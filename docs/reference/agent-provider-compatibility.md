@@ -8,14 +8,14 @@ provider-neutral trait implementation, exact version/revision/scope mapping, pri
 final signed Usage Sync bytes. It remains `Recognized` until the same tree proves final batch
 discovery/pairing/activation and first-sync accounting end to end.
 
-| Provider ID   | State      | Required local surface and accounting evidence                          | Current exact gap                                                                                                    |
-| ------------- | ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Provider ID   | State      | Required local surface and accounting evidence                                                                 | Current exact gap                                                                                        |
+| ------------- | ---------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `codex`       | Recognized | Exact App Server `0.144.5`, reader `codex_app_server_0_144_5_v1`, revision 1, `agent_account`, explicit attach | Final batch pairing/activation and first-sync E2E absent; connector package/release evidence also absent |
-| `claude_code` | Recognized | Exact documented local schema and disjoint/aggregate token semantics    | No checked exact local schema, account-domain rule, immutable fixture digest, reader, or final V1 E2E                |
-| `opencode`    | Recognized | Exact documented read-only local store and cumulative account/day rules | No checked stable schema/account boundary, immutable fixture digest, reader, or final V1 E2E                         |
-| `qwen_code`   | Recognized | Exact documented local usage surface and UTC/account semantics          | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                                      |
-| `cline`       | Recognized | Exact documented local usage surface and UTC/account semantics          | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                                      |
-| `aider`       | Recognized | Exact documented local usage surface and UTC/account semantics          | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                                      |
+| `claude_code` | Recognized | Exact documented local schema and disjoint/aggregate token semantics                                           | No checked exact local schema, account-domain rule, immutable fixture digest, reader, or final V1 E2E    |
+| `opencode`    | Recognized | Exact documented read-only local store and cumulative account/day rules                                        | No checked stable schema/account boundary, immutable fixture digest, reader, or final V1 E2E             |
+| `qwen_code`   | Recognized | Exact documented local usage surface and UTC/account semantics                                                 | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                          |
+| `cline`       | Recognized | Exact documented local usage surface and UTC/account semantics                                                 | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                          |
+| `aider`       | Recognized | Exact documented local usage surface and UTC/account semantics                                                 | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                          |
 
 ## Admission requirements
 

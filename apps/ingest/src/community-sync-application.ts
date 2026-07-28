@@ -327,8 +327,7 @@ function readSubmissionResult(
     if (
       typeof acceptedEntries !== "number" ||
       !Number.isSafeInteger(acceptedEntries) ||
-      (outcome === "accepted" &&
-        (acceptedEntries < 1 || acceptedEntries > expectedEntries)) ||
+      (outcome === "accepted" && (acceptedEntries < 1 || acceptedEntries > expectedEntries)) ||
       ((outcome === "duplicate" || outcome === "quarantined") && acceptedEntries !== 0) ||
       (outcome !== "accepted" && outcome !== "duplicate" && outcome !== "quarantined") ||
       (recoveryAction !== undefined &&
@@ -360,9 +359,7 @@ function createSuccessDecision(
     syncId,
     outcome: result.outcome,
     acceptedEntries: result.acceptedEntries,
-    ...(result.recoveryAction === undefined
-      ? {}
-      : { recoveryAction: result.recoveryAction }),
+    ...(result.recoveryAction === undefined ? {} : { recoveryAction: result.recoveryAction }),
   };
   const body = Object.freeze(
     Object.assign(Object.create(null) as object, values),

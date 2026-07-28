@@ -264,8 +264,7 @@ function canonicalRecordWithOptional(
     const keys = Reflect.ownKeys(value);
     if (
       keys.some(
-        (key) =>
-          typeof key !== "string" || (!requiredKeys.has(key) && !optionalKeys.has(key)),
+        (key) => typeof key !== "string" || (!requiredKeys.has(key) && !optionalKeys.has(key)),
       ) ||
       [...requiredKeys].some((key) => !keys.includes(key))
     ) {
@@ -347,11 +346,7 @@ function readApplicationDecision(value: unknown): SerializedDecision | undefined
   const status = decision.status;
 
   if (ok === true && status === 200) {
-    const candidate = canonicalRecordWithOptional(
-      body,
-      requiredResultKeys,
-      optionalResultKeys,
-    );
+    const candidate = canonicalRecordWithOptional(body, requiredResultKeys, optionalResultKeys);
     if (candidate === undefined) {
       return undefined;
     }

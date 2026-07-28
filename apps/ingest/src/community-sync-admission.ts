@@ -67,10 +67,7 @@ export function createCommunitySyncKeyedAdmission(
       }
       const existingEntry = activeByKey.get(key);
       const active = existingEntry?.count ?? 0;
-      if (
-        active >= limitPerKey ||
-        (active === 0 && activeByKey.size >= maximumActiveKeys)
-      ) {
+      if (active >= limitPerKey || (active === 0 && activeByKey.size >= maximumActiveKeys)) {
         return undefined;
       }
       const entry = existingEntry ?? { count: 0 };

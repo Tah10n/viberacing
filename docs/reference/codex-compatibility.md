@@ -44,8 +44,8 @@ separate portable smoke executes the repository-built connector, not Codex; it v
 Codex artifact, account, usage response, package, signature, or support row.
 
 The exact Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2` for
-`account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and summary
-values, and returns at most 31 sorted unique daily date/token entries. A separate built-in
+`account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
+summary values, and returns at most 31 sorted unique daily date/token entries. A separate built-in
 provider-neutral reader now maps that minimized result to one explicit-attach `agent_account`
 candidate and canonical decimal-string UTC totals. Its raw account fixture contains all required
 privacy sentinels; tests prove none reaches canonical output, signed JSON, or diagnostics. This is
@@ -101,10 +101,10 @@ hash-admits only the exact candidate, keeps a no-write-sharing handle through la
 request context, and sends one closed signed `/v1/usage` request with `agentAccountId`,
 `readerVersion`, and canonical decimal-string daily totals, without proxy, redirect, retry,
 legacy-path fallback, or edge-origin credentials. It cannot admit another version or platform,
-create a release, or make the connector supported. `check-codex` separately reuses only
-the artifact selector and grants no launch, account, credential, network, or cached authority. Its
-preview adds only redacted fixed state and grants no support or report authenticity. Every matrix
-row still requires the complete admission evidence above.
+create a release, or make the connector supported. `check-codex` separately reuses only the artifact
+selector and grants no launch, account, credential, network, or cached authority. Its preview adds
+only redacted fixed state and grants no support or report authenticity. Every matrix row still
+requires the complete admission evidence above.
 
 ## Planned stable surface
 

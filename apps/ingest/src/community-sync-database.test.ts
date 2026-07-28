@@ -47,8 +47,7 @@ const explicitEnvironment = {
   VIBERACING_INGEST_DATABASE_USER: "viberacing_ingest_login",
 } as const;
 
-const fixedIdFactory: PublicIdFactory = (prefix) =>
-  prefix === "obs" ? observationId : eventId;
+const fixedIdFactory: PublicIdFactory = (prefix) => (prefix === "obs" ? observationId : eventId);
 
 function verifiedSubmission(): Record<string, unknown> {
   return {
@@ -360,29 +359,17 @@ describe("Community sync database adapter", () => {
       () => ({ usageDate: "2026-07-13", dailyTokenTotal: "42" }),
     );
     const accessorEntry = verifiedSubmission();
-    Object.defineProperty(
-      (accessorEntry.payload as { dailyEntries: object[] }).dailyEntries,
-      "0",
-      {
-        enumerable: true,
-        get: () => ({ usageDate: "2026-07-13", dailyTokenTotal: "42" }),
-      },
-    );
+    Object.defineProperty((accessorEntry.payload as { dailyEntries: object[] }).dailyEntries, "0", {
+      enumerable: true,
+      get: () => ({ usageDate: "2026-07-13", dailyTokenTotal: "42" }),
+    });
 
     const nullPrototype = Object.assign(Object.create(null) as object, verifiedSubmission());
     await expect(
       createCommunitySyncDatabase(createFixture().pool, fixedIdFactory).submit(nullPrototype),
     ).resolves.toMatchObject({ outcome: "accepted" });
 
-    for (const input of [
-      accessor,
-      trapped,
-      sparse,
-      decorated,
-      exotic,
-      oversized,
-      accessorEntry,
-    ]) {
+    for (const input of [accessor, trapped, sparse, decorated, exotic, oversized, accessorEntry]) {
       const fixture = createFixture();
       await expectDatabaseError(
         createCommunitySyncDatabase(fixture.pool, fixedIdFactory).submit(input),
@@ -397,10 +384,9 @@ describe("Community sync database adapter", () => {
     async (input) => {
       const fixture = createFixture();
       await expectDatabaseError(
-        createCommunitySyncDatabase(
-          fixture.pool,
-          fixedIdFactory,
-        ).readDeviceVerificationMaterial(input as never),
+        createCommunitySyncDatabase(fixture.pool, fixedIdFactory).readDeviceVerificationMaterial(
+          input as never,
+        ),
         "input_invalid",
       );
       expect(fixture.connect).not.toHaveBeenCalled();
@@ -427,10 +413,9 @@ describe("Community sync database adapter", () => {
   ])("destroys the client for malformed device result rows", async (deviceRows) => {
     const fixture = createFixture({ deviceRows });
     await expectDatabaseError(
-      createCommunitySyncDatabase(
-        fixture.pool,
-        fixedIdFactory,
-      ).readDeviceVerificationMaterial(deviceId),
+      createCommunitySyncDatabase(fixture.pool, fixedIdFactory).readDeviceVerificationMaterial(
+        deviceId,
+      ),
       "result_invalid",
     );
     expect(fixture.release).toHaveBeenCalledWith(true);
@@ -461,10 +446,9 @@ describe("Community sync database adapter", () => {
     ]) {
       const fixture = createFixture({ deviceRows });
       await expectDatabaseError(
-        createCommunitySyncDatabase(
-          fixture.pool,
-          fixedIdFactory,
-        ).readDeviceVerificationMaterial(deviceId),
+        createCommunitySyncDatabase(fixture.pool, fixedIdFactory).readDeviceVerificationMaterial(
+          deviceId,
+        ),
         "result_invalid",
       );
       expect(fixture.release).toHaveBeenCalledWith(true);
@@ -520,17 +504,14 @@ describe("Community sync database adapter", () => {
     { runtimeRows: [{ role_ok: true, login_scope_ok: false, search_path_ok: true }] },
     { runtimeRows: [{ role_ok: true, login_scope_ok: true, search_path_ok: false }] },
     {
-      runtimeRows: [
-        { role_ok: true, login_scope_ok: true, search_path_ok: true, extra: true },
-      ],
+      runtimeRows: [{ role_ok: true, login_scope_ok: true, search_path_ok: true, extra: true }],
     },
   ])("rejects a mismatched runtime boundary before capability access", async ({ runtimeRows }) => {
     const fixture = createFixture({ runtimeRows });
     await expectDatabaseError(
-      createCommunitySyncDatabase(
-        fixture.pool,
-        fixedIdFactory,
-      ).readDeviceVerificationMaterial(deviceId),
+      createCommunitySyncDatabase(fixture.pool, fixedIdFactory).readDeviceVerificationMaterial(
+        deviceId,
+      ),
       "runtime_boundary_mismatch",
     );
     expect(fixture.readDevice).not.toHaveBeenCalled();
@@ -545,9 +526,7 @@ describe("Community sync database adapter", () => {
     });
     const trappedFixture = createFixture({ runtimeRows: trappedRows });
     await expectDatabaseError(
-      createCommunitySyncDatabase(trappedFixture.pool, fixedIdFactory).submit(
-        verifiedSubmission(),
-      ),
+      createCommunitySyncDatabase(trappedFixture.pool, fixedIdFactory).submit(verifiedSubmission()),
       "runtime_boundary_mismatch",
     );
 
@@ -573,9 +552,7 @@ describe("Community sync database adapter", () => {
     const queryFixture = createFixture();
     queryFixture.submit.mockRejectedValueOnce(new Error("synthetic query detail"));
     await expectDatabaseError(
-      createCommunitySyncDatabase(queryFixture.pool, fixedIdFactory).submit(
-        verifiedSubmission(),
-      ),
+      createCommunitySyncDatabase(queryFixture.pool, fixedIdFactory).submit(verifiedSubmission()),
       "query_failed",
     );
     expect(queryFixture.release).toHaveBeenCalledWith(true);
@@ -587,8 +564,7 @@ describe("Community sync database adapter", () => {
         throw new Error("synthetic identifier detail");
       }) as PublicIdFactory,
       (() => "invalid") as PublicIdFactory,
-      ((prefix) =>
-        prefix === "obs" ? observationId : "evt_short") as PublicIdFactory,
+      ((prefix) => (prefix === "obs" ? observationId : "evt_short")) as PublicIdFactory,
     ]) {
       const fixture = createFixture();
       await expectDatabaseError(

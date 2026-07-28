@@ -87,10 +87,7 @@ function readDependencies(value: unknown): ConfiguredCommunitySyncVerifierDepend
     );
     const now = values.now;
     const readDeviceVerificationMaterial = values.readDeviceVerificationMaterial;
-    if (
-      typeof now !== "function" ||
-      typeof readDeviceVerificationMaterial !== "function"
-    ) {
+    if (typeof now !== "function" || typeof readDeviceVerificationMaterial !== "function") {
       dependencyFail();
     }
     return Object.freeze({

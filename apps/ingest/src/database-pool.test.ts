@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveIngestDatabaseConfig } from "./database-config.js";
-import {
-  createIngestDatabasePool,
-  type IngestDatabaseUsageSubmission,
-} from "./database-pool.js";
+import { createIngestDatabasePool, type IngestDatabaseUsageSubmission } from "./database-pool.js";
 
 const config = resolveIngestDatabaseConfig({
   NODE_ENV: "test",

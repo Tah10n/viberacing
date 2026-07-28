@@ -298,30 +298,28 @@ describe("Community sync application", () => {
     },
   );
 
-  it.each([
-    "update_connector",
-    "reconnect_account",
-    "contact_support",
-    "retry_later",
-  ] as const)("returns the closed coarse recovery action %s", async (recoveryAction) => {
-    const harness = createHarness({
-      submit: () =>
-        Promise.resolve({
-          acceptedEntries: 0,
-          outcome: "quarantined",
-          recoveryAction,
-        }),
-    });
+  it.each(["update_connector", "reconnect_account", "contact_support", "retry_later"] as const)(
+    "returns the closed coarse recovery action %s",
+    async (recoveryAction) => {
+      const harness = createHarness({
+        submit: () =>
+          Promise.resolve({
+            acceptedEntries: 0,
+            outcome: "quarantined",
+            recoveryAction,
+          }),
+      });
 
-    const decision = await harness.application.execute({});
+      const decision = await harness.application.execute({});
 
-    expect(decision).toMatchObject({
-      body: { acceptedEntries: 0, outcome: "quarantined", recoveryAction },
-      ok: true,
-      status: 200,
-    });
-    expect(validateUsageSyncResultV1(decision.body)).toMatchObject({ ok: true });
-  });
+      expect(decision).toMatchObject({
+        body: { acceptedEntries: 0, outcome: "quarantined", recoveryAction },
+        ok: true,
+        status: 200,
+      });
+      expect(validateUsageSyncResultV1(decision.body)).toMatchObject({ ok: true });
+    },
+  );
 
   it("uses distinct cryptographic request IDs by default", async () => {
     const submission = validVerifiedSubmission();
@@ -715,9 +713,7 @@ describe("Community sync application", () => {
       ]),
     );
     const submitUsageSync = vi.fn(() =>
-      Promise.resolve([
-        { accepted_entries: 2, outcome: "accepted", recovery_action: null },
-      ]),
+      Promise.resolve([{ accepted_entries: 2, outcome: "accepted", recovery_action: null }]),
     );
     const client: IngestDatabaseClient = {
       readDeviceVerificationMaterial,
@@ -728,12 +724,8 @@ describe("Community sync application", () => {
     const close = vi.fn(() => Promise.resolve());
     const connect = vi.fn(() => Promise.resolve(client));
     const pool: IngestDatabasePool = { close, connect };
-    const database = createCommunitySyncDatabase(
-      pool,
-      (prefix) =>
-        prefix === "obs"
-          ? "obs_FFFFFFFFFFFFFFFFFFFFFF"
-          : "evt_GGGGGGGGGGGGGGGGGGGGGG",
+    const database = createCommunitySyncDatabase(pool, (prefix) =>
+      prefix === "obs" ? "obs_FFFFFFFFFFFFFFFFFFFFFF" : "evt_GGGGGGGGGGGGGGGGGGGGGG",
     );
     const verifier = createCommunitySyncVerifier({
       now: () => nowMilliseconds,

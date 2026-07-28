@@ -100,10 +100,7 @@ export interface CommunitySyncSubmissionResult {
   readonly acceptedEntries: number;
   readonly outcome: "accepted" | "duplicate" | "quarantined";
   readonly recoveryAction?:
-    | "update_connector"
-    | "reconnect_account"
-    | "contact_support"
-    | "retry_later";
+    "update_connector" | "reconnect_account" | "contact_support" | "retry_later";
 }
 
 export interface CommunitySyncDatabase {
@@ -467,9 +464,7 @@ function readSubmissionResult(
         (acceptedEntries < 1 || acceptedEntries > maximumAcceptedEntries)) ||
       ((outcome === "duplicate" || outcome === "quarantined") && acceptedEntries !== 0) ||
       (outcome !== "accepted" && outcome !== "duplicate" && outcome !== "quarantined") ||
-      (outcome === "quarantined"
-        ? recoveryAction !== "contact_support"
-        : recoveryAction !== null)
+      (outcome === "quarantined" ? recoveryAction !== "contact_support" : recoveryAction !== null)
     ) {
       fail("result_invalid");
     }
@@ -577,9 +572,7 @@ function toDatabaseSubmission(
     agentAccountId: submission.agentAccountId,
     bodyDigest: Buffer.from(submission.bodyDigest),
     clientVersion: payload.clientVersion,
-    dailyTokenTotals: Object.freeze(
-      payload.dailyEntries.map((entry) => entry.dailyTokenTotal),
-    ),
+    dailyTokenTotals: Object.freeze(payload.dailyEntries.map((entry) => entry.dailyTokenTotal)),
     deviceId: submission.deviceId,
     deviceKeyId: submission.deviceKeyId,
     deviceNonceDigest: Buffer.from(submission.deviceNonceDigest),

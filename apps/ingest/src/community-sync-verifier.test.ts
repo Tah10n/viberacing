@@ -514,8 +514,7 @@ describe("Community sync edge-origin proof", () => {
         harness.verifier.verify(buildRequest({ originTimestamp: timestamp })),
       ).resolves.toMatchObject({
         deviceId,
-        originExpiresAtMilliseconds:
-          timestampMilliseconds + originProofMaximumAgeMilliseconds,
+        originExpiresAtMilliseconds: timestampMilliseconds + originProofMaximumAgeMilliseconds,
         originKeyId,
         originNonceDigestHex: createHash("sha256")
           .update("viberacing-origin-nonce-v1\0", "utf8")
