@@ -72,11 +72,29 @@ const tscBin = webRequire.resolve("typescript/bin/tsc");
 const vitestBin = resolve(dirname(webRequire.resolve("vitest")), "vitest.mjs");
 const nodeOnly = process.argv.includes("--node-only");
 const releaseMode = process.argv.includes("--release");
+const historyRefArguments = process.argv
+  .slice(2)
+  .filter((argument) => argument.startsWith("--history-ref="));
+const historyRef =
+  historyRefArguments.length === 1 ? historyRefArguments[0].slice("--history-ref=".length) : null;
 const unknownArguments = process.argv
   .slice(2)
-  .filter((argument) => argument !== "--node-only" && argument !== "--release");
-if (unknownArguments.length > 0) {
-  console.error(`Unknown verification argument: ${unknownArguments[0]}`);
+  .filter(
+    (argument) =>
+      argument !== "--node-only" &&
+      argument !== "--release" &&
+      !argument.startsWith("--history-ref="),
+  );
+if (
+  unknownArguments.length > 0 ||
+  historyRefArguments.length > 1 ||
+  (historyRefArguments.length === 1 && historyRef.length === 0)
+) {
+  console.error(
+    unknownArguments.length > 0
+      ? `Unknown verification argument: ${unknownArguments[0]}`
+      : "Verification accepts exactly one non-empty --history-ref=<revision> argument.",
+  );
   process.exit(2);
 }
 
@@ -191,7 +209,10 @@ const releaseChecks = [
   [
     "reachable Git history",
     process.execPath,
-    [resolve(import.meta.dirname, "check-git-history.mjs")],
+    [
+      resolve(import.meta.dirname, "check-git-history.mjs"),
+      ...(historyRef === null ? [] : ["--ref", historyRef]),
+    ],
   ],
   [
     "documentation checker behavior",

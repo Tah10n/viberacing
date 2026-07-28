@@ -42,10 +42,10 @@ function makeFixture(name) {
   return directory;
 }
 
-function run(directory) {
+function run(directory, extraArguments = []) {
   return spawnSync(
     process.execPath,
-    [join(directory, "scripts", "check-git-history.mjs"), "--root", directory],
+    [join(directory, "scripts", "check-git-history.mjs"), "--root", directory, ...extraArguments],
     { cwd: directory, encoding: "utf8" },
   );
 }
@@ -179,7 +179,18 @@ try {
     "Signed-off-by must be the final commit trailer",
   );
 
-  console.log("Git history checker tests passed (11 cases).");
+  const explicitRevision = makeFixture("explicit-revision");
+  git(explicitRevision, "switch", "--quiet", "-c", "automation/update");
+  git(explicitRevision, "commit", "--quiet", "--allow-empty", "-m", "unsigned automation change");
+  git(explicitRevision, "switch", "--quiet", "main");
+  expectFailure(
+    "default all-ref scope",
+    run(explicitRevision),
+    "missing exact author DCO sign-off",
+  );
+  expectPass("explicit publication revision", run(explicitRevision, ["--ref", "HEAD"]));
+
+  console.log("Git history checker tests passed (12 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }

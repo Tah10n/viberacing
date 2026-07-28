@@ -1,31 +1,46 @@
 //! Exact candidate Codex artifact selection and admission.
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 use std::collections::HashSet;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 use std::ffi::OsStr;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
+use std::fs::OpenOptions;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 use sha2::{Digest, Sha256};
 
 pub(crate) const ADMITTED_CODEX_VERSION: &str = "0.144.5";
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const DISCOVERY_FILE_NAMES: [&str; 2] = ["codex.exe", "codex-x86_64-pc-windows-msvc.exe"];
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const MAX_DISCOVERY_CANDIDATE_PATH_BYTES: usize = 2048;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const MAX_DISCOVERY_DIRECTORIES: usize = 64;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const MAX_DISCOVERY_HASH_CANDIDATES: usize = 4;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const MAX_DISCOVERY_PATH_BYTES: usize = 65_536;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const ADMITTED_WINDOWS_X86_64_BYTES: u64 = 341_195_568;
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const ADMITTED_WINDOWS_X86_64_SHA256: [u8; 32] = [
     0xef, 0xdb, 0x35, 0x40, 0xef, 0x74, 0xb9, 0x90, 0x94, 0x08, 0xc8, 0xd3, 0x8d, 0xa7, 0x94, 0x83,
     0x45, 0x47, 0x97, 0xb3, 0x6f, 0x47, 0x1e, 0x3e, 0x00, 0x4f, 0xc2, 0xbf, 0x2b, 0x70, 0xe2, 0x2a,
 ];
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 #[derive(Clone, Copy)]
 struct ArtifactPolicy {
     bytes: u64,
     sha256: [u8; 32],
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 const WINDOWS_X86_64_POLICY: ArtifactPolicy = ArtifactPolicy {
     bytes: ADMITTED_WINDOWS_X86_64_BYTES,
     sha256: ADMITTED_WINDOWS_X86_64_SHA256,
@@ -33,10 +48,13 @@ const WINDOWS_X86_64_POLICY: ArtifactPolicy = ArtifactPolicy {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AdmissionError {
+    #[cfg_attr(not(all(windows, target_arch = "x86_64")), allow(dead_code))]
     DiscoveryUnavailable,
+    #[cfg_attr(not(all(windows, target_arch = "x86_64")), allow(dead_code))]
     InvalidPath,
-    #[allow(dead_code)]
+    #[cfg_attr(all(windows, target_arch = "x86_64"), allow(dead_code))]
     UnsupportedPlatform,
+    #[cfg_attr(not(all(windows, target_arch = "x86_64")), allow(dead_code))]
     UnsupportedArtifact,
 }
 
@@ -91,6 +109,7 @@ pub(crate) fn admit_candidate_selection(
     }
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn discover_from_path_value(
     path_value: &OsStr,
     policy: ArtifactPolicy,
@@ -101,14 +120,17 @@ fn discover_from_path_value(
     discover_with_policy(std::env::split_paths(path_value), policy)
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn encoded_value_fits(value: &OsStr, limit: usize) -> bool {
     value.len() <= limit
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn candidate_path_fits(path: &Path) -> bool {
     encoded_value_fits(path.as_os_str(), MAX_DISCOVERY_CANDIDATE_PATH_BYTES)
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn discover_with_policy(
     directories: impl IntoIterator<Item = PathBuf>,
     policy: ArtifactPolicy,
@@ -153,6 +175,7 @@ fn discover_with_policy(
     Err(AdmissionError::DiscoveryUnavailable)
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn admit_with_policy(path: &Path, policy: ArtifactPolicy) -> Result<AdmittedCodex, AdmissionError> {
     if !path.is_absolute() {
         return Err(AdmissionError::InvalidPath);
@@ -187,6 +210,7 @@ fn admit_with_policy(path: &Path, policy: ArtifactPolicy) -> Result<AdmittedCode
     })
 }
 
+#[cfg(any(all(windows, target_arch = "x86_64"), test))]
 fn open_guarded(path: &Path) -> std::io::Result<File> {
     let mut options = OpenOptions::new();
     options.read(true);

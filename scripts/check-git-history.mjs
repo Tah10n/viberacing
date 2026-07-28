@@ -8,12 +8,26 @@ import {
 } from "./lib/public-content-policy.mjs";
 
 const args = process.argv.slice(2);
-if (!(args.length === 0 || (args.length === 2 && args[0] === "--root" && args[1]))) {
-  console.error("Usage: node scripts/check-git-history.mjs [--root <directory>]");
-  process.exit(2);
+let root = resolve(import.meta.dirname, "..");
+let rootSupplied = false;
+let revision = null;
+for (let index = 0; index < args.length; index += 1) {
+  const argument = args[index];
+  const value = args[index + 1];
+  if (argument === "--root" && value && !rootSupplied) {
+    root = resolve(value);
+    rootSupplied = true;
+    index += 1;
+  } else if (argument === "--ref" && value && revision === null) {
+    revision = value;
+    index += 1;
+  } else {
+    console.error(
+      "Usage: node scripts/check-git-history.mjs [--root <directory>] [--ref <revision>]",
+    );
+    process.exit(2);
+  }
 }
-
-const root = args.length === 0 ? resolve(import.meta.dirname, "..") : resolve(args[1]);
 const findings = new Set();
 const identityEmailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const signedOffByPrefix = "Signed-off-by:";
@@ -187,16 +201,37 @@ if (git(["rev-parse", "--is-shallow-repository"]).trim() === "true") {
   );
 }
 
-const refs = git(["for-each-ref", "--format=%(refname)\t%(objectname)\t%(objecttype)"])
-  .split(/\r?\n/)
-  .filter(Boolean)
-  .map((line) => line.split("\t"));
+let refs;
+let commits;
+if (revision === null) {
+  refs = git(["for-each-ref", "--format=%(refname)\t%(objectname)\t%(objecttype)"])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.split("\t"));
+  commits = git(["rev-list", "--all"]).split(/\r?\n/).filter(Boolean);
+} else {
+  inspectBuffer("requested history revision", Buffer.from(revision, "utf8"));
+  try {
+    const object = git(["rev-parse", "--verify", "--end-of-options", revision]).trim();
+    const commit = git([
+      "rev-parse",
+      "--verify",
+      "--end-of-options",
+      `${revision}^{commit}`,
+    ]).trim();
+    const type = git(["cat-file", "-t", object]).trim();
+    refs = [[`revision ${revision}`, object, type]];
+    commits = git(["rev-list", commit]).split(/\r?\n/).filter(Boolean);
+  } catch {
+    console.error(`Git history revision does not resolve to a commit: ${revision}`);
+    process.exit(2);
+  }
+}
 
 for (const [refName] of refs) {
   inspectBuffer(`ref ${refName}`, Buffer.from(refName, "utf8"));
 }
 
-const commits = git(["rev-list", "--all"]).split(/\r?\n/).filter(Boolean);
 const blobLocations = new Map();
 const tagObjects = new Set(refs.filter(([, , type]) => type === "tag").map(([, oid]) => oid));
 let uniqueHistoricalPaths = 0;

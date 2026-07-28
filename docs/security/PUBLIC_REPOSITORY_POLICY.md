@@ -72,7 +72,7 @@ remove it from Git history.
 ## Required review before GitHub publication
 
 - run `pnpm run verify:release` and require `pnpm run check:publication` to pass;
-- scan every reachable Git object, not only the current tree;
+- scan every Git object reachable from the publication-candidate refs, not only the current tree;
 - confirm every reachable commit has a non-placeholder public Git identity and one exact
   author-matching DCO sign-off;
 - record real public maintainers and CODEOWNERS without copying private workstation identities;
@@ -95,3 +95,9 @@ trailer; it still scans ordinary message text and every historical blob. Pattern
 recognize every credential or private fact. Binary metadata, external systems, screenshots, and
 semantic disclosures require separate review. The scanners are controls in a layered publication
 process, not a confidentiality guarantee.
+
+The history checker scans every local ref by default for an operator-led publication review. Hosted
+`main` verification supplies the exact checked-out `HEAD` as its publication candidate so unrelated
+automation branches fetched by `actions/checkout` cannot change that candidate's DCO result. This
+scope distinction does not exempt a branch selected for merge or release from its own tree and
+history checks.
