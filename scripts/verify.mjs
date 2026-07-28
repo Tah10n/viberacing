@@ -199,6 +199,11 @@ const releaseChecks = [
     [resolve(import.meta.dirname, "test-docs-check.mjs")],
   ],
   [
+    "documentation currentness checker behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-documentation-currentness-check.mjs")],
+  ],
+  [
     "migration runbook checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-migration-runbook-check.mjs")],
@@ -259,6 +264,11 @@ const releaseChecks = [
     [resolve(import.meta.dirname, "test-config-check.mjs")],
   ],
   ["documentation", process.execPath, [resolve(import.meta.dirname, "check-docs.mjs")]],
+  [
+    "documentation currentness",
+    process.execPath,
+    [resolve(import.meta.dirname, "check-documentation-currentness.mjs")],
+  ],
   [
     "migration runbook",
     process.execPath,

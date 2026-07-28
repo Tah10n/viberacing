@@ -256,9 +256,15 @@
     "writability",
     "xlink",
     "zmij",
+    "Архитектура",
+    "Быстрый",
     "Остановить",
     "Продолжить",
-    "гонку"
+    "Текущий",
+    "гонку",
+    "запуск",
+    "контрактов",
+    "схем"
   ],
   "flagWords": ["adress", "dependancy", "enviroment", "occurence", "seperate", "teh"]
 }

@@ -101,3 +101,6 @@ will actually be pushed. Do not claim application build or test success until th
 Project maintainers also run `pnpm run check:publication` before the first public announcement. It
 is intentionally not part of normal verification because a correctly disclosed pre-public tree is
 expected to fail until hosted identities and controls exist.
+
+The private-first upload and hosted-control sequence is documented in
+[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).

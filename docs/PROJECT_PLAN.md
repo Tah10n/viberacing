@@ -1425,6 +1425,9 @@ files become necessary, they are generated from the canonical guidance and check
 - Executable or explicitly illustrative command examples.
 - Generated-reference drift.
 - File-size and broken-anchor checks for AGENTS.md and documentation indexes.
+- Root onboarding currentness: EN/RU READMEs stay within 220 lines, surface quick start in the first
+  40 lines, retain one architecture thumbnail, and derive public contract/OpenAPI/migration counts
+  from canonical manifests.
 
 ## Code quality and test strategy
 

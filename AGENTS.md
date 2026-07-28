@@ -336,6 +336,9 @@ replay, real-user deletion, recovery, or deployment.
 - `pnpm run verify:release` adds coverage, production builds, history, documentation/link, spelling,
   licenses, formatting, Markdown, visual/policy checks, and checker-regression suites. Use it for
   release/publication preparation or broad cross-cutting changes, not every local edit.
+- `pnpm run check:documentation-currentness` derives public contract, OpenAPI, and migration counts
+  from canonical manifests and keeps both root READMEs compact with an early quick start and
+  architecture thumbnail. Its seven mutation fixtures fail on inventory or onboarding drift.
 - `pnpm run check:config` and `pnpm run test:config-check` bind the stable-release trigger,
   secretless/protected job split, exact tool pins, migration-latch cleanup, service order, and
   coordinated Ingest/Edge flag. They prove only the checked workflow declaration, not hosted

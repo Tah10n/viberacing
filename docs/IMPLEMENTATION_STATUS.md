@@ -299,6 +299,10 @@ scheduler/cadence exists.
   environment files, and staged-snapshot isolation.
 - Black-box documentation cases for valid links, missing files and anchors, duplicate anchors, and
   attempts to escape the repository root.
+- A manifest-derived documentation-currentness gate binds EN/RU root onboarding to the exact
+  contract schema/policy/operation/path and migration inventories, requires quick start within the
+  first 40 lines, caps each root README at 220 lines, and requires an architecture thumbnail. Seven
+  mutation cases fail on inventory, length, ordering, or diagram drift.
 - Tracked symbolic links are rejected before repository checks can follow them.
 - A complete-reachable-history gate that refuses shallow clones; structurally validates one
   non-placeholder Author and Committer identity plus one exact author-matching final DCO sign-off;
@@ -349,6 +353,9 @@ scheduler/cadence exists.
 - A fail-closed publication-readiness checker with regression coverage for GitHub remote,
   MAINTAINERS/CODEOWNERS agreement, protected policy ownership, private conduct reporting, and
   private vulnerability reporting state.
+- A repository-owned private-first GitHub publication runbook separates local history/public-data
+  evidence from real hosted maintainer, CODEOWNERS, branch-ruleset, reporting, Actions-log, and
+  visibility controls.
 - A repository-scoped design threat model with assets, attacker capabilities, trust boundaries,
   realistic/out-of-scope stories, required mitigations, implemented-versus-planned status, and
   severity calibration.
@@ -834,13 +841,13 @@ scheduler/cadence exists.
   and schema-owner groups. The default database and `public` schema capabilities are revoked;
   database and runtime-role search paths are scoped to `pg_catalog, pg_temp`; the migration
   principal retains explicit connection authority; unexpected group-role memberships fail closed.
-- Forty-two checksum-ledgered, transactional SQL migrations with bounded lock/statement execution
-  and 28 forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and
-  restricted authorities, session-bound challenges, opaque sources, pending/active/revoked device
-  keys, pairing, bounded audit references, deletion work/tombstones, seven fixed maintenance mutex
-  rows, origin and device nonces, bounded raw Community snapshots, monotonic current source/day
-  values, immutable score versions and season definitions, derived season entries/daily scores,
-  terminal UTC-day/count freshness projections, active CarRecipes and pending proposals, and schema
+- 43 checksum-ledgered, transactional SQL migrations with bounded lock/statement execution and 28
+  forced-RLS private tables for profiles, invites, sessions, passkeys, recovery codes and restricted
+  authorities, session-bound challenges, opaque sources, pending/active/revoked device keys,
+  pairing, bounded audit references, deletion work/tombstones, seven fixed maintenance mutex rows,
+  origin and device nonces, bounded raw Community snapshots, monotonic current source/day values,
+  immutable score versions and season definitions, derived season entries/daily scores, terminal
+  UTC-day/count freshness projections, active CarRecipes and pending proposals, and schema
   revisions. There is intentionally no GitHub token, account email, prompt, repository, credential,
   arbitrary JSON, or free-form diagnostic column.
 - Database constraints and triggers enforce unique GitHub bindings, normalized handles, keyed
@@ -1664,6 +1671,7 @@ pnpm run verify
 pnpm run verify:release
 pnpm run verify:web:deployment
 pnpm run check:agent-skills
+pnpm run check:documentation-currentness
 pnpm run check:contracts
 pnpm run check:database
 pnpm run check:migration-runbook

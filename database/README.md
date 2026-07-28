@@ -2,7 +2,7 @@
 
 ## Status
 
-This directory contains forty-one SQL-first revisions for identity, passkey login and management,
+This directory contains 43 SQL-first revisions for identity, passkey login and management,
 restricted recovery, source, device, pairing, audit, deletion, Community usage, scoring, season
 finalization, and CarRecipe proposal state. The migrations, narrow database procedures, and
 PostgreSQL integration tests are implemented. A local invite/OAuth/initial-passkey,

@@ -24,6 +24,12 @@ and have been tested.
 
 Before the repository is announced or outside contributions are accepted:
 
+Follow the repository-owned
+[first GitHub publication runbook](docs/getting-started/GITHUB_FIRST_PUBLICATION.md). It keeps the
+initial source upload private while the local and private-repository controls below are completed,
+then requires a controlled visibility cutover and verified private vulnerability reporting before
+announcement or outside participation.
+
 1. Record at least one real public maintainer profile and mark the registry configured.
 2. Add `.github/CODEOWNERS` using only identities that have confirmed write access. At least one
    listed maintainer must appear as a direct user owner for the protected policies; organization

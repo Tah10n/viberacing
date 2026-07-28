@@ -3,7 +3,7 @@
 ## Current scope
 
 The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and forty-one checksum-ledgered database migrations. Repository verification uses synthetic data and
+and 43 checksum-ledgered database migrations. Repository verification uses synthetic data and
 injected capabilities only. It has procedure-only identity, passkey login/management, restricted
 recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
 retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
@@ -194,10 +194,11 @@ pnpm run build:contracts
 
 Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
 operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
-OpenAPI document contains two paths marked `implemented-local`. The corresponding dynamic Next.js
-GET and bounded Ingest POST have request/response and build evidence, but no working database login
-is tracked. The separate Ingest integration creates and removes only a synthetic disposable login;
-no deployment exists merely because the local operations are documented.
+OpenAPI document contains 8 paths marked `implemented-local`. The four dynamic Next.js GET
+operations plus bounded pairing, proposal, and Ingest POST operations have request/response and
+build evidence, but no working deployment database login is tracked. The separate integrations
+create and remove only synthetic disposable logins; no deployment exists merely because the local
+operations are documented.
 
 Connector-focused commands use only checked-in synthetic fixtures. Rust tests launch a target-built
 fixture executable to prove fixed arguments, environment isolation, protocol order, timeout,
