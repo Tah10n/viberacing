@@ -10,10 +10,12 @@ stop any phase.
 - Document governance, contribution, support, release, dependency, and reporting policies.
 - Complete the threat model, privacy data map, architecture views, compatibility policy, and initial
   ADRs.
-- Configure real hosted maintainers, CODEOWNERS, private reporting, branch protection, and secret
-  scanning before announcement.
+- Configure real hosted maintainers, CODEOWNERS, private vulnerability reporting, source-only
+  interaction restrictions, branch protection, and secret scanning before the first source
+  announcement. Add a private conduct channel before opening participation.
 
-Exit criterion: the repository is safe to publish and its claims match executable evidence.
+Exit criterion: the repository is safe to publish in source-only mode and its claims match
+executable and hosted evidence.
 
 ## Phase 1 — Visual prototype with synthetic data
 

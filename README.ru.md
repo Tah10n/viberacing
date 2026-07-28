@@ -3,8 +3,9 @@
 > **Статус:** локальная pre-alpha. Синтетический веб-прототип запускается, но production-сервиса и
 > выпущенного connector пока нет.
 
-Внешнее участие закрыто до настройки реальных публичных maintainers, CODEOWNERS и проверенных
-приватных каналов для security/conduct reports. Безопасная последовательность описана в
+Внешнее участие закрыто. Исходники можно сразу опубликовать в source-only режиме после записи
+реального maintainer и CODEOWNERS, проверки GitHub Private Vulnerability Reporting, отключения
+Issues/Discussions и ограничения Pull Requests только collaborators. Последовательность описана в
 [инструкции первой GitHub-публикации (EN)](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
 Vibe Racing — открытый пиксельный недельный рейтинг вайбкодеров. Privacy-first **vibecode rating**
@@ -112,22 +113,19 @@ pnpm run check:publication
 
 ## Готовность к GitHub
 
-Сначала исходники загружаются в **приватный GitHub repository**. Пока репозиторий приватный,
-настройте и проверьте все доступные в этом режиме controls. GitHub Private Vulnerability Reporting
-включается во время контролируемого visibility cutover, потому что эта repository setting доступна
-для public repositories. Не объявляйте проект и не приглашайте внешних участников до зелёного
-финального publication gate.
+Репозиторий рассчитан на немедленный **public source-only режим**. Сначала создаётся пустой public
+repository, затем настраиваются security/interaction controls, и только после зелёного publication
+gate отправляются исходники.
 
 - подтверждены публичные maintainer identities и matching CODEOWNERS;
-- настроен и проверен приватный conduct-reporting channel;
-- защищён `main` и выбраны обязательные CI checks;
-- просмотрен первый hosted Actions run и его публичные logs;
-- выполнен проверенный visibility cutover, сразу включён и протестирован GitHub Private
-  Vulnerability Reporting, а при его недоступности процесс остановлен или repository возвращён в
-  private visibility;
+- до source push включён и протестирован GitHub Private Vulnerability Reporting;
+- Issues и Discussions отключены, Pull Requests доступны только collaborators;
+- проверенный `main` отправлен, защищён и связан с обязательными CI checks;
+- просмотрен первый hosted Actions run и его public logs;
 - повторно пройдены `verify:release` и `check:publication`.
 
-Точный private-first процесс:
+Пока participation закрыт, фиктивный conduct endpoint не создаётся. Для открытия public interactions
+позже потребуется реальный протестированный private conduct channel. Точный процесс:
 [First GitHub publication (EN)](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
 ## Основные документы

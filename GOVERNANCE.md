@@ -1,8 +1,9 @@
 # Governance
 
-Vibe Racing is currently a maintainer-led project in pre-public preparation. Governance becomes
-operational only when real public maintainers are recorded in [MAINTAINERS.md](MAINTAINERS.md). No
-identity is inferred from a workstation, Git configuration, commit history, or private account.
+Vibe Racing is currently a maintainer-led project in unpublished source-only preparation. Governance
+becomes operational only when real public maintainers are recorded in
+[MAINTAINERS.md](MAINTAINERS.md). No identity is inferred from a workstation, Git configuration,
+commit history, or private account.
 
 ## Principles
 

@@ -3,10 +3,10 @@
 > **Status:** local pre-alpha. The synthetic web prototype is runnable, but no production service or
 > released connector exists.
 
-External participation remains closed until real public maintainers, CODEOWNERS, and tested private
-security and conduct-reporting channels are configured. See
-[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md) for the private-first
-publication sequence.
+External participation remains closed. The source can be published immediately in source-only mode
+after a real maintainer and CODEOWNERS are recorded, GitHub private vulnerability reporting is
+verified, and Issues/Discussions are disabled with Pull Requests limited to collaborators. See
+[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
 Vibe Racing is an open-source, pixel-art weekly token leaderboard for vibe coders. It presents one
 privacy-first **vibecode rating** as a public race. The current local slice supports Codex only and
@@ -121,23 +121,21 @@ synthetic evidence. A green local command is not production or hosted-CI evidenc
 
 ## Publication status
 
-The source tree is designed to be uploaded to a **private GitHub repository first**. Keep it private
-while every control that GitHub permits on a private repository is configured and reviewed. GitHub
-Private Vulnerability Reporting is enabled during a controlled visibility cutover because GitHub
-offers that repository setting to public repositories; do not announce the project or invite outside
-participation until the final publication gate passes.
+The source tree is designed for an immediate **public, source-only GitHub repository**. Create the
+empty public repository first, configure its security and interaction settings, and push source only
+after the local publication gate passes.
 
 - confirm public maintainer identities and matching CODEOWNERS;
-- configure and test private conduct reporting;
-- protect `main` and require the reviewed CI checks;
-- review the first hosted Actions run and all visible logs;
-- make the reviewed visibility cutover, immediately enable and test GitHub private vulnerability
-  reporting, and stop or return to private visibility if it is unavailable;
+- enable and test GitHub private vulnerability reporting before the source push;
+- disable Issues and Discussions and limit Pull Requests to collaborators;
+- push the reviewed `main`, protect it, and require the reviewed CI checks;
+- review the first hosted Actions run and its public logs;
 - rerun `verify:release` and `check:publication`.
 
-The exact operator sequence and rollback boundary are documented in
-[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md). Release and deployment
-are separate later workflows.
+No conduct endpoint is invented while participation is closed. Opening public interactions later
+requires a real tested private conduct channel. The exact sequence is documented in
+[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md); release and deployment
+remain separate workflows.
 
 ## Documentation
 

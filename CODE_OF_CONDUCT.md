@@ -2,12 +2,15 @@
 
 External participation status: closed.
 
+GitHub public interaction status: not restricted or verified.
+
 Conduct reporting channel: not configured.
 
-The repository is in pre-public preparation for an open-source community, but outside participation
-must not be invited or accepted until a private conduct-reporting channel and at least one
-accountable public maintainer are configured. This status is a publication safeguard, not an
-invitation to report conduct concerns in public.
+The source may be published in a source-only mode, but outside participation must not be invited or
+accepted until a private conduct-reporting channel and at least one accountable public maintainer
+are configured. In source-only mode, GitHub Issues and Discussions remain disabled, while Pull
+Requests are limited to collaborators and verified as restricted. This status is not an invitation
+to report conduct concerns in public.
 
 ## Our commitment
 
@@ -50,8 +53,24 @@ to assess the incident.
 While the conduct channel status above is `not configured`, the project is not ready to accept
 outside participation. Before opening participation, maintainers must publish a project-controlled
 private HTTPS reporting channel, document who can access it, test receipt and retention, and replace
-both status lines at the top of this file. Security vulnerabilities follow
+all three status lines at the top of this file. Security vulnerabilities follow
 [SECURITY.md](SECURITY.md), not the conduct process.
+
+## Public source-only mode
+
+Public source visibility permits reading, cloning, and forking; it does not by itself open project
+participation. While external participation is closed:
+
+- GitHub Issues and Discussions must be disabled, and Pull Requests must be limited to
+  collaborators, with all three settings verified after repository creation;
+- no project documentation may invite bug reports, feature requests, contributions, or community
+  support;
+- maintainers may use repository access only for reviewed maintainer changes;
+- the absence of a conduct channel must remain explicit rather than being replaced with a public
+  issue or security-reporting route.
+
+Opening any public interaction surface requires the private conduct channel first, followed by a
+reviewed update to the status lines and publication gate.
 
 ## Enforcement
 

@@ -1,11 +1,12 @@
 # Contributing to Vibe Racing
 
-Vibe Racing is currently building its public foundation. Contributions should preserve the public
-trust model and keep the repository safe to publish.
+Vibe Racing is currently building its public foundation. Maintainer changes should preserve the
+public trust model and keep the repository safe to publish.
 
-External contribution status: closed during pre-public preparation. Do not open or solicit outside
-issues or pull requests until the publication gate in [MAINTAINERS.md](MAINTAINERS.md) is complete.
-These instructions define the future contribution contract and apply to maintainer changes now.
+External contribution status: closed. A public source-only repository keeps GitHub Issues and
+Discussions disabled and limits Pull Requests to collaborators; do not open or solicit those
+surfaces until the participation gate in [MAINTAINERS.md](MAINTAINERS.md) is complete. These
+instructions define the future contribution contract and apply to maintainer changes now.
 
 ## Before contributing
 
@@ -98,9 +99,9 @@ Then inspect the complete `git diff --cached`. Automated pattern checks do not r
 meaning, decoded binary metadata, asset provenance, unreachable local Git objects, or remotes that
 will actually be pushed. Do not claim application build or test success until those checks exist.
 
-Project maintainers also run `pnpm run check:publication` before the first public announcement. It
-is intentionally not part of normal verification because a correctly disclosed pre-public tree is
-expected to fail until hosted identities and controls exist.
+Project maintainers also run `pnpm run check:publication` before the first public source push. It is
+intentionally not part of normal verification because an unpublished tree is expected to fail until
+hosted identities and controls exist.
 
-The private-first upload and hosted-control sequence is documented in
+The public source-only upload and hosted-control sequence is documented in
 [First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).

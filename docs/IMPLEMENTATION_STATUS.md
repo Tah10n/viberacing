@@ -45,7 +45,7 @@ Codex-only path from the existing reader through `UsageSyncV1` to a direct token
 | Additional agent readers, optional MCP, and per-provider Verified tier                   | Proposed (ADR 0068)                | [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md); plan Phases 6, 9, and 10                     |
 | Thin client, hybrid onboarding, ownership lease, per-device keys, partitioned backfill   | Proposed (ADR 0069)                | [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md); plan Phase 6                               |
 | Hosted deployment, production login/TLS, live edge route, released connector, real OAuth | Not implemented                    | See [Not implemented yet](#not-implemented-yet)                                                                   |
-| Phase 0 publication: maintainer identity, CODEOWNERS, remote, hosted CI                  | Pending                            | `check:publication` (intentionally failing)                                                                       |
+| Phase 0 public source: maintainer, CODEOWNERS, PVR, hosted controls                      | Pending                            | `check:publication` (intentionally failing)                                                                       |
 | Phase 1 release evidence: provisioned browser, native screen-reader, field CWV           | Pending                            | See [Phase 1 still pending](#phase-1-still-pending)                                                               |
 
 ## Current phase
@@ -351,11 +351,11 @@ scheduler/cadence exists.
   issue forms, automatic assignment, unresolved ownership, modified DCO text, and missing privacy
   warnings.
 - A fail-closed publication-readiness checker with regression coverage for GitHub remote,
-  MAINTAINERS/CODEOWNERS agreement, protected policy ownership, private conduct reporting, and
-  private vulnerability reporting state.
-- A repository-owned private-first GitHub publication runbook separates local history/public-data
-  evidence from real hosted maintainer, CODEOWNERS, branch-ruleset, reporting, Actions-log, and
-  visibility controls.
+  MAINTAINERS/CODEOWNERS agreement, protected policy ownership, verified source-only interaction
+  restrictions or open-participation conduct reporting, and private vulnerability reporting state.
+- A repository-owned public source-only GitHub publication runbook separates local
+  history/public-data evidence from real hosted maintainer, CODEOWNERS, interaction restrictions,
+  branch-ruleset, reporting, Actions-log, and visibility controls.
 - A repository-scoped design threat model with assets, attacker capabilities, trust boundaries,
   realistic/out-of-scope stories, required mitigations, implemented-versus-planned status, and
   severity calibration.
@@ -1712,9 +1712,10 @@ The first command is the normal development gate. `verify:release` and the expli
 production-build, checker-regression, and Docker commands are release or boundary-specific evidence;
 they are not required for every local edit.
 
-`pnpm run check:publication` is intentionally failing in this pre-public tree. It becomes a required
-passing gate only after the public maintainer identity, CODEOWNERS, GitHub remote, and private
-reporting settings are real and verified.
+`pnpm run check:publication` is intentionally failing in this unpublished tree. It becomes a
+required passing source-only gate only after the public maintainer identity, CODEOWNERS, GitHub
+remote, private vulnerability reporting, and hosted interaction restrictions are real and verified.
+Open participation additionally requires a tested private conduct channel.
 
 The staged check reads blobs from the Git index, not potentially different working-tree copies.
 Review `git diff --cached` manually before every commit.

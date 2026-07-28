@@ -32,8 +32,9 @@ or social post.
 
 The public repository must enable GitHub private vulnerability reporting before its first
 announcement. Use the repository's **Report a vulnerability** action to submit a confidential
-report. If that action is unavailable, open a public issue containing no technical details and ask
-the maintainers to provide the current private reporting channel.
+report. If that action is unavailable, do not substitute a public issue, pull request, conduct
+report, or personal contact. The hosted state no longer matches this policy; maintainers must
+restore and reverify private vulnerability reporting before inviting reports.
 
 Do not send credentials, private keys, real user records, production database exports, or unrelated
 personal data with a report. Use minimal synthetic evidence whenever possible.

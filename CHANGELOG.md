@@ -8,12 +8,12 @@ Versioning where its guarantees are applicable.
 
 ### Added
 
-- A private-first GitHub publication runbook that separates a source upload from public visibility
-  and binds confirmed maintainer identity, CODEOWNERS, `main` rules, hosted CI review, private
-  vulnerability/conduct reporting, and final local gates without claiming those hosted controls
-  exist. A separate manifest-derived documentation-currentness checker and seven mutation fixtures
-  keep EN/RU root onboarding compact and bind its contract/OpenAPI/migration inventories to
-  canonical files.
+- A public source-only GitHub publication runbook that configures an empty public repository before
+  the first source push and binds confirmed maintainer identity, CODEOWNERS, verified private
+  vulnerability reporting, restricted Issues/Discussions/Pull Requests, `main` rules, hosted CI
+  review, and final local gates without claiming those hosted controls exist. A separate
+  manifest-derived documentation-currentness checker and seven mutation fixtures keep EN/RU root
+  onboarding compact and bind its contract/OpenAPI/migration inventories to canonical files.
 - A checked profile-deletion failure rehearsal runbook for the existing atomic request, Jobs-only
   maximum-ten primary purge, and 30-day terminal-job retention boundary. Twenty-six controls and ten
   exact commands distinguish request, purge, retention, and stale-backup/cache failure; preserve
@@ -629,6 +629,9 @@ Versioning where its guarantees are applicable.
   trust/privacy, architecture, status, verification, publication, and documentation maps under a
   checked 220-line limit. Corrected current migration and OpenAPI counts and normalized nested root
   pnpm scripts to the same bare `pnpm` convention.
+- Split public source visibility from open community participation. The publication gate now accepts
+  a verified source-only mode with Issues and Discussions disabled and Pull Requests limited to
+  collaborators, while still requiring a private conduct channel before public interactions open.
 - Removed the unreleased `ConnectorSyncV1` contract, `/v1/community/sync` operation, Edge/Ingest
   branches, generated artifacts, and direct runtime access to its internal SQL implementation.
   `UsageSyncV1` on exact `/v1/community/usage` is now the sole usage-ingest protocol, while

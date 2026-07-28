@@ -1333,22 +1333,25 @@ The planned public tree is:
 
 ### Community and governance
 
-Before the repository is announced publicly it includes:
+Before source is pushed to a public repository it includes:
 
 - Apache-2.0 LICENSE and clear asset licensing;
 - CONTRIBUTING with setup, architecture map, review expectations, DCO sign-off, and safe test-data
   rules;
-- CODE_OF_CONDUCT with a tested project-controlled private enforcement channel;
+- CODE_OF_CONDUCT with an explicit source-only interaction state; a tested project-controlled
+  private enforcement channel is required before public participation opens;
 - SECURITY with supported versions and GitHub private vulnerability reporting;
 - GOVERNANCE, MAINTAINERS, SUPPORT, ROADMAP, changelog, release policy, issue forms, and
   pull-request template;
 - Developer Certificate of Origin rather than a custom CLA for the initial contributor model;
 - a documented trademark and branding policy before the name or logo is promoted broadly.
 
-Pre-public policy files and forms may exist before public identities are known, but they must state
-that participation is closed. Publication remains blocked until a real maintainer, matching
-CODEOWNERS rules, and tested private reporting channels replace that status. Local workstation
-identity is never used as a substitute.
+Unpublished policy files and forms may exist before public identities are known, but they must state
+that participation is closed. Source-only publication remains blocked until a real maintainer,
+matching CODEOWNERS rules, verified private vulnerability reporting, and verified hosted interaction
+restrictions replace the pre-public status. A tested private conduct channel is required before
+Issues, Discussions, or unrestricted Pull Requests open. Local workstation identity is never used as
+a substitute.
 
 Before owner-directed bootstrap work is committed, the project owner explicitly supplies and
 approves a public Git author name plus a GitHub-verified or GitHub-provided `noreply` email.

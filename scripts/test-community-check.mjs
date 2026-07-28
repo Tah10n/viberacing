@@ -57,6 +57,10 @@ const cases = [
         text
           .replace("External participation status: closed.", "External participation status: open.")
           .replace(
+            "GitHub public interaction status: not restricted or verified.",
+            "GitHub public interaction status: enabled for open participation.",
+          )
+          .replace(
             "Conduct reporting channel: not configured.",
             "Conduct reporting channel: https://reports.example.org/conduct",
           ),
@@ -77,17 +81,56 @@ const cases = [
     expectedStatus: 0,
   },
   {
-    name: "rejects open participation without configured safeguards",
+    name: "accepts a coherent public source-only state",
     mutate(directory) {
       mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
         text.replace(
-          "External participation status: closed.",
-          "External participation status: open.",
+          "GitHub public interaction status: not restricted or verified.",
+          "GitHub public interaction status: restricted and verified.",
         ),
+      );
+      mutate(
+        directory,
+        "MAINTAINERS.md",
+        (text) =>
+          `${text.replace("Public maintainer registry: not configured.", "Public maintainer registry: configured.")}\n- https://github.com/viberacing-ci-fixture\n`,
+      );
+      mutate(directory, "SECURITY.md", (text) =>
+        text.replace(
+          "Private vulnerability reporting status: not enabled or verified.",
+          "Private vulnerability reporting status: enabled and verified.",
+        ),
+      );
+    },
+    expectedStatus: 0,
+  },
+  {
+    name: "rejects open participation without configured safeguards",
+    mutate(directory) {
+      mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
+        text
+          .replace("External participation status: closed.", "External participation status: open.")
+          .replace(
+            "GitHub public interaction status: not restricted or verified.",
+            "GitHub public interaction status: enabled for open participation.",
+          ),
       );
     },
     expectedStatus: 1,
     expectedText: "open participation requires a configured private conduct channel",
+  },
+  {
+    name: "rejects closed participation with public interactions enabled",
+    mutate(directory) {
+      mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
+        text.replace(
+          "GitHub public interaction status: not restricted or verified.",
+          "GitHub public interaction status: enabled for open participation.",
+        ),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "closed participation cannot claim",
   },
   {
     name: "rejects a missing required policy",

@@ -15,14 +15,14 @@ function git(directory, args) {
   }
 }
 
-function makeFixture(name, ready = false) {
+function makeFixture(name, mode = "pre-public") {
   const directory = join(fixtureRoot, name);
   mkdirSync(resolve(directory, ".github"), { recursive: true });
   for (const path of ["CODE_OF_CONDUCT.md", "MAINTAINERS.md", "SECURITY.md"]) {
     cpSync(resolve(root, path), resolve(directory, path));
   }
   git(directory, ["init", "--quiet"]);
-  if (ready) {
+  if (mode !== "pre-public") {
     git(directory, [
       "remote",
       "add",
@@ -37,12 +37,26 @@ function makeFixture(name, ready = false) {
       resolve(directory, "MAINTAINERS.md"),
       "# Maintainers\n\nPublic maintainer registry: configured.\n\n- https://github.com/viberacing-ci-fixture\n",
     );
-    const conduct = readFileSync(resolve(directory, "CODE_OF_CONDUCT.md"), "utf8")
-      .replace("External participation status: closed", "External participation status: open")
-      .replace(
-        "Conduct reporting channel: not configured.",
-        "Conduct reporting channel: https://reports.example.org/conduct",
+    let conduct = readFileSync(resolve(directory, "CODE_OF_CONDUCT.md"), "utf8");
+    if (mode === "source-only") {
+      conduct = conduct.replace(
+        "GitHub public interaction status: not restricted or verified.",
+        "GitHub public interaction status: restricted and verified.",
       );
+    } else if (mode === "open-participation") {
+      conduct = conduct
+        .replace("External participation status: closed", "External participation status: open")
+        .replace(
+          "GitHub public interaction status: not restricted or verified.",
+          "GitHub public interaction status: enabled for open participation.",
+        )
+        .replace(
+          "Conduct reporting channel: not configured.",
+          "Conduct reporting channel: https://reports.example.org/conduct",
+        );
+    } else {
+      throw new Error(`unknown fixture mode: ${mode}`);
+    }
     writeFileSync(resolve(directory, "CODE_OF_CONDUCT.md"), conduct);
     const security = readFileSync(resolve(directory, "SECURITY.md"), "utf8").replace(
       "Private vulnerability reporting status: not enabled or verified.",
@@ -63,19 +77,25 @@ function run(directory) {
 const cases = [
   {
     name: "rejects the honest pre-public state",
-    ready: false,
+    mode: "pre-public",
     expectedStatus: 1,
-    expectedText: "Do not publish yet",
+    expectedText: "Do not publish source yet",
   },
   {
-    name: "accepts a complete static publication fixture",
-    ready: true,
+    name: "accepts a complete open-participation publication fixture",
+    mode: "open-participation",
     expectedStatus: 0,
-    expectedText: "Static publication-readiness checks passed",
+    expectedText: "Static publication-readiness checks passed (open-participation)",
+  },
+  {
+    name: "accepts a verified source-only publication fixture",
+    mode: "source-only",
+    expectedStatus: 0,
+    expectedText: "Static publication-readiness checks passed (source-only)",
   },
   {
     name: "rejects CODEOWNERS and maintainer drift",
-    ready: true,
+    mode: "open-participation",
     mutate(directory) {
       writeFileSync(
         resolve(directory, ".github/CODEOWNERS"),
@@ -87,7 +107,7 @@ const cases = [
   },
   {
     name: "rejects a trailing global CODEOWNERS override",
-    ready: true,
+    mode: "open-participation",
     mutate(directory) {
       const path = resolve(directory, ".github/CODEOWNERS");
       writeFileSync(path, `${readFileSync(path, "utf8")}* @different-fixture\n`);
@@ -97,7 +117,7 @@ const cases = [
   },
   {
     name: "rejects unreviewed CODEOWNERS wildcard syntax",
-    ready: true,
+    mode: "open-participation",
     mutate(directory) {
       const path = resolve(directory, ".github/CODEOWNERS");
       writeFileSync(path, `${readFileSync(path, "utf8")}/docs/** @viberacing-ci-fixture\n`);
@@ -107,7 +127,7 @@ const cases = [
   },
   {
     name: "rejects a public issue page as a conduct channel",
-    ready: true,
+    mode: "open-participation",
     mutate(directory) {
       const path = resolve(directory, "CODE_OF_CONDUCT.md");
       writeFileSync(
@@ -123,7 +143,7 @@ const cases = [
   },
   {
     name: "rejects query data in the conduct channel",
-    ready: true,
+    mode: "open-participation",
     mutate(directory) {
       const path = resolve(directory, "CODE_OF_CONDUCT.md");
       writeFileSync(
@@ -138,8 +158,8 @@ const cases = [
     expectedText: "credential-free HTTPS endpoint without query data",
   },
   {
-    name: "rejects a closed participation status",
-    ready: true,
+    name: "rejects closed participation while public interactions remain enabled",
+    mode: "open-participation",
     mutate(directory) {
       const path = resolve(directory, "CODE_OF_CONDUCT.md");
       writeFileSync(
@@ -151,13 +171,42 @@ const cases = [
       );
     },
     expectedStatus: 1,
-    expectedText: "does not mark external participation open",
+    expectedText: "source-only publication requires GitHub Issues",
+  },
+  {
+    name: "rejects unverified source-only interaction controls",
+    mode: "source-only",
+    mutate(directory) {
+      const path = resolve(directory, "CODE_OF_CONDUCT.md");
+      writeFileSync(
+        path,
+        readFileSync(path, "utf8").replace(
+          "GitHub public interaction status: restricted and verified.",
+          "GitHub public interaction status: not restricted or verified.",
+        ),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "source-only publication requires GitHub Issues",
+  },
+  {
+    name: "rejects a missing conduct-channel status in source-only mode",
+    mode: "source-only",
+    mutate(directory) {
+      const path = resolve(directory, "CODE_OF_CONDUCT.md");
+      writeFileSync(
+        path,
+        readFileSync(path, "utf8").replace("Conduct reporting channel: not configured.\n", ""),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "conduct-reporting channel status is missing",
   },
 ];
 
 try {
   for (const [index, testCase] of cases.entries()) {
-    const directory = makeFixture(`case-${index}`, testCase.ready);
+    const directory = makeFixture(`case-${index}`, testCase.mode);
     testCase.mutate?.(directory);
     const result = run(directory);
     const output = `${result.stdout}${result.stderr}`;

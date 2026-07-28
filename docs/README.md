@@ -15,9 +15,9 @@ remain safe to publish verbatim.
   boundaries and the commit/publication checklist.
 - [Local development](getting-started/LOCAL_DEVELOPMENT.md) — pinned tools, repository gates, and
   synthetic web prototype and disposable PostgreSQL startup.
-- [First GitHub publication](getting-started/GITHUB_FIRST_PUBLICATION.md) — private-first source
-  upload, confirmed public ownership, CODEOWNERS, hosted branch/reporting controls, and the final
-  visibility gate.
+- [First GitHub publication](getting-started/GITHUB_FIRST_PUBLICATION.md) — empty-public-repository
+  setup, source-only interaction restrictions, confirmed ownership, CODEOWNERS, reporting, first
+  push, hosted CI, and branch controls.
 - [Railway Web staging](getting-started/RAILWAY_WEB_STAGING.md) — minimal production image,
   standalone runtime smoke, exact default-off variables, and the explicit preview-only boundary.
 - [Railway data-plane staging](getting-started/RAILWAY_DATA_PLANE_STAGING.md) — separate Web,

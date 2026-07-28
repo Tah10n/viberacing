@@ -61,6 +61,7 @@ const contentRequirements = new Map([
     "CODE_OF_CONDUCT.md",
     [
       "External participation status:",
+      "GitHub public interaction status:",
       "Conduct reporting channel:",
       "Contributor Covenant, version 3.0",
     ],
@@ -138,6 +139,8 @@ const securityPolicy = texts.get("SECURITY.md");
 if (conductPolicy !== null && maintainerPolicy !== null && securityPolicy !== null) {
   const participationStatus =
     conductPolicy.match(/^External participation status:\s*(.+?)\s*$/m)?.[1] ?? "";
+  const interactionStatus =
+    conductPolicy.match(/^GitHub public interaction status:\s*(.+?)\s*$/m)?.[1] ?? "";
   const conductChannel = conductPolicy.match(/^Conduct reporting channel:\s*(.+?)\s*$/m)?.[1] ?? "";
   const maintainerStatus =
     maintainerPolicy.match(/^Public maintainer registry:\s*(.+?)\s*$/m)?.[1] ?? "";
@@ -146,6 +149,15 @@ if (conductPolicy !== null && maintainerPolicy !== null && securityPolicy !== nu
 
   if (!new Set(["closed.", "open."]).has(participationStatus)) {
     report("CODE_OF_CONDUCT.md", "external participation status must be exactly closed or open");
+  }
+  if (
+    !new Set([
+      "not restricted or verified.",
+      "restricted and verified.",
+      "enabled for open participation.",
+    ]).has(interactionStatus)
+  ) {
+    report("CODE_OF_CONDUCT.md", "GitHub public interaction status has an unsupported value");
   }
 
   let conductChannelReady = false;
@@ -193,6 +205,12 @@ if (conductPolicy !== null && maintainerPolicy !== null && securityPolicy !== nu
   }
 
   if (participationStatus === "open.") {
+    if (interactionStatus !== "enabled for open participation.") {
+      report(
+        "CODE_OF_CONDUCT.md",
+        "open participation requires GitHub public interactions to be marked enabled",
+      );
+    }
     if (!conductChannelReady) {
       report(
         "CODE_OF_CONDUCT.md",
@@ -208,6 +226,11 @@ if (conductPolicy !== null && maintainerPolicy !== null && securityPolicy !== nu
     if (vulnerabilityStatus !== "enabled and verified.") {
       report("SECURITY.md", "open participation requires verified private vulnerability reporting");
     }
+  } else if (interactionStatus === "enabled for open participation.") {
+    report(
+      "CODE_OF_CONDUCT.md",
+      "closed participation cannot claim that GitHub public interactions are enabled",
+    );
   }
 }
 

@@ -119,24 +119,26 @@ if (codeowners) {
 }
 
 const conduct = read("CODE_OF_CONDUCT.md");
-if (!/^External participation status:\s*open\.\s*$/m.test(conduct)) {
-  blockers.push("the code of conduct does not mark external participation open");
-}
+const participationStatus =
+  conduct.match(/^External participation status:\s*(.+?)\s*$/m)?.[1] ?? "";
+const interactionStatus =
+  conduct.match(/^GitHub public interaction status:\s*(.+?)\s*$/m)?.[1] ?? "";
 const conductChannel = conduct.match(/^Conduct reporting channel:\s*(.+?)\s*$/m)?.[1] ?? "";
-if (!conductChannel || conductChannel === "not configured.") {
-  blockers.push("a private conduct-reporting HTTPS channel is not configured");
-} else {
+let conductChannelReady = false;
+if (!conductChannel) {
+  blockers.push("the conduct-reporting channel status is missing");
+} else if (conductChannel !== "not configured.") {
   try {
     const url = new URL(conductChannel);
-    if (
-      url.protocol !== "https:" ||
-      url.hostname === "localhost" ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      /\/issues(?:\/|$)/.test(url.pathname)
-    ) {
+    conductChannelReady =
+      url.protocol === "https:" &&
+      url.hostname !== "localhost" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      !/\/issues(?:\/|$)/.test(url.pathname);
+    if (!conductChannelReady) {
       blockers.push(
         "the conduct-reporting channel must be a private credential-free HTTPS endpoint without query data, not a public issue page",
       );
@@ -144,6 +146,26 @@ if (!conductChannel || conductChannel === "not configured.") {
   } catch {
     blockers.push("the conduct-reporting channel is not a valid HTTPS URL");
   }
+}
+
+let publicationMode = "";
+if (participationStatus === "closed.") {
+  publicationMode = "source-only";
+  if (interactionStatus !== "restricted and verified.") {
+    blockers.push(
+      "source-only publication requires GitHub Issues and Discussions to be disabled, Pull Requests to be collaborators-only, and all three settings to be recorded as verified",
+    );
+  }
+} else if (participationStatus === "open.") {
+  publicationMode = "open-participation";
+  if (interactionStatus !== "enabled for open participation.") {
+    blockers.push("open participation requires GitHub public interactions to be marked enabled");
+  }
+  if (!conductChannelReady) {
+    blockers.push("open participation requires a private conduct-reporting HTTPS channel");
+  }
+} else {
+  blockers.push("external participation must be exactly closed or open");
 }
 
 const security = read("SECURITY.md");
@@ -157,11 +179,11 @@ if (blockers.length > 0) {
     console.error(`- ${blocker}`);
   }
   console.error(
-    "Do not publish yet. Configure real public project identities and hosted controls, then rerun this gate.",
+    "Do not publish source yet. Configure real public project identities and hosted controls, then rerun this gate.",
   );
   process.exit(1);
 }
 
 console.log(
-  "Static publication-readiness checks passed. Verify hosted permissions and security settings before announcing the repository.",
+  `Static publication-readiness checks passed (${publicationMode}). Verify hosted permissions and security settings before announcing the repository.`,
 );

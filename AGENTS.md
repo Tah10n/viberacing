@@ -556,8 +556,9 @@ replay, real-user deletion, recovery, or deployment.
   database-session release, immutable runtime contents, and complete cleanup. It does not prove a
   deployed signal route, Railway/orchestrator drain, external TLS, protected secret delivery,
   production credentials, representative load/capacity, real-user input, or deployment.
-- `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS, and
-  private reporting controls are configured.
+- `pnpm run check:publication` is expected to fail until real hosted maintainers, CODEOWNERS,
+  private vulnerability reporting, and either verified source-only interaction restrictions or
+  open-participation conduct reporting are configured.
 - `pnpm run check:database` verifies immutable migration paths/checksums and static capability
   policy. `pnpm run test:database:integration` separately uses an isolated, portless, ephemeral
   PostgreSQL Compose project to apply the reviewed manifest in order. Before revision 0039 it holds
