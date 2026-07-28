@@ -123,6 +123,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Install the Linux Secret Service build dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libdbus-1-dev pkg-config
+
       - name: Install the pinned Rust toolchain
         run: >-
           rustup toolchain install 1.94.0 --profile minimal --component clippy,rustfmt

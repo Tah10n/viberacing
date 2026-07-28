@@ -92,6 +92,7 @@
     "itoa",
     "JSONL",
     "libc",
+    "libdbus",
     "lpad",
     "Lucida",
     "memchr",

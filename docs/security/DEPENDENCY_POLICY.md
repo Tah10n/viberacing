@@ -218,11 +218,15 @@ lifecycle scripts, and runs the bounded development gate. The `main` or manually
 also installs the pinned minimal Rust toolchain and runs `cargo fetch --locked` before the
 exhaustive release gate. Fetch resolves only committed checksums and does not execute crate build
 scripts; the license checker then runs Cargo metadata offline. The separate Rust job compiles and
-tests the same lock graph for every event; no job receives secrets or release authority. After
-exhaustive Node verification, the secretless `main` or manual job runs eleven synthetic
-disposable-PostgreSQL integrations, including the real local Web and Ingest HTTP boundaries plus
-separate OS-signal checks for emitted Ingest and Jobs-scheduler processes. They use no production
-credential or artifact upload and are not release or deployment evidence.
+tests the same lock graph for every event; no job receives secrets or release authority. Its Ubuntu
+runner installs only the `libdbus-1-dev` headers and `pkg-config` before compilation because the
+reviewed Linux Secret Service backend links to the runner's native D-Bus library; a configuration
+regression binds that exact build-only setup and order. This is hosted build infrastructure, not an
+embedded connector runtime or deployment dependency. After exhaustive Node verification, the
+secretless `main` or manual job runs eleven synthetic disposable-PostgreSQL integrations, including
+the real local Web and Ingest HTTP boundaries plus separate OS-signal checks for emitted Ingest and
+Jobs-scheduler processes. They use no production credential or artifact upload and are not release
+or deployment evidence.
 
 New crates require the same necessity, maintenance, license, provenance, and advisory review as npm
 packages. Native code, build scripts, proc macros, network clients, cryptography, parsers, and

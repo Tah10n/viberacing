@@ -309,6 +309,21 @@ const windowsPortableSteps = [
   },
   { run: "node scripts/test-connector-windows-portable.mjs" },
 ];
+const linuxSecretServiceBuildSetup = [
+  "sudo apt-get update",
+  "sudo apt-get install --yes --no-install-recommends libdbus-1-dev pkg-config",
+].join("\n");
+const rustSteps = [
+  {
+    uses: pinnedCheckout,
+    with: { "fetch-depth": 0, "persist-credentials": false },
+  },
+  { run: linuxSecretServiceBuildSetup },
+  {
+    run: "rustup toolchain install 1.94.0 --profile minimal --component clippy,rustfmt",
+  },
+  { run: "node scripts/check-rust.mjs" },
+];
 const goodCiWorkflow = {
   ...goodWorkflow,
   jobs: {
@@ -316,6 +331,11 @@ const goodCiWorkflow = {
       ...goodWorkflow.jobs.verify,
       "timeout-minutes": 25,
       steps: requiredNodeSteps,
+    },
+    rust: {
+      ...goodWorkflow.jobs.verify,
+      "timeout-minutes": 15,
+      steps: rustSteps,
     },
     connector_windows_portable: {
       ...goodWorkflow.jobs.verify,
@@ -327,6 +347,23 @@ const goodCiWorkflow = {
   },
 };
 assert.deepEqual(validateWorkflow(".github/workflows/ci.yml", goodCiWorkflow), []);
+assert.match(
+  validateWorkflow(".github/workflows/ci.yml", {
+    ...goodCiWorkflow,
+    jobs: {
+      ...goodCiWorkflow.jobs,
+      rust: {
+        ...goodCiWorkflow.jobs.rust,
+        steps: rustSteps.map((step) =>
+          step.run === linuxSecretServiceBuildSetup
+            ? { run: step.run.replace("libdbus-1-dev", "libdbus-1-3") }
+            : step,
+        ),
+      },
+    },
+  }).join("\n"),
+  /Linux Secret Service build setup/,
+);
 assert.match(
   validateWorkflow(".github/workflows/ci.yml", {
     ...goodCiWorkflow,

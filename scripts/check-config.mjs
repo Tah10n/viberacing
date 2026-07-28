@@ -86,6 +86,10 @@ const windowsPortableRuns = [
   "cargo build --release --locked --target-dir target --package viberacing-connector --bin viberacing-connector",
   "node scripts/test-connector-windows-portable.mjs",
 ];
+const linuxSecretServiceBuildSetup = [
+  "sudo apt-get update",
+  "sudo apt-get install --yes --no-install-recommends libdbus-1-dev pkg-config",
+].join("\n");
 const requiredEnvExampleValues = new Map([
   ["DATABASE_HOST", "127.0.0.1"],
   ["DATABASE_NAME", "viberacing_local"],
@@ -601,6 +605,45 @@ export function validateWorkflow(path, workflow) {
       findings.push(
         "Node CI must run only the core gate on pull requests and reserve Cargo license setup, the release gate, and synthetic PostgreSQL integrations for main or manual runs",
       );
+    }
+
+    const rustJob = workflow.jobs?.rust;
+    if (!isObject(rustJob)) {
+      findings.push("primary CI must define the Rust workspace-gate job");
+    } else {
+      const rustSteps = rustJob.steps;
+      const rustCheckoutStep = Array.isArray(rustSteps) ? rustSteps[0] : undefined;
+      const rustRunSteps = Array.isArray(rustSteps)
+        ? rustSteps
+            .slice(1)
+            .map((step) =>
+              isObject(step) && typeof step.run === "string" ? step.run.trimEnd() : null,
+            )
+        : [];
+      const exactRustCheckout =
+        isObject(rustCheckoutStep) &&
+        typeof rustCheckoutStep.uses === "string" &&
+        rustCheckoutStep.uses.startsWith("actions/checkout@") &&
+        exactValue(rustCheckoutStep.with, {
+          "fetch-depth": 0,
+          "persist-credentials": false,
+        });
+      if (
+        rustJob["runs-on"] !== "ubuntu-24.04" ||
+        rustJob["timeout-minutes"] !== 15 ||
+        !Array.isArray(rustSteps) ||
+        rustSteps.length !== 4 ||
+        !exactRustCheckout ||
+        !exactValue(rustRunSteps, [
+          linuxSecretServiceBuildSetup,
+          "rustup toolchain install 1.94.0 --profile minimal --component clippy,rustfmt",
+          "node scripts/check-rust.mjs",
+        ])
+      ) {
+        findings.push(
+          "Rust CI must use the exact Ubuntu runner, Linux Secret Service build setup, pinned toolchain, and workspace gate in fixed order",
+        );
+      }
     }
 
     const windowsPortableJob = workflow.jobs?.connector_windows_portable;
