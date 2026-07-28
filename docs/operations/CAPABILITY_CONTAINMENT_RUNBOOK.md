@@ -2,6 +2,13 @@
 
 ## Scope and evidence boundary
 
+**Clean-slate transition hold.** ADR 0076 removes the unreleased legacy Community routes and
+replaces CodexSource authority with AgentAccount-scoped devices plus snapshot-only public reads. The
+current ten-decision catalog remains baseline evidence only until the final route/account/snapshot
+modules and their exact default-off decisions land. Do not interpret an old flag as containment of
+`POST /v1/usage`, `GET /v1/leaderboards/*`, AgentAccount pairing, snapshot refresh, or a released
+connector.
+
 This is the checked operator prerequisite for containing one or more Vibe Racing capabilities after
 a security, privacy, integrity, or reliability incident. It binds the ten repository-owned
 default-off decisions to protected triage, process replacement, verification, and recovery of one

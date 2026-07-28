@@ -1,11 +1,11 @@
 # ADR 0069: Thin auditable multi-agent client and low-friction hybrid onboarding
 
-- Status: Proposed
+- Status: Superseded
 - Date: 2026-07-21
 - Decision owners: Connector, Web/Auth, Ingest, and Product owners
 - Supersedes: None while Proposed (if accepted, would refine ADR 0068's connection path and
   partially supersede ADR 0003's GitHub-required enrollment framing)
-- Superseded by: None
+- Superseded by: ADR 0076
 
 ## Context
 

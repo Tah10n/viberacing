@@ -8,10 +8,16 @@ after a real maintainer and CODEOWNERS are recorded, GitHub private vulnerabilit
 verified, and Issues/Discussions are disabled with Pull Requests limited to collaborators. See
 [First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
-Vibe Racing is an open-source, pixel-art weekly token leaderboard for vibe coders. It presents one
-privacy-first **vibecode rating** as a public race. The current local slice supports Codex only and
-uses a direct sum of provider-reported tokens: no logarithm, active-day bonus, or
-provider/model/cost multiplier.
+Vibe Racing is an open-source, pixel-art weekly leaderboard for exact provider-reported coding-agent
+tokens. The accepted clean-slate target uses one immutable GitHub identity, multiple logical
+`AgentAccount` records, account-scoped device keys, direct exact weekly sums, shared ranks, and
+snapshot-only public reads. Community remains self-reported, tokenizers differ, and rank represents
+neither normalized cost/compute nor a reward or privilege.
+
+The working branch is replacing the unreleased Codex-only local baseline under
+[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Until
+[implementation status](docs/IMPLEMENTATION_STATUS.md) records each replacement slice, do not treat
+the accepted target as implemented provider support, connector release, or deployment.
 
 ![Synthetic Vibe Racing desktop preview in the Neon Night theme](docs/testing/phase1-visual-baselines/desktop-1280x720-en-neon-night.png)
 

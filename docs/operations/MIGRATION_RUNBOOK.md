@@ -2,6 +2,14 @@
 
 ## Scope and evidence boundary
 
+**Clean-slate transition hold.**
+[ADR 0076](../decisions/0076-clean-agent-account-provider-reported-token-ranking.md) supersedes the
+unreleased 43-revision catalog. No production database or user population exists, so that catalog is
+design evidence only and must not be promoted, backfilled, wrapped, or followed by revision 0044.
+Until the clean bootstrap manifest, roles, restore evidence, and migration-runner tests land
+together, this runbook authorizes no staging execution. A local old-schema integration result is
+baseline evidence, not permission to preserve the old ledger.
+
 This is the checked operator contract for applying the repository-owned PostgreSQL migration catalog
 to an isolated staging environment. Migration files are authored, reviewed, hashed, and committed
 before execution. Starting Web, Ingest, Jobs, or the local site does not apply migrations. Only the
@@ -149,7 +157,10 @@ owner and deadline.
 
 ## Prohibited actions
 
-- Do not edit, reorder, remove, or replace an applied migration or its manifest digest.
+- After an intentional environment has been created from the final clean catalog, do not edit,
+  reorder, remove, or replace an applied migration or its manifest digest. The one pre-release
+  clean-slate replacement happens before such an environment exists and is verified by rebuilding
+  only empty disposable databases.
 - Do not add a down migration, generic destructive rollback, ledger rewrite, or manual schema
   repair.
 - Do not run the migration catalog through a runtime service, interactive owner session, or

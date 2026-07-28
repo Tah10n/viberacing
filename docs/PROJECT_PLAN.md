@@ -1,1968 +1,345 @@
-# Vibe Racing public implementation plan
+# Vibe Racing project plan
 
-## Document status
+## Status and evidence boundary
 
-This is the canonical, public-safe plan for the project. It intentionally contains no credentials,
-personal account data, production hostnames, local machine paths, incident details, or live
-anti-abuse thresholds.
+This is the canonical delivery plan for the clean pre-release replacement selected by
+[ADR 0076](decisions/0076-clean-agent-account-provider-reported-token-ranking.md). The repository
+has no production database, released connector, deployed service, or real-user traffic. No migration
+or backward-compatibility population exists.
 
-The repository contained no implementation when this plan was written. The separate
-[implementation status](IMPLEMENTATION_STATUS.md) records evidence as delivery progresses. Behavior
-described here remains proposed until that page points to corresponding code, tests, and deployment
-evidence.
+[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) records what the working tree has actually
+proved. A target in this plan is not an implementation, provider-support, release, deployment,
+capacity, monitoring, privacy-operation, or real-user claim.
 
-### Strategic revision (ADR 0068)
+## Product contract
 
-[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) broadens the product direction.
-The token leaderboard becomes **agent-neutral** (initially Codex, Claude Code, opencode, Qwen Code,
-Cline, and Aider, with more agents recognized for future support) with a hybrid Community/Verified
-honesty model. The future public metric is the direct `weeklyTokenTotal` across every supported
-agent, with no provider/model/cost multiplier. A thin client is the primary connection path; MCP is
-an optional transport for integrations that can already produce the same reviewed usage contract,
-not a universal token meter. The existing racing presentation remains the visual expression of that
-one ranking. The existing security foundation is reused and generalized, not rewritten. Sections
-below that still speak only about Codex or `weeklyScore` describe the compatibility baseline. The
-broad multi-agent reader set, optional MCP, and Verified-tier work remains proposed and tracked
-through dedicated follow-on ADRs. ADRs 0071–0073 implement a narrower Codex-only vertical slice:
-server-owned attribution, `UsageSyncV1`, the current candidate connector cutover, and direct
-`community_tokens_v1` ranking. They do not implement another reader, the thin client, anonymous
-onboarding, MCP, Verified ingestion, or deployment.
+Vibe Racing is an English/Russian, reward-free weekly leaderboard for provider-reported coding-agent
+tokens.
 
-### Strategic revision (ADR 0069)
+- one immutable GitHub numeric user ID has at most one profile;
+- no anonymous profile exists;
+- one profile may own several providers and several accounts for one provider;
+- one `AgentAccount` is one logical account of one coding agent;
+- connector installations and device keys are authority, not score sources;
+- several devices for one AgentAccount do not duplicate its tokens;
+- the only competitive metric is `provider_reported_tokens_v1`;
+- one AgentAccount/UTC-date cumulative total contributes once;
+- rank depends only on exact `weeklyTokenTotal`;
+- equal totals share `rankPosition`;
+- Community is device-signed self-reporting and never becomes Verified by client assertion;
+- Verified requires a separately reviewed server-side provider integration and separate ranking;
+- tokenizers differ; totals are not normalized cost, compute, effort, quality, or subscription
+  value;
+- rank grants no money, prize, authorization, access, or valuable privilege.
 
-[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) refines how users connect and
-onboard. The primary connection path becomes a **thin, minimal-dependency, auditable client** that
-reads each agent's local usage storage directly; the optional MCP and Rust connector paths do not
-block the thin MVP. Onboarding is **low-friction and hybrid**: anonymous/pseudonymous participation
-is allowed, GitHub device-flow is offered for a linked identity, and a passkey step-up is required
-only for critical/sensitive actions. The plan also adopts proven client practices (auto-submit hook,
-bounded backfill within the open-season horizon, sequential all-source submit, a local dry-run
-preview, and a minimal canonical-total payload) and a **ship-a-thin-MVP-first** release strategy.
-This is planning scope only; it refines, and does not yet change, the implemented baseline.
-
-## Reading map
-
-- Product and data truth: Outcome, Product behavior, Trust model.
-- System design: Architecture, Codex compatibility contract, Multi-account and multi-device model.
-- Security-critical flows: Identity, passkeys, pairing, protocol, deletion, administration, and
-  operations.
-- Public project quality: Repository design, documentation, tests, supply chain, versioning, and
-  release.
-- Execution: Delivery phases and public-beta release gates.
-
-Readers implementing one subsystem should still review the linked
-[security invariants](architecture/SECURITY_INVARIANTS.md), because those constraints cross service
-boundaries.
-
-## Outcome
-
-Vibe Racing will be one focused English/Russian, pixel-art product: an **agent-neutral weekly token
-leaderboard**. It ranks how many tokens participating vibe coders spent across many coding agents —
-initially Codex, Claude Code, opencode, Qwen Code, Cline, and Aider, with Kimi, Gemini CLI, Cursor,
-GitHub Copilot, Windsurf, and others recognized for future support — rather than Codex alone. The
-primary connection path is a **thin, minimal-dependency, auditable client** that reads each agent's
-local usage storage directly (ADR 0069). An optional **MCP server** may transport the same canonical
-daily total for reviewed integrations, and a signed Rust connector remains an optional precision
-path. The racing presentation visualizes the same server-derived direct weekly token total
-regardless of which supported agent produced the usage.
-
-The product launches as an invite-only Community beta. Community data is self-reported and
-unverified. It cannot award money, prizes, authorization, or valuable product privileges.
-
-Honesty follows a hybrid model (ADR 0068): a baseline **Community** tier that is self-reported,
-server-bounded, and explicitly labeled "not verified", plus an opportunistic **Verified** tier that
-the server populates only through a provider's server-verifiable usage API with the user's OAuth
-consent, where such an API exists. The Verified league remains a disabled server-owned state per
-provider until that provider integration is implemented, reviewed, and enabled server-side.
-
-## Findings incorporated into this revision
-
-The earlier design had several claims that were too strong for a high-quality public project:
-
-1. Current Codex account information exposes an account type and, for some ChatGPT accounts, an
-   email, but no documented immutable account identifier. Email can also be absent. Therefore the
-   service cannot prove global account uniqueness.
-2. The daily bucket date is currently a string in the generated schema. The project must not claim
-   undocumented UTC semantics.
-3. A VOPRF over account email would add a substantial cryptographic and privacy surface without
-   making a modified client honest.
-4. Blindly retaining the maximum usage value makes an accidental or malicious spike difficult to
-   correct.
-5. A public repository needs governance, contribution, provenance, compatibility, documentation,
-   licensing, privacy, and operational gates in addition to application code.
-6. Agent readability requires concise durable instructions, stable contracts, explicit invariants,
-   an architecture index, and commands that are actually exercised by CI.
-
-This plan corrects those issues rather than hiding them behind vague abuse-prevention language.
-
-## Product behavior
-
-### Public experience
-
-- The home page opens on the current weekly token leaderboard rather than a marketing-only landing
-  page.
-- After the token-total contract ships, the leaderboard shows shared rank, display handle,
-  `weeklyTokenTotal`, freshness rounded to a day, and the number of sources contributing that week.
-  Pixel-art cars and track position visualize that same provider-independent rank.
-- Users can inspect their private daily totals, connected agent sources, device keys, privacy
-  controls, and deletion flow. Provider-shaped component fields are neither submitted nor stored.
-- Switchable visual themes use the same semantic leaderboard state. The three racing themes (Neon
-  Night Arcade, Classic Grand Prix, Cyber Rally) change presentation only.
-- Keyboard navigation, screen-reader labels, contrast, reduced motion, and a non-animated table view
-  are first-class acceptance criteria.
-- The interface and user documentation ship in English and Russian.
-
-### Privacy defaults
-
-- Public identity is a user-selected handle. Linking the public profile to GitHub is opt-in.
-- An explicitly public participating profile publishes its weekly aggregate token total. Exact
-  daily, source, provider, and component values remain private.
-- Last-sync data is rounded to a day so the UI does not expose an exact working schedule.
-- A user can pause collection, hide the profile immediately, or delete it.
-- The MVP uses no advertising, behavioral analytics, third-party tracking pixels, or remote web
-  fonts.
-
-### Explicit non-goals
-
-- Ranking all users of any agent worldwide.
-- Claiming OpenAI, Anthropic, Google, or any other provider endorsement or verification.
-- Supporting prizes, wagering, paid ranking, or usage-based authorization.
-- Reading prompts, conversations, repositories, model selections, API keys, agent authentication
-  tokens, or account email from any agent.
-- Arbitrary image, SVG, HTML, CSS, script, archive, or URL uploads.
-- Letting an MCP client create profile authority, widen device scope, set derived fields, or submit
-  for a source it does not own through pairing.
-- Supporting API-key and Amazon Bedrock agent modes in the first release.
-- Implementing any provider's Verified tier before a verifiable upstream contract exists for that
-  provider.
-
-## Trust model
-
-### Actors
-
-- Visitor: reads the public leaderboard and public profile.
-- Anonymous user (proposed, ADR 0069): owns one Vibe Racing profile through an opaque local identity
-  credential, without GitHub; enrolled through an admission gate (invite or Turnstile).
-- GitHub user: owns one Vibe Racing profile.
-- Passkey holder: approves security-sensitive profile changes and source pairing.
-- Thin client (proposed, ADR 0069): a minimal-dependency, human-auditable program that reads agent
-  local storage directly and submits bounded daily aggregates; the primary connection path.
-- Agent integration (thin-client reader, optional MCP client, or native connector): owns a
-  source-bound device key for one agent provider and submits only the canonical daily Community
-  total.
-- Provider (Verified tier): an agent provider whose server-verifiable usage API the server queries
-  with the user's OAuth consent.
-- Maintainer: develops and releases the project but has no routine need to read user usage values.
-- Operator: runs Cloudflare, Railway, and PostgreSQL with separated production roles; an optional
-  MCP transport has its own confined role and gate if introduced.
-- Attacker: may control browsers, modified or arbitrary MCP-compatible agents, many GitHub accounts,
-  network clients, malicious pull requests, or leaked device credentials.
-
-### Residual risk
-
-A computer owner can modify the thin client, a connector, or an MCP-compatible agent, fabricate
-token values, create several declared sources across providers, or share a device. Request
-signatures prove which registered device sent a payload; they do not prove that the payload came
-from an honest agent installation.
-
-We contain this risk by:
-
-- keeping the leaderboard explicitly Community and reward-free;
-- applying request, source, numeric, and public-integer bounds before exact direct aggregation;
-- publishing the number of sources used in a season without exposing provider contribution details;
-- making the direct weekly token total the ranking metric, with no secondary competitive tie
-  breaker;
-- rate-limiting source creation, optional MCP connection, and ingestion with deployment-configured
-  policies;
-- requiring passkey-approved pairing before any MCP-reported source binds to a profile;
-- quarantining anomalous records without calling the heuristic verification;
-- keeping each provider's Verified ingestion unreachable until its integration ships.
-
-## Architecture
+## Selected architecture
 
 ```mermaid
 flowchart LR
-    Storage["Agent local storage (logs, rollout, SQLite)"] --> ThinClient["Thin auditable client (primary, ADR 0069)"]
-    Codex["Local Codex App Server"] --> Connector["Signed Rust connector (optional)"]
-    Agents["MCP-compatible agents"] --> MCP["Optional MCP submission transport"]
-    ThinClient -->|"per-source signed aggregates"| Edge["Cloudflare Worker, WAF, limits"]
-    Connector -->|"source-bound signed request"| Edge
-    MCP -->|"reviewed canonical total"| Edge
-    Browser["Browser"] --> Edge
-
-    GitHub["GitHub OAuth"] --> Web["Next.js Web and Auth"]
-    Passkey["WebAuthn passkey"] --> Web
-    Provider["Provider usage API (Verified, OAuth)"] --> Web
-
-    Edge --> Web
-    Edge --> Ingest["Fastify Ingest API"]
-
-    Web -->|"profile role"| DB[("PostgreSQL")]
-    Ingest -->|"submit-usage procedure only"| DB
-    Jobs["Season, deletion, cleanup jobs"] -->|"maintenance role"| DB
-
-    Admin["Isolated admin origin"] -->|"Access plus passkey"| Web
+    GH["GitHub OAuth + PKCE"] --> WA["Web/Auth + passkey"]
+    LS["Agent local storage"] --> RD["Built-in bounded readers"]
+    RD --> CN["Connector installation"]
+    CN --> PA["Batch pairing approval"]
+    PA --> AA["AgentAccounts + account-scoped devices"]
+    CN --> ED["Cloudflare Edge"]
+    ED --> IN["Ingest verification"]
+    AA --> IN
+    IN --> DB["PostgreSQL exact accounting"]
+    DB --> JB["Jobs snapshot builder"]
+    JB --> SS["Immutable snapshot pages"]
+    SS --> PW["Public Web + CDN"]
 ```
 
-The thin client (ADR 0069) and optional MCP submission transport are proposed surfaces from
-[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) and
-[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md); the provider usage API path
-is the per-provider Verified tier. They reuse the existing edge, Ingest verification kernel, pairing
-authority, and isolated database roles rather than introducing a new trust root. MCP does not define
-or derive the token metric. ADR 0071 now supplies the separate default-off Usage Sync contract and
-Codex-attributed Ingest/database path that those future clients may reuse; it adds no client or MCP
-surface.
+### Identity and private authority
 
-### Runtime components
+GitHub OAuth resolves only the immutable numeric user ID and discards the provider token. Enrollment
+creates or opens the unique profile, confirms a bounded handle, registers the primary passkey, and
+continues directly to agent connection. A passkey protects the complete pairing batch and every
+critical security/deletion action. Restricted recovery can mint only replacement-passkey authority.
 
-- Web/Auth: Next.js App Router and strict TypeScript. The public home also exposes one local-only
-  EN/RU score simulator that passes canonical hypothetical input through the production Community
-  scoring functions without a request, account prefill, persistence, logging, or standing mutation.
-  Local invite/OAuth/initial-passkey enrollment and returning discoverable-credential login use
-  purpose-separated encrypted cookies, exact same-origin bounded routes, application WebAuthn
-  verification, and fixed calls through the probed read-write pool. Login options retain no database
-  state; valid proof alone reaches atomic challenge creation/consumption and passkey-provenance
-  session minting. The account page now uses that exact session for a bounded, server-rendered
-  passkey inventory without credential or key material and for an idempotent same-origin
-  `public`/`hidden` profile control. Hiding affects public score reads without pausing source sync.
-  The same account view now projects only the profile's at-most-32 sources and 64 active device
-  credentials, preserves empty sources for lifecycle control, rounds activation to a day, and hides
-  source/internal identifiers. It can immediately pause one source or revoke one exact owned device
-  even while public visibility is hidden. A paused source can be reactivated only after a fresh
-  user-verified assertion bound to the session, source, RP ID, and origin; raw source IDs never
-  enter HTML. A separate fresh context can terminally unlink an active, paused, or quarantined
-  source and revoke all of its devices without publishing a hidden profile. It can revoke an owned
-  non-current active passkey only after a fresh user-verified assertion bound to that session,
-  target, RP, origin, and one atomically consumed challenge. It can also add a backup key after
-  independent existing-key assertion and registration ceremonies whose validated label and
-  challenges reach one atomic consume-and-add statement. Its recovery-code control now requires a
-  fresh user-verified assertion bound to the active session/profile/RP/origin, derives ten
-  independent Argon2id PHCs sequentially under a distinct protected pepper, atomically replaces the
-  previous batch, and returns plaintext once only after commit. A separate local recovery page now
-  accepts only the exact one-time code and replacement label, obtains only that selector's PHC,
-  performs bounded Argon2id verification under the protected pepper, and normalizes admitted
-  responses to a configured minimum floor under four-call no-queue admission. Success consumes the
-  code into a five-minute restricted authority, verifies the exact replacement registration, and
-  reaches atomic passkey replacement plus normal-session creation; a code alone never creates a
-  session. The deletion control accepts the exact typed handle before a fresh assertion bound to
-  session/profile/handle/RP/origin, then atomically consumes that challenge while immediately hiding
-  the profile, revoking authority, unlinking sources, and queueing one opaque purge job. A separate
-  local Jobs command now performs bounded atomic primary purge, and a separate command removes only
-  terminal deletion jobs after 30 days. Another command removes database audit references only after
-  180 days; it is not an external append-only audit sink. Fixed-clock synthetic scheduler/PostgreSQL
-  composition is proven, while deployed scheduling, cache invalidation, tombstone policy, backup
-  expiry, and restore replay remain separate gates. A transport-free pairing start boundary now owns
-  fresh server IDs/token/challenge/code, separate protected poll/code verifiers, closed device
-  metadata, nine-minute expiry, and one fixed call through a separate probed read-write pool
-  wrapper. A second activation boundary owns protected poll lookup, strict possession proof,
-  server-owned activation IDs, and fixed admission/timing. The local `/connect` slice now supplies
-  the intervening browser step: exact-session code lookup with a database-backed attempt window,
-  bounded device/fingerprint review, explicit new-source or active existing-source selection through
-  an encrypted session-bound control, and fresh-passkey atomic approval. Distributed
-  recovery/anonymous edge attempt policy, deployed expired-state cleanup cadence and notification,
-  live provider/database credentials, and deployment remain separate gates.
-- Enrollment enable gate: `/join`, `/join/passkey`, GitHub start/callback, and initial-passkey
-  options/verification each resolve exact `VIBERACING_ENROLLMENT_ENABLED=true` once at module
-  evaluation. Every alternate or unreadable value omits both EN/RU forms and stops before request
-  parsing, runtime/admission, OAuth/WebAuthn, or database work. All four service methods repeat the
-  literal check before input/cookie/private state. Active-session redirects, returning login,
-  restricted recovery, logout, and account security actions remain available. The tracked example is
-  false. This gate itself proves no deployed route denial, worker reload/drain, dynamic switch,
-  operator policy, distributed rate limit, cleanup execution, or invite repair. Revision 0038 and
-  ADR 0061 separately add bounded cleanup for an abandoned `enrolling` profile after all associated
-  session/challenge authority expires; ADR 0063 includes only that exact object in the default-off
-  local catalog and combined synthetic PostgreSQL integration. None makes its redeemed invite
-  reusable or proves deployed execution.
-- Pairing enable gate: connector start/poll and browser approval options/verification each resolve
-  exact `VIBERACING_PAIRING_ENABLED=true` once at route-module evaluation. Every alternate or
-  unreadable value cancels an available request body and returns the existing generic 503 before
-  request parsing, runtime/service construction, admission acquisition, protected configuration, or
-  database work. The tracked example is false. This proves no deployed route denial, worker reload,
-  old-instance drain, or dynamic switch.
-- Source creation gate: `/connect` and both browser approval modules resolve exact
-  `VIBERACING_SOURCE_CREATION_ENABLED=true` once at module evaluation. Every alternate or unreadable
-  value omits the new-source UI, preserves active existing-source choices, and supplies a literal
-  false decision to both service steps. New-source options stop before pairing-code derivation,
-  pending lookup, entropy/WebAuthn work, or challenge storage; verification stops before WebAuthn
-  response parsing, credential lookup, proof, or database completion. Exact source choice is sealed
-  in the five-minute challenge and included in its v2 context digest, so a restarted disabled
-  verification module also rejects an in-flight new-source challenge. The tracked example is false.
-  This proves no deployed route denial, worker reload/drain, dynamic switch, operator policy, or
-  source-creation rate limit.
-- CarRecipe proposal gate: the account page, browser proposal creation, browser approval, and device
-  proposal POST each resolve exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` once at module
-  evaluation. Every alternate or unreadable value omits editor/approve UI and stops mutation before
-  request parsing, runtime/service construction, admission, proof, or database work. Browser service
-  create/approve repeats literal-true enforcement before recipe/control/session work. Active and
-  private pending previews plus exact session-bound rejection remain available. The tracked example
-  is false. This proves no deployed route denial, worker reload/drain, dynamic switch, operator
-  policy, distributed rate limit, or cleanup schedule.
-- Public ranking reads: all three local score/race/status GET modules resolve exact
-  `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module evaluation. Every other or unreadable
-  value returns the existing generic 503 before query/header parsing, admission acquisition, or
-  store/database configuration. The tracked example is false and the browser retains its synthetic
-  fallback. This proves no deployed route/cache denial, worker reload, old-instance drain, or
-  dynamic switch.
-- Authenticated score view: the account server render reuses the exact possessed session and one
-  combined Web/Auth pool checkout to read visibility plus the current Monday's existing seven
-  derived daily scores and bounded summary. Hidden profiles return no score; raw usage, private
-  identifiers, client fetching, and browser storage stay absent.
-- Ingest: a small Fastify service with no OAuth, admin, signing, or deployment credentials. Its
-  first local slices are a pure raw-request verification kernel and a bounded least-privileged
-  PostgreSQL adapter, a protected exact two-key origin configuration reader, and an atomic
-  PostgreSQL origin-replay capability. A transport-free application boundary now composes those
-  exact capabilities, generates one server request ID, waits for database settlement, and validates
-  a closed acknowledgement or generic problem decision. A separate bounded Fastify factory now
-  preserves exact raw HTTP evidence, enforces local parser/header/connection/deadline and four-call
-  no-queue policies, rejects proxy/request-ID trust, and serializes only revalidated contracts. A
-  separate local host now requires one exact default-off enable latch before inspecting other host
-  or protected application configuration, then admits exact loopback cleartext or explicit
-  `0.0.0.0:$PORT` production behind a declared Railway-edge TLS boundary, composes only those
-  reviewed factories, and bounds partial-startup cleanup plus SIGINT/SIGTERM shutdown. One opt-in
-  synthetic integration now builds that emitted host, provisions only a disposable least-privileged
-  Ingest login, sends independently signed loopback requests, and proves
-  accepted/duplicate/replay/revoke plus exact PostgreSQL state. It also holds four valid requests at
-  the first replay-store call, rejects a fifth without a fifth replay call, and proves the four
-  accepted results after release. After closing that imported host, the same gate starts the built
-  entry point as a separate silent process, observes its loopback listener without application work,
-  proves one more exact accepted write, and forcibly ends only that test child. A second opt-in gate
-  mounts the exact link-free emitted production graph read-only under the pinned Linux Node image,
-  blocks one independently signed request at origin replay, delivers a real `SIGTERM`, releases the
-  lock, and proves exact acknowledgement/persistence settlement, silent code-0 exit, session
-  release, immutable runtime contents, and cleanup. A separate dependency-free Worker now creates
-  the exact origin proof, with local Web Crypto tests and production-verifier compatibility
-  evidence. Railway/orchestrator drain, trusted external TLS and edge routing, secret-manager/edge
-  key injection, direct-origin denial, distributed rate/backpressure controls, deployment
-  login/certificate, representative load/capacity evidence, real-user end-to-end integration, and
-  deployment remain separate gates.
-- Jobs: idempotent Node.js one-shot jobs for season finalization, deletion, retention, and cleanup.
-  The local runner now wraps only the twelve reviewed authentication/abandoned-enrollment/
-  audit-event/invite/CarRecipe-proposal/ingest/finalized-source-day/pairing/session/
-  terminal-deletion-job/aged-revoked-passkey/aged-revoked-device cleanup procedures, primary profile
-  purge, one pairing approval-provenance redaction procedure, one fixed pairing-rate-window reset,
-  Community refresh, and finalization. One opt-in synthetic integration applies the reviewed
-  migrations to disposable PostgreSQL, runs every emitted command through a narrow login, rejects an
-  extra-membership login before mutation, and verifies exact state. A separate exact-default-off
-  local scheduler now derives the current and latest grace-eligible Monday in UTC plus at most one
-  oldest known data-backed historical season per hour, admits only fixed five-minute/hour/day
-  process slots, invokes the runner sequentially without overlap or same-slot retry, and bounds
-  signal shutdown. An opt-in synthetic integration now composes that production scheduler core under
-  a fixed injected UTC clock/timer with the real Jobs runner and disposable PostgreSQL, proving
-  exact catalog order, full-state widened-login denial, and exact narrow-login effects. A separate
-  timer integration advances the fixed clock by one hour, invokes the production interval handler
-  twice during the active real-runner cycle, proves the exact recurring catalog plus overlap and
-  same-slot suppression, and verifies the rearmed terminal reset. A third lifecycle integration
-  starts the penultimate real-runner call before injecting its first handler, proves active-call
-  settlement and no later scheduler job, and requires exact graceful cleanup and exit code 0 before
-  invoking the omitted reset separately. A fourth integration builds a link-free production-only
-  runtime from the exact installed graph, mounts it read-only under a pinned Linux Node image, and
-  starts the built entry point under the real host clock after temporarily revoking only the Jobs
-  role's exact backlog-function execution grant. The first process emits one generic cycle signal,
-  leaves the backlog unchanged, reaches the later terminal marker, and exits with code 0 after an OS
-  `SIGTERM`. The harness restores and rechecks the grant, rearms the marker, holds the scoring
-  mutex, and starts the same runtime again. It observes the first finalization lock-wait, delivers
-  `SIGKILL`, requires exit 137 plus session release, and proves the backlog and marker remain
-  unchanged. After releasing the holder, a restart finalizes the backlog before a silent code-0
-  signal exit. A disposable post-insert barrier then holds a second backlog after its first daily
-  projection insert; a second `SIGKILL` must release the session and roll back the new season plus
-  all projection rows while retaining the source/day input and terminal marker. The harness removes
-  the trigger/function, verifies no schema residue, and a clean-schema restart finalizes that
-  backlog exactly once. A final rearm/restart proves another silent repeated cycle, session cleanup
-  after all six starts, immutable runtime contents, and exact stored state. A fifth integration uses
-  the same bounded runtime shape. It leaves the native clock and minute timer unchanged, waits for
-  startup, holds the scoring mutex until refresh is active in a later real five-minute slot,
-  delivers an OS `SIGTERM`, releases the mutex, and proves refresh settlement, a newer timestamp,
-  silent code-0 exit, session release, and immutable runtime contents. A sixth integration uses the
-  same bounded runtime shape, holds the emitted first finalization call, delivers an OS `SIGTERM`,
-  and proves graceful settlement without refresh or any later job. It requires silent code-0 exit,
-  session release, immutable runtime contents, and the same final state after the seventeen omitted
-  commands run separately. The fourth gate proves local failure/crash containment, later-job
-  continuation, successful clean-schema retries, a later repeated restart, four graceful
-  post-startup `SIGTERM` settlements, two abrupt active-call `SIGKILL` exits, and one controlled
-  uncommitted post-insert PostgreSQL transaction rollback; the fifth proves one local host-timer
-  recurring refresh plus active-call signal settlement. Recovery from committed/external effects or
-  every Jobs capability, automatic privilege repair, a deployed signal route,
-  controller/orchestrator grace policy, managed restart, an external audit sink, durable or deployed
-  cadence, representative or deployed backlog recovery, monitoring, production credentials/TLS,
-  capacity, cache/backup/tombstone purge, restore replay, and deployment remain separate gates.
-- Database: PostgreSQL with SQL-first migrations and separate non-owner runtime roles.
-- Edge: Cloudflare Worker for origin proof, WAF integration, request shaping, and public caching.
-- Connector: Rust CLI for Windows, macOS, and Linux.
-- Contracts: language-neutral JSON Schemas; generated OpenAPI and language types are derived
-  artifacts checked for drift.
+Private Web responses and controls are same-profile, CSRF-protected, purpose-bound, and `no-store`.
 
-### Deployment boundaries
+### Provider registry and readers
 
-- Cloudflare is the only intended public entry point.
-- The edge adds a short-lived proof bound to method, path, body hash, and time.
-- Railway rejects missing, expired, replayed, or body-mismatched proofs before application work.
-- Health endpoints expose no build secrets or dependency details and have a separate narrow policy.
-- Staging and production use different projects, databases, OAuth registrations, passkey origins,
-  edge keys, and deployment credentials.
-- Pull-request previews never use production data or production secrets.
+The closed initial registry recognizes `codex`, `claude_code`, `opencode`, `qwen_code`, `cline`, and
+`aider`. State is `supported`, `recognized`, or `disabled`.
 
-## Multi-agent compatibility and token accounting
+A provider is supported only when the tree contains:
 
-Proposed by [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md). This section frames
-the Codex compatibility contract below as the first provider instance of a general model.
+- a bounded built-in reader for one exact documented local surface;
+- an immutable accounting revision;
+- UTC-day and cumulative-total rules;
+- aggregate/component and deduplication semantics;
+- an account-domain and overlap rule;
+- positive, boundary, corruption, drift, and mixed-content privacy fixtures;
+- end-to-end discovery, pairing, signed sync, storage, and ranking evidence.
 
-### Agent providers
+Unknown or ambiguous usage-bearing schema fails closed. The project does not invent local schemas or
+infer support from a directory name. Providers without exact evidence remain recognized or disabled
+with the missing evidence stated.
 
-- An **AgentSource** is an opaque, user-declared Community source attributed to one provider from a
-  closed, reviewed **supported** enum: initially `codex`, `claude-code`, `opencode`, `qwen-code`,
-  `cline`, `aider`. A provider enters this enum only when a bounded reader for its local usage
-  storage is implemented and reviewed.
-- **Recognized but not yet supported** — reserved provider identifiers awaiting a working reader
-  (and, for server-side-usage agents such as GitHub Copilot, possibly a Verified-tier provider-API
-  path rather than local reading): `kimi`, `gemini-cli`, `cursor`, `github-copilot`, `windsurf`.
-  Submitting usage for a provider outside the supported enum fails closed.
-- Adding a provider to the supported enum requires a compatibility entry, a working bounded reader,
-  and, when semantics change, an ADR. Unknown or malformed provider usage fails closed and is never
-  uploaded as a partial interpretation.
-- The source remains opaque and self-declared; it is not a verified provider account identity. The
-  public Community label and contributing-source count make that limitation visible without
-  publishing a provider contribution breakdown.
+Reader output is a closed privacy type: provider, opaque bounded candidate metadata, UTC date,
+canonical cumulative token-total decimal string, and reader/accounting version. Prompt,
+conversation, code, tool output, repository name/content, path, email, login, model, key/token, raw
+usage record, and provider-shaped components remain local and non-reflective.
 
-### Canonical token total
+### Installation, AgentAccount, and device
 
-The product ranks **provider-reported tokens**. Different tokenizers mean this is not a claim of
-equal compute, cost, energy, or work across providers. The simplicity and honesty rule is:
+One connector installation has one native-store installation key and may service several
+AgentAccounts. Each activated AgentAccount/device pair has its own native-store Ed25519 key.
 
-```text
-sourceDayTokens =
-  one reviewed provider aggregate, or the sum of documented disjoint components
+Provider, accounting revision, trust tier, and accounting scope are selected by the server during
+approved create/attach and remain immutable. A device can submit only for its exact AgentAccount and
+cannot approve a batch, manage another credential, change account/profile state, or delete a
+profile.
 
-profileDayTokens =
-  sum(latest accepted sourceDayTokens for each eligible distinct source)
-
-weeklyTokenTotal =
-  sum(profileDayTokens for dates in the season)
-```
-
-- Prefer a documented aggregate total. If none exists, sum only documented disjoint input/output
-  components. Cached, reasoning, or thought fields that are nested breakdowns are never added again.
-- Deduplicate cumulative snapshots and repeated records before daily aggregation.
-- Provider/model/cost metadata never applies a multiplier. A provider label selects a reviewed
-  compatibility reader only; it cannot change an admitted numeric total or rank.
-- The `UsageSyncV1` contract and season metric version pin the accepted reader/accounting revision
-  per provider. A semantic mapping change starts with a new season/version and never reinterprets
-  finalized values.
-- Unknown or ambiguous semantics fail closed. The client never estimates tokens from prompts,
-  responses, characters, prices, or another provider's tokenizer.
-- Every intermediate is an exact non-negative integer. A value outside the public JSON safe-integer
-  range is quarantined rather than wrapped, saturated, rounded, or published.
-- Equal `weeklyTokenTotal` values share rank. Provider, source count, active days, streak, and car
-  choice are not competitive tie breakers.
-- The current `community_v1` logarithmic `weeklyScore` remains an implemented compatibility baseline
-  only. New seasons cut over atomically to the implemented local `community_tokens_v1`; finalized
-  seasons are never rewritten or compared across metric versions.
-
-Documented API semantics used to select this rule were reviewed on 2026-07-23: OpenAI exposes an
-aggregate `total_tokens` with cached and reasoning tokens as nested details; Anthropic documents
-disjoint input, cache-creation, cache-read, and output components; Google Gemini exposes aggregate
-`totalTokenCount` across prompt, candidate, and thought tokens. Each local agent reader still
-requires fixtures for its exact storage schema and version before it becomes supported.
-
-### Connection paths
-
-- **Thin client (primary; proposed, ADR 0069).** A minimal-dependency, human-auditable client reads
-  each agent's local usage storage directly through bounded read-only readers and submits per-source
-  signed canonical daily totals. Adding an agent means adding one bounded, fixture-backed reader.
-  The thin client is the primary connection path.
-- **MCP server (optional transport).** MCP tools define arbitrary schemas and do not standardize
-  token telemetry. A future MCP surface may submit the same `UsageSyncV1` object only for an
-  integration with reviewed usage semantics. MCP compatibility alone does not make an agent
-  supported. The transport reuses the Ingest verification kernel and pairing applications and does
-  not widen the fields a device may set.
-- **Native connector (optional, precision).** The existing Rust connector remains available for
-  agents with good local usage data (Codex first), reading a narrow local usage response through a
-  version-specific handshake.
-- **Provider usage API (Verified tier).** Where a provider exposes a server-verifiable usage API,
-  the server fetches usage directly with the user's minimal-scope OAuth consent. This populates the
-  Verified tier only and stays disabled per provider until its integration ships.
-
-### MCP safety contract
-
-- Binding an MCP-reported source to a profile requires the existing pairing approval with a fresh
-  passkey step-up; an MCP client cannot create profile authority or submit for a source it does not
-  own.
-- The MCP surface reads no prompts, conversations, repositories, model selections, credentials, API
-  keys, or account email, and reflects none of it in output or logs.
-- MCP connection and ingestion are rate-limited and fail closed behind an exact default-off enable
-  gate, consistent with the existing gate pattern.
-- The MCP surface accepts no provider-shaped component fields and applies no accounting
-  interpretation or multiplier. It transports one already-derived canonical daily total.
-
-## Positioning and adopted practices
-
-The product belongs to the emerging category of public, multi-agent token-usage leaderboards. The
-goal is to be strong on every dimension that matters for this vision by combining the best of that
-category with this project's own differentiators, rather than trading one off against another.
-Comparable products are treated as prior art only; none is named or linked here.
-
-### Differentiators
-
-- **Open server, not just open client.** The web, ingest, jobs, database migrations, and scoring are
-  public and auditable, so the leaderboard and scoring themselves can be inspected, not only the
-  client.
-- **Server-side integrity.** The server computes dates, direct token totals, ranks, and seasons with
-  exact integer bounds and immutable finalization, and separates self-reported Community data from
-  opportunistically Verified provider data.
-- **Racing presentation.** Pixel-art cars and track position make the provider-independent weekly
-  token rank immediately legible without creating another scoring surface.
-- **Strict privacy defaults.** The explicitly public weekly aggregate is visible; exact daily,
-  source, provider, and component values remain private; freshness is rounded to a day; there is no
-  geo collection, advertising, analytics, or tracking.
-- **Auditable connection.** A thin client reads local usage directly across agents; MCP is an
-  optional submission transport, not a metering dependency.
-
-### Adopted practices
-
-These practices are adopted from prior art in the category because they are simple, user-trusting,
-and proven (see [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md)):
-
-- A thin, minimal-dependency, human-auditable client as the primary connection path.
-- Direct read-only reading of each supported agent's local usage storage.
-- Low-friction onboarding: anonymous or GitHub device-flow, with passkey step-up only for critical
-  actions.
-- Auto-submit on session end, bounded backfill partitioned into independent requests by derived ISO
-  season (closed/finalized seasons are excluded per ADR 0008), and a local sequential `submit all`
-  loop that sends one independently signed single-source/single-season request at a time.
-- A local dry-run that shows exactly what would be sent before anything leaves the machine.
-- Payload minimization by construction: no model names, session counts, or provider-shaped raw token
-  components cross the reader boundary.
-
-### Honest tradeoffs
-
-Being strong on every dimension requires sequencing and accepts some tradeoffs. Anonymous
-participation lowers the barrier to entry but weakens per-human sybil resistance; this is acceptable
-because the leaderboard is reward-free and bounded (see
-[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) and the threat model).
-Shipping a thin MVP first is prioritized over completing the full security architecture before any
-release.
-
-## Codex compatibility contract
-
-### Supported surface
-
-The connector launches Codex App Server over local stdio, performs the required initialize
-handshake, and allowlists only:
-
-- account/read, used to confirm that the active mode is ChatGPT while ignoring and never
-  transmitting the returned email or plan;
-- account/usage/read, used for the summary and daily buckets.
-
-The connector does not enable experimental API capability. It rejects WebSocket, thread, turn, item,
-approval, MCP, file, shell, and login methods.
-
-### Version policy
-
-App Server schemas are version-specific. Compatibility is therefore explicit, not guessed from a
-broad semantic-version range.
-
-- docs/reference/codex-compatibility.md lists every supported Codex version.
-- compat/codex contains a manifest and synthetic fixtures for each candidate or supported exact
-  contract; candidate evidence is forbidden from the supported matrix.
-- Required CI installs pinned supported Codex releases, generates their stable JSON schemas, and
-  compares the extracted account contracts.
-- A non-blocking scheduled job probes the latest release and opens an issue when the contract
-  changes.
-- An unknown or malformed contract fails closed with a clear local error. It never uploads a partial
-  interpretation.
-- Compatibility additions require fixtures, an ADR when semantics change, and connector release
-  notes.
-
-ADR 0022 now adds candidate-only evidence, advanced to `0.144.5`: immutable release metadata, full
-stable-schema digests, minimal account extracts, synthetic fixtures, a drift checker, and a closed
-library parser for the two planned reads. It confirms ChatGPT mode while discarding
-email/plan/summary values and returns only bounded sorted daily date/token entries. ADR 0023 adds a
-one-shot supervisor with a fixed `app-server` argument, local pipes, no ambient environment, bounded
-stdout/stderr/time, and reap-before-success composition. Its launch capability has no public
-constructor. ADR 0031 lets only one private Windows x86_64 development command construct it after
-exact `0.144.5` size/SHA-256 admission while a no-write-sharing handle remains open. ADR 0051 adds
-only a bounded fixed-name `PATH` selection path after active-record review and retains the explicit
-path fallback under identical admission. ADR 0052 adds a distinct explicitly invoked `check-codex`
-command that reuses only that selector without credential-store, process, account, or network
-access; its point-in-time result is never reused by `sync`. ADR 0053 adds a separate Windows
-release-profile portable copy/removal smoke under a secretless no-upload CI declaration. It tests
-only the repository-built `0.0.0` connector's closed command surface and residue, not Codex
-execution, packaging, installation, release, or support. ADR 0054 adds an explicit diagnostic
-preview mode to the same candidate check: it emits only a closed version/admission/support summary,
-retains failed-admission status, omits local values, and neither saves nor sends output. The
-candidate still does not run on all platforms, create a supported release, or create a matrix row.
-ADR 0024 adds an inaccessible reviewed source/device/time/nonce context whose minimized daily usage
-produces one exact bounded request body, SHA-256 digest, and LF-separated device message. ADR 0075
-narrows that unreleased wire surface to `UsageSyncV1` only. ADR 0025 removes public access to the
-unsigned material and adds an isolated one-use signer behind an equally inaccessible device-bound
-key capability. A shared Rust/Ingest vector proves exact body, public-key, and signature agreement.
-ADR 0026 adds a second domain-separated pairing-possession policy, inaccessible
-pending-key/challenge signer, and pure strict Web verifier with a shared synthetic vector. A
-separate local Web/Auth slice implements browser approval for a signed-in passkey session. ADR 0027
-adds the server-side half of the final activation step: exact 32-byte poll tokens become
-primary/secondary HMAC-SHA-256 verifier candidates, one probed read-write Web pool selects at most
-one approved transaction, the strict proof is mandatory, and only server-owned IDs reach the atomic
-procedure. Its four-call admission and 250-millisecond floor are local process safeguards, not an
-anonymous route or distributed client-rate policy. ADR 0028 adds the transport-free server-side
-start half: closed public-key/device metadata enters, fresh server IDs, a 32-byte poll token and
-challenge, separate primary poll/code HMAC verifiers, a 60-bit human code, and a nine-minute expiry
-reach only the fixed `start_pairing` procedure. Malformed admitted input performs fixed-shape local
-work but no database write. Revision 0021 separately gives the authenticated browser approval lookup
-a session-bound distributed attempt window and a closed primary/secondary code probe. Revision 0013
-and ADR 0029 add the separate Jobs-side physical cleanup: at most 1000 expired non-activated
-transactions and exact pending keys per call, with activated and live state preserved. ADR 0030 now
-closes the local connection journey with four versioned start/poll request/response contracts, exact
-no-store POST routes, one aggregate four-call application boundary, revision 0022's fixed
-global-and-64-bucket distributed rate windows, and one pairing-only Rust command. The client uses OS
-randomness, native credential storage without a plaintext fallback, HTTPS with platform trust (or
-loopback HTTP for development), bounded bodies/time/retries, exact possession proof, resumable
-prepared/pending/active state, and non-reflective output. ADR 0057 places connector start/poll and
-both signed-in approval operations behind exact `VIBERACING_PAIRING_ENABLED=true` at route-module
-evaluation. Disabled POST cancels an available body and returns generic no-store 503 before parsing,
-runtime/service construction, admission acquisition, protected configuration, or database work;
-explicit connector non-POST methods retain 405. The tracked example remains false. ADR 0058
-separately requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval
-modules for a new source while preserving active existing-source pairing. The service repeats
-literal-true checks at options and verification; the sealed choice and v2 context digest close
-in-flight new-source completion after a disabled module reload. Both tracked flags remain false.
-This evidence is still local and synthetic: there is no live Web login/database result, edge
-capacity policy, cross-platform execution matrix, released binary, Codex support, scheduler, or
-deployed result. ADR 0031 adds the next one-shot Windows development command: exact artifact
-admission, fresh context from the active record, the existing composer/signer, and one fixed
-no-proxy/no-redirect upload with a closed acknowledgement. ADR 0051 adds resource-bounded discovery
-through two fixed filenames and at most four exact-size hashes, plus the unchanged explicit path
-fallback. ADR 0052 adds a credential-free candidate artifact check that performs only that admission
-and emits an explicit unsupported result; the sync command still re-admits only after active-record
-validation. ADR 0053 then builds the locked Windows release profile, copies it under a bounded
-temporary root, checks only help and missing-candidate behavior with no ambient credential/network
-environment, and removes it. ADR 0054 adds the closed redacted stdout preview to the same candidate
-check without changing admission or support. These decisions add no retry, edge proof,
-cross-platform evidence, package, installer, release, or support claim. ADR 0041 adds a separate
-exact `forget-local` command that deletes only the native origin/label record without reading it or
-contacting the service. It is idempotent and explicitly does not claim server revoke; rotation and
-revoke composition remain separate gates.
-
-### Date semantics
-
-The current contract does not document a timezone for startDate. Version 1 therefore:
-
-- accepts only the strict YYYY-MM-DD shape;
-- stores it as codexReportedDate rather than calling it UTC;
-- groups the value into an ISO Monday-based season without claiming what timezone created the
-  upstream label;
-- uses server receivedAt, never client time, for grace periods and finalization;
-- documents any future timezone clarification through an ADR and data migration.
+When a provider exposes a safe stable opaque account-domain ID, pairing uses a domain-separated
+server verifier to prevent duplicate attachment. Email/login/display/path hashes are prohibited. If
+no safe identifier exists, the user explicitly creates or attaches the candidate to an existing
+same-provider AgentAccount.
 
 ## Multi-account and multi-device model
 
-### AgentSource
+This heading preserves links from historical ADRs. The active model is the AgentAccount,
+installation, and device contract above: multiple same-provider accounts and multiple devices per
+account are allowed, while account/day totals are counted once.
 
-An AgentSource (formerly CodexSource; generalized by
-[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)) is an opaque Community source
-created by the user and attributed to one agent provider from the closed enum. It is not marketed as
-a verified provider account identity.
+### Batch connection
 
-One profile can hold at most 32 lifetime source records and 64 active plus unexpired approved device
-authorities, across all providers. These are public fail-safe ceilings, not product targets.
-Creation and synchronization also remain subject to lower private fair-use, rate, and infrastructure
-budgets.
+`viberacing connect --origin <https-origin>`:
 
-When pairing a device or enabling an optional MCP integration, the user chooses:
+1. validates exact origin;
+2. creates or loads the installation identity from the native credential store;
+3. runs built-in discovery readers;
+4. shows a local privacy-safe preview;
+5. creates one pending account-scoped key per selected candidate;
+6. signs one bounded ordered discovery manifest;
+7. obtains a browser deep link and fallback code;
+8. polls with a bounded keyed token;
+9. persists activated credentials before success output;
+10. deletes skipped pending keys;
+11. performs first sync for activated accounts.
 
-- create a new source for another agent account (selecting its provider); or
-- attach this device/agent to an existing source representing the same account and provider.
+The browser shows the complete ordered candidate list and requires create, attach, or skip for each
+one. One fresh passkey assertion binds the entire decision digest. Activation is atomic: no partial
+approved batch or orphan authority. Manual code remains a fallback, never a bearer profile
+credential.
 
-Under the proposed hybrid identity model, that choice requires a current session for the same
-profile—whether anonymous or GitHub-linked—and a fresh passkey; GitHub is not required for an
-anonymous profile that has activated a passkey. The implemented baseline remains GitHub-bound until
-ADR 0069 is accepted and implemented. Every attached device has its own private key and
-independently revocable device-authority row bound to exactly one source; a private key is never
-shared across devices. All devices attached to one source are deduplicated at the source/date level.
-Separate sources are summed directly across all providers for `community_tokens_v1`; the legacy
-profile score cap remains only in `community_v1`.
+### Contracts and routes
 
-This design intentionally does not read, hash, transmit, or store account email. It also does not
-pretend to prevent a malicious user from declaring the same account as several sources. The public
-source count and Community label make the remaining limitation visible.
+The final version-one inventory is:
 
-### State model
+- `AgentProviderV1`;
+- `ConnectorDiscoveryManifestV1`;
+- `ConnectorPairingStartV1`;
+- `ConnectorPairingApprovalV1`;
+- `ConnectorPairingPollResultV1`;
+- `UsageSyncV1`;
+- `UsageSyncResultV1`;
+- `LeaderboardSnapshotV1`;
+- `PublicProfileSummaryV1`;
+- `ProblemDetailsV1`.
 
-Source states are:
-
-- active: eligible to submit;
-- paused: retained but unable to submit until passkey reactivation;
-- unlinked: future submissions are rejected while season attribution remains;
-- quarantined: submissions are retained for review but excluded from ranking;
-- deleted: removed through the profile deletion workflow.
-
-Every transition is an explicit server-side state machine with database constraints and an audit
-event.
-
-### Usage update rule
-
-- Device snapshots for one source/date never sum.
-- A value greater than or equal to the prior accepted value can advance the current snapshot while
-  the season is open.
-- A decrease, malformed date, impossible range, or suspicious jump quarantines the update instead of
-  silently taking max or overwriting history.
-- Signed raw snapshots are retained for a short documented dispute window, proposed as 30 days, then
-  removed.
-- Finalized seasons are immutable except through a separately authorized, reasoned, audited
-  correction process.
-
-## Identity, passkeys, and pairing
-
-The bullets below describe the implemented baseline (GitHub enrollment plus an initial passkey).
-[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) proposes a low-friction hybrid
-onboarding that would generalize it: anonymous/pseudonymous participation, GitHub device-flow, and a
-passkey step-up only for critical/sensitive actions rather than at enrollment. Its anonymous
-identity has a server-clock ownership lease so loss of the temporary credential converges to
-hide/pause and bounded system cleanup instead of indefinite retained state. ADR 0069 is Proposed
-planning scope; it does not refine VR-AUTH-001 or the one-profile-per-GitHub-ID rule unless
-accepted.
-
-### Profile enrollment
-
-- Invite-only beta.
-- GitHub OAuth with minimal identity permission, state, PKCE, exact redirect matching, one-time code
-  handling, and session-fixation prevention.
-- The GitHub access token is discarded after the immutable GitHub user ID is resolved.
-- One profile per GitHub user ID.
-- Turnstile is validated server-side for invite redemption and suspicious anonymous flows.
-- Invite values and recovery codes are stored only as slow or keyed hashes, as appropriate to their
-  entropy.
-
-### WebAuthn
-
-- At least one passkey is required after GitHub enrollment.
-- Multiple passkeys are supported before recovery codes can be regenerated.
-- User verification is required for registration and critical actions.
-- RP ID and allowed origins are exact per environment.
-- Challenges are high-entropy, one-time, short-lived, and transaction-bound.
-- Login challenges carry no profile authority; a session is bound only after an active exact
-  credential derives the profile and the application verifies the assertion.
-- Sessions retain their authenticating-passkey provenance across rotation, and critical step-up
-  challenges retain the exact verifying passkey separately.
-- Attestation is not required in the MVP; the service does not build a device fingerprint database.
-- Sign counters are treated as a risk signal, not a universal clone detector.
-- Adding a device, unlinking a source, changing recovery, and deleting a profile require fresh
-  step-up.
-- Passkey removal is terminal, cannot remove the last active credential, and closes the removed
-  key's sessions, unused ceremonies, and approved-but-not-activated pairing authority. Activated
-  devices remain explicit separately revocable credentials.
-- Public database safety ceilings allow at most 32 retained passkey records and 32 active unexpired
-  browser sessions per profile. Revision 0030 adds bounded cleanup for expired session rows with no
-  retained predecessor or pairing approval reference. Revision 0035 separately deletes only passkeys
-  revoked for at least 180 days with no session, verifying/authorized challenge, or pairing
-  reference; deployed scheduler evidence and edge limits remain independently required.
-- Recovery uses a short-lived restricted authority and cannot become a normal browser session until
-  a replacement passkey is safely established.
-- Recovery-code regeneration requires an exact active-session passkey step-up and atomically
-  replaces a batch of 8 to 16 opaque-selector/secret codes. Plaintext is shown once; only Argon2id
-  PHCs are persisted, and used verifier material is immediately scrubbed.
-- After bounded application Argon2id verification, one code creates at most one ten-minute
-  registration authority bound to the exact replacement WebAuthn challenge and context. It cannot
-  call session, profile, source, device, invite, ingest, job, deletion, or admin capabilities.
-- Successful registration atomically installs the replacement passkey, revokes old passkeys and
-  browser sessions, cancels pending device approval, removes remaining codes/challenges, and only
-  then creates a passkey-bound session. Activated source-bound devices remain visible and explicitly
-  revocable because they have no profile-admin scope.
-- Recovery lookup and verification require generic responses and timing, body/attempt bounds,
-  edge/service rate controls, protected deployment pepper, deployed cleanup cadence, and monitoring.
-  Fixed-clock synthetic scheduler/PostgreSQL cleanup composition exists. Recovery completion fails
-  closed at the 32-retained-passkey provenance ceiling until the bounded cleanup has removed an
-  eligible old unreferenced revoked row; the ceiling itself is unchanged.
-
-### Device authorization
-
-1. The agent-facing connect page contains static, versioned instructions and no personalized secret.
-2. The user or agent downloads a GitHub Release and verifies checksum, platform signature, and
-   provenance.
-3. The connector creates an Ed25519 key for the selected source.
-4. The connector starts a transaction with its immutable public key and safe metadata. The server
-   returns a high-entropy poll token, a transaction challenge, and a short user code; only keyed
-   verifiers are persisted.
-5. The browser accepts the code and displays the public-key fingerprint, connector version,
-   platform, device label, and an explicit new-source or active existing-source choice. Existing
-   options expose only source ordinals, active device labels, and an encrypted session-bound
-   control; the raw source ID stays server-only.
-6. An authenticated session plus fresh passkey approves the exact pending transaction and selected
-   source. The server generates a fresh source ID for `new` or recovers the owned source from the
-   encrypted control for `existing`; PostgreSQL rechecks ownership and active state atomically.
-7. The connector presents the poll token and proves private-key possession by signing the bound
-   challenge.
-8. The server atomically activates the binding and issues a public device ID tied to that public key
-   and exactly one source.
-
-Steps 4 through 8 are unavailable at their four HTTP entry modules unless each resolved exact
-`VIBERACING_PAIRING_ENABLED=true` when loaded. Disabled POST reaches no pairing runtime, service,
-admission acquisition, protected key, WebAuthn ceremony, or database capability. This local decision
-is not a dynamic/deployed switch. Steps 5 and 6 additionally require exact
-`VIBERACING_SOURCE_CREATION_ENABLED=true` only for `new`; every alternate module decision omits that
-UI choice and makes both service steps fail closed while `existing` remains available. The encrypted
-approval challenge and its v2 context digest bind exact source choice so a new-source challenge
-cannot finish after a restarted verification module resolves disabled. This second local decision is
-also not a dynamic or deployed switch.
-
-The poll token is short-lived, one-time, and insufficient to approve or activate a device without
-the browser step-up and key-possession proof. The server stores only its keyed verifier; the
-connector persists the plaintext only inside its native OS credential record while the transaction
-is pending, then clears it on activation or local expiry. It is never logged or printed. There is no
-long-lived bearer credential. Each later sync request signs a canonical method, path, body hash,
-device ID, nonce, timestamp, and idempotency key.
-
-Nonce records expire after the replay window. Idempotency records have bounded retention. Neither
-table can grow without cleanup.
-
-Steps 3 through 8 now have one local executable path with synthetic/injected HTTP evidence and
-isolated PostgreSQL evidence. The later signed sync also has one separate Windows candidate command
-with synthetic loopback acknowledgement evidence. A separate portable copy/removal smoke exercises
-only the repository-built Windows connector and declares the same secretless no-upload CI job; it is
-not the GitHub Release download/verification in step 2. A live authenticator/database/TLS/edge path,
-hosted Windows result, real package lifecycle, cross-platform runtime results, release provenance,
-and real-user end-to-end sync remain separate gates.
-
-### Local connector safety
-
-- User-scoped installation with no administrator or root requirement.
-- Keys live in Windows Credential Manager, macOS Keychain, or Linux Secret Service. No plaintext
-  persistent fallback.
-- One explicit local-removal command deletes only the exact canonical origin/label entry and reports
-  that it did not revoke server device authority. Server revoke stays an authenticated account
-  action; key rotation is not inferred from local deletion.
-- The connector resolves links, hash-admits the exact Codex artifact while preventing write
-  substitution, displays only the admitted exact version, and does not accept a silent
-  environment-variable override.
-- One explicit point-in-time candidate check reuses the identical bounded admission without opening
-  credential storage, starting Codex, reading an account, persisting a result, or using a network;
-  success explicitly states that no version is supported, and later sync repeats admission.
-- One optional diagnostic-preview mode on that same check emits only the compile-time connector and
-  candidate versions, fixed platform contract, closed admission class, and empty support state. A
-  failure remains nonzero; paths, digests, environment values, credentials, account, and usage stay
-  absent, and the connector supplies no file or sharing mechanism.
-- One Windows x86_64 repository smoke copies only the locked release-profile `0.0.0` connector into
-  a bounded temporary directory, checks its exact help and missing-candidate behavior under a
-  cleared environment, verifies digest stability and no residue, and removes the copy. It is not a
-  package, installer, upgrade, revoke, signature, provenance, or support result.
-- The App Server child process has a bounded lifetime, bounded output, separate stderr, sanitized
-  environment, and guaranteed cleanup.
-- Scheduled execution uses an argument array, fixed executable path, fixed working directory,
-  jittered retry, and no shell evaluation.
-- The connector never executes commands or scripts received from the website.
-- MVP updates are manual and verified. Auto-update is deferred until its own signed update threat
-  model exists.
-- Telemetry is off by default. The implemented local diagnostic preview is explicit, closed,
-  redacted, stdout-only, and inspected before a user deliberately shares it; the connector neither
-  saves nor sends it. Any automated export remains a separate reviewed boundary.
-
-## Public protocol and data
-
-### Canonical contracts
-
-Contracts live under contracts/v1 as human-readable JSON Schema. They are the source of truth for:
-
-- strict request and response validation;
-- generated OpenAPI documentation;
-- generated TypeScript types;
-- Rust serialization fixtures;
-- size, enum, integer, timestamp, and unknown-field rules.
-
-Generated artifacts state their generator and source. CI regenerates them and fails on drift.
-
-All public endpoints:
-
-- are under /v1;
-- accept only declared content types and bounded bodies;
-- reject unknown fields;
-- return a documented problem-details error shape and request ID;
-- have explicit cache and CORS policy;
-- never expose stack traces, SQL errors, secrets, or internal hostnames.
-
-The first reserved read contract is `GET /v1/community/scores?seasonStart=YYYY-MM-DD`. It accepts
-exactly one supported Monday season, returns a bounded Community score page or the documented
-problem shape, and starts with `Cache-Control: no-store`, `Vary: Accept`, and same-origin/no-CORS
-semantics. ADR 0013, the generated OpenAPI operation, and a local Next.js route now implement the
-closed query, GET-only method/`Accept` policy, exact problem translation, final response validation,
-and four-request no-queue admission. The lease remains held through the adapter's enforced
-connect/query/statement deadlines. This local evidence is not a deployment, live database login,
-edge rate policy, shared cache, capacity result, or public-beta claim.
-
-A second compatible read contract is `GET /v1/community/race?seasonStart=YYYY-MM-DD`. ADR 0037
-preserves the complete stable score component and adds only one optional exact current `CarRecipeV1`
-to each otherwise identical row. Revision 0027 projects that recipe only after current
-active-profile filtering. Proposal identity, state, timestamps, and private identifiers remain
-absent; a recipe is current presentation state, not an immutable historical season snapshot.
-
-A third compatible read contract is `GET /v1/community/race/status?seasonStart=YYYY-MM-DD`. ADR 0040
-preserves both closed older components and adds only a required saturated complete-UTC-day freshness
-value plus an optional preference-gated consecutive positive-score streak to the race rows. Revision
-0029 derives them at read time from accepted server receipts and materialized daily scores. Exact
-timestamps, daily history, private identifiers, and the preference itself remain absent; status
-never changes score, rank, authority, or finalized state.
-
-ADR 0056 places all three read operations behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` at
-route-module evaluation. Disabled GET uses their already documented generic no-store 503 before
-query, `Accept`, admission acquisition, or storage work; non-GET methods retain 405. The tracked
-configuration remains false. This does not change a component or operation schema and is not
-deployed, dynamic, or cache-denial evidence.
-
-The visible home race now uses that separate same-origin status operation for its current
-server-selected Monday. It accepts only the bounded Public response, loads its compact independent
-validator after hydration, uses no credentials or browser persistence, and keeps a clearly labeled
-synthetic fallback on any invalid or unavailable result. A participant without an active recipe uses
-a repository-owned visual fallback. Selecting a Community handle updates one same-page summary with
-only its weekly score, rank, active-day/source counts, rounded freshness, optional streak, and
-visual-marker car; the UI explicitly keeps daily detail, device counts, exact usage/receipt time,
-proposal state, and identifiers out of that surface. The exact public handle can be shared as
-`/?profile=handle#profile`; invalid or duplicate values are ignored, and a missing top-32 row is
-never substituted with another profile. A separate opt-in synthetic gate now carries all four GETs
-through two emitted standalone Next production processes and a TLS-enabled disposable narrow Web
-login after applying the reviewed PostgreSQL migrations. It proves an extra-membership login fails
-without private-table mutation, validates the exact public contracts plus TLS 1.2/1.3, proves
-successful reads remain non-mutating, and exercises the exact four-request no-queue boundary with
-four observed database waits plus a rejected fifth request. Its disposable PostgreSQL preloads
-`auto_explain`; superuser-provisioned database-scoped settings apply only to the narrow synthetic
-login and disable parameter logging. A bounded fail-closed oracle now requires the four adapter
-plans and four nested projections, their reviewed indexes, bounded rows/plan shape, and no mutation,
-sequential scan of bounded-index relations, dirty/written block, temporary I/O, private marker, or
-printed/written plan artifact; container cleanup removes the ephemeral log. Authenticated
-daily/profile detail, cache, deployment certificate/login, external TLS/edge route, representative
-plan/load/capacity evidence, monitoring, real-user data, and deployment remain separate gates.
-
-### UsageSyncV1
-
-The minimum payload contains:
-
-- schemaVersion;
-- sourceId;
-- syncId;
-- observedAt for replay protection only;
-- clientVersion and agentVersion;
-- bounded daily entries with reportedDate and dailyTokenTotal.
-
-Trust tier, score, rank, streak, profile ID, season, receivedAt, and moderation state are
-server-derived and absent from client-writable schemas.
-
-ADR 0015, as narrowed by ADR 0075, and `connector-usage-sync-authentication.json` make the local
-pre-database verification boundary executable. They fix the exact method/target/media type, copied
-raw envelope and JSON budgets, canonical base64url/timestamps, and LF-separated origin/device
-messages. A pure verifier checks a replay-consumed exact-body origin HMAC before parsing or device
-lookup, validates the generated payload contract, and verifies the source-bound exact-body request
-under strict Ed25519 semantics. ADR 0016 adds a separate bounded PostgreSQL config/pool/mapper for
-only the minimal device lookup and verified submission procedures, with per-checkout least-privilege
-probes and mock-pool evidence. ADR 0017 adds exact protected primary/secondary origin-key
-configuration and a factory that constructs the verifier without returning raw configuration. ADR
-0018 adds the forced-RLS origin replay tuple, atomic Ingest-only consume, Jobs cleanup extension,
-and strict local adapter mapping. ADR 0019 composes one configured database boundary with that
-verifier, generates a server-owned request ID, waits for submission, and validates only the closed
-result/problem contracts. ADR 0020 adds the local exact Fastify POST boundary with copied raw
-bytes/headers, no-queue admission, fixed connection and deadline budgets, no proxy/request-ID trust,
-and closed contract serialization. ADR 0033 adds a separate local executable host with exact
-loopback and Railway production declarations, buildable runtime package exports, one bind call,
-complete partial- startup cleanup, and a 36-second process shutdown deadline. ADR 0055 adds exact
-`VIBERACING_INGEST_ENABLED=true` admission before any other host field, protected application
-configuration, factory, pool, server, or listener; the tracked example remains false. That host is
-not live secret-manager/edge integration, a verified external TLS route, a deployment database
-login/TLS connection, direct-origin denial, a connector, capacity evidence, or deployment. A
-separate opt-in gate carries independently signed requests through the emitted loopback host and a
-synthetic dedicated login in disposable PostgreSQL, checking accepted, duplicate, replay, revoke,
-response, exact persistence, and controlled four-slot no-queue behavior at the first replay-store
-call. After the imported host closes, that same gate also starts the silent built entry point for
-one separate accepted request before forcibly ending only its test child. A separate exact-runtime
-gate delivers a real Linux `SIGTERM` while one independently signed request is blocked at origin
-replay, then proves its acknowledgement and stored-state settlement, silent host exit, session
-release, immutable runtime contents, and cleanup. This local evidence does not satisfy any
-Railway/orchestrator drain, deployment, or representative-load gate above.
-
-### Storage
-
-Primary tables include:
-
-- profiles, sessions, passkeys, recovery codes, and invites;
-- codex sources and device keys;
-- short-lived origin and device replay digests;
-- signed usage snapshots, current source/day values, and terminal UTC-day/count freshness
-  projections;
-- seasons, score-version records, entries, and source-count snapshots;
-- CarRecipe and proposals;
-- audit events, deletion jobs, and short-lived security tombstones.
-
-Important constraints include unique GitHub identity, unique device public key, unique origin
-key/digest and device nonce within their replay windows, unique source/date current state, and valid
-state-transition checks.
-
-The ingest database role receives EXECUTE only on narrowly owned submission procedures and cannot
-directly modify profiles, passkeys, invites, admin state, schema, or finalized seasons. Migration
-ownership is never assigned to a runtime service.
-
-## Token accounting and seasons
-
-### Implemented compatibility baseline: `community_v1`
-
-The current code and public contracts still use the accepted legacy formula:
+The only public product routes are:
 
 ```text
-profileDailyTokens =
-  sum(current accepted tokens for each distinct active source)
-
-dailyScore =
-  min(1000, round(250 * ln(1 + profileDailyTokens / 10000)))
-
-weeklyScore =
-  sum(dailyScore), capped at 7000
+POST /v1/usage
+GET /v1/leaderboards/current
+GET /v1/leaderboards/{seasonStart}
+GET /v1/profiles/{handle}
 ```
 
-This formula, one-to-seven-active-day simulator, `weeklyScore`, and historical contracts remain
-implemented evidence. They are not the target multi-agent ranking because the logarithm and
-active-day aggregation can rank fewer weekly tokens above more weekly tokens.
+There are no `/v1/community/*` aliases or compatibility wrappers.
 
-### Direct metric: `community_tokens_v1`
+`UsageSyncV1` carries one server-issued `agentAccountId`, `syncId`, canonical `observedAt`,
+`clientVersion`, `readerVersion`, and bounded unique `dailyEntries`. Each entry contains an exact
+UTC `usageDate` and canonical decimal-string cumulative token total. Provider, revision, trust,
+scope, profile, rank, model, components, account identity, and device/installation counts are
+absent.
 
-For each season:
+### Edge and Ingest
 
-```text
-sourceDayTokens =
-  canonical total from one reviewed reader for one source/date
+Edge independently resolves exact enablement before protected configuration or body work, admits
+only the final route/method/media type/encoding and bounded framing, applies rate policy, computes
+the exact body digest, and adds one short-lived path/body-bound origin HMAC. It forwards only
+allowlisted headers and never retries or accepts caller origin authority.
 
-profileDayTokens =
-  sum(latest accepted sourceDayTokens for each eligible distinct source)
+Ingest performs framing, HMAC verification, duplicate-key-aware parse, schema validation,
+header/body relationships, non-mutating binding lookup, Ed25519 verification, and server-owned
+attribution validation before any persistent write.
 
-weeklyTokenTotal =
-  sum(profileDayTokens for dates in the season)
-```
+One PostgreSQL transaction then consumes origin and device replay, enforces long-lived idempotency,
+revalidates active installation/device/account/provider/revision/trust/scope, applies database-clock
+UTC/backfill/finalization policy, enforces monotonic cumulative totals, inserts the immutable
+observation, updates one account/day total, coalesces the dirty-season outbox, appends the bounded
+event, and returns the exact result. Any failure rolls back everything.
 
-Rules for the locally implemented metric:
+### Exact numeric and date model
 
-- `weeklyTokenTotal` is the ranking value. There is no logarithm, active-day bonus, streak bonus,
-  provider/model/cost multiplier, currency conversion, or raw-token tie breaker.
-- Each reader uses one provider-documented aggregate or documented disjoint components. Nested
-  cached/reasoning/thought breakdowns are counted once; cumulative snapshots and duplicate records
-  are deduplicated. Unknown semantics fail closed.
-- Exact non-negative integer aggregation happens after source/date deduplication. An intermediate
-  outside the JSON safe-integer public contract is omitted from materialization, never wrapped,
-  saturated, rounded, or compared.
-- Equal weekly token totals share the same rank.
-- Display ordering inside a shared rank is deterministic per season and has no competitive meaning.
-- Provider, source count, active days, streak, trust label, and CarRecipe are not competitive tie
-  breakers.
-- The metric version is stored with each season and cannot change mid-season. Existing/finalized
-  `community_v1` seasons remain immutable; a cutover creates only `community_tokens_v1` seasons, and
-  ranks from different metric versions are never merged.
+All token totals are canonical non-negative decimal strings at JSON boundaries, `bigint` or
+canonical strings after TypeScript validation, and `numeric(30,0)` in PostgreSQL. They never pass
+through JavaScript `Number`.
 
-Rules shared by both metric versions:
+Usage date is UTC. PostgreSQL clock rejects future dates and owns the bounded backfill and season
+window. Client time, timezone, locale, and `observedAt` cannot widen eligibility.
 
-- A season begins on Monday according to codexReportedDate grouping.
-- [ADR 0008](decisions/0008-community-season-grace-and-finalization.md) fixes the Community grace
-  deadline at Wednesday 00:00 UTC after that ISO week, 48 hours after the next Monday begins.
-- Server receive time closes the Ingest window; a Jobs decision time at or after the same boundary
-  finalizes the season. Client time cannot extend either decision.
+### Seasons and snapshots
 
-The ranking page always states that it ranks participating Vibe Racing Community profiles rather
-than all users of any agent. Under `community_tokens_v1`, it also states that tokenizers differ and
-the displayed value is the direct sum of provider-reported tokens, not normalized compute or cost.
+One UTC week is one season with metric `provider_reported_tokens_v1`. For each visible eligible
+profile, Jobs exactly sums unique AgentAccount/day totals. Rank is descending total with shared
+positions. Deterministic tie display is noncompetitive.
+
+Usage and visibility changes coalesce one dirty-season outbox record. The fixed Jobs catalog
+refreshes bounded immutable snapshot versions, pages, one top-32 race payload, and public profile
+summaries. Publication advances atomically only after complete validation. A failed refresh
+preserves the last good version. Finalization is fixed, idempotent, no-overlap, and server-clock
+owned.
+
+Public Web has no live ranking capability. It reads only complete snapshots, emits strong ETags,
+supports 304, and applies reviewed shared-cache headers. Private endpoints remain `no-store`.
+
+### Public and private UX
+
+The home page leads with a semantic server-rendered leaderboard that works without canvas or
+JavaScript animation. Community self-reporting and tokenizer differences are explicit in EN/RU. The
+race is lazy, cosmetic, reduced-motion aware, and consumes the same top-32 payload.
+
+Public fields are bounded handle, rank, exact weekly total string, tier, approved car, and rounded
+snapshot freshness. No provider/account/device/day breakdown is public.
+
+The private dashboard orders:
+
+1. current ranking;
+2. agents and AgentAccounts grouped by provider;
+3. sync health and quarantine state;
+4. installations and devices;
+5. public profile/privacy;
+6. car appearance;
+7. passkeys/recovery and destructive security actions.
+
+It never labels accounts as "Source 1" or asks for theme/motion/streak before first value.
 
 ## CarRecipe and pixel assets
 
-CarRecipe is a strict versioned object containing only project-owned enums, such as chassis, nose,
-cockpit, wing, wheels, palette, trail, and a bounded seed.
+CarRecipe remains a closed cosmetic enum built only from reviewed repository assets. It can be
+proposed by a browser or account-scoped device and activated only by the authenticated browser.
+Appearance never changes usage, trust, eligibility, rank, or authority.
 
-- No free text, arbitrary color, URL, path, file, markup, shader, or executable value is accepted.
-- The server validates the recipe before persistence.
-- The renderer is deterministic across all three themes.
-- An agent can propose a recipe without uploading conversation text.
-- A proposal is previewed and explicitly approved in the browser.
-- A device cannot directly replace the active car.
+### Roles and operations
 
-Pixel source is stored in reviewable indexed data rather than opaque editable binaries where
-practical. Generated sprite sheets are derived artifacts. Fonts and unavoidable binaries require
-source, license, checksum, and attribution records. Real automotive brands and protected trade dress
-are not used without permission.
+The clean bootstrap owns schema through a non-login owner role and creates separate forced-RLS,
+least-privileged Web read, Web/Auth, Ingest, Jobs, Admin, and migration capabilities. Runtime
+adapters expose exact parameterized functions only. Jobs and migration processes accept fixed
+catalogs, not arbitrary SQL, selectors, cutoffs, or retry counts.
 
-## Web and application security
-
-- Strict CSP with nonces and no user-controlled markup.
-- HSTS, Referrer-Policy, Permissions-Policy, frame protection, MIME sniffing protection, and an
-  explicit cross-origin policy.
-- Authenticated responses are private and no-store; public cache keys cannot mix user state.
-- Credentialed CORS never uses a wildcard.
-- State-changing browser requests require CSRF protection.
-- Handles and display names use bounded normalization and plain-text rendering.
-- Redirect destinations are allowlisted.
-- IP-based controls trust only edge-authenticated forwarding headers.
-- Error handling is constant in membership-sensitive flows where practical.
-- Expensive endpoints have concurrency limits, deadlines, and backpressure.
-
-## Deletion and retention
-
-Confirmed deletion requires GitHub session, fresh passkey, and typed handle.
-
-The transaction:
-
-1. hides the public profile immediately;
-2. revokes sessions and all device keys immediately;
-3. makes ingestion reject the profile;
-4. schedules idempotent primary-data deletion;
-5. reports progress without leaking record identifiers.
-
-Primary data is purged within the published service window. Backup expiry and any short-lived
-abuse-prevention tombstone are described honestly in the Privacy Policy. Restore procedures must not
-silently resurrect a deleted profile; deletion markers are replayed after recovery.
-
-Expired pairing transactions and their authority-free pending keys now have a separate bounded
-Jobs-only deletion capability and local one-shot command. This is isolated SQL/application evidence,
-not a production retention schedule. Expired authentication challenges and restricted recovery
-authorities now have a second bounded Jobs-only deletion capability; it also removes only an exact
-still-present used code whose verifier was already scrubbed and follows the recovery profile lock
-order. Expired CarRecipe proposals have a separate maximum-1000 cleanup under their own private
-mutex. Revision 0030 adds a maximum-1000 oldest-first cleanup for expired browser sessions only when
-no retained rotation predecessor or pairing approval provenance references the row; selected session
-challenges cascade, while pairing-referenced sessions remain until that reference is removed.
-Revision 0031 adds a maximum-1000 oldest-first cleanup for expired active or revoked invite verifier
-rows under the shared authentication mutex; live invites and redeemed enrollment provenance remain.
-Revision 0024 adds a maximum-10 Jobs-only primary-profile purge: it serializes against every
-intersecting maintenance capability, accepts only due queued/retry work for committed
-`deletion_pending` profiles, removes restrictive pairing references first, terminally settles the
-opaque job, and cascades primary identity/credential/source/device/usage/personal-score data in one
-transaction. It retains only the opaque terminal job and redacted audit reference. Revision 0032
-retains that job for at least 30 days after server-recorded completion, then permits maximum-1000
-oldest-first batches only when state remains `purged` and the profile link is null. Revision 0033
-adds a maximum-1000 oldest-first cleanup for both profile-linked and already-redacted database audit
-events only after 180 days from server-recorded occurrence under a separate private mutex. It does
-not provide the planned external append-only sink. Revision 0034 retains the exact session/passkey
-approval references on activated pairings for at least 180 days, then permits maximum-1000
-oldest-first redaction of only those two references under the existing authentication and pairing
-mutexes. The pairing, profile/source/device binding, active device, and passkey remain, while a
-later session cleanup may remove a newly unreferenced expired session. Revision 0035 separately
-removes maximum-1000 oldest-first passkey rows only after 180 days in revoked state and only when no
-session, verifying/authorized challenge, or pairing reference remains; this can free the unchanged
-32-row add/recovery ceiling. Revision 0036 removes maximum-1000 oldest-first minimized activated
-pairing/revoked-device pairs only after both activation and revocation are at least 180 days old,
-approval provenance has been redacted, and no authorization challenge, nonce, or raw snapshot
-remains. It deletes no raw evidence by cascade and preserves active, recent, or referenced history.
-Revision 0037 separately resets only positive fixed anonymous pairing transport windows after the
-maximum permitted one-hour duration: it preserves all 130 preallocated rows, accepts no caller
-parameter, locks rows in admission order, and scrubs the aggregate timestamp/count to the closed
-epoch/zero state. Revision 0038 separately removes maximum-1000 oldest-first canonical `enrolling`
-profiles only after all exact enrollment-session/registration-challenge expiries are strictly past,
-one redeemed invite remains, and no other profile-bound recovery, authority, source, deletion,
-scoring, or recipe state exists. The profile cascade permanently removes the redeemed invite and
-expired enrollment authority while audit evidence remains with null profile linkage; it creates no
-deletion job, tombstone, restored invite, or notification. Revision 0039 captures one bounded
-UTC-day/source/value inventory per profile when a season becomes terminal, keeps the compatible
-public freshness result stable, and permits maximum-1000 oldest-first source/day deletions only
-after 30 days. Every deletion rechecks captured/live inventory under the existing scoring,
-Ingest-retention, and profile-purge mutex order. Open, recent, missing-projection, or drifted state
-remains ineligible. The separate default-off local scheduler now includes that exact command in its
-fixed hourly catalog and combined synthetic PostgreSQL integration, but no deployed cadence,
-correction authority, monitoring, capacity, backup purge, or deployed restore evidence exists.
-Revision 0040 separately adds one zero-argument Jobs-only function that takes the shared Community
-scoring mutex, derives the oldest grace-eligible open or retained-data-backed season, and invokes
-the existing finalization function for at most one season. It returns only a closed 0-or-1 season
-count and the bounded profile count; Web, Ingest, Admin, and `PUBLIC` remain denied. The existing
-source-date index and one new partial open-season index support the oldest-first lookup without
-adding a queue, run ledger, selected date, retry counter, or new retained field. The default-off
-scheduler places this capability first in its hourly catalog, but representative backlog size,
-capacity, monitoring, real-user recovery, and deployed cadence remain unproven. The isolated
-database integration first holds revision 0039's advisory lock until two exact migration processes
-are observed waiting. One then applies the reviewed transaction, one rolls back with the expected
-duplicate-object `42P07`, and exactly one ledger row plus the canonical table must remain. It next
-performs two container-only restores of the current synthetic snapshot, checks exact data
-digests/lengths, stable restored schema, forced RLS, selected role grants, and then all 45
-post-restore lock-wait races plus the final runtime deny matrix. It does not prove a successful
-concurrent deployment controller or staging migration orchestration/rollback, and it does not
-exercise a stale snapshot that contains a deleted profile, deletion-marker replay, external backup
-storage/encryption, cluster-role recovery, production credentials, representative scale, or RPO/RTO.
-Other remaining expiry classes, keyed tombstone policy, cache/backup purge, and stale-backup
-deletion replay still require their own reviewed implementation and public policy, and no
-implemented cleanup, redaction, or reset has a deployed cadence.
-
-A separate local one-shot migration runner is now exact-default-off before catalog, protected
-configuration, or resource work. It verifies only the canonical manifest/file inventory and source
-digests, probes one distinct owner-member login, takes the fixed session advisory lock, rereads the
-ledger, and applies only an exact reviewed suffix before requiring the complete catalog. A separate
-opt-in synthetic gate now runs one widened and two narrow emitted processes over hostname-verified
-TLS to one disposable PostgreSQL database. It proves widened-login denial before schema creation,
-observes both narrow controllers behind one external lock holder, requires both to converge on the
-exact 43-row ledger after release, and verifies all 28 forced-RLS private tables, identity
-invariants, and resource cleanup. The next independent prerequisite is protected staging
-orchestration with environment-owned credentials/trust, intended replica topology, service
-compatibility, forward rollback, monitoring, and recovery; the disposable result satisfies none of
-those deployment gates.
-
-A checked staging migration and forward-recovery runbook now turns that prerequisite into eighteen
-ordered operator controls. It binds seven exact repository commands to the current package scripts,
-runner enablement decision, and generic success output; thirteen missing, unsafe, or drifted
-variants fail closed. The runbook separates migration authoring from site startup, requires private
-owner and target assignment, restore and service-compatibility evidence, one-shot apply, exact
-post-apply oracles, containment, and forward-only repair. It contains no protected values and does
-not prove a staging run, production authorization, monitoring, stale-backup deletion replay,
-recovery, or deployment.
-
-A separate checked current-snapshot restore rehearsal runbook binds twenty isolation, restore,
-verification, stale-backup stop, and incident-handoff controls to four exact repository commands and
-the existing twice-restored disposable PostgreSQL oracle. Sixteen missing, unsafe, or drifted
-variants fail closed. The runbook permits only the current synthetic snapshot and requires operators
-to stop before any pre-deletion or real-user archive. It adds no external backup store or protected
-record and proves no staging restore, stale-backup deletion replay, cluster recovery, RPO/RTO,
-production authorization, or deployment.
+Migration, restore, containment, deletion failure, snapshot failure, and release use explicit
+runbooks with protected external authority and evidence. Repository commands operate only on
+synthetic fixtures and disposable local PostgreSQL.
 
 ## Administration and operations
 
-- Admin uses a separate hostname behind Cloudflare Access plus application passkey step-up.
-- Ordinary GitHub membership never implies admin.
-- Admin roles are least-privileged and individual; no shared accounts.
-- Sensitive actions require a reason and produce an external, append-only audit event.
-- Operators cannot retrieve Codex prompts or account email because those values are never collected.
-- Kill switches independently disable enrollment, pairing, source creation, ingestion, proposals,
-  legacy public ranking, and direct-token ranking. Local default-off gates now cover Ingest startup,
-  the three legacy public-ranking route modules, the independent token route, the four pairing route
-  modules, new-source creation at the page plus both approval service steps, CarRecipe proposal
-  creation/approval across browser and device ingress, and the two enrollment pages plus all four
-  HTTP/service steps; deployed restart/route/cache-denial/runbook behavior remains a separate gate
-  for every control.
-- Operational logs are structured, redacted, retention-bounded, and avoid raw token values.
-- Alerts cover auth anomalies, pairing storms, source growth, signature and replay failures, ingest
-  rejection, season jobs, deletion failures, database saturation, release events, and origin-proof
-  failures.
-- Backup restore, key rotation, compromised release, mass device revoke, source quarantine, and
-  deletion failure have tested runbooks.
+Admin remains a separate Access/member/fresh-passkey/reason/audit boundary with one narrow database
+capability. Normal sessions cannot become Admin. Operations remain external protected authority
+guided by checked public runbooks; repository-local results do not prove a deployed controller.
 
-A separate transport-free Admin invitation kernel now fixes the first sensitive-action sequence: one
-exact injected Access/individual-admin/fresh-passkey decision, an acknowledged external `authorized`
-audit event, the single probed `viberacing_api.issue_invite` capability under the `viberacing_admin`
-role, and an acknowledged external `committed` event must all succeed before one seven-day
-`BETA_ADMISSION` credential is returned. The external events omit the invite ID, secret, verifier
-digest, and raw proof. Ambiguous database or final-audit outcomes return no credential and never
-retry. The bounded database adapter now proves a two-phase login/TLS then assumed-role capability
-boundary and mandatory reset-before-reuse. One opt-in synthetic gate composes the built production
-kernel with injected authorization/audit ports and a disposable hostname-verified TLS PostgreSQL
-database: it rejects an extra-membership login without private mutation and verifies one exact
-invite plus database audit through the narrow login. There is still no separate-origin Admin host,
-complete fresh-passkey verifier/authorization composition, external append-only backend/retention
-policy, protected production login/certificate, issuer UI/API/CLI, ambiguous-state operator
-workflow, monitoring, capacity evidence, or deployment. A separate local prerequisite now verifies
-only exact bounded `Cf-Access-Jwt-Assertion` RS256 tokens against a protected one-or-two-key
-snapshot, exact team issuer/single audience, human token class, maximum one-hour lifetime, and
-one-to-sixteen individual opaque members. It returns no subject, email, token, key, or complete
-authorization and has no real Access policy/token, remote key refresh, passkey ceremony, host,
-origin protection, or deployment evidence.
+### Release and supply chain
 
-A checked capability-containment and recovery rehearsal runbook now binds all ten existing
-exact-default-off decisions to 24 ordered controls and eight repository commands. It requires
-protected authority, independent containment, Web process replacement, Ingest/Jobs/migration
-settlement, preserved returning security/deletion paths, redacted evidence, and recovery of one
-capability at a time; 25 unsafe or drifted variants fail closed. This is local prerequisite evidence
-only, not a private reporting channel, deployed control plane, dynamic kill switch, monitoring,
-containment, recovery, or deployment.
+Node, pnpm, Rust, actions, containers, packages, and tools stay exact-pinned and reviewed under the
+dependency policy. Pull-request CI is secretless.
 
-A separate checked profile-deletion failure rehearsal runbook now binds the implemented atomic
-request, Jobs-only maximum-ten primary purge, separate 30-day terminal retention, fixed scheduler
-catalog, and existing rollback/role/race evidence to 26 ordered controls and ten exact repository
-commands. Twenty-five missing, unsafe, or drifted variants fail closed. It distinguishes request,
-purge, terminal-retention, and stale-backup/cache state; preserves confirmed authority lock-down;
-requires protected aggregate diagnosis and at most one reviewed deployment-owned retry; and refuses
-to infer automatic retry from unused schema state. This is local prerequisite evidence only, not a
-deployed alert, retry controller, user notification path, cache/backup purge, stale-backup replay,
-real-user deletion outcome, recovery, staging, or deployment.
+An official connector requires protected builds for Windows, macOS, and Linux, platform signature
+where applicable, checksums, SBOM, provenance, clean-machine install/update/uninstall,
+credential-store/discovery/sync tests, and an explicit supported-version matrix. Local Windows
+compilation or synthetic reader fixtures do not satisfy that gate.
 
-## Repository design
+## Delivery sequence and commit boundaries
 
-The planned public tree is:
+Each step is a reviewable vertical slice with focused tests, complete staged-diff review,
+public-file scan, and a signed-off commit.
+
+1. Finalize Accepted clean AgentAccount architecture, invariants, threat/abuse/privacy maps.
+2. Replace the pre-release migration history with the clean bootstrap, roles, forced RLS, manifest,
+   migration runner, restore, and database tests.
+3. Add profiles, provider/revision registry, AgentAccounts, installations, devices, and batch
+   pairing persistence.
+4. Add atomic usage observations, account/day totals, replay, idempotency, monotonicity, outbox, and
+   audit.
+5. Add direct-token seasons, shared rank, snapshot versions/pages/top-32/profile summaries,
+   finalization, and 10,000-profile evidence.
+6. Replace generated schemas, types, policies, OpenAPI, and removed-route oracles with final V1
+   contracts.
+7. Replace Ingest verifier/application/adapter/host with final ordering and zero-write evidence.
+8. Replace Edge with the final route, framing, HMAC, header, rate, and no-retry boundary.
+9. Add connector installation, provider registry, bounded reader interface, discovery manifest, and
+   privacy-sentinel framework.
+10. Implement only provider readers whose exact local schema and accounting evidence exists; mark
+    the rest recognized or disabled.
+11. Implement batch connect, sync/status/doctor/account/disconnect/forget-local, native credentials,
+    and cross-platform lifecycle.
+12. Simplify GitHub OAuth/passkey onboarding and remove anonymous/cosmetic pre-value flow.
+13. Implement browser batch approval with one passkey assertion and fallback code.
+14. Implement dirty-season refresh/finalization/retention in Jobs and default-off scheduler.
+15. Replace public live ranking with snapshot-only leaderboard/profile APIs and cache behavior.
+16. Replace public race/leaderboard UX with semantic SSR and one lazy top-32 payload.
+17. Replace source dashboard with provider/AgentAccount/installation/device dashboard.
+18. Add clean-bootstrap, multi-agent, privacy, scale, packaging, release, and checker-regression CI.
+19. Perform final security/correctness/consistency review and fix every finding.
+
+Do not start a compatibility layer, speculative provider reader, optional MCP path, provider OAuth
+Verified integration, reward system, deployment, or production operation to make a gate pass.
+
+## Verification strategy
+
+### Focused gates
+
+Every slice runs its workspace lint, typecheck, unit coverage, contract/database checker, generated
+drift, Rust formatting/check/test/Clippy where applicable, and the affected disposable PostgreSQL or
+runtime integration.
+
+### Cross-cutting development gate
 
 ```text
-.
-|-- .agents/
-|   `-- skills/
-|       |-- viberacing-propose-car/
-|       `-- viberacing-verify/
-|-- .github/
-|   |-- ISSUE_TEMPLATE/
-|   |-- workflows/
-|   |-- CODEOWNERS
-|   |-- dependabot.yml
-|   `-- pull_request_template.md
-|-- apps/
-|   |-- web/
-|   |-- ingest/
-|   |-- jobs/
-|   `-- admin/
-|-- contracts/
-|   `-- v1/
-|-- crates/
-|   `-- connector/
-|-- packages/
-|   |-- db/
-|   |-- pixel-assets/
-|   |-- scoring/
-|   `-- ui/
-|-- compat/
-|   `-- codex/
-|-- docs/
-|   |-- architecture/
-|   |-- decisions/
-|   |-- getting-started/
-|   |-- operations/
-|   |-- reference/
-|   |-- releasing/
-|   `-- security/
-|-- AGENTS.md
-|-- CODE_OF_CONDUCT.md
-|-- CONTRIBUTING.md
-|-- GOVERNANCE.md
-|-- LICENSE
-|-- MAINTAINERS.md
-|-- README.md
-|-- README.ru.md
-|-- ROADMAP.md
-|-- SECURITY.md
-|-- SUPPORT.md
-`-- THIRD_PARTY_NOTICES.md
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run verify
+cargo test --workspace --all-targets --all-features --locked
 ```
 
-### Toolchain
-
-- pnpm workspace with package manager and current LTS Node pinned in tracked configuration.
-- Cargo workspace with stable Rust pinned in rust-toolchain.toml.
-- Committed pnpm and Cargo lockfiles.
-- Cross-platform root scripts; no Unix-only command is the sole documented development path.
-- Docker Compose supplies disposable local PostgreSQL only; no production data is used for
-  development.
-- The root `pnpm run verify` command is the bounded development gate for public/configuration
-  boundaries, contracts, migrations, workspace lint/types/unit tests, and Rust. Exhaustive
-  coverage/build/history/documentation/publication evidence is explicit through
-  `pnpm run verify:release` rather than blocking every iteration.
-
-### Community and governance
-
-Before source is pushed to a public repository it includes:
-
-- Apache-2.0 LICENSE and clear asset licensing;
-- CONTRIBUTING with setup, architecture map, review expectations, DCO sign-off, and safe test-data
-  rules;
-- CODE_OF_CONDUCT with an explicit source-only interaction state; a tested project-controlled
-  private enforcement channel is required before public participation opens;
-- SECURITY with supported versions and GitHub private vulnerability reporting;
-- GOVERNANCE, MAINTAINERS, SUPPORT, ROADMAP, changelog, release policy, issue forms, and
-  pull-request template;
-- Developer Certificate of Origin rather than a custom CLA for the initial contributor model;
-- a documented trademark and branding policy before the name or logo is promoted broadly.
-
-Unpublished policy files and forms may exist before public identities are known, but they must state
-that participation is closed. Source-only publication remains blocked until a real maintainer,
-matching CODEOWNERS rules, verified private vulnerability reporting, and verified hosted interaction
-restrictions replace the pre-public status. A tested private conduct channel is required before
-Issues, Discussions, or unrestricted Pull Requests open. Local workstation identity is never used as
-a substitute.
-
-Before owner-directed bootstrap work is committed, the project owner explicitly supplies and
-approves a public Git author name plus a GitHub-verified or GitHub-provided `noreply` email.
-Repository-local author and committer configuration and every DCO `Signed-off-by` trailer for that
-work use the approved identity. A coding agent pauses for the identity instead of inventing a
-generic maintainer or copying private workstation data. Independent contributors retain their own
-authorship and sign-off.
-
-Before configuring a public GitHub `origin`, audit every reachable commit for generic or placeholder
-bootstrap identities. With the owner's explicit attribution and DCO confirmation, correct any such
-unpublished history to the approved GitHub-linked identity, rerun the public-file, history, and DCO
-checks, and review the resulting commits before publication. Published protected history is not
-rewritten merely to change attribution; a later correction is documented transparently.
-
-Repository badges are added only after the corresponding check exists. The project does not display
-aspirational security, coverage, or compliance badges.
-
-## Documentation for people and agents
-
-### Human documentation
-
-README stays short: purpose, screenshot, status, trust disclaimer, quick start, architecture
-thumbnail, documentation map, contribution and security links.
-
-Long-form documents follow a predictable structure:
-
-- getting started and tutorials;
-- task-oriented how-to guides;
-- architecture and design explanations;
-- protocol, CLI, configuration, scoring, and compatibility reference;
-- operations and incident runbooks;
-- numbered ADRs.
-
-English engineering documentation is canonical. Russian documentation covers the product and user
-workflows. Translation files record their canonical source, and CI reports drift.
-
-### Agent documentation
-
-The root AGENTS.md contains only:
-
-- the repository map and canonical documents;
-- actual build and verification commands;
-- public-data boundaries;
-- non-negotiable security rules;
-- completion criteria.
-
-Nested AGENTS.md files are introduced only for genuinely different areas:
-
-- apps/ingest for signature, schema, and database-capability boundaries;
-- crates/connector for local privacy, process, key, and compatibility rules;
-- docs when documentation tooling requires different commands.
-
-Repeatable verification now has a checked read-only repository skill under
-`.agents/skills/viberacing-verify` because the root, focused, staged-public-data, and history
-commands and their evidence boundaries are stable. It derives its command/runtime policy from the
-repository, includes the real Git scope, and has no edit, staging, commit, installation, network,
-live, publication, push, or deployment authority. The local `.agents/skills/viberacing-propose-car`
-workflow reduces style intent to exact enums and invokes only the fixed proposal command; it is
-checked for schema/CLI drift and has no connector installation or release authority. The broader
-end-user connect workflow is packaged separately as a distributable plugin or skill only after the
-CLI and release identity are stable, and it invokes fixed connector commands only.
-
-No duplicated agent-instruction files are maintained manually for different vendors. If adapter
-files become necessary, they are generated from the canonical guidance and checked for drift.
-
-### Documentation quality gates
-
-- Markdown formatting and style.
-- Internal and external link checking.
-- Spelling with separate EN/RU dictionaries.
-- Mermaid syntax and rendering.
-- OpenAPI and JSON Schema linting.
-- Translation drift.
-- Executable or explicitly illustrative command examples.
-- Generated-reference drift.
-- File-size and broken-anchor checks for AGENTS.md and documentation indexes.
-- Root onboarding currentness: EN/RU READMEs stay within 220 lines, surface quick start in the first
-  40 lines, retain one architecture thumbnail, and derive public contract/OpenAPI/migration counts
-  from canonical manifests.
-
-## Code quality and test strategy
-
-### TypeScript
-
-- Strict compiler settings and no unchecked implicit any.
-- ESLint import boundaries between Web, Ingest, Jobs, contracts, and database capabilities.
-- Formatter check, unit tests, property tests, and runtime schema tests.
-- Security-sensitive packages receive higher branch and mutation-test expectations than presentation
-  code.
-
-### Rust connector
-
-- unsafe code forbidden by default.
-- cargo fmt, clippy with warnings denied, cargo audit, cargo deny, license checks, unit and
-  integration tests.
-- Fuzzing for JSON-RPC framing, schema decoding, canonical request signing, and hostile process
-  output.
-- Platform tests on Windows, macOS, and Linux.
-- No panic or secret-bearing diagnostic on malformed upstream input.
-
-### Required behavior coverage
-
-- GitHub OAuth state, PKCE, callback, account uniqueness, and token disposal.
-- WebAuthn RP ID, origin, challenge, replay, user verification, multiple passkeys, recovery, and
-  step-up.
-- Pairing expiry, code guessing, cross-source device binding, revoke, key rotation, and
-  stolen-device scenarios.
-- App Server handshake, supported-version adapters, nullable fields, missing buckets, malformed
-  dates, oversized output, overload, timeout, and child cleanup.
-- Multi-device same-source dedup and multi-source aggregation.
-- Decreasing and anomalous snapshots, integer bounds, idempotency, replay cleanup, finalization, and
-  shared ranks.
-- Every database role attempting every forbidden capability.
-- XSS, CSRF, IDOR, open redirect, cache leakage, CORS, CSP, SQL injection, origin bypass, and
-  request smuggling defenses.
-- CarRecipe rejection of files, URLs, markup, unknown enums, and oversized input; deterministic
-  visual snapshots in every theme; agent-skill rejection of enum/CLI drift, shell-unsafe inputs,
-  retries, extra commands, and activation authority.
-- Deletion under retries, job crashes, backup restore, and partial outage.
-- Fork pull requests unable to access secrets or publish.
-- Connector artifact verification from a clean machine.
-
-### Performance and reliability
-
-Measure rather than promise:
-
-- public leaderboard p50/p95 latency and cache hit rate;
-- ingest p95 latency, database connections, lock time, and rejection rate;
-- season-finalization duration and idempotent rerun behavior;
-- connector startup time, memory, child-process lifetime, and upload size;
-- frontend Core Web Vitals with and without animation;
-- load shedding during pairing and sync storms.
-
-Initial SLOs are beta targets, not contractual guarantees. They are published only after staging
-measurements exist.
-
-## GitHub and supply-chain policy
-
-- Protected default branch, required status checks, no force push, and no direct production release
-  from an unreviewed commit.
-- CODEOWNERS for auth, connector, contracts, database privileges, edge, workflows, and release code.
-- Security-critical stable releases require independent review. If the project has only one
-  maintainer, an external review substitutes for self-approval.
-- All reusable GitHub Actions are pinned to full commit SHAs and updated by reviewed automation.
-- Workflow permissions are read-only by default and expanded per job.
-- Fork pull requests run with pull_request, no production secrets, and no privileged self-hosted
-  runner.
-- pull_request_target never checks out or executes untrusted fork code.
-- CodeQL, secret scanning with push protection, dependency review, OSV or ecosystem audits, license
-  checks, and Dependabot run continuously.
-- OpenSSF Scorecard runs as a signal. Release gates focus on specific critical and high-risk checks
-  rather than gaming one aggregate score.
-- Release jobs operate only from protected tags or environments and receive signing/deployment
-  credentials after approval.
-- The current checked service workflow implements that boundary for stable-tag Railway/Cloudflare
-  source replacement: a secretless verification job precedes the protected environment, deployment
-  inputs are immutable-pinned, and Migration/Web/Ingest/Jobs/Edge order is fixed. Hosted environment
-  settings, credential scope, execution evidence, and connector artifact release remain pending.
-- Binaries are built in CI, checksummed, signed where platforms support it, accompanied by SBOM, and
-  GitHub provenance-attested.
-- Users receive an independent verification command and expected signer identity. An attestation is
-  useful only when consumers verify it.
-- Release binaries live in GitHub Releases, not in source control.
-
-## Versioning, migration, and release
-
-- Connector, public API, CarRecipe, scoring, and database schema have explicit, independently
-  documented versions.
-- Connector releases follow semantic versioning.
-- Public API breaking changes use a new path version and a documented deprecation window; an
-  emergency security block may shorten support with a published advisory.
-- Scoring changes apply only to a new season and never rewrite a finalized season silently.
-- Database changes use expand-and-contract migrations compatible with the currently running
-  application version.
-- Every production release has migration, verification, rollback, and incident-owner steps.
-- Changelog entries describe user impact, security impact, migration, and compatibility.
-- Unsigned development builds are clearly distinguished from official release artifacts.
-
-## Delivery phases
-
-### Phase 0 — Public foundation
-
-- Initialize Git with the public-safe baseline.
-- Establish the owner-approved GitHub-linked author, committer, and DCO identity for bootstrap work;
-  audit and correct any unpublished placeholder commits before configuring the public remote.
-- Add community health files, governance, DCO, issue forms, CODEOWNERS, branch rules, secret
-  scanning, dependency policy, and initial CI.
-- Add threat model, abuse cases, privacy data map, compatibility policy, ADR template, and
-  architecture diagrams.
-- Add pinned toolchains, lockfiles, environment schema, and disposable local PostgreSQL.
-- Gate: documentation and supply-chain checks pass without application code, and every bootstrap
-  commit has an explicitly approved GitHub-linked identity with a matching DCO sign-off and no
-  generic placeholder author.
-
-### Phase 1 — Visual prototype with synthetic data
-
-- Build the responsive live race, leaderboard, profile shell, three themes, reduced-motion mode, and
-  deterministic pixel renderer.
-- Use synthetic fixtures only; no authentication or real ingestion.
-- Add visual regression, accessibility, localization, and performance tests.
-- Gate: the intended product can be evaluated without exposing a trust or privacy surface.
-
-### Phase 2 — Identity and single-source vertical slice
-
-- Implement invite redemption, GitHub OAuth, sessions, passkeys, recovery, profile controls, and
-  deletion skeleton.
-- Implement connector, App Server adapters, secure key storage, device authorization, source-bound
-  signing, and one Community source.
-- Implement isolated ingest procedure, strict contracts, scoring, season job, and public disclaimer.
-- Gate: one real user can pair and sync without any prompt, email, credential, or repository data
-  leaving the machine.
-
-The public-read side now has a synthetic emitted-production-HTTP/TLS-enabled-disposable-PostgreSQL
-path for score, race, and status plus widened-login denial. Its self-signed ephemeral certificate
-and synthetic login do not satisfy the one-real-user, pairing/sync, deployment certificate/login,
-external TLS/edge, cache, capacity, or operational gate above.
-
-### Phase 3 — Multi-source and lifecycle hardening
-
-- Explicit new-source versus active existing-source pairing is implemented in the local browser and
-  Web/Auth boundary; live authenticator/database/connector evidence and deployment controls remain
-  gates.
-- Complete aggregation, same-source device dedup, source count, quarantine, retention, and
-  finalized-season immutability. Bounded local commands now remove only canonical abandoned
-  pre-activation profiles after all session/challenge authority expires and exact source/day rows
-  only after terminal finalization plus 30 days while preserving rounded freshness. A separate
-  default-off local scheduler now invokes the fixed maintenance catalog sequentially from UTC
-  process slots, and one opt-in synthetic integration composes its production core with the real
-  Jobs runner and disposable PostgreSQL under fixed injected time. A second advances the fixed clock
-  by one hour, invokes the production interval handler twice during the active real-runner cycle,
-  proves the exact recurring catalog plus overlap and same-slot suppression, and verifies the
-  rearmed terminal reset. A third composes the production process lifecycle under fixed time,
-  injects its first handler during an active real database job, and proves graceful settlement plus
-  no later scheduler job. A fourth starts the built entry point under real host time from a pinned
-  Linux Node image and read-only link-free copy of the production graph after temporarily denying
-  only the Jobs role's backlog function. It proves one generic cycle signal, no backlog mutation,
-  and later terminal-job settlement before a code-0 `SIGTERM` exit. The harness restores the exact
-  grant, rearms the marker, holds the scoring mutex, and starts the same runtime again. It observes
-  the first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session release, and
-  proves the backlog and marker remain unchanged. After releasing the holder, a restart finalizes
-  the backlog before a silent signal exit. The same runtime is then killed at a disposable
-  post-insert barrier in a second backlog; session release must roll back the complete projection
-  transaction. The test removes and verifies absence of that barrier before a clean-schema restart
-  finalizes the second backlog exactly once, and a final restart proves another silent repeated
-  cycle. A fifth uses the same bounded runtime shape, leaves the native clock/timer unchanged, and
-  proves one host-timer refresh in a later real five-minute slot settles through OS `SIGTERM` before
-  silent code-0 exit. A sixth uses the same bounded runtime shape, blocks the emitted first
-  finalization call, delivers an OS `SIGTERM`, and proves graceful active-call settlement plus
-  suppression of every later job. The fourth gate proves only one controlled uncommitted post-insert
-  transaction rollback; recovery from committed/external effects or every Jobs capability, automatic
-  privilege repair, a deployed signal route, controller/orchestrator grace, managed restart,
-  durable/deployed cadence, representative or deployed backlog recovery, capacity, notification,
-  correction, backup purge, and deployed retention evidence remain open.
-- Add abuse controls, backpressure, alerts, audit logs, and kill switches. Exact default-off local
-  gates now cover Ingest startup, all three legacy public-ranking routes, the direct-token route,
-  all four pairing routes, and new-source creation while preserving active existing-source pairing,
-  plus CarRecipe proposal creation/approval while preserving private read/reject, plus
-  invite/OAuth/initial-passkey enrollment while preserving returning login/recovery. The public
-  score route also has one controlled real-HTTP/PostgreSQL four-slot admission scenario with a fifth
-  request rejected before a fifth public-score query. Distributed limits, representative
-  load/capacity, and deployed operation remain open.
-- Gate: source multiplication cannot exceed the profile score cap or gain privilege, and
-  infrastructure limits survive load tests.
-
-### Phase 4 — Agent car proposal
-
-- The canonical version 1 schema, deterministic renderer, asset record, exact-session PostgreSQL
-  proposal/approval state, signed-in three-theme account preview, and separate compatible public
-  active-recipe race projection are implemented locally. A separate bounded device-authenticated
-  Web/PostgreSQL ingress and fixed native-store `propose-car` command now submit only that exact
-  private recipe without activation authority. A checked local Agent Skill now reduces existing
-  style intent to the canonical fields, validates explicit shell-safe origin/label values, invokes
-  that command once, and never forwards conversation text or gains decision authority. Exact
-  default-off module decisions now independently close browser creation/approval and device ingress
-  while preserving private read/reject. The proposal cleanup command is present in the default-off
-  local scheduler catalog and combined synthetic PostgreSQL integration, while deployed scheduling
-  and retention evidence, distributed edge policy, production database result, monitoring, capacity
-  evidence, packaging, release, and deployment remain gates. A separate explicit `check-codex`
-  command now performs only point-in-time exact Windows candidate admission without
-  credential-store, process, account, persistence, or network access. Its explicit diagnostic
-  preview now adds one closed local failure-preserving and support-denying summary with no output
-  file or transport; automated support export and broader release diagnostics remain open. A
-  separate locked Windows release-profile portable copy/removal smoke is implemented locally and
-  declared in secretless no-upload CI, but its hosted result and actual package
-  install/upgrade/revoke/uninstall evidence remain open.
-- Add versioned CarRecipe, bounded proposal API, browser preview and approval, theme rendering,
-  asset provenance, and snapshot tests.
-- Package the fixed-command end-user connector workflow only after the CLI is stable.
-- Gate: no arbitrary content or conversation text enters the service.
-
-### Phase 5 — Staging-readiness foundation (no participant beta)
-
-- Prepare the isolated staging topology and protected deployment controllers without exposing
-  participant routes, creating a production cohort, or representing the current Codex-only
-  foundation as the thin MVP.
-- Rehearse origin protection, migrations, backup restore, deletion replay, monitoring, incident
-  runbooks, connector signing, SBOM, provenance, and rollback. The checked migration,
-  current-snapshot restore, and capability-containment runbooks plus the local advisory-lock
-  overlap, twice-restored database drill, exact-default-off decisions, emitted migration-controller
-  convergence, and stable-release deployment declaration are prerequisite implementation evidence;
-  they do not satisfy successful staging migration orchestration/rollback, a protected staging
-  restore, deployed containment, stale-backup deletion replay, or any hosted deployment gate.
-- Prepare accessibility, privacy, legal, licensing, name/trademark, external security, and
-  documentation review inputs. Completion is evaluated against the Phase 8 thin-MVP artifact, not
-  against this foundation alone.
-- Gate: no invite cohort or public beta begins in this phase. The transport-free Admin invitation
-  kernel is a local prerequisite only; it does not create or authorize a cohort.
-
-The following phases implement the strategic revisions from
-[ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md) and
-[ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md). They build on the foundation
-above; each new surface ships behind its own exact default-off enable gate.
-
-Per [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md), the work is sequenced to
-**ship a thin MVP first**: the multi-agent generalization, canonical readers, thin auditable client,
-and low-friction hybrid onboarding (Phase 6) feed the direct token-total contract and leaderboard
-(Phase 7). Only that combined artifact enters staging and invite beta (Phase 8). Optional MCP
-submission (Phase 9) and Verified provider integrations (Phase 10) are follow-on capabilities and do
-not block that core Community product.
-
-### Phase 6 — Multi-agent generalization, thin client, and hybrid onboarding
-
-Current status: ADR 0075 closes the existing Codex source path around one `UsageSyncV1` protocol,
-exact server-derived `codex`/`codex_daily_usage_buckets_v1` attribution, the Edge/Ingest containment
-gate, and real PostgreSQL mapping. It removes the unused predecessor because neither the site nor
-connector was released. The exact-version Windows candidate emits only that body and path.
-Additional provider readers, source creation, the thin client, anonymous/hybrid onboarding,
-ownership lease, and partitioned backfill remain pending, so Phase 6 is not complete.
-
-- Generalize the source model and contracts: add the provider enum and the AgentSource provider
-  dimension; use the multi-agent `UsageSyncV1` contract with generated-type and OpenAPI drift
-  checks. Provider is immutable on AgentSource and is not client-writable in `UsageSyncV1`; Ingest
-  derives it from the verified device/source binding and rejects a provider field as unknown.
-- Map repository-created Codex sources to provider `codex`; no protocol compatibility window is
-  required before the first release.
-- Add one reviewed, versioned canonical-total mapping for each first provider. Prefer its documented
-  aggregate; otherwise sum only documented disjoint components. Prove nested cache/reasoning/thought
-  fields and cumulative snapshots are not double counted. Pin the mapping through the
-  `UsageSyncV1`/season metric versions; reject providers with ambiguous semantics.
-- Build the thin, minimal-dependency, human-auditable client with bounded read-only readers for the
-  first agent local-storage formats. Each reader extracts only the documented usage-aggregate fields
-  from mixed-content storage, enforces strict size/record/field bounds, rejects symlinks and path
-  traversal, and may ignore only explicitly recognized non-usage records. Malformed, oversized,
-  ambiguous, or unrecognized usage-bearing input invalidates the whole affected source/day; no
-  partial daily total or signed request is emitted. Independently valid source/day units may
-  continue with a bounded local error. Add the agent-local-storage trust boundary to the threat
-  model.
-- Implement anonymous enrollment bootstrap as a two-step challenge-response ceremony with two
-  separate Ed25519 credentials. The identity bootstrap key is temporary profile authority only while
-  the profile is anonymous and has no active passkey. Its closed allowlist is a short-lived
-  restricted bootstrap session, registration of exactly the first passkey, and anonymous-to-GitHub
-  upgrade; it never enters restricted recovery, adds a subsequent passkey, performs deletion, or
-  signs sync. The device-bound sync key signs only for its one bound source and cannot gain profile
-  authority. Every local installation/device generates its own credential-store-protected key with
-  no plaintext-file or product export/copy workflow; this does not claim hardware-backed
-  non-exportability, and a compromised process running with the user's authority may extract or use
-  it. One source may have multiple independently revocable device-authority rows. Every action has a
-  distinct domain-separated challenge.
-- Consume admission before challenge issuance with proof-class-specific semantics. For an invite,
-  atomically reserve one active/unexpired/unredeemed verifier for the exact enrollment transaction;
-  concurrency yields one reservation/challenge, and expiry may release only that same still-valid
-  reservation. For Turnstile or another external proof, validate it externally, discard the raw
-  token, and atomically insert a unique one-way local consumption record before challenge issuance;
-  it cannot be rolled back for reuse, so failure requires a new provider token. Completion consumes
-  the exact challenge and creates one profile/source/first-device binding atomically; the invite
-  branch also redeems its reservation. Rate-limit by bootstrap public key and network origin as
-  defense-in-depth.
-- Set a 90-day anonymous ownership lease from the database clock in the enrollment transaction. Only
-  a valid pre-expiry identity proof that establishes a restricted bootstrap session renews it to
-  database-now plus 90 days; ordinary sync, device possession, reads, failed proof, and client time
-  never renew it. At expiry, authoritative reads hide the profile, Ingest rejects sync, and one
-  serialized transition pauses every source and opens only a 30-day terminal promotion grace.
-  First-passkey or GitHub promotion during grace retires the bootstrap key but leaves the profile
-  hidden and sources paused until passkey-protected user action. After grace, a separate bounded,
-  idempotent Jobs-only system-expiry capability removes profile-owned state without fabricating a
-  user deletion request.
-- Retire the identity bootstrap credential atomically with first-passkey activation or successful
-  GitHub upgrade and persist monotonic `first-passkey-complete` state when any first passkey is
-  activated. A retained or stolen client copy is rejected after retirement. Subsequent passkey
-  addition and restricted recovery use only the normal passkey/recovery-code flows; revocation and
-  aged provenance cleanup never reset first-passkey eligibility. Loss before promotion cannot be
-  recovered with a replacement credential; the enrollment UI warns, shows the lease deadline, and
-  offers immediate first-passkey promotion. Expiry and system cleanup prevent a permanent orphan.
-- Offer GitHub device-flow as a separate enrollment identity. During beta it uses the same admission
-  gate and must prove possession of the first device's sync key before atomically creating the
-  unique GitHub profile, first source, first device binding, basic session, and one bounded
-  first-passkey authority. A GitHub-linked profile that has never activated a passkey may consume
-  that exact enrollment/upgrade transaction, or a later fresh same-ID returning device-flow
-  transaction after expiry, plus one action-bound WebAuthn challenge to register exactly the first
-  passkey. That single-purpose authority grants no login, recovery, source/device, deletion, or
-  Admin capability and is permanently unavailable after monotonic first-passkey completion.
-  Anonymous upgrade requires the bootstrap proof while no passkey exists or a fresh passkey after
-  promotion; the no-passkey branch retires bootstrap authority while preserving the bounded GitHub
-  first-passkey path. If the resolved GitHub ID already belongs to a profile, fail generically with
-  zero mutation; never merge profiles or transfer sources/scores automatically.
-- Implement bounded backfill partitioned by derived ISO season. Always send current-week dates in an
-  independent signed request; include the immediately preceding week only while it may arrive before
-  its Wednesday 00:00 UTC grace deadline, and send it as a separate request. Server receipt time
-  remains authoritative, so a previous-season deadline race cannot quarantine current-season dates.
-  Exclude closed/finalized seasons and never retry them after closure. Implement local dry-run
-  (`status`) that prints the exact ordered source/season requests before send.
-- Keep the payload minimal by construction: do not collect model names, session counts, or raw
-  provider-shaped token components. The reader emits only source/date plus the canonical daily total
-  required by `UsageSyncV1`.
-- Gate: UsageSyncV1 rejects a provider field; Ingest derives provider/accounting revision from the
-  immutable AgentSource reached through the verified device binding; relabel, wrong-source,
-  unsupported-revision, per-provider bounds, and reject-unknown tests pass. Existing Codex data and
-  sync remain compatible. Each reader extracts only the canonical total from mixed-content storage
-  with no sensitive-field leakage or component/snapshot double counting. Anonymous enrollment uses a
-  temporary identity bootstrap credential and an independently revocable device-bound sync key;
-  multiple device keys may bind one source, no private key is shared, and a sync key cannot add a
-  passkey or delete the profile. The bootstrap key cannot enter recovery, add a later passkey, or
-  perform a critical action; first-passkey and GitHub promotion retire it atomically. Fixed-clock
-  and concurrency tests prove only a valid pre-expiry bootstrap-session proof renews the 90-day
-  ownership lease; ordinary sync cannot. Expiry hides the profile, pauses all sources, rejects
-  Ingest, and leaves only the two promotion proofs for 30 days. Promotion does not automatically
-  unhide or resume; after grace the independent Jobs-only system-expiry capability removes the
-  profile idempotently and cannot impersonate user deletion. Invite concurrency yields exactly one
-  reservation/challenge and safe exact-reservation release; external-proof concurrency yields
-  exactly one one-way local consumption/challenge with no raw-token retention or reuse. Replay and
-  cross-domain proofs are rejected; enrollment creates one profile/source/first-device binding
-  atomically. Fresh GitHub enrollment proves admission plus first-device possession. GitHub
-  first-passkey authority requires a fresh same-ID device flow, is single-purpose, and cannot be
-  issued after monotonic completion or used as recovery. GitHub collision returns a generic
-  zero-mutation result, and no automatic merge exists. Anonymous passkey-bound source/device actions
-  do not require GitHub. Deletion requires a passkey. `submit all` sends sequential, independently
-  bounded and signed single-source/single-season requests with independent outcomes; cross-source
-  signing is rejected. Fixed-clock grace-boundary tests prove a previous-season quarantine cannot
-  include current-season dates; dry-run matches every ordered request. The payload rejects model
-  names, session counts, and provider-shaped component fields.
-
-### Phase 7 — Direct token-total leaderboard
-
-Current status: ADR 0072 implements this phase locally for the current Codex-only Community beta
-slice. Revision 0042 selects `community_tokens_v1` for new seasons, preserves legacy seasons, and
-adds the direct public projection. The separate default-off Web route and EN/RU token-first browser
-consumer have contract, unit, production-build, and disposable PostgreSQL evidence. Deployment and
-the broader multi-agent Phase 6 artifact remain pending.
-
-- Add the versioned `community_tokens_v1` season metric and public `weeklyTokenTotal` contract.
-  Compute one exact direct sum after source/date deduplication; do not apply logarithms, active-day
-  bonuses, provider/model/cost multipliers, currency conversion, or secondary competitive tie
-  breakers.
-- Cut over only newly created seasons. Preserve finalized `community_v1` score rows and contracts
-  unchanged, and never compare ranks across metric versions.
-- Keep the pixel-art cars, track, and the Neon Night Arcade, Classic Grand Prix, and Cyber Rally
-  themes as presentation of the canonical weekly token rank. Provider contribution details remain
-  private; the public source count and Community label communicate the self-reporting limitation.
-- Keep CarRecipe cosmetic: a provider label, source count, theme, or car choice cannot change token
-  totals, trust tier, or rank.
-- Gate: direct-sum property tests prove that a larger admitted token total can never place behind a
-  smaller total; aggregate/component, cache, reasoning/thought, snapshot-deduplication, overflow
-  quarantine, shared-rank, migration, and finalized-season immutability tests pass. The EN/RU UI
-  says tokenizers differ and the metric is provider-reported tokens, not normalized compute or cost.
-  Visual and table positions derive from the same `weeklyTokenTotal`; keyboard, screen-reader,
-  contrast, reduced-motion, and non-animated table evidence passes.
-
-### Phase 8 — Thin MVP staging and invite beta
-
-- Build one immutable Phase 6–7 thin-MVP artifact: multi-agent readers, hybrid onboarding, the
-  direct token-total contract, and the provider-neutral leaderboard. The earlier Codex-only
-  foundation is not a substitute for this artifact.
-- Deploy that exact artifact to isolated staging first, then complete origin protection, migrations,
-  backup restore, deletion replay, monitoring, incident runbooks, connector/client signing, SBOM,
-  provenance, rollback, accessibility, privacy, legal, licensing, name/trademark, external security,
-  and documentation evidence against it.
-- Deploy production only after every public-beta release gate below is satisfied. Start with a small
-  invite cohort and expand only after reviewing reliability, cost, abuse, support, and deletion
-  evidence. The transport-free Admin invitation kernel remains a local prerequisite and does not
-  create or authorize that cohort.
-- Gate: no Phase 5 foundation result, legacy Codex-only artifact, optional MCP implementation, or
-  Verified integration can stand in for the complete Phase 6–7 artifact and its staging evidence.
-
-### Phase 9 — Optional MCP submission transport
-
-- Add a bounded MCP server only as an optional Community submission transport for integrations that
-  already produce the reviewed `UsageSyncV1` canonical total. MCP compatibility alone cannot make a
-  provider supported and the server does not infer usage from arbitrary MCP fields.
-- Reuse the Ingest verification kernel, replay protection, source binding, and pairing approval.
-  Require passkey-approved pairing before an MCP-reported source binds to an existing profile; deny
-  cross-profile and cross-source submission, replay, unsupported accounting schemas, oversized
-  input, and floods. The anonymous enrollment bootstrap (Phase 6) is a separate ceremony and does
-  not use the MCP pairing path.
-- Ship behind an exact default-off MCP enable gate; read no prompts, credentials, email, model
-  names, session counts, or provider-shaped token components and reflect none in output or logs.
-- Gate: the thin client and Phase 7 leaderboard work with MCP disabled; an agent link never grants
-  profile authority; MCP negative authorization and abuse cases pass; the enrollment bootstrap and
-  MCP pairing are independently tested and cannot substitute for each other.
-
-### Phase 10 — Verified tier (per provider)
-
-- Add server-side usage fetch through a provider's server-verifiable usage API with minimal-scope
-  OAuth and exact redirect, for the first provider(s) that expose such an API.
-- Map the provider response through the same canonical-total rule used by Community readers. Trust
-  tier changes provenance only; it never applies a numeric multiplier or changes rank arithmetic.
-- Keep Verified a disabled server-owned state per provider until its integration is reviewed and
-  enabled; a Community record can never become Verified by client assertion.
-- Gate: provider tokens never enter logs, fixtures, or the repository; over-scope and cross-account
-  linking are rejected; Community/Verified separation and accounting-parity tests pass.
-
-## Public-beta release gates
-
-Phase 8 cannot start a participant cohort, and the project is not ready for a public beta, until all
-of these are true. Optional Phase 9 MCP and Phase 10 Verified capabilities are not prerequisites;
-when disabled, their absence must not weaken or be misrepresented as evidence for the thin MVP:
-
-### Product truth
-
-- The leaderboard says Community and self-reported.
-- Verified ingestion is unreachable.
-- No reward or privilege depends on score.
-- Multi-source behavior and source count are visible and documented.
-
-### Security
-
-- Threat model and abuse cases cover browser, connector, local process, ingestion, database, edge,
-  admin, CI, release, and dependencies.
-- No critical or high unresolved finding remains in the launch scope.
-- Auth, pairing, device authorization, ingest, deletion, origin proof, and release paths have
-  independent review.
-- Fork and direct-origin attack tests pass.
-
-### Privacy
-
-- Data inventory, purpose, retention, deletion, backup behavior, subprocessors, and user controls
-  match the implementation.
-- No prompts, repositories, credentials, or account email appear in code paths, logs, fixtures,
-  analytics, or support exports.
-- Terms and Privacy Policy receive appropriate legal review for the launch jurisdictions.
-
-### Open source
-
-- GitHub community profile is complete.
-- License and third-party asset/dependency notices are correct.
-- Contributor and governance processes are usable by someone outside the original team.
-- Private vulnerability reporting and response ownership are active.
-- OpenSSF and workflow audits have no unaccepted critical/high-risk result.
-
-### Quality
-
-- A clean clone can follow the documented setup successfully.
-- One canonical command verifies format, lint, types, unit, contracts, docs, licenses, and security
-  policy.
-- Integration and E2E commands are documented separately with their required local services.
-- Windows, macOS, and Linux connector artifacts pass tests and independent verification.
-- Documentation links, examples, generated contracts, translations, and screenshots are current.
-
-### Operations
-
-- Staging evidence exists for latency, failure handling, load shedding, migration, rollback, backup
-  restore, deletion, and key rotation.
-- Alerts have owners and actionable runbooks.
-- Production secrets are absent from source, pull requests, preview builds, and untrusted workflow
-  contexts.
-- Kill switches and minimum connector version enforcement are tested.
-
-## Decisions that remain deployment-specific
-
-The following do not belong as literal values in the public repository:
-
-- live rate-limit and anomaly thresholds;
-- production hostnames and account identifiers;
-- secret names when their disclosure would aid an active incident;
-- signing, origin-proof, OAuth, session, database, and deployment credentials;
-- private security reports, exploit details under embargo, and user incident data;
-- exact invite cohort and operational capacity.
-
-The public code defines schemas, safe bounds, configuration validation, and synthetic test profiles.
-Production supplies reviewed values through protected configuration.
-
-## Design references
-
-These sources define external contracts and repository practices; they do not prove that Vibe Racing
-has implemented them.
-
-- [OpenAI Codex App Server](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
-  for account methods, stable versus experimental schemas, initialization, and version-specific
-  schema generation.
-- [OpenAI guidance for AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and
-  [skills](https://learn.chatgpt.com/docs/build-skills) for durable, layered repository guidance and
-  repeatable agent workflows.
-- [GitHub community health files](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file)
-  for contribution, governance, support, and security-policy surfaces.
-- [GitHub OAuth authorization](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
-  for state, PKCE, redirect, and device-flow requirements.
-- [WebAuthn Level 3](https://www.w3.org/TR/webauthn-3/) for passkey ceremonies and user-verification
-  semantics.
-- [GitHub secure build guidance](https://docs.github.com/en/code-security/tutorials/implement-supply-chain-best-practices/securing-builds)
-  and
-  [artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
-  for workflow permissions, provenance, and SBOM attestations.
-- [OpenSSF Scorecard](https://scorecard.dev/) for recurring open-source supply-chain checks without
-  treating one aggregate score as proof.
-- [Developer Certificate of Origin](https://developercertificate.org/) for the selected initial
-  contribution certification model.
-- The Model Context Protocol (MCP) specification for the optional submission transport proposed by
-  ADR 0068. MCP defines tool schemas and invocation, not provider token telemetry. Adding its
-  documentation host to the reviewed external-link allowlist is a separate policy review step; it is
-  intentionally not linked here until then.
-
-## Final assessment
-
-With these corrections, the plan is suitable as an implementation baseline for a serious open-source
-project. It does not make the service impossible to abuse; no public client-reported leaderboard can
-make that promise. Instead it makes abuse low-value, bounded, observable, reversible, and honest to
-users, while keeping the codebase understandable and verifiable by both people and coding agents.
-
-The strategic revision in [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)
-broadens the product to an agent-neutral direct token-total leaderboard with a thin-client primary
-path and optional MCP submission without weakening that posture: the same fail-closed gates,
-isolated database roles, pairing authority, server-derived fields, and honest Community/Verified
-labeling extend to every supported agent. The multi-agent accounting, token-total contract, optional
-MCP, and per-provider Verified work remains proposed until its dedicated ADRs and implementation
-evidence land.
+### Final release-preparation gate
+
+The final branch runs:
+
+- documentation, architecture, contracts, configuration, database, agent-skill, public-file,
+  formatting, spelling, Markdown, license, history, and checker-mutation gates;
+- every workspace lint, typecheck, unit coverage, and production build;
+- clean database, migration, restore, Admin, Web, Ingest, Edge, Jobs, scheduler, signal, lifecycle,
+  timer, scale, and snapshot PostgreSQL integrations;
+- complete locked Rust workspace formatting, check, tests, Clippy, and dependency audit;
+- Windows portable connector smoke and every available cross-platform package/lifecycle check;
+- `pnpm run verify` and `pnpm run verify:release`;
+- staged public scan, `git diff --cached --check`, full staged semantic review, and final branch
+  diff review.
+
+Network, Docker, hosted, signing, or platform gates that cannot run must be reported exactly, never
+silently converted to success. No production/deployment/provider-support claim is made from a
+skipped gate.
+
+## Explicit non-goals for this replacement
+
+- production-data migration or backward compatibility;
+- legacy score history, formula, routes, schemas, procedures, or aliases;
+- anonymous identity;
+- subjective token normalization;
+- model, price, subscription, prompt, code, repository, path, email, or raw-record collection;
+- arbitrary plugin/readers, shell hooks, launchers, proxies, redirects, or plaintext keys;
+- Community rewards or authorization;
+- optional MCP transport before the primary product is complete;
+- Verified provider integration without exact server-side evidence;
+- deployment, public beta, real-user data, or official connector claims without hosted evidence.
+
+## Completion
+
+The plan is complete only when all 45 Definition-of-Done properties in the accepted objective are
+demonstrated by current-tree code and tests, the old pre-release implementation is absent, every
+provider support state is honest, the full gate matrix passes or an external limitation is reported,
+and the final self-review finds no unresolved correctness, security, privacy, compatibility, or
+documentation defect.

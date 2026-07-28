@@ -24,15 +24,19 @@ bounded Windows portable copy/removal smoke uploads nothing and does not establi
 installer, immutable version, signature, checksum publication, SBOM, provenance, clean-machine
 release result, or support claim.
 
-The local `check-codex --diagnostic-preview` output is user-reviewed troubleshooting context only.
-It contains no signature, checksum, artifact identity, provenance, installed-package state, or
-support grant and must never be accepted as release verification.
+Local `doctor`, discovery previews, provider fixtures, release-profile builds, and portable smoke
+output are user-reviewed troubleshooting or synthetic test context only. They contain no hosted
+signature, checksum publication, provenance, installed-package lifecycle, or support grant and must
+never be accepted as release verification.
 
 ## Required release evidence
 
 - Clean, reviewed source and generated artifacts at an immutable commit.
 - Passing formatting, lint, type, unit, integration, security, contract, documentation, and platform
   tests appropriate to the component.
+- Protected Windows, macOS, and Linux connector builds plus clean-machine install, update,
+  uninstall, native credential-store, discovery, first-sync, repeat-sync, and local-forget evidence
+  for every declared supported platform.
 - Reviewed dependency and license inventory, vulnerability audit, SBOM, and third-party notices.
 - Reproducible build instructions, checksums, signatures, and verifiable build provenance.
 - Compatibility, migration, backup, restore, deletion, monitoring, and rollback evidence.
@@ -53,9 +57,10 @@ support grant and must never be accepted as release verification.
 6. Verify installation, health, telemetry redaction, and published signatures from a clean client.
 7. Announce only after rollback owners and monitoring are active.
 
-Connector artifacts require platform-specific signing where available plus a project signature and
-published checksum. Container images use immutable digests. Web releases record the source commit,
-migration state, and exact deploy artifact.
+Connector artifacts require platform-specific signing where available plus a project signature,
+published checksums, SBOM, provenance, complete package inventory, and an explicit
+provider/reader/client/platform support declaration. Container images use immutable digests. Web
+releases record the source commit, clean bootstrap/revision state, and exact deploy artifact.
 
 ## Rollback
 
@@ -66,7 +71,8 @@ version without silently trusting either.
 
 If integrity, authorization, privacy, or scoring correctness is uncertain, stop promotion and
 disable the affected feature. Never restore service by weakening request verification, signature
-checks, source isolation, deletion guarantees, or Community/Verified separation.
+checks, AgentAccount/device scope, overlap exclusion, deletion guarantees, snapshot integrity, or
+Community/Verified separation.
 
 ## Records
 

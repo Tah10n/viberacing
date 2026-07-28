@@ -2,190 +2,168 @@
 
 ## Principle
 
-Compatibility is explicit evidence, not a broad version guess. Vibe Racing fails closed when an
-upstream schema, public contract, signing format, scoring rule, or stored-data expectation is
-unknown. The [Codex compatibility matrix](../reference/codex-compatibility.md), rather than this
-policy, records whether any exact Codex and connector combination is currently supported.
+Compatibility is exact evidence, not a version guess. Vibe Racing fails closed when a provider
+reader, accounting revision, client contract, device binding, date rule, snapshot metric, database
+catalog, or release artifact is unknown or ambiguous.
+
+The project is pre-release and has no production database, released connector, or real-user traffic.
+[ADR 0076](../decisions/0076-clean-agent-account-provider-reported-token-ranking.md) therefore
+replaces the unreleased Codex-only implementation without a legacy compatibility window. Removed
+schemas, routes, procedures, migrations, and local binaries are rebuilt, not adapted.
 
 ## Version axes
 
-| Axis                    | Version owner                                                            | Compatibility rule                                                                                        | Breaking-change path                                                               |
-| ----------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Codex App Server schema | Installed Codex release                                                  | Exact pinned entries in the [Codex matrix](../reference/codex-compatibility.md)                           | Add generated schema/fixtures and connector adapter; unknown versions stop locally |
-| Connector CLI/binary    | Vibe Racing connector release                                            | Semantic version plus published supported service/API range                                               | Signed release, migration notes, minimum-version policy, rollback/revoke plan      |
-| Connector sync schema   | `schemaVersion` in `contracts/v1`                                        | Server validates one documented version at a time with bounded overlap                                    | New schema version; explicit deprecation window; no silent reinterpretation        |
-| Public HTTP API         | Path such as `/v1`                                                       | Additive compatible fields only when old clients ignore them by contract; unknown request fields rejected | New path version or documented migration                                           |
-| CarRecipe               | Recipe version and enum set                                              | Renderer and server share exact versioned enums/assets                                                    | New recipe version, deterministic migration or safe fallback                       |
-| Scoring                 | Season `scoreVersion`                                                    | Fixed for an entire season; finalized scores are not rewritten                                            | New version begins only with a new season and public simulator/update              |
-| Season closure          | [ADR 0008](../decisions/0008-community-season-grace-and-finalization.md) | Community grace ends Wednesday 00:00 UTC after the ISO week; existing definitions are immutable           | Superseding ADR and future-season compatibility plan; never extend existing grace  |
-| Database schema         | Migration revision                                                       | Expand-and-contract across deployed application overlap                                                   | Reviewed migration, backup/restore evidence, rollback or forward-fix               |
-| Edge origin proof       | Proof version/key epoch                                                  | Edge and origin accept only reviewed bounded overlap                                                      | Coordinated key/version rotation; fail closed outside overlap                      |
-| Release metadata        | SBOM, provenance, checksum, signature formats                            | Artifact and verification instructions identify exact formats                                             | Dual-publish during migration, then revoke old trust root explicitly               |
+| Axis                       | Version owner                        | Compatibility rule                                                                                        | Breaking-change path                                                                    |
+| -------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Public HTTP route          | Contracts and Web/Ingest             | Exact path plus method; no alias or path fallback                                                         | New accepted ADR and explicit new major contract; no silent retry                       |
+| JSON Schema and OpenAPI    | Contracts                            | Closed object, exact schema version, reject unknown and duplicate keys                                    | New major version with generated drift and negative tests                               |
+| Connector client           | Connector and Release                | Exact supported client range and final V1 contracts only                                                  | Protected new release and support-matrix update                                         |
+| Provider reader            | Connector and Provider registry      | Exact provider, local surface, admitted agent versions/schema digest, and reader version                  | New reader version; unknown usage-bearing input fails closed                            |
+| Accounting revision        | Provider registry and Database       | Immutable per AgentAccount and season; exact aggregate/component/dedup/UTC/scope semantics                | New revision for new accounts/seasons; never reinterpret accepted history in place      |
+| Account domain and scope   | Pairing and Database                 | Closed stable-opaque or explicit attach rule plus reviewed overlap matrix                                 | New registry revision and explicit conflict migration before activation                 |
+| Device signature           | Contracts, Connector, and Ingest     | Exact algorithm, canonical message, path, body digest, account/device IDs, timestamp, and nonce           | New policy version and re-pair; no algorithm downgrade                                  |
+| Edge origin proof          | Edge and Ingest                      | Exact key ID, path/body message, HMAC algorithm, timestamp window, nonce, and independent enablement      | Bounded key overlap under protected replacement                                         |
+| Date and backfill          | Database                             | UTC calendar date and PostgreSQL clock; fixed server-owned backfill/finalization policy                   | Accepted policy/revision change at a future season boundary                             |
+| Competitive metric         | Database, Jobs, and Public contracts | Only `provider_reported_tokens_v1`; exact decimal direct sum and shared ranks                             | New metric requires a new ADR and cannot mix with the old metric in one ranking         |
+| Snapshot storage           | Jobs and Public Web                  | Complete immutable version/pages/top-32/profile summaries plus atomic publication pointer and strong ETag | New snapshot format/version built beside old until one atomic publication switch        |
+| Database bootstrap catalog | Database and migration runner        | Exact ordered manifest, file digests, transactional ledger, role/RLS/grant oracles                        | Pre-release reset before first deployment; forward-only revisions after intentional use |
+| Connector platform package | Release                              | Exact version, OS/architecture, checksum, signature, SBOM, provenance, install/update/uninstall evidence  | New protected artifact; unsupported combinations fail before use                        |
 
-These axes are independently versioned. A connector version does not imply a database migration or
-scoring change, and a web deployment does not silently change a finalized season.
+## Provider reader contracts
 
-`CarRecipeV1` currently fixes nine fields, seven project-owned enum axes, and a seed from 0
-through 65535. The schema validator, PostgreSQL checks, animated renderer, and server-rendered
-three-theme preview agree on those values. A stored version 1 recipe must retain that visual
-meaning; adding an axis, widening a value to free-form content, or reinterpreting an enum is a new
-version and reviewed migration, not an additive implementation detail. The current internal account
-forms do not create a public HTTP compatibility promise. The active recipe remains absent from the
-closed stable `CommunityScorePageV1`; ADR 0037 adds a separate `CommunityRacePageV1` and
-`GET /v1/community/race` rather than weakening strict score clients. That response may omit
-`carRecipe`, but any present object must match exact version 1.
+The canonical matrix is
+[agent-provider compatibility](../reference/agent-provider-compatibility.md).
 
-ADR 0040 follows the same rule for public status. `CommunityRaceStatusPageV1` and
-`GET /v1/community/race/status` preserve the race semantics but separately require bounded
-`freshnessDays` and permit preference-gated `streakDays`. Neither field is added to
-`CommunityScorePageV1` or `CommunityRacePageV1`; strict legacy clients continue to reject them. The
-relative freshness value is defined in complete UTC calendar days, and streak is a read-time
-informational projection that never changes score, rank, authority, or finalized score state.
+Provider state:
 
-Revision 0011's internal PostgreSQL score projection is not itself a public HTTP contract. ADR 0010
-defines a closed response-only v1 component and generated derivatives, while ADR 0013 now adds the
-local path, request validation, exact mapping, response headers, no-store policy, and compatibility
-evidence. Deployment, edge behavior, and any future cache remain separate compatibility surfaces. A
-new recipe field/version, status meaning, proposal metadata, or historical snapshot semantics
-require another reviewed component/version and migration path; they are not additive changes to any
-closed v1 response.
+- `supported` — a real bounded reader, exact accounting revision, safe account-domain/scope rule,
+  privacy sentinels, and end-to-end discovery/pairing/sync/accounting evidence exist;
+- `recognized` — the provider is a closed product option, but one or more required evidence items
+  are absent, so no usage request can be produced;
+- `disabled` — a previously supported combination is blocked for security, correctness, or
+  compatibility reasons.
 
-## Codex App Server contract
+A provider name, directory, executable, MCP compatibility, public API field, plausible local schema,
+or another provider's accounting rules cannot create support.
 
-The official [Codex App Server documentation](https://learn.chatgpt.com/docs/app-server) describes a
-required `initialize`/`initialized` handshake, version-specific schema generation, local stdio as
-the default transport, and a separate opt-in for experimental API capability. The final connector
-must therefore:
+Every supported row records:
 
-- launches a reviewed Codex executable locally and uses stdio only;
-- sends the required handshake once per connection;
-- omits experimental API capability;
-- rejects WebSocket, Unix-socket, thread, turn, item, approval, MCP, file, shell, login, and unknown
-  methods;
-- plans to allowlist only the account-mode and usage reads named in the implementation plan, but
-  does not treat those names as supported until a pinned release's generated stable schema and
-  synthetic fixtures prove them;
-- extracts only the bounded mode decision, reported date, and token value needed locally; account
-  email and other response fields never enter the egress contract;
-- stops before upload on missing fields, unknown fields, malformed dates, oversized output, protocol
-  errors, unsupported auth mode, or schema drift.
+- provider ID;
+- local storage or stable API surface;
+- admitted agent versions/schema digest;
+- reader version;
+- immutable accounting revision;
+- UTC-day derivation;
+- aggregate or disjoint component formula;
+- cumulative/repeated-record deduplication;
+- safe opaque account-domain rule or explicit attach requirement;
+- accounting scope and known-overlap exclusions;
+- supported connector/platform versions;
+- immutable fixture and end-to-end evidence links.
 
-The Rust library implements the fixed stable handshake plus a candidate-only Codex `0.144.5`
-account/usage parser. After the handshake, it emits only fixed IDs `1` and `2`, confirms ChatGPT
-mode, discards email/plan/summary fields, and returns at most 31 sorted unique date/token buckets
-under the sync bounds. The candidate manifest records release metadata, full generated schema
-digests, minimal extracts, fixtures, and unresolved blockers. A one-shot supervisor now composes
-those exact state machines through a fixed `app-server` argument, local pipes, a capability-owned
-working directory/environment, bounded output/time, and reap-before-success cleanup. The capability
-has no public constructor. A second inaccessible reviewed context permits exact `UsageSyncV1` body,
-SHA-256 digest, nonce, and `/v1/community/usage` device-message composition from that candidate
-output. An isolated one-use signer consumes that otherwise inaccessible material only with a third
-inaccessible device-bound key capability and returns the same body plus five signed header values.
-The `connect` command can generate a real device key in a native OS credential store and complete
-the local start/approve/poll journey. A separate Windows x86_64 development `sync` command can
-construct the three private capabilities only after validating an active record and admitting the
-exact `0.144.5` artifact size and SHA-256. Selection is either an explicit canonical path or bounded
-fixed-name discovery through at most 64 absolute `PATH` directories and four distinct exact-size
-hashes; both retain the same no-write-sharing handle. It creates fresh context and submits one
-closed signed Usage Sync request without automatic retry or legacy-path fallback. It cannot admit
-another version or platform, produce clean-machine privacy evidence, negotiate support, or alter the
-empty matrix. A separate explicitly invoked `check-codex` command reuses only the same selector
-without origin, credential-store, process, account, persistence, or network access. It releases the
-handle before fixed output, explicitly says no version is supported, and creates no reusable result;
-`sync` always repeats admission after active-record validation. Its optional diagnostic preview
-exposes only compile-time versions, the fixed platform contract, one closed admission class, and the
-empty support state; failed admission remains nonzero and no local value, file, or transport is
-added. A separate Windows release-profile smoke copies the repository-built `0.0.0` connector to an
-isolated temporary directory, verifies only its closed help and generic candidate-missing behavior,
-and removes it. That portable lifecycle check neither executes Codex nor creates a connector
-package, version, clean-machine account result, provenance, release, or support row. ADRs 0021
-through 0026, 0030, 0031, and 0051 through 0054 record those distinctions.
+Unknown usage-bearing record kinds, fields needed by the accounting formula, schema digests,
+encodings, time semantics, or overlap behavior invalidate the affected AgentAccount/day. The reader
+does not estimate, skip a required record, or emit a partial total.
 
-Generated schema output is exact to the Codex version that produced it. The repository commits only
-reviewed relevant schema extracts and synthetic fixtures, not account data or a developer's local
-configuration.
+## Contract and API rules
 
-`scripts/check-codex-compatibility.mjs` requires canonical duplicate-free evidence files, verifies
-their byte counts and digests, closes the method/fixture inventory, and forbids a candidate manifest
-from appearing in the supported matrix. A future supported manifest must have a matching matrix row
-and no unresolved blockers.
+The final V1 public routes are only:
 
-## Codex support matrix process
+```text
+POST /v1/usage
+GET /v1/leaderboards/current
+GET /v1/leaderboards/{seasonStart}
+GET /v1/profiles/{handle}
+```
 
-For each proposed Codex version:
+The final V1 schema inventory is closed in the contracts manifest. Unknown fields, duplicate JSON
+keys, alternate media types, alternate encodings, path normalization, query parameters where absent,
+and body/header disagreement fail before protected work.
 
-1. Obtain the release from its canonical signed/published channel and record immutable provenance.
-2. Generate the stable App Server JSON schema with experimental capability disabled.
-3. Diff the full account-related schema against the prior supported release.
-4. Extract the minimal reviewed contract and generate synthetic positive, nullable, missing,
-   malformed, oversized, and unknown-field fixtures.
-5. Run connector handshake, parsing, privacy-egress, timeout, overload, and child-cleanup tests on
-   Windows, macOS, and Linux where supported.
-6. Record schema digest, release provenance, connector range, test evidence, limitations, and review
-   in the public matrix.
-7. Release a signed connector only after the matrix entry merges through protected review.
+There is no compatibility acceptance for `/v1/community/sync`, `/v1/community/usage`,
+`/v1/community/scores`, `/v1/community/race`, `/v1/community/race/status`, or
+`/v1/community/tokens`. An old local binary receives generic not found and must be rebuilt.
 
-A scheduled non-blocking probe may report a newer Codex release, but it cannot silently widen the
-support matrix or publish a connector.
+`UsageSyncV1` has no provider, accounting revision, trust, scope, profile, rank, model, component,
+raw identity, or compatibility hint. Ingest derives immutable attribution from the exact
+device-to-AgentAccount binding and rejects a mismatched client/reader combination.
+
+## Numeric semantics
+
+Token totals are canonical decimal digit strings. Accepted values:
+
+- contain only ASCII digits;
+- have no sign, decimal point, exponent, whitespace, or noncanonical leading zero;
+- fit `numeric(30,0)`;
+- map to canonical string or `bigint` only after validation;
+- never pass through JavaScript `Number`.
+
+Connector, schemas, generated types, runtime validation, signature vectors, PostgreSQL functions,
+snapshot serialization, and Web mapping share the same boundaries.
 
 ## Date and time semantics
 
-The planned upstream date is treated as `codexReportedDate`, a strict `YYYY-MM-DD` label. Until a
-pinned upstream contract documents a timezone, Vibe Racing does not call it UTC or reinterpret it
-through local timezone conversion.
+All competitive dates are UTC calendar dates. PostgreSQL clock is authoritative for:
 
-- Season grouping uses the reported calendar label with ISO Monday boundaries.
-- Server `receivedAt`, never connector time, controls replay windows, grace deadlines, and
-  finalization.
-- Community grace is 48 hours after the next Monday begins and closes inclusively at Wednesday 00:00
-  UTC under [ADR 0008](../decisions/0008-community-season-grace-and-finalization.md).
-- Clock-skew policy is bounded and deployment-configured; client time cannot reopen a season.
-- An upstream timezone clarification requires an ADR, compatibility update, migration analysis, and
-  tests against existing season labels.
+- current date;
+- future rejection;
+- bounded backfill;
+- season open/finalized state;
+- replay/idempotency expiry where durable state is involved;
+- Jobs eligibility.
 
-## API and schema rules
+Client clock, local timezone, locale, file mtime, provider display timezone, and `observedAt` cannot
+widen eligibility. A provider that cannot yield an honest UTC day is not supported for competitive
+ranking.
 
-- Requests with a body declare a supported schema version and content type and remain under explicit
-  byte, collection, string, integer, and timestamp bounds. URL-only reads use the versioned path and
-  a closed query contract instead of inventing a body content type.
-- Unknown request fields are rejected. Responses may gain additive fields only where clients are
-  documented and tested to ignore them safely.
-- `CommunityScorePageV1` is closed and its generated consumers reject unknown fields; extend it only
-  through a separately reviewed component/version, not an unannounced additive response field.
-- `CommunityRacePageV1` and `CommunityRaceStatusPageV1` are also independently closed. The status
-  route is the only one that carries `freshnessDays` or `streakDays`; changing their UTC-day,
-  visibility, or streak-anchor semantics requires a reviewed compatibility decision.
-- `CommunityTokenRaceStatusPageV1` is a separate closed metric contract. It does not reinterpret
-  `weeklyScore`; changing `community_tokens_v1`, direct-sum/shared-rank semantics, or
-  `weeklyTokenTotal` requires a reviewed compatibility decision.
-- The reviewed `x-viberacing-dateMinimum`, `x-viberacing-dateMaximum`, and `x-viberacing-isoWeekday`
-  keywords are executable contract semantics. A consumer that treats them as inert annotations
-  cannot be the server admission validator for a score season.
-- Client-writable schemas exclude profile identity, accepted source binding, trust tier, score,
-  rank, streak, season, server receipt time, moderation, and deletion state.
-- Errors use a versioned bounded problem-details shape and request ID without stack, SQL, hostname,
-  secret, or record disclosure. The common server-only factory now enforces the closed mapping,
-  generated opaque ID, runtime validation, and no-store response baseline. The manifest-generated
-  four public score/race/status/token operations and local Web routes enforce their own query,
-  response, status, cache, same-origin, and implementation-status contracts. This does not claim
-  deployment or make future `/v1` operations implicitly compatible.
-- Generated OpenAPI, TypeScript, Rust fixtures, and documentation identify their canonical schema
-  source; CI rejects drift.
+## AgentAccount and scope compatibility
+
+An activated AgentAccount pins provider, accounting revision, trust tier, and scope. A later reader
+binary can submit only when its registry entry remains compatible with that exact tuple.
+
+Several devices may submit the same account/day, but the account/day total remains one monotonic
+cumulative value. A provider-wide scope and included account-specific scopes cannot be active
+contributors together. When a safe stable opaque provider account-domain ID is unavailable,
+compatibility requires explicit user create/attach selection rather than an inferred
+email/login/path hash.
+
+## Snapshot compatibility
+
+Public reads consume one complete published snapshot version. Page schema, top-32 payload, profile
+summary, ETag, metric, trust tier, and season boundaries are version-bound.
+
+A builder may create a new version beside the current one, but the publication pointer advances only
+after every page and summary passes invariants. Web never mixes versions or falls back to live
+aggregation. Refresh failure keeps the prior version.
 
 ## Deprecation and emergency block
 
-Normal deprecation publishes the affected versions, reason, replacement, support window, user
-impact, and verification steps before enforcement. The server may require a minimum connector
-version only after signed replacements exist and staged rollout/rollback has been exercised.
+Before the first release, incompatible local state is removed and rebuilt. No deprecation window is
+created for an unreleased route, migration, database, reader, or connector.
 
-An actively dangerous connector or contract may be blocked faster. The project publishes a security
-advisory when safe, distinguishes compromised from merely unsupported versions, revokes affected
-artifacts/keys where possible, and never restores compatibility by disabling signature, origin,
-schema, or privacy checks.
+After release:
+
+1. mark the exact provider/reader/client/platform combination disabled;
+2. stop new pairing and sync for that combination without changing other providers;
+3. preserve existing accepted observations and finalized snapshots;
+4. publish the security/correctness reason and supported replacement when safe;
+5. ship a new protected connector or server revision;
+6. re-enable only after exact compatibility and lifecycle evidence.
+
+Emergency disablement is independently fail-closed and does not relabel Community as Verified,
+reinterpret totals, widen a role, bypass signature/date/scope checks, or restore a legacy route.
 
 ## Compatibility evidence
 
-Every compatibility claim links to immutable fixtures and CI results. “Works on latest,” an
-unbounded semantic-version range, a developer's successful local run, or absence of a reported bug
-is not evidence. Unsupported paths return a clear local/service error and must not upload a partial
-interpretation.
+Repository evidence includes:
+
+- provider registry and matrix drift checks;
+- exact positive/negative/mixed-content reader fixtures;
+- cross-language body/digest/signature vectors;
+- create/attach/skip, second-device, wrong-provider/revision/scope, replay, and idempotency tests;
+- canonical decimal and UTC boundary tests;
+- clean bootstrap, role/RLS/grant, migration, restore, Ingest, Jobs, snapshot, and Web integrations;
+- protected-platform release declarations and local portable smoke.
+
+Only hosted protected builds, signatures, package lifecycle tests, real provider surfaces, staging
+services, and production observations can promote the corresponding external evidence claim.

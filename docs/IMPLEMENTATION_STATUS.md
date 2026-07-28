@@ -8,50 +8,54 @@ This page records only evidence that exists in the public working tree. The
 A scannable index of what exists and what does not. "Local" means synthetic or injected evidence in
 the working tree, not a deployed service, production credential, or real-user result. The detailed
 evidence for each row follows in the sections below and in the linked ADRs; this table is an index,
-not a replacement for them. [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md)
-records the proposed direct multi-agent token accounting, leaderboard, and optional MCP direction,
-and [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md) records the proposed thin
-client, anonymous onboarding, and low-friction hybrid enrollment direction. Those broad directions
-remain planning scope. ADRs [0071](decisions/0071-provider-attributed-usage-sync-foundation.md),
-[0072](decisions/0072-direct-community-token-leaderboard.md), and
-[0073](decisions/0073-candidate-connector-usage-sync-cutover.md) implement the shortest local
-Codex-only path from the existing reader through `UsageSyncV1` to a direct token leaderboard.
+not a replacement for them.
+[ADR 0076](decisions/0076-clean-agent-account-provider-reported-token-ranking.md) is the accepted
+clean-slate target. It supersedes the broader ADR 0068/0069 proposals, including anonymous
+onboarding, and the unreleased ADR 0072/0075 Codex-only token paths. Until the implementation slices
+land, the detailed rows below deliberately describe the old local baseline and are not evidence of
+AgentAccount, `provider_reported_tokens_v1`, final `/v1/*` routes, atomic zero-write Ingest, or
+snapshot-only public reads.
 
-| Capability                                                                               | Status                             | Evidence pointer                                                                                                  |
-| ---------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Public foundation: governance, CI, supply-chain, licenses, links, history                | Implemented                        | `check:community`, `check:licenses`, `check:external-links`, `check:history`                                      |
-| Public-safety scans: secrets, personal data, local paths, staged blobs                   | Implemented                        | `check:public`, `check:public:staged`                                                                             |
-| Phase 1 visual prototype: three themes, pixel renderer, a11y, EN/RU                      | Implemented (local)                | `check:phase1-visual-baselines`                                                                                   |
-| Web preview production image and standalone runtime smoke                                | Implemented (local)                | `verify:web:deployment`, `Dockerfile`, `railway.json`                                                             |
-| Web search metadata, root canonical, robots and sitemap                                  | Implemented (local)                | `test:web`, `verify:web:deployment`                                                                               |
-| Ingest, Jobs-scheduler, and migration production images and Railway configs              | Implemented (local packaging)      | `deploy/`, three local image builds                                                                               |
-| Cloudflare sync origin signer and production-Ingest proof compatibility                  | Implemented (local)                | `test:edge`, `test:edge-ingest-compatibility`, ADR 0070                                                           |
-| Design system and standalone race-broadcast exploration                                  | Documented reference only          | `docs/design/`; manual reference review, not implemented in `apps/web`                                            |
-| Contracts: JSON Schema, generated TypeScript/OpenAPI, runtime validator                  | Implemented                        | `check:contracts`, `test:contracts:coverage`                                                                      |
-| Database: 43 migrations, forced-RLS private tables, isolated roles, procedures           | Implemented (local integration)    | `check:database`, `test:database:integration`                                                                     |
-| Public score/race/status/token routes and least-privilege Web adapters                   | Implemented (local, default-off)   | `test:web:postgres-integration`, `test:web-query-plan-evidence`                                                   |
-| Identity, passkeys, restricted recovery, sessions, account controls                      | Implemented (local, synthetic)     | `test:web:coverage`                                                                                               |
-| Source/device lifecycle and pairing approval                                             | Implemented (local, default-off)   | `test:web:coverage`                                                                                               |
-| CarRecipe proposal/approval: session, device ingress, agent skill                        | Implemented (local, default-off)   | `test:web:coverage`, `check:agent-skills`                                                                         |
-| Ingest: kernel, adapter, application, HTTP factory, host                                 | Implemented (local, default-off)   | `test:ingest:coverage`, `test:ingest:postgres-integration`                                                        |
-| Provider-attributed UsageSyncV1 for the existing Codex source path                       | Implemented (local, default-off)   | ADR 0071, `check:contracts`, `test:ingest:postgres-integration`                                                   |
-| Direct Community token leaderboard and EN/RU token-first race                            | Implemented (local, default-off)   | ADR 0072, `test:web:coverage`, `test:web:postgres-integration`                                                    |
-| Jobs runner: eighteen bounded maintenance capabilities                                   | Implemented (local)                | `test:jobs:coverage`, `test:jobs:postgres-integration`                                                            |
-| Jobs scheduler: default-off UTC catalog, no-overlap, bounded lifecycle                   | Implemented (local)                | `test:jobs-scheduler:coverage` plus six scheduler integrations                                                    |
-| Migration runner: default-off, digest-verified ledger, narrow login                      | Implemented (local)                | `test:migrate:coverage`, `test:migrate:postgres-integration`                                                      |
-| Rust connector: handshake, reader, UsageSync signer, connect/sync commands               | Implemented (library, Windows dev) | ADR 0073, `cargo test --workspace`, `test:connector:windows-portable`                                             |
-| Admin: invitation kernel and Access/membership verifier                                  | Implemented (local)                | `test:admin:coverage`, `test:admin:postgres-integration`                                                          |
-| Operational runbooks: migration, restore, containment, deletion-failure                  | Implemented (static checks)        | `check:migration-runbook`, `check:restore-runbook`, `check:containment-runbook`, `check:deletion-failure-runbook` |
-| Additional agent readers, optional MCP, and per-provider Verified tier                   | Proposed (ADR 0068)                | [ADR 0068](decisions/0068-multi-agent-token-leaderboard-and-mcp.md); plan Phases 6, 9, and 10                     |
-| Thin client, hybrid onboarding, ownership lease, per-device keys, partitioned backfill   | Proposed (ADR 0069)                | [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md); plan Phase 6                               |
-| Hosted deployment, production login/TLS, live edge route, released connector, real OAuth | Not implemented                    | See [Not implemented yet](#not-implemented-yet)                                                                   |
-| Phase 0 public source: maintainer, CODEOWNERS, PVR, hosted controls                      | Pending                            | `check:publication` (intentionally failing)                                                                       |
-| Phase 1 release evidence: provisioned browser, native screen-reader, field CWV           | Pending                            | See [Phase 1 still pending](#phase-1-still-pending)                                                               |
+| Capability                                                                               | Status                              | Evidence pointer                                                                                                  |
+| ---------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Public foundation: governance, CI, supply-chain, licenses, links, history                | Implemented                         | `check:community`, `check:licenses`, `check:external-links`, `check:history`                                      |
+| Public-safety scans: secrets, personal data, local paths, staged blobs                   | Implemented                         | `check:public`, `check:public:staged`                                                                             |
+| Phase 1 visual prototype: three themes, pixel renderer, a11y, EN/RU                      | Implemented (local)                 | `check:phase1-visual-baselines`                                                                                   |
+| Web preview production image and standalone runtime smoke                                | Implemented (local)                 | `verify:web:deployment`, `Dockerfile`, `railway.json`                                                             |
+| Web search metadata, root canonical, robots and sitemap                                  | Implemented (local)                 | `test:web`, `verify:web:deployment`                                                                               |
+| Ingest, Jobs-scheduler, and migration production images and Railway configs              | Implemented (local packaging)       | `deploy/`, three local image builds                                                                               |
+| Cloudflare sync origin signer and production-Ingest proof compatibility                  | Implemented (local)                 | `test:edge`, `test:edge-ingest-compatibility`, ADR 0070                                                           |
+| Design system and standalone race-broadcast exploration                                  | Documented reference only           | `docs/design/`; manual reference review, not implemented in `apps/web`                                            |
+| Contracts: JSON Schema, generated TypeScript/OpenAPI, runtime validator                  | Implemented                         | `check:contracts`, `test:contracts:coverage`                                                                      |
+| Database: 43 migrations, forced-RLS private tables, isolated roles, procedures           | Implemented (local integration)     | `check:database`, `test:database:integration`                                                                     |
+| Public score/race/status/token routes and least-privilege Web adapters                   | Implemented (local, default-off)    | `test:web:postgres-integration`, `test:web-query-plan-evidence`                                                   |
+| Identity, passkeys, restricted recovery, sessions, account controls                      | Implemented (local, synthetic)      | `test:web:coverage`                                                                                               |
+| Source/device lifecycle and pairing approval                                             | Implemented (local, default-off)    | `test:web:coverage`                                                                                               |
+| CarRecipe proposal/approval: session, device ingress, agent skill                        | Implemented (local, default-off)    | `test:web:coverage`, `check:agent-skills`                                                                         |
+| Ingest: kernel, adapter, application, HTTP factory, host                                 | Implemented (local, default-off)    | `test:ingest:coverage`, `test:ingest:postgres-integration`                                                        |
+| Provider-attributed UsageSyncV1 for the existing Codex source path                       | Implemented (local, default-off)    | ADR 0071, `check:contracts`, `test:ingest:postgres-integration`                                                   |
+| Direct Community token leaderboard and EN/RU token-first race                            | Implemented (local, default-off)    | ADR 0072, `test:web:coverage`, `test:web:postgres-integration`                                                    |
+| Jobs runner: eighteen bounded maintenance capabilities                                   | Implemented (local)                 | `test:jobs:coverage`, `test:jobs:postgres-integration`                                                            |
+| Jobs scheduler: default-off UTC catalog, no-overlap, bounded lifecycle                   | Implemented (local)                 | `test:jobs-scheduler:coverage` plus six scheduler integrations                                                    |
+| Migration runner: default-off, digest-verified ledger, narrow login                      | Implemented (local)                 | `test:migrate:coverage`, `test:migrate:postgres-integration`                                                      |
+| Rust connector: handshake, reader, UsageSync signer, connect/sync commands               | Implemented (library, Windows dev)  | ADR 0073, `cargo test --workspace`, `test:connector:windows-portable`                                             |
+| Admin: invitation kernel and Access/membership verifier                                  | Implemented (local)                 | `test:admin:coverage`, `test:admin:postgres-integration`                                                          |
+| Operational runbooks: migration, restore, containment, deletion-failure                  | Implemented (static checks)         | `check:migration-runbook`, `check:restore-runbook`, `check:containment-runbook`, `check:deletion-failure-runbook` |
+| Clean AgentAccount/provider-reported-token replacement                                   | Accepted target; not implemented    | [ADR 0076](decisions/0076-clean-agent-account-provider-reported-token-ranking.md)                                 |
+| Anonymous profile/bootstrap/ownership-lease direction                                    | Superseded; must not be implemented | [ADR 0069](decisions/0069-thin-client-and-low-friction-onboarding.md), superseded by ADR 0076                     |
+| Hosted deployment, production login/TLS, live edge route, released connector, real OAuth | Not implemented                     | See [Not implemented yet](#not-implemented-yet)                                                                   |
+| Phase 0 public source: maintainer, CODEOWNERS, PVR, hosted controls                      | Pending                             | `check:publication` (intentionally failing)                                                                       |
+| Phase 1 release evidence: provisioned browser, native screen-reader, field CWV           | Pending                             | See [Phase 1 still pending](#phase-1-still-pending)                                                               |
 
 ## Current phase
 
-Phase 1 product code is locally complete, with the manual release-evidence items below still open.
-The Phase 2 language-neutral contract and SQL persistence foundations now include database-only
+The branch is replacing the unreleased Codex-specific baseline under ADR 0076. The old
+implementation remains locally testable at this documentation commit, but it is scheduled for
+removal rather than compatibility. No clean bootstrap, AgentAccount runtime, final contracts,
+additional supported reader, batch approval, atomic final Ingest transaction, snapshot-only public
+API, connector release, or deployment is claimed yet.
+
+The prior Phase 2 language-neutral contract and SQL persistence foundations include database-only
 passkey login, multi-passkey management, restricted recovery, Community usage ingest, bounded
 retention cleanup for ingest, authentication, invitation, session, abandoned enrollment,
 terminal-deletion-job, database audit-event, aged revoked-passkey state, and aged minimized

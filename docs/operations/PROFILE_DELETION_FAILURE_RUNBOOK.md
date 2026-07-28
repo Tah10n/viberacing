@@ -1,5 +1,11 @@
 # Profile deletion failure rehearsal runbook
 
+> **Clean-slate transition hold:** ADR 0076 replaces source/device ownership with
+> installation/AgentAccount/account-scoped-device authority and replaces live public ranking with
+> immutable snapshots. The current procedure below describes old local baseline evidence only.
+> Shared or staging use remains closed until the clean request, purge, snapshot removal, restore,
+> cache, and credential oracles are implemented and this runbook is rebound to them.
+
 This checked public runbook covers one narrow incident class: a profile-deletion request or the
 bounded primary purge did not reach its expected state. It preserves the immediate authority
 lock-down, separates request failure from purge failure and terminal-job retention, and permits only

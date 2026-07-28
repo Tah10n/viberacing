@@ -8,10 +8,16 @@
 Issues/Discussions и ограничения Pull Requests только collaborators. Последовательность описана в
 [инструкции первой GitHub-публикации (EN)](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
-Vibe Racing — открытый пиксельный недельный рейтинг вайбкодеров. Privacy-first **vibecode rating**
-представлен как одна публичная гонка. Текущий локальный slice поддерживает только Codex и напрямую
-суммирует provider-reported tokens: без логарифма, бонуса за активные дни и коэффициентов
-провайдера, модели или стоимости.
+Vibe Racing — открытый пиксельный недельный рейтинг точных provider-reported tokens coding agents.
+Принятая clean-slate модель использует один immutable GitHub identity, несколько логических
+`AgentAccount`, account-scoped device keys, прямую точную недельную сумму, shared rank и публичное
+чтение только готовых snapshots. Community остаётся self-reported, токенизаторы различаются, а rank
+не означает нормализованные стоимость/compute, награду или привилегию.
+
+Рабочая ветка заменяет невыпущенный локальный Codex-only baseline по
+[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Пока
+[implementation status](docs/IMPLEMENTATION_STATUS.md) не зафиксирует каждый replacement slice,
+принятую модель нельзя считать реализованной поддержкой provider, выпуском connector или deployment.
 
 ![Синтетическое desktop-превью Vibe Racing на русском языке в теме Cyber Rally](docs/testing/phase1-visual-baselines/desktop-1280x720-ru-cyber-rally.png)
 

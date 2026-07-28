@@ -80,15 +80,17 @@ Reports are especially valuable when they affect:
 
 - connector supply chain, signatures, local key storage, or command execution;
 - GitHub OAuth, passkeys, sessions, recovery, pairing, or device authorization;
-- cross-profile or cross-source authorization;
-- origin bypass, request signatures, replay, ingest, scoring, or finalization;
+- cross-profile, cross-AgentAccount, installation, or device authorization;
+- origin bypass, request signatures, replay, atomic ingest, exact accounting, snapshots, or
+  finalization;
 - database privilege separation, deletion, backups, admin, or audit integrity;
 - GitHub Actions, release credentials, deployment, or artifact provenance;
 - disclosure of prompts, repositories, credentials, account data, or private usage information.
 
-Community score fabrication by a computer owner is a documented residual risk, not by itself a
-vulnerability. A bypass that turns Community data into Verified data, privilege, reward, or access
-is a vulnerability.
+Community token fabrication by a computer owner for an AgentAccount they control is a documented
+residual risk, not by itself a vulnerability. Cross-account mutation, double-counting one accounting
+domain, prohibited-data exfiltration, or a bypass that turns Community into Verified, privilege,
+reward, or access is a vulnerability.
 
 ## Research expectations
 

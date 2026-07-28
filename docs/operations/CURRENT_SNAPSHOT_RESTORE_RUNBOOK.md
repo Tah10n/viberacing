@@ -2,6 +2,12 @@
 
 ## Scope and evidence boundary
 
+**Clean-slate transition hold.** ADR 0076 replaces the unreleased database catalog and snapshot
+model. The current old-schema synthetic archive is baseline evidence only; it is not compatible with
+the final clean bootstrap and must never be restored into it. Restore rehearsal reopens only after
+an empty database, exact final ledger, AgentAccount authority, exact accounting state, immutable
+snapshots, and deletion invariants are proven together. No production or real-user archive exists.
+
 This is the checked operator contract for rehearsing restoration of one current synthetic snapshot
 into an isolated staging-shaped target. The repository-owned integration creates bounded archives
 only inside its disposable PostgreSQL container, replaces only that run's database twice, verifies

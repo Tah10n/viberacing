@@ -42,7 +42,9 @@ const requiredFiles = [
   "docs/decisions/0007-restricted-recovery-authority.md",
   "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
   "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
+  "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
   "docs/decisions/README.md",
+  "docs/reference/agent-provider-compatibility.md",
   "docs/reference/codex-compatibility.md",
   "docs/security/ABUSE_CASES.md",
   "docs/security/PRIVACY_DATA_MAP.md",
@@ -59,7 +61,7 @@ const requiredContent = new Map([
       "## Attack Surface, Mitigations, and Attacker Stories",
       "## Severity Calibration (Critical, High, Medium, Low)",
       "The current tree contains",
-      "implementation status",
+      "Implementation status",
       "security invariants",
     ],
   ],
@@ -78,9 +80,21 @@ const requiredContent = new Map([
     "docs/architecture/COMPATIBILITY_POLICY.md",
     [
       "## Version axes",
-      "## Codex App Server contract",
+      "## Provider reader contracts",
+      "## Contract and API rules",
       "## Date and time semantics",
       "## Deprecation and emergency block",
+    ],
+  ],
+  [
+    "docs/reference/agent-provider-compatibility.md",
+    [
+      "Compatibility status:",
+      "## Admission requirements",
+      "## Current support declaration",
+      "`codex`",
+      "`claude_code`",
+      "`opencode`",
     ],
   ],
   [
@@ -89,16 +103,22 @@ const requiredContent = new Map([
   ],
   [
     "docs/architecture/SYSTEM_CONTEXT.md",
-    ["## Status", "## System context", "## Container view", "## Component responsibilities"],
+    [
+      "## Status",
+      "## External actors and systems",
+      "## Container view",
+      "## Component responsibilities",
+    ],
   ],
   [
     "docs/architecture/DATA_FLOW.md",
     [
-      "## Enrollment and passkey bootstrap",
-      "## Device pairing and source choice",
-      "keyed poll verifier",
-      "Ed25519 proof over bound challenge",
+      "## GitHub enrollment and primary passkey",
+      "## Batch discovery and pairing approval",
+      "keyed poll/code verifiers",
+      "one fresh passkey assertion",
       "## Local collection and signed synchronization",
+      "## Snapshot refresh and public read",
       "## Hide and deletion",
       "## Trusted release",
     ],
@@ -237,7 +257,9 @@ if (compatibility !== null) {
 
 const invariants = texts.get("docs/architecture/SECURITY_INVARIANTS.md");
 if (invariants !== null) {
-  const ids = [...invariants.matchAll(/\|\s*(VR-[A-Z]+-\d{3})\s*\|/g)].map((match) => match[1]);
+  const ids = [...invariants.matchAll(/\|\s*(VR-[A-Z]+(?:-[A-Z]+)*-\d{3})\s*\|/g)].map(
+    (match) => match[1],
+  );
   if (ids.length < 15 || new Set(ids).size !== ids.length) {
     report(
       "docs/architecture/SECURITY_INVARIANTS.md",
@@ -273,147 +295,83 @@ if (privacy !== null) {
   }
 }
 
-const proposedArchitectureContracts = new Map([
+const cleanAgentAccountContracts = new Map([
   [
     "ROADMAP.md",
     [
-      "## Phase 6 — Proposed multi-agent thin client, hybrid onboarding, and canonical accounting",
-      "## Phase 7 — Direct token-total leaderboard (local Codex slice implemented)",
-      "## Phase 8 — Thin MVP staging and invite beta",
-      "## Phase 9 — Proposed optional MCP submission",
-      "## Phase 10 — Proposed per-provider Verified tier",
-      "community_tokens_v1",
-      "MCP only as an optional",
-      "provider/model/cost multiplier",
-      "all users of any coding agent",
-      "server-clock 90-day lease",
-      "Jobs-only system-expiry cleanup",
-      "Do not claim hardware-backed non-exportability",
-    ],
-  ],
-  [
-    "docs/architecture/SECURITY_INVARIANTS.md",
-    [
-      "## Proposed invariant amendments (non-authoritative)",
-      "They do not",
-      "amend the active table above",
-      "Implementations must continue to satisfy the active table until an ADR is Accepted",
-      "server-clock 90-day ownership lease",
-      "separate bounded Jobs-only system-expiry cleanup",
-      "does not claim hardware-backed non-exportability",
-    ],
-  ],
-  [
-    "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
-    [
-      "- Status: Proposed",
-      "VR-TRUST-002 would be amended",
-      "Proposed new invariants (non-authoritative",
-      "The weekly token leaderboard remains the sole public ranking surface",
-      "community_tokens_v1",
-      "weeklyTokenTotal",
-      "No logarithm, active-day bonus",
-      "nested cache/reasoning/thought breakdown twice",
-      "provider/model/cost",
-      "revision cannot change mid-season",
-      "MCP compatibility alone never",
-      "provider is not client-writable",
-      "server derives it from the immutable AgentSource",
-      "provider field in the body is rejected as unknown",
-      "VR-TOKEN-001",
-      "VR-MCP-001",
-      "VR-PROVIDER-001",
-    ],
-  ],
-  [
-    "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
-    [
-      "- Status: Proposed",
-      "register exactly the first passkey",
-      "NOT enter the restricted-recovery flow",
-      "marks the identity bootstrap credential retired",
-      "unique reservation rule makes concurrent use",
-      "rejected before challenge issuance",
-      "proof is locally consumed and cannot be rolled back or reused",
-      "Sequential all-source submit",
-      "Minimal payload by construction",
-      "never automatically merged",
-      "GitHub first-passkey authority",
-      "`first-passkey-complete`",
-      "multiple independently revocable device keys",
-      "GitHub is not required",
-      "single-source/single-season",
-      "Wednesday 00:00 UTC",
-      "cannot be quarantined by the older dates",
-      "profiles.github_user_id NOT NULL UNIQUE",
-      "90-day anonymous ownership lease",
-      "ordinary sync never renews it",
-      "30-day terminal promotion grace",
-      "separate Jobs-only system-expiry capability",
-      "profile remains hidden and its sources remain paused",
-      "does not fabricate a user deletion request",
-      "No partial daily total or signed request is emitted for that source/day",
-      "explicitly recognized non-usage record type",
-      "does not claim hardware-backed non-exportability",
+      "## Stage 1 — Clean database bootstrap",
+      "## Stage 3 — Atomic usage accounting",
+      "## Stage 6 — Thin multi-agent connector",
+      "## Stage 9 — Final evidence and review",
     ],
   ],
   [
     "docs/PROJECT_PLAN.md",
     [
-      "registration of exactly the first passkey",
-      "proof-class-specific semantics",
-      "one-way local consumption record before challenge issuance",
-      "fail generically with zero mutation",
-      "sequential, independently bounded and signed single-source",
-      "direct `weeklyTokenTotal`",
-      "MCP compatibility alone",
-      "payload rejects model names",
-      "whether anonymous or GitHub-linked",
-      "UsageSyncV1 rejects a provider field",
-      "`first-passkey-complete`",
-      "single-source/single-season",
-      "### Phase 8 — Thin MVP staging and invite beta",
-      "90-day anonymous ownership lease",
-      "ordinary sync cannot",
-      "Jobs-only system-expiry capability",
-      "no partial daily total or signed request is emitted",
-      "does not claim hardware-backed non-exportability",
+      "one `AgentAccount` is one logical account",
+      "POST /v1/usage",
+      "Public Web has no live ranking capability",
+      "Delivery sequence and commit boundaries",
+      "Explicit non-goals for this replacement",
     ],
   ],
   [
-    "docs/security/PRIVACY_DATA_MAP.md",
+    "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
     [
-      "Canonical source/day token total",
-      "Public weekly token total",
-      "raw provider components are discarded locally",
-      "One key per device authority",
-      "not client-writable in UsageSyncV1",
-      "arbitrary MCP request/response data outside the exact",
-      "GitHub first-passkey authority",
-      "Anonymous ownership lease and terminal-expiry state",
-      "ordinary sync never renews it",
-      "does not claim hardware-backed non-exportability",
+      "- Status: Accepted",
+      "Clean-slate pre-release replacement",
+      "`AgentAccount` is one logical account",
+      "provider_reported_tokens_v1",
+      "one database transaction",
+      "Public requests never aggregate raw ranking tables",
+      "no anonymous profile",
+      "POST /v1/usage",
+      "GET /v1/leaderboards/current",
     ],
   ],
   [
-    "docs/security/ABUSE_CASES.md",
+    "docs/architecture/SECURITY_INVARIANTS.md",
     [
-      "VR-ABUSE-MCP-FORGERY",
-      "VR-ABUSE-TOKEN-ACCOUNTING",
-      "VR-ABUSE-BACKFILL-SEASON-RACE",
-      "VR-ABUSE-PROVIDER-OAUTH",
-      "indefinite retained/public orphan state",
-      "system-expiry cleanup",
-      "compromised process running with the user's authority may extract or use key material",
-      "emits no partial daily total or signed request",
+      "VR-IDENTITY-001",
+      "VR-ACCOUNT-001",
+      "VR-COUNT-001",
+      "VR-DEDUP-001",
+      "VR-DATE-001",
+      "VR-INGEST-ATOMIC-001",
+      "VR-PRIVACY-001",
+      "VR-SNAPSHOT-001",
+      "VR-SCOPE-001",
+      "provider_reported_tokens_v1",
     ],
   ],
   [
     "docs/security/THREAT_MODEL.md",
     [
-      "sync cannot renew it",
-      "separate Jobs-only cleanup prevents an indefinite lost-key orphan",
-      "promotion-only grace without automatic reactivation",
+      "TB-04",
+      "Agent local storage to built-in reader",
+      "Multi-device double counting",
+      "Snapshot poisoning or partial publication",
+      "Community-to-Verified promotion",
+    ],
+  ],
+  [
+    "docs/security/PRIVACY_DATA_MAP.md",
+    [
+      "AgentAccount provider, accounting revision, trust, scope",
+      "Account-scoped device private key",
+      "Canonical cumulative token-total decimal string",
+      "One counted cumulative total per logical account",
+      "There is no anonymous identity bootstrap key",
+    ],
+  ],
+  [
+    "docs/security/ABUSE_CASES.md",
+    [
+      "VR-ABUSE-DEVICE-MULTIPLICATION",
+      "VR-ABUSE-ACCOUNT-OVERLAP",
+      "VR-ABUSE-INGEST-ZERO-WRITE",
+      "VR-ABUSE-SNAPSHOT-PARTIAL",
+      "VR-ABUSE-TRUST-PROMOTION",
     ],
   ],
 ]);
@@ -422,7 +380,7 @@ function normalizeContractText(value) {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-for (const [path, fragments] of proposedArchitectureContracts) {
+for (const [path, fragments] of cleanAgentAccountContracts) {
   const document = texts.get(path);
   if (document === null) {
     continue;
@@ -430,82 +388,28 @@ for (const [path, fragments] of proposedArchitectureContracts) {
   const normalizedDocument = normalizeContractText(document);
   for (const fragment of fragments) {
     if (!normalizedDocument.includes(normalizeContractText(fragment))) {
-      report(
-        path,
-        `required proposed-architecture contract is missing: ${JSON.stringify(fragment)}`,
-      );
+      report(path, `required clean-agent-account contract is missing: ${JSON.stringify(fragment)}`);
     }
   }
 }
 
-const forbiddenProposedArchitectureText = new Map([
-  ["ROADMAP.md", ["Generate one non-exportable sync key", "skip the record or the file"]],
+const forbiddenCurrentArchitectureText = new Map([
   [
     "docs/architecture/SECURITY_INVARIANTS.md",
-    ["Amended by ADR 0068", "Amended by ADR 0069", "one non-exportable key"],
+    ["## Proposed invariant amendments", "A CodexSource is", "`community_tokens_v1` season"],
   ],
   [
-    "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md",
-    [
-      "VR-TRUST-002 is amended",
-      "explicit provider identifier",
-      "sync contract gains a provider field",
-      "primary universal connection path",
-      "scoring gains per-provider normalization",
-      "public per-provider contribution breakdown",
-    ],
-  ],
-  [
-    "docs/decisions/0069-thin-client-and-low-friction-onboarding.md",
-    [
-      "first and subsequent passkey registration",
-      "identity credential remains as a second factor",
-      "Turnstile token is validated and locked",
-      "The envelope aggregates independently signed",
-      "causes the next submit",
-      "Granular per-field privacy toggles",
-      "generated per source",
-      "one key per source",
-      "current open season and its grace window",
-      "ordinary sync renews it",
-      "profile and sources resume automatically",
-      "user deletion job performs system expiry",
-      "skip the record or the file",
-      "generated independently, non-exportable",
-    ],
-  ],
-  [
-    "docs/PROJECT_PLAN.md",
-    [
-      "all-source aggregation",
-      "reviewed, versioned per-provider normalization",
-      "MCP server as the universal Community ingest path",
-      "bounded per-provider contribution breakdown",
-      "requires a current GitHub session and passkey",
-      "generates its own non-exportable key",
-      "skip the record or the file",
-    ],
+    "docs/security/THREAT_MODEL.md",
+    ["TB-15 | Low-friction enrollment", "anonymous ownership lease"],
   ],
   [
     "docs/security/PRIVACY_DATA_MAP.md",
-    [
-      "tool calls, and MCP data;",
-      "one key per source",
-      "Private key client-only and non-exportable",
-    ],
+    ["Anonymous identity bootstrap key —", "`codex_sources`", "`community_tokens_v1` public"],
   ],
-  [
-    "docs/security/ABUSE_CASES.md",
-    [
-      "revocable non-exportable key",
-      "generated, non-exportable",
-      "skip the record or file",
-      "skip the record or the file",
-    ],
-  ],
+  ["docs/security/ABUSE_CASES.md", ["VR-ABUSE-ENROLL-CREDENTIAL", "opaque CodexSource"]],
 ]);
 
-for (const [path, fragments] of forbiddenProposedArchitectureText) {
+for (const [path, fragments] of forbiddenCurrentArchitectureText) {
   const document = texts.get(path);
   if (document === null) {
     continue;
@@ -513,7 +417,7 @@ for (const [path, fragments] of forbiddenProposedArchitectureText) {
   const normalizedDocument = normalizeContractText(document);
   for (const fragment of fragments) {
     if (normalizedDocument.includes(normalizeContractText(fragment))) {
-      report(path, `forbidden proposed-architecture text is present: ${JSON.stringify(fragment)}`);
+      report(path, `forbidden current-architecture text is present: ${JSON.stringify(fragment)}`);
     }
   }
 }
