@@ -4,6 +4,35 @@ BEGIN;
 
 SET LOCAL ROLE viberacing_owner;
 
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  trust_tier,
+  season_end,
+  metric_version,
+  accounting_policy_version,
+  state,
+  opened_at,
+  grace_ends_at
+)
+SELECT
+  season_start,
+  'community',
+  season_start + 6,
+  'provider_reported_tokens_v1',
+  'agent_account_cumulative_utc_v1',
+  'open',
+  season_start::timestamp AT TIME ZONE 'UTC',
+  ((season_start + 7)::timestamp AT TIME ZONE 'UTC') + interval '48 hours'
+FROM (
+  SELECT DISTINCT
+    usage_date::date - (extract(isodow FROM usage_date)::integer - 1) AS season_start
+  FROM pg_catalog.generate_series(
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date - 35,
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date,
+    interval '1 day'
+  ) AS generated(usage_date)
+) AS required_season;
+
 UPDATE viberacing_private.agent_providers
 SET state = 'supported'
 WHERE provider_code = 'codex';

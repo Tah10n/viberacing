@@ -66,6 +66,7 @@ CREATE TABLE viberacing_private.usage_observations (
   quarantine_reason varchar(40),
   entry_count integer NOT NULL,
   accepted_entry_count integer NOT NULL,
+  season_starts date[] NOT NULL,
   received_at timestamptz NOT NULL DEFAULT pg_catalog.transaction_timestamp(),
   retention_expires_at timestamptz NOT NULL,
   CONSTRAINT usage_observations_id_canonical
@@ -119,6 +120,8 @@ CREATE TABLE viberacing_private.usage_observations (
   ),
   CONSTRAINT usage_observations_entry_count_bounded
     CHECK (entry_count BETWEEN 1 AND 31),
+  CONSTRAINT usage_observations_season_count_bounded
+    CHECK (pg_catalog.cardinality(season_starts) BETWEEN 1 AND 6),
   CONSTRAINT usage_observations_retention_bounded CHECK (
     retention_expires_at >= received_at + interval '10 days'
   ),
@@ -151,6 +154,7 @@ CREATE TABLE viberacing_private.usage_idempotency_records (
   client_version varchar(64) NOT NULL,
   original_outcome varchar(12) NOT NULL,
   original_accepted_entry_count integer NOT NULL,
+  season_starts date[] NOT NULL,
   created_at timestamptz NOT NULL DEFAULT pg_catalog.transaction_timestamp(),
   retention_expires_at timestamptz NOT NULL,
   PRIMARY KEY (device_key_id, sync_id),
@@ -169,6 +173,8 @@ CREATE TABLE viberacing_private.usage_idempotency_records (
     OR (original_outcome IN ('duplicate', 'quarantined')
       AND original_accepted_entry_count = 0)
   ),
+  CONSTRAINT usage_idempotency_season_count_bounded
+    CHECK (pg_catalog.cardinality(season_starts) BETWEEN 1 AND 6),
   CONSTRAINT usage_idempotency_retention_bounded CHECK (
     retention_expires_at >= created_at + interval '10 days'
   ),
@@ -213,10 +219,11 @@ CREATE TABLE viberacing_private.ranking_refresh_outbox (
   season_start date NOT NULL,
   trust_tier varchar(12) NOT NULL,
   dirty_since timestamptz NOT NULL,
-  last_observation_id varchar(26) NOT NULL
-    REFERENCES viberacing_private.usage_observations(observation_id) ON DELETE RESTRICT,
+  last_observation_id varchar(26)
+    REFERENCES viberacing_private.usage_observations(observation_id) ON DELETE SET NULL,
   attempt_count integer NOT NULL DEFAULT 0,
   next_attempt_at timestamptz NOT NULL,
+  state varchar(8) NOT NULL DEFAULT 'pending',
   PRIMARY KEY (season_start, trust_tier),
   CONSTRAINT ranking_refresh_outbox_season_monday
     CHECK (extract(isodow FROM season_start) = 1),
@@ -224,6 +231,8 @@ CREATE TABLE viberacing_private.ranking_refresh_outbox (
     CHECK (trust_tier IN ('community', 'verified')),
   CONSTRAINT ranking_refresh_outbox_attempt_bounded
     CHECK (attempt_count BETWEEN 0 AND 100),
+  CONSTRAINT ranking_refresh_outbox_state_closed
+    CHECK (state IN ('pending', 'retry')),
   CONSTRAINT ranking_refresh_outbox_time_order
     CHECK (next_attempt_at >= dirty_since)
 );
@@ -477,6 +486,7 @@ DECLARE
   v_retention_expires_at timestamptz;
   v_row_count integer;
   v_semantic_digest bytea;
+  v_season_starts date[];
   v_single_new numeric(30, 0);
   v_single_previous numeric(30, 0);
   v_transaction_time timestamptz := pg_catalog.transaction_timestamp();
@@ -551,6 +561,14 @@ BEGIN
       'UTF8'
     )
   );
+  SELECT pg_catalog.array_agg(season_start.value ORDER BY season_start.value)
+  INTO v_season_starts
+  FROM (
+    SELECT DISTINCT
+      usage_date.value
+        - (extract(isodow FROM usage_date.value)::integer - 1) AS value
+    FROM pg_catalog.unnest(p_usage_dates) AS usage_date(value)
+  ) AS season_start;
 
   SELECT idempotency.*
   INTO v_existing_idempotency
@@ -732,6 +750,7 @@ BEGIN
     client_version,
     original_outcome,
     original_accepted_entry_count,
+    season_starts,
     retention_expires_at
   )
   VALUES (
@@ -749,6 +768,7 @@ BEGIN
     p_client_version,
     v_outcome,
     v_accepted_entries,
+    v_season_starts,
     v_retention_expires_at
   );
 
@@ -770,6 +790,7 @@ BEGIN
     quarantine_reason,
     entry_count,
     accepted_entry_count,
+    season_starts,
     retention_expires_at
   )
   VALUES (
@@ -790,6 +811,7 @@ BEGIN
     CASE WHEN v_outcome = 'quarantined' THEN v_reason_code ELSE NULL END,
     v_entry_count,
     v_accepted_entries,
+    v_season_starts,
     v_retention_expires_at
   );
 
@@ -835,7 +857,8 @@ BEGIN
           dirty_since,
           last_observation_id,
           attempt_count,
-          next_attempt_at
+          next_attempt_at,
+          state
         )
         VALUES (
           p_usage_dates[v_index]
@@ -844,7 +867,8 @@ BEGIN
           v_now,
           p_observation_id,
           0,
-          v_now
+          v_now,
+          'pending'
         )
         ON CONFLICT (season_start, trust_tier) DO UPDATE
         SET dirty_since = least(
@@ -856,7 +880,8 @@ BEGIN
             next_attempt_at = least(
               ranking_refresh_outbox.next_attempt_at,
               EXCLUDED.next_attempt_at
-            );
+            ),
+            state = 'pending';
       END IF;
     END LOOP;
   END IF;

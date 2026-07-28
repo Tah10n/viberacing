@@ -7,9 +7,10 @@ This directory is the first-release, empty-database bootstrap for the agent-neut
 production or shared database used that history, so there is no data migration, backfill, cutover,
 compatibility wrapper, or revision 0044.
 
-The catalog is intentionally small and logical. At this stage it contains the schema/identity and
-authentication layers; the remaining first-release layers are added to this same catalog as the
-corresponding end-to-end slices land. The final inventory is bounded to seven revisions.
+The catalog is intentionally small and logical. It currently contains the identity, authentication,
+agent-account/pairing, atomic usage-accounting, and snapshot-ranking layers. The remaining
+first-release retention/Admin and CarRecipe layers are added to this same catalog as their
+end-to-end slices land. The final inventory is bounded to seven revisions.
 
 ## Current catalog
 
@@ -30,6 +31,12 @@ corresponding end-to-end slices land. The final inventory is bounded to seven re
   PostgreSQL; origin/device replay, long-lived idempotency, monotonic account/day totals, immutable
   observations, coalesced dirty-season work, and hash-chained ranking events settle together or roll
   back together.
+- `0005_seasons_ranking_and_snapshots.sql` adds explicit UTC Monday-Sunday Community seasons, exact
+  direct-token profile/provider totals, deterministic shared ranks and display order, immutable
+  versioned pages/profile summaries, a last-good publication pointer, coalesced bounded retry,
+  snapshot-only Web reads, and Jobs-only ensure/refresh/finalize capabilities. Season finalization
+  is the authoritative direct-mutation closure; the checked scheduler is responsible for invoking it
+  after the fixed 48-hour grace deadline.
 - `manifest.json` is the sole ordered inventory and SHA-256 source used by the static checker and
   default-off migration runner.
 
@@ -57,7 +64,7 @@ The cluster bootstrap creates these non-login, non-owner runtime groups:
 | `viberacing_owner`  | Owns reviewed schema and procedure implementations; migration runner only         |
 | `viberacing_web`    | GitHub identity, passkey/session, private profile, visibility, and deletion calls |
 | `viberacing_ingest` | Active-device material read and one atomic Community usage submission             |
-| `viberacing_jobs`   | None until snapshot/retention layers are present                                  |
+| `viberacing_jobs`   | Ensure current season, refresh one dirty season, and finalize one due season      |
 | `viberacing_admin`  | One bounded optional-invite issuance call                                         |
 | `PUBLIC`            | None                                                                              |
 
@@ -108,6 +115,7 @@ corepack pnpm run test:migrate:postgres-integration
 
 The PostgreSQL tests own disposable Compose projects and ephemeral storage. They prove clean
 creation, forced RLS, narrow grants, identity/auth semantics, concurrent GitHub convergence,
+exact-decimal accounting, deterministic multi-account ranking, snapshot failure recovery,
 current-snapshot restore, and migration-controller overlap locally. They do not prove a production
 credential, deployed TLS route, staging rollout, production backup/restore, monitoring, capacity, or
 deployment.

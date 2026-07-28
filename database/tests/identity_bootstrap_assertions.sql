@@ -23,6 +23,11 @@ BEGIN
     FROM viberacing_private.schema_migrations
     WHERE revision = 4
       AND name = 'usage_ingest_replay_and_idempotency'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.schema_migrations
+    WHERE revision = 5
+      AND name = 'seasons_ranking_and_snapshots'
   ) THEN
     RAISE EXCEPTION 'clean bootstrap ledger is incomplete';
   END IF;
@@ -37,7 +42,7 @@ BEGIN
   WHERE namespace.nspname = 'viberacing_private'
     AND relation.relkind = 'r';
 
-  IF v_private_table_count <> 22 OR v_forced_rls_count <> v_private_table_count THEN
+  IF v_private_table_count <> 30 OR v_forced_rls_count <> v_private_table_count THEN
     RAISE EXCEPTION 'private tables are not exactly force-RLS protected';
   END IF;
 

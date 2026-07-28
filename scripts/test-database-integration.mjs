@@ -136,6 +136,65 @@ function spawnPsql(sql) {
   });
 }
 
+function startRefreshMutexHolder() {
+  const child = spawn("docker", psqlArgs(), {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const stdout = [];
+  const stderr = [];
+  let heldResolve;
+  let heldReject;
+  const held = new Promise((resolvePromise, reject) => {
+    heldResolve = resolvePromise;
+    heldReject = reject;
+  });
+  const done = new Promise((resolvePromise, reject) => {
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("snapshot refresh mutex holder exceeded its deadline"));
+    }, 15_000);
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      heldReject(error);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      const result = {
+        code,
+        stderr: Buffer.concat(stderr).toString("utf8"),
+        stdout: Buffer.concat(stdout).toString("utf8"),
+      };
+      if (!result.stdout.includes("refresh-mutex-held")) {
+        heldReject(new Error(`snapshot refresh mutex was not acquired: ${result.stderr}`));
+      }
+      resolvePromise(result);
+    });
+  });
+  child.stdout.on("data", (chunk) => {
+    stdout.push(chunk);
+    if (Buffer.concat(stdout).toString("utf8").includes("refresh-mutex-held")) {
+      heldResolve();
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr.push(chunk);
+  });
+  child.stdin.end(`
+BEGIN;
+SET ROLE viberacing_owner;
+SELECT capability
+FROM viberacing_private.maintenance_mutexes
+WHERE capability = 'leaderboard_refresh'
+FOR UPDATE;
+SELECT 'refresh-mutex-held';
+SELECT pg_catalog.pg_sleep(5);
+ROLLBACK;
+`);
+  return { done, held };
+}
+
 function canonicalArchiveDigest(archive, section) {
   const result = container(
     "pg_restore",
@@ -282,6 +341,38 @@ SELECT pg_catalog.jsonb_build_object(
   };
 }
 
+function finalizedSnapshotEvidence() {
+  return JSON.parse(
+    psqlValue(`
+SELECT pg_catalog.jsonb_build_object(
+  'canonicalPayload', page.canonical_payload,
+  'etag', snapshot.etag,
+  'pageDigest', pg_catalog.encode(page.payload_digest, 'hex'),
+  'revision', snapshot.revision,
+  'seasonStart', snapshot.season_start,
+  'snapshotDigest', pg_catalog.encode(snapshot.payload_digest, 'hex'),
+  'snapshotId', snapshot.snapshot_id
+)::text
+FROM viberacing_private.seasons AS season
+JOIN viberacing_private.leaderboard_published_snapshots AS published
+  ON published.season_start = season.season_start
+  AND published.trust_tier = season.trust_tier
+JOIN viberacing_private.leaderboard_snapshots AS snapshot
+  ON snapshot.snapshot_id = published.snapshot_id
+JOIN viberacing_private.leaderboard_snapshot_pages AS page
+  ON page.snapshot_id = snapshot.snapshot_id
+  AND page.page_kind = 'leaderboard_page'
+  AND page.page_number = 1
+WHERE season.trust_tier = 'community'
+  AND season.state = 'finalized'
+  AND snapshot.finalized
+  AND snapshot.state = 'published'
+ORDER BY season.season_start
+LIMIT 1;
+`),
+  );
+}
+
 function createArchive(database, archive) {
   requireSuccess(
     container("pg_dump", [
@@ -357,6 +448,28 @@ try {
     psql(readFileSync(resolve(root, "database", "tests", "usage_accounting.sql"), "utf8")),
     "atomic usage-accounting oracle",
   );
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database", "tests", "seasons_snapshots.sql"), "utf8"), {
+      timeout: 120_000,
+    }),
+    "season ranking and snapshot oracle",
+  );
+
+  const refreshMutexHolder = startRefreshMutexHolder();
+  await refreshMutexHolder.held;
+  const blockedRefresh = await spawnPsql(`
+SET ROLE viberacing_jobs;
+SELECT outcome
+FROM viberacing_api.refresh_next_dirty_community_season();
+`);
+  assert.equal(blockedRefresh.code, 0, blockedRefresh.stderr);
+  assert.equal(
+    blockedRefresh.stdout.trim(),
+    "busy",
+    "concurrent snapshot refresh did not fail closed at the mutex",
+  );
+  const refreshMutexHolderResult = await refreshMutexHolder.done;
+  assert.equal(refreshMutexHolderResult.code, 0, refreshMutexHolderResult.stderr);
 
   const directRead = psql(`
 SET SESSION AUTHORIZATION viberacing_web;
@@ -415,6 +528,35 @@ FROM viberacing_api.open_github_profile(
   requireSuccess(
     psql(`
 SET ROLE viberacing_owner;
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  trust_tier,
+  season_end,
+  metric_version,
+  accounting_policy_version,
+  state,
+  opened_at,
+  grace_ends_at
+)
+SELECT
+  season_start,
+  'community',
+  season_start + 6,
+  'provider_reported_tokens_v1',
+  'agent_account_cumulative_utc_v1',
+  'open',
+  season_start::timestamp AT TIME ZONE 'UTC',
+  ((season_start + 7)::timestamp AT TIME ZONE 'UTC') + interval '48 hours'
+FROM (
+  SELECT
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+      - (
+        extract(
+          isodow FROM (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+        )::integer - 1
+      ) AS season_start
+) AS current_season
+ON CONFLICT (season_start, trust_tier) DO NOTHING;
 UPDATE viberacing_private.agent_providers
 SET state = 'supported'
 WHERE provider_code = 'codex';
@@ -640,6 +782,7 @@ FROM viberacing_private.schema_migrations;
     "database ledger drifted from the reviewed clean catalog",
   );
 
+  const sourceFinalizedSnapshot = finalizedSnapshotEvidence();
   createArchive(databaseName, archiveOne);
   const sourceData = canonicalArchiveDigest(archiveOne, "data");
   restoreArchive(archiveOne);
@@ -648,6 +791,11 @@ FROM viberacing_private.schema_migrations;
       readFileSync(resolve(root, "database", "tests", "identity_bootstrap_assertions.sql"), "utf8"),
     ),
     "first restored semantic oracle",
+  );
+  assert.deepEqual(
+    finalizedSnapshotEvidence(),
+    sourceFinalizedSnapshot,
+    "first restore changed the finalized snapshot",
   );
 
   const firstRestoredSchema = semanticSchemaDigest();
@@ -661,6 +809,11 @@ FROM viberacing_private.schema_migrations;
       readFileSync(resolve(root, "database", "tests", "identity_bootstrap_assertions.sql"), "utf8"),
     ),
     "second restored semantic oracle",
+  );
+  assert.deepEqual(
+    finalizedSnapshotEvidence(),
+    sourceFinalizedSnapshot,
+    "second restore changed the finalized snapshot",
   );
   const secondRestoredSchema = semanticSchemaDigest();
   assert.deepEqual(
@@ -682,5 +835,5 @@ FROM viberacing_private.schema_migrations;
 }
 
 console.log(
-  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
+  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, direct-token ranking across 208 public profiles, immutable last-good/final snapshots, two-session refresh-overlap suppression, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
 );
