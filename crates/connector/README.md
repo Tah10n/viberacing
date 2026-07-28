@@ -1,19 +1,19 @@
 # Vibe Racing connector and bounded protocol foundation
 
-This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
-candidate-only account/usage adapter for the exact `0.144.5` schema extract. It also contains a
-bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor, an
-isolated pairing-possession signer, and an exact-body Community sync composer/request signer behind
-inaccessible reviewed capabilities. One runnable `connect` command completes the versioned pairing
-journey with native OS key custody. A second Windows x86_64 development command admits one exact
-Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
-released connector. A third fixed command signs one explicit enum-only CarRecipe proposal without
-starting Codex or receiving proposal decision authority. A separate local repository Agent Skill can
-reduce a style request to that exact command; it adds no connector method or authority. A fourth
-local-only command removes one exact native credential without inspecting it or implying that the
-registered server device was revoked. A fifth read-only command performs only point-in-time exact
-candidate artifact admission without opening credential storage, starting Codex, reading an account,
-or using the network.
+This Rust crate contains the provider-neutral built-in `AgentUsageReader` boundary plus the
+fail-closed local Codex App Server initialization and exact `0.144.5` account/usage adapter. The
+Codex reader maps only an explicit account handle, UTC dates, and cumulative decimal token totals
+into canonical types; email, plan, summary, local path, and privacy-sentinel values are discarded
+before Usage Sync composition. Claude Code, opencode, Qwen Code, Cline, and Aider remain recognized
+without executable reader authority.
+
+The crate also contains a bounded one-shot child supervisor behind a reviewed-launch capability, an
+isolated installation pairing-poll signer, and an exact-body provider-neutral Usage Sync
+composer/request signer. The current runnable `connect` command still represents the pre-batch
+single-account client shell and is not final onboarding evidence; the next connector slice replaces
+it with the discovery-manifest batch protocol. The Windows x86_64 development `sync` command admits
+one exact Codex candidate, collects through the built-in reader, signs, and uploads one bounded final
+V1 request. It is not a supported, packaged, or released connector.
 
 The implemented surface is deliberately narrow:
 
@@ -29,15 +29,21 @@ The implemented surface is deliberately narrow:
 - closed exact-version response visitors that confirm ChatGPT mode while discarding email, plan, and
   nullable summary values; and
 - at most 31 sorted unique daily entries with real `20xx` dates and sync-safe token integers;
+- one closed built-in provider registry, a provider-neutral reader trait, opaque local account
+  handles, safe candidate metadata, bounded UTC windows, and canonical decimal-string daily totals;
+- an exact Codex reader version/accounting revision over `agent_account` scope, explicit-attach
+  fingerprint policy, and raw-fixture privacy sentinels that cannot enter canonical output,
+  diagnostics, or signed JSON;
 - one fixed `app-server` argument, reviewed working directory, cleared ambient environment,
   capability-owned allowlist values, and local piped stdio only;
 - three stdout frames of at most 16 KiB each, discard-only stderr capped at 8 KiB, a 10-second
   response deadline, a 45-second lifetime, and a 500-millisecond graceful-exit window; and
 - exact handshake/account/usage composition that returns daily data only after terminal output is
   checked and the synthetic child is reaped;
-- exact closed identifier, calendar, timestamp, entry-count, integer, and 8 KiB sync-body bounds;
-- fixed manual seven-field JSON serialization, connector/candidate versions, SHA-256 digest, and
-  repository-owned unpadded base64url encoding; and
+- exact closed AgentAccount/reader/device identifiers, calendar, timestamp, entry-count, decimal,
+  and 8 KiB sync-body bounds;
+- fixed manual seven-field JSON serialization with `agentAccountId`, `readerVersion`, and
+  string-valued totals, SHA-256 digest, and repository-owned unpadded base64url encoding; and
 - the exact eight-field LF-separated device-signature message with no trailing separator, checked
   against one synthetic vector shared with the production Ingest verifier;
 - an unsigned prepared type with no public accessors, clone, diagnostic, or serialization surface;
@@ -45,9 +51,9 @@ The implemented surface is deliberately narrow:
   prepared message, and an exact body-plus-five-header signed envelope; and
 - key/body/message drop zeroization plus cross-language verification of the synthetic public key and
   signature, including rejection of a one-byte message mutation;
-- the exact four-field LF-separated pairing-possession message with no trailing separator, binding
-  one canonical version-4 pairing ID, exact 32-byte server challenge, and the public key derived
-  from the consumed pending private-key capability; and
+- the exact four-field LF-separated pairing-poll possession message with no trailing separator,
+  binding one canonical `pair_<22 chars>` ID, exact 32-byte server challenge, and the installation
+  public key derived from the consumed pending private-key capability; and
 - a one-use proof exposing only the pairing ID and canonical signature, checked against a second
   synthetic Rust/Web vector that uses the same public key as the sync vector;
 - one exact `connect --origin <origin> --label <label>` command with HTTPS-only remote origins,
@@ -61,7 +67,7 @@ The implemented surface is deliberately narrow:
   interrupted poll, retries every two seconds for at most eight local minutes, and saves activation
   before success output; and
 - output limited to the exact `/connect` URL, human code, generic progress, and success without key,
-  token, challenge, source, or device identifiers;
+  token, challenge, AgentAccount, or device identifiers;
 - one exact `forget-local --origin <origin> --label <label>` command that derives the same native
   account, invokes only credential deletion, and treats both deleted and absent entries as success;
 - one fixed identifier-free removal result that explicitly says server device authority was not
@@ -79,9 +85,10 @@ The implemented surface is deliberately narrow:
   explicit unsupported status, with no credential, process, account, persistence, or network access;
   its opt-in preview adds only fixed version/admission fields, excludes paths, digests, environment
   values, credentials, account, and usage, and is never saved or sent by the connector;
-- fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
+- fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record
+  AgentAccount/device/key
   binding, and one existing exact composition/signing path;
-- one fixed `/v1/community/usage` `UsageSyncV1` POST with proxies and redirects disabled, platform
+- one fixed `/v1/usage` `UsageSyncV1` POST with proxies and redirects disabled, platform
   TLS, only the five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement;
   and
 - no automatic retry after an ambiguous POST and only generic accepted, duplicate, or review output.
@@ -96,8 +103,8 @@ The implemented surface is deliberately narrow:
 - drop clearing for every owned proposal body, signature-message, raw-nonce, encoded-nonce, and
   encoded-signature byte buffer.
 
-`ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
-`ReviewedCommunityUsageContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
+`ReviewedCodexLaunch`, `PendingInstallationSigningKey`, `ReviewedPairingPollChallenge`,
+`ReviewedUsageSyncContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
 private pairing command constructs only its two pending capabilities; the private sync command can
 construct the launch/context/key capabilities only after active-record review and exact artifact
 admission from bounded fixed-name discovery or an explicit path. `check-codex` reuses only that
@@ -107,8 +114,10 @@ executable admission, WebSocket transport, generic JSON-RPC or HTTP method, sche
 credential rotation, automatic server-revoke composition, package, or release artifact. Browser
 approval and edge origin proof remain separate server-side boundaries. The checked-in
 [`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development evidence
-only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
-clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
+only. The [connector compatibility matrix](../../docs/reference/codex-compatibility.md) remains
+empty until clean-machine platform, packaging, provenance, and release evidence all pass. The
+provider registry separately remains recognized until final batch pairing and end-to-end
+AgentAccount activation evidence exist.
 
 A separate repository harness can build the Windows x86_64 release profile, copy that `0.0.0` binary
 into one bounded temporary directory, exercise only the exact help surface and a missing candidate

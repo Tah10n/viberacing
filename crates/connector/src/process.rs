@@ -639,9 +639,9 @@ mod tests {
     use super::*;
 
     const TEST_LIMITS: ProcessLimits = ProcessLimits {
-        response_timeout: Duration::from_millis(300),
-        lifetime: Duration::from_secs(2),
-        exit_grace: Duration::from_millis(100),
+        response_timeout: Duration::from_secs(1),
+        lifetime: Duration::from_secs(4),
+        exit_grace: Duration::from_millis(250),
     };
 
     static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);

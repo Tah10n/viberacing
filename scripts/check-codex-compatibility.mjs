@@ -332,6 +332,7 @@ function validateManifest(version, versionRoot, matrixVersions) {
 
   const expectedFixtureKinds = new Map([
     ["account-positive", "accept"],
+    ["account-privacy-sentinels", "accept-and-discard-prohibited-values"],
     ["account-nullable", "accept"],
     ["account-unsupported", "reject-unsupported"],
     ["account-unknown-field", "reject-invalid"],

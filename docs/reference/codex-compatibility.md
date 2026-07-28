@@ -43,12 +43,13 @@ evidence with no local values in output; that preview is not attestation or supp
 separate portable smoke executes the repository-built connector, not Codex; it verifies no official
 Codex artifact, account, usage response, package, signature, or support row.
 
-The candidate Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2`
-for `account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and
-summary values, and returns at most 31 sorted unique daily date/token entries within the sync
-contract. Ten adapter tests plus generated hostile cases exercise exact bytes, nullable/missing
-values, schema drift, dates, integer/count bounds, framing, terminal failure, and non-reflective
-diagnostics.
+The exact Rust adapter is reachable only after the handshake. It emits the fixed IDs `1` and `2` for
+`account/read` and `account/usage/read`, accepts only ChatGPT mode, discards email, plan, and summary
+values, and returns at most 31 sorted unique daily date/token entries. A separate built-in
+provider-neutral reader now maps that minimized result to one explicit-attach `agent_account`
+candidate and canonical decimal-string UTC totals. Its raw account fixture contains all required
+privacy sentinels; tests prove none reaches canonical output, signed JSON, or diagnostics. This is
+local reader evidence, not a released connector or final batch-pairing result.
 
 Nine supervisor unit cases launch only a target-built Rust fixture. They prove one fixed
 `app-server` argument and working directory, cleared ambient environment with a narrow
@@ -97,9 +98,10 @@ the exact `UsageSyncV1` bytes and device key behind two further inaccessible cap
 generates and activates the native-store credential. The Windows x86_64 `sync` command validates
 that active record before bounded fixed-name discovery or an explicit path, canonicalizes and
 hash-admits only the exact candidate, keeps a no-write-sharing handle through launch, creates fresh
-request context, and sends one closed signed `/v1/community/usage` request without proxy, redirect,
-retry, legacy-path fallback, or edge-origin credentials. It cannot admit another version or
-platform, create a release, or make the candidate supported. `check-codex` separately reuses only
+request context, and sends one closed signed `/v1/usage` request with `agentAccountId`,
+`readerVersion`, and canonical decimal-string daily totals, without proxy, redirect, retry,
+legacy-path fallback, or edge-origin credentials. It cannot admit another version or platform,
+create a release, or make the connector supported. `check-codex` separately reuses only
 the artifact selector and grants no launch, account, credential, network, or cached authority. Its
 preview adds only redacted fixed state and grants no support or report authenticity. Every matrix
 row still requires the complete admission evidence above.

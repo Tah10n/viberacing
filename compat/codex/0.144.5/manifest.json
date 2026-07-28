@@ -81,6 +81,13 @@
       "sha256": "b656928cc27c53190566e3f60f2f5e8e998e9f4c6273e5a5f4201a460d7115c5"
     },
     {
+      "path": "fixtures/account-privacy-sentinels.jsonl",
+      "kind": "account-privacy-sentinels",
+      "expected": "accept-and-discard-prohibited-values",
+      "bytes": 258,
+      "sha256": "8db2639cd2207ed651aa9dc98160023a71a892205e5642fbd708aa5d98b0d860"
+    },
+    {
       "path": "fixtures/account-null-email.jsonl",
       "kind": "account-nullable",
       "expected": "accept",

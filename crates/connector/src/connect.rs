@@ -19,8 +19,8 @@ use ureq::tls::{RootCerts, TlsConfig};
 use crate::admission::{ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate_selection};
 use crate::car_proposal::CarRecipeSelection;
 use crate::pairing::{
-    CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PendingDevicePairingSigningKey,
-    ReviewedPairingChallenge, valid_pairing_id,
+    PAIRING_CHALLENGE_BYTES, PairingPollV1Signer, PendingInstallationSigningKey,
+    ReviewedPairingPollChallenge, valid_pairing_id,
 };
 use crate::sync::encode_base64url;
 
@@ -48,7 +48,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PAIRING_LIFETIME_SECONDS: u64 = 8 * 60;
 const MAX_POLL_ATTEMPTS: usize = 240;
 
-const RECORD_MAGIC: &[u8; 8] = b"VBRPAIR1";
+const RECORD_MAGIC: &[u8; 8] = b"VBRINST1";
 const RECORD_VERSION: u8 = 1;
 const MAGIC_RANGE: std::ops::Range<usize> = 0..8;
 const VERSION_INDEX: usize = 8;
@@ -56,14 +56,14 @@ const STATE_INDEX: usize = 9;
 const ORIGIN_RANGE: std::ops::Range<usize> = 10..42;
 const CLIENT_ID_RANGE: std::ops::Range<usize> = 42..58;
 const SECRET_KEY_RANGE: std::ops::Range<usize> = 58..90;
-const PAIRING_ID_RANGE: std::ops::Range<usize> = 90..126;
-const POLL_TOKEN_RANGE: std::ops::Range<usize> = 126..158;
-const CHALLENGE_RANGE: std::ops::Range<usize> = 158..190;
-const USER_CODE_RANGE: std::ops::Range<usize> = 190..204;
-const DEADLINE_RANGE: std::ops::Range<usize> = 204..212;
-const SOURCE_ID_RANGE: std::ops::Range<usize> = 212..238;
-const DEVICE_ID_RANGE: std::ops::Range<usize> = 238..264;
-const RECORD_BYTES: usize = 264;
+const PAIRING_ID_RANGE: std::ops::Range<usize> = 90..117;
+const POLL_TOKEN_RANGE: std::ops::Range<usize> = 117..149;
+const CHALLENGE_RANGE: std::ops::Range<usize> = 149..181;
+const USER_CODE_RANGE: std::ops::Range<usize> = 181..195;
+const DEADLINE_RANGE: std::ops::Range<usize> = 195..203;
+const AGENT_ACCOUNT_ID_RANGE: std::ops::Range<usize> = 203..229;
+const DEVICE_ID_RANGE: std::ops::Range<usize> = 229..255;
+const RECORD_BYTES: usize = 255;
 
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -517,12 +517,12 @@ struct CredentialRecord {
     origin_digest: [u8; 32],
     client_id: [u8; 16],
     secret_key: [u8; SECRET_KEY_LENGTH],
-    pairing_id: [u8; 36],
+    pairing_id: [u8; 27],
     poll_token: [u8; 32],
     challenge: [u8; PAIRING_CHALLENGE_BYTES],
     user_code: [u8; 14],
     deadline: u64,
-    source_id: [u8; 26],
+    agent_account_id: [u8; 26],
     device_id: [u8; 26],
 }
 
@@ -542,12 +542,12 @@ impl CredentialRecord {
             origin_digest,
             client_id,
             secret_key,
-            pairing_id: [0; 36],
+            pairing_id: [0; 27],
             poll_token: [0; 32],
             challenge: [0; PAIRING_CHALLENGE_BYTES],
             user_code: [0; 14],
             deadline: 0,
-            source_id: [0; 26],
+            agent_account_id: [0; 26],
             device_id: [0; 26],
         })
     }
@@ -559,7 +559,7 @@ impl CredentialRecord {
         self.challenge.fill(0);
         self.user_code.fill(0);
         self.deadline = 0;
-        self.source_id.fill(0);
+        self.agent_account_id.fill(0);
         self.device_id.fill(0);
     }
 
@@ -575,14 +575,18 @@ impl CredentialRecord {
             .ok_or(ConnectorCliError::InvalidServiceResponse)?;
         self.user_code = exact_text(&response.user_code)?;
         self.deadline = deadline;
-        self.source_id.fill(0);
+        self.agent_account_id.fill(0);
         self.device_id.fill(0);
         self.state = RecordState::Pending;
         Ok(())
     }
 
-    fn make_active(&mut self, source_id: &str, device_id: &str) -> Result<(), ConnectorCliError> {
-        self.source_id = exact_text(source_id)?;
+    fn make_active(
+        &mut self,
+        agent_account_id: &str,
+        device_id: &str,
+    ) -> Result<(), ConnectorCliError> {
+        self.agent_account_id = exact_text(agent_account_id)?;
         self.device_id = exact_text(device_id)?;
         self.pairing_id.fill(0);
         self.poll_token.fill(0);
@@ -614,7 +618,7 @@ impl CredentialRecord {
         output[CHALLENGE_RANGE].copy_from_slice(&self.challenge);
         output[USER_CODE_RANGE].copy_from_slice(&self.user_code);
         output[DEADLINE_RANGE].copy_from_slice(&self.deadline.to_le_bytes());
-        output[SOURCE_ID_RANGE].copy_from_slice(&self.source_id);
+        output[AGENT_ACCOUNT_ID_RANGE].copy_from_slice(&self.agent_account_id);
         output[DEVICE_ID_RANGE].copy_from_slice(&self.device_id);
         output
     }
@@ -642,7 +646,7 @@ impl CredentialRecord {
             challenge: copy_range(bytes, CHALLENGE_RANGE),
             user_code: copy_range(bytes, USER_CODE_RANGE),
             deadline: u64::from_le_bytes(copy_range(bytes, DEADLINE_RANGE)),
-            source_id: copy_range(bytes, SOURCE_ID_RANGE),
+            agent_account_id: copy_range(bytes, AGENT_ACCOUNT_ID_RANGE),
             device_id: copy_range(bytes, DEVICE_ID_RANGE),
         };
         if !record.valid(expected_origin) {
@@ -664,7 +668,7 @@ impl CredentialRecord {
             && all_zero(&self.challenge)
             && all_zero(&self.user_code)
             && self.deadline == 0;
-        let binding_fields_clear = all_zero(&self.source_id) && all_zero(&self.device_id);
+        let binding_fields_clear = all_zero(&self.agent_account_id) && all_zero(&self.device_id);
         match self.state {
             RecordState::Prepared => pending_fields_clear && binding_fields_clear,
             RecordState::Pending => {
@@ -677,8 +681,8 @@ impl CredentialRecord {
             }
             RecordState::Active => {
                 pending_fields_clear
-                    && str::from_utf8(&self.source_id)
-                        .is_ok_and(|value| valid_public_id(value, "src_"))
+                    && str::from_utf8(&self.agent_account_id)
+                        .is_ok_and(|value| valid_public_id(value, "acc_"))
                     && str::from_utf8(&self.device_id)
                         .is_ok_and(|value| valid_public_id(value, "dev_"))
             }
@@ -694,7 +698,7 @@ impl CredentialRecord {
         self.challenge.fill(0);
         self.user_code.fill(0);
         self.deadline = 0;
-        self.source_id.fill(0);
+        self.agent_account_id.fill(0);
         self.device_id.fill(0);
     }
 }
@@ -847,7 +851,7 @@ struct PollResponse {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct DeviceBinding {
-    source_id: String,
+    agent_account_id: String,
     device_id: String,
 }
 
@@ -1054,7 +1058,7 @@ fn valid_poll_response(response: &PollResponse) -> bool {
         && valid_public_id(&response.request_id, "req_")
         && response.device_bindings.len() <= 1
         && response.device_bindings.iter().all(|binding| {
-            valid_public_id(&binding.source_id, "src_")
+            valid_public_id(&binding.agent_account_id, "acc_")
                 && valid_public_id(&binding.device_id, "dev_")
         })
 }
@@ -1209,9 +1213,10 @@ fn run_connect(
     write_line(output, "Waiting for approval...")?;
 
     let pairing_id = record.pairing_id()?.to_owned();
-    let key = PendingDevicePairingSigningKey::from_secret_key(record.secret_key);
-    let context = ReviewedPairingChallenge::from_reviewed_response(&pairing_id, record.challenge);
-    let proof = CandidatePairingPossessionV1Signer::sign(key, context)
+    let key = PendingInstallationSigningKey::from_secret_key(record.secret_key);
+    let context =
+        ReviewedPairingPollChallenge::from_reviewed_response(&pairing_id, record.challenge);
+    let proof = PairingPollV1Signer::sign(key, context)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?;
     let poll_token = encode_base64url(&record.poll_token);
     let client_id = encode_base64url(&record.client_id);
@@ -1230,7 +1235,7 @@ fn run_connect(
             .map_err(map_cli_transport_error)?
         {
             PollTransportOutcome::Activated(binding) => {
-                record.make_active(&binding.source_id, &binding.device_id)?;
+                record.make_active(&binding.agent_account_id, &binding.device_id)?;
                 store.save(&record)?;
                 return write_line(output, "Device connected.");
             }
@@ -1253,7 +1258,7 @@ fn start_pairing(
     store: &mut dyn CredentialStore,
     transport: &mut dyn PairingTransport,
 ) -> Result<(), ConnectorCliError> {
-    let key = PendingDevicePairingSigningKey::from_secret_key(record.secret_key);
+    let key = PendingInstallationSigningKey::from_secret_key(record.secret_key);
     let public_key = encode_base64url(&key.verifying_key_bytes());
     let client_id = encode_base64url(&record.client_id);
     let request = StartRequest {
@@ -1411,11 +1416,11 @@ mod tests {
     use super::*;
 
     const REQUEST_ID: &str = "req_AAAAAAAAAAAAAAAAAAAAAA";
-    const PAIRING_ID: &str = "00000000-0000-4000-8000-000000001001";
+    const PAIRING_ID: &str = "pair_AAAAAAAAAAAAAAAAAAAAAA";
     const POLL_TOKEN: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
     const CHALLENGE: &str = "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8";
     const USER_CODE: &str = "ABCD-EFGH-JKLM";
-    const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
+    const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
 
     struct MemoryStore {
@@ -1476,7 +1481,7 @@ mod tests {
             assert_eq!(request.poll_token, POLL_TOKEN);
             assert_eq!(request.possession_signature.len(), 86);
             Ok(PollTransportOutcome::Activated(DeviceBinding {
-                source_id: SOURCE_ID.to_owned(),
+                agent_account_id: AGENT_ACCOUNT_ID.to_owned(),
                 device_id: DEVICE_ID.to_owned(),
             }))
         }
@@ -2076,7 +2081,7 @@ review-before-sharing: required\n"
             schema_version: 1,
             request_id: REQUEST_ID.to_owned(),
             device_bindings: vec![DeviceBinding {
-                source_id: SOURCE_ID.to_owned(),
+                agent_account_id: AGENT_ACCOUNT_ID.to_owned(),
                 device_id: DEVICE_ID.to_owned(),
             }],
         };
@@ -2115,7 +2120,7 @@ review-before-sharing: required\n"
         assert!(text.contains("https://race.example/connect"));
         assert!(text.contains(USER_CODE));
         assert!(text.contains("Device connected."));
-        assert!(!text.contains(SOURCE_ID));
+        assert!(!text.contains(AGENT_ACCOUNT_ID));
         assert!(!text.contains(DEVICE_ID));
         assert!(!text.contains(POLL_TOKEN));
         let stored = CredentialRecord::decode(
@@ -2135,7 +2140,7 @@ review-before-sharing: required\n"
         let digest = digest_origin(&origin);
         let mut record = CredentialRecord::new(digest).expect("test entropy must be available");
         record
-            .make_active(SOURCE_ID, DEVICE_ID)
+            .make_active(AGENT_ACCOUNT_ID, DEVICE_ID)
             .expect("synthetic binding must validate");
         let mut store = MemoryStore {
             bytes: Some(record.encode().to_vec()),

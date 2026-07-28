@@ -187,7 +187,7 @@ mod tests {
     use crate::connect::CredentialRecord;
 
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
-    const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
+    const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
     const REQUEST_ID: &str = "req_CCCCCCCCCCCCCCCCCCCCCC";
 
     fn recipe() -> CarRecipeSelection {
@@ -206,7 +206,7 @@ mod tests {
 
     fn active_record(origin: &Origin) -> CredentialRecord {
         let mut record = CredentialRecord::new(digest_origin(origin)).unwrap();
-        record.make_active(SOURCE_ID, DEVICE_ID).unwrap();
+        record.make_active(AGENT_ACCOUNT_ID, DEVICE_ID).unwrap();
         record
     }
 

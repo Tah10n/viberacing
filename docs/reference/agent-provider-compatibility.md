@@ -1,14 +1,16 @@
 # Agent provider compatibility
 
-Compatibility status: clean AgentAccount target accepted; no final provider reader is supported yet.
+Compatibility status: clean AgentAccount target accepted; Codex reader implemented locally but
+provider activation remains blocked on final batch pairing and end-to-end evidence.
 
-The table records only the final ADR 0076 reader/accounting path. The old Codex `0.144.5` App Server
-candidate proves a historical local parser, not the final discovery, AgentAccount, privacy-sentinel,
-multi-device, or end-to-end compatibility contract.
+The table records only the final ADR 0076 reader/accounting path. Codex now has the closed
+provider-neutral trait implementation, exact version/revision/scope mapping, privacy sentinels, and
+final signed Usage Sync bytes. It remains `Recognized` until the same tree proves final batch
+discovery/pairing/activation and first-sync accounting end to end.
 
 | Provider ID   | State      | Required local surface and accounting evidence                          | Current exact gap                                                                                                    |
 | ------------- | ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `codex`       | Recognized | Stable bounded usage surface, UTC day, cumulative total, account domain | Final built-in discovery reader, AgentAccount domain/scope, privacy sentinel, batch pairing, and final V1 E2E absent |
+| `codex`       | Recognized | Exact App Server `0.144.5`, reader `codex_app_server_0_144_5_v1`, revision 1, `agent_account`, explicit attach | Final batch pairing/activation and first-sync E2E absent; connector package/release evidence also absent |
 | `claude_code` | Recognized | Exact documented local schema and disjoint/aggregate token semantics    | No checked exact local schema, account-domain rule, immutable fixture digest, reader, or final V1 E2E                |
 | `opencode`    | Recognized | Exact documented read-only local store and cumulative account/day rules | No checked stable schema/account boundary, immutable fixture digest, reader, or final V1 E2E                         |
 | `qwen_code`   | Recognized | Exact documented local usage surface and UTC/account semantics          | No exact evidence for a safe usage surface, reader, accounting revision, or E2E                                      |
@@ -32,10 +34,10 @@ A row becomes `Supported` only when the same commit includes:
 
 ## Current support declaration
 
-No provider is currently supported by the final clean AgentAccount path. The connector must not emit
-a final `UsageSyncV1` request from any row above until its state changes through reviewed code and
-evidence. Recognized providers may appear only as unavailable product information with the precise
-gap; they cannot be selected as working accounts.
+No provider is currently activated for new server-side AgentAccounts. The local Codex development
+sync path can produce the final signed `UsageSyncV1` bytes only from an already active synthetic
+binding; this does not bypass the recognized database state or create a working batch connection.
+Other recognized providers remain unavailable product information with the precise gap.
 
 ## Update policy
 

@@ -8,16 +8,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 
-use crate::DailyUsage;
 use crate::admission::{ADMITTED_CODEX_VERSION, admit_candidate_selection};
+use crate::codex_reader::{CODEX_APP_SERVER_0_144_5_READER_VERSION, CodexAppServer01445Reader};
 use crate::process::{
     CandidateCodex01445Collector, ReviewedCodexLaunch, current_allowed_environment,
 };
 use crate::sync::{
-    COMMUNITY_USAGE_MEDIA_TYPE, COMMUNITY_USAGE_REQUEST_TARGET, CandidateCommunityUsageV1Composer,
-    CandidateCommunityUsageV1Signer, DEVICE_NONCE_BYTES, ReviewedCommunityUsageContext,
-    ReviewedDeviceSigningKey, SignedCommunityUsage, encode_base64url,
+    DEVICE_NONCE_BYTES, ReviewedDeviceSigningKey, ReviewedUsageSyncContext, SignedUsageSync,
+    USAGE_SYNC_MEDIA_TYPE, USAGE_SYNC_REQUEST_TARGET, UsageSyncV1Composer, UsageSyncV1Signer,
+    encode_base64url,
 };
+use crate::{AgentUsageReader, CanonicalDailyUsage, UtcUsageWindow, validate_reader_metadata};
 
 use super::{
     ConnectorCliError, CredentialRecord, CredentialStore, Origin, REQUEST_ID_HEADER, RecordState,
@@ -60,13 +61,36 @@ pub(super) fn run_sync(
     );
     let collection = CandidateCodex01445Collector::collect(launch);
     working_directory.cleanup()?;
-    let daily_usage = collection.map_err(|_| ConnectorCliError::CodexUnavailable)?;
-    if daily_usage.is_empty() {
+    let provider_usage = collection.map_err(|_| ConnectorCliError::CodexUnavailable)?;
+    if provider_usage.is_empty() {
         return Err(ConnectorCliError::NoUsage);
     }
-
+    let first_date = provider_usage
+        .entries()
+        .first()
+        .ok_or(ConnectorCliError::NoUsage)?
+        .codex_reported_date()
+        .to_owned();
+    let last_date = provider_usage
+        .entries()
+        .last()
+        .ok_or(ConnectorCliError::NoUsage)?
+        .codex_reported_date()
+        .to_owned();
+    let reader = CodexAppServer01445Reader::from_collected(provider_usage);
+    validate_reader_metadata(&reader).map_err(|_| ConnectorCliError::CodexUnavailable)?;
+    let candidate = reader
+        .discover_accounts()
+        .map_err(|_| ConnectorCliError::CodexUnavailable)?
+        .pop()
+        .ok_or(ConnectorCliError::CodexUnavailable)?;
+    let window = UtcUsageWindow::new(first_date, last_date)
+        .map_err(|_| ConnectorCliError::CodexUnavailable)?;
+    let daily_usage = reader
+        .read_daily_usage(candidate.handle(), &window)
+        .map_err(|_| ConnectorCliError::CodexUnavailable)?;
     let submitted_entries = daily_usage.len();
-    let signed = prepare_fresh_sync(&record, daily_usage)?;
+    let signed = prepare_fresh_sync(&record, &daily_usage)?;
     let result = HttpSyncTransport::new(origin).send(&signed, submitted_entries)?;
     record.clear();
     match result {
@@ -78,8 +102,8 @@ pub(super) fn run_sync(
 
 fn prepare_fresh_sync(
     record: &CredentialRecord,
-    daily_usage: DailyUsage,
-) -> Result<SignedCommunityUsage, ConnectorCliError> {
+    daily_usage: &CanonicalDailyUsage,
+) -> Result<SignedUsageSync, ConnectorCliError> {
     let mut sync_random = [0_u8; 16];
     let mut device_nonce = [0_u8; DEVICE_NONCE_BYTES];
     getrandom::fill(&mut sync_random).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
@@ -98,11 +122,11 @@ fn prepare_fresh_sync(
 
 fn prepare_sync(
     record: &CredentialRecord,
-    daily_usage: DailyUsage,
+    daily_usage: &CanonicalDailyUsage,
     observed_at: String,
     sync_random: [u8; 16],
     device_nonce: [u8; DEVICE_NONCE_BYTES],
-) -> Result<SignedCommunityUsage, ConnectorCliError> {
+) -> Result<SignedUsageSync, ConnectorCliError> {
     if record.state != RecordState::Active || daily_usage.is_empty() {
         return Err(if daily_usage.is_empty() {
             ConnectorCliError::NoUsage
@@ -110,25 +134,25 @@ fn prepare_sync(
             ConnectorCliError::NotConnected
         });
     }
-    let source_id = str::from_utf8(&record.source_id)
+    let agent_account_id = str::from_utf8(&record.agent_account_id)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?
         .to_owned();
     let device_id = str::from_utf8(&record.device_id)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?
         .to_owned();
     let sync_id = format!("syn_{}", encode_base64url(&sync_random));
-    let context = ReviewedCommunityUsageContext::from_active_device(
-        source_id,
+    let context = ReviewedUsageSyncContext::from_active_account(
+        agent_account_id,
+        CODEX_APP_SERVER_0_144_5_READER_VERSION.to_owned(),
         sync_id,
         observed_at,
         device_id.clone(),
         device_nonce,
     );
     let key = ReviewedDeviceSigningKey::from_active_device(device_id, record.secret_key);
-    let prepared = CandidateCommunityUsageV1Composer::compose(context, daily_usage)
+    let prepared = UsageSyncV1Composer::compose(context, daily_usage)
         .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
-    CandidateCommunityUsageV1Signer::sign(key, prepared)
-        .map_err(|_| ConnectorCliError::SecureStorageInvalid)
+    UsageSyncV1Signer::sign(key, prepared).map_err(|_| ConnectorCliError::SecureStorageInvalid)
 }
 
 fn format_utc_milliseconds(time: SystemTime) -> Result<String, ConnectorCliError> {
@@ -222,6 +246,18 @@ struct SyncResponse {
     sync_id: String,
     outcome: SyncOutcome,
     accepted_entries: u8,
+    next_allowed_sync_at: Option<String>,
+    #[serde(rename = "recoveryAction")]
+    _recovery_action: Option<RecoveryAction>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RecoveryAction {
+    UpdateConnector,
+    ReconnectAccount,
+    ContactSupport,
+    RetryLater,
 }
 
 struct HttpSyncTransport {
@@ -239,14 +275,14 @@ impl HttpSyncTransport {
 
     fn send(
         &self,
-        request: &SignedCommunityUsage,
+        request: &SignedUsageSync,
         submitted_entries: usize,
     ) -> Result<SyncOutcome, ConnectorCliError> {
         let response = self
             .agent
-            .post(format!("{}{COMMUNITY_USAGE_REQUEST_TARGET}", self.origin))
-            .content_type(COMMUNITY_USAGE_MEDIA_TYPE)
-            .header("accept", COMMUNITY_USAGE_MEDIA_TYPE)
+            .post(format!("{}{USAGE_SYNC_REQUEST_TARGET}", self.origin))
+            .content_type(USAGE_SYNC_MEDIA_TYPE)
+            .header("accept", USAGE_SYNC_MEDIA_TYPE)
             .header(DEVICE_ID_HEADER, request.device_id())
             .header(DEVICE_TIMESTAMP_HEADER, request.device_timestamp())
             .header(DEVICE_NONCE_HEADER, request.device_nonce())
@@ -294,7 +330,7 @@ impl HttpSyncTransport {
 }
 
 fn validate_sync_response(
-    request: &SignedCommunityUsage,
+    request: &SignedUsageSync,
     header_request_id: &str,
     response: &SyncResponse,
     submitted_entries: usize,
@@ -305,10 +341,20 @@ fn validate_sync_response(
         || response.sync_id != request.idempotency_key()
         || !valid_public_id(&response.sync_id, "syn_")
         || usize::from(response.accepted_entries) > submitted_entries
+        || response
+            .next_allowed_sync_at
+            .as_deref()
+            .is_some_and(|value| !valid_utc_minute_timestamp(value))
     {
         return Err(ConnectorCliError::InvalidSyncResponse);
     }
     Ok(response.outcome)
+}
+
+fn valid_utc_minute_timestamp(value: &str) -> bool {
+    value.len() == 24
+        && value.ends_with(":00.000Z")
+        && super::valid_utc_millisecond_timestamp(value)
 }
 
 fn write_line(output: &mut dyn Write, value: &str) -> Result<(), ConnectorCliError> {
@@ -331,11 +377,11 @@ mod tests {
         include_bytes!("../../../../compat/codex/0.144.5/fixtures/account-chatgpt.jsonl");
     const USAGE_RESPONSE: &[u8] =
         include_bytes!("../../../../compat/codex/0.144.5/fixtures/usage-daily.jsonl");
-    const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
+    const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
     const REQUEST_ID: &str = "req_CCCCCCCCCCCCCCCCCCCCCC";
 
-    fn daily_usage() -> DailyUsage {
+    fn daily_usage() -> CanonicalDailyUsage {
         let mut handshake = ConnectorHandshake::new();
         handshake.start().unwrap();
         handshake
@@ -347,19 +393,27 @@ mod tests {
             .accept_account_read_response(ACCOUNT_RESPONSE)
             .unwrap();
         adapter.start_usage_read().unwrap();
-        adapter.accept_usage_read_response(USAGE_RESPONSE).unwrap()
+        let provider_usage = adapter.accept_usage_read_response(USAGE_RESPONSE).unwrap();
+        let reader = CodexAppServer01445Reader::from_collected(provider_usage);
+        let candidate = reader.discover_accounts().unwrap().pop().unwrap();
+        reader
+            .read_daily_usage(
+                candidate.handle(),
+                &UtcUsageWindow::new("2026-07-13".to_owned(), "2026-07-14".to_owned()).unwrap(),
+            )
+            .unwrap()
     }
 
     fn active_record(origin: &Origin) -> CredentialRecord {
         let mut record = CredentialRecord::new(digest_origin(origin)).unwrap();
-        record.make_active(SOURCE_ID, DEVICE_ID).unwrap();
+        record.make_active(AGENT_ACCOUNT_ID, DEVICE_ID).unwrap();
         record
     }
 
-    fn signed_request(origin: &Origin) -> SignedCommunityUsage {
+    fn signed_request(origin: &Origin) -> SignedUsageSync {
         prepare_sync(
             &active_record(origin),
-            daily_usage(),
+            &daily_usage(),
             "2026-07-17T12:34:56.789Z".to_owned(),
             [7; 16],
             [9; DEVICE_NONCE_BYTES],
@@ -393,12 +447,14 @@ mod tests {
     }
 
     #[test]
-    fn prepares_one_exact_source_bound_request_from_the_active_record() {
+    fn prepares_one_exact_account_bound_request_from_the_active_record() {
         let origin = Origin::parse("https://race.example").unwrap();
         let signed = signed_request(&origin);
         let body = str::from_utf8(signed.body()).unwrap();
-        assert!(body.contains(SOURCE_ID));
-        assert!(body.contains("\"agentVersion\":\"0.144.5\""));
+        assert!(body.contains(AGENT_ACCOUNT_ID));
+        assert!(body.contains("\"readerVersion\":\"codex_app_server_0_144_5_v1\""));
+        assert!(!body.contains("sourceId"));
+        assert!(!body.contains("provider"));
         assert_eq!(signed.device_id(), DEVICE_ID);
         assert!(valid_public_id(signed.idempotency_key(), "syn_"));
         assert_eq!(signed.device_nonce().len(), 22);
@@ -445,7 +501,7 @@ mod tests {
                         .parse::<usize>()
                         .unwrap();
                     if request.len() >= header_end + content_length {
-                        assert!(headers.starts_with("POST /v1/community/usage HTTP/1.1\r\n"));
+                        assert!(headers.starts_with("POST /v1/usage HTTP/1.1\r\n"));
                         assert_eq!(
                             header_value(headers, DEVICE_ID_HEADER),
                             Some(expected_device.as_str())
@@ -508,6 +564,8 @@ mod tests {
             sync_id: signed.idempotency_key().to_owned(),
             outcome: SyncOutcome::Accepted,
             accepted_entries: 3,
+            next_allowed_sync_at: None,
+            _recovery_action: None,
         };
 
         assert_eq!(
