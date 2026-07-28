@@ -561,7 +561,7 @@ export function validateWorkflow(path, workflow) {
       "rustup toolchain install 1.94.0 --profile minimal",
       "cargo fetch --locked",
       "pnpm run verify:node",
-      "pnpm run verify:release:node -- --history-ref=HEAD",
+      "pnpm run verify:release:node --history-ref=HEAD",
       "pnpm run test:migrate:postgres-integration",
       "pnpm run test:web:postgres-integration",
       "pnpm run test:ingest:postgres-integration",

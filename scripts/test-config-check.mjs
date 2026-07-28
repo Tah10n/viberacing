@@ -248,7 +248,7 @@ const requiredNodeSteps = [
   { run: "cargo fetch --locked", if: "github.event_name != 'pull_request'" },
   { run: "pnpm run verify:node", if: "github.event_name == 'pull_request'" },
   {
-    run: "pnpm run verify:release:node -- --history-ref=HEAD",
+    run: "pnpm run verify:release:node --history-ref=HEAD",
     if: "github.event_name != 'pull_request'",
   },
   {
