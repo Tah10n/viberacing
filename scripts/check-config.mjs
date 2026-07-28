@@ -12,6 +12,7 @@ const exactOverrideSelector =
   /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
 const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
 const releaseDeploymentWorkflowPath = ".github/workflows/deploy-release.yml";
+const edgeWranglerPath = "apps/edge/wrangler.jsonc";
 const checkoutAction = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd";
 const setupNodeAction = "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e";
 const cloudflareAction = "cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0";
@@ -90,6 +91,43 @@ const linuxSecretServiceBuildSetup = [
   "sudo apt-get update",
   "sudo apt-get install --yes --no-install-recommends libdbus-1-dev pkg-config",
 ].join("\n");
+const edgeRateLimitConfiguration = Object.freeze([
+  Object.freeze({
+    name: "VIBERACING_USAGE_GLOBAL_BURST",
+    namespace_id: "320001",
+    simple: Object.freeze({ limit: 240, period: 10 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_GLOBAL_SUSTAINED",
+    namespace_id: "320002",
+    simple: Object.freeze({ limit: 900, period: 60 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_IP_BURST",
+    namespace_id: "320003",
+    simple: Object.freeze({ limit: 20, period: 10 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_IP_SUSTAINED",
+    namespace_id: "320004",
+    simple: Object.freeze({ limit: 60, period: 60 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_DEVICE_BURST",
+    namespace_id: "320005",
+    simple: Object.freeze({ limit: 10, period: 10 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_DEVICE_SUSTAINED",
+    namespace_id: "320006",
+    simple: Object.freeze({ limit: 30, period: 60 }),
+  }),
+  Object.freeze({
+    name: "VIBERACING_USAGE_BYTE_BUDGET",
+    namespace_id: "320007",
+    simple: Object.freeze({ limit: 2_048, period: 60 }),
+  }),
+]);
 const requiredEnvExampleValues = new Map([
   ["DATABASE_HOST", "127.0.0.1"],
   ["DATABASE_NAME", "viberacing_local"],
@@ -828,6 +866,42 @@ export function validateCompose(compose) {
   return findings;
 }
 
+export function validateEdgeWrangler(configuration) {
+  if (!isObject(configuration)) {
+    return ["Edge Wrangler configuration must be one object"];
+  }
+  const findings = [];
+  if (
+    !exactValue(Object.keys(configuration).sort(), [
+      "compatibility_date",
+      "main",
+      "name",
+      "ratelimits",
+      "vars",
+      "workers_dev",
+    ])
+  ) {
+    findings.push("Edge Wrangler configuration must retain its exact closed top-level surface");
+  }
+  if (
+    configuration.name !== "viberacing-ingest-edge" ||
+    configuration.main !== "src/worker.mjs" ||
+    configuration.compatibility_date !== "2026-07-26" ||
+    configuration.workers_dev !== false ||
+    !exactValue(configuration.vars, { VIBERACING_USAGE_SYNC_ENABLED: "false" })
+  ) {
+    findings.push(
+      "Edge Wrangler configuration must retain the reviewed worker entry, date, no-workers.dev boundary, and default-off usage gate",
+    );
+  }
+  if (!exactValue(configuration.ratelimits, edgeRateLimitConfiguration)) {
+    findings.push(
+      "Edge Wrangler configuration must retain all seven exact burst, sustained, prefix, device, and byte-budget bindings",
+    );
+  }
+  return findings;
+}
+
 export function validatePnpmWorkspace(workspace) {
   const findings = [];
   const requiredValues = [
@@ -1203,6 +1277,13 @@ function main() {
       for (const finding of validatePnpmWorkspace(value)) {
         failures.push(`${safePath} — ${finding}`);
       }
+    }
+  }
+
+  const edgeWrangler = parseYaml(edgeWranglerPath, failures);
+  if (edgeWrangler !== null) {
+    for (const finding of validateEdgeWrangler(edgeWrangler)) {
+      failures.push(`${edgeWranglerPath} — ${finding}`);
     }
   }
 

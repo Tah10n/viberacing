@@ -4,6 +4,7 @@ import { parseDocument } from "yaml";
 import {
   validateCompose,
   validateDependencyOverrides,
+  validateEdgeWrangler,
   validatePnpmWorkspace,
   validateRootPackage,
   validateWorkspacePackage,
@@ -55,6 +56,43 @@ VIBERACING_RECOVERY_ARGON2_PASSES=replace-with-reviewed-pass-count
 VIBERACING_RECOVERY_PEPPER=replace-with-distinct-32-byte-base64url-value
 VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
 VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL=replace-with-distinct-random-32-byte-base64url-key`;
+
+const goodEdgeWrangler = parseDocument(
+  readFileSync(new URL("../apps/edge/wrangler.jsonc", import.meta.url), "utf8"),
+  { strict: true, uniqueKeys: true, version: "1.2" },
+).toJS();
+assert.deepEqual(validateEdgeWrangler(goodEdgeWrangler), []);
+for (const mutate of [
+  (value) => {
+    value.workers_dev = true;
+  },
+  (value) => {
+    value.vars.VIBERACING_USAGE_SYNC_ENABLED = "true";
+  },
+  (value) => {
+    value.routes = ["sync.example.com/*"];
+  },
+  (value) => {
+    value.ratelimits.pop();
+  },
+  (value) => {
+    value.ratelimits[0].name = "RENAMED";
+  },
+  (value) => {
+    value.ratelimits[1].namespace_id = value.ratelimits[0].namespace_id;
+  },
+  (value) => {
+    value.ratelimits[2].simple.limit += 1;
+  },
+  (value) => {
+    value.ratelimits[3].simple.period = 30;
+  },
+]) {
+  const candidate = structuredClone(goodEdgeWrangler);
+  mutate(candidate);
+  assert.notDeepEqual(validateEdgeWrangler(candidate), []);
+}
+assert.notDeepEqual(validateEdgeWrangler(null), []);
 
 assert.deepEqual(validateEnvExampleText(goodEnvExample), []);
 assert.match(

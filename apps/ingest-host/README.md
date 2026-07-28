@@ -9,10 +9,10 @@ Every mode is disabled unless `VIBERACING_INGEST_ENABLED` is exactly `true`. The
 latch before `NODE_ENV`, listener, origin-proof, or database configuration and before constructing
 an application, pool, server, or socket. Missing, `false`, or any alternate spelling exits with the
 same silent status-1 startup failure. Tracked `.env.example` deliberately fixes it to `false`. The
-separate `VIBERACING_USAGE_SYNC_ENABLED` value controls only registration of
-`POST /v1/community/usage`; exact own enumerable string `true` enables it after the primary Ingest
-latch and before application construction. Every other shape leaves the sole usage-ingest route
-absent. This is a fail-closed containment decision, not a protocol-migration switch.
+separate `VIBERACING_USAGE_SYNC_ENABLED` value controls only registration of `POST /v1/usage`; exact
+own enumerable string `true` enables it after the primary Ingest latch and before application
+construction. Every other shape leaves the sole usage-ingest route absent. This is a fail-closed
+containment decision, not a protocol-migration switch.
 
 ## Listener contract
 
@@ -75,11 +75,13 @@ monitoring, load, capacity, or real-user synchronization.
 The separate opt-in `pnpm run test:ingest:postgres-integration` gate builds emitted contracts,
 Ingest, and host code; starts one disposable PostgreSQL container with an ephemeral loopback-only
 port; creates a synthetic login with only `viberacing_ingest`; and sends independently signed
-requests through this host. It proves provider-attributed Usage Sync acceptance, removed-path
-rejection before application work, duplicate acknowledgements, persistent origin replay and
-revoked-device denial, closed response headers, unique request IDs, and exact database stored state.
-It also holds four valid requests at the first replay-store call, requires a fifth generic 503
-without a fifth replay call, and proves the four accepted responses after release. After closing the
+requests through this host. It proves provider-neutral Usage Sync acceptance with server-owned
+attribution, both unreleased legacy paths rejected before application work, duplicate
+acknowledgements, persistent origin/device-nonce replay and revoked-device denial, closed response
+headers, unique request IDs, and exact database stored state. It also proves exact retry,
+cumulative-total monotonicity, account/device races, and per-device no-queue admission. A separate
+lock holds four valid requests inside the atomic submission, requires a fifth generic 503 without a
+fifth submission call, and proves the four accepted responses after release. After closing the
 imported host, it starts `dist/main.js` as a separate silent process, observes the loopback listener
 with a connection-only probe, proves another exact accepted request, and forcibly ends only that
 test child before removing the container, network, and storage. It does not prove OS-signal
@@ -91,8 +93,8 @@ The separate opt-in `pnpm run test:ingest:signal-postgres-integration` gate moun
 exact production runtime read-only under the pinned Linux Node image. The builder makes and verifies
 only the public runtime root as readable and traversable by the image's distinct non-root user,
 while the read-only mount prevents container mutation. The gate holds one independently signed
-request at the first origin-replay database call and delivers a real `SIGTERM`. After releasing the
-lock it requires the exact acknowledgement and stored state, silent code-0 host exit, complete
+request inside the atomic submission and delivers a real `SIGTERM`. After releasing the lock it
+requires the exact acknowledgement and stored state, silent code-0 host exit, complete
 database-session release, unchanged runtime contents, and bounded cleanup. It proves only that one
 local Linux signal/drain path. It does not prove Railway/orchestrator drain, external TLS/edge
 routing, protected secret or production login delivery, representative load/capacity, real-user

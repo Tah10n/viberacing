@@ -4,12 +4,29 @@ import { describe, it } from "node:test";
 
 import worker, { handleIngestEdgeRequest } from "../src/worker.mjs";
 
-const requestTarget = "/v1/community/usage";
+const requestTarget = "/v1/usage";
 const originKeyId = "edge_staging";
 const originKey = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 1));
 const originKeyBase64Url = originKey.toString("base64url");
 const upstreamRequestId = "req_AQEBAQEBAQEBAQEBAQEBAQ";
 const fixedNow = Date.parse("2026-07-26T12:34:56.789Z");
+const rateBindingNames = [
+  "VIBERACING_USAGE_BYTE_BUDGET",
+  "VIBERACING_USAGE_DEVICE_BURST",
+  "VIBERACING_USAGE_DEVICE_SUSTAINED",
+  "VIBERACING_USAGE_GLOBAL_BURST",
+  "VIBERACING_USAGE_GLOBAL_SUSTAINED",
+  "VIBERACING_USAGE_IP_BURST",
+  "VIBERACING_USAGE_IP_SUSTAINED",
+];
+const allowRateLimiter = Object.freeze({
+  async limit() {
+    return { success: true };
+  },
+});
+const rateLimitEnvironment = Object.freeze(
+  Object.fromEntries(rateBindingNames.map((name) => [name, allowRateLimiter])),
+);
 
 const configuredEnvironment = Object.freeze({
   VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originKeyBase64Url,
@@ -18,11 +35,13 @@ const configuredEnvironment = Object.freeze({
 });
 const validEnvironment = Object.freeze({
   ...configuredEnvironment,
+  ...rateLimitEnvironment,
   VIBERACING_USAGE_SYNC_ENABLED: "true",
 });
 
 const validHeaders = Object.freeze({
   accept: "application/json",
+  "cf-connecting-ip": "203.0.113.42",
   "content-type": "application/json",
   "idempotency-key": "syn_AAAAAAAAAAAAAAAAAAAAAA",
   "x-viberacing-device-id": "dev_AAAAAAAAAAAAAAAAAAAAAA",
@@ -155,6 +174,143 @@ describe("Cloudflare Community sync edge", () => {
     });
   });
 
+  it("applies global, IP-prefix, hashed-device, byte, burst, and sustained limits", async () => {
+    const calls = Object.fromEntries(rateBindingNames.map((name) => [name, []]));
+    const environment = {
+      ...validEnvironment,
+      ...Object.fromEntries(
+        rateBindingNames.map((name) => [
+          name,
+          {
+            async limit(input) {
+              calls[name].push(input.key);
+              return { success: true };
+            },
+          },
+        ]),
+      ),
+    };
+    const response = await handleIngestEdgeRequest(
+      createRequest({
+        body: "x".repeat(2_049),
+        headers: { "cf-connecting-ip": "2001:0db8:0001:0002:0003:0004:0005:0006" },
+      }),
+      environment,
+      createDependencies(async () => upstreamResponse()),
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(calls.VIBERACING_USAGE_GLOBAL_BURST, [`route:${requestTarget}`]);
+    assert.deepEqual(calls.VIBERACING_USAGE_GLOBAL_SUSTAINED, [`route:${requestTarget}`]);
+    assert.equal(calls.VIBERACING_USAGE_IP_BURST.length, 1);
+    assert.deepEqual(calls.VIBERACING_USAGE_IP_BURST, calls.VIBERACING_USAGE_IP_SUSTAINED);
+    assert.doesNotMatch(calls.VIBERACING_USAGE_IP_BURST[0], /2001|db8/u);
+    assert.equal(calls.VIBERACING_USAGE_DEVICE_BURST.length, 1);
+    assert.deepEqual(calls.VIBERACING_USAGE_DEVICE_BURST, calls.VIBERACING_USAGE_DEVICE_SUSTAINED);
+    assert.doesNotMatch(calls.VIBERACING_USAGE_DEVICE_BURST[0], /dev_AAAAAAAAAAAAAAAAAAAAAA/u);
+    assert.deepEqual(calls.VIBERACING_USAGE_BYTE_BUDGET, Array(3).fill(`route:${requestTarget}`));
+  });
+
+  it("returns generic 429 when any durable limiter denies the request", async () => {
+    for (const deniedName of rateBindingNames) {
+      let fetchCalls = 0;
+      const environment = {
+        ...validEnvironment,
+        ...Object.fromEntries(
+          rateBindingNames.map((name) => [
+            name,
+            {
+              async limit() {
+                return { success: name !== deniedName };
+              },
+            },
+          ]),
+        ),
+      };
+      const response = await handleIngestEdgeRequest(
+        createRequest(),
+        environment,
+        createDependencies(async () => {
+          fetchCalls += 1;
+          return upstreamResponse();
+        }),
+      );
+      assert.equal(response.status, 429);
+      assert.equal((await readProblem(response)).errorCode, "rate_limited");
+      assert.equal(fetchCalls, 0);
+    }
+  });
+
+  it("fails closed when required durable rate-limit configuration is absent or invalid", async () => {
+    const cases = [
+      Object.fromEntries(
+        Object.entries(validEnvironment).filter(
+          ([name]) => name !== "VIBERACING_USAGE_GLOBAL_BURST",
+        ),
+      ),
+      { ...validEnvironment, VIBERACING_USAGE_GLOBAL_BURST: {} },
+      {
+        ...validEnvironment,
+        VIBERACING_USAGE_GLOBAL_BURST: {
+          async limit() {
+            throw new Error("private rate backend detail");
+          },
+        },
+      },
+      {
+        ...validEnvironment,
+        VIBERACING_USAGE_GLOBAL_BURST: {
+          async limit() {
+            return { success: "yes" };
+          },
+        },
+      },
+    ];
+    for (const environment of cases) {
+      const response = await handleIngestEdgeRequest(
+        createRequest(),
+        environment,
+        createDependencies(async () => upstreamResponse()),
+      );
+      assert.equal(response.status, 503);
+      const problem = await readProblem(response);
+      assert.equal(problem.errorCode, "temporarily_unavailable");
+      assert.doesNotMatch(JSON.stringify(problem), /private rate backend detail/u);
+    }
+  });
+
+  it("rejects compressed bodies and invalid Cloudflare client addresses before rate work", async () => {
+    let rateCalls = 0;
+    const environment = {
+      ...validEnvironment,
+      ...Object.fromEntries(
+        rateBindingNames.map((name) => [
+          name,
+          {
+            async limit() {
+              rateCalls += 1;
+              return { success: true };
+            },
+          },
+        ]),
+      ),
+    };
+    for (const request of [
+      createRequest({ headers: { "content-encoding": "gzip" } }),
+      createRequest({ headers: { "cf-connecting-ip": "999.0.0.1" } }),
+      createRequest({ headers: { "cf-connecting-ip": "2001:::1" } }),
+    ]) {
+      const response = await handleIngestEdgeRequest(
+        request,
+        environment,
+        createDependencies(async () => upstreamResponse()),
+      );
+      assert.equal(response.status, 400);
+      assert.equal((await readProblem(response)).errorCode, "invalid_request");
+    }
+    assert.equal(rateCalls, 0);
+  });
+
   it("keeps the sole Usage Sync route absent for every non-exact enablement shape", async () => {
     const inherited = Object.assign(
       Object.create({ VIBERACING_USAGE_SYNC_ENABLED: "true" }),
@@ -243,7 +399,7 @@ describe("Cloudflare Community sync edge", () => {
     ],
     [
       "query string",
-      createRequest({ url: "https://sync.example.com/v1/community/usage?x=1" }),
+      createRequest({ url: "https://sync.example.com/v1/usage?x=1" }),
       404,
       "not_found",
     ],
@@ -371,6 +527,34 @@ describe("Cloudflare Community sync edge", () => {
     assert.equal(relayedProblemBody.requestId, upstreamRequestId);
     assert.equal(relayedProblemBody.errorCode, "temporarily_unavailable");
 
+    const relayedRecovery = await handleIngestEdgeRequest(
+      createRequest(),
+      validEnvironment,
+      createDependencies(async () =>
+        customUpstreamResponse(
+          JSON.stringify({
+            schemaVersion: 1,
+            requestId: upstreamRequestId,
+            syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
+            outcome: "quarantined",
+            acceptedEntries: 0,
+            nextAllowedSyncAt: "2026-07-26T12:35:00.000Z",
+            recoveryAction: "retry_later",
+          }),
+        ),
+      ),
+    );
+    assert.equal(relayedRecovery.status, 200);
+    assert.deepEqual(await relayedRecovery.json(), {
+      schemaVersion: 1,
+      requestId: upstreamRequestId,
+      syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
+      outcome: "quarantined",
+      acceptedEntries: 0,
+      nextAllowedSyncAt: "2026-07-26T12:35:00.000Z",
+      recoveryAction: "retry_later",
+    });
+
     const thrown = await handleIngestEdgeRequest(
       createRequest(),
       validEnvironment,
@@ -404,6 +588,39 @@ describe("Cloudflare Community sync edge", () => {
             syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
             outcome: "accepted",
             acceptedEntries: 1,
+          }),
+        ),
+      () =>
+        customUpstreamResponse(
+          JSON.stringify({
+            schemaVersion: 1,
+            requestId: upstreamRequestId,
+            syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
+            outcome: "accepted",
+            acceptedEntries: 1,
+            nextAllowedSyncAt: "2026-02-30T12:35:00.000Z",
+          }),
+        ),
+      () =>
+        customUpstreamResponse(
+          JSON.stringify({
+            schemaVersion: 1,
+            requestId: upstreamRequestId,
+            syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
+            outcome: "accepted",
+            acceptedEntries: 1,
+            nextAllowedSyncAt: 1,
+          }),
+        ),
+      () =>
+        customUpstreamResponse(
+          JSON.stringify({
+            schemaVersion: 1,
+            requestId: upstreamRequestId,
+            syncId: "syn_AAAAAAAAAAAAAAAAAAAAAA",
+            outcome: "accepted",
+            acceptedEntries: 1,
+            recoveryAction: "private_detail",
           }),
         ),
       () => upstreamResponse(200, "application/problem+json; charset=utf-8"),

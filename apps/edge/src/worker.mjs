@@ -1,5 +1,5 @@
 const syncMethod = "POST";
-const usageSyncRequestTarget = "/v1/community/usage";
+const usageSyncRequestTarget = "/v1/usage";
 const syncMediaType = "application/json";
 const maximumBodyBytes = 8_192;
 const maximumUpstreamBodyBytes = 8_192;
@@ -13,9 +13,22 @@ const dnsNamePattern =
 const ipv4Pattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const syncIdPattern = /^syn_[A-Za-z0-9_-]{22}$/;
+const canonicalMinuteTimestampPattern =
+  /^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:00\.000Z$/u;
 const successUpstreamContentTypePattern = /^application\/json(?:\s*;\s*charset=utf-8)?$/i;
 const problemUpstreamContentTypePattern = /^application\/problem\+json(?:\s*;\s*charset=utf-8)?$/i;
 const textEncoder = new TextEncoder();
+const rateLimitBindingNames = Object.freeze({
+  byteBudget: "VIBERACING_USAGE_BYTE_BUDGET",
+  deviceBurst: "VIBERACING_USAGE_DEVICE_BURST",
+  deviceSustained: "VIBERACING_USAGE_DEVICE_SUSTAINED",
+  globalBurst: "VIBERACING_USAGE_GLOBAL_BURST",
+  globalSustained: "VIBERACING_USAGE_GLOBAL_SUSTAINED",
+  ipBurst: "VIBERACING_USAGE_IP_BURST",
+  ipSustained: "VIBERACING_USAGE_IP_SUSTAINED",
+});
+const rateLimitBindingNameSet = new Set(Object.values(rateLimitBindingNames));
+const byteBudgetUnitBytes = 1_024;
 
 const deviceHeaderNames = Object.freeze([
   "idempotency-key",
@@ -31,9 +44,10 @@ const forbiddenInboundHeaderNames = Object.freeze([
   "x-viberacing-origin-proof",
   "x-viberacing-origin-timestamp",
 ]);
-const syncResultKeys = Object.freeze(
+const requiredSyncResultKeys = Object.freeze(
   new Set(["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"]),
 );
+const optionalSyncResultKeys = Object.freeze(new Set(["nextAllowedSyncAt", "recoveryAction"]));
 const problemKeys = Object.freeze(
   new Set(["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"]),
 );
@@ -47,6 +61,10 @@ const problemDefinitions = Object.freeze({
   invalid_request: Object.freeze({
     retryable: false,
     title: "Invalid request",
+  }),
+  rate_limited: Object.freeze({
+    retryable: true,
+    title: "Rate limited",
   }),
   method_not_allowed: Object.freeze({
     retryable: false,
@@ -195,6 +213,33 @@ function readConfiguration(environment, requestTarget) {
   }
 }
 
+function readRateLimitBindings(environment) {
+  try {
+    if (environment === null || typeof environment !== "object" || Array.isArray(environment)) {
+      throw new EdgeRequestError(503, "temporarily_unavailable");
+    }
+    const bindings = Object.create(null);
+    for (const name of rateLimitBindingNameSet) {
+      const binding = environment[name];
+      if (
+        binding === null ||
+        typeof binding !== "object" ||
+        Array.isArray(binding) ||
+        typeof binding.limit !== "function"
+      ) {
+        throw new EdgeRequestError(503, "temporarily_unavailable");
+      }
+      bindings[name] = binding;
+    }
+    return Object.freeze(bindings);
+  } catch (error) {
+    if (error instanceof EdgeRequestError) {
+      throw error;
+    }
+    throw new EdgeRequestError(503, "temporarily_unavailable");
+  }
+}
+
 function createDefaultDependencies() {
   return Object.freeze({
     fetch: globalThis.fetch.bind(globalThis),
@@ -256,9 +301,138 @@ function hasExactKeys(value, expectedKeys) {
   );
 }
 
+function readIpv4Prefix(value) {
+  const parts = value.split(".");
+  if (parts.length !== 4) {
+    return undefined;
+  }
+  const octets = [];
+  for (const part of parts) {
+    if (!/^(?:0|[1-9][0-9]{0,2})$/u.test(part)) {
+      return undefined;
+    }
+    const octet = Number(part);
+    if (octet > 255) {
+      return undefined;
+    }
+    octets.push(octet);
+  }
+  return `${octets[0]}.${octets[1]}.${octets[2]}.0/24`;
+}
+
+function readIpv6Prefix(value) {
+  if (
+    value.length < 2 ||
+    value.length > 45 ||
+    !/^[0-9A-Fa-f:]+$/u.test(value) ||
+    value.includes(":::")
+  ) {
+    return undefined;
+  }
+  const halves = value.split("::");
+  if (halves.length > 2) {
+    return undefined;
+  }
+  const left = halves[0] === "" ? [] : halves[0].split(":");
+  const right = halves.length === 1 || halves[1] === "" ? [] : halves[1].split(":");
+  if (
+    [...left, ...right].some((part) => !/^[0-9A-Fa-f]{1,4}$/u.test(part)) ||
+    (halves.length === 1 && left.length !== 8) ||
+    (halves.length === 2 && left.length + right.length >= 8)
+  ) {
+    return undefined;
+  }
+  const missing = halves.length === 2 ? 8 - left.length - right.length : 0;
+  const groups = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+  if (groups.length !== 8) {
+    return undefined;
+  }
+  return `${groups
+    .slice(0, 4)
+    .map((part) => Number.parseInt(part, 16).toString(16))
+    .join(":")}::/64`;
+}
+
+function readClientPrefix(request) {
+  const value = request.headers.get("cf-connecting-ip");
+  if (value === null || value.length > 45 || value.includes(",")) {
+    throw new EdgeRequestError(400, "invalid_request");
+  }
+  const prefix = value.includes(":") ? readIpv6Prefix(value) : readIpv4Prefix(value);
+  if (prefix === undefined) {
+    throw new EdgeRequestError(400, "invalid_request");
+  }
+  return prefix;
+}
+
+async function hashRateKey(domain, value) {
+  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(`${domain}\0${value}`));
+  return encodeBase64Url(new Uint8Array(digest));
+}
+
+async function consumeRateToken(binding, key) {
+  let result;
+  try {
+    result = await binding.limit({ key });
+  } catch {
+    throw new EdgeRequestError(503, "temporarily_unavailable");
+  }
+  if (!hasExactKeys(result, new Set(["success"])) || typeof result.success !== "boolean") {
+    throw new EdgeRequestError(503, "temporarily_unavailable");
+  }
+  if (!result.success) {
+    throw new EdgeRequestError(429, "rate_limited");
+  }
+}
+
+async function enforceRateLimits(request, environment, bodyBytes) {
+  const bindings = readRateLimitBindings(environment);
+  const routeKey = `route:${usageSyncRequestTarget}`;
+  const clientPrefix = readClientPrefix(request);
+  const deviceId = request.headers.get("x-viberacing-device-id");
+  if (deviceId === null) {
+    throw new EdgeRequestError(400, "invalid_request");
+  }
+  const deviceKey = await hashRateKey("viberacing-rate-device-v1", deviceId);
+  const prefixKey = await hashRateKey("viberacing-rate-prefix-v1", clientPrefix);
+
+  await consumeRateToken(bindings[rateLimitBindingNames.globalBurst], routeKey);
+  await consumeRateToken(bindings[rateLimitBindingNames.globalSustained], routeKey);
+  await consumeRateToken(bindings[rateLimitBindingNames.ipBurst], prefixKey);
+  await consumeRateToken(bindings[rateLimitBindingNames.ipSustained], prefixKey);
+  await consumeRateToken(bindings[rateLimitBindingNames.deviceBurst], deviceKey);
+  await consumeRateToken(bindings[rateLimitBindingNames.deviceSustained], deviceKey);
+  const byteTokens = Math.max(1, Math.ceil(bodyBytes / byteBudgetUnitBytes));
+  for (let index = 0; index < byteTokens; index += 1) {
+    await consumeRateToken(bindings[rateLimitBindingNames.byteBudget], routeKey);
+  }
+}
+
+function isCanonicalMinuteTimestamp(value) {
+  if (typeof value !== "string" || !canonicalMinuteTimestampPattern.test(value)) {
+    return false;
+  }
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) && new Date(milliseconds).toISOString() === value;
+}
+
 function isValidSyncResult(value, upstreamRequestId) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return false;
+  }
+  const keys = Reflect.ownKeys(value);
   return (
-    hasExactKeys(value, syncResultKeys) &&
+    keys.every(
+      (key) =>
+        typeof key === "string" &&
+        (requiredSyncResultKeys.has(key) || optionalSyncResultKeys.has(key)),
+    ) &&
+    [...requiredSyncResultKeys].every((key) => keys.includes(key)) &&
     value.schemaVersion === 1 &&
     value.requestId === upstreamRequestId &&
     requestIdPattern.test(value.requestId) &&
@@ -268,7 +442,14 @@ function isValidSyncResult(value, upstreamRequestId) {
     syncOutcomes.has(value.outcome) &&
     Number.isInteger(value.acceptedEntries) &&
     value.acceptedEntries >= 0 &&
-    value.acceptedEntries <= 31
+    value.acceptedEntries <= 31 &&
+    (value.nextAllowedSyncAt === undefined ||
+      isCanonicalMinuteTimestamp(value.nextAllowedSyncAt)) &&
+    (value.recoveryAction === undefined ||
+      value.recoveryAction === "update_connector" ||
+      value.recoveryAction === "reconnect_account" ||
+      value.recoveryAction === "contact_support" ||
+      value.recoveryAction === "retry_later")
   );
 }
 
@@ -305,6 +486,9 @@ function validateRequest(request, environment) {
     throw new EdgeRequestError(405, "method_not_allowed", syncMethod);
   }
   if (request.headers.get("content-type") !== syncMediaType) {
+    throw new EdgeRequestError(400, "invalid_request");
+  }
+  if (request.headers.has("content-encoding")) {
     throw new EdgeRequestError(400, "invalid_request");
   }
   for (const headerName of forbiddenInboundHeaderNames) {
@@ -546,6 +730,7 @@ export async function handleIngestEdgeRequest(
     }
     const requestTarget = validateRequest(request, environment);
     const body = await readBoundedBody(request);
+    await enforceRateLimits(request, environment, body.byteLength);
     const configuration = readConfiguration(environment, requestTarget);
     try {
       const originHeaders = await createOriginHeaders(
