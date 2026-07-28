@@ -754,14 +754,16 @@ scheduler/cadence exists.
 - A separate opt-in emitted Ingest OS-signal gate. It builds a link-free runtime containing only the
   emitted host, Ingest, contracts, and exact installed production graph; fingerprints it; and mounts
   it read-only under the pinned Linux Node 24.18 image in only the disposable database network
-  namespace. A separate capability-free client receives one independently signed synthetic request
-  over stdin. The harness holds the host at `consume_origin_nonce`, delivers a real `SIGTERM`,
-  releases the owner lock before the database deadline, and proves the exact 200 acknowledgement
-  plus one nonce/snapshot/entry/current-value state, silent code-0 exit, zero remaining Ingest
-  sessions, unchanged runtime contents, and complete client/host/runtime/database cleanup. It proves
-  one local Linux active-request signal path, not Railway/orchestrator drain, external TLS/edge
-  routing, protected secret delivery, a production login, monitoring, representative load/capacity,
-  real-user input, or deployment.
+  namespace. The runtime builder explicitly makes and verifies only its public root directory
+  readable and traversable by the image's distinct non-root user; the read-only mount still prevents
+  container mutation. A separate capability-free client receives one independently signed synthetic
+  request over stdin. The harness holds the host at `consume_origin_nonce`, delivers a real
+  `SIGTERM`, releases the owner lock before the database deadline, and proves the exact 200
+  acknowledgement plus one nonce/snapshot/entry/current-value state, silent code-0 exit, zero
+  remaining Ingest sessions, unchanged runtime contents, and complete client/host/runtime/database
+  cleanup. It proves one local Linux active-request signal path, not Railway/orchestrator drain,
+  external TLS/edge routing, protected secret delivery, a production login, monitoring,
+  representative load/capacity, real-user input, or deployment.
 - A server-only public HTTP problem boundary that requests exactly 16 cryptographic random bytes,
   returns a frozen opaque request token, owns all eleven status/title/retry mappings including
   explicit 405/406 semantics, validates the complete `ProblemDetailsV1`, and emits only

@@ -88,8 +88,10 @@ delivery, distributed control, a production credential, edge routing, representa
 input, or capacity.
 
 The separate opt-in `pnpm run test:ingest:signal-postgres-integration` gate mounts one link-free
-exact production runtime read-only under the pinned Linux Node image, holds one independently signed
-request at the first origin-replay database call, and delivers a real `SIGTERM`. After releasing the
+exact production runtime read-only under the pinned Linux Node image. The builder makes and verifies
+only the public runtime root as readable and traversable by the image's distinct non-root user,
+while the read-only mount prevents container mutation. The gate holds one independently signed
+request at the first origin-replay database call and delivers a real `SIGTERM`. After releasing the
 lock it requires the exact acknowledgement and stored state, silent code-0 host exit, complete
 database-session release, unchanged runtime contents, and bounded cleanup. It proves only that one
 local Linux signal/drain path. It does not prove Railway/orchestrator drain, external TLS/edge

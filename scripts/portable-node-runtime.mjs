@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -252,6 +253,16 @@ export function createPortableNodeRuntime(options) {
   mkdirSync(targetDirectory, { recursive: true });
   const runtimeDirectory = mkdtempSync(join(targetDirectory, runtimePrefix));
   try {
+    if (process.platform !== "win32") {
+      // mkdtemp creates 0700 on POSIX, while the container intentionally runs under another UID.
+      chmodSync(runtimeDirectory, 0o755);
+      assert.equal(
+        lstatSync(runtimeDirectory).mode & 0o777,
+        0o755,
+        "portable runtime root must be traversable by the distinct non-root container user",
+      );
+    }
+
     for (const workspace of workspaces) {
       copyWorkspacePackage(
         workspace.directory,
