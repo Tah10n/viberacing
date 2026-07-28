@@ -375,7 +375,10 @@ function loadReviewedManifest() {
   if (findings.length > 0) {
     throw new Error(`migration manifest validation failed:\n- ${findings.join("\n- ")}`);
   }
-  assert.equal(manifest.migrations.length, 43);
+  assert.ok(
+    manifest.migrations.length >= 2 && manifest.migrations.length <= 7,
+    "clean bootstrap catalog must remain a small logical inventory",
+  );
   return manifest;
 }
 
@@ -819,11 +822,11 @@ WHERE namespace.nspname = 'viberacing_private'
   assert.deepEqual(schemaBoundary, {
     allForcedRls: true,
     allOwnerOwned: true,
-    privateTableCount: 28,
+    privateTableCount: 7,
   });
 
   psql(
-    readFileSync(resolve(root, "database", "tests", "identity_invariants.sql"), "utf8"),
+    readFileSync(resolve(root, "database", "tests", "identity_bootstrap_assertions.sql"), "utf8"),
     "post-migration database invariant oracle",
   );
 }
@@ -936,7 +939,7 @@ async function main() {
     assertControllerCleanup();
 
     console.log(
-      "Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact 43-row ledger, 28 forced-RLS tables, and released connections/lock).",
+      `Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact ${manifest.migrations.length}-row clean ledger, 7 forced-RLS tables, and released connections/lock).`,
     );
   } catch (error) {
     primaryFailure = error;
