@@ -570,50 +570,6 @@ BEGIN
     FROM pg_catalog.unnest(p_usage_dates) AS usage_date(value)
   ) AS season_start;
 
-  SELECT idempotency.*
-  INTO v_existing_idempotency
-  FROM viberacing_private.usage_idempotency_records AS idempotency
-  WHERE idempotency.device_key_id = p_device_key_id
-    AND idempotency.sync_id = p_sync_id
-  FOR UPDATE;
-
-  IF v_existing_idempotency.device_key_id IS NOT NULL THEN
-    IF v_existing_idempotency.device_id <> p_device_id
-      OR v_existing_idempotency.agent_account_id <> p_agent_account_id
-      OR v_existing_idempotency.body_digest <> p_body_digest
-      OR v_existing_idempotency.signature <> p_signature
-      OR v_existing_idempotency.device_nonce_digest <> p_device_nonce_digest
-      OR v_existing_idempotency.semantic_digest <> v_semantic_digest
-      OR v_existing_idempotency.observed_at <> p_observed_at
-      OR v_existing_idempotency.reader_version <> p_reader_version
-      OR v_existing_idempotency.client_version <> p_client_version
-    THEN
-      PERFORM viberacing_private.operation_failed();
-    END IF;
-
-    PERFORM 1
-    FROM viberacing_private.device_keys AS device
-    JOIN viberacing_private.connector_installations AS installation
-      ON installation.installation_id = device.installation_id
-      AND installation.profile_id = device.profile_id
-    JOIN viberacing_private.agent_accounts AS account
-      ON account.agent_account_id = device.agent_account_id
-      AND account.profile_id = device.profile_id
-    WHERE device.device_key_id = p_device_key_id
-      AND device.device_id = p_device_id
-      AND device.agent_account_id = p_agent_account_id
-      AND device.state = 'active'
-      AND installation.state = 'active'
-      AND account.state = 'active'
-    FOR UPDATE OF device, installation, account;
-    IF NOT FOUND THEN
-      PERFORM viberacing_private.operation_failed();
-    END IF;
-
-    RETURN QUERY SELECT 'duplicate'::text, 0, NULL::text;
-    RETURN;
-  END IF;
-
   INSERT INTO viberacing_private.origin_nonces (
     nonce_digest,
     origin_key_id,
@@ -685,6 +641,31 @@ BEGIN
       PERFORM viberacing_private.operation_failed();
     END IF;
   END LOOP;
+
+  SELECT idempotency.*
+  INTO v_existing_idempotency
+  FROM viberacing_private.usage_idempotency_records AS idempotency
+  WHERE idempotency.device_key_id = p_device_key_id
+    AND idempotency.sync_id = p_sync_id
+  FOR UPDATE;
+
+  IF v_existing_idempotency.device_key_id IS NOT NULL THEN
+    IF v_existing_idempotency.device_id <> p_device_id
+      OR v_existing_idempotency.agent_account_id <> p_agent_account_id
+      OR v_existing_idempotency.body_digest <> p_body_digest
+      OR v_existing_idempotency.signature <> p_signature
+      OR v_existing_idempotency.device_nonce_digest <> p_device_nonce_digest
+      OR v_existing_idempotency.semantic_digest <> v_semantic_digest
+      OR v_existing_idempotency.observed_at <> p_observed_at
+      OR v_existing_idempotency.reader_version <> p_reader_version
+      OR v_existing_idempotency.client_version <> p_client_version
+    THEN
+      PERFORM viberacing_private.operation_failed();
+    END IF;
+
+    RETURN QUERY SELECT 'duplicate'::text, 0, NULL::text;
+    RETURN;
+  END IF;
 
   INSERT INTO viberacing_private.device_nonces (
     device_key_id,

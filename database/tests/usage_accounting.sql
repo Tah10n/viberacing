@@ -326,8 +326,10 @@ BEGIN
   IF v_outcome <> 'duplicate' OR v_entries <> 0 OR v_recovery IS NOT NULL THEN
     RAISE EXCEPTION 'exact ambiguous-response retry was not a no-write duplicate';
   END IF;
-  IF v_before_counts <> ARRAY[
-    (SELECT pg_catalog.count(*) FROM viberacing_private.origin_nonces),
+  IF v_before_counts[1] + 1 <> (
+      SELECT pg_catalog.count(*) FROM viberacing_private.origin_nonces
+    )
+    OR v_before_counts[2:7] <> ARRAY[
     (SELECT pg_catalog.count(*) FROM viberacing_private.device_nonces),
     (SELECT pg_catalog.count(*) FROM viberacing_private.usage_idempotency_records),
     (SELECT pg_catalog.count(*) FROM viberacing_private.usage_observations),
@@ -335,8 +337,28 @@ BEGIN
     (SELECT pg_catalog.count(*) FROM viberacing_private.ranking_refresh_outbox),
     (SELECT pg_catalog.count(*) FROM viberacing_private.ranking_events)
   ] THEN
-    RAISE EXCEPTION 'exact retry mutated persistent state';
+    RAISE EXCEPTION 'exact retry mutated state beyond consuming its fresh origin nonce';
   END IF;
+
+  BEGIN
+    PERFORM *
+    FROM pg_temp.submit_usage_fixture(
+      'Z',
+      'A',
+      'A',
+      '02',
+      '11',
+      '21',
+      '31',
+      pg_catalog.transaction_timestamp(),
+      ARRAY[v_current_date, v_current_date - 1, v_current_date - 35],
+      ARRAY['9007199254740993', '42', '7']
+    );
+    RAISE EXCEPTION 'same origin nonce unexpectedly bypassed replay protection';
+  EXCEPTION
+    WHEN SQLSTATE 'P0001' THEN
+      NULL;
+  END;
 
   BEGIN
     PERFORM *
@@ -718,7 +740,7 @@ BEGIN
     RAISE EXCEPTION 'idempotency did not survive short nonce cleanup';
   END IF;
 
-  IF EXISTS (
+  IF NOT EXISTS (
     SELECT 1
     FROM viberacing_private.origin_nonces
     WHERE nonce_digest = pg_catalog.decode(pg_catalog.repeat('08', 32), 'hex')
@@ -728,7 +750,7 @@ BEGIN
     WHERE device_key_id = 'key_AAAAAAAAAAAAAAAAAAAAAA'
       AND nonce_digest = pg_catalog.decode(pg_catalog.repeat('11', 32), 'hex')
   ) THEN
-    RAISE EXCEPTION 'exact retry after nonce cleanup performed replay writes';
+    RAISE EXCEPTION 'long-idempotency retry did not consume only its fresh origin nonce';
   END IF;
 END
 $long_idempotency_assertion$;

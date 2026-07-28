@@ -23,7 +23,7 @@
       "revision": 4,
       "name": "usage_ingest_replay_and_idempotency",
       "path": "database/migrations/0004_usage_ingest_replay_and_idempotency.sql",
-      "sha256": "cfa4c0adc095f585558f94bc2e75c2af6ec5414b526622b60d118cc8c3904d72"
+      "sha256": "bdcb18e32763d34082d4a8ce27eeff8205b624f974fdc7ba7c310c91dec37882"
     },
     {
       "revision": 5,
