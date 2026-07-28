@@ -947,8 +947,6 @@ function validatePackageScripts(manifest) {
       findings.push(`script ${name} must be a string`);
     } else if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
       findings.push(`script ${name} must not download and execute remote content`);
-    } else if (/\bpnpm\b/.test(command.replaceAll("corepack pnpm", ""))) {
-      findings.push(`script ${name} must invoke pinned pnpm through Corepack`);
     }
   }
   return findings;

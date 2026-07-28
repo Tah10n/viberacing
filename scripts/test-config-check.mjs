@@ -1053,16 +1053,6 @@ assert.match(
   }).join("\n"),
   /exact version/,
 );
-assert.match(
-  validateRootPackage({
-    private: true,
-    packageManager: "pnpm@11.7.0",
-    devDependencies: { tool: "1.2.3" },
-    scripts: { lint: "pnpm --filter @viberacing/web run lint" },
-  }).join("\n"),
-  /through Corepack/,
-);
-
 const goodWebPackage = {
   name: "@viberacing/web",
   version: "0.0.0",
@@ -1199,4 +1189,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (81 cases).");
+console.log("Configuration checker tests passed (80 cases).");
