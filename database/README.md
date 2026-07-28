@@ -25,6 +25,11 @@ corresponding end-to-end slices land. The final inventory is bounded to seven re
   keys, digest-bound batch pairing, one-assertion atomic decisions, bounded fallback-code attempts,
   activation, inventory, and lifecycle controls. Providers remain `recognized` until their reader
   evidence is complete.
+- `0004_usage_ingest_replay_and_idempotency.sql` adds the non-mutating Ingest material read and one
+  atomic Community submission procedure. Exact decimal strings become `numeric(30,0)` only in
+  PostgreSQL; origin/device replay, long-lived idempotency, monotonic account/day totals, immutable
+  observations, coalesced dirty-season work, and hash-chained ranking events settle together or roll
+  back together.
 - `manifest.json` is the sole ordered inventory and SHA-256 source used by the static checker and
   default-off migration runner.
 
@@ -51,7 +56,7 @@ The cluster bootstrap creates these non-login, non-owner runtime groups:
 | ------------------- | --------------------------------------------------------------------------------- |
 | `viberacing_owner`  | Owns reviewed schema and procedure implementations; migration runner only         |
 | `viberacing_web`    | GitHub identity, passkey/session, private profile, visibility, and deletion calls |
-| `viberacing_ingest` | None until the atomic usage layer is present                                      |
+| `viberacing_ingest` | Active-device material read and one atomic Community usage submission             |
 | `viberacing_jobs`   | None until snapshot/retention layers are present                                  |
 | `viberacing_admin`  | One bounded optional-invite issuance call                                         |
 | `PUBLIC`            | None                                                                              |

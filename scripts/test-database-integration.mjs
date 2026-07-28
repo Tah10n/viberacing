@@ -353,6 +353,10 @@ try {
     psql(readFileSync(resolve(root, "database", "tests", "agent_accounts_pairing.sql"), "utf8")),
     "agent-account and batch-pairing oracle",
   );
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database", "tests", "usage_accounting.sql"), "utf8")),
+    "atomic usage-accounting oracle",
+  );
 
   const directRead = psql(`
 SET SESSION AUTHORIZATION viberacing_web;
@@ -406,6 +410,219 @@ FROM viberacing_api.open_github_profile(
     ),
     "2",
     "both converged OAuth completions must retain their own bounded session",
+  );
+
+  requireSuccess(
+    psql(`
+SET ROLE viberacing_owner;
+UPDATE viberacing_private.agent_providers
+SET state = 'supported'
+WHERE provider_code = 'codex';
+UPDATE viberacing_private.agent_accounting_revisions
+SET enabled_for_new_accounts = true
+WHERE provider_code = 'codex'
+  AND accounting_revision = 1;
+INSERT INTO viberacing_private.profiles (
+  profile_id, github_user_id, handle, locale, hidden_at
+)
+VALUES (
+  '50000000-0000-4000-8000-000000000001',
+  940000000000001,
+  'concurrent-usage',
+  'en',
+  pg_catalog.transaction_timestamp()
+);
+UPDATE viberacing_private.profiles
+SET state = 'active'
+WHERE profile_id = '50000000-0000-4000-8000-000000000001';
+INSERT INTO viberacing_private.agent_accounts (
+  agent_account_id,
+  profile_id,
+  provider_code,
+  accounting_revision,
+  scope_kind,
+  fingerprint_kind,
+  account_fingerprint_digest,
+  private_label,
+  identity_assurance
+)
+VALUES (
+  'acc_CCCCCCCCCCCCCCCCCCCCCC',
+  '50000000-0000-4000-8000-000000000001',
+  'codex',
+  1,
+  'agent_account',
+  'stable_opaque',
+  pg_catalog.decode(pg_catalog.repeat('51', 32), 'hex'),
+  'Concurrent usage',
+  'community_local'
+);
+INSERT INTO viberacing_private.connector_installations (
+  installation_id,
+  profile_id,
+  installation_public_key,
+  label,
+  connector_version,
+  os_family,
+  architecture,
+  state,
+  activated_at,
+  last_seen_at
+)
+VALUES
+  (
+    'ins_CCCCCCCCCCCCCCCCCCCCCC',
+    '50000000-0000-4000-8000-000000000001',
+    pg_catalog.decode(pg_catalog.repeat('52', 32), 'hex'),
+    'Concurrent one',
+    '0.0.0',
+    'windows',
+    'x86_64',
+    'active',
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp()
+  ),
+  (
+    'ins_DDDDDDDDDDDDDDDDDDDDDD',
+    '50000000-0000-4000-8000-000000000001',
+    pg_catalog.decode(pg_catalog.repeat('53', 32), 'hex'),
+    'Concurrent two',
+    '0.0.0',
+    'linux',
+    'aarch64',
+    'active',
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp()
+  );
+INSERT INTO viberacing_private.device_keys (
+  device_key_id,
+  device_id,
+  profile_id,
+  installation_id,
+  agent_account_id,
+  public_key
+)
+VALUES
+  (
+    'key_CCCCCCCCCCCCCCCCCCCCCC',
+    'dev_CCCCCCCCCCCCCCCCCCCCCC',
+    '50000000-0000-4000-8000-000000000001',
+    'ins_CCCCCCCCCCCCCCCCCCCCCC',
+    'acc_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_catalog.decode(pg_catalog.repeat('54', 32), 'hex')
+  ),
+  (
+    'key_DDDDDDDDDDDDDDDDDDDDDD',
+    'dev_DDDDDDDDDDDDDDDDDDDDDD',
+    '50000000-0000-4000-8000-000000000001',
+    'ins_DDDDDDDDDDDDDDDDDDDDDD',
+    'acc_CCCCCCCCCCCCCCCCCCCCCC',
+    pg_catalog.decode(pg_catalog.repeat('55', 32), 'hex')
+  );
+`),
+    "concurrent usage fixture",
+  );
+
+  const usageContender = (marker, total) => `
+SET ROLE viberacing_ingest;
+SELECT outcome
+FROM viberacing_api.submit_usage_sync(
+  'obs_${marker.repeat(22)}',
+  'evt_${marker.repeat(22)}',
+  'edge_test',
+  pg_catalog.decode(pg_catalog.repeat('${marker === "C" ? "6c" : "6d"}', 32), 'hex'),
+  pg_catalog.transaction_timestamp() + interval '30 seconds',
+  'key_${marker.repeat(22)}',
+  'dev_${marker.repeat(22)}',
+  'acc_CCCCCCCCCCCCCCCCCCCCCC',
+  'syn_${marker.repeat(22)}',
+  pg_catalog.transaction_timestamp(),
+  '0.0.0',
+  'codex_app_server_0_144_5_v1',
+  pg_catalog.decode(pg_catalog.repeat('${marker === "C" ? "7c" : "7d"}', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('${marker === "C" ? "8c" : "8d"}', 64), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('${marker === "C" ? "9c" : "9d"}', 32), 'hex'),
+  ARRAY[(pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date],
+  ARRAY['${total}']::text[]
+);
+`;
+  const [lowerUsage, higherUsage] = await Promise.all([
+    spawnPsql(usageContender("C", "100")),
+    spawnPsql(usageContender("D", "200")),
+  ]);
+  assert.equal(lowerUsage.code, 0, lowerUsage.stderr);
+  assert.equal(higherUsage.code, 0, higherUsage.stderr);
+
+  const concurrentUsageEvidence = JSON.parse(
+    psqlValue(`
+SELECT pg_catalog.json_build_object(
+  'dayTotal', (
+    SELECT cumulative_token_total::text
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+  ),
+  'observationCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.usage_observations
+    WHERE agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+  ),
+  'acceptedCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.usage_observations
+    WHERE agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+      AND outcome = 'accepted'
+  ),
+  'quarantinedCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.usage_observations
+    WHERE agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+      AND outcome = 'quarantined'
+  ),
+  'eventCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.ranking_events
+    WHERE agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+  ),
+  'chainHeadCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.ranking_events AS event
+    WHERE event.agent_account_id = 'acc_CCCCCCCCCCCCCCCCCCCCCC'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM viberacing_private.ranking_events AS successor
+        WHERE successor.agent_account_id = event.agent_account_id
+          AND successor.previous_event_digest = event.event_digest
+      )
+  )
+)::text;
+`),
+  );
+  assert.equal(concurrentUsageEvidence.dayTotal, "200");
+  assert.equal(Number(concurrentUsageEvidence.observationCount), 2);
+  assert.ok(
+    Number(concurrentUsageEvidence.acceptedCount) === 1 ||
+      Number(concurrentUsageEvidence.acceptedCount) === 2,
+  );
+  assert.equal(
+    Number(concurrentUsageEvidence.acceptedCount) +
+      Number(concurrentUsageEvidence.quarantinedCount),
+    2,
+  );
+  assert.equal(Number(concurrentUsageEvidence.eventCount), 2);
+  assert.equal(Number(concurrentUsageEvidence.chainHeadCount), 1);
+
+  requireSuccess(
+    psql(`
+SET ROLE viberacing_owner;
+UPDATE viberacing_private.agent_accounting_revisions
+SET enabled_for_new_accounts = false
+WHERE provider_code = 'codex'
+  AND accounting_revision = 1;
+UPDATE viberacing_private.agent_providers
+SET state = 'recognized'
+WHERE provider_code = 'codex';
+`),
+    "restore pre-reader provider state after concurrency oracle",
   );
 
   const ledger = JSON.parse(
@@ -465,5 +682,5 @@ FROM viberacing_private.schema_migrations;
 }
 
 console.log(
-  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account batch pairing/device lifecycle, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
+  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
 );

@@ -18,6 +18,12 @@
       "name": "agent_accounts_installations_and_pairing",
       "path": "database/migrations/0003_agent_accounts_installations_and_pairing.sql",
       "sha256": "e322132e6d59dc119d2d8a0146e2624887d003a32db51d7148b21f55be93d0d5"
+    },
+    {
+      "revision": 4,
+      "name": "usage_ingest_replay_and_idempotency",
+      "path": "database/migrations/0004_usage_ingest_replay_and_idempotency.sql",
+      "sha256": "a7602eed2f62feb64dc9d3d0f4f7ee09789a7259c3d26f5eb59ebe636ef33acf"
     }
   ]
 }

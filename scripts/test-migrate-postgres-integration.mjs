@@ -822,7 +822,7 @@ WHERE namespace.nspname = 'viberacing_private'
   assert.deepEqual(schemaBoundary, {
     allForcedRls: true,
     allOwnerOwned: true,
-    privateTableCount: 15,
+    privateTableCount: 22,
   });
 
   psql(
@@ -939,7 +939,7 @@ async function main() {
     assertControllerCleanup();
 
     console.log(
-      `Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact ${manifest.migrations.length}-row clean ledger, 15 forced-RLS tables, and released connections/lock).`,
+      `Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact ${manifest.migrations.length}-row clean ledger, 22 forced-RLS tables, and released connections/lock).`,
     );
   } catch (error) {
     primaryFailure = error;
