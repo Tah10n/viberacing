@@ -55,9 +55,9 @@ const cases = [
     mutate(directory) {
       mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
         text
-          .replace("External participation status: closed.", "External participation status: open.")
+          .replace(/^External participation status:.*$/m, "External participation status: open.")
           .replace(
-            "GitHub public interaction status: not restricted or verified.",
+            /^GitHub public interaction status:.*$/m,
             "GitHub public interaction status: enabled for open participation.",
           )
           .replace(
@@ -73,7 +73,7 @@ const cases = [
       );
       mutate(directory, "SECURITY.md", (text) =>
         text.replace(
-          "Private vulnerability reporting status: not enabled or verified.",
+          /^Private vulnerability reporting status:.*$/m,
           "Private vulnerability reporting status: enabled and verified.",
         ),
       );
@@ -85,7 +85,7 @@ const cases = [
     mutate(directory) {
       mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
         text.replace(
-          "GitHub public interaction status: not restricted or verified.",
+          /^GitHub public interaction status:.*$/m,
           "GitHub public interaction status: restricted and verified.",
         ),
       );
@@ -97,7 +97,7 @@ const cases = [
       );
       mutate(directory, "SECURITY.md", (text) =>
         text.replace(
-          "Private vulnerability reporting status: not enabled or verified.",
+          /^Private vulnerability reporting status:.*$/m,
           "Private vulnerability reporting status: enabled and verified.",
         ),
       );
@@ -109,9 +109,9 @@ const cases = [
     mutate(directory) {
       mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
         text
-          .replace("External participation status: closed.", "External participation status: open.")
+          .replace(/^External participation status:.*$/m, "External participation status: open.")
           .replace(
-            "GitHub public interaction status: not restricted or verified.",
+            /^GitHub public interaction status:.*$/m,
             "GitHub public interaction status: enabled for open participation.",
           ),
       );
@@ -124,7 +124,7 @@ const cases = [
     mutate(directory) {
       mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
         text.replace(
-          "GitHub public interaction status: not restricted or verified.",
+          /^GitHub public interaction status:.*$/m,
           "GitHub public interaction status: enabled for open participation.",
         ),
       );

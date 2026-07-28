@@ -40,14 +40,14 @@ function makeFixture(name, mode = "pre-public") {
     let conduct = readFileSync(resolve(directory, "CODE_OF_CONDUCT.md"), "utf8");
     if (mode === "source-only") {
       conduct = conduct.replace(
-        "GitHub public interaction status: not restricted or verified.",
+        /^GitHub public interaction status:.*$/m,
         "GitHub public interaction status: restricted and verified.",
       );
     } else if (mode === "open-participation") {
       conduct = conduct
-        .replace("External participation status: closed", "External participation status: open")
+        .replace(/^External participation status:.*$/m, "External participation status: open.")
         .replace(
-          "GitHub public interaction status: not restricted or verified.",
+          /^GitHub public interaction status:.*$/m,
           "GitHub public interaction status: enabled for open participation.",
         )
         .replace(
@@ -59,7 +59,7 @@ function makeFixture(name, mode = "pre-public") {
     }
     writeFileSync(resolve(directory, "CODE_OF_CONDUCT.md"), conduct);
     const security = readFileSync(resolve(directory, "SECURITY.md"), "utf8").replace(
-      "Private vulnerability reporting status: not enabled or verified.",
+      /^Private vulnerability reporting status:.*$/m,
       "Private vulnerability reporting status: enabled and verified.",
     );
     writeFileSync(resolve(directory, "SECURITY.md"), security);

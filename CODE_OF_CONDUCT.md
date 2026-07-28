@@ -2,7 +2,7 @@
 
 External participation status: closed.
 
-GitHub public interaction status: not restricted or verified.
+GitHub public interaction status: restricted and verified.
 
 Conduct reporting channel: not configured.
 

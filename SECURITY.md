@@ -1,10 +1,12 @@
 # Security policy
 
-Private vulnerability reporting status: not enabled or verified.
+Private vulnerability reporting status: enabled and verified.
 
-This is an explicit publication blocker. Do not announce the repository or invite vulnerability
-reports until GitHub private vulnerability reporting has been enabled, tested with authorized
-responders, and the status line above has been changed through review.
+GitHub API response returned private vulnerability reporting as enabled on 2026-07-28, and the
+signed-out public advisories page exposed the exact **Report a vulnerability** action. GitHub did
+not permit the repository owner to act as an outside reporter, so no synthetic advisory was created.
+External-account submission and notification delivery remain unproven and must not be claimed as
+publication evidence.
 
 ## Repository threat model
 
@@ -30,11 +32,10 @@ Unsupported versions will not receive routine fixes.
 Do not disclose vulnerability details in a public issue, pull request, discussion, commit message,
 or social post.
 
-The public repository must enable GitHub private vulnerability reporting before its first
-announcement. Use the repository's **Report a vulnerability** action to submit a confidential
-report. If that action is unavailable, do not substitute a public issue, pull request, conduct
-report, or personal contact. The hosted state no longer matches this policy; maintainers must
-restore and reverify private vulnerability reporting before inviting reports.
+Use the repository's **Report a vulnerability** action to submit a confidential report. If that
+action is unavailable, do not substitute a public issue, pull request, conduct report, or personal
+contact. The hosted state no longer matches this policy; maintainers must restore and reverify
+private vulnerability reporting before inviting reports.
 
 Do not send credentials, private keys, real user records, production database exports, or unrelated
 personal data with a report. Use minimal synthetic evidence whenever possible.

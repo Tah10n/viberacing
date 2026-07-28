@@ -96,10 +96,16 @@ Complete these settings before the source push.
 ### Private vulnerability reporting
 
 An owner or administrator enables GitHub Private Vulnerability Reporting under Advanced Security.
-Confirm that **Report a vulnerability** is visible, submit one authorized synthetic report, verify
-the responder notification, and close the test without publishing it.
+Read back the exact enabled state through the authenticated API and confirm from a signed-out public
+session that **Report a vulnerability** is visible. If a separate authorized test-reporter account
+is available, submit one synthetic report, verify the responder notification, and close the test
+without publishing it. A repository owner may be rejected by GitHub's outside-reporter endpoint;
+that rejection must not create an advisory or be represented as delivery evidence. In that case,
+record external-account submission and notification delivery as unproven rather than inventing a
+second identity.
 
-Only after verifying the hosted setting change [SECURITY.md](../../SECURITY.md) to:
+Only after the API state and signed-out public action are both verified change
+[SECURITY.md](../../SECURITY.md) to:
 
 ```text
 Private vulnerability reporting status: enabled and verified.
