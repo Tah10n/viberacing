@@ -17,7 +17,7 @@ keyring = { version = "=3.6.3", default-features = false, features = ["apple-nat
 serde = { version = "=1.0.228", default-features = false, features = ["derive", "std"] }
 serde_json = { version = "=1.0.150", default-features = false, features = ["std"] }
 sha2 = { version = "=0.11.0", default-features = false }
-ureq = { version = "=3.2.0", default-features = false, features = ["platform-verifier", "rustls"] }
+ureq = { version = "=3.3.0", default-features = false, features = ["platform-verifier", "rustls"] }
 
 [features]
 process-test-fixture = []
