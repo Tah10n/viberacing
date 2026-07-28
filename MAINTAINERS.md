@@ -1,14 +1,25 @@
 # Maintainers
 
-Public maintainer registry: not configured.
+Public maintainer registry: configured.
 
-No public maintainer identity is recorded in this unpublished local tree. Local usernames, account
-names, email addresses, Git identities, and filesystem paths are private workstation context and
-must not be copied here.
+## Current maintainers
+
+### Tah10n
+
+- Public GitHub profile: [Tah10n](https://github.com/Tah10n)
+- Current roles: maintainer, security responder, and release manager during bootstrap
+- Responsibilities: repository stewardship, architecture and security policy, release review, and
+  public-source administration
+- Effective date: 2026-07-28
+- Public conflict disclosure: none declared
+
+The connected GitHub identity and repository administrator/write access were verified on the
+effective date. Strong multi-factor authentication remains an account-owner responsibility that
+cannot be proven by repository-local checks.
 
 ## Maintainer record
 
-Before source publication, each maintainer entry must include:
+Each maintainer entry must include:
 
 - a public GitHub profile URL;
 - current project roles from [GOVERNANCE.md](GOVERNANCE.md);
@@ -41,4 +52,5 @@ an empty public repository before the first source push and keeps outside partic
 7. Run `pnpm run verify:release` and `pnpm run check:publication`.
 
 Two independent maintainers are recommended before public beta and required before a process claims
-independent approval or resilient incident response.
+independent approval or resilient incident response. The current single-maintainer bootstrap does
+not claim either property.
