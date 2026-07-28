@@ -33,11 +33,6 @@ import {
   usageSyncRequestTarget,
 } from "./protocol.js";
 
-export const codexProvider = "codex";
-export const codexAccountingRevision = "codex_daily_usage_buckets_v1";
-export type AgentProvider = typeof codexProvider;
-export type AgentAccountingRevision = typeof codexAccountingRevision;
-
 export type CommunitySyncVerificationErrorCode =
   | "dependency_unavailable"
   | "device_rejected"
@@ -62,22 +57,26 @@ export class CommunitySyncVerifierConfigurationError extends Error {
   }
 }
 
-export interface OriginNonceConsumption {
+export interface OriginProofMaterial {
   readonly expiresAtMilliseconds: number;
   readonly keyId: string;
   readonly nonceDigestHex: string;
 }
 
 export interface DeviceVerificationMaterial {
-  readonly accountingRevision: string;
+  readonly accountingRevision: number;
+  readonly agentAccountId: string;
   readonly deviceKeyId: string;
+  readonly identityAssurance: "community_local";
+  readonly installationId: string;
+  readonly maximumBackfillDays: number;
   readonly provider: string;
   readonly publicKey: Uint8Array;
-  readonly sourceId: string;
+  readonly readerVersion: string;
+  readonly scopeKind: "agent_account";
 }
 
 export interface CommunitySyncVerifierOptions {
-  readonly consumeOriginNonce: (input: OriginNonceConsumption) => boolean | Promise<boolean>;
   readonly now: () => number;
   readonly originKeys: readonly Readonly<{
     keyId: string;
@@ -89,16 +88,22 @@ export interface CommunitySyncVerifierOptions {
 }
 
 export interface VerifiedCommunitySync {
-  readonly accountingRevision: AgentAccountingRevision;
+  readonly accountingRevision: number;
+  readonly agentAccountId: string;
   readonly bodyDigestHex: string;
+  readonly deviceNonceDigestHex: string;
   readonly deviceId: string;
   readonly deviceKeyId: string;
   readonly idempotencyKey: string;
-  readonly nonceDigestHex: string;
+  readonly originExpiresAtMilliseconds: number;
+  readonly originKeyId: string;
+  readonly originNonceDigestHex: string;
   readonly payload: UsageSyncV1;
-  readonly provider: AgentProvider;
+  readonly provider: string;
+  readonly readerVersion: string;
   readonly requestTarget: CommunitySyncRequestTarget;
   readonly signatureBase64Url: string;
+  readonly scopeKind: "agent_account";
 }
 
 export interface CommunitySyncVerifier {
@@ -112,40 +117,45 @@ interface RawRequestEnvelope {
 }
 
 interface ValidatedDeviceMaterial {
-  readonly accountingRevision: string;
+  readonly accountingRevision: number;
+  readonly agentAccountId: string;
   readonly deviceKeyId: string;
+  readonly identityAssurance: "community_local";
+  readonly installationId: string;
+  readonly maximumBackfillDays: number;
   readonly provider: string;
   readonly publicKey: Buffer;
-  readonly sourceId: string;
+  readonly readerVersion: string;
+  readonly scopeKind: "agent_account";
 }
 
 interface ValidatedOptions {
-  readonly consumeOriginNonce: CommunitySyncVerifierOptions["consumeOriginNonce"];
   readonly now: CommunitySyncVerifierOptions["now"];
   readonly originKeys: ReadonlyMap<string, Buffer>;
   readonly readDeviceVerificationMaterial: CommunitySyncVerifierOptions["readDeviceVerificationMaterial"];
 }
 
 const requestKeys = new Set(["method", "rawBody", "rawHeaders", "requestTarget"]);
-const optionKeys = new Set([
-  "consumeOriginNonce",
-  "now",
-  "originKeys",
-  "readDeviceVerificationMaterial",
-]);
+const optionKeys = new Set(["now", "originKeys", "readDeviceVerificationMaterial"]);
 const originKeyKeys = new Set(["keyId", "secret"]);
 const deviceMaterialKeys = new Set([
   "accountingRevision",
+  "agentAccountId",
   "deviceKeyId",
+  "identityAssurance",
+  "installationId",
+  "maximumBackfillDays",
   "provider",
   "publicKey",
-  "sourceId",
+  "readerVersion",
+  "scopeKind",
 ]);
 const requiredHeaderNameSet = new Set<string>(requiredHeaderNames);
-const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
-const providerPattern = /^[a-z][a-z0-9-]{1,31}$/;
-const accountingRevisionPattern = /^[a-z][a-z0-9_]{1,63}$/;
-const canonicalUuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const agentAccountIdPattern = /^acc_[A-Za-z0-9_-]{22}$/;
+const deviceKeyIdPattern = /^key_[A-Za-z0-9_-]{22}$/;
+const installationIdPattern = /^ins_[A-Za-z0-9_-]{22}$/;
+const providerPattern = /^[a-z][a-z0-9_]{1,23}$/;
+const readerVersionPattern = /^[a-z][a-z0-9_]{2,63}$/;
 const headerNamePattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const headerValuePattern = /^[\x20-\x7e]*$/;
 const dummyOriginSecret = Buffer.alloc(originProofKeyBytes, 0xa5);
@@ -246,12 +256,10 @@ function readOptions(value: unknown): ValidatedOptions {
     if (!isPlainRecord(value) || !hasExactKeys(value, optionKeys)) {
       configurationFail();
     }
-    const consumeOriginNonce = ownDataValue(value, "consumeOriginNonce");
     const now = ownDataValue(value, "now");
     const originKeyValues = readDenseArray(ownDataValue(value, "originKeys"), 2);
     const readDeviceVerificationMaterial = ownDataValue(value, "readDeviceVerificationMaterial");
     if (
-      typeof consumeOriginNonce !== "function" ||
       typeof now !== "function" ||
       typeof readDeviceVerificationMaterial !== "function" ||
       originKeyValues === undefined ||
@@ -279,7 +287,6 @@ function readOptions(value: unknown): ValidatedOptions {
     }
 
     return {
-      consumeOriginNonce: consumeOriginNonce as CommunitySyncVerifierOptions["consumeOriginNonce"],
       now: now as CommunitySyncVerifierOptions["now"],
       originKeys,
       readDeviceVerificationMaterial:
@@ -364,15 +371,15 @@ function readRawRequest(value: unknown): RawRequestEnvelope {
 function canonicalUsagePayload(value: UsageSyncV1): UsageSyncV1 {
   return Object.freeze({
     schemaVersion: 1,
-    sourceId: value.sourceId,
+    agentAccountId: value.agentAccountId,
     syncId: value.syncId,
     observedAt: value.observedAt,
     clientVersion: value.clientVersion,
-    agentVersion: value.agentVersion,
+    readerVersion: value.readerVersion,
     dailyEntries: Object.freeze(
       value.dailyEntries.map((entry) =>
         Object.freeze({
-          reportedDate: entry.reportedDate,
+          usageDate: entry.usageDate,
           dailyTokenTotal: entry.dailyTokenTotal,
         }),
       ),
@@ -391,29 +398,51 @@ function readDeviceMaterial(
       return invalidDeviceMaterial;
     }
     const accountingRevision = ownDataValue(value, "accountingRevision");
+    const agentAccountId = ownDataValue(value, "agentAccountId");
     const deviceKeyId = ownDataValue(value, "deviceKeyId");
+    const identityAssurance = ownDataValue(value, "identityAssurance");
+    const installationId = ownDataValue(value, "installationId");
+    const maximumBackfillDays = ownDataValue(value, "maximumBackfillDays");
     const provider = ownDataValue(value, "provider");
     const publicKey = copyExactBytes(ownDataValue(value, "publicKey"), devicePublicKeyBytes);
-    const sourceId = ownDataValue(value, "sourceId");
+    const readerVersion = ownDataValue(value, "readerVersion");
+    const scopeKind = ownDataValue(value, "scopeKind");
     if (
-      typeof accountingRevision !== "string" ||
-      !accountingRevisionPattern.test(accountingRevision) ||
+      typeof accountingRevision !== "number" ||
+      !Number.isSafeInteger(accountingRevision) ||
+      accountingRevision < 1 ||
+      accountingRevision > 32_767 ||
+      typeof agentAccountId !== "string" ||
+      !agentAccountIdPattern.test(agentAccountId) ||
       typeof deviceKeyId !== "string" ||
-      !canonicalUuidPattern.test(deviceKeyId) ||
+      !deviceKeyIdPattern.test(deviceKeyId) ||
+      identityAssurance !== "community_local" ||
+      typeof installationId !== "string" ||
+      !installationIdPattern.test(installationId) ||
+      typeof maximumBackfillDays !== "number" ||
+      !Number.isSafeInteger(maximumBackfillDays) ||
+      maximumBackfillDays < 1 ||
+      maximumBackfillDays > 90 ||
       typeof provider !== "string" ||
       !providerPattern.test(provider) ||
       publicKey === undefined ||
-      typeof sourceId !== "string" ||
-      !sourceIdPattern.test(sourceId)
+      typeof readerVersion !== "string" ||
+      !readerVersionPattern.test(readerVersion) ||
+      scopeKind !== "agent_account"
     ) {
       return invalidDeviceMaterial;
     }
     return Object.freeze({
       accountingRevision,
+      agentAccountId,
       deviceKeyId,
+      identityAssurance,
+      installationId,
+      maximumBackfillDays,
       provider,
       publicKey,
-      sourceId,
+      readerVersion,
+      scopeKind,
     });
   } catch {
     return invalidDeviceMaterial;
@@ -433,13 +462,11 @@ async function verifyEd25519(
 }
 
 class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
-  readonly #consumeOriginNonce: CommunitySyncVerifierOptions["consumeOriginNonce"];
   readonly #now: CommunitySyncVerifierOptions["now"];
   readonly #originKeys: ReadonlyMap<string, Buffer>;
   readonly #readDeviceVerificationMaterial: CommunitySyncVerifierOptions["readDeviceVerificationMaterial"];
 
   constructor(options: ValidatedOptions) {
-    this.#consumeOriginNonce = options.consumeOriginNonce;
     this.#now = options.now;
     this.#originKeys = options.originKeys;
     this.#readDeviceVerificationMaterial = options.readDeviceVerificationMaterial;
@@ -448,7 +475,11 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
   async verify(request: unknown): Promise<VerifiedCommunitySync> {
     const envelope = readRawRequest(request);
     const bodyDigest = digestBody(envelope.body);
-    await this.#verifyOrigin(envelope.headers, bodyDigest.base64Url, envelope.requestTarget);
+    const origin = this.#verifyOrigin(
+      envelope.headers,
+      bodyDigest.base64Url,
+      envelope.requestTarget,
+    );
 
     let parsed: unknown;
     try {
@@ -504,32 +535,37 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
     if (
       deviceMaterial === null ||
       !signatureValid ||
-      deviceMaterial.sourceId !== payload.sourceId ||
-      deviceMaterial.provider !== codexProvider ||
-      deviceMaterial.accountingRevision !== codexAccountingRevision
+      deviceMaterial.agentAccountId !== payload.agentAccountId ||
+      deviceMaterial.readerVersion !== payload.readerVersion
     ) {
       fail("device_rejected");
     }
 
     return Object.freeze({
-      accountingRevision: codexAccountingRevision,
+      accountingRevision: deviceMaterial.accountingRevision,
+      agentAccountId: deviceMaterial.agentAccountId,
       bodyDigestHex: bodyDigest.hex,
+      deviceNonceDigestHex: createHash("sha256").update(nonceBytes).digest("hex"),
       deviceId,
       deviceKeyId: deviceMaterial.deviceKeyId,
       idempotencyKey,
-      nonceDigestHex: createHash("sha256").update(nonceBytes).digest("hex"),
+      originExpiresAtMilliseconds: origin.expiresAtMilliseconds,
+      originKeyId: origin.keyId,
+      originNonceDigestHex: origin.nonceDigestHex,
       payload,
-      provider: codexProvider,
+      provider: deviceMaterial.provider,
+      readerVersion: deviceMaterial.readerVersion,
       requestTarget: envelope.requestTarget,
       signatureBase64Url,
+      scopeKind: deviceMaterial.scopeKind,
     });
   }
 
-  async #verifyOrigin(
+  #verifyOrigin(
     headers: Readonly<Record<RequiredHeaderName, string>>,
     bodyDigestBase64Url: string,
     requestTarget: CommunitySyncRequestTarget,
-  ): Promise<void> {
+  ): OriginProofMaterial {
     const keyId = headers[headerNames.originKeyId];
     const nonce = headers[headerNames.originNonce];
     const proof = headers[headerNames.originProof];
@@ -582,24 +618,11 @@ class DefaultCommunitySyncVerifier implements CommunitySyncVerifier {
       .update("\0", "utf8")
       .update(nonceBytes)
       .digest("hex");
-    let consumed: unknown;
-    try {
-      consumed = await this.#consumeOriginNonce(
-        Object.freeze({
-          expiresAtMilliseconds: timestampMilliseconds + originProofMaximumAgeMilliseconds,
-          keyId,
-          nonceDigestHex,
-        }),
-      );
-    } catch {
-      fail("dependency_unavailable");
-    }
-    if (typeof consumed !== "boolean") {
-      fail("dependency_unavailable");
-    }
-    if (!consumed) {
-      fail("origin_rejected");
-    }
+    return Object.freeze({
+      expiresAtMilliseconds: timestampMilliseconds + originProofMaximumAgeMilliseconds,
+      keyId,
+      nonceDigestHex,
+    });
   }
 }
 

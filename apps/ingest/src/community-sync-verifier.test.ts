@@ -3,15 +3,12 @@ import { createHash, createHmac, generateKeyPairSync, sign, type KeyObject } fro
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  codexAccountingRevision,
-  codexProvider,
   CommunitySyncVerificationError,
   CommunitySyncVerifierConfigurationError,
   createCommunitySyncVerifier,
   type CommunitySyncVerifier,
   type CommunitySyncVerifierOptions,
   type DeviceVerificationMaterial,
-  type OriginNonceConsumption,
 } from "./community-sync-verifier";
 import {
   communitySyncMediaType,
@@ -30,9 +27,13 @@ import {
 const nowMilliseconds = Date.UTC(2026, 6, 15, 18);
 const observedAt = "2026-07-15T18:00:00.000Z";
 const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
-const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
+const agentAccountId = "acc_BBBBBBBBBBBBBBBBBBBBBB";
 const syncId = "syn_CCCCCCCCCCCCCCCCCCCCCC";
-const deviceKeyId = "11111111-2222-4333-8444-555555555555";
+const deviceKeyId = "key_DDDDDDDDDDDDDDDDDDDDDD";
+const installationId = "ins_EEEEEEEEEEEEEEEEEEEEEE";
+const accountingRevision = 1;
+const provider = "codex";
+const readerVersion = "codex_daily_usage_buckets_v1";
 const originKeyId = "edge_primary";
 const originSecret = Buffer.alloc(32, 0x33);
 const originNonce = Buffer.alloc(16, 0x22).toString("base64url");
@@ -69,7 +70,6 @@ interface RequestOptions {
 }
 
 interface HarnessOverrides {
-  readonly consumeOriginNonce?: CommunitySyncVerifierOptions["consumeOriginNonce"];
   readonly now?: CommunitySyncVerifierOptions["now"];
   readonly originKeys?: CommunitySyncVerifierOptions["originKeys"];
   readonly readDeviceVerificationMaterial?: CommunitySyncVerifierOptions["readDeviceVerificationMaterial"];
@@ -78,14 +78,14 @@ interface HarnessOverrides {
 function validPayload(): Readonly<Record<string, unknown>> {
   return {
     schemaVersion: 1,
-    sourceId,
+    agentAccountId,
     syncId,
     observedAt,
     clientVersion: "1.2.3",
-    agentVersion: "0.144.5",
+    readerVersion,
     dailyEntries: [
-      { reportedDate: "2026-07-14", dailyTokenTotal: 123 },
-      { reportedDate: "2026-07-15", dailyTokenTotal: 456 },
+      { usageDate: "2026-07-14", dailyTokenTotal: "123" },
+      { usageDate: "2026-07-15", dailyTokenTotal: "9007199254740993" },
     ],
   };
 }
@@ -207,31 +207,33 @@ function replaceOriginProof(request: RawRequest, secret: Uint8Array = originSecr
 
 function validDeviceMaterial(): DeviceVerificationMaterial {
   return {
-    accountingRevision: codexAccountingRevision,
+    accountingRevision,
+    agentAccountId,
     deviceKeyId,
-    provider: codexProvider,
+    identityAssurance: "community_local",
+    installationId,
+    maximumBackfillDays: 31,
+    provider,
     publicKey: Buffer.from(devicePublicKey),
-    sourceId,
+    readerVersion,
+    scopeKind: "agent_account",
   };
 }
 
 function createHarness(overrides: HarnessOverrides = {}): Readonly<{
-  consumeOriginNonce: ReturnType<typeof vi.fn>;
   now: ReturnType<typeof vi.fn>;
   readDeviceVerificationMaterial: ReturnType<typeof vi.fn>;
   verifier: CommunitySyncVerifier;
 }> {
-  const consumeOriginNonce = vi.fn(() => true);
   const now = vi.fn(() => nowMilliseconds);
   const readDeviceVerificationMaterial = vi.fn(() => validDeviceMaterial());
   const verifier = createCommunitySyncVerifier({
-    consumeOriginNonce: overrides.consumeOriginNonce ?? consumeOriginNonce,
     now: overrides.now ?? now,
     originKeys: overrides.originKeys ?? [{ keyId: originKeyId, secret: Buffer.from(originSecret) }],
     readDeviceVerificationMaterial:
       overrides.readDeviceVerificationMaterial ?? readDeviceVerificationMaterial,
   });
-  return { consumeOriginNonce, now, readDeviceVerificationMaterial, verifier };
+  return { now, readDeviceVerificationMaterial, verifier };
 }
 
 async function expectFailure(
@@ -244,7 +246,7 @@ async function expectFailure(
     expect(error).toBeInstanceOf(CommunitySyncVerificationError);
     expect(error).toMatchObject({ code, message: "Community sync request rejected." });
     expect(String(error)).not.toContain(deviceId);
-    expect(String(error)).not.toContain(sourceId);
+    expect(String(error)).not.toContain(agentAccountId);
     expect(String(error)).not.toContain(syncId);
     return;
   }
@@ -253,7 +255,6 @@ async function expectFailure(
 
 function validOptions(): CommunitySyncVerifierOptions {
   return {
-    consumeOriginNonce: () => true,
     now: () => nowMilliseconds,
     originKeys: [{ keyId: originKeyId, secret: Buffer.from(originSecret) }],
     readDeviceVerificationMaterial: () => validDeviceMaterial(),
@@ -296,7 +297,6 @@ describe("Community sync verifier configuration", () => {
     null,
     {},
     { ...validOptions(), extra: true },
-    { ...validOptions(), consumeOriginNonce: true },
     { ...validOptions(), now: 1 },
     { ...validOptions(), readDeviceVerificationMaterial: "lookup" },
     { ...validOptions(), originKeys: [] },
@@ -392,21 +392,22 @@ describe("Community sync raw request boundary", () => {
     await expect(createHarness().verifier.verify(request)).resolves.toMatchObject({ deviceId });
   });
 
-  it("copies body and headers before awaiting replay consumption", async () => {
-    let resolveReplay: ((value: boolean) => void) | undefined;
-    const replay = new Promise<boolean>((resolve) => {
-      resolveReplay = resolve;
+  it("copies body and headers before awaiting device material", async () => {
+    let resolveLookup: ((value: DeviceVerificationMaterial) => void) | undefined;
+    const lookup = new Promise<DeviceVerificationMaterial>((resolve) => {
+      resolveLookup = resolve;
     });
+    const readDeviceVerificationMaterial = vi.fn(async () => lookup);
     const request = buildRequest();
     const originalDigest = digestBody(request.rawBody).hex;
-    const harness = createHarness({ consumeOriginNonce: async () => replay });
+    const harness = createHarness({ readDeviceVerificationMaterial });
     const verification = harness.verifier.verify(request);
     await vi.waitFor(() => {
-      expect(resolveReplay).toBeTypeOf("function");
+      expect(readDeviceVerificationMaterial).toHaveBeenCalledOnce();
     });
     request.rawBody.fill(0);
     request.rawHeaders.fill("mutated");
-    resolveReplay?.(true);
+    resolveLookup?.(validDeviceMaterial());
 
     await expect(verification).resolves.toMatchObject({ bodyDigestHex: originalDigest, deviceId });
   });
@@ -415,8 +416,8 @@ describe("Community sync raw request boundary", () => {
     null,
     [],
     { ...buildRequest(), method: "GET" },
-    { ...buildRequest(), requestTarget: "/v1/community/sync" as never },
-    { ...buildRequest(), requestTarget: "/v1/community/usage?extra=1" as never },
+    { ...buildRequest(), requestTarget: "/v1/community/usage" as never },
+    { ...buildRequest(), requestTarget: "/v1/usage?extra=1" as never },
     { ...buildRequest(), extra: true },
     { method: communitySyncMethod },
     { ...buildRequest(), rawBody: "{}" },
@@ -511,20 +512,18 @@ describe("Community sync edge-origin proof", () => {
       const harness = createHarness();
       await expect(
         harness.verifier.verify(buildRequest({ originTimestamp: timestamp })),
-      ).resolves.toMatchObject({ deviceId });
-      const input = harness.consumeOriginNonce.mock.calls[0]?.[0] as
-        OriginNonceConsumption | undefined;
-      expect(input).toEqual({
-        expiresAtMilliseconds: timestampMilliseconds + originProofMaximumAgeMilliseconds,
-        keyId: originKeyId,
-        nonceDigestHex: createHash("sha256")
+      ).resolves.toMatchObject({
+        deviceId,
+        originExpiresAtMilliseconds:
+          timestampMilliseconds + originProofMaximumAgeMilliseconds,
+        originKeyId,
+        originNonceDigestHex: createHash("sha256")
           .update("viberacing-origin-nonce-v1\0", "utf8")
           .update(originKeyId, "utf8")
           .update("\0", "utf8")
           .update(Buffer.from(originNonce, "base64url"))
           .digest("hex"),
       });
-      expect(Object.isFrozen(input)).toBe(true);
     }
   });
 
@@ -547,7 +546,6 @@ describe("Community sync edge-origin proof", () => {
   ])("rejects malformed, stale, unknown, or forged proof input", async (options) => {
     const harness = createHarness();
     await expectFailure(harness.verifier.verify(buildRequest(options)), "origin_rejected");
-    expect(harness.consumeOriginNonce).not.toHaveBeenCalled();
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
 
@@ -556,11 +554,10 @@ describe("Community sync edge-origin proof", () => {
     request.rawBody = Buffer.from('{"not":"the signed body"}', "utf8");
     const harness = createHarness();
     await expectFailure(harness.verifier.verify(request), "origin_rejected");
-    expect(harness.consumeOriginNonce).not.toHaveBeenCalled();
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
 
-  it("maps invalid clocks and replay-store failures without reflection", async () => {
+  it("maps invalid clocks without reflection", async () => {
     for (const now of [
       () => {
         throw new Error("private clock failure");
@@ -574,21 +571,6 @@ describe("Community sync edge-origin proof", () => {
         "dependency_unavailable",
       );
     }
-    for (const consumeOriginNonce of [
-      () => {
-        throw new Error("private replay failure");
-      },
-      () => "yes" as unknown as boolean,
-    ]) {
-      await expectFailure(
-        createHarness({ consumeOriginNonce }).verifier.verify(buildRequest()),
-        "dependency_unavailable",
-      );
-    }
-    await expectFailure(
-      createHarness({ consumeOriginNonce: () => false }).verifier.verify(buildRequest()),
-      "origin_rejected",
-    );
   });
 });
 
@@ -599,18 +581,29 @@ describe("Community sync body and device verification", () => {
     const result = await harness.verifier.verify(request);
 
     expect(result).toEqual({
-      accountingRevision: codexAccountingRevision,
+      accountingRevision,
+      agentAccountId,
       bodyDigestHex: digestBody(request.rawBody).hex,
+      deviceNonceDigestHex: createHash("sha256")
+        .update(Buffer.from(deviceNonce, "base64url"))
+        .digest("hex"),
       deviceId,
       deviceKeyId,
       idempotencyKey: syncId,
-      nonceDigestHex: createHash("sha256")
-        .update(Buffer.from(deviceNonce, "base64url"))
+      originExpiresAtMilliseconds: nowMilliseconds + originProofMaximumAgeMilliseconds,
+      originKeyId,
+      originNonceDigestHex: createHash("sha256")
+        .update("viberacing-origin-nonce-v1\0", "utf8")
+        .update(originKeyId, "utf8")
+        .update("\0", "utf8")
+        .update(Buffer.from(originNonce, "base64url"))
         .digest("hex"),
       payload: validPayload(),
-      provider: codexProvider,
+      provider,
+      readerVersion,
       requestTarget: usageSyncRequestTarget,
       signatureBase64Url: headerValue(request, headerNames.deviceSignature),
+      scopeKind: "agent_account",
     });
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.payload)).toBe(true);
@@ -619,15 +612,21 @@ describe("Community sync body and device verification", () => {
     expect(Object.getPrototypeOf(result.payload)).toBe(Object.prototype);
     expect(Object.keys(result)).toEqual([
       "accountingRevision",
+      "agentAccountId",
       "bodyDigestHex",
+      "deviceNonceDigestHex",
       "deviceId",
       "deviceKeyId",
       "idempotencyKey",
-      "nonceDigestHex",
+      "originExpiresAtMilliseconds",
+      "originKeyId",
+      "originNonceDigestHex",
       "payload",
       "provider",
+      "readerVersion",
       "requestTarget",
       "signatureBase64Url",
+      "scopeKind",
     ]);
     expect(harness.readDeviceVerificationMaterial).toHaveBeenCalledOnce();
     expect(harness.readDeviceVerificationMaterial).toHaveBeenCalledWith(deviceId);
@@ -654,8 +653,8 @@ describe("Community sync body and device verification", () => {
       JSON.stringify({
         ...validPayload(),
         dailyEntries: [
-          { reportedDate: "2026-07-15", dailyTokenTotal: 1 },
-          { reportedDate: "2026-07-15", dailyTokenTotal: 2 },
+          { usageDate: "2026-07-15", dailyTokenTotal: "1" },
+          { usageDate: "2026-07-15", dailyTokenTotal: "2" },
         ],
       }),
       "utf8",
@@ -663,14 +662,13 @@ describe("Community sync body and device verification", () => {
     Buffer.from(
       JSON.stringify({
         ...validPayload(),
-        dailyEntries: [{ reportedDate: "2026-07-14", dailyTokenTotal: -1 }],
+        dailyEntries: [{ usageDate: "2026-07-14", dailyTokenTotal: "-1" }],
       }),
       "utf8",
     ),
   ])("maps malformed or contract-invalid bodies to one stable failure", async (rawBody) => {
     const harness = createHarness();
     await expectFailure(harness.verifier.verify(buildRequest({ rawBody })), "invalid_body");
-    expect(harness.consumeOriginNonce).toHaveBeenCalledOnce();
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
 
@@ -689,14 +687,14 @@ describe("Community sync body and device verification", () => {
     expect(harness.readDeviceVerificationMaterial).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown device and cross-source binding with the same public failure", async () => {
+  it("rejects an unknown device and cross-account binding with the same public failure", async () => {
     await expectFailure(
       createHarness({ readDeviceVerificationMaterial: () => null }).verifier.verify(buildRequest()),
       "device_rejected",
     );
     for (const material of [
-      { ...validDeviceMaterial(), provider: "claude-code" },
-      { ...validDeviceMaterial(), accountingRevision: "codex_daily_usage_buckets_v2" },
+      { ...validDeviceMaterial(), agentAccountId: "acc_FFFFFFFFFFFFFFFFFFFFFF" },
+      { ...validDeviceMaterial(), readerVersion: "other_reader_v1" },
     ]) {
       await expectFailure(
         createHarness({
@@ -705,15 +703,6 @@ describe("Community sync body and device verification", () => {
         "device_rejected",
       );
     }
-    await expectFailure(
-      createHarness({
-        readDeviceVerificationMaterial: () => ({
-          ...validDeviceMaterial(),
-          sourceId: "src_DDDDDDDDDDDDDDDDDDDDDD",
-        }),
-      }).verifier.verify(buildRequest()),
-      "device_rejected",
-    );
   });
 
   it("rejects native-OpenSSL's zero-key/zero-signature weak-key bypass", async () => {
@@ -759,7 +748,10 @@ describe("Community sync body and device verification", () => {
 
   it("maps device lookup failures and malformed trusted results to dependency failure", async () => {
     const accessor = validDeviceMaterial();
-    Object.defineProperty(accessor, "sourceId", { enumerable: true, get: () => sourceId });
+    Object.defineProperty(accessor, "agentAccountId", {
+      enumerable: true,
+      get: () => agentAccountId,
+    });
     const proxy = new Proxy(validDeviceMaterial(), {
       ownKeys() {
         throw new Error("private material trap");
@@ -769,10 +761,15 @@ describe("Community sync body and device verification", () => {
       undefined,
       {},
       { ...validDeviceMaterial(), extra: true },
-      { ...validDeviceMaterial(), deviceKeyId: "not-a-uuid" },
-      { ...validDeviceMaterial(), sourceId: "src_short" },
+      { ...validDeviceMaterial(), deviceKeyId: "key_short" },
+      { ...validDeviceMaterial(), agentAccountId: "acc_short" },
+      { ...validDeviceMaterial(), installationId: "ins_short" },
       { ...validDeviceMaterial(), provider: "CODEX" },
-      { ...validDeviceMaterial(), accountingRevision: "../private" },
+      { ...validDeviceMaterial(), accountingRevision: 0 },
+      { ...validDeviceMaterial(), maximumBackfillDays: 91 },
+      { ...validDeviceMaterial(), readerVersion: "../private" },
+      { ...validDeviceMaterial(), identityAssurance: "remote" },
+      { ...validDeviceMaterial(), scopeKind: "profile" },
       { ...validDeviceMaterial(), publicKey: Buffer.alloc(31) },
       { ...validDeviceMaterial(), publicKey: new Uint8Array(new SharedArrayBuffer(32)) },
       { ...validDeviceMaterial(), publicKey: new (class extends Uint8Array {})(32) },

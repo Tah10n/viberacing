@@ -1,4 +1,12 @@
 export {
+  CommunitySyncAdmissionConfigurationError,
+  createCommunitySyncAdmission,
+  createCommunitySyncKeyedAdmission,
+  type CommunitySyncAdmission,
+  type CommunitySyncAdmissionLease,
+  type CommunitySyncKeyedAdmission,
+} from "./community-sync-admission.js";
+export {
   CommunitySyncVerificationError,
   CommunitySyncVerifierConfigurationError,
   createCommunitySyncVerifier,
@@ -6,7 +14,7 @@ export {
   type CommunitySyncVerifierOptions,
   type CommunitySyncVerificationErrorCode,
   type DeviceVerificationMaterial,
-  type OriginNonceConsumption,
+  type OriginProofMaterial,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
 export {
@@ -37,7 +45,8 @@ export {
   type CommunitySyncDatabaseErrorCode,
   type CommunitySyncSubmissionResult,
   type ConfiguredCommunitySyncDatabase,
-  type SnapshotIdFactory,
+  type PublicIdFactory,
+  type PublicIdPrefix,
 } from "./community-sync-database.js";
 export {
   IngestDatabaseConfigurationError,

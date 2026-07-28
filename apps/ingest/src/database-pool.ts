@@ -41,62 +41,60 @@ const runtimeBoundaryQuery = `SELECT
 
 const deviceVerificationQuery = `SELECT
   material.device_key_id::text AS device_key_id,
-  material.source_id AS source_id,
+  material.device_id::text AS device_id,
+  material.installation_id::text AS installation_id,
+  material.agent_account_id::text AS agent_account_id,
   material.public_key AS public_key,
-  material.provider AS provider,
-  material.accounting_revision AS accounting_revision
-FROM viberacing_api.read_device_verification_material($1::text) AS material`;
-
-const consumeOriginNonceQuery = `SELECT
-  viberacing_api.consume_origin_nonce(
-    $1::text,
-    $2::bytea,
-    $3::timestamptz
-  ) AS consumed`;
+  material.provider_code::text AS provider_code,
+  material.accounting_revision AS accounting_revision,
+  material.reader_version::text AS reader_version,
+  material.scope_kind::text AS scope_kind,
+  material.maximum_backfill_days AS maximum_backfill_days,
+  material.identity_assurance::text AS identity_assurance
+FROM viberacing_api.read_usage_device_verification_material($1::text) AS material`;
 
 const submitUsageSyncQuery = `SELECT
   submission.outcome AS outcome,
-  submission.accepted_entries AS accepted_entries
+  submission.accepted_entries AS accepted_entries,
+  submission.recovery_action AS recovery_action
 FROM viberacing_api.submit_usage_sync(
-  $1::uuid,
+  $1::text,
   $2::text,
   $3::text,
-  $4::text,
-  $5::text,
-  $6::uuid,
+  $4::bytea,
+  $5::timestamptz,
+  $6::text,
   $7::text,
-  $8::timestamptz,
+  $8::text,
   $9::text,
-  $10::text,
-  $11::bytea,
-  $12::bytea,
+  $10::timestamptz,
+  $11::text,
+  $12::text,
   $13::bytea,
-  $14::text[],
-  $15::bigint[]
+  $14::bytea,
+  $15::bytea,
+  $16::date[],
+  $17::text[]
 ) AS submission`;
 
-export interface IngestDatabaseOriginNonce {
-  readonly expiresAt: string;
-  readonly nonceDigest: Uint8Array;
-  readonly originKeyId: string;
-}
-
 export interface IngestDatabaseUsageSubmission {
-  readonly accountingRevision: string;
-  readonly agentVersion: string;
+  readonly agentAccountId: string;
   readonly bodyDigest: Uint8Array;
   readonly clientVersion: string;
-  readonly dailyTokenTotals: readonly number[];
+  readonly dailyTokenTotals: readonly string[];
   readonly deviceId: string;
   readonly deviceKeyId: string;
-  readonly nonceDigest: Uint8Array;
+  readonly deviceNonceDigest: Uint8Array;
+  readonly eventId: string;
+  readonly observationId: string;
   readonly observedAt: string;
-  readonly provider: string;
-  readonly reportedDates: readonly string[];
+  readonly originExpiresAt: string;
+  readonly originKeyId: string;
+  readonly originNonceDigest: Uint8Array;
+  readonly readerVersion: string;
   readonly signature: Uint8Array;
-  readonly snapshotId: string;
-  readonly sourceId: string;
   readonly syncId: string;
+  readonly usageDates: readonly string[];
 }
 
 export type IngestDatabasePoolSignal = "idle_client_error";
@@ -105,7 +103,6 @@ export type IngestDatabasePoolSignalSink = (
 ) => Promise<void> | void;
 
 export interface IngestDatabaseClient {
-  consumeOriginNonce(input: IngestDatabaseOriginNonce): Promise<unknown>;
   readDeviceVerificationMaterial(deviceId: string): Promise<unknown>;
   release(destroy?: boolean): void;
   submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown>;
@@ -155,13 +152,6 @@ function wrapClient(client: NodePostgresClient): IngestDatabaseClient {
   }
 
   return Object.freeze({
-    consumeOriginNonce(input: IngestDatabaseOriginNonce): Promise<unknown> {
-      return fixedQuery(consumeOriginNonceQuery, [
-        input.originKeyId,
-        Buffer.from(input.nonceDigest),
-        input.expiresAt,
-      ]);
-    },
     readDeviceVerificationMaterial(deviceId: string): Promise<unknown> {
       return fixedQuery(deviceVerificationQuery, [deviceId]);
     },
@@ -170,21 +160,23 @@ function wrapClient(client: NodePostgresClient): IngestDatabaseClient {
     },
     submitUsageSync(input: IngestDatabaseUsageSubmission): Promise<unknown> {
       return fixedQuery(submitUsageSyncQuery, [
+        input.observationId,
+        input.eventId,
+        input.originKeyId,
+        Buffer.from(input.originNonceDigest),
+        input.originExpiresAt,
         input.deviceKeyId,
         input.deviceId,
-        input.sourceId,
-        input.provider,
-        input.accountingRevision,
-        input.snapshotId,
+        input.agentAccountId,
         input.syncId,
         input.observedAt,
         input.clientVersion,
-        input.agentVersion,
+        input.readerVersion,
         Buffer.from(input.bodyDigest),
         Buffer.from(input.signature),
-        Buffer.from(input.nonceDigest),
-        [...input.reportedDates],
-        input.dailyTokenTotals.map(String),
+        Buffer.from(input.deviceNonceDigest),
+        [...input.usageDates],
+        [...input.dailyTokenTotals],
       ]);
     },
     verifyRuntimeBoundary(): Promise<unknown> {

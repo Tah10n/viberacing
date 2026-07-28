@@ -16,7 +16,10 @@ import {
   type UsageSyncResultV1,
 } from "@viberacing/contracts";
 
-import { createCommunitySyncAdmission } from "./community-sync-admission.js";
+import {
+  createCommunitySyncAdmission,
+  createCommunitySyncKeyedAdmission,
+} from "./community-sync-admission.js";
 import { ingestDatabaseConcurrencyLimit, ingestDatabaseQueryTimeoutMs } from "./database-config.js";
 import {
   communitySyncMediaType,
@@ -35,7 +38,14 @@ const qualityPattern = /^(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)$/;
 const applicationKeys = new Set(["execute"]);
 const closeableApplicationKeys = new Set(["close", "execute"]);
 const decisionKeys = new Set(["body", "ok", "status"]);
-const resultKeys = new Set(["acceptedEntries", "outcome", "requestId", "schemaVersion", "syncId"]);
+const requiredResultKeys = new Set([
+  "acceptedEntries",
+  "outcome",
+  "requestId",
+  "schemaVersion",
+  "syncId",
+]);
+const optionalResultKeys = new Set(["nextAllowedSyncAt", "recoveryAction"]);
 const problemKeys = new Set([
   "errorCode",
   "requestId",
@@ -50,6 +60,7 @@ export const communitySyncHttpPolicy = Object.freeze({
   acceptPolicy: "closed-json",
   admissionLimit: ingestDatabaseConcurrencyLimit,
   admissionMode: "no-queue",
+  perDeviceAdmissionLimit: 1,
   cacheControl: "no-store",
   connectionTimeoutMs: ingestDatabaseQueryTimeoutMs + 2_000,
   corsPolicy: "same-origin",
@@ -241,6 +252,44 @@ function canonicalRecord(
   }
 }
 
+function canonicalRecordWithOptional(
+  value: unknown,
+  requiredKeys: ReadonlySet<string>,
+  optionalKeys: ReadonlySet<string>,
+): Readonly<Record<string, unknown>> | undefined {
+  try {
+    if (!isPlainRecord(value) || !Object.isFrozen(value)) {
+      return undefined;
+    }
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.some(
+        (key) =>
+          typeof key !== "string" || (!requiredKeys.has(key) && !optionalKeys.has(key)),
+      ) ||
+      [...requiredKeys].some((key) => !keys.includes(key))
+    ) {
+      return undefined;
+    }
+    const result = Object.create(null) as Record<string, unknown>;
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (
+        typeof key !== "string" ||
+        descriptor === undefined ||
+        !("value" in descriptor) ||
+        !descriptor.enumerable
+      ) {
+        return undefined;
+      }
+      result[key] = descriptor.value as unknown;
+    }
+    return Object.freeze(result);
+  } catch {
+    return undefined;
+  }
+}
+
 function createRequestId(): string {
   let entropy: unknown;
   try {
@@ -298,7 +347,11 @@ function readApplicationDecision(value: unknown): SerializedDecision | undefined
   const status = decision.status;
 
   if (ok === true && status === 200) {
-    const candidate = canonicalRecord(body, resultKeys);
+    const candidate = canonicalRecordWithOptional(
+      body,
+      requiredResultKeys,
+      optionalResultKeys,
+    );
     if (candidate === undefined) {
       return undefined;
     }
@@ -545,6 +598,10 @@ export function createCommunitySyncHttpServer(
   }
   const validatedApplication = readApplication(application);
   const admission = createCommunitySyncAdmission(communitySyncHttpPolicy.admissionLimit);
+  const deviceAdmission = createCommunitySyncKeyedAdmission(
+    communitySyncHttpPolicy.perDeviceAdmissionLimit,
+    communitySyncHttpPolicy.admissionLimit,
+  );
   const options: FastifyHttpOptions<RawServerDefault> = {
     bodyLimit: communitySyncHttpPolicy.maximumBodyBytes,
     clientErrorHandler: (_error, socket) => {
@@ -592,7 +649,10 @@ export function createCommunitySyncHttpServer(
   );
 
   server.addHook("onRequest", (request, reply, done) => {
-    if (request.raw.rawHeaders.length > communitySyncHttpPolicy.maximumRawHeaderPairs * 2) {
+    if (
+      request.raw.rawHeaders.length > communitySyncHttpPolicy.maximumRawHeaderPairs * 2 ||
+      request.headers["content-encoding"] !== undefined
+    ) {
       sendProblem(reply, "invalid_request");
       return;
     }
@@ -640,6 +700,15 @@ export function createCommunitySyncHttpServer(
           sendProblem(reply, "temporarily_unavailable");
           return;
         }
+        const deviceHeader = request.headers["x-viberacing-device-id"];
+        const deviceAdmissionKey =
+          typeof deviceHeader === "string" ? deviceHeader : "invalid-device";
+        const deviceLease = deviceAdmission.tryAcquire(deviceAdmissionKey);
+        if (deviceLease === undefined) {
+          lease.release();
+          sendProblem(reply, "temporarily_unavailable");
+          return;
+        }
         try {
           const decision = await validatedApplication.execute(createRawEnvelope(request));
           // Fastify's handler-timeout signal also observes the IncomingMessage `close` event, which
@@ -656,6 +725,7 @@ export function createCommunitySyncHttpServer(
             sendDecision(reply, serialized);
           }
         } finally {
+          deviceLease.release();
           lease.release();
         }
       },

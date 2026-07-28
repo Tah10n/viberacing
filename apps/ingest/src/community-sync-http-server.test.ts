@@ -591,6 +591,48 @@ describe("Community sync HTTP decisions", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toMatchObject({ errorCode: "internal_error", status: 500 });
   });
+
+  it("contains accessor-backed problem bodies and descriptor-trapping success bodies", async () => {
+    const problemBody = Object.freeze(
+      Object.defineProperty(
+        Object.assign(Object.create(null) as object, {
+          schemaVersion: 1,
+          requestId: problemRequestId,
+          status: 400,
+          errorCode: "invalid_request",
+          retryable: false,
+        }),
+        "title",
+        {
+          enumerable: true,
+          get: () => "Invalid request",
+        },
+      ),
+    );
+    const successTarget = frozenRecord({
+      schemaVersion: 1,
+      requestId,
+      syncId,
+      outcome: "accepted",
+      acceptedEntries: 1,
+    });
+    const successBody = new Proxy(successTarget, {
+      getOwnPropertyDescriptor() {
+        throw new Error("hostile body descriptor");
+      },
+    });
+
+    for (const decision of [
+      Object.freeze({ body: problemBody, ok: false, status: 400 }),
+      Object.freeze({ body: successBody, ok: true, status: 200 }),
+    ]) {
+      const server = buildServer(application(() => Promise.resolve(decision)));
+      const response = await server.inject(postOptions());
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({ errorCode: "internal_error", status: 500 });
+      expect(response.body).not.toContain("hostile body descriptor");
+    }
+  });
 });
 
 describe("Community sync HTTP rejection and resource policy", () => {
@@ -655,7 +697,7 @@ describe("Community sync HTTP rejection and resource policy", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  it("maps unsupported media and oversized input to generic invalid requests", async () => {
+  it("maps unsupported media, compressed, and oversized input to generic invalid requests", async () => {
     const execute = vi.fn(() => Promise.resolve(successDecision()));
     const server = buildServer(application(execute));
     const unsupported = await server.inject(
@@ -667,8 +709,17 @@ describe("Community sync HTTP rejection and resource policy", () => {
     const oversized = await server.inject(
       postOptions({ payload: Buffer.alloc(communitySyncHttpPolicy.maximumBodyBytes + 1, 0x61) }),
     );
+    const compressed = await server.inject(
+      postOptions({
+        headers: {
+          accept: "application/json",
+          "content-encoding": "gzip",
+          "content-type": "application/json",
+        },
+      }),
+    );
 
-    for (const response of [unsupported, oversized]) {
+    for (const response of [unsupported, compressed, oversized]) {
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ errorCode: "invalid_request", status: 400 });
     }
@@ -737,14 +788,30 @@ describe("Community sync HTTP rejection and resource policy", () => {
       });
     });
     const server = buildServer(application(execute));
-    const active = Array.from({ length: communitySyncHttpPolicy.admissionLimit }, () =>
-      server.inject(postOptions()),
+    const active = Array.from({ length: communitySyncHttpPolicy.admissionLimit }, (_, index) =>
+      server.inject(
+        postOptions({
+          headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            "x-viberacing-device-id": `dev-${String(index)}`,
+          },
+        }),
+      ),
     );
     await vi.waitFor(() => {
       expect(resolvers).toHaveLength(communitySyncHttpPolicy.admissionLimit);
     });
 
-    const rejected = await server.inject(postOptions());
+    const rejected = await server.inject(
+      postOptions({
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "x-viberacing-device-id": "dev-overflow",
+        },
+      }),
+    );
     expect(rejected.statusCode).toBe(503);
     expect(rejected.json()).toMatchObject({
       errorCode: "temporarily_unavailable",
@@ -761,6 +828,41 @@ describe("Community sync HTTP rejection and resource policy", () => {
       ),
     );
     await expect(server.inject(postOptions())).resolves.toMatchObject({ statusCode: 200 });
+  });
+
+  it("allows only one unsettled request per device and releases the key after settlement", async () => {
+    let resolveExecution: ((decision: unknown) => void) | undefined;
+    const execute = vi.fn(
+      () =>
+        new Promise<unknown>((resolve) => {
+          resolveExecution = resolve;
+        }),
+    );
+    const server = buildServer(application(execute));
+    const options = postOptions({
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "x-viberacing-device-id": "dev-shared",
+      },
+    });
+    const first = server.inject(options);
+    await vi.waitFor(() => {
+      expect(execute).toHaveBeenCalledOnce();
+    });
+
+    const rejected = await server.inject(options);
+    expect(rejected.statusCode).toBe(503);
+    expect(execute).toHaveBeenCalledOnce();
+
+    resolveExecution?.(successDecision());
+    await expect(first).resolves.toMatchObject({ statusCode: 200 });
+    const replacement = server.inject(options);
+    await vi.waitFor(() => {
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+    resolveExecution?.(successDecision());
+    await expect(replacement).resolves.toMatchObject({ statusCode: 200 });
   });
 
   it("maps a handler-style deadline failure to a generic retryable 503", async () => {
