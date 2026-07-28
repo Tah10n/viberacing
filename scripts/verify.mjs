@@ -68,7 +68,6 @@ const migrateTscBin = migrateRequire.resolve("typescript/bin/tsc");
 const migrateVitestBin = resolve(dirname(migrateRequire.resolve("vitest")), "vitest.mjs");
 const eslintBin = resolve(dirname(webRequire.resolve("eslint")), "..", "bin", "eslint.js");
 const nextBin = webRequire.resolve("next/dist/bin/next");
-const tscBin = webRequire.resolve("typescript/bin/tsc");
 const vitestBin = resolve(dirname(webRequire.resolve("vitest")), "vitest.mjs");
 const nodeOnly = process.argv.includes("--node-only");
 const releaseMode = process.argv.includes("--release");
@@ -465,7 +464,11 @@ const releaseChecks = [
     [resolve(import.meta.dirname, "check-migrate-entrypoint.mjs")],
   ],
   ["web lint", process.execPath, [eslintBin, "."], webRoot],
-  ["web types", process.execPath, [tscBin, "--noEmit"], webRoot],
+  [
+    "web types",
+    process.execPath,
+    [corepackEntrypoint, "pnpm", "--filter", "@viberacing/web", "run", "typecheck"],
+  ],
   ["web tests and coverage", process.execPath, [vitestBin, "run", "--coverage"], webRoot],
   [
     "web build checker behavior",

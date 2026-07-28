@@ -947,6 +947,8 @@ function validatePackageScripts(manifest) {
       findings.push(`script ${name} must be a string`);
     } else if (/\b(?:curl|wget|Invoke-WebRequest)\b/i.test(command)) {
       findings.push(`script ${name} must not download and execute remote content`);
+    } else if (/\bpnpm\b/.test(command.replaceAll("corepack pnpm", ""))) {
+      findings.push(`script ${name} must invoke pinned pnpm through Corepack`);
     }
   }
   return findings;
@@ -975,6 +977,12 @@ export function validateWorkspacePackage(path, manifest) {
   }
   if (manifest?.packageManager !== undefined) {
     findings.push("workspace packageManager must be inherited from the root");
+  }
+  if (
+    path === "apps/web/package.json" &&
+    manifest?.scripts?.typecheck !== "next typegen && tsc --noEmit"
+  ) {
+    findings.push("Web typecheck must generate Next route types before running TypeScript");
   }
   findings.push(...validateDependencyDeclarations(manifest));
   findings.push(...validatePackageScripts(manifest));

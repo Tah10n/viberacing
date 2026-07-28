@@ -38,6 +38,7 @@ data/
 node_modules/
 .pnpm-store/
 .wrangler/
+/apps/web/next-env.d.ts
 .next/
 dist/
 build/

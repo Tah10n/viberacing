@@ -61,11 +61,13 @@ root canonical, and exposes an origin-bound `robots.txt` plus `sitemap.xml`. Acc
 recovery, and pairing pages are `noindex`; API routes stay out of the crawl surface. These files let
 search crawlers discover the deployed site but do not prove that a search engine has indexed or
 ranked it. Use `pnpm run lint:web`, `pnpm run typecheck:web`, and `pnpm run test:web` while
-iterating. Coverage, the production build, the built-artifact check, and the deterministic
-query-plan parser are boundary/release evidence included by `pnpm run verify:release`, not by the
-normal root development gate. `pnpm run verify:web:deployment` additionally builds and exercises the
-emitted standalone runtime with its search metadata/discovery endpoints and the static asset layout
-used by the root production image. The safe Web-only Railway procedure is documented in
+iterating. The typecheck command first runs Next's route-type generator, so a fresh checkout does
+not depend on ignored `.next` output; the generated `next-env.d.ts` also remains ignored. Coverage,
+the production build, the built-artifact check, and the deterministic query-plan parser are
+boundary/release evidence included by `pnpm run verify:release`, not by the normal root development
+gate. `pnpm run verify:web:deployment` additionally builds and exercises the emitted standalone
+runtime with its search metadata/discovery endpoints and the static asset layout used by the root
+production image. The safe Web-only Railway procedure is documented in
 [`docs/getting-started/RAILWAY_WEB_STAGING.md`](../../docs/getting-started/RAILWAY_WEB_STAGING.md);
 it keeps every participant capability disabled and is not a data-backed beta deployment.
 `pnpm run test:web:postgres-integration` is the separate Docker-backed synthetic boundary: it builds

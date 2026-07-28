@@ -1483,9 +1483,12 @@ scheduler/cadence exists.
   explicit stable tag dispatched from `main`, proves main ancestry, completes secretless release and
   synthetic PostgreSQL gates, and only then enters the protected `production` Environment. It uses
   pinned Railway/Cloudflare/Wrangler inputs and fixes migration-latch cleanup plus Migration, Web,
-  Ingest, Jobs, and Edge order. Seventy-nine configuration-checker cases cover its exact contract
-  and unsafe mutations. This is a local checked declaration: no GitHub Environment, protected
-  credential, Railway project, Cloudflare route, hosted run, migration, or deployment is proven.
+  Ingest, Jobs, and Edge order. Eighty-one configuration-checker cases cover its exact contract,
+  unsafe mutations, pinned Corepack use inside nested root scripts, and the required Next route-type
+  generation before Web TypeScript. Generated `next-env.d.ts` and `.next` declarations remain
+  ignored so clean-checkout typechecking cannot depend on a maintainer's prior build. This is a
+  local checked declaration: no GitHub Environment, protected credential, Railway project,
+  Cloudflare route, hosted run, migration, or deployment is proven.
 - A lock-integrity-bound metadata cache for platform-specific npm packages, twelve license-checker
   regression cases, and two expiring reviewed overrides: one resolves Next.js to patched
   `postcss@8.5.19`, and one removes unused `sharp`/libvips code while Next.js image optimization

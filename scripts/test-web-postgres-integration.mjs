@@ -19,7 +19,6 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const webRoot = resolve(root, "apps", "web");
-const nextEnvironmentPath = resolve(webRoot, "next-env.d.ts");
 const webRequire = createRequire(resolve(webRoot, "package.json"));
 const nextBin = webRequire.resolve("next/dist/bin/next");
 const standaloneServerPath = resolve(webRoot, ".next", "standalone", "apps", "web", "server.js");
@@ -56,7 +55,6 @@ const databaseBlockerTimeoutMs = 10_000;
 const blockedQueryObservationTimeoutMs = 2_000;
 const admissionRejectionTimeoutMs = 1_500;
 const databaseBlockerReadyMarker = "viberacing_web_admission_blocker_ready";
-const productionNextEnvironmentReference = 'import "./.next/types/routes.d.ts";';
 
 const fixture = Object.freeze({
   alphaProfileId: "00000000-0000-4000-8000-000000032101",
@@ -1552,20 +1550,6 @@ async function exerciseSuccessfulRoutes(
 }
 
 async function main() {
-  const nextEnvironmentStats = lstatSync(nextEnvironmentPath);
-  assert.equal(nextEnvironmentStats.isFile(), true, "next-env.d.ts must remain a regular file");
-  assert.equal(
-    nextEnvironmentStats.isSymbolicLink(),
-    false,
-    "next-env.d.ts must not be a symbolic link",
-  );
-  const originalNextEnvironment = readFileSync(nextEnvironmentPath);
-  const originalNextEnvironmentText = originalNextEnvironment.toString("utf8");
-  assert.equal(
-    originalNextEnvironmentText.split(productionNextEnvironmentReference).length - 1,
-    1,
-    "next-env.d.ts must contain the one canonical production route-type reference",
-  );
   buildWorkspace("packages/contracts", "contract production build");
   buildWebApplication();
   const contracts = await import(
@@ -1736,22 +1720,6 @@ FROM current_season;`,
       } catch {
         cleanupFailure ??= new Error("synthetic PostgreSQL TLS material cleanup failed");
       }
-    }
-    try {
-      const currentNextEnvironment = readFileSync(nextEnvironmentPath);
-      if (!currentNextEnvironment.equals(originalNextEnvironment)) {
-        writeFileSync(nextEnvironmentPath, originalNextEnvironment);
-        cleanupFailure ??= new Error(
-          "Next production build changed the canonical next-env.d.ts file",
-        );
-      }
-      assert.equal(
-        readFileSync(nextEnvironmentPath).equals(originalNextEnvironment),
-        true,
-        "Next production type reference restoration failed",
-      );
-    } catch {
-      cleanupFailure ??= new Error("Next production type reference cleanup failed");
     }
   }
 

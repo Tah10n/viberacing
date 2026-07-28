@@ -1053,6 +1053,15 @@ assert.match(
   }).join("\n"),
   /exact version/,
 );
+assert.match(
+  validateRootPackage({
+    private: true,
+    packageManager: "pnpm@11.7.0",
+    devDependencies: { tool: "1.2.3" },
+    scripts: { lint: "pnpm --filter @viberacing/web run lint" },
+  }).join("\n"),
+  /through Corepack/,
+);
 
 const goodWebPackage = {
   name: "@viberacing/web",
@@ -1061,7 +1070,7 @@ const goodWebPackage = {
   type: "module",
   engines: { node: ">=24.14.0 <25" },
   dependencies: { react: "19.2.7" },
-  scripts: { test: "vitest run" },
+  scripts: { test: "vitest run", typecheck: "next typegen && tsc --noEmit" },
 };
 assert.deepEqual(validateWorkspacePackage("apps/web/package.json", goodWebPackage), []);
 assert.match(
@@ -1084,6 +1093,13 @@ assert.match(
     private: false,
   }).join("\n"),
   /must remain private/,
+);
+assert.match(
+  validateWorkspacePackage("apps/web/package.json", {
+    ...goodWebPackage,
+    scripts: { ...goodWebPackage.scripts, typecheck: "tsc --noEmit" },
+  }).join("\n"),
+  /generate Next route types/,
 );
 
 const overrideSelector = "eslint-config-next@16.2.10>eslint-import-resolver-typescript";
@@ -1183,4 +1199,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (79 cases).");
+console.log("Configuration checker tests passed (81 cases).");

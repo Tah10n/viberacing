@@ -496,9 +496,10 @@ proves a login with extra membership fails generically without private-table mut
 exact score/race/status/token contracts plus TLS 1.2/1.3 through the narrow synthetic login, and
 repeats the full private-state fingerprint after successful reads. It then holds exactly four
 observed score queries behind a controlled owner lock, rejects a fifth request without a fifth
-public-score query, rolls back, and validates the four original responses. It restores the exact
-pre-run `next-env.d.ts`, bounds and discards all child output, and removes the ephemeral key
-directory, both Next processes, the blocker, container, network, and storage. It is not a deployment
+public-score query, rolls back, and validates the four original responses. Next route declarations,
+including `next-env.d.ts`, are generated into ignored local output rather than restored as tracked
+source. The harness bounds and discards all child output and removes the ephemeral key directory,
+both Next processes, the blocker, container, network, and storage. It is not a deployment
 certificate/login, external TLS/edge, cache, monitoring, load/capacity, real-user, or deployment
 test.
 
