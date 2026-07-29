@@ -161,7 +161,6 @@ try {
     VIBERACING_PAIRING_ENABLED: "false",
     VIBERACING_PUBLIC_ORIGIN: expectedOrigin,
     VIBERACING_PUBLIC_SNAPSHOTS_ENABLED: "false",
-    VIBERACING_SOURCE_CREATION_ENABLED: "false",
   };
   for (const key of ["ComSpec", "SystemRoot"]) {
     if (process.env[key] !== undefined) {

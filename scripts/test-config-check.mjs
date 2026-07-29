@@ -40,9 +40,9 @@ VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID=edge_local
 VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
 VIBERACING_CAR_PROPOSALS_ENABLED=false
 VIBERACING_ENROLLMENT_ENABLED=false
+VIBERACING_INVITE_GATE_ENABLED=false
 VIBERACING_PAIRING_ENABLED=false
 VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false
-VIBERACING_SOURCE_CREATION_ENABLED=false
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
 VIBERACING_WEB_DATABASE_NAME=viberacing_local
@@ -106,6 +106,15 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace(
+      "VIBERACING_INVITE_GATE_ENABLED=false",
+      "VIBERACING_INVITE_GATE_ENABLED=true",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
       "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false",
       "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true",
     ),
@@ -139,15 +148,6 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace("VIBERACING_PAIRING_ENABLED=false", "VIBERACING_PAIRING_ENABLED=true"),
-  ).join("\n"),
-  /must retain the reviewed public-safe example value/,
-);
-assert.match(
-  validateEnvExampleText(
-    goodEnvExample.replace(
-      "VIBERACING_SOURCE_CREATION_ENABLED=false",
-      "VIBERACING_SOURCE_CREATION_ENABLED=true",
-    ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,
 );
@@ -266,6 +266,83 @@ const goodWorkflow = {
 };
 
 assert.deepEqual(validateWorkflow("good.yml", goodWorkflow), []);
+
+const connectorReleaseCandidateWorkflowPath = ".github/workflows/connector-release-candidate.yml";
+const goodConnectorReleaseCandidateWorkflow = parseDocument(
+  readFileSync(
+    new URL("../.github/workflows/connector-release-candidate.yml", import.meta.url),
+    "utf8",
+  ),
+  { strict: true, uniqueKeys: true, version: "1.2" },
+).toJS();
+assert.deepEqual(
+  validateWorkflow(connectorReleaseCandidateWorkflowPath, goodConnectorReleaseCandidateWorkflow),
+  [],
+);
+for (const [mutate, expected] of [
+  [
+    (workflow) => {
+      workflow.on = { pull_request: {} };
+    },
+    /manual-only/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.if = "github.ref != 'refs/heads/main'";
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.strategy.matrix.include.pop();
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.environment = undefined;
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[5].run =
+        "cargo build --release --target-dir target --package viberacing-connector --bin viberacing-connector";
+    },
+    /Cargo --locked/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[8].uses = "actions/attest@v4";
+    },
+    /pinned GitHub Sigstore provenance/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[10].with.name = "viberacing-connector";
+    },
+    /explicitly unsigned candidate bundles/,
+  ],
+  [
+    (workflow) => {
+      workflow.permissions.contents = "write";
+    },
+    /exact attestation permissions/,
+  ],
+  [
+    (workflow) => {
+      workflow.env = { SIGNING_KEY: "${{ secrets.SIGNING_KEY }}" };
+    },
+    /references secrets/,
+  ],
+]) {
+  const candidate = structuredClone(goodConnectorReleaseCandidateWorkflow);
+  mutate(candidate);
+  assert.match(
+    validateWorkflow(connectorReleaseCandidateWorkflowPath, candidate).join("\n"),
+    expected,
+  );
+}
 
 const requiredNodeSteps = [
   { run: "node scripts/check-public-files.mjs --all" },

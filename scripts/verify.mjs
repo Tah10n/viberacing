@@ -259,6 +259,11 @@ const releaseChecks = [
     [resolve(import.meta.dirname, "test-codex-compatibility-check.mjs")],
   ],
   [
+    "connector release-candidate evidence behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-connector-release-candidate.mjs")],
+  ],
+  [
     "contract checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-contract-check.mjs")],

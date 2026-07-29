@@ -154,8 +154,8 @@
     "unsafe-integer"
   ],
   "supportBlockers": [
-    "The Windows Codex digest is admitted locally and a no-upload connector copy/removal smoke is declared, but its hosted result, package, signature, SBOM, provenance, and protected release pipeline remain absent.",
+    "A protected five-target candidate workflow, local Windows bundle, checksum, SPDX, and attestation policy now exist, but no hosted matrix result or native platform signature exists.",
     "The one-shot sync path is Windows x86_64 development evidence only; macOS/Linux executable admission and clean-machine account/privacy execution results remain absent.",
-    "No deployed edge/Ingest/database path, real-user end-to-end result, packaged connector, real install/upgrade/uninstall lifecycle, credential rotation or automated server-revoke composition, scheduler, or connector release exists."
+    "No official package, public download, real-user result, native signed install lifecycle, update channel, credential rotation automation, or connector release exists."
   ]
 }

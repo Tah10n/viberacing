@@ -24,6 +24,16 @@ bounded Windows portable copy/removal smoke uploads nothing and does not establi
 installer, immutable version, signature, checksum publication, SBOM, provenance, clean-machine
 release result, or support claim.
 
+The checked `Connector release candidates` workflow is a separate manual-only `main` path. It
+declares five native OS/architecture builds and requires the `connector-release-candidate`
+Environment. Each job uses the exact Cargo lock, exercises a bounded portable install/uninstall,
+generates SHA-256 checksums, a versioned compatibility manifest, and an SPDX 2.3 SBOM, creates
+GitHub Sigstore provenance and SBOM attestations, and uploads only a seven-day
+`UNSIGNED-CANDIDATE-*` workflow artifact. The local tree proves the workflow policy and one Windows
+candidate builder run only. No hosted matrix result, native platform signature, notarization, public
+package, GitHub Release asset, supported-version promotion, or official connector release is
+claimed.
+
 Local `doctor`, discovery previews, provider fixtures, release-profile builds, and portable smoke
 output are user-reviewed troubleshooting or synthetic test context only. They contain no hosted
 signature, checksum publication, provenance, installed-package lifecycle, or support grant and must
@@ -61,6 +71,13 @@ Connector artifacts require platform-specific signing where available plus a pro
 published checksums, SBOM, provenance, complete package inventory, and an explicit
 provider/reader/client/platform support declaration. Container images use immutable digests. Web
 releases record the source commit, clean bootstrap/revision state, and exact deploy artifact.
+
+The current candidate workflow must not be changed to attach an unsigned artifact to a GitHub
+Release or package registry. Official promotion remains blocked until protected native signing and
+verification are implemented for every declared platform, hosted results are recorded, downloaded
+artifacts are independently verified, and the compatibility declaration changes from an empty
+official target list through reviewed evidence. Automatic self-update remains out of scope until a
+signed update manifest, rollback and key-rotation policy, and downgrade protection exist.
 
 ## Rollback
 

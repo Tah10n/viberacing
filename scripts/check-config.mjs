@@ -10,12 +10,21 @@ const exactVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const exactPackageSelector = /^(?:@[^/\s]+\/[^@\s]+|[^@\s]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const exactOverrideSelector =
   /^(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?>(?:@[^/\s]+\/[^@\s>]+|[^@\s>]+)$/;
-const hostedRunners = new Set(["ubuntu-24.04", "windows-2025", "macos-15"]);
+const hostedRunners = new Set([
+  "macos-15",
+  "macos-15-intel",
+  "ubuntu-24.04",
+  "ubuntu-24.04-arm",
+  "windows-2025",
+]);
 const releaseDeploymentWorkflowPath = ".github/workflows/deploy-release.yml";
+const connectorReleaseCandidateWorkflowPath = ".github/workflows/connector-release-candidate.yml";
 const edgeWranglerPath = "apps/edge/wrangler.jsonc";
 const checkoutAction = "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd";
 const setupNodeAction = "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e";
 const cloudflareAction = "cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0";
+const attestAction = "actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26";
+const uploadArtifactAction = "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f";
 const railwayCliImage =
   "ghcr.io/railwayapp/cli:5.26.0@sha256:30293385a4793e30b54b1616dd0fddf6a60d355ed70767ae06bdbc5e8253f883";
 const releaseJobCondition =
@@ -87,6 +96,33 @@ const windowsPortableRuns = [
   "cargo build --release --locked --target-dir target --package viberacing-connector --bin viberacing-connector",
   "node scripts/test-connector-windows-portable.mjs",
 ];
+const connectorReleaseTargets = Object.freeze([
+  Object.freeze({
+    target: "windows-x86_64",
+    runner: "windows-2025",
+    executable: "viberacing-connector.exe",
+  }),
+  Object.freeze({
+    target: "macos-aarch64",
+    runner: "macos-15",
+    executable: "viberacing-connector",
+  }),
+  Object.freeze({
+    target: "macos-x86_64",
+    runner: "macos-15-intel",
+    executable: "viberacing-connector",
+  }),
+  Object.freeze({
+    target: "linux-x86_64",
+    runner: "ubuntu-24.04",
+    executable: "viberacing-connector",
+  }),
+  Object.freeze({
+    target: "linux-aarch64",
+    runner: "ubuntu-24.04-arm",
+    executable: "viberacing-connector",
+  }),
+]);
 const linuxSecretServiceBuildSetup = [
   "sudo apt-get update",
   "sudo apt-get install --yes --no-install-recommends libdbus-1-dev pkg-config",
@@ -156,9 +192,9 @@ const requiredEnvExampleValues = new Map([
   ["VIBERACING_INGEST_TLS_TERMINATION", "loopback-cleartext"],
   ["VIBERACING_CAR_PROPOSALS_ENABLED", "false"],
   ["VIBERACING_ENROLLMENT_ENABLED", "false"],
+  ["VIBERACING_INVITE_GATE_ENABLED", "false"],
   ["VIBERACING_PAIRING_ENABLED", "false"],
   ["VIBERACING_PUBLIC_SNAPSHOTS_ENABLED", "false"],
-  ["VIBERACING_SOURCE_CREATION_ENABLED", "false"],
   ["VIBERACING_WEB_DATABASE_HOST", "127.0.0.1"],
   ["VIBERACING_WEB_DATABASE_NAME", "viberacing_local"],
   ["VIBERACING_WEB_DATABASE_PASSWORD", "replace-with-local-web-password"],
@@ -471,6 +507,156 @@ export function validateReleaseDeploymentWorkflow(workflow) {
   return findings;
 }
 
+function validateConnectorReleaseCandidateWorkflow(workflow) {
+  const findings = [];
+  if (
+    workflow.name !== "Connector release candidates" ||
+    !exactValue(workflow.on, { workflow_dispatch: null })
+  ) {
+    findings.push(
+      "connector candidates must be manual-only and must never build from pull requests",
+    );
+  }
+  if (
+    !exactValue(workflow.permissions, {
+      attestations: "write",
+      contents: "read",
+      "id-token": "write",
+    }) ||
+    !exactValue(workflow.concurrency, {
+      group: "connector-release-candidate",
+      "cancel-in-progress": false,
+    }) ||
+    !exactValue(workflow.defaults, { run: { shell: "bash" } })
+  ) {
+    findings.push(
+      "connector candidates must retain only the exact attestation permissions and serialized execution",
+    );
+  }
+  if (!isObject(workflow.jobs) || !exactValue(Object.keys(workflow.jobs), ["candidate"])) {
+    findings.push("connector candidate workflow must contain only the candidate build job");
+    return findings;
+  }
+  const job = workflow.jobs.candidate;
+  if (
+    !isObject(job) ||
+    job.name !== "Build ${{ matrix.target }} unsigned candidate" ||
+    job.if !== "github.ref == 'refs/heads/main'" ||
+    job.environment !== "connector-release-candidate" ||
+    job["runs-on"] !== "${{ matrix.runner }}" ||
+    job["timeout-minutes"] !== 30 ||
+    !exactValue(job.strategy, {
+      "fail-fast": false,
+      "max-parallel": 5,
+      matrix: { include: connectorReleaseTargets },
+    }) ||
+    !exactValue(job.env, {
+      VIBERACING_CONNECTOR_RELEASE_TARGET: "${{ matrix.target }}",
+    })
+  ) {
+    findings.push(
+      "connector candidates must use the exact protected main-only five-platform matrix",
+    );
+    return findings;
+  }
+  const steps = job.steps;
+  const expectedStepNames = [
+    "Check out main without persisted credentials",
+    "Set up pinned Node.js",
+    "Scan public files before the native build",
+    "Install the Linux Secret Service build dependency",
+    "Install the pinned minimal Rust toolchain",
+    "Build the exact locked release profile",
+    "Exercise bounded install and uninstall",
+    "Prepare checksums, compatibility declaration, and SPDX SBOM",
+    "Sign build provenance with GitHub Sigstore",
+    "Sign the SPDX SBOM attestation with GitHub Sigstore",
+    "Upload only the explicitly unsigned candidate bundle",
+  ];
+  if (
+    !Array.isArray(steps) ||
+    steps.length !== expectedStepNames.length ||
+    !exactValue(
+      steps.map((step) => step?.name),
+      expectedStepNames,
+    )
+  ) {
+    findings.push("connector candidate steps must retain their exact closed order");
+    return findings;
+  }
+  const [
+    checkout,
+    setupNode,
+    publicScan,
+    linuxDependency,
+    rust,
+    build,
+    portable,
+    prepare,
+    provenance,
+    sbom,
+    upload,
+  ] = steps;
+  if (
+    checkout.uses !== checkoutAction ||
+    !exactValue(checkout.with, {
+      "fetch-depth": 0,
+      "persist-credentials": false,
+    }) ||
+    setupNode.uses !== setupNodeAction ||
+    !exactValue(setupNode.with, {
+      "node-version-file": ".node-version",
+      "package-manager-cache": false,
+    }) ||
+    publicScan.run !== "node scripts/check-public-files.mjs --all" ||
+    linuxDependency.if !== "startsWith(matrix.target, 'linux-')" ||
+    linuxDependency.run?.trimEnd() !== linuxSecretServiceBuildSetup ||
+    rust.run !== "rustup toolchain install 1.94.0 --profile minimal" ||
+    build.run !==
+      "cargo build --release --locked --target-dir target --package viberacing-connector --bin viberacing-connector" ||
+    portable.run !== "node scripts/test-connector-windows-portable.mjs" ||
+    prepare.run !== "node scripts/connector-release-candidate.mjs"
+  ) {
+    findings.push(
+      "connector candidates must scan first, install only reviewed build inputs, use Cargo --locked, and run both lifecycle and candidate evidence checks",
+    );
+  }
+  const subjectPath =
+    "target/connector-release-candidate/${{ matrix.target }}/${{ matrix.executable }}";
+  if (
+    provenance.id !== "provenance" ||
+    provenance.uses !== attestAction ||
+    !exactValue(provenance.with, { "subject-path": subjectPath }) ||
+    sbom.id !== "sbom" ||
+    sbom.uses !== attestAction ||
+    !exactValue(sbom.with, {
+      "sbom-path": "target/connector-release-candidate/${{ matrix.target }}/sbom.spdx.json",
+      "subject-path": subjectPath,
+    })
+  ) {
+    findings.push(
+      "connector candidates must retain pinned GitHub Sigstore provenance and SBOM attestations",
+    );
+  }
+  if (
+    upload.uses !== uploadArtifactAction ||
+    !exactValue(upload.with, {
+      name: "UNSIGNED-CANDIDATE-${{ matrix.target }}",
+      path: "target/connector-release-candidate/${{ matrix.target }}",
+      "if-no-files-found": "error",
+      "include-hidden-files": false,
+      "compression-level": 0,
+      overwrite: false,
+      "retention-days": 7,
+    })
+  ) {
+    findings.push(
+      "connector workflow may upload only short-lived explicitly unsigned candidate bundles",
+    );
+  }
+  return findings;
+}
+
 export function validateWorkflow(path, workflow) {
   const findings = [];
   if (!isObject(workflow)) {
@@ -482,7 +668,16 @@ export function validateWorkflow(path, workflow) {
     findings.push("pull_request_target is forbidden for untrusted repository code");
   }
 
-  findings.push(...permissionFindings("top-level permissions", workflow.permissions));
+  const connectorCandidatePermissions =
+    path === connectorReleaseCandidateWorkflowPath &&
+    exactValue(workflow.permissions, {
+      attestations: "write",
+      contents: "read",
+      "id-token": "write",
+    });
+  if (!connectorCandidatePermissions) {
+    findings.push(...permissionFindings("top-level permissions", workflow.permissions));
+  }
 
   if (!isObject(workflow.jobs) || Object.keys(workflow.jobs).length === 0) {
     findings.push("workflow must define at least one job");
@@ -501,7 +696,11 @@ export function validateWorkflow(path, workflow) {
     ) {
       findings.push(`job ${jobName} must set timeout-minutes between 1 and 60`);
     }
-    if (!hostedRunners.has(job["runs-on"])) {
+    const connectorCandidateMatrixRunner =
+      path === connectorReleaseCandidateWorkflowPath &&
+      jobName === "candidate" &&
+      job["runs-on"] === "${{ matrix.runner }}";
+    if (!hostedRunners.has(job["runs-on"]) && !connectorCandidateMatrixRunner) {
       findings.push(`job ${jobName} must use an allowlisted GitHub-hosted runner`);
     }
     const allowedReleaseEnvironment =
@@ -511,7 +710,15 @@ export function validateWorkflow(path, workflow) {
         name: "production",
         url: "${{ vars.VIBERACING_PUBLIC_ORIGIN }}",
       });
-    if (job.environment !== undefined && !allowedReleaseEnvironment) {
+    const allowedConnectorCandidateEnvironment =
+      path === connectorReleaseCandidateWorkflowPath &&
+      jobName === "candidate" &&
+      job.environment === "connector-release-candidate";
+    if (
+      job.environment !== undefined &&
+      !allowedReleaseEnvironment &&
+      !allowedConnectorCandidateEnvironment
+    ) {
       findings.push(`job ${jobName} must not attach a privileged environment`);
     }
     const jobContainer = typeof job.container === "string" ? job.container : job.container?.image;
@@ -581,6 +788,9 @@ export function validateWorkflow(path, workflow) {
 
   if (path === releaseDeploymentWorkflowPath) {
     findings.push(...validateReleaseDeploymentWorkflow(workflow));
+  }
+  if (path === connectorReleaseCandidateWorkflowPath) {
+    findings.push(...validateConnectorReleaseCandidateWorkflow(workflow));
   }
 
   if (path === ".github/workflows/ci.yml") {

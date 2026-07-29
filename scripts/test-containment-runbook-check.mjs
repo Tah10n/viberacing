@@ -10,21 +10,18 @@ const runbookRelativePath = join("docs", "operations", "CAPABILITY_CONTAINMENT_R
 const fixtureRelativePaths = Object.freeze([
   ".env.example",
   join("scripts", "check-config.mjs"),
-  join("apps", "web", "lib", "public-token-ranking-config.ts"),
-  join("apps", "web", "lib", "public-ranking-config.ts"),
+  join("apps", "web", "lib", "public-snapshot-config.ts"),
   join("apps", "web", "lib", "pairing-config.ts"),
-  join("apps", "web", "lib", "source-creation-config.ts"),
   join("apps", "web", "lib", "car-proposals-config.ts"),
   join("apps", "web", "lib", "enrollment-enable-config.ts"),
-  join("apps", "web", "app", "v1", "community", "scores", "route.ts"),
-  join("apps", "web", "app", "v1", "community", "tokens", "route.ts"),
-  join("apps", "web", "app", "v1", "community", "race", "route.ts"),
-  join("apps", "web", "app", "v1", "community", "race", "status", "route.ts"),
+  join("apps", "web", "lib", "invite-gate-config.ts"),
+  join("apps", "web", "app", "v1", "leaderboards", "current", "route.ts"),
+  join("apps", "web", "app", "v1", "leaderboards", "[seasonStart]", "route.ts"),
+  join("apps", "web", "app", "v1", "profiles", "[handle]", "route.ts"),
+  join("apps", "web", "lib", "public-home-snapshot.ts"),
   join("apps", "web", "app", "v1", "connector", "pairing", "start", "route.ts"),
   join("apps", "web", "app", "v1", "connector", "pairing", "poll", "route.ts"),
-  join("apps", "web", "app", "auth", "pairing", "options", "route.ts"),
-  join("apps", "web", "app", "auth", "pairing", "verify", "route.ts"),
-  join("apps", "web", "app", "connect", "page.tsx"),
+  join("apps", "web", "lib", "batch-pairing-browser-route.ts"),
   join("apps", "web", "app", "account", "page.tsx"),
   join("apps", "web", "app", "auth", "cars", "proposals", "route.ts"),
   join("apps", "web", "app", "auth", "cars", "proposals", "approve", "route.ts"),
@@ -189,17 +186,17 @@ try {
 
   restoreValidFixture();
   mutateFixture(
-    join("apps", "web", "lib", "public-token-ranking-config.ts"),
+    join("apps", "web", "lib", "public-snapshot-config.ts"),
     'readEnvironmentValue(environment) === "true"',
     'readEnvironmentValue(environment) !== "false"',
   );
-  expectFailure("token-ranking Web admission drift", "Web capability source");
+  expectFailure("public-snapshot Web admission drift", "Web capability source");
 
   restoreValidFixture();
   mutateFixture(
-    join("apps", "web", "lib", "public-ranking-config.ts"),
-    "VIBERACING_PUBLIC_RANKING_ENABLED",
-    "VIBERACING_PUBLIC_READS_ENABLED",
+    join("apps", "web", "lib", "invite-gate-config.ts"),
+    "VIBERACING_INVITE_GATE_ENABLED",
+    "VIBERACING_INVITE_POLICY_ENABLED",
   );
   expectFailure("Web gate-name drift", "Web capability source");
 
@@ -212,7 +209,7 @@ try {
   expectFailure("Web admission drift", "Web capability source");
 
   restoreValidFixture();
-  rmSync(join(temporaryRoot, "apps", "web", "app", "v1", "community", "scores", "route.ts"));
+  rmSync(join(temporaryRoot, "apps", "web", "app", "v1", "leaderboards", "current", "route.ts"));
   expectFailure("missing module gate binding", "Web module gate binding");
 
   restoreValidFixture();
@@ -273,7 +270,10 @@ try {
   restoreValidFixture();
   writeFixture(
     runbookRelativePath,
-    runbookSource.replace(/resolve\s+their decisions\s+at module evaluation\./u, "read a decision"),
+    runbookSource.replace(
+      /resolve\s+their\s+decisions\s+at\s+module\s+evaluation\./u,
+      "read a decision",
+    ),
   );
   expectFailure("module-load boundary removal", "missing required statement");
 

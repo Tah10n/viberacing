@@ -21,8 +21,19 @@ import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const sourceBinary = resolve(repositoryRoot, "target", "release", "viberacing-connector.exe");
-const temporaryPrefix = "viberacing-connector-portable-";
+const platformTargets = new Map([
+  ["darwin-arm64", "macos-aarch64"],
+  ["darwin-x64", "macos-x86_64"],
+  ["linux-arm64", "linux-aarch64"],
+  ["linux-x64", "linux-x86_64"],
+  ["win32-x64", "windows-x86_64"],
+]);
+const actualTarget = platformTargets.get(`${process.platform}-${process.arch}`);
+const requestedTarget = process.env.VIBERACING_CONNECTOR_RELEASE_TARGET ?? "windows-x86_64";
+const executableName =
+  process.platform === "win32" ? "viberacing-connector.exe" : "viberacing-connector";
+const sourceBinary = resolve(repositoryRoot, "target", "release", executableName);
+const temporaryPrefix = `viberacing-connector-portable-${requestedTarget}-`;
 const maximumBinaryBytes = 16 * 1024 * 1024;
 const maximumOutputBytes = 16 * 1024;
 const processTimeoutMilliseconds = 5_000;
@@ -38,7 +49,10 @@ const expectedUsage =
   "  viberacing-connector forget-local\n" +
   "  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n" +
   "  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>\n";
-const expectedCandidateFailure = "no exact Codex executable was admitted\n";
+const expectedCandidateFailure =
+  requestedTarget === "windows-x86_64"
+    ? "no exact Codex executable was admitted\n"
+    : "this connector platform is unsupported\n";
 
 function normalizeNewlines(value) {
   return value.replaceAll("\r\n", "\n");
@@ -124,7 +138,7 @@ let approvedTemporaryRoot;
 let passed = false;
 
 try {
-  if (process.argv.length !== 2 || process.platform !== "win32" || process.arch !== "x64") {
+  if (process.argv.length !== 2 || actualTarget === undefined || requestedTarget !== actualTarget) {
     throw new Error("closed invocation");
   }
 
@@ -153,7 +167,7 @@ try {
 
   failureStage = "portable copy";
   const installationRoot = join(canonicalTemporaryRoot, "portable");
-  const stagedBinary = join(installationRoot, "viberacing-connector.exe");
+  const stagedBinary = join(installationRoot, executableName);
   mkdirSync(installationRoot, { recursive: false });
   writeFileSync(stagedBinary, sourceSnapshot.bytes, { flag: "wx" });
   const stagedSnapshot = readBoundedRegularFile(stagedBinary);
@@ -161,24 +175,29 @@ try {
     stagedSnapshot.size !== sourceSnapshot.size ||
     stagedSnapshot.digest !== sourceSnapshot.digest ||
     !exactEntries(canonicalTemporaryRoot, ["portable"]) ||
-    !exactEntries(installationRoot, ["viberacing-connector.exe"])
+    !exactEntries(installationRoot, [executableName])
   ) {
     throw new Error("closed portable copy");
   }
 
   failureStage = "child environment";
-  const systemRoot = process.env.SystemRoot;
-  const commandProcessor = process.env.ComSpec;
-  if (!systemRoot || !commandProcessor) {
+  const childEnvironment =
+    process.platform === "win32"
+      ? {
+          ComSpec: process.env.ComSpec,
+          PATH: "",
+          SystemRoot: process.env.SystemRoot,
+          TEMP: canonicalTemporaryRoot,
+          TMP: canonicalTemporaryRoot,
+        }
+      : {
+          HOME: canonicalTemporaryRoot,
+          PATH: "",
+          TMPDIR: canonicalTemporaryRoot,
+        };
+  if (process.platform === "win32" && (!childEnvironment.SystemRoot || !childEnvironment.ComSpec)) {
     throw new Error("closed child environment");
   }
-  const childEnvironment = {
-    ComSpec: commandProcessor,
-    PATH: "",
-    SystemRoot: systemRoot,
-    TEMP: canonicalTemporaryRoot,
-    TMP: canonicalTemporaryRoot,
-  };
 
   failureStage = "command surface";
   const usage = run(stagedBinary, ["--help"], installationRoot, childEnvironment);
@@ -220,7 +239,7 @@ try {
     finalStagedSnapshot.size !== sourceSnapshot.size ||
     finalStagedSnapshot.digest !== sourceSnapshot.digest ||
     !exactEntries(canonicalTemporaryRoot, ["portable"]) ||
-    !exactEntries(installationRoot, ["viberacing-connector.exe"])
+    !exactEntries(installationRoot, [executableName])
   ) {
     throw new Error("closed post-run integrity");
   }
@@ -264,10 +283,10 @@ try {
 }
 
 if (!passed) {
-  console.error(`Windows portable connector smoke failed during ${failureStage}.`);
+  console.error(`${requestedTarget} portable connector smoke failed during ${failureStage}.`);
   process.exit(1);
 }
 
 console.log(
-  "Windows portable connector smoke passed (bounded copy, closed commands, integrity, removal).",
+  `${requestedTarget} portable connector smoke passed (bounded copy, closed commands, integrity, removal).`,
 );

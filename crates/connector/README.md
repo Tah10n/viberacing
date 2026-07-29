@@ -4,8 +4,11 @@ This crate is the thin, provider-neutral local connector for Vibe Racing. It own
 discovery, privacy-minimized daily token collection, installation and account-scoped keys in the
 operating-system credential store, batch pairing, and signed `UsageSyncV1` submission.
 
-It is still an unreleased development connector. The repository contains no package, installer,
-platform signature, public download, production endpoint, or real-user ingestion evidence.
+It is still an unreleased development connector. A checked manual-main candidate workflow and local
+Windows candidate builder now cover the explicit five-target matrix, portable lifecycle, checksum,
+compatibility manifest, SPDX, and GitHub attestation policy. No hosted matrix result, native
+platform signature, official package, installer, public download, production endpoint, or real-user
+ingestion evidence exists.
 
 ## Reader boundary
 
@@ -117,6 +120,7 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 node scripts/check-codex-compatibility.mjs
 pnpm run test:connector:windows-portable
+pnpm run test:connector:release-candidate
 ```
 
 Tests use synthetic fixtures and ephemeral loopback HTTP only. They do not execute a real user
