@@ -8,16 +8,19 @@ const sourceRoot = resolve(import.meta.dirname, "..");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-deletion-runbook-check-"));
 const runbookRelativePath = join("docs", "operations", "PROFILE_DELETION_FAILURE_RUNBOOK.md");
 const fixtureRelativePaths = Object.freeze([
-  join("database", "migrations", "0002_identity_capabilities.sql"),
-  join("database", "migrations", "0024_profile_deletion_purge.sql"),
-  join("database", "migrations", "0032_terminal_deletion_job_retention_cleanup.sql"),
+  join("database", "migrations", "0001_roles_schemas_and_identity.sql"),
+  join("database", "migrations", "0002_authentication_passkeys_and_recovery.sql"),
+  join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
   join("apps", "web", "lib", "pairing-database-pool.ts"),
   join("apps", "web", "lib", "enrollment-http.ts"),
+  join("apps", "web", "lib", "enrollment-http.test.ts"),
   join("apps", "jobs", "src", "command.ts"),
+  join("apps", "jobs", "src", "command.test.ts"),
+  join("apps", "jobs", "src", "maintenance.ts"),
   join("apps", "jobs", "src", "database-pool.ts"),
   join("apps", "jobs-scheduler", "src", "schedule.ts"),
-  join("database", "tests", "profile_deletion_purge.sql"),
-  join("database", "tests", "deletion_job_cleanup.sql"),
+  join("apps", "jobs-scheduler", "src", "schedule.test.ts"),
+  join("database", "tests", "retention_jobs.sql"),
   join("scripts", "test-database-integration.mjs"),
   join("scripts", "test-jobs-postgres-integration.mjs"),
 ]);
@@ -108,7 +111,7 @@ try {
   );
 
   restoreValidFixture();
-  expectPass("valid profile deletion failure runbook contract");
+  expectPass("valid clean-slate profile deletion failure runbook contract");
 
   rmSync(runbookPath);
   expectFailure(
@@ -159,11 +162,27 @@ try {
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0002_identity_capabilities.sql"),
-    "SET\n    state = 'deletion_pending',",
-    "SET\n    state = 'active',",
+    join("database", "migrations", "0001_roles_schemas_and_identity.sql"),
+    "NEW.public_visibility := 'hidden';",
+    "NEW.public_visibility := 'public';",
   );
-  expectFailure("request lock-down drift", "profile deletion request migration");
+  expectFailure("profile hide drift", "profile state migration");
+
+  restoreValidFixture();
+  mutateFixture(
+    join("database", "migrations", "0002_authentication_passkeys_and_recovery.sql"),
+    "CREATE FUNCTION viberacing_private.revoke_recovery_authority_on_profile_deletion()",
+    "CREATE FUNCTION viberacing_private.keep_recovery_authority_on_profile_deletion()",
+  );
+  expectFailure("recovery authority drift", "profile recovery lock-down migration");
+
+  restoreValidFixture();
+  mutateFixture(
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "UPDATE viberacing_private.agent_accounts\n  SET state = 'unlinked'",
+    "UPDATE viberacing_private.agent_accounts\n  SET state = 'active'",
+  );
+  expectFailure("AgentAccount lock-down drift", "profile deletion request migration");
 
   restoreValidFixture();
   mutateFixture(
@@ -184,59 +203,57 @@ try {
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0024_profile_deletion_purge.sql"),
-    "p_batch_size NOT BETWEEN 1 AND 10",
-    "p_batch_size NOT BETWEEN 1 AND 100",
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "viberacing_private.validate_maintenance_batch(p_batch_size, 10)",
+    "viberacing_private.validate_maintenance_batch(p_batch_size, 100)",
   );
   expectFailure("purge batch widening", "primary profile purge migration");
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0024_profile_deletion_purge.sql"),
-    "job_record.state IN ('queued', 'retry_wait')",
-    "job_record.state <> 'purged'",
-    true,
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "season.state <> 'finalized'",
+    "season.state = 'finalized'",
   );
-  expectFailure("purge eligibility drift", "primary profile purge migration");
+  expectFailure("published snapshot safety drift", "primary profile purge migration");
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0024_profile_deletion_purge.sql"),
-    "TO viberacing_jobs;",
-    "TO viberacing_web;",
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "GRANT EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer)\n  TO viberacing_jobs;",
+    "GRANT EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer)\n  TO viberacing_web;",
   );
-  expectFailure("purge role widening", "primary profile purge migration");
+  expectFailure("purge role widening", "profile deletion grants and RLS migration");
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0024_profile_deletion_purge.sql"),
-    "DELETE FROM viberacing_private.profiles AS profile_record",
-    "SELECT profile_record.profile_id FROM viberacing_private.profiles AS profile_record",
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "DELETE FROM viberacing_private.profiles\n    WHERE profile_id = candidate.profile_id",
+    "SELECT 1 FROM viberacing_private.profiles\n    WHERE profile_id = candidate.profile_id",
   );
   expectFailure("purge atomic settlement drift", "primary profile purge migration");
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0032_terminal_deletion_job_retention_cleanup.sql"),
-    "INTERVAL '30 days'",
-    "INTERVAL '1 day'",
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "retention_expires_at = completed_at + interval '30 days'",
+    "retention_expires_at = completed_at + interval '1 day'",
   );
-  expectFailure("terminal retention shortening", "terminal deletion-job cleanup migration");
+  expectFailure("terminal retention shortening", "profile deletion grants and RLS migration");
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "migrations", "0032_terminal_deletion_job_retention_cleanup.sql"),
-    "job_record.state = 'purged'",
-    "job_record.state <> 'queued'",
-    true,
+    join("database", "migrations", "0006_retention_deletion_admin_and_audit.sql"),
+    "WHERE job.state = 'completed'\n      AND job.retention_expires_at",
+    "WHERE job.state = 'pending'\n      AND job.retention_expires_at",
   );
   expectFailure("terminal eligibility drift", "terminal deletion-job cleanup migration");
 
   restoreValidFixture();
   mutateFixture(
     join("apps", "jobs", "src", "command.ts"),
-    'argumentsValue[0] === "purge-profile-deletions"',
-    'argumentsValue[0] === "purge-profile"',
+    'case "purge-profile-deletions":',
+    'case "purge-profile":',
   );
   expectFailure("Jobs command drift", "Jobs deletion command parser");
 
@@ -258,37 +275,25 @@ try {
 
   restoreValidFixture();
   mutateFixture(
-    join("database", "tests", "profile_deletion_purge.sql"),
-    "state drift rolls the entire attempted purge back",
-    "state drift is ignored",
+    join("database", "tests", "retention_jobs.sql"),
+    "published non-finalized snapshot did not block profile purge",
+    "published state was ignored",
   );
-  expectFailure("purge rollback evidence drift", "primary profile purge SQL evidence");
-
-  restoreValidFixture();
-  mutateFixture(
-    join("database", "tests", "deletion_job_cleanup.sql"),
-    "recent, linked terminal evidence and non-terminal deletion authority remain untouched",
-    "all deletion jobs are removed",
-  );
-  expectFailure(
-    "terminal preservation evidence drift",
-    "terminal deletion-job cleanup SQL evidence",
-  );
+  expectFailure("snapshot-block evidence drift", "profile deletion PostgreSQL evidence");
 
   restoreValidFixture();
   mutateFixture(
     join("scripts", "test-database-integration.mjs"),
-    "database/tests/profile_deletion_purge_concurrency_assertions.sql",
-    "database/tests/profile_deletion_purge_unchecked.sql",
+    'resolve(root, "database", "tests", "retention_jobs.sql")',
+    'resolve(root, "database", "tests", "retention_unchecked.sql")',
   );
-  expectFailure("database race evidence drift", "database integration deletion evidence");
+  expectFailure("database integration evidence drift", "database integration deletion evidence");
 
   restoreValidFixture();
   mutateFixture(
     join("scripts", "test-jobs-postgres-integration.mjs"),
-    '["purge-profile-deletions"]',
-    '["purge-profile"]',
-    true,
+    '"purge-profile-deletions"',
+    '"purge-profile"',
   );
   expectFailure("Jobs integration evidence drift", "Jobs PostgreSQL deletion evidence");
 
@@ -296,15 +301,11 @@ try {
   writeFixture(
     runbookRelativePath,
     runbookSource.replace(
-      /No repository-owned controller currently claims, leases, transitions, backs\s+off, or requeues a failed deletion job\./u,
-      "The scheduler retries every failed deletion job automatically.",
+      "The deletion job has only `pending` and `completed` states",
+      "The scheduler automatically retries failed deletion jobs with durable per-job backoff",
     ),
   );
   expectFailure("automatic retry claim", "missing required statement");
-
-  restoreValidFixture();
-  writeFileSync(runbookPath, Buffer.from([0xff]));
-  expectFailure("invalid UTF-8", "canonical UTF-8 text without NUL bytes");
 
   console.log("Deletion failure runbook checker regressions passed (25 unsafe/drift variants).");
 } finally {

@@ -45,6 +45,30 @@ FROM (
 ) AS required
 ON CONFLICT (season_start, trust_tier) DO NOTHING;
 
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  trust_tier,
+  season_end,
+  metric_version,
+  accounting_policy_version,
+  state,
+  opened_at,
+  grace_ends_at
+)
+SELECT
+  required.season_start,
+  'community',
+  required.season_start + 6,
+  'provider_reported_tokens_v1',
+  'agent_account_cumulative_utc_v1',
+  'grace',
+  required.season_start::timestamp AT TIME ZONE 'UTC',
+  ((required.season_start + 7)::timestamp AT TIME ZONE 'UTC') + interval '48 hours'
+FROM (
+  SELECT pg_temp.season_start(pg_temp.utc_date() - 70) AS season_start
+) AS required
+ON CONFLICT (season_start, trust_tier) DO NOTHING;
+
 INSERT INTO viberacing_private.profiles (
   profile_id,
   github_user_id,
@@ -80,6 +104,13 @@ VALUES
     'retention-delete',
     'en',
     pg_catalog.transaction_timestamp()
+  ),
+  (
+    '70000000-0000-4000-8000-000000000005',
+    970000000000005,
+    'retention-blocked',
+    'en',
+    pg_catalog.transaction_timestamp()
   );
 
 UPDATE viberacing_private.profiles
@@ -88,7 +119,8 @@ WHERE profile_id IN (
   '70000000-0000-4000-8000-000000000001',
   '70000000-0000-4000-8000-000000000002',
   '70000000-0000-4000-8000-000000000003',
-  '70000000-0000-4000-8000-000000000004'
+  '70000000-0000-4000-8000-000000000004',
+  '70000000-0000-4000-8000-000000000005'
 );
 
 INSERT INTO viberacing_private.agent_accounts (
@@ -613,6 +645,25 @@ VALUES (
   pg_catalog.transaction_timestamp() - interval '31 days'
 );
 
+INSERT INTO viberacing_private.recovery_authorities (
+  recovery_authority_id,
+  profile_id,
+  source_recovery_code_id,
+  verifier_digest,
+  challenge_digest,
+  context_digest,
+  expires_at
+)
+VALUES (
+  '70000000-0000-4000-8000-000000000304',
+  '70000000-0000-4000-8000-000000000004',
+  '70000000-0000-4000-8000-000000000305',
+  pg_catalog.decode(pg_catalog.repeat('a2', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a3', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('a4', 32), 'hex'),
+  pg_catalog.transaction_timestamp() + interval '5 minutes'
+);
+
 INSERT INTO viberacing_private.passkeys (
   passkey_id,
   profile_id,
@@ -675,6 +726,63 @@ VALUES (
   '{}',
   pg_catalog.sha256(pg_catalog.convert_to('{}', 'UTF8'))
 );
+
+INSERT INTO viberacing_private.leaderboard_snapshots (
+  snapshot_id,
+  season_start,
+  trust_tier,
+  revision,
+  generated_at,
+  finalized,
+  participant_count,
+  state
+)
+VALUES (
+  'snp_BBBBBBBBBBBBBBBBBBBBBB',
+  pg_temp.season_start(pg_temp.utc_date() - 70),
+  'community',
+  900002,
+  pg_catalog.transaction_timestamp(),
+  false,
+  1,
+  'building'
+);
+
+INSERT INTO viberacing_private.leaderboard_snapshot_profiles (
+  snapshot_id,
+  handle,
+  canonical_payload,
+  payload_digest
+)
+VALUES (
+  'snp_BBBBBBBBBBBBBBBBBBBBBB',
+  'retention-blocked',
+  '{}',
+  pg_catalog.sha256(pg_catalog.convert_to('{}', 'UTF8'))
+);
+
+UPDATE viberacing_private.leaderboard_snapshots
+SET payload_digest = pg_catalog.decode(pg_catalog.repeat('a5', 32), 'hex'),
+    etag = '"' || pg_catalog.repeat('a5', 32) || '"',
+    state = 'published'
+WHERE snapshot_id = 'snp_BBBBBBBBBBBBBBBBBBBBBB';
+
+INSERT INTO viberacing_private.leaderboard_published_snapshots (
+  season_start,
+  trust_tier,
+  snapshot_id,
+  published_at
+)
+VALUES (
+  pg_temp.season_start(pg_temp.utc_date() - 70),
+  'community',
+  'snp_BBBBBBBBBBBBBBBBBBBBBB',
+  pg_catalog.transaction_timestamp()
+);
+
+UPDATE viberacing_private.profiles
+SET state = 'deletion_pending'
+WHERE profile_id = '70000000-0000-4000-8000-000000000005';
 
 UPDATE viberacing_private.pairing_request_windows
 SET window_started_at = pg_catalog.transaction_timestamp() - interval '2 hours',
@@ -753,6 +861,21 @@ BEGIN
   END IF;
 END
 $deletion_lockdown_assertion$;
+
+DO $recovery_lockdown_assertion$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.recovery_authorities
+    WHERE recovery_authority_id = '70000000-0000-4000-8000-000000000304'
+      AND profile_id = '70000000-0000-4000-8000-000000000004'
+      AND state = 'revoked'
+      AND revoked_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'profile deletion did not revoke active recovery authority';
+  END IF;
+END
+$recovery_lockdown_assertion$;
 
 INSERT INTO viberacing_private.profile_deletion_jobs (
   profile_id,
@@ -909,6 +1032,34 @@ BEGIN
       AND retention_expires_at = completed_at + interval '30 days'
   ) THEN
     RAISE EXCEPTION 'profile purge terminal state is invalid';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.profiles
+    WHERE profile_id = '70000000-0000-4000-8000-000000000005'
+      AND state = 'deletion_pending'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.profile_deletion_jobs
+    WHERE profile_id = '70000000-0000-4000-8000-000000000005'
+      AND state = 'pending'
+  ) THEN
+    RAISE EXCEPTION 'published non-finalized snapshot did not block profile purge';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.leaderboard_published_snapshots AS published
+    JOIN viberacing_private.seasons AS season
+      ON season.season_start = published.season_start
+      AND season.trust_tier = published.trust_tier
+    JOIN viberacing_private.leaderboard_snapshot_profiles AS snapshot_profile
+      ON snapshot_profile.snapshot_id = published.snapshot_id
+    WHERE season.state <> 'finalized'
+      AND snapshot_profile.handle = 'retention-blocked'
+  ) THEN
+    RAISE EXCEPTION 'snapshot-blocked profile deletion state is invalid';
   END IF;
 
   IF NOT EXISTS (

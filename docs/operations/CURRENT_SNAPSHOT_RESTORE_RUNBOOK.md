@@ -2,17 +2,12 @@
 
 ## Scope and evidence boundary
 
-**Clean-slate transition hold.** ADR 0076 replaces the unreleased database catalog and snapshot
-model. The current old-schema synthetic archive is baseline evidence only; it is not compatible with
-the final clean bootstrap and must never be restored into it. Restore rehearsal reopens only after
-an empty database, exact final ledger, AgentAccount authority, exact accounting state, immutable
-snapshots, and deletion invariants are proven together. No production or real-user archive exists.
-
 This is the checked operator contract for rehearsing restoration of one current synthetic snapshot
 into an isolated staging-shaped target. The repository-owned integration creates bounded archives
 only inside its disposable PostgreSQL container, replaces only that run's database twice, verifies
-the restored state, and removes the container, network, and storage. Starting Web, Ingest, Jobs, the
-local site, or the migration process does not create or restore a backup.
+the exact clean bootstrap ledger, AgentAccount/accounting state, finalized immutable snapshot, and
+security boundary after each restore, then removes the container, network, and storage. Starting
+Web, Ingest, Jobs, the local site, or the migration process does not create or restore a backup.
 
 No repository command restores a shared staging or production database. A deployment-owned backup
 and restore controller, protected credentials, trust material, encrypted storage, retention policy,
@@ -77,11 +72,12 @@ pnpm run test:database:integration
 ```
 
 The local archive budget is 64 MiB and each canonical schema or data buffer is bounded to 32 MiB.
-The current oracle requires two current-snapshot restores, SHA-256/length-identical canonical data,
-a byte-stable canonical restored schema, all 28 private tables with forced RLS, selected exact
-grants and denials, 45 post-restore lock-wait races, one early-completion overlap, 12
-relation-denial checks, and 67 cross-capability checks. Dump content is never emitted; bounded
-buffers are overwritten after hashing.
+The current oracle requires the exact seven-row clean migration ledger, all 35 private tables with
+forced RLS, three bounded archives and two current-snapshot restores, SHA-256/length-identical
+canonical data, a byte-stable canonical restored schema, the same finalized snapshot identity and
+payload after both restores, and the complete identity/auth/provider/grant/legacy-object semantic
+oracle after each restore. Dump content is never emitted; bounded buffers are overwritten after
+hashing.
 
 A successful local result is prerequisite evidence only. It does not select, decrypt, copy, or
 restore any deployment archive and does not authorize a staging or production action.
@@ -134,8 +130,8 @@ therefore cannot prove that a deleted profile remains deleted after restoring ol
 Do not delete an expired tombstone, shorten backup retention, or treat current-snapshot equality as
 resurrection protection. A future stale-backup exercise requires a separately reviewed keyed marker
 authority, replay procedure, cache and credential invalidation, privacy-map update, and destructive
-test proving that deleted identity, session, passkey, device, source, and public state do not
-return.
+test proving that deleted identity, session, passkey, installation, device, AgentAccount, and public
+state do not return.
 
 ## Failure and incident handoff
 

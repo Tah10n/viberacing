@@ -7,31 +7,34 @@ const failures = [];
 const maximumRunbookBytes = 32_768;
 const runbookPath = resolve(root, "docs", "operations", "PROFILE_DELETION_FAILURE_RUNBOOK.md");
 const rootPackagePath = resolve(root, "package.json");
-const requestMigrationPath = resolve(
+const identityMigrationPath = resolve(
   root,
   "database",
   "migrations",
-  "0002_identity_capabilities.sql",
+  "0001_roles_schemas_and_identity.sql",
 );
-const purgeMigrationPath = resolve(
+const authenticationMigrationPath = resolve(
   root,
   "database",
   "migrations",
-  "0024_profile_deletion_purge.sql",
+  "0002_authentication_passkeys_and_recovery.sql",
 );
-const terminalCleanupMigrationPath = resolve(
+const deletionMigrationPath = resolve(
   root,
   "database",
   "migrations",
-  "0032_terminal_deletion_job_retention_cleanup.sql",
+  "0006_retention_deletion_admin_and_audit.sql",
 );
 const webPoolPath = resolve(root, "apps", "web", "lib", "pairing-database-pool.ts");
 const webHttpPath = resolve(root, "apps", "web", "lib", "enrollment-http.ts");
+const webHttpTestPath = resolve(root, "apps", "web", "lib", "enrollment-http.test.ts");
 const jobsCommandPath = resolve(root, "apps", "jobs", "src", "command.ts");
+const jobsCommandTestPath = resolve(root, "apps", "jobs", "src", "command.test.ts");
+const jobsMaintenancePath = resolve(root, "apps", "jobs", "src", "maintenance.ts");
 const jobsPoolPath = resolve(root, "apps", "jobs", "src", "database-pool.ts");
 const schedulePath = resolve(root, "apps", "jobs-scheduler", "src", "schedule.ts");
-const purgeTestPath = resolve(root, "database", "tests", "profile_deletion_purge.sql");
-const terminalCleanupTestPath = resolve(root, "database", "tests", "deletion_job_cleanup.sql");
+const scheduleTestPath = resolve(root, "apps", "jobs-scheduler", "src", "schedule.test.ts");
+const retentionTestPath = resolve(root, "database", "tests", "retention_jobs.sql");
 const databaseIntegrationPath = resolve(root, "scripts", "test-database-integration.mjs");
 const jobsIntegrationPath = resolve(root, "scripts", "test-jobs-postgres-integration.mjs");
 
@@ -55,11 +58,11 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-02",
-    "Pin the exact reviewed commit, immutable service artifacts, migration ledger, affected environment, and deployment-owned controllers privately.",
+    "Pin the exact reviewed commit, immutable service artifacts, seven-revision migration ledger, affected environment, and deployment-owned controllers privately.",
   ],
   [
     "VR-DELETE-03",
-    "Classify the symptom as request failure, queued primary-purge failure, terminal-job cleanup failure, or cache/backup/restore risk; do not merge those states.",
+    "Classify the symptom as request failure, snapshot-blocked primary purge, other primary-purge failure, terminal-job cleanup failure, or cache/backup/restore risk; do not merge those states.",
   ],
   [
     "VR-DELETE-04",
@@ -67,7 +70,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-05",
-    "Prove protected routing, process-settlement, database-health, least-privilege, verified-TLS, and monitoring prerequisites exist; otherwise keep the incident contained.",
+    "Prove protected routing, process settlement, database health, least privilege, verified TLS, and monitoring prerequisites exist; otherwise keep the incident contained.",
   ],
   [
     "VR-DELETE-06",
@@ -75,11 +78,11 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-07",
-    "Treat an absent successful request result as unknown lock-down; do not claim the profile is hidden or authority is revoked until the protected atomic request oracle confirms it.",
+    "Treat an absent successful request result as unknown lock-down; do not claim the profile or authority changed until the protected atomic request oracle confirms it.",
   ],
   [
     "VR-DELETE-08",
-    "For a confirmed successful request, require one aggregate oracle to confirm `deletion_pending`, hidden profile, revoked active authority, unlinked sources, cancelled approved pairing, and one non-terminal job without exposing row data.",
+    "For a confirmed request, require one aggregate oracle to confirm `deletion_pending`, hidden public state, revoked sessions/passkeys/recovery authority/device keys/installations, unlinked AgentAccounts, expired pairing, and one `pending` deletion job without exposing row data.",
   ],
   [
     "VR-DELETE-09",
@@ -87,7 +90,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-10",
-    "If request lock-down is absent or inconsistent, use the checked capability containment runbook and deployment controls to prevent affected authority or public state from being used while the root cause is investigated.",
+    "If request lock-down is absent or inconsistent, use the checked capability-containment runbook and deployment controls to prevent affected authority or public state from being used while the root cause is investigated.",
   ],
   [
     "VR-DELETE-11",
@@ -95,23 +98,23 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-12",
-    "Use a protected read-only aggregate oracle to distinguish due `queued`, due `retry_wait`, future, `purged`, missing, linked, and malformed state without returning a profile, handle, digest, job identifier, timestamp, error code, or row.",
+    "Use a protected read-only aggregate oracle to distinguish `pending`, snapshot-blocked, `completed`, missing, and malformed state without returning a profile, handle, UUID, digest, timestamp, or row.",
   ],
   [
     "VR-DELETE-13",
-    "Verify the pinned ledger, exact function ownership/grants, forced RLS, the fixed five deletion-intersecting maintenance mutexes, Jobs login probe, TLS, database read-write state, and resource saturation before considering a retry.",
+    "Verify the seven-row ledger, exact function ownership/grants, forced RLS, `profile_purge` and `deletion_job_cleanup` mutexes, published-snapshot state, Jobs login probe, TLS, database read-write state, and resource saturation before considering a retry.",
   ],
   [
     "VR-DELETE-14",
-    "Treat any observed `running` job, unreviewed state transition, caller-selected backoff, or claimed automatic retry as unsupported and hand it to incident command.",
+    "Treat any observed third deletion-job state, per-job lease/backoff metadata, caller-selected cutoff, or claimed durable automatic retry as unsupported and hand it to incident command.",
   ],
   [
     "VR-DELETE-15",
-    "Diagnose terminal-job retention separately; cleanup cannot complete or repair a non-terminal primary purge and must not run early to erase evidence.",
+    "Diagnose terminal-job retention separately; cleanup cannot complete or repair a `pending` primary purge and must not run early to erase evidence.",
   ],
   [
     "VR-DELETE-16",
-    "Classify cache invalidation, backup expiry, tombstone policy, and stale-backup deletion replay as open external work; do not infer them from primary-database success.",
+    "Classify cache invalidation, backup expiry, deletion-marker policy, and stale-backup replay as open external work; do not infer them from primary-database success.",
   ],
   [
     "VR-DELETE-17",
@@ -131,19 +134,19 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-DELETE-21",
-    "After a reported success, require one protected aggregate oracle to prove the exact profile is absent, its personal rows cannot be reached, and the matching job alone is profile-free, terminal `purged`, lease-free, error-free, and completed.",
+    "After a reported success, require one protected aggregate oracle to prove the exact profile and reachable personal rows are absent and the matching protected job alone is terminal `completed` with the exact 30-day retention deadline.",
   ],
   [
     "VR-DELETE-22",
-    "Recheck runtime-role denials, forced RLS, maintenance mutexes, database/session cleanup, scheduler settlement, and absence of unexpected mutation outside the approved batch.",
+    "Recheck runtime-role denials, forced RLS, both deletion mutexes, published-snapshot consistency, database/session cleanup, scheduler settlement, and absence of unexpected mutation outside the approved batch.",
   ],
   [
     "VR-DELETE-23",
-    "Retain the opaque terminal job for at least the fixed 30-day server-time window; terminal cleanup remains a separate bounded Jobs action and never proves user-data deletion.",
+    "Retain the protected terminal UUID row until its fixed 30-day server-time deadline; terminal cleanup remains a separate bounded Jobs action and never proves user-data deletion.",
   ],
   [
     "VR-DELETE-24",
-    "Keep cache, backup, tombstone, restore-replay, notification, legal-retention, and monitoring gaps open with named owners and deadlines; do not call the broader deletion complete.",
+    "Keep cache, backup, deletion-marker, restore-replay, notification, legal-retention, and monitoring gaps open with named owners and deadlines; do not call the broader deletion complete.",
   ],
   [
     "VR-DELETE-25",
@@ -180,13 +183,14 @@ const expectedRootScripts = Object.freeze({
   "verify:release:node": "node scripts/verify.mjs --release --node-only",
 });
 const requiredStatements = Object.freeze([
+  "The request transaction does not physically purge profile data.",
   "Neither the HTTP request nor Web startup runs the physical purge.",
-  "No repository-owned controller currently claims, leases, transitions, backs off, or requeues a failed deletion job.",
-  "Do not describe those schema fields or the hourly local scheduler as automatic retry, durable missed-slot recovery, deployed cadence, or monitoring.",
-  "The retry is a new bounded call, not a resume of an application lease.",
-  "A failed transaction leaves the previously committed request lock-down and non-terminal job available for diagnosis",
-  "The separate terminal cleanup can delete only a profile-free `purged` job after at least 30 days; it is retention cleanup, not a purge retry or completion oracle.",
-  "The current database has an unused tombstone table shape, but the request and purge intentionally do not populate it.",
+  "The deletion job has only `pending` and `completed` states; it has no lease, attempt counter, error field, caller-selected cutoff, or per-job backoff.",
+  "The purge refuses a profile while its handle remains in a published snapshot for a non-finalized season.",
+  "A failed purge transaction leaves the previously committed request lock-down and `pending` job available for diagnosis.",
+  "The retry is a new bounded scan of server-selected pending jobs, not a resume of an application lease.",
+  "The separate terminal cleanup can delete only a `completed` job after its server-computed retention expiry; it is retention cleanup, not a purge retry or completion oracle.",
+  "The retained terminal row still contains the opaque profile UUID and must remain protected personal data until cleanup.",
   "There is no repository-owned user-notification system or private support channel.",
   "Do not read or edit private tables interactively.",
   "Do not run raw SQL, `psql`, a Jobs package command, or a scheduler entry point from this public runbook.",
@@ -248,27 +252,6 @@ function requireOrder(source, label, fragments) {
       return;
     }
     cursor = next;
-  }
-}
-
-function requireOccurrences(source, label, fragment, expectedCount) {
-  if (source === undefined) {
-    return;
-  }
-  const normalized = compact(source);
-  const needle = compact(fragment);
-  let count = 0;
-  let cursor = 0;
-  while (true) {
-    const index = normalized.indexOf(needle, cursor);
-    if (index < 0) {
-      break;
-    }
-    count += 1;
-    cursor = index + needle.length;
-  }
-  if (count !== expectedCount) {
-    fail(`${label} expected ${expectedCount} occurrence(s) of: ${fragment}`);
   }
 }
 
@@ -383,33 +366,78 @@ if (rootPackage !== undefined) {
   }
 }
 
-const requestMigration = normalizedFile(requestMigrationPath, "profile deletion request migration");
+const identityMigration = normalizedFile(identityMigrationPath, "profile state migration");
+const profileStateFunction = sectionBetween(
+  identityMigration,
+  "profile state migration",
+  "CREATE FUNCTION viberacing_private.enforce_profile_update()",
+  "CREATE TRIGGER profiles_enforce_update",
+);
+requireOrder(profileStateFunction, "profile state migration", [
+  "IF NEW.state = 'deletion_pending' AND OLD.state <> 'deletion_pending' THEN",
+  "NEW.public_visibility := 'hidden';",
+  "NEW.hidden_at := NEW.updated_at;",
+  "NEW.deletion_requested_at := NEW.updated_at;",
+]);
+
+const authenticationMigration = normalizedFile(
+  authenticationMigrationPath,
+  "profile recovery lock-down migration",
+);
+const recoveryLockdownFunction = sectionBetween(
+  authenticationMigration,
+  "profile recovery lock-down migration",
+  "CREATE FUNCTION viberacing_private.revoke_recovery_authority_on_profile_deletion()",
+  "CREATE TRIGGER profiles_revoke_recovery_authority",
+);
+requireOrder(recoveryLockdownFunction, "profile recovery lock-down migration", [
+  "IF NEW.state = 'deletion_pending' AND OLD.state <> 'deletion_pending' THEN",
+  "UPDATE viberacing_private.recovery_authorities",
+  "SET state = 'revoked'",
+  "WHERE profile_id = NEW.profile_id",
+  "AND state = 'active';",
+]);
+
+const deletionMigration = normalizedFile(
+  deletionMigrationPath,
+  "profile deletion request and purge migration",
+);
 const requestFunction = sectionBetween(
-  requestMigration,
+  deletionMigration,
   "profile deletion request migration",
-  "CREATE FUNCTION viberacing_api.request_profile_deletion(",
-  "REVOKE ALL ON TABLE viberacing_private.audit_events",
+  "CREATE OR REPLACE FUNCTION viberacing_api.request_profile_deletion(",
+  "CREATE FUNCTION viberacing_private.enqueue_profile_deletion_job()",
 );
 requireOrder(requestFunction, "profile deletion request migration", [
-  "CREATE FUNCTION viberacing_api.request_profile_deletion(",
-  "state = 'deletion_pending'",
+  "v_profile_id := viberacing_api.consume_auth_challenge(",
+  "'profile_delete'",
+  "UPDATE viberacing_private.profiles",
+  "SET state = 'deletion_pending'",
+  "UPDATE viberacing_private.pairing_transactions AS pairing",
+  "SET state = 'expired'",
+  "UPDATE viberacing_private.device_keys",
+  "SET state = 'revoked'",
+  "UPDATE viberacing_private.connector_installations",
+  "SET state = 'revoked'",
+  "UPDATE viberacing_private.agent_accounts",
+  "SET state = 'unlinked'",
   "UPDATE viberacing_private.sessions",
+  "SET state = 'revoked'",
   "UPDATE viberacing_private.passkeys",
-  "DELETE FROM viberacing_private.recovery_codes",
-  "DELETE FROM viberacing_private.auth_challenges",
-  "UPDATE viberacing_private.device_keys AS device",
-  "UPDATE viberacing_private.codex_sources",
-  "UPDATE viberacing_private.pairing_transactions",
-  "INSERT INTO viberacing_private.deletion_jobs",
-  "'queued'",
-  "viberacing_private.append_audit_event",
+  "SET state = 'revoked'",
 ]);
 requireFragments(requestFunction, "profile deletion request migration", [
-  "hidden_at = COALESCE(hidden_at, now_at)",
-  "deletion_requested_at = now_at",
-  "SET state = 'unlinked'",
-  "SET state = 'cancelled'",
-  "WHEN integrity_constraint_violation THEN",
+  "AND handle = p_typed_handle;",
+  "IF NOT FOUND THEN",
+  "AND state IN ('pending', 'active');",
+  "AND state <> 'unlinked';",
+]);
+requireFragments(deletionMigration, "profile deletion request migration", [
+  "CREATE TRIGGER profiles_enqueue_deletion_job",
+  "AFTER UPDATE OF state ON viberacing_private.profiles",
+  "IF OLD.state <> 'deletion_pending' AND NEW.state = 'deletion_pending' THEN",
+  "INSERT INTO viberacing_private.profile_deletion_jobs",
+  "NEW.deletion_requested_at",
 ]);
 
 const webPool = normalizedFile(webPoolPath, "Web profile deletion database composition");
@@ -420,12 +448,11 @@ const webPoolQuery = sectionBetween(
   "const createPasskeyAddChallengeQuery",
 );
 requireOrder(webPoolQuery, "Web profile deletion database composition", [
-  "const completeProfileDeletionQuery",
-  "challenge_consumption AS MATERIALIZED",
-  "profile_deletion AS MATERIALIZED",
-  "viberacing_api.request_profile_deletion(",
-  "FROM challenge_consumption WHERE consumed",
-  "AND pg_catalog.count(*) = 1 AS deleted",
+  "const completeProfileDeletionQuery = `WITH profile_deletion AS MATERIALIZED",
+  "SELECT viberacing_api.request_profile_deletion(",
+  "$8::text",
+  "SELECT pg_catalog.count(*) = 1 AS deleted",
+  "FROM profile_deletion",
 ]);
 
 const webHttp = normalizedFile(webHttpPath, "Web profile deletion HTTP boundary");
@@ -433,10 +460,10 @@ const webHttpHandler = sectionBetween(
   webHttp,
   "Web profile deletion HTTP boundary",
   "async profileDeletionVerify(request: Request)",
-  "async sourcePause(request: Request)",
+  "async logout(request: Request)",
 );
 requireOrder(webHttpHandler, "Web profile deletion HTTP boundary", [
-  "async profileDeletionVerify(request: Request)",
+  'exactOrigin(request, currentRuntime, "/auth/profile/delete/verify")',
   "const deleted = await currentRuntime.service.completeProfileDeletion(",
   'if (!deleted) { return problem("unauthorized"); }',
   "const headers = noStoreHeaders();",
@@ -444,68 +471,86 @@ requireOrder(webHttpHandler, "Web profile deletion HTTP boundary", [
   "return new Response(null, { headers, status: 204 });",
 ]);
 
-const purgeMigration = normalizedFile(purgeMigrationPath, "primary profile purge migration");
-requireFragments(purgeMigration, "primary profile purge migration", [
-  "p_batch_size NOT BETWEEN 1 AND 10 THEN",
-  "job_record.state IN ('queued', 'retry_wait')",
-  "job_record.available_at <= now_at",
-  "LIMIT p_batch_size FOR UPDATE SKIP LOCKED",
-  "profile_record.state = 'deletion_pending'",
-  "locked_mutex_count <> 5",
-  "last_error_code = NULL",
-  "REVOKE EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer) FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin",
-  "GRANT EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer) TO viberacing_jobs",
+const purgeFunction = sectionBetween(
+  deletionMigration,
+  "primary profile purge migration",
+  "CREATE FUNCTION viberacing_api.purge_profile_deletions(",
+  "CREATE FUNCTION viberacing_api.cleanup_terminal_deletion_jobs(",
+);
+requireFragments(purgeFunction, "primary profile purge migration", [
+  "viberacing_private.validate_maintenance_batch(p_batch_size, 10)",
+  "viberacing_private.try_lock_maintenance('profile_purge')",
+  "job.state = 'pending'",
+  "profile.state = 'deletion_pending'",
+  "FROM viberacing_private.leaderboard_published_snapshots AS published",
+  "season.state <> 'finalized'",
+  "snapshot_profile.handle = profile.handle",
+  "ORDER BY job.requested_at, job.profile_id",
+  "LIMIT p_batch_size",
+  "FOR UPDATE OF job, profile SKIP LOCKED",
+  "DELETE FROM viberacing_private.season_profile_totals",
+  "DELETE FROM viberacing_private.ranking_events AS event",
+  "DELETE FROM viberacing_private.usage_idempotency_records AS record",
+  "DELETE FROM viberacing_private.agent_account_day_totals AS total",
+  "DELETE FROM viberacing_private.usage_observations AS observation",
+  "DELETE FROM viberacing_private.pairing_transactions AS pairing",
+  "DELETE FROM viberacing_private.profiles",
+  "GET DIAGNOSTICS changed_rows = ROW_COUNT",
+  "IF changed_rows <> 1 THEN",
+  "SET state = 'completed'",
+  "retention_expires_at = v_now + interval '30 days'",
+  "AND state = 'pending';",
 ]);
-requireOccurrences(
-  purgeMigration,
-  "primary profile purge migration",
-  "job_record.state IN ('queued', 'retry_wait')",
-  2,
-);
-requireOccurrences(
-  purgeMigration,
-  "primary profile purge migration",
-  "job_record.available_at <= now_at",
-  2,
-);
-for (const mutex of [
-  "auth_retention_cleanup",
-  "community_scoring_refresh",
-  "ingest_retention_cleanup",
-  "pairing_retention_cleanup",
-  "profile_deletion_purge",
-]) {
-  requireFragments(purgeMigration, "primary profile purge migration", [`'${mutex}'`]);
-}
-requireOrder(purgeMigration, "primary profile purge migration", [
-  "UPDATE viberacing_private.deletion_jobs AS job_record",
-  "state = 'purged'",
-  "DELETE FROM viberacing_private.profiles AS profile_record",
-  "purged_profiles := purged_profiles + 1",
+requireOrder(purgeFunction, "primary profile purge migration", [
+  "DELETE FROM viberacing_private.profiles",
+  "GET DIAGNOSTICS changed_rows = ROW_COUNT",
+  "IF changed_rows <> 1 THEN",
+  "UPDATE viberacing_private.profile_deletion_jobs",
+  "SET state = 'completed'",
+  "purged_profiles := purged_profiles + 1;",
 ]);
 
-const terminalCleanupMigration = normalizedFile(
-  terminalCleanupMigrationPath,
+const terminalCleanupFunction = sectionBetween(
+  deletionMigration,
   "terminal deletion-job cleanup migration",
+  "CREATE FUNCTION viberacing_api.cleanup_terminal_deletion_jobs(",
+  "CREATE FUNCTION viberacing_api.reset_expired_pairing_request_windows()",
 );
-requireFragments(terminalCleanupMigration, "terminal deletion-job cleanup migration", [
-  "p_batch_size NOT BETWEEN 1 AND 1000 THEN",
-  "capability = 'profile_deletion_purge'",
-  "pg_catalog.clock_timestamp() - INTERVAL '30 days'",
-  "job_record.state = 'purged'",
-  "job_record.profile_id IS NULL",
-  "job_record.completed_at <= cutoff_at",
-  "LIMIT p_batch_size FOR UPDATE SKIP LOCKED",
-  "REVOKE EXECUTE ON FUNCTION viberacing_api.cleanup_terminal_deletion_jobs(integer) FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin",
+requireFragments(terminalCleanupFunction, "terminal deletion-job cleanup migration", [
+  "viberacing_private.validate_maintenance_batch(p_batch_size, 1000)",
+  "viberacing_private.try_lock_maintenance('deletion_job_cleanup')",
+  "job.state = 'completed'",
+  "job.retention_expires_at <= pg_catalog.clock_timestamp()",
+  "ORDER BY job.retention_expires_at, job.profile_id",
+  "LIMIT p_batch_size",
+  "FOR UPDATE OF job SKIP LOCKED",
+  "DELETE FROM viberacing_private.profile_deletion_jobs AS job",
+]);
+requireFragments(deletionMigration, "profile deletion grants and RLS migration", [
+  "state IN ('pending', 'completed')",
+  "retention_expires_at = completed_at + interval '30 days'",
+  "ALTER TABLE viberacing_private.profile_deletion_jobs FORCE ROW LEVEL SECURITY",
+  "REVOKE ALL ON TABLE viberacing_private.profile_deletion_jobs FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin",
+  "GRANT EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer) TO viberacing_jobs",
   "GRANT EXECUTE ON FUNCTION viberacing_api.cleanup_terminal_deletion_jobs(integer) TO viberacing_jobs",
+]);
+
+const jobsMaintenance = normalizedFile(jobsMaintenancePath, "Jobs deletion job validator");
+requireFragments(jobsMaintenance, "Jobs deletion job validator", [
+  "export const maximumCleanupBatchSize = 1_000;",
+  "export const maximumProfileDeletionPurgeBatchSize = 10;",
+  'kind === "purge_profile_deletions" ? maximumProfileDeletionPurgeBatchSize : maximumCleanupBatchSize',
 ]);
 
 const jobsCommand = normalizedFile(jobsCommandPath, "Jobs deletion command parser");
 requireFragments(jobsCommand, "Jobs deletion command parser", [
-  'argumentsValue.length === 1 && argumentsValue[0] === "purge-profile-deletions"',
+  "value.length !== 1",
+  'case "purge-profile-deletions":',
   "batchSize: maximumProfileDeletionPurgeBatchSize",
-  'argumentsValue.length === 1 && argumentsValue[0] === "cleanup-terminal-deletion-jobs"',
+  'kind: "purge_profile_deletions"',
+  'case "cleanup-terminal-deletion-jobs":',
   "batchSize: maximumCleanupBatchSize",
+  'kind: "cleanup_terminal_deletion_jobs"',
 ]);
 
 const jobsPool = normalizedFile(jobsPoolPath, "Jobs deletion database adapter");
@@ -516,37 +561,49 @@ requireFragments(jobsPool, "Jobs deletion database adapter", [
 
 const schedule = normalizedFile(schedulePath, "Jobs scheduler deletion catalog");
 requireOrder(schedule, "Jobs scheduler deletion catalog", [
+  'Object.freeze({ kind: "refresh_dirty_leaderboard" })',
   'batchSize: maximumProfileDeletionPurgeBatchSize, kind: "purge_profile_deletions"',
   'batchSize: maximumCleanupBatchSize, kind: "cleanup_terminal_deletion_jobs"',
 ]);
 forbidFragments(
-  [jobsCommand, jobsPool, schedule].filter((value) => value !== undefined).join("\n"),
+  [jobsCommand, jobsMaintenance, jobsPool, schedule]
+    .filter((value) => value !== undefined)
+    .join("\n"),
   "Jobs deletion runtime",
-  ["attempt_count", "available_at", "last_error_code", "lease_token_digest", "retry_wait"],
+  ["retry_wait", "lease_token", "last_error_code", "available_at"],
 );
 
-const purgeTest = normalizedFile(purgeTestPath, "primary profile purge SQL evidence");
-requireFragments(purgeTest, "primary profile purge SQL evidence", [
-  "one call purges at most ten oldest due profiles",
-  "a retry-wait job is purged when its availability window is due",
-  "state drift rolls the entire attempted purge back",
-  "primary purge does not invent an unkeyed restore tombstone",
-  "Web cannot purge profiles",
-  "Ingest cannot purge profiles",
-  "Admin cannot purge profiles",
-  "a missing private deletion purge mutex fails closed",
+const retentionTest = normalizedFile(retentionTestPath, "profile deletion PostgreSQL evidence");
+requireFragments(retentionTest, "profile deletion PostgreSQL evidence", [
+  "profile deletion did not atomically lock down every authority",
+  "profile deletion did not revoke active recovery authority",
+  "published non-finalized snapshot did not block profile purge",
+  "FROM viberacing_api.purge_profile_deletions(10)",
+  "profile deletion purge result is invalid",
+  "FROM viberacing_api.cleanup_terminal_deletion_jobs(1000)",
+  "profile purge terminal state is invalid",
+  "snapshot-blocked profile deletion state is invalid",
 ]);
 
-const terminalCleanupTest = normalizedFile(
-  terminalCleanupTestPath,
-  "terminal deletion-job cleanup SQL evidence",
-);
-requireFragments(terminalCleanupTest, "terminal deletion-job cleanup SQL evidence", [
-  "recent, linked terminal evidence and non-terminal deletion authority remain untouched",
-  "Web cannot run terminal deletion-job cleanup",
-  "Ingest cannot run terminal deletion-job cleanup",
-  "Admin cannot run terminal deletion-job cleanup",
-  "a missing private deletion mutex fails terminal deletion-job cleanup closed",
+const webHttpTest = normalizedFile(webHttpTestPath, "Web profile deletion HTTP evidence");
+requireFragments(webHttpTest, "Web profile deletion HTTP evidence", [
+  "expect(verification.status).toBe(204)",
+  'expect(verification.headers.get("cache-control")).toBe("no-store")',
+  'expect(verification.headers.get("set-cookie")).toContain("viberacing_session=")',
+]);
+
+const jobsCommandTest = normalizedFile(jobsCommandTestPath, "Jobs deletion command evidence");
+requireFragments(jobsCommandTest, "Jobs deletion command evidence", [
+  '["purge-profile-deletions", { batchSize: 10, kind: "purge_profile_deletions" }]',
+  '["cleanup-terminal-deletion-jobs", { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" }]',
+  "parses one closed no-argument command",
+]);
+
+const scheduleTest = normalizedFile(scheduleTestPath, "Jobs scheduler deletion evidence");
+requireFragments(scheduleTest, "Jobs scheduler deletion evidence", [
+  'expect(jobs[10]).toEqual({ batchSize: 10, kind: "purge_profile_deletions" })',
+  'kinds.indexOf("purge_profile_deletions")',
+  'kinds.indexOf("cleanup_terminal_deletion_jobs")',
 ]);
 
 const databaseIntegration = normalizedFile(
@@ -554,18 +611,15 @@ const databaseIntegration = normalizedFile(
   "database integration deletion evidence",
 );
 requireFragments(databaseIntegration, "database integration deletion evidence", [
-  "database/tests/profile_deletion_purge.sql",
-  "database/tests/profile_deletion_purge_concurrency_setup.sql",
-  "database/tests/profile_deletion_purge_concurrency_assertions.sql",
-  "database/tests/deletion_job_cleanup.sql",
-  "database/tests/deletion_job_cleanup_concurrency_setup.sql",
-  "database/tests/deletion_job_cleanup_concurrency_assertions.sql",
+  'resolve(root, "database", "tests", "retention_jobs.sql")',
+  '"retention and Jobs oracle"',
 ]);
 
 const jobsIntegration = normalizedFile(jobsIntegrationPath, "Jobs PostgreSQL deletion evidence");
 requireFragments(jobsIntegration, "Jobs PostgreSQL deletion evidence", [
-  '["purge-profile-deletions"]',
-  '["cleanup-terminal-deletion-jobs"]',
+  '"purge-profile-deletions"',
+  '"cleanup-terminal-deletion-jobs"',
+  "for (const command of commandCatalog)",
 ]);
 
 if (failures.length > 0) {
@@ -577,5 +631,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Deletion failure runbook check passed (${expectedControlIds.length} controls, ${expectedCommands.length} commands, atomic request/purge and terminal-retention bindings).`,
+  `Deletion failure runbook check passed (${expectedControlIds.length} controls, ${expectedCommands.length} commands, clean-slate request/snapshot-gated purge/terminal-retention bindings).`,
 );

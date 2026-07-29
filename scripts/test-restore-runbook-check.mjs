@@ -15,6 +15,10 @@ const databaseIntegrationSource = readFileSync(
   "utf8",
 );
 const composeSource = readFileSync(join(sourceRoot, "compose.yaml"), "utf8");
+const identityAssertionsSource = readFileSync(
+  join(sourceRoot, "database", "tests", "identity_bootstrap_assertions.sql"),
+  "utf8",
+);
 const runbookPath = join(
   temporaryRoot,
   "docs",
@@ -24,6 +28,12 @@ const runbookPath = join(
 const rootPackagePath = join(temporaryRoot, "package.json");
 const databaseIntegrationPath = join(temporaryRoot, "scripts", "test-database-integration.mjs");
 const composePath = join(temporaryRoot, "compose.yaml");
+const identityAssertionsPath = join(
+  temporaryRoot,
+  "database",
+  "tests",
+  "identity_bootstrap_assertions.sql",
+);
 
 const validRootPackage = Object.freeze({
   scripts: {
@@ -44,6 +54,7 @@ function restoreValidFixture() {
   writeJson(rootPackagePath, validRootPackage);
   writeFileSync(databaseIntegrationPath, databaseIntegrationSource, "utf8");
   writeFileSync(composePath, composeSource, "utf8");
+  writeFileSync(identityAssertionsPath, identityAssertionsSource, "utf8");
 }
 
 function scan() {
@@ -77,6 +88,7 @@ function expectFailure(label, expectedFinding) {
 try {
   mkdirSync(join(temporaryRoot, "scripts"), { recursive: true });
   mkdirSync(join(temporaryRoot, "docs", "operations"), { recursive: true });
+  mkdirSync(join(temporaryRoot, "database", "tests"), { recursive: true });
   copyFileSync(
     join(sourceRoot, "scripts", "check-restore-runbook.mjs"),
     join(temporaryRoot, "scripts", "check-restore-runbook.mjs"),
@@ -144,26 +156,42 @@ try {
   writeFileSync(
     databaseIntegrationPath,
     databaseIntegrationSource.replace(
-      "assertRestoredSecurityBoundary();",
-      "assertRestoredBoundary();",
+      '"first restored semantic oracle"',
+      '"first restored incomplete oracle"',
     ),
     "utf8",
   );
   expectFailure(
     "restore security-check drift",
-    "no longer performs two restores and two security checks",
+    "no longer performs three archives, two restores, and two security checks",
   );
 
   restoreValidFixture();
   writeFileSync(
     databaseIntegrationPath,
     databaseIntegrationSource.replace(
-      "28 forced-RLS tables after two current-snapshot restores",
-      "restored database",
+      'container("stat", ["-c", "%s", archive])',
+      'container("stat", ["--format=%s", archive])',
     ),
     "utf8",
   );
-  expectFailure("aggregate evidence drift", "database restore integration drifted");
+  expectFailure("portable archive-size probe drift", "database restore integration drifted");
+
+  restoreValidFixture();
+  writeFileSync(
+    identityAssertionsPath,
+    identityAssertionsSource.replace("WHERE revision = 7", "WHERE revision = 70"),
+    "utf8",
+  );
+  expectFailure("clean ledger oracle drift", "restored identity oracle drifted");
+
+  restoreValidFixture();
+  writeFileSync(
+    identityAssertionsPath,
+    identityAssertionsSource.replace("v_private_table_count <> 35", "v_private_table_count <> 34"),
+    "utf8",
+  );
+  expectFailure("forced-RLS inventory drift", "restored identity oracle drifted");
 
   restoreValidFixture();
   writeFileSync(
@@ -205,7 +233,7 @@ try {
   writeFileSync(runbookPath, Buffer.from([0xff]));
   expectFailure("invalid UTF-8", "canonical UTF-8 text without NUL bytes");
 
-  console.log("Restore runbook checker regressions passed (16 unsafe/drift variants).");
+  console.log("Restore runbook checker regressions passed (18 unsafe/drift variants).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }

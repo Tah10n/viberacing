@@ -33,7 +33,15 @@ BEGIN
     FROM viberacing_private.schema_migrations
     WHERE revision = 6
       AND name = 'retention_deletion_admin_and_audit'
-  ) THEN
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.schema_migrations
+    WHERE revision = 7
+      AND name = 'car_recipes'
+  ) OR (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.schema_migrations
+  ) <> 7 THEN
     RAISE EXCEPTION 'clean bootstrap ledger is incomplete';
   END IF;
 

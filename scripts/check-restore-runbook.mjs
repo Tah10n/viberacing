@@ -6,6 +6,12 @@ const root = resolve(import.meta.dirname, "..");
 const runbookPath = resolve(root, "docs", "operations", "CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md");
 const rootPackagePath = resolve(root, "package.json");
 const databaseIntegrationPath = resolve(root, "scripts", "test-database-integration.mjs");
+const identityAssertionsPath = resolve(
+  root,
+  "database",
+  "tests",
+  "identity_bootstrap_assertions.sql",
+);
 const composePath = resolve(root, "compose.yaml");
 const maximumRunbookBytes = 32 * 1024;
 const failures = [];
@@ -141,10 +147,10 @@ const requiredStatements = Object.freeze([
   "No production or real-user restore is authorized by this document.",
   "The local archive budget is 64 MiB",
   "each canonical schema or data buffer is bounded to 32 MiB",
-  "all 28 private tables with forced RLS",
-  "45 post-restore lock-wait races",
-  "12 relation-denial checks",
-  "67 cross-capability checks",
+  "the exact seven-row clean migration ledger",
+  "all 35 private tables with forced RLS",
+  "three bounded archives and two current-snapshot restores",
+  "the same finalized snapshot identity and payload",
   "Dump content is never emitted; bounded buffers are overwritten after hashing.",
   "A successful local result is prerequisite evidence only.",
   "Stale-backup deletion replay is not implemented.",
@@ -153,28 +159,46 @@ const requiredStatements = Object.freeze([
 const requiredIntegrationFragments = Object.freeze([
   "const projectName = `vr-dbtest-${process.pid}`;\nconst composePrefix = [",
   '  "--project-name",\n  projectName,\n  "--profile",\n  "test",',
-  'const sourceRestoreArchivePath = "/var/lib/postgresql/viberacing-source-snapshot.dump";',
-  'const normalizedRestoreArchivePath = "/var/lib/postgresql/viberacing-normalized-snapshot.dump";',
-  "const maximumCanonicalDumpBytes = 32 * 1024 * 1024;",
+  'const archiveOne = "/tmp/viberacing-clean-bootstrap-one.dump";',
+  'const archiveTwo = "/tmp/viberacing-clean-bootstrap-two.dump";',
+  'const archiveThree = "/tmp/viberacing-clean-bootstrap-three.dump";',
+  "const maximumToolOutput = 32 * 1024 * 1024;",
   "const maximumRestoreArchiveBytes = 64 * 1024 * 1024;",
-  "const expectedObservedLockWaitRaceCount = 46;",
-  "const expectedObservedMigrationOverlapCount = 1;",
-  "const expectedObservedEarlyCompletionOverlapCount = 1;",
   '"--format=custom"',
+  '"--create"',
   '"--serializable-deferrable"',
   '"--lock-wait-timeout=5s"',
+  'container("stat", ["-c", "%s", archive])',
+  "Number.isSafeInteger(size) && size <= maximumRestoreArchiveBytes",
   '"--exit-on-error"',
-  "function exerciseCurrentSnapshotRestore()",
-  'replaceDatabaseFromArchive(sourceRestoreArchivePath, "source current-snapshot restore");',
-  "replaceDatabaseFromArchive(",
-  'normalizedRestoreArchivePath, "normalized current-snapshot restore"',
+  "function canonicalArchiveDigest(archive, section)",
+  "function semanticSchemaDigest()",
+  "function finalizedSnapshotEvidence()",
+  "function createArchive(database, archive)",
+  "function restoreArchive(archive)",
   "stdout.fill(0);",
+  "createArchive(databaseName, archiveOne);",
+  "restoreArchive(archiveOne);",
+  '"first restored semantic oracle"',
+  '"first restore changed the finalized snapshot"',
+  "createArchive(databaseName, archiveTwo);",
+  '"first restored data archive drifted"',
+  "restoreArchive(archiveTwo);",
+  '"second restored semantic oracle"',
+  '"second restore changed the finalized snapshot"',
+  '"normalized restored schema drifted across generations"',
+  "createArchive(databaseName, archiveThree);",
+  '"second restored data archive drifted"',
   'docker([...composePrefix, "down", "--volumes", "--remove-orphans"]',
   'docker([...composePrefix, "up", "--detach", "--wait", "postgres-test"]',
-  "28 forced-RLS tables after two current-snapshot restores",
-  "SHA-256/length-identical",
-  "post-restore lock-wait races",
-  "12 relation-denial and 67 cross-capability checks",
+  "two snapshot restores with byte-stable",
+]);
+const requiredIdentityAssertionFragments = Object.freeze([
+  "WHERE revision = 7\n      AND name = 'car_recipes'",
+  "FROM viberacing_private.schema_migrations",
+  ") <> 7 THEN",
+  "v_private_table_count <> 35",
+  "'private tables are not exactly force-RLS protected'",
 ]);
 
 function fail(message) {
@@ -292,21 +316,35 @@ try {
       fail(`database restore integration drifted from the runbook contract: ${fragment}`);
     }
   }
-  const restoreFunction = normalizedSource.match(
-    /function exerciseCurrentSnapshotRestore\(\) \{([\s\S]*?)\n\}\n\nfunction psql\(/u,
-  )?.[1];
-  if (restoreFunction === undefined) {
-    fail("database restore integration function boundary could not be read");
-  } else {
-    const restoreCalls = [...restoreFunction.matchAll(/replaceDatabaseFromArchive\(/gu)].length;
-    const securityChecks = [...restoreFunction.matchAll(/assertRestoredSecurityBoundary\(\);/gu)]
-      .length;
-    if (restoreCalls !== 2 || securityChecks !== 2) {
-      fail("database restore integration no longer performs two restores and two security checks");
-    }
+  const restoreCalls = [
+    ...normalizedSource.matchAll(/^\s*restoreArchive\(archive(?:One|Two)\);$/gmu),
+  ].length;
+  const archiveCalls = [
+    ...normalizedSource.matchAll(
+      /^\s*createArchive\(databaseName, archive(?:One|Two|Three)\);$/gmu,
+    ),
+  ].length;
+  const restoredSecurityChecks = [
+    ...normalizedSource.matchAll(/"(?:first|second) restored semantic oracle"/gu),
+  ].length;
+  if (restoreCalls !== 2 || archiveCalls !== 3 || restoredSecurityChecks !== 2) {
+    fail(
+      "database restore integration no longer performs three archives, two restores, and two security checks",
+    );
   }
 } catch {
   fail("database restore integration source could not be read");
+}
+
+try {
+  const identityAssertions = readFileSync(identityAssertionsPath, "utf8").replace(/\r\n/gu, "\n");
+  for (const fragment of requiredIdentityAssertionFragments) {
+    if (!identityAssertions.includes(fragment)) {
+      fail(`restored identity oracle drifted from the runbook contract: ${fragment}`);
+    }
+  }
+} catch {
+  fail("restored identity oracle source could not be read");
 }
 
 try {

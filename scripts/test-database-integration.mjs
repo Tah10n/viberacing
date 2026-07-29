@@ -24,6 +24,7 @@ const archiveOne = "/tmp/viberacing-clean-bootstrap-one.dump";
 const archiveTwo = "/tmp/viberacing-clean-bootstrap-two.dump";
 const archiveThree = "/tmp/viberacing-clean-bootstrap-three.dump";
 const maximumToolOutput = 32 * 1024 * 1024;
+const maximumRestoreArchiveBytes = 64 * 1024 * 1024;
 
 function docker(args, options = {}) {
   const result = spawnSync("docker", args, {
@@ -388,6 +389,16 @@ function createArchive(database, archive) {
       database,
     ]),
     `snapshot archive for ${database}`,
+  );
+  const sizeText = requireSuccess(
+    container("stat", ["-c", "%s", archive]),
+    "snapshot archive size",
+  ).trim();
+  assert.match(sizeText, /^[1-9][0-9]*$/, "snapshot archive size is not canonical");
+  const size = Number(sizeText);
+  assert.ok(
+    Number.isSafeInteger(size) && size <= maximumRestoreArchiveBytes,
+    "snapshot archive exceeded the bounded restore budget",
   );
 }
 
