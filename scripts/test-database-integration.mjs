@@ -831,27 +831,36 @@ SELECT pg_catalog.json_build_object(
 
   requireSuccess(
     psql(`
+BEGIN;
 SET ROLE viberacing_owner;
+UPDATE viberacing_private.agent_providers
+SET state = 'recognized'
+WHERE provider_code = 'codex';
+UPDATE viberacing_private.agent_accounting_revisions
+SET enabled_for_new_accounts = false
+WHERE provider_code = 'codex'
+  AND accounting_revision = 1;
 DO $assertion$
 BEGIN
   IF NOT EXISTS (
     SELECT 1
     FROM viberacing_private.agent_providers
     WHERE provider_code = 'codex'
-      AND state = 'supported'
+      AND state = 'recognized'
   ) OR NOT EXISTS (
     SELECT 1
     FROM viberacing_private.agent_accounting_revisions
     WHERE provider_code = 'codex'
       AND accounting_revision = 1
-      AND enabled_for_new_accounts
+      AND NOT enabled_for_new_accounts
   ) THEN
-    RAISE EXCEPTION 'Codex support baseline drifted during concurrency oracle';
+    RAISE EXCEPTION 'Codex candidate state did not return to the clean bootstrap default';
   END IF;
 END
 $assertion$;
+COMMIT;
 `),
-    "verify supported Codex reader state after concurrency oracle",
+    "restore fail-closed Codex candidate state after concurrency oracle",
   );
 
   const ledger = JSON.parse(

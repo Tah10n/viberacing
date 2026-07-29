@@ -25,7 +25,7 @@ CREATE TABLE viberacing_private.agent_providers (
 
 INSERT INTO viberacing_private.agent_providers (provider_code, display_name, state)
 VALUES
-  ('codex', 'Codex', 'supported'),
+  ('codex', 'Codex', 'recognized'),
   ('claude_code', 'Claude Code', 'recognized'),
   ('opencode', 'opencode', 'recognized'),
   ('qwen_code', 'Qwen Code', 'recognized'),
@@ -70,8 +70,9 @@ CREATE TABLE viberacing_private.agent_accounting_revisions (
     UNIQUE (provider_code, accounting_revision, scope_kind)
 );
 
--- Codex is the only supported reader in this bootstrap. Its exact 0.144.5 candidate parser,
--- portable boundary, batch pairing, and first-sync path are covered by repository-owned evidence.
+-- Codex has the only implemented candidate reader, but the clean bootstrap does not activate new
+-- competitive accounts before one release-supported connector and clean-machine real-account
+-- end-to-end result exist. Synthetic integrations promote this row only inside disposable data.
 INSERT INTO viberacing_private.agent_accounting_revisions (
   provider_code,
   accounting_revision,
@@ -90,7 +91,7 @@ VALUES (
   'provider_utc_date',
   35,
   '0.0.0',
-  true
+  false
 );
 
 CREATE TABLE viberacing_private.agent_accounts (

@@ -6,7 +6,12 @@ SET LOCAL ROLE viberacing_owner;
 
 UPDATE viberacing_private.agent_providers
 SET state = 'supported'
-WHERE provider_code = 'claude_code';
+WHERE provider_code IN ('codex', 'claude_code');
+
+UPDATE viberacing_private.agent_accounting_revisions
+SET enabled_for_new_accounts = true
+WHERE provider_code = 'codex'
+  AND accounting_revision = 1;
 
 INSERT INTO viberacing_private.agent_accounting_revisions (
   provider_code,

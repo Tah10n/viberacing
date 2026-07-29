@@ -17,7 +17,7 @@
       "revision": 3,
       "name": "agent_accounts_installations_and_pairing",
       "path": "database/migrations/0003_agent_accounts_installations_and_pairing.sql",
-      "sha256": "fc2b6585594f5635c2b2ab22cc62654255c45c0b5ee094c7996b0df00e9dceb4"
+      "sha256": "eb9beeb5a5aaa86dacc88045f7c44f1b2a52a785f1aa0197d7257132e248ee47"
     },
     {
       "revision": 4,

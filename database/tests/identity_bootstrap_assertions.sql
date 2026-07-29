@@ -63,12 +63,18 @@ BEGIN
     SELECT 1
     FROM viberacing_private.agent_providers
     WHERE provider_code = 'codex'
-      AND state = 'supported'
+      AND state = 'recognized'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.agent_accounting_revisions
+    WHERE provider_code = 'codex'
+      AND accounting_revision = 1
+      AND NOT enabled_for_new_accounts
   ) OR (
     SELECT pg_catalog.count(*)
     FROM viberacing_private.agent_providers
   ) <> 6 THEN
-    RAISE EXCEPTION 'closed provider inventory or Codex support state is invalid';
+    RAISE EXCEPTION 'closed provider inventory or Codex candidate state is invalid';
   END IF;
 
   IF EXISTS (

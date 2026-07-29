@@ -198,6 +198,8 @@ const requiredIdentityAssertionFragments = Object.freeze([
   "FROM viberacing_private.schema_migrations",
   ") <> 7 THEN",
   "v_private_table_count <> 35",
+  "WHERE provider_code = 'codex'\n      AND state = 'recognized'",
+  "AND NOT enabled_for_new_accounts",
   "'private tables are not exactly force-RLS protected'",
 ]);
 
