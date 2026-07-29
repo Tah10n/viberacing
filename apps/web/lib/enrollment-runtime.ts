@@ -40,7 +40,6 @@ export function getEnrollmentRuntime(): EnrollmentRuntime {
         config,
         cookieCodec,
         database,
-        derivePairingCode: pairingCodeVerifier.derive.bind(pairingCodeVerifier),
       });
       const carProposalService = createCarProposalService({
         cookieCodec,

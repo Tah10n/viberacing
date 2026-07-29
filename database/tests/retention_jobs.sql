@@ -595,6 +595,8 @@ VALUES (
 INSERT INTO viberacing_private.recovery_codes (
   recovery_code_id,
   profile_id,
+  batch_id,
+  position,
   verifier_phc,
   state,
   created_at,
@@ -603,7 +605,9 @@ INSERT INTO viberacing_private.recovery_codes (
 VALUES (
   '70000000-0000-4000-8000-000000000104',
   '70000000-0000-4000-8000-000000000002',
-  pg_catalog.repeat('a', 32),
+  '70000000-0000-4000-8000-000000000105',
+  0,
+  NULL,
   'used',
   pg_catalog.transaction_timestamp() - interval '40 days',
   pg_catalog.transaction_timestamp() - interval '31 days'

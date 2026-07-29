@@ -836,6 +836,32 @@ BEGIN
           'weeklyTokenTotal',
           profile_total.weekly_token_total::text
         ) || CASE
+          WHEN car_recipe.profile_id IS NOT NULL THEN
+            pg_catalog.jsonb_build_object(
+              'carRecipe',
+              pg_catalog.jsonb_build_object(
+                'chassis',
+                car_recipe.chassis,
+                'cockpit',
+                car_recipe.cockpit,
+                'nose',
+                car_recipe.nose,
+                'palette',
+                car_recipe.palette,
+                'schemaVersion',
+                car_recipe.schema_version,
+                'seed',
+                car_recipe.seed,
+                'trail',
+                car_recipe.trail,
+                'wheels',
+                car_recipe.wheels,
+                'wing',
+                car_recipe.wing
+              )
+            )
+          ELSE jsonb '{}'
+        END || CASE
           WHEN profile.provider_breakdown_visible THEN
             pg_catalog.jsonb_build_object(
               'providerBreakdown',
@@ -863,6 +889,8 @@ BEGIN
       FROM viberacing_private.season_profile_totals AS profile_total
       JOIN viberacing_private.profiles AS profile
         ON profile.profile_id = profile_total.profile_id
+      LEFT JOIN viberacing_private.profile_car_recipes AS car_recipe
+        ON car_recipe.profile_id = profile_total.profile_id
       WHERE profile_total.season_start = v_season.season_start
         AND profile_total.trust_tier = 'community'
         AND profile_total.display_position BETWEEN
@@ -941,6 +969,32 @@ BEGIN
         'weeklyTokenTotal',
         profile_total.weekly_token_total::text
       ) || CASE
+        WHEN car_recipe.profile_id IS NOT NULL THEN
+          pg_catalog.jsonb_build_object(
+            'carRecipe',
+            pg_catalog.jsonb_build_object(
+              'chassis',
+              car_recipe.chassis,
+              'cockpit',
+              car_recipe.cockpit,
+              'nose',
+              car_recipe.nose,
+              'palette',
+              car_recipe.palette,
+              'schemaVersion',
+              car_recipe.schema_version,
+              'seed',
+              car_recipe.seed,
+              'trail',
+              car_recipe.trail,
+              'wheels',
+              car_recipe.wheels,
+              'wing',
+              car_recipe.wing
+            )
+          )
+        ELSE jsonb '{}'
+      END || CASE
         WHEN profile.provider_breakdown_visible THEN
           pg_catalog.jsonb_build_object(
             'providerBreakdown',
@@ -968,6 +1022,8 @@ BEGIN
     FROM viberacing_private.season_profile_totals AS profile_total
     JOIN viberacing_private.profiles AS profile
       ON profile.profile_id = profile_total.profile_id
+    LEFT JOIN viberacing_private.profile_car_recipes AS car_recipe
+      ON car_recipe.profile_id = profile_total.profile_id
     WHERE profile_total.season_start = v_season.season_start
       AND profile_total.trust_tier = 'community'
       AND profile_total.display_position BETWEEN 1 AND 32
@@ -1047,7 +1103,29 @@ BEGIN
       (
         pg_catalog.jsonb_build_object(
           'carRecipe',
-          NULL,
+          CASE
+            WHEN car_recipe.profile_id IS NULL THEN NULL
+            ELSE pg_catalog.jsonb_build_object(
+              'chassis',
+              car_recipe.chassis,
+              'cockpit',
+              car_recipe.cockpit,
+              'nose',
+              car_recipe.nose,
+              'palette',
+              car_recipe.palette,
+              'schemaVersion',
+              car_recipe.schema_version,
+              'seed',
+              car_recipe.seed,
+              'trail',
+              car_recipe.trail,
+              'wheels',
+              car_recipe.wheels,
+              'wing',
+              car_recipe.wing
+            )
+          END,
           'freshnessDays',
           profile_total.freshness_days,
           'handle',
@@ -1083,6 +1161,8 @@ BEGIN
     FROM viberacing_private.season_profile_totals AS profile_total
     JOIN viberacing_private.profiles AS profile
       ON profile.profile_id = profile_total.profile_id
+    LEFT JOIN viberacing_private.profile_car_recipes AS car_recipe
+      ON car_recipe.profile_id = profile_total.profile_id
     LEFT JOIN provider_breakdowns AS provider_breakdown
       ON provider_breakdown.profile_id = profile_total.profile_id
     WHERE profile_total.season_start = v_season.season_start
@@ -1455,6 +1535,253 @@ BEGIN
 END
 $function$;
 
+CREATE FUNCTION viberacing_api.read_private_dashboard_ranking(
+  p_session_id uuid,
+  p_session_verifier_digest bytea
+)
+RETURNS TABLE (
+  season_start date,
+  season_end date,
+  season_state text,
+  weekly_token_total text,
+  rank_position bigint,
+  participant_count integer,
+  snapshot_generated_at text,
+  public_visibility text,
+  provider_breakdown_visible boolean
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_profile_id uuid;
+  v_season_start date := (
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+      - (
+        extract(
+          isodow FROM (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+        )::integer - 1
+      )
+  );
+BEGIN
+  v_profile_id := viberacing_private.authenticate_session(
+    p_session_id,
+    p_session_verifier_digest
+  );
+  RETURN QUERY
+  SELECT
+    v_season_start,
+    v_season_start + 6,
+    CASE
+      WHEN snapshot.snapshot_id IS NULL THEN 'pending'
+      ELSE season.state::text
+    END,
+    CASE
+      WHEN snapshot.snapshot_id IS NULL THEN NULL
+      ELSE coalesce(profile_total.weekly_token_total, 0)::text
+    END,
+    profile_total.rank_position,
+    snapshot.participant_count,
+    CASE
+      WHEN snapshot.generated_at IS NULL THEN NULL
+      ELSE pg_catalog.to_char(
+        snapshot.generated_at AT TIME ZONE 'UTC',
+        'YYYY-MM-DD"T"HH24:MI"Z"'
+      )
+    END,
+    profile.public_visibility::text,
+    profile.provider_breakdown_visible
+  FROM viberacing_private.profiles AS profile
+  LEFT JOIN viberacing_private.seasons AS season
+    ON season.season_start = v_season_start
+    AND season.trust_tier = 'community'
+  LEFT JOIN viberacing_private.leaderboard_published_snapshots AS published
+    ON published.season_start = v_season_start
+    AND published.trust_tier = 'community'
+  LEFT JOIN viberacing_private.leaderboard_snapshots AS snapshot
+    ON snapshot.snapshot_id = published.snapshot_id
+    AND snapshot.state = 'published'
+  LEFT JOIN viberacing_private.season_profile_totals AS profile_total
+    ON profile_total.season_start = v_season_start
+    AND profile_total.trust_tier = 'community'
+    AND profile_total.profile_id = profile.profile_id
+  WHERE profile.profile_id = v_profile_id
+    AND profile.state = 'active';
+END
+$function$;
+
+CREATE FUNCTION viberacing_api.read_agent_account_dashboard(
+  p_session_id uuid,
+  p_session_verifier_digest bytea
+)
+RETURNS TABLE (
+  agent_account_id text,
+  provider_code text,
+  private_label text,
+  identity_assurance text,
+  accounting_revision integer,
+  expected_reader_version text,
+  observed_reader_version text,
+  account_state text,
+  status_code text,
+  quarantine_reason text,
+  weekly_token_total text,
+  today_token_total text,
+  last_successful_sync_date date,
+  installation_id text,
+  installation_label text,
+  connector_version text,
+  os_family text,
+  architecture text,
+  installation_state text,
+  connected_date date,
+  last_seen_date date,
+  device_id text,
+  device_state text
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_profile_id uuid;
+  v_today date := (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date;
+  v_season_start date := (
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+      - (
+        extract(
+          isodow FROM (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date
+        )::integer - 1
+      )
+  );
+BEGIN
+  v_profile_id := viberacing_private.authenticate_session(
+    p_session_id,
+    p_session_verifier_digest
+  );
+  RETURN QUERY
+  WITH account_material AS (
+    SELECT
+      account.agent_account_id,
+      account.provider_code,
+      account.private_label,
+      account.identity_assurance,
+      account.accounting_revision,
+      account.state AS account_state,
+      provider.state AS provider_state,
+      revision.reader_contract_version AS expected_reader_version,
+      revision.enabled_for_new_accounts,
+      coalesce(total.weekly_token_total, 0)::numeric(60, 0) AS weekly_token_total,
+      coalesce(total.today_token_total, 0)::numeric(60, 0) AS today_token_total,
+      total.last_successful_sync_at,
+      accepted.reader_version AS observed_reader_version,
+      quarantined.quarantine_reason,
+      device_count.active_device_count
+    FROM viberacing_private.agent_accounts AS account
+    JOIN viberacing_private.agent_providers AS provider
+      ON provider.provider_code = account.provider_code
+    JOIN viberacing_private.agent_accounting_revisions AS revision
+      ON revision.provider_code = account.provider_code
+      AND revision.accounting_revision = account.accounting_revision
+      AND revision.scope_kind = account.scope_kind
+    LEFT JOIN LATERAL (
+      SELECT
+        pg_catalog.sum(day_total.cumulative_token_total) FILTER (
+          WHERE day_total.usage_date BETWEEN v_season_start AND v_season_start + 6
+        ) AS weekly_token_total,
+        pg_catalog.max(day_total.cumulative_token_total) FILTER (
+          WHERE day_total.usage_date = v_today
+        ) AS today_token_total,
+        pg_catalog.max(day_total.last_accepted_at) AS last_successful_sync_at
+      FROM viberacing_private.agent_account_day_totals AS day_total
+      WHERE day_total.agent_account_id = account.agent_account_id
+    ) AS total ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT observation.reader_version
+      FROM viberacing_private.usage_observations AS observation
+      WHERE observation.agent_account_id = account.agent_account_id
+        AND observation.outcome = 'accepted'
+      ORDER BY observation.received_at DESC, observation.observation_id DESC
+      LIMIT 1
+    ) AS accepted ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT observation.quarantine_reason
+      FROM viberacing_private.usage_observations AS observation
+      WHERE observation.agent_account_id = account.agent_account_id
+        AND observation.outcome = 'quarantined'
+      ORDER BY observation.received_at DESC, observation.observation_id DESC
+      LIMIT 1
+    ) AS quarantined ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT pg_catalog.count(*) AS active_device_count
+      FROM viberacing_private.device_keys AS device
+      JOIN viberacing_private.connector_installations AS installation
+        ON installation.installation_id = device.installation_id
+        AND installation.profile_id = account.profile_id
+        AND installation.state = 'active'
+      WHERE device.agent_account_id = account.agent_account_id
+        AND device.state = 'active'
+    ) AS device_count ON TRUE
+    WHERE account.profile_id = v_profile_id
+  )
+  SELECT
+    account.agent_account_id::text,
+    account.provider_code::text,
+    account.private_label::text,
+    account.identity_assurance::text,
+    account.accounting_revision,
+    account.expected_reader_version::text,
+    account.observed_reader_version::text,
+    account.account_state::text,
+    CASE
+      WHEN account.account_state = 'unlinked' THEN 'removed'
+      WHEN account.account_state = 'quarantined' THEN 'quarantined'
+      WHEN account.account_state = 'paused' THEN 'paused'
+      WHEN account.provider_state <> 'supported'
+        OR NOT account.enabled_for_new_accounts
+      THEN 'unsupported_agent_version'
+      WHEN account.active_device_count = 0 THEN 'needs_login'
+      WHEN account.observed_reader_version IS NULL THEN 'syncing'
+      WHEN account.observed_reader_version <> account.expected_reader_version
+      THEN 'reader_outdated'
+      ELSE 'connected'
+    END::text,
+    CASE
+      WHEN account.account_state = 'quarantined'
+      THEN coalesce(account.quarantine_reason, 'anomaly_review')::text
+      ELSE NULL
+    END,
+    account.weekly_token_total::text,
+    account.today_token_total::text,
+    account.last_successful_sync_at::date,
+    installation.installation_id::text,
+    installation.label::text,
+    installation.connector_version::text,
+    installation.os_family::text,
+    installation.architecture::text,
+    installation.state::text,
+    installation.activated_at::date,
+    installation.last_seen_at::date,
+    device.device_id::text,
+    device.state::text
+  FROM account_material AS account
+  LEFT JOIN viberacing_private.device_keys AS device
+    ON device.agent_account_id = account.agent_account_id
+  LEFT JOIN viberacing_private.connector_installations AS installation
+    ON installation.installation_id = device.installation_id
+    AND installation.profile_id = v_profile_id
+  ORDER BY
+    account.provider_code,
+    account.agent_account_id,
+    installation.installation_id NULLS FIRST,
+    device.device_id NULLS FIRST
+  LIMIT 129;
+END
+$function$;
+
 CREATE FUNCTION viberacing_api.read_current_leaderboard_page(p_page integer)
 RETURNS TABLE (
   canonical_payload text,
@@ -1713,6 +2040,10 @@ GRANT EXECUTE ON FUNCTION viberacing_api.refresh_next_dirty_community_season()
 GRANT EXECUTE ON FUNCTION viberacing_api.finalize_next_due_community_season()
   TO viberacing_jobs;
 
+GRANT EXECUTE ON FUNCTION viberacing_api.read_private_dashboard_ranking(uuid, bytea)
+  TO viberacing_web;
+GRANT EXECUTE ON FUNCTION viberacing_api.read_agent_account_dashboard(uuid, bytea)
+  TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.read_current_leaderboard_page(integer)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.read_season_leaderboard_page(date, integer)

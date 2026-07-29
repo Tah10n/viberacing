@@ -11,5 +11,5 @@ const http = createEnrollmentHttp({
 });
 
 export function POST(request: Request): Promise<Response> {
-  return http.sourceUnlinkOptions(request);
+  return http.accountTargetOptions(request, "device_revoke");
 }

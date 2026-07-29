@@ -525,7 +525,7 @@ export function BatchPairingApprovalForm({
         </div>
       </dl>
       <form className="auth-form" onSubmit={(event) => void approvePairing(event)}>
-        <fieldset className="pairing-source-options">
+        <fieldset className="pairing-account-options">
           <legend>{copy.candidateChoices}</legend>
           {review.pairing.candidates.map((candidate, candidateIndex) => {
             const draft = drafts.find((item) => item.candidateId === candidate.candidateId);
@@ -533,7 +533,7 @@ export function BatchPairingApprovalForm({
               return null;
             }
             return (
-              <section className="pairing-source-option" key={candidate.candidateId}>
+              <section className="pairing-account-option" key={candidate.candidateId}>
                 <div>
                   <strong>
                     {copy.accountCandidate} {String(candidateIndex + 1)} ·{" "}

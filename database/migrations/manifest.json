@@ -11,13 +11,13 @@
       "revision": 2,
       "name": "authentication_passkeys_and_recovery",
       "path": "database/migrations/0002_authentication_passkeys_and_recovery.sql",
-      "sha256": "ca329141bab5bf890e9e006965056541a74f061bc8143b52dc188039ff664612"
+      "sha256": "32e2a4717f21fec5098fb34104b6ecd4ac8a8894264e264e9db0e5edadf81ede"
     },
     {
       "revision": 3,
       "name": "agent_accounts_installations_and_pairing",
       "path": "database/migrations/0003_agent_accounts_installations_and_pairing.sql",
-      "sha256": "f6f45a744a453c7471bdfdad2e7b83010bd79e87da9b6307fc77187e7a6bccae"
+      "sha256": "fc2b6585594f5635c2b2ab22cc62654255c45c0b5ee094c7996b0df00e9dceb4"
     },
     {
       "revision": 4,
@@ -29,13 +29,19 @@
       "revision": 5,
       "name": "seasons_ranking_and_snapshots",
       "path": "database/migrations/0005_seasons_ranking_and_snapshots.sql",
-      "sha256": "9ce5d43e971ebd1930ceef37e3453dccfa4960fe25cdf9d5419cc1be2df0a41a"
+      "sha256": "d2580d48dcaabffe5c92518b057ba9501c708119edcecefafdfec34ed14e9a6d"
     },
     {
       "revision": 6,
       "name": "retention_deletion_admin_and_audit",
       "path": "database/migrations/0006_retention_deletion_admin_and_audit.sql",
-      "sha256": "0511e7f934117da861c0d18881ca5037468135b325b0acf4f571b50e8aa059de"
+      "sha256": "246831beafd5fb6e16f470b4dd357b857294e60c55a10bb7fdc3c9d066073025"
+    },
+    {
+      "revision": 7,
+      "name": "car_recipes",
+      "path": "database/migrations/0007_car_recipes.sql",
+      "sha256": "5f32c632d4dc535ccb7fa3079a20e5352635399a594c2f4aa67140e5ec87e9fe"
     }
   ]
 }

@@ -46,144 +46,6 @@ const runtimeBoundaryQuery = `SELECT
   pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok,
   pg_catalog.current_setting('default_transaction_read_only') = 'off' AS read_write_ok`;
 
-const admitPairingTransportRequestQuery = `SELECT
-  viberacing_api.admit_pairing_transport_request(
-    $1::text,
-    $2::bytea,
-    $3::integer,
-    $4::integer,
-    $5::integer
-  ) AS admitted`;
-
-const pairingStatusQuery = `SELECT
-  candidate.candidate_index,
-  status.pairing_state,
-  status.source_id,
-  status.device_id
-FROM (
-  VALUES
-    (1, $1::bytea),
-    (2, $2::bytea)
-) AS candidate(candidate_index, poll_verifier_digest)
-CROSS JOIN LATERAL viberacing_api.poll_pairing_status(
-  candidate.poll_verifier_digest
-) AS status
-ORDER BY candidate.candidate_index`;
-
-const verificationMaterialQuery = `SELECT
-  candidate.candidate_index,
-  material.pairing_id::text AS pairing_id,
-  material.pairing_challenge AS pairing_challenge,
-  material.public_key AS public_key
-FROM (
-  VALUES
-    (1, $1::bytea),
-    (2, $2::bytea)
-) AS candidate(candidate_index, poll_verifier_digest)
-CROSS JOIN LATERAL viberacing_api.read_pairing_verification_material(
-  candidate.poll_verifier_digest
-) AS material
-ORDER BY candidate.candidate_index`;
-
-const activatePairingQuery = `WITH activation AS MATERIALIZED (
-  SELECT viberacing_api.activate_pairing(
-    $1::bytea,
-    $2::uuid,
-    $3::text,
-    $4::uuid,
-    $5::text
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS activated
-FROM activation`;
-
-const startPairingQuery = `WITH pairing_start AS MATERIALIZED (
-  SELECT viberacing_api.start_pairing(
-    $1::uuid,
-    $2::bytea,
-    $3::bytea,
-    $4::bytea,
-    $5::uuid,
-    $6::bytea,
-    $7::text,
-    $8::text,
-    $9::text,
-    $10::text,
-    $11::timestamptz
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS started
-FROM pairing_start`;
-
-const readPairingApprovalQuery = `SELECT
-  approval.candidate_index::integer AS candidate_index,
-  approval.pairing_id::text AS pairing_id,
-  approval.device_label,
-  approval.connector_version,
-  approval.os_family,
-  approval.architecture,
-  approval.public_key,
-  pg_catalog.to_char(
-    approval.expires_at AT TIME ZONE 'UTC',
-    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
-  ) AS expires_at
-FROM viberacing_api.read_pairing_for_approval_limited(
-  $1::uuid,
-  $2::bytea,
-  $3::bytea,
-  $4::bytea,
-  $5::boolean,
-  $6::integer,
-  $7::integer
-) AS approval`;
-
-const createPairingApprovalChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_pairing_approval_challenge(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
-    $4::bytea,
-    $5::text,
-    $6::text,
-    $7::uuid,
-    $8::bytea,
-    $9::bytea,
-    $10::timestamptz
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS created
-FROM challenge_creation`;
-
-const completePairingApprovalQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
-    'pairing_approval'::text,
-    $4::bytea,
-    $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), pairing_approval AS MATERIALIZED (
-  SELECT viberacing_api.approve_pairing(
-    $1::uuid,
-    $2::bytea,
-    $9::uuid,
-    $3::uuid,
-    $5::bytea,
-    $10::uuid,
-    $11::text
-  ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
-)
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS approved
-FROM pairing_approval`;
-
 const enrollProfileQuery = `SELECT
   opened.profile_id,
   opened.handle,
@@ -241,9 +103,7 @@ FROM passkey_completion`;
 
 const revokeEnrollmentSessionQuery = `SELECT viberacing_api.revoke_session(
   $1::uuid,
-  $2::bytea,
-  $3::uuid,
-  $4::text
+  $2::bytea
 ) AS revoked`;
 
 const readPasskeyLoginMaterialQuery = `SELECT
@@ -269,9 +129,7 @@ FROM viberacing_api.complete_passkey_login_session(
   $8::boolean,
   $9::uuid,
   $10::bytea,
-  $11::timestamptz,
-  $12::uuid,
-  $13::text
+  $11::timestamptz
 ) AS completed`;
 
 const readPasskeyInventoryQuery = `SELECT
@@ -283,77 +141,60 @@ const readPasskeyInventoryQuery = `SELECT
 FROM viberacing_api.read_passkey_inventory($1::uuid, $2::bytea) AS inventory
 ORDER BY (inventory.created_at AT TIME ZONE 'UTC')::date, inventory.passkey_id`;
 
-const readActiveDeviceInventoryQuery = `WITH inventory AS MATERIALIZED (
-  SELECT *
-  FROM viberacing_api.read_source_inventory($1::uuid, $2::bytea)
-), active_devices AS (
-  SELECT
-    inventory.source_id,
-    inventory.source_state,
-    inventory.device_id,
-    inventory.device_label,
-    inventory.connector_version,
-    inventory.os_family,
-    inventory.architecture,
-    inventory.device_state,
-    (inventory.activated_at AT TIME ZONE 'UTC')::date::text AS activated_on
-  FROM inventory
-  WHERE inventory.device_state = 'active'
-), sources_without_active_devices AS (
-  SELECT
-    inventory.source_id,
-    inventory.source_state,
-    NULL::text AS device_id,
-    NULL::text AS device_label,
-    NULL::text AS connector_version,
-    NULL::text AS os_family,
-    NULL::text AS architecture,
-    NULL::text AS device_state,
-    NULL::text AS activated_on
-  FROM inventory
-  GROUP BY inventory.source_id, inventory.source_state
-  HAVING pg_catalog.count(*) FILTER (WHERE inventory.device_state = 'active') = 0
-), bounded_inventory AS (
-  SELECT * FROM active_devices
-  UNION ALL
-  SELECT * FROM sources_without_active_devices
-)
-SELECT *
-FROM bounded_inventory
-ORDER BY source_id, activated_on NULLS FIRST, device_id NULLS FIRST
-LIMIT 96`;
+const readPrivateDashboardRankingQuery = `SELECT
+  ranking.season_start::text AS season_start,
+  ranking.season_end::text AS season_end,
+  ranking.season_state,
+  ranking.weekly_token_total,
+  ranking.rank_position::text AS rank_position,
+  ranking.participant_count,
+  ranking.snapshot_generated_at,
+  ranking.public_visibility,
+  ranking.provider_breakdown_visible
+FROM viberacing_api.read_private_dashboard_ranking($1::uuid, $2::bytea) AS ranking`;
 
-const revokeDeviceQuery = `WITH device_revocation AS MATERIALIZED (
-  SELECT viberacing_api.revoke_device(
+const readAgentAccountDashboardQuery = `SELECT
+  dashboard.agent_account_id,
+  dashboard.provider_code,
+  dashboard.private_label,
+  dashboard.identity_assurance,
+  dashboard.accounting_revision,
+  dashboard.expected_reader_version,
+  dashboard.observed_reader_version,
+  dashboard.account_state,
+  dashboard.status_code,
+  dashboard.quarantine_reason,
+  dashboard.weekly_token_total,
+  dashboard.today_token_total,
+  dashboard.last_successful_sync_date::text AS last_successful_sync_date,
+  dashboard.installation_id,
+  dashboard.installation_label,
+  dashboard.connector_version,
+  dashboard.os_family,
+  dashboard.architecture,
+  dashboard.installation_state,
+  dashboard.connected_date::text AS connected_date,
+  dashboard.last_seen_date::text AS last_seen_date,
+  dashboard.device_id,
+  dashboard.device_state
+FROM viberacing_api.read_agent_account_dashboard($1::uuid, $2::bytea) AS dashboard`;
+
+const pauseAgentAccountQuery = `WITH account_pause AS MATERIALIZED (
+  SELECT viberacing_api.pause_agent_account(
     $1::uuid,
     $2::bytea,
-    $3::text,
-    $4::uuid,
-    $5::text
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS revoked
-FROM device_revocation`;
-
-const pauseSourceQuery = `WITH source_pause AS MATERIALIZED (
-  SELECT viberacing_api.pause_source(
-    $1::uuid,
-    $2::bytea,
-    $3::text,
-    $4::uuid,
-    $5::text
+    $3::text
   ) AS ignored
 )
 SELECT pg_catalog.count(*) = 1 AS paused
-FROM source_pause`;
+FROM account_pause`;
 
-const createSourceReactivationChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_source_action_challenge(
+const createAccountTargetActionChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_auth_challenge(
     $1::uuid,
     $2::bytea,
-    $3::text,
-    'source_reactivation'::text,
-    $4::uuid,
+    $3::uuid,
+    $4::text,
     $5::bytea,
     $6::bytea,
     $7::timestamptz
@@ -362,111 +203,80 @@ const createSourceReactivationChallengeQuery = `WITH challenge_creation AS MATER
 SELECT pg_catalog.count(*) = 1 AS created
 FROM challenge_creation`;
 
-const completeSourceReactivationQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
+const completeAgentAccountReactivationQuery = `WITH account_reactivation AS MATERIALIZED (
+  SELECT viberacing_api.reactivate_agent_account(
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    'source_reactivation'::text,
     $4::bytea,
-    $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), source_reactivation AS MATERIALIZED (
-  SELECT viberacing_api.reactivate_source(
-    $1::uuid,
-    $2::bytea,
-    $9::text,
-    $3::uuid,
-    $5::bytea,
-    $10::uuid,
-    $11::text
-  ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
-)
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS reactivated
-FROM source_reactivation`;
-
-const createSourceUnlinkChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_source_action_challenge(
-    $1::uuid,
-    $2::bytea,
-    $3::text,
-    'source_unlink'::text,
-    $4::uuid,
-    $5::bytea,
-    $6::bytea,
-    $7::timestamptz
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::text
   ) AS ignored
 )
-SELECT pg_catalog.count(*) = 1 AS created
-FROM challenge_creation`;
+SELECT pg_catalog.count(*) = 1 AS completed
+FROM account_reactivation`;
 
-const completeSourceUnlinkQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
+const completeAgentAccountUnlinkQuery = `WITH account_unlink AS MATERIALIZED (
+  SELECT viberacing_api.unlink_agent_account(
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    'source_unlink'::text,
     $4::bytea,
-    $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), source_unlink AS MATERIALIZED (
-  SELECT viberacing_api.unlink_source(
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::text
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS completed
+FROM account_unlink`;
+
+const completeDeviceKeyRevocationQuery = `WITH device_revocation AS MATERIALIZED (
+  SELECT viberacing_api.revoke_device_key(
     $1::uuid,
     $2::bytea,
-    $9::text,
     $3::uuid,
-    $5::bytea,
-    $10::uuid,
-    $11::text
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::text
   ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
 )
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS unlinked
-FROM source_unlink`;
+SELECT pg_catalog.count(*) = 1 AS completed
+FROM device_revocation`;
 
-const readProfileVisibilityQuery = `SELECT visibility.visibility
-FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility`;
-
-const readAccountOverviewQuery = `WITH visibility AS MATERIALIZED (
-  SELECT visibility.visibility
-  FROM viberacing_api.read_profile_visibility($1::uuid, $2::bytea) AS visibility
+const completeInstallationRevocationQuery = `WITH installation_revocation AS MATERIALIZED (
+  SELECT viberacing_api.revoke_connector_installation(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::text
+  ) AS revoked_device_count
 )
-SELECT
-  visibility.visibility,
-  score.season_start::text AS season_start,
-  score.season_end::text AS season_end,
-  score.season_finalized,
-  score.weekly_score,
-  score.active_days,
-  score.source_count,
-  score.score_date::text AS score_date,
-  score.daily_score
-FROM visibility
-LEFT JOIN LATERAL viberacing_api.read_profile_score(
-  $1::uuid,
-  $2::bytea,
-  $3::date
-) AS score ON TRUE
-ORDER BY score.score_date NULLS FIRST`;
+SELECT pg_catalog.count(*) = 1 AS completed
+FROM installation_revocation`;
+
+const readProfileVisibilityQuery = `SELECT profile.public_visibility AS visibility
+FROM viberacing_api.read_private_profile($1::uuid, $2::bytea) AS profile`;
 
 const setProfileVisibilityQuery = `SELECT viberacing_api.set_profile_visibility(
   $1::uuid,
   $2::bytea,
-  $3::boolean
+  $3::text
 ) AS visibility`;
+
+const setProviderBreakdownVisibilityQuery = `SELECT viberacing_api.set_provider_breakdown_visibility(
+    $1::uuid,
+    $2::bytea,
+    $3::boolean
+  ) AS provider_breakdown_visible`;
 
 const proposeCarRecipeQuery = `SELECT viberacing_api.propose_car_recipe(
   $1::uuid,
@@ -490,7 +300,7 @@ const readCarProposalDeviceMaterialQuery = `SELECT
 FROM viberacing_api.read_car_proposal_device_material($1::text) AS material`;
 
 const proposeCarRecipeFromDeviceQuery = `SELECT viberacing_api.propose_car_recipe_from_device(
-  $1::uuid,
+  $1::text,
   $2::text,
   $3::timestamptz,
   $4::bytea,
@@ -552,7 +362,7 @@ const createProfileDeletionChallengeQuery = `WITH challenge_creation AS MATERIAL
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    'profile_deletion'::text,
+    'profile_delete'::text,
     $4::bytea,
     $5::bytea,
     $6::timestamptz
@@ -561,138 +371,62 @@ const createProfileDeletionChallengeQuery = `WITH challenge_creation AS MATERIAL
 SELECT pg_catalog.count(*) = 1 AS created
 FROM challenge_creation`;
 
-const completeProfileDeletionQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
-    'profile_deletion'::text,
-    $4::bytea,
-    $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), profile_deletion AS MATERIALIZED (
+const completeProfileDeletionQuery = `WITH profile_deletion AS MATERIALIZED (
   SELECT viberacing_api.request_profile_deletion(
     $1::uuid,
     $2::bytea,
-    $9::text,
     $3::uuid,
-    $10::uuid,
-    $11::bytea,
-    $12::uuid,
-    $13::text
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::text
   ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
 )
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS deleted
+SELECT pg_catalog.count(*) = 1 AS deleted
 FROM profile_deletion`;
 
 const createPasskeyAddChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_passkey_change_challenge(
-    $1::uuid,
-    $2::bytea,
-    'add'::text,
-    NULL::uuid,
-    $3::uuid,
-    $4::bytea,
-    $5::bytea,
-    $6::timestamptz
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS created
-FROM challenge_creation`;
-
-const completePasskeyAdditionQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
+  SELECT viberacing_api.create_auth_challenge(
     $1::uuid,
     $2::bytea,
     $3::uuid,
     'passkey_change'::text,
     $4::bytea,
     $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), passkey_addition AS MATERIALIZED (
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completePasskeyAdditionQuery = `WITH passkey_addition AS MATERIALIZED (
   SELECT viberacing_api.add_passkey(
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    $5::bytea,
-    $9::uuid,
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::uuid,
+    $9::bytea,
     $10::bytea,
-    $11::bytea,
-    $12::text,
-    $13::bigint,
-    $14::boolean,
-    $15::boolean,
-    $16::uuid,
-    $17::text
+    $11::text,
+    $12::bigint,
+    $13::boolean,
+    $14::boolean
   ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
 )
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS added
+SELECT pg_catalog.count(*) = 1 AS added
 FROM passkey_addition`;
 
 const createPasskeyRevokeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_passkey_change_challenge(
-    $1::uuid,
-    $2::bytea,
-    'revoke'::text,
-    $3::uuid,
-    $4::uuid,
-    $5::bytea,
-    $6::bytea,
-    $7::timestamptz
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS created
-FROM challenge_creation`;
-
-const completePasskeyRevocationQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
+  SELECT viberacing_api.create_auth_challenge(
     $1::uuid,
     $2::bytea,
     $3::uuid,
     'passkey_change'::text,
-    $4::bytea,
-    $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), passkey_revocation AS MATERIALIZED (
-  SELECT viberacing_api.revoke_passkey(
-    $1::uuid,
-    $2::bytea,
-    $9::uuid,
-    $3::uuid,
-    $5::bytea,
-    $10::uuid,
-    $11::text
-  ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
-)
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS revoked
-FROM passkey_revocation`;
-
-const createRecoveryCodeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_recovery_change_challenge(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
     $4::bytea,
     $5::bytea,
     $6::timestamptz
@@ -701,36 +435,50 @@ const createRecoveryCodeChallengeQuery = `WITH challenge_creation AS MATERIALIZE
 SELECT pg_catalog.count(*) = 1 AS created
 FROM challenge_creation`;
 
-const completeRecoveryCodeReplacementQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_passkey_challenge(
+const completePasskeyRevocationQuery = `WITH passkey_revocation AS MATERIALIZED (
+  SELECT viberacing_api.revoke_passkey(
+    $1::uuid,
+    $2::bytea,
+    $3::uuid,
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::uuid
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS revoked
+FROM passkey_revocation`;
+
+const createRecoveryCodeChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
+  SELECT viberacing_api.create_auth_challenge(
     $1::uuid,
     $2::bytea,
     $3::uuid,
     'recovery_change'::text,
     $4::bytea,
     $5::bytea,
-    $6::uuid,
-    $7::bigint,
-    $8::boolean
-  ) AS consumed
-), recovery_code_replacement AS MATERIALIZED (
+    $6::timestamptz
+  ) AS ignored
+)
+SELECT pg_catalog.count(*) = 1 AS created
+FROM challenge_creation`;
+
+const completeRecoveryCodeReplacementQuery = `WITH recovery_code_replacement AS MATERIALIZED (
   SELECT viberacing_api.replace_recovery_codes(
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    $5::bytea,
-    $9::uuid,
-    $10::uuid[],
-    $11::text[],
-    $12::uuid,
-    $13::text
+    $4::bytea,
+    $5::uuid,
+    $6::bigint,
+    $7::boolean,
+    $8::uuid,
+    $9::uuid[],
+    $10::text[]
   ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
 )
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS replaced
+SELECT pg_catalog.count(*) = 1 AS replaced
 FROM recovery_code_replacement`;
 
 const readRecoveryCodeVerificationMaterialQuery = `SELECT
@@ -745,9 +493,7 @@ const startRecoveryQuery = `WITH recovery_start AS MATERIALIZED (
     $3::bytea,
     $4::bytea,
     $5::bytea,
-    $6::timestamptz,
-    $7::uuid,
-    $8::text
+    $6::timestamptz
   ) AS ignored
 )
 SELECT pg_catalog.count(*) = 1 AS started
@@ -771,57 +517,20 @@ FROM viberacing_api.complete_recovery_registration_session(
   $11::boolean,
   $12::uuid,
   $13::bytea,
-  $14::timestamptz,
-  $15::uuid,
-  $16::text
+  $14::timestamptz
 ) AS completed`;
 
-export interface PairingDatabaseActivation {
-  readonly auditEventId: string;
-  readonly deviceId: string;
-  readonly pairingId: string;
-  readonly pollVerifierDigest: Uint8Array;
-  readonly requestId: string;
-}
-
-export interface PairingDatabaseStart {
-  readonly architecture: string;
-  readonly connectorVersion: string;
-  readonly deviceKeyId: string;
-  readonly deviceLabel: string;
-  readonly expiresAt: string;
-  readonly osFamily: string;
-  readonly pairingChallenge: Uint8Array;
-  readonly pairingId: string;
-  readonly pollVerifierDigest: Uint8Array;
-  readonly publicKey: Uint8Array;
-  readonly userCodeDigest: Uint8Array;
-}
-
-export interface PairingDatabaseRateAdmission {
-  readonly bucketLimit: number;
-  readonly clientIdentityDigest: Uint8Array;
-  readonly globalLimit: number;
-  readonly operation: "poll" | "start";
-  readonly windowSeconds: number;
-}
-
 export interface EnrollmentDatabaseProfile {
-  readonly auditEventId: string;
   readonly githubUserId: number;
   readonly handle: string;
   readonly inviteId?: string;
   readonly inviteRequired: boolean;
   readonly inviteVerifierDigest?: Uint8Array;
   readonly locale: "en" | "ru";
-  readonly motionPreference: "off" | "on" | "system";
   readonly profileId: string;
-  readonly requestId: string;
   readonly sessionExpiresAt: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
-  readonly streakVisible: boolean;
-  readonly theme: "classic-grand-prix" | "cyber-rally" | "neon-night";
 }
 
 export interface EnrollmentDatabasePasskeyChallenge {
@@ -835,35 +544,28 @@ export interface EnrollmentDatabasePasskeyChallenge {
 }
 
 export interface EnrollmentDatabaseInitialPasskey {
-  readonly auditEventId: string;
   readonly backupEligible: boolean;
   readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly cosePublicKey: Uint8Array;
   readonly credentialId: Uint8Array;
   readonly handle: string;
   readonly passkeyId: string;
-  readonly requestId: string;
   readonly rotatedSessionExpiresAt: string;
   readonly rotatedSessionId: string;
   readonly rotatedSessionVerifierDigest: Uint8Array;
-  readonly rotationAuditEventId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
   readonly signCount: number;
 }
 
 export interface EnrollmentDatabaseSessionRevocation {
-  readonly auditEventId: string;
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
 }
 
 export interface EnrollmentDatabaseLoginCompletion {
-  readonly auditEventId: string;
   readonly backupState: boolean;
   readonly challengeDigest: Uint8Array;
   readonly challengeExpiresAt: string;
@@ -872,7 +574,6 @@ export interface EnrollmentDatabaseLoginCompletion {
   readonly credentialId: Uint8Array;
   readonly observedSignCount: number;
   readonly passkeyId: string;
-  readonly requestId: string;
   readonly sessionExpiresAt: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
@@ -883,102 +584,47 @@ export interface EnrollmentDatabasePasskeyInventoryRequest {
   readonly sessionVerifierDigest: Uint8Array;
 }
 
-export interface EnrollmentDatabaseSourceDeviceInventoryRequest {
+export interface EnrollmentDatabaseAgentAccountPause {
+  readonly agentAccountId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
 }
 
-export interface EnrollmentDatabaseDeviceRevocation {
-  readonly auditEventId: string;
-  readonly deviceId: string;
-  readonly requestId: string;
-  readonly sessionId: string;
-  readonly sessionVerifierDigest: Uint8Array;
-}
+export type EnrollmentDatabaseAccountTargetPurpose =
+  "account_reactivate" | "account_unlink" | "device_revoke" | "installation_revoke";
 
-export interface EnrollmentDatabaseSourcePause {
-  readonly auditEventId: string;
-  readonly requestId: string;
-  readonly sessionId: string;
-  readonly sessionVerifierDigest: Uint8Array;
-  readonly sourceId: string;
-}
-
-export interface EnrollmentDatabasePairingApprovalRead {
-  readonly attemptLimit: number;
-  readonly codeDigests: readonly [Uint8Array, Uint8Array];
-  readonly secondaryActive: boolean;
-  readonly sessionId: string;
-  readonly sessionVerifierDigest: Uint8Array;
-  readonly windowSeconds: number;
-}
-
-export interface EnrollmentDatabasePairingApprovalChallenge {
+export interface EnrollmentDatabaseAccountTargetChallenge {
   readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly expiresAt: string;
-  readonly pairingId: string;
+  readonly purpose: EnrollmentDatabaseAccountTargetPurpose;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
-  readonly sourceChoice: "existing" | "new";
-  readonly sourceId: string;
-  readonly userCodeDigest: Uint8Array;
 }
 
-export interface EnrollmentDatabasePairingApproval {
-  readonly auditEventId: string;
+export interface EnrollmentDatabaseAccountTargetCompletion {
   readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly observedSignCount: number;
-  readonly pairingId: string;
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
+  readonly targetId: string;
   readonly verifiedPasskeyId: string;
 }
-
-export interface EnrollmentDatabaseSourceReactivationChallenge {
-  readonly challengeDigest: Uint8Array;
-  readonly challengeId: string;
-  readonly contextDigest: Uint8Array;
-  readonly expiresAt: string;
-  readonly sessionId: string;
-  readonly sessionVerifierDigest: Uint8Array;
-  readonly sourceId: string;
-}
-
-export interface EnrollmentDatabaseSourceReactivation {
-  readonly auditEventId: string;
-  readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
-  readonly challengeId: string;
-  readonly contextDigest: Uint8Array;
-  readonly observedSignCount: number;
-  readonly requestId: string;
-  readonly sessionId: string;
-  readonly sessionVerifierDigest: Uint8Array;
-  readonly sourceId: string;
-  readonly verifiedPasskeyId: string;
-}
-
-export type EnrollmentDatabaseSourceUnlinkChallenge = EnrollmentDatabaseSourceReactivationChallenge;
-
-export type EnrollmentDatabaseSourceUnlink = EnrollmentDatabaseSourceReactivation;
 
 export interface EnrollmentDatabaseProfileVisibilityRequest {
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
 }
 
-export interface EnrollmentDatabaseAccountOverviewRequest extends EnrollmentDatabaseProfileVisibilityRequest {
-  readonly seasonStart: string;
-}
-
 export interface EnrollmentDatabaseProfileVisibilityUpdate extends EnrollmentDatabaseProfileVisibilityRequest {
   readonly publiclyVisible: boolean;
+}
+
+export interface EnrollmentDatabaseProviderBreakdownVisibilityUpdate extends EnrollmentDatabaseProfileVisibilityRequest {
+  readonly providerBreakdownVisible: boolean;
 }
 
 export interface EnrollmentDatabaseCarRecipeProposal extends EnrollmentDatabaseProfileVisibilityRequest {
@@ -1010,15 +656,10 @@ export interface EnrollmentDatabaseProfileDeletionChallenge {
 }
 
 export interface EnrollmentDatabaseProfileDeletion {
-  readonly auditEventId: string;
   readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
-  readonly deletionJobId: string;
   readonly observedSignCount: number;
-  readonly profileRefDigest: Uint8Array;
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
   readonly typedHandle: string;
@@ -1035,10 +676,8 @@ export interface EnrollmentDatabasePasskeyAddChallenge {
 }
 
 export interface EnrollmentDatabasePasskeyAddition {
-  readonly auditEventId: string;
   readonly backupEligible: boolean;
   readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly cosePublicKey: Uint8Array;
@@ -1046,7 +685,6 @@ export interface EnrollmentDatabasePasskeyAddition {
   readonly label: string;
   readonly observedSignCount: number;
   readonly passkeyId: string;
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
   readonly signCount: number;
@@ -1061,17 +699,13 @@ export interface EnrollmentDatabasePasskeyRevokeChallenge {
   readonly expiresAt: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
-  readonly targetPasskeyId: string;
 }
 
 export interface EnrollmentDatabasePasskeyRevocation {
-  readonly auditEventId: string;
   readonly backupState: boolean;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly observedSignCount: number;
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
   readonly targetPasskeyId: string;
@@ -1088,15 +722,12 @@ export interface EnrollmentDatabaseRecoveryCodeChallenge {
 }
 
 export interface EnrollmentDatabaseRecoveryCodeReplacement {
-  readonly auditEventId: string;
   readonly backupState: boolean;
   readonly batchId: string;
-  readonly challengeDigest: Uint8Array;
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly observedSignCount: number;
   readonly recoveryCodeIds: readonly string[];
-  readonly requestId: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
   readonly verifierPhcs: readonly string[];
@@ -1104,18 +735,15 @@ export interface EnrollmentDatabaseRecoveryCodeReplacement {
 }
 
 export interface EnrollmentDatabaseRecoveryStart {
-  readonly auditEventId: string;
   readonly authorityId: string;
   readonly authorityVerifierDigest: Uint8Array;
   readonly challengeDigest: Uint8Array;
   readonly contextDigest: Uint8Array;
   readonly expiresAt: string;
   readonly recoveryCodeId: string;
-  readonly requestId: string;
 }
 
 export interface EnrollmentDatabaseRecoveryCompletion {
-  readonly auditEventId: string;
   readonly authorityId: string;
   readonly authorityVerifierDigest: Uint8Array;
   readonly backupEligible: boolean;
@@ -1126,7 +754,6 @@ export interface EnrollmentDatabaseRecoveryCompletion {
   readonly credentialId: Uint8Array;
   readonly label: string;
   readonly passkeyId: string;
-  readonly requestId: string;
   readonly sessionExpiresAt: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
@@ -1138,21 +765,16 @@ export type PairingDatabasePoolSignalSink = (
   signal: PairingDatabasePoolSignal,
 ) => Promise<void> | void;
 
-export interface PairingDatabaseClient {
-  admitPairingTransportRequest?(input: PairingDatabaseRateAdmission): Promise<unknown>;
-  activatePairing(input: PairingDatabaseActivation): Promise<unknown>;
-  pollPairingStatus?(pollVerifierDigests: readonly [Uint8Array, Uint8Array]): Promise<unknown>;
-  readVerificationMaterial(
-    pollVerifierDigests: readonly [Uint8Array, Uint8Array],
-  ): Promise<unknown>;
-  release(destroy?: boolean): void;
-  startPairing(input: PairingDatabaseStart): Promise<unknown>;
-  verifyRuntimeBoundary(): Promise<unknown>;
-}
-
 export interface EnrollmentDatabaseClient {
   approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown>;
-  completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<unknown>;
+  completeAgentAccountReactivation(
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): Promise<unknown>;
+  completeAgentAccountUnlink(input: EnrollmentDatabaseAccountTargetCompletion): Promise<unknown>;
+  completeDeviceKeyRevocation(input: EnrollmentDatabaseAccountTargetCompletion): Promise<unknown>;
+  completeInstallationRevocation(
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): Promise<unknown>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<unknown>;
@@ -1162,40 +784,31 @@ export interface EnrollmentDatabaseClient {
     input: EnrollmentDatabaseRecoveryCodeReplacement,
   ): Promise<unknown>;
   completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown>;
-  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<unknown>;
-  completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<unknown>;
-  createPairingApprovalChallenge(
-    input: EnrollmentDatabasePairingApprovalChallenge,
-  ): Promise<unknown>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<unknown>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<unknown>;
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<unknown>;
+  createAccountTargetChallenge(input: EnrollmentDatabaseAccountTargetChallenge): Promise<unknown>;
   createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<unknown>;
-  createSourceReactivationChallenge(
-    input: EnrollmentDatabaseSourceReactivationChallenge,
-  ): Promise<unknown>;
-  createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<unknown>;
   enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown>;
-  pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown>;
+  pauseAgentAccount(input: EnrollmentDatabaseAgentAccountPause): Promise<unknown>;
   proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<unknown>;
-  readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<unknown>;
   readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
-  readActiveDeviceInventory(
-    input: EnrollmentDatabaseSourceDeviceInventoryRequest,
-  ): Promise<unknown>;
+  readAgentAccountDashboard(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
+  readPrivateDashboardRanking(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   readPasskeyInventory(input: EnrollmentDatabasePasskeyInventoryRequest): Promise<unknown>;
-  readPairingApproval(input: EnrollmentDatabasePairingApprovalRead): Promise<unknown>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown>;
   readRecoveryCodeVerificationMaterial(recoveryCodeId: string): Promise<unknown>;
   readProfileVisibility(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<unknown>;
   release(destroy?: boolean): void;
-  revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown>;
   rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown>;
   revokeEnrollmentSession(input: EnrollmentDatabaseSessionRevocation): Promise<unknown>;
   setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown>;
+  setProviderBreakdownVisibility(
+    input: EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
+  ): Promise<unknown>;
   startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
@@ -1205,11 +818,6 @@ export interface ConnectorCarProposalDatabaseClient {
   readCarProposalDeviceMaterial(deviceId: string): Promise<unknown>;
   release(destroy?: boolean): void;
   verifyRuntimeBoundary(): Promise<unknown>;
-}
-
-export interface PairingDatabasePool {
-  close(): Promise<void>;
-  connect(): Promise<PairingDatabaseClient>;
 }
 
 export interface EnrollmentDatabasePool {
@@ -1223,10 +831,10 @@ export interface ConnectorCarProposalDatabasePool {
 }
 
 export interface WebAuthDatabaseClient
-  extends PairingDatabaseClient, EnrollmentDatabaseClient, ConnectorCarProposalDatabaseClient {}
+  extends EnrollmentDatabaseClient, ConnectorCarProposalDatabaseClient {}
 
 export interface WebAuthDatabasePool
-  extends PairingDatabasePool, EnrollmentDatabasePool, ConnectorCarProposalDatabasePool {
+  extends EnrollmentDatabasePool, ConnectorCarProposalDatabasePool {
   connect(): Promise<WebAuthDatabaseClient>;
 }
 
@@ -1267,6 +875,29 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     return result.rows;
   }
 
+  async function completeAccountTarget(
+    query: string,
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): Promise<unknown> {
+    const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+    const contextDigest = Buffer.from(input.contextDigest);
+    try {
+      return await fixedQuery(query, [
+        input.sessionId,
+        sessionVerifierDigest,
+        input.challengeId,
+        contextDigest,
+        input.verifiedPasskeyId,
+        input.observedSignCount,
+        input.backupState,
+        input.targetId,
+      ]);
+    } finally {
+      sessionVerifierDigest.fill(0);
+      contextDigest.fill(0);
+    }
+  }
+
   return Object.freeze({
     async approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
@@ -1280,61 +911,26 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
-    async admitPairingTransportRequest(input: PairingDatabaseRateAdmission): Promise<unknown> {
-      const clientIdentityDigest = Buffer.from(input.clientIdentityDigest);
-      try {
-        return await fixedQuery(admitPairingTransportRequestQuery, [
-          input.operation,
-          clientIdentityDigest,
-          input.globalLimit,
-          input.bucketLimit,
-          input.windowSeconds,
-        ]);
-      } finally {
-        clientIdentityDigest.fill(0);
-      }
+    completeAgentAccountReactivation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<unknown> {
+      return completeAccountTarget(completeAgentAccountReactivationQuery, input);
     },
-    async activatePairing(input: PairingDatabaseActivation): Promise<unknown> {
-      const digest = Buffer.from(input.pollVerifierDigest);
-      try {
-        return await fixedQuery(activatePairingQuery, [
-          digest,
-          input.pairingId,
-          input.deviceId,
-          input.auditEventId,
-          input.requestId,
-        ]);
-      } finally {
-        digest.fill(0);
-      }
+    completeAgentAccountUnlink(input: EnrollmentDatabaseAccountTargetCompletion): Promise<unknown> {
+      return completeAccountTarget(completeAgentAccountUnlinkQuery, input);
     },
-    async completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(completePairingApprovalQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.verifiedPasskeyId,
-          input.observedSignCount,
-          input.backupState,
-          input.pairingId,
-          input.auditEventId,
-          input.requestId,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-      }
+    completeDeviceKeyRevocation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<unknown> {
+      return completeAccountTarget(completeDeviceKeyRevocationQuery, input);
+    },
+    completeInstallationRevocation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<unknown> {
+      return completeAccountTarget(completeInstallationRevocationQuery, input);
     },
     async completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
       const credentialId = Buffer.from(input.credentialId);
       const cosePublicKey = Buffer.from(input.cosePublicKey);
@@ -1358,7 +954,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
         contextDigest.fill(0);
         credentialId.fill(0);
         cosePublicKey.fill(0);
@@ -1367,7 +962,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     },
     async completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
       const credentialId = Buffer.from(input.credentialId);
       const cosePublicKey = Buffer.from(input.cosePublicKey);
@@ -1376,7 +970,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,
-          challengeDigest,
           contextDigest,
           input.verifiedPasskeyId,
           input.observedSignCount,
@@ -1388,12 +981,9 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.signCount,
           input.backupEligible,
           input.backupState,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
         contextDigest.fill(0);
         credentialId.fill(0);
         cosePublicKey.fill(0);
@@ -1417,8 +1007,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.sessionId,
           sessionVerifierDigest,
           input.sessionExpiresAt,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         challengeDigest.fill(0);
@@ -1452,8 +1040,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.sessionId,
           sessionVerifierDigest,
           input.sessionExpiresAt,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         authorityVerifierDigest.fill(0);
@@ -1466,25 +1052,20 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     },
     async completePasskeyRevocation(input: EnrollmentDatabasePasskeyRevocation): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
       try {
         return await fixedQuery(completePasskeyRevocationQuery, [
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,
-          challengeDigest,
           contextDigest,
           input.verifiedPasskeyId,
           input.observedSignCount,
           input.backupState,
           input.targetPasskeyId,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
         contextDigest.fill(0);
       }
     },
@@ -1492,14 +1073,12 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       input: EnrollmentDatabaseRecoveryCodeReplacement,
     ): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
       try {
         return await fixedQuery(completeRecoveryCodeReplacementQuery, [
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,
-          challengeDigest,
           contextDigest,
           input.verifiedPasskeyId,
           input.observedSignCount,
@@ -1507,90 +1086,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.batchId,
           [...input.recoveryCodeIds],
           [...input.verifierPhcs],
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
         contextDigest.fill(0);
       }
     },
     async completeProfileDeletion(input: EnrollmentDatabaseProfileDeletion): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
       const contextDigest = Buffer.from(input.contextDigest);
-      const profileRefDigest = Buffer.from(input.profileRefDigest);
       try {
         return await fixedQuery(completeProfileDeletionQuery, [
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,
-          challengeDigest,
           contextDigest,
           input.verifiedPasskeyId,
           input.observedSignCount,
           input.backupState,
           input.typedHandle,
-          input.deletionJobId,
-          profileRefDigest,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-        profileRefDigest.fill(0);
-      }
-    },
-    async completeSourceReactivation(
-      input: EnrollmentDatabaseSourceReactivation,
-    ): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(completeSourceReactivationQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.verifiedPasskeyId,
-          input.observedSignCount,
-          input.backupState,
-          input.sourceId,
-          input.auditEventId,
-          input.requestId,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-      }
-    },
-    async completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(completeSourceUnlinkQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.verifiedPasskeyId,
-          input.observedSignCount,
-          input.backupState,
-          input.sourceId,
-          input.auditEventId,
-          input.requestId,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
         contextDigest.fill(0);
       }
     },
@@ -1611,33 +1128,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-      }
-    },
-    async createPairingApprovalChallenge(
-      input: EnrollmentDatabasePairingApprovalChallenge,
-    ): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const userCodeDigest = Buffer.from(input.userCodeDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(createPairingApprovalChallengeQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.pairingId,
-          userCodeDigest,
-          input.sourceChoice,
-          input.sourceId,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.expiresAt,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        userCodeDigest.fill(0);
         challengeDigest.fill(0);
         contextDigest.fill(0);
       }
@@ -1672,7 +1162,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(createPasskeyRevokeChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
-          input.targetPasskeyId,
           input.challengeId,
           challengeDigest,
           contextDigest,
@@ -1705,6 +1194,28 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         contextDigest.fill(0);
       }
     },
+    async createAccountTargetChallenge(
+      input: EnrollmentDatabaseAccountTargetChallenge,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      const challengeDigest = Buffer.from(input.challengeDigest);
+      const contextDigest = Buffer.from(input.contextDigest);
+      try {
+        return await fixedQuery(createAccountTargetActionChallengeQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.challengeId,
+          input.purpose,
+          challengeDigest,
+          contextDigest,
+          input.expiresAt,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+        challengeDigest.fill(0);
+        contextDigest.fill(0);
+      }
+    },
     async createRecoveryCodeChallenge(
       input: EnrollmentDatabaseRecoveryCodeChallenge,
     ): Promise<unknown> {
@@ -1715,50 +1226,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(createRecoveryCodeChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.expiresAt,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-      }
-    },
-    async createSourceReactivationChallenge(
-      input: EnrollmentDatabaseSourceReactivationChallenge,
-    ): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(createSourceReactivationChallengeQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.sourceId,
-          input.challengeId,
-          challengeDigest,
-          contextDigest,
-          input.expiresAt,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        challengeDigest.fill(0);
-        contextDigest.fill(0);
-      }
-    },
-    async createSourceUnlinkChallenge(
-      input: EnrollmentDatabaseSourceUnlinkChallenge,
-    ): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const challengeDigest = Buffer.from(input.challengeDigest);
-      const contextDigest = Buffer.from(input.contextDigest);
-      try {
-        return await fixedQuery(createSourceUnlinkChallengeQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.sourceId,
           input.challengeId,
           challengeDigest,
           contextDigest,
@@ -1794,50 +1261,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
-    async pollPairingStatus(
-      pollVerifierDigests: readonly [Uint8Array, Uint8Array],
-    ): Promise<unknown> {
-      const first = Buffer.from(pollVerifierDigests[0]);
-      const second = Buffer.from(pollVerifierDigests[1]);
-      try {
-        return await fixedQuery(pairingStatusQuery, [first, second]);
-      } finally {
-        first.fill(0);
-        second.fill(0);
-      }
-    },
-    async readVerificationMaterial(
-      pollVerifierDigests: readonly [Uint8Array, Uint8Array],
-    ): Promise<unknown> {
-      const first = Buffer.from(pollVerifierDigests[0]);
-      const second = Buffer.from(pollVerifierDigests[1]);
-      try {
-        return await fixedQuery(verificationMaterialQuery, [first, second]);
-      } finally {
-        first.fill(0);
-        second.fill(0);
-      }
-    },
-    async readPairingApproval(input: EnrollmentDatabasePairingApprovalRead): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      const primaryCodeDigest = Buffer.from(input.codeDigests[0]);
-      const secondaryCodeDigest = Buffer.from(input.codeDigests[1]);
-      try {
-        return await fixedQuery(readPairingApprovalQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          primaryCodeDigest,
-          secondaryCodeDigest,
-          input.secondaryActive,
-          input.attemptLimit,
-          input.windowSeconds,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-        primaryCodeDigest.fill(0);
-        secondaryCodeDigest.fill(0);
-      }
-    },
     async readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<unknown> {
       const credential = Buffer.from(credentialId);
       try {
@@ -1849,15 +1272,13 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
     readRecoveryCodeVerificationMaterial(recoveryCodeId: string): Promise<unknown> {
       return fixedQuery(readRecoveryCodeVerificationMaterialQuery, [recoveryCodeId]);
     },
-    async pauseSource(input: EnrollmentDatabaseSourcePause): Promise<unknown> {
+    async pauseAgentAccount(input: EnrollmentDatabaseAgentAccountPause): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
-        return await fixedQuery(pauseSourceQuery, [
+        return await fixedQuery(pauseAgentAccountQuery, [
           input.sessionId,
           sessionVerifierDigest,
-          input.sourceId,
-          input.auditEventId,
-          input.requestId,
+          input.agentAccountId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
@@ -1910,26 +1331,14 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         nonceDigest.fill(0);
       }
     },
-    async readActiveDeviceInventory(
-      input: EnrollmentDatabaseSourceDeviceInventoryRequest,
+    async readAgentAccountDashboard(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
     ): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
-        return await fixedQuery(readActiveDeviceInventoryQuery, [
+        return await fixedQuery(readAgentAccountDashboardQuery, [
           input.sessionId,
           sessionVerifierDigest,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-      }
-    },
-    async readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      try {
-        return await fixedQuery(readAccountOverviewQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.seasonStart,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
@@ -1950,6 +1359,19 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
         return await fixedQuery(readPasskeyInventoryQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+        ]);
+      } finally {
+        sessionVerifierDigest.fill(0);
+      }
+    },
+    async readPrivateDashboardRanking(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
+      try {
+        return await fixedQuery(readPrivateDashboardRankingQuery, [
           input.sessionId,
           sessionVerifierDigest,
         ]);
@@ -1985,56 +1407,30 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         sessionVerifierDigest.fill(0);
       }
     },
-    async revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<unknown> {
-      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
-      try {
-        return await fixedQuery(revokeDeviceQuery, [
-          input.sessionId,
-          sessionVerifierDigest,
-          input.deviceId,
-          input.auditEventId,
-          input.requestId,
-        ]);
-      } finally {
-        sessionVerifierDigest.fill(0);
-      }
-    },
     async setProfileVisibility(input: EnrollmentDatabaseProfileVisibilityUpdate): Promise<unknown> {
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
         return await fixedQuery(setProfileVisibilityQuery, [
           input.sessionId,
           sessionVerifierDigest,
-          input.publiclyVisible,
+          input.publiclyVisible ? "public" : "hidden",
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
       }
     },
-    async startPairing(input: PairingDatabaseStart): Promise<unknown> {
-      const pollVerifierDigest = Buffer.from(input.pollVerifierDigest);
-      const userCodeDigest = Buffer.from(input.userCodeDigest);
-      const pairingChallenge = Buffer.from(input.pairingChallenge);
-      const publicKey = Buffer.from(input.publicKey);
+    async setProviderBreakdownVisibility(
+      input: EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
+    ): Promise<unknown> {
+      const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
-        return await fixedQuery(startPairingQuery, [
-          input.pairingId,
-          pollVerifierDigest,
-          userCodeDigest,
-          pairingChallenge,
-          input.deviceKeyId,
-          publicKey,
-          input.deviceLabel,
-          input.connectorVersion,
-          input.osFamily,
-          input.architecture,
-          input.expiresAt,
+        return await fixedQuery(setProviderBreakdownVisibilityQuery, [
+          input.sessionId,
+          sessionVerifierDigest,
+          input.providerBreakdownVisible,
         ]);
       } finally {
-        pollVerifierDigest.fill(0);
-        userCodeDigest.fill(0);
-        pairingChallenge.fill(0);
-        publicKey.fill(0);
+        sessionVerifierDigest.fill(0);
       }
     },
     async startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<unknown> {
@@ -2049,8 +1445,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           challengeDigest,
           contextDigest,
           input.expiresAt,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         authorityVerifierDigest.fill(0);
@@ -2064,8 +1458,6 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(revokeEnrollmentSessionQuery, [
           input.sessionId,
           sessionVerifierDigest,
-          input.auditEventId,
-          input.requestId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);

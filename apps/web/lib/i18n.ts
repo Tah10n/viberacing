@@ -71,7 +71,6 @@ const english = {
     "This page uses synthetic fixtures, no trackers, no remote fonts, and no account or connector credentials.",
   sharedRank: "Shared rank",
   signIn: "Sign in",
-  sourceCount: "Sources",
   sourcesAggregated: "Multiple accounts can be summed as separate approved sources.",
   streak: "Streak",
   streakUnavailable: "—",
@@ -166,7 +165,6 @@ const russian: Record<TranslationKey, string> = {
     "На странице только синтетические данные: без трекеров, внешних шрифтов, аккаунтов и ключей коннектора.",
   sharedRank: "Общее место",
   signIn: "Войти",
-  sourceCount: "Источники",
   sourcesAggregated:
     "Несколько аккаунтов можно суммировать как отдельные подтверждённые источники.",
   streak: "Серия",

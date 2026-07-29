@@ -1669,58 +1669,6 @@ AS $function$
   ORDER BY candidate.candidate_id
 $function$;
 
-CREATE FUNCTION viberacing_api.read_agent_account_inventory(
-  p_session_id uuid,
-  p_session_verifier_digest bytea
-)
-RETURNS TABLE (
-  agent_account_id text,
-  provider_code text,
-  private_label text,
-  identity_assurance text,
-  account_state text,
-  installation_id text,
-  installation_label text,
-  device_id text,
-  device_state text,
-  activated_date date,
-  last_used_date date
-)
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = pg_catalog, pg_temp
-AS $function$
-DECLARE
-  v_profile_id uuid;
-BEGIN
-  v_profile_id := viberacing_private.authenticate_session(
-    p_session_id,
-    p_session_verifier_digest
-  );
-  RETURN QUERY
-  SELECT
-    account.agent_account_id::text,
-    account.provider_code::text,
-    account.private_label::text,
-    account.identity_assurance::text,
-    account.state::text,
-    installation.installation_id::text,
-    installation.label::text,
-    device.device_id::text,
-    device.state::text,
-    device.activated_at::date,
-    device.last_used_at::date
-  FROM viberacing_private.agent_accounts AS account
-  LEFT JOIN viberacing_private.device_keys AS device
-    ON device.agent_account_id = account.agent_account_id
-  LEFT JOIN viberacing_private.connector_installations AS installation
-    ON installation.installation_id = device.installation_id
-  WHERE account.profile_id = v_profile_id
-  ORDER BY account.provider_code, account.created_at, device.activated_at;
-END
-$function$;
-
 CREATE FUNCTION viberacing_api.pause_agent_account(
   p_session_id uuid,
   p_session_verifier_digest bytea,
@@ -2046,8 +1994,6 @@ GRANT EXECUTE ON FUNCTION viberacing_api.read_pairing_possession_material(text, 
 GRANT EXECUTE ON FUNCTION viberacing_api.activate_pairing_batch(text, bytea)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.poll_pairing_batch(text, bytea)
-  TO viberacing_web;
-GRANT EXECUTE ON FUNCTION viberacing_api.read_agent_account_inventory(uuid, bytea)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.pause_agent_account(uuid, bytea, text)
   TO viberacing_web;

@@ -16,171 +16,18 @@ const config = resolvePairingDatabaseConfig({
 });
 
 describe("pairing database pool", () => {
-  it("exposes only fixed pairing probe, rate, status, proof, activation, and start statements", async () => {
+  it("uses only fixed private-dashboard and passkey-bound account-action statements", async () => {
     const returnedRows = [
-      [{ role_ok: true }],
-      [{ admitted: true }],
-      [],
-      [],
-      [{ activated: true }],
-      [{ started: true }],
+      [{ weekly_token_total: "9007199254740993" }],
+      [{ agent_account_id: `acc_${"A".repeat(22)}` }],
+      [{ paused: true }],
+      [{ created: true }],
+      [{ completed: true }],
+      [{ completed: true }],
+      [{ completed: true }],
+      [{ completed: true }],
+      [{ provider_breakdown_visible: true }],
     ];
-    const liveQueries: { text: string; values: unknown[] }[] = [];
-    const querySnapshots: { text: string; values: unknown[] }[] = [];
-    const releases: boolean[] = [];
-    let ended = false;
-    const driverClient = {
-      query(query: { text: string; values: unknown[] }): Promise<{ rows: unknown }> {
-        liveQueries.push(query);
-        querySnapshots.push({
-          text: query.text,
-          values: query.values.map((value) =>
-            Buffer.isBuffer(value) ? Buffer.from(value) : value,
-          ),
-        });
-        return Promise.resolve({ rows: returnedRows.shift() });
-      },
-      release(destroy = false): void {
-        releases.push(destroy);
-      },
-    };
-    const driverPool = {
-      connect() {
-        return Promise.resolve(driverClient);
-      },
-      end(): Promise<void> {
-        ended = true;
-        return Promise.resolve();
-      },
-      on() {
-        return this;
-      },
-    };
-    const pool = createPairingDatabasePool(config, undefined, (receivedConfig) => {
-      expect(receivedConfig).toBe(config);
-      return driverPool;
-    });
-    const client = await pool.connect();
-    const firstDigest = Buffer.alloc(32, 0x11);
-    const secondDigest = Buffer.alloc(32, 0x22);
-    const activationDigest = Buffer.alloc(32, 0x33);
-    const codeDigest = Buffer.alloc(32, 0x44);
-    const challenge = Buffer.alloc(32, 0x55);
-    const publicKey = Buffer.alloc(32, 0x66);
-    const clientIdentityDigest = Buffer.alloc(32, 0x77);
-
-    await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ role_ok: true }]);
-    await expect(
-      client.admitPairingTransportRequest?.({
-        bucketLimit: 20,
-        clientIdentityDigest,
-        globalLimit: 200,
-        operation: "poll",
-        windowSeconds: 60,
-      }),
-    ).resolves.toEqual([{ admitted: true }]);
-    await expect(client.pollPairingStatus?.([firstDigest, secondDigest])).resolves.toEqual([]);
-    await expect(client.readVerificationMaterial([firstDigest, secondDigest])).resolves.toEqual([]);
-    await expect(
-      client.activatePairing({
-        auditEventId: "00000000-0000-4000-8000-000000000027",
-        deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
-        pairingId: "00000000-0000-4000-8000-000000000026",
-        pollVerifierDigest: activationDigest,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-      }),
-    ).resolves.toEqual([{ activated: true }]);
-    await expect(
-      client.startPairing({
-        architecture: "x86_64",
-        connectorVersion: "0.0.0-test",
-        deviceKeyId: "00000000-0000-4000-8000-000000000028",
-        deviceLabel: "Synthetic device",
-        expiresAt: "2026-07-16T08:00:00.000Z",
-        osFamily: "windows",
-        pairingChallenge: challenge,
-        pairingId: "00000000-0000-4000-8000-000000000029",
-        pollVerifierDigest: activationDigest,
-        publicKey,
-        userCodeDigest: codeDigest,
-      }),
-    ).resolves.toEqual([{ started: true }]);
-    client.release();
-    client.release(true);
-    await pool.close();
-
-    expect(querySnapshots).toHaveLength(6);
-    expect(querySnapshots[0]?.text).toContain("CURRENT_USER = 'viberacing_web'");
-    expect(querySnapshots[0]?.text).toContain("default_transaction_read_only') = 'off'");
-    expect(querySnapshots[0]?.values).toEqual([]);
-    expect(querySnapshots[1]?.text).toContain("admit_pairing_transport_request");
-    expect(querySnapshots[1]?.values).toEqual(["poll", clientIdentityDigest, 200, 20, 60]);
-    expect(querySnapshots[2]?.text).toContain("poll_pairing_status");
-    expect(querySnapshots[2]?.values).toEqual([firstDigest, secondDigest]);
-    expect(querySnapshots[3]?.text).toContain("VALUES");
-    expect(querySnapshots[3]?.text).toContain("read_pairing_verification_material");
-    expect(querySnapshots[3]?.values).toEqual([firstDigest, secondDigest]);
-    expect(querySnapshots[4]?.text).toContain("activate_pairing");
-    expect(querySnapshots[4]?.text).toContain("AS MATERIALIZED");
-    expect(querySnapshots[4]?.values).toEqual([
-      activationDigest,
-      "00000000-0000-4000-8000-000000000026",
-      "dev_AAAAAAAAAAAAAAAAAAAAAA",
-      "00000000-0000-4000-8000-000000000027",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
-    ]);
-    expect(querySnapshots[5]?.text).toContain("start_pairing");
-    expect(querySnapshots[5]?.text).toContain("AS MATERIALIZED");
-    expect(querySnapshots[5]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000029",
-      activationDigest,
-      codeDigest,
-      challenge,
-      "00000000-0000-4000-8000-000000000028",
-      publicKey,
-      "Synthetic device",
-      "0.0.0-test",
-      "windows",
-      "x86_64",
-      "2026-07-16T08:00:00.000Z",
-    ]);
-    expect(firstDigest).toEqual(Buffer.alloc(32, 0x11));
-    expect(secondDigest).toEqual(Buffer.alloc(32, 0x22));
-    expect(activationDigest).toEqual(Buffer.alloc(32, 0x33));
-    expect(codeDigest).toEqual(Buffer.alloc(32, 0x44));
-    expect(challenge).toEqual(Buffer.alloc(32, 0x55));
-    expect(publicKey).toEqual(Buffer.alloc(32, 0x66));
-    expect(clientIdentityDigest).toEqual(Buffer.alloc(32, 0x77));
-    expect(liveQueries[1]?.values[1]).toEqual(Buffer.alloc(32));
-    expect(liveQueries[2]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
-    expect(liveQueries[3]?.values).toEqual([Buffer.alloc(32), Buffer.alloc(32)]);
-    expect(liveQueries[4]?.values[0]).toEqual(Buffer.alloc(32));
-    expect(liveQueries[5]?.values.slice(1, 4)).toEqual([
-      Buffer.alloc(32),
-      Buffer.alloc(32),
-      Buffer.alloc(32),
-    ]);
-    expect(liveQueries[5]?.values[5]).toEqual(Buffer.alloc(32));
-    expect(releases).toEqual([false, true]);
-    expect(ended).toBe(true);
-    expect(Object.isFrozen(client)).toBe(true);
-    expect(Object.isFrozen(pool)).toBe(true);
-  });
-
-  it("uses only fixed pairing-approval statements and clears copied secret material", async () => {
-    const approvalRows = [
-      {
-        architecture: "x86_64",
-        candidate_index: 1,
-        connector_version: "1.2.3",
-        device_label: "Studio PC",
-        expires_at: "2026-07-16T10:09:00.000Z",
-        os_family: "windows",
-        pairing_id: "00000000-0000-4000-8000-000000001001",
-        public_key: Buffer.alloc(32, 0x64),
-      },
-    ];
-    const returnedRows = [approvalRows, [{ created: true }], [{ approved: true }]];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
     const driverClient = {
@@ -196,81 +43,97 @@ describe("pairing database pool", () => {
       },
       release: vi.fn(),
     };
-    const pool = createPairingDatabasePool(config, undefined, () => ({
+    const driverPool = {
       connect: () => Promise.resolve(driverClient),
       end: () => Promise.resolve(),
       on() {
         return this;
       },
-    }));
+    };
+    const pool = createPairingDatabasePool(config, undefined, () => driverPool);
     const client = await pool.connect();
-    const sessionDigest = Buffer.alloc(32, 0x61);
-    const primaryCodeDigest = Buffer.alloc(32, 0x62);
-    const secondaryCodeDigest = Buffer.alloc(32, 0x63);
-    const challengeDigest = Buffer.alloc(32, 0x65);
-    const contextDigest = Buffer.alloc(32, 0x66);
+    const sessionId = "00000000-0000-4000-8000-000000000312";
+    const challengeId = "00000000-0000-4000-8000-000000000313";
+    const passkeyId = "00000000-0000-4000-8000-000000000314";
+    const sessionDigest = Buffer.alloc(32, 0x51);
+    const challengeDigest = Buffer.alloc(32, 0x52);
+    const contextDigest = Buffer.alloc(32, 0x53);
+    const targetIds = [
+      `acc_${"A".repeat(22)}`,
+      `acc_${"A".repeat(22)}`,
+      `dev_${"B".repeat(22)}`,
+      `ins_${"C".repeat(22)}`,
+    ] as const;
 
-    await expect(
-      client.readPairingApproval({
-        attemptLimit: 6,
-        codeDigests: [primaryCodeDigest, secondaryCodeDigest],
-        secondaryActive: true,
-        sessionId: "00000000-0000-4000-8000-000000000201",
-        sessionVerifierDigest: sessionDigest,
-        windowSeconds: 600,
-      }),
-    ).resolves.toEqual(approvalRows);
-    await expect(
-      client.createPairingApprovalChallenge({
-        challengeDigest,
-        challengeId: "00000000-0000-4000-8000-000000001201",
-        contextDigest,
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        pairingId: "00000000-0000-4000-8000-000000001001",
-        sessionId: "00000000-0000-4000-8000-000000000201",
-        sessionVerifierDigest: sessionDigest,
-        sourceChoice: "existing",
-        sourceId: `src_${"N".repeat(22)}`,
-        userCodeDigest: primaryCodeDigest,
-      }),
-    ).resolves.toEqual([{ created: true }]);
-    await expect(
-      client.completePairingApproval({
-        auditEventId: "00000000-0000-4000-8000-000000001301",
-        backupState: false,
-        challengeDigest,
-        challengeId: "00000000-0000-4000-8000-000000001201",
-        contextDigest,
-        observedSignCount: 4,
-        pairingId: "00000000-0000-4000-8000-000000001001",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-        sessionId: "00000000-0000-4000-8000-000000000201",
-        sessionVerifierDigest: sessionDigest,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000301",
-      }),
-    ).resolves.toEqual([{ approved: true }]);
+    await client.readPrivateDashboardRanking({ sessionId, sessionVerifierDigest: sessionDigest });
+    await client.readAgentAccountDashboard({ sessionId, sessionVerifierDigest: sessionDigest });
+    await client.pauseAgentAccount({
+      agentAccountId: targetIds[0],
+      sessionId,
+      sessionVerifierDigest: sessionDigest,
+    });
+    await client.createAccountTargetChallenge({
+      challengeDigest,
+      challengeId,
+      contextDigest,
+      expiresAt: "2026-07-16T10:05:00.000Z",
+      purpose: "account_unlink",
+      sessionId,
+      sessionVerifierDigest: sessionDigest,
+    });
+    const completion = {
+      backupState: false,
+      challengeId,
+      contextDigest,
+      observedSignCount: 4,
+      sessionId,
+      sessionVerifierDigest: sessionDigest,
+      verifiedPasskeyId: passkeyId,
+    };
+    await client.completeAgentAccountReactivation({ ...completion, targetId: targetIds[0] });
+    await client.completeAgentAccountUnlink({ ...completion, targetId: targetIds[1] });
+    await client.completeDeviceKeyRevocation({ ...completion, targetId: targetIds[2] });
+    await client.completeInstallationRevocation({ ...completion, targetId: targetIds[3] });
+    await client.setProviderBreakdownVisibility({
+      providerBreakdownVisible: true,
+      sessionId,
+      sessionVerifierDigest: sessionDigest,
+    });
 
-    expect(snapshots[0]?.text).toContain("read_pairing_for_approval_limited");
-    expect(snapshots[0]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000201",
-      sessionDigest,
-      primaryCodeDigest,
-      secondaryCodeDigest,
-      true,
-      6,
-      600,
+    expect(snapshots.map(({ text }) => text)).toEqual([
+      expect.stringContaining("read_private_dashboard_ranking"),
+      expect.stringContaining("read_agent_account_dashboard"),
+      expect.stringContaining("pause_agent_account"),
+      expect.stringContaining("create_auth_challenge"),
+      expect.stringContaining("reactivate_agent_account"),
+      expect.stringContaining("unlink_agent_account"),
+      expect.stringContaining("revoke_device_key"),
+      expect.stringContaining("revoke_connector_installation"),
+      expect.stringContaining("set_provider_breakdown_visibility"),
     ]);
-    expect(snapshots[1]?.text).toContain("create_pairing_approval_challenge");
-    expect(snapshots[1]?.text).not.toContain("'new'::text");
-    expect(snapshots[1]?.values[4]).toBe("existing");
-    expect(snapshots[1]?.values[5]).toBe(`src_${"N".repeat(22)}`);
-    expect(snapshots[2]?.text).toContain("consume_passkey_challenge");
-    expect(snapshots[2]?.text).toContain("approve_pairing");
-    expect(sessionDigest).toEqual(Buffer.alloc(32, 0x61));
-    expect(primaryCodeDigest).toEqual(Buffer.alloc(32, 0x62));
-    expect(secondaryCodeDigest).toEqual(Buffer.alloc(32, 0x63));
-    expect(challengeDigest).toEqual(Buffer.alloc(32, 0x65));
-    expect(contextDigest).toEqual(Buffer.alloc(32, 0x66));
+    expect(snapshots[2]?.values).toEqual([sessionId, sessionDigest, targetIds[0]]);
+    expect(snapshots[3]?.values).toEqual([
+      sessionId,
+      sessionDigest,
+      challengeId,
+      "account_unlink",
+      challengeDigest,
+      contextDigest,
+      "2026-07-16T10:05:00.000Z",
+    ]);
+    for (const [index, targetId] of targetIds.entries()) {
+      expect(snapshots[index + 4]?.values).toEqual([
+        sessionId,
+        sessionDigest,
+        challengeId,
+        contextDigest,
+        passkeyId,
+        4,
+        false,
+        targetId,
+      ]);
+    }
+    expect(snapshots[8]?.values).toEqual([sessionId, sessionDigest, true]);
     for (const query of liveQueries) {
       for (const value of query.values) {
         if (Buffer.isBuffer(value)) {
@@ -327,15 +190,12 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completeRecoveryCodeReplacement({
-        auditEventId: "00000000-0000-4000-8000-000000000704",
         backupState: true,
         batchId: "00000000-0000-4000-8000-000000000703",
-        challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000701",
         contextDigest: context,
         observedSignCount: 9,
         recoveryCodeIds,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionId: "00000000-0000-4000-8000-000000000702",
         sessionVerifierDigest: digest,
         verifierPhcs,
@@ -343,7 +203,8 @@ describe("pairing database pool", () => {
       }),
     ).resolves.toEqual([{ replaced: true }]);
 
-    expect(snapshots[0]?.text).toContain("create_recovery_change_challenge");
+    expect(snapshots[0]?.text).toContain("create_auth_challenge");
+    expect(snapshots[0]?.text).toContain("'recovery_change'::text");
     expect(snapshots[0]?.values).toEqual([
       "00000000-0000-4000-8000-000000000702",
       digest,
@@ -352,15 +213,12 @@ describe("pairing database pool", () => {
       context,
       "2026-07-16T10:05:00.000Z",
     ]);
-    expect(snapshots[1]?.text).toContain("consume_passkey_challenge");
-    expect(snapshots[1]?.text).toContain("'recovery_change'::text");
     expect(snapshots[1]?.text).toContain("replace_recovery_codes");
     expect(snapshots[1]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[1]?.values).toEqual([
       "00000000-0000-4000-8000-000000000702",
       digest,
       "00000000-0000-4000-8000-000000000701",
-      digest,
       context,
       "00000000-0000-4000-8000-000000000705",
       9,
@@ -368,8 +226,6 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000703",
       recoveryCodeIds,
       verifierPhcs,
-      "00000000-0000-4000-8000-000000000704",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
   });
 
@@ -419,19 +275,16 @@ describe("pairing database pool", () => {
     ]);
     await expect(
       client.startRecovery({
-        auditEventId: "00000000-0000-4000-8000-000000000713",
         authorityId: "00000000-0000-4000-8000-000000000714",
         authorityVerifierDigest: authorityDigest,
         challengeDigest,
         contextDigest,
         expiresAt: "2026-07-16T10:05:00.000Z",
         recoveryCodeId,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
       }),
     ).resolves.toEqual([{ started: true }]);
     await expect(
       client.completeRecoveryRegistration({
-        auditEventId: "00000000-0000-4000-8000-000000000715",
         authorityId: "00000000-0000-4000-8000-000000000714",
         authorityVerifierDigest: authorityDigest,
         backupEligible: true,
@@ -442,7 +295,6 @@ describe("pairing database pool", () => {
         credentialId,
         label: "Replacement passkey",
         passkeyId: "00000000-0000-4000-8000-000000000716",
-        requestId: "req_BBBBBBBBBBBBBBBBBBBBBB",
         sessionExpiresAt: "2026-08-15T10:00:00.000Z",
         sessionId: "00000000-0000-4000-8000-000000000717",
         sessionVerifierDigest: sessionDigest,
@@ -468,8 +320,6 @@ describe("pairing database pool", () => {
       challengeDigest,
       contextDigest,
       "2026-07-16T10:05:00.000Z",
-      "00000000-0000-4000-8000-000000000713",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[2]?.text).toContain("complete_recovery_registration_session");
     expect(snapshots[2]?.values).toEqual([
@@ -487,8 +337,6 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000717",
       sessionDigest,
       "2026-08-15T10:00:00.000Z",
-      "00000000-0000-4000-8000-000000000715",
-      "req_BBBBBBBBBBBBBBBBBBBBBB",
     ]);
   });
 
@@ -571,38 +419,6 @@ describe("pairing database pool", () => {
       [{ deleted: true }],
       [{ visibility: "hidden" }],
       [{ revoked: true }],
-      [
-        {
-          activated_on: "2026-07-14",
-          architecture: "x86_64",
-          connector_version: "1.2.3",
-          device_id: `dev_${"A".repeat(22)}`,
-          device_label: "Studio PC",
-          device_state: "active",
-          os_family: "windows",
-          source_id: `src_${"B".repeat(22)}`,
-          source_state: "active",
-        },
-      ],
-      [{ revoked: true }],
-      [{ paused: true }],
-      [{ created: true }],
-      [{ reactivated: true }],
-      [{ created: true }],
-      [{ unlinked: true }],
-      [
-        {
-          active_days: null,
-          daily_score: null,
-          score_date: null,
-          season_end: null,
-          season_finalized: null,
-          season_start: null,
-          source_count: null,
-          visibility: "public",
-          weekly_score: null,
-        },
-      ],
     ];
     const liveQueries: { text: string; values: unknown[] }[] = [];
     const snapshots: { text: string; values: unknown[] }[] = [];
@@ -635,21 +451,16 @@ describe("pairing database pool", () => {
 
     await expect(
       client.enrollProfile({
-        auditEventId: "00000000-0000-4000-8000-000000000305",
         githubUserId: 123,
         handle: "pending_0000000000004000",
         inviteId: "00000000-0000-4000-8000-000000000301",
         inviteRequired: true,
         inviteVerifierDigest: digest,
         locale: "en",
-        motionPreference: "system",
         profileId: "00000000-0000-4000-8000-000000000302",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionExpiresAt: "2026-08-15T10:00:00.000Z",
         sessionId: "00000000-0000-4000-8000-000000000303",
         sessionVerifierDigest: digest,
-        streakVisible: false,
-        theme: "neon-night",
       }),
     ).resolves.toEqual([
       {
@@ -674,21 +485,17 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completeInitialPasskey({
-        auditEventId: "00000000-0000-4000-8000-000000000305",
         backupEligible: true,
         backupState: false,
-        challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000304",
         contextDigest: context,
         cosePublicKey: publicKey,
         credentialId: credential,
         handle: "pixel_driver",
         passkeyId: "00000000-0000-4000-8000-000000000306",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         rotatedSessionExpiresAt: "2026-08-15T10:00:00.000Z",
         rotatedSessionId: "00000000-0000-4000-8000-000000000308",
         rotatedSessionVerifierDigest: digest,
-        rotationAuditEventId: "00000000-0000-4000-8000-000000000309",
         sessionId: "00000000-0000-4000-8000-000000000303",
         sessionVerifierDigest: digest,
         signCount: 1,
@@ -705,7 +512,6 @@ describe("pairing database pool", () => {
     ]);
     await expect(
       client.completePasskeyLogin({
-        auditEventId: "00000000-0000-4000-8000-000000000311",
         backupState: false,
         challengeDigest: digest,
         challengeExpiresAt: "2026-07-16T10:05:00.000Z",
@@ -714,7 +520,6 @@ describe("pairing database pool", () => {
         credentialId: credential,
         observedSignCount: 2,
         passkeyId: "00000000-0000-4000-8000-000000000306",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionExpiresAt: "2026-08-15T10:00:00.000Z",
         sessionId: "00000000-0000-4000-8000-000000000312",
         sessionVerifierDigest: digest,
@@ -758,10 +563,8 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completePasskeyAddition({
-        auditEventId: "00000000-0000-4000-8000-000000000315",
         backupEligible: true,
         backupState: false,
-        challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000313",
         contextDigest: context,
         cosePublicKey: publicKey,
@@ -769,7 +572,6 @@ describe("pairing database pool", () => {
         label: "Backup passkey",
         observedSignCount: 3,
         passkeyId: "00000000-0000-4000-8000-000000000314",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionId: "00000000-0000-4000-8000-000000000312",
         sessionVerifierDigest: digest,
         signCount: 0,
@@ -785,18 +587,14 @@ describe("pairing database pool", () => {
         expiresAt: "2026-07-16T10:05:00.000Z",
         sessionId: "00000000-0000-4000-8000-000000000312",
         sessionVerifierDigest: digest,
-        targetPasskeyId: "00000000-0000-4000-8000-000000000307",
       }),
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completePasskeyRevocation({
-        auditEventId: "00000000-0000-4000-8000-000000000317",
         backupState: false,
-        challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000316",
         contextDigest: context,
         observedSignCount: 3,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionId: "00000000-0000-4000-8000-000000000312",
         sessionVerifierDigest: digest,
         targetPasskeyId: "00000000-0000-4000-8000-000000000307",
@@ -815,15 +613,10 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ created: true }]);
     await expect(
       client.completeProfileDeletion({
-        auditEventId: "00000000-0000-4000-8000-000000000320",
         backupState: false,
-        challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000318",
         contextDigest: context,
-        deletionJobId: "00000000-0000-4000-8000-000000000319",
         observedSignCount: 4,
-        profileRefDigest: digest,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionId: "00000000-0000-4000-8000-000000000312",
         sessionVerifierDigest: digest,
         typedHandle: "pixel_driver",
@@ -839,106 +632,10 @@ describe("pairing database pool", () => {
     ).resolves.toEqual([{ visibility: "hidden" }]);
     await expect(
       client.revokeEnrollmentSession({
-        auditEventId: "00000000-0000-4000-8000-000000000307",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         sessionId: "00000000-0000-4000-8000-000000000303",
         sessionVerifierDigest: digest,
       }),
     ).resolves.toEqual([{ revoked: true }]);
-    await expect(
-      client.readActiveDeviceInventory({
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        device_id: `dev_${"A".repeat(22)}`,
-        device_label: "Studio PC",
-      }),
-    ]);
-    await expect(
-      client.revokeDevice({
-        auditEventId: "00000000-0000-4000-8000-000000000321",
-        deviceId: `dev_${"A".repeat(22)}`,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-      }),
-    ).resolves.toEqual([{ revoked: true }]);
-    await expect(
-      client.pauseSource({
-        auditEventId: "00000000-0000-4000-8000-000000000322",
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-        sourceId: `src_${"B".repeat(22)}`,
-      }),
-    ).resolves.toEqual([{ paused: true }]);
-    await expect(
-      client.createSourceReactivationChallenge({
-        challengeDigest: digest,
-        challengeId: "00000000-0000-4000-8000-000000000323",
-        contextDigest: context,
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-        sourceId: `src_${"B".repeat(22)}`,
-      }),
-    ).resolves.toEqual([{ created: true }]);
-    await expect(
-      client.completeSourceReactivation({
-        auditEventId: "00000000-0000-4000-8000-000000000324",
-        backupState: false,
-        challengeDigest: digest,
-        challengeId: "00000000-0000-4000-8000-000000000323",
-        contextDigest: context,
-        observedSignCount: 5,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-        sourceId: `src_${"B".repeat(22)}`,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
-      }),
-    ).resolves.toEqual([{ reactivated: true }]);
-    await expect(
-      client.createSourceUnlinkChallenge({
-        challengeDigest: digest,
-        challengeId: "00000000-0000-4000-8000-000000000325",
-        contextDigest: context,
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-        sourceId: `src_${"B".repeat(22)}`,
-      }),
-    ).resolves.toEqual([{ created: true }]);
-    await expect(
-      client.completeSourceUnlink({
-        auditEventId: "00000000-0000-4000-8000-000000000326",
-        backupState: false,
-        challengeDigest: digest,
-        challengeId: "00000000-0000-4000-8000-000000000325",
-        contextDigest: context,
-        observedSignCount: 6,
-        requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-        sourceId: `src_${"B".repeat(22)}`,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000306",
-      }),
-    ).resolves.toEqual([{ unlinked: true }]);
-    await expect(
-      client.readAccountOverview({
-        seasonStart: "2026-07-13",
-        sessionId: "00000000-0000-4000-8000-000000000312",
-        sessionVerifierDigest: digest,
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        score_date: null,
-        visibility: "public",
-      }),
-    ]);
-
     expect(snapshots.map(({ text }) => text)).toEqual([
       expect.stringContaining("open_github_profile"),
       expect.stringContaining("begin_initial_passkey"),
@@ -946,23 +643,15 @@ describe("pairing database pool", () => {
       expect.stringContaining("read_passkey_verification_material"),
       expect.stringContaining("complete_passkey_login_session"),
       expect.stringContaining("read_passkey_inventory"),
-      expect.stringContaining("read_profile_visibility"),
-      expect.stringContaining("create_passkey_change_challenge"),
-      expect.stringContaining("consume_passkey_challenge"),
-      expect.stringContaining("create_passkey_change_challenge"),
-      expect.stringContaining("consume_passkey_challenge"),
+      expect.stringContaining("read_private_profile"),
       expect.stringContaining("create_auth_challenge"),
-      expect.stringContaining("consume_passkey_challenge"),
+      expect.stringContaining("add_passkey"),
+      expect.stringContaining("create_auth_challenge"),
+      expect.stringContaining("revoke_passkey"),
+      expect.stringContaining("create_auth_challenge"),
+      expect.stringContaining("request_profile_deletion"),
       expect.stringContaining("set_profile_visibility"),
       expect.stringContaining("revoke_session"),
-      expect.stringContaining("read_source_inventory"),
-      expect.stringContaining("revoke_device"),
-      expect.stringContaining("pause_source"),
-      expect.stringContaining("create_source_action_challenge"),
-      expect.stringContaining("reactivate_source"),
-      expect.stringContaining("create_source_action_challenge"),
-      expect.stringContaining("unlink_source"),
-      expect.stringContaining("read_profile_score"),
     ]);
     expect(snapshots[2]?.text).toContain("complete_initial_passkey");
     expect(snapshots[2]?.text).not.toContain("rotate_session");
@@ -973,22 +662,6 @@ describe("pairing database pool", () => {
     expect(snapshots[10]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[12]?.text).toContain("request_profile_deletion");
     expect(snapshots[12]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[15]?.text).toContain("LIMIT 96");
-    expect(snapshots[15]?.text).toContain("device_state = 'active'");
-    expect(snapshots[15]?.text).toContain("sources_without_active_devices");
-    expect(snapshots[15]?.text).not.toContain("public_key");
-    expect(snapshots[15]?.text).not.toContain("device_key_id");
-    expect(snapshots[16]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[17]?.text).toContain("AS MATERIALIZED");
-    expect(snapshots[18]?.text).toContain("'source_reactivation'::text");
-    expect(snapshots[19]?.text).toContain("consume_passkey_challenge");
-    expect(snapshots[19]?.text).toContain("reactivate_source");
-    expect(snapshots[20]?.text).toContain("'source_unlink'::text");
-    expect(snapshots[21]?.text).toContain("consume_passkey_challenge");
-    expect(snapshots[21]?.text).toContain("unlink_source");
-    expect(snapshots[22]?.text).toContain("read_profile_visibility");
-    expect(snapshots[22]?.text).toContain("read_profile_score");
-    expect(snapshots[22]?.text).toContain("LEFT JOIN LATERAL");
     expect(snapshots[4]?.values).toEqual([
       "00000000-0000-4000-8000-000000000310",
       digest,
@@ -1001,8 +674,6 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000312",
       digest,
       "2026-08-15T10:00:00.000Z",
-      "00000000-0000-4000-8000-000000000311",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[5]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
     expect(snapshots[6]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
@@ -1018,7 +689,6 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000313",
-      digest,
       context,
       "00000000-0000-4000-8000-000000000306",
       3,
@@ -1030,13 +700,10 @@ describe("pairing database pool", () => {
       0,
       true,
       false,
-      "00000000-0000-4000-8000-000000000315",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[9]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
-      "00000000-0000-4000-8000-000000000307",
       "00000000-0000-4000-8000-000000000316",
       digest,
       context,
@@ -1046,14 +713,11 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000316",
-      digest,
       context,
       "00000000-0000-4000-8000-000000000306",
       3,
       false,
       "00000000-0000-4000-8000-000000000307",
-      "00000000-0000-4000-8000-000000000317",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
     expect(snapshots[11]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
@@ -1067,82 +731,18 @@ describe("pairing database pool", () => {
       "00000000-0000-4000-8000-000000000312",
       digest,
       "00000000-0000-4000-8000-000000000318",
-      digest,
       context,
       "00000000-0000-4000-8000-000000000306",
       4,
       false,
       "pixel_driver",
-      "00000000-0000-4000-8000-000000000319",
-      digest,
-      "00000000-0000-4000-8000-000000000320",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
     ]);
-    expect(snapshots[13]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest, false]);
-    expect(snapshots[15]?.values).toEqual(["00000000-0000-4000-8000-000000000312", digest]);
-    expect(snapshots[16]?.values).toEqual([
+    expect(snapshots[13]?.values).toEqual([
       "00000000-0000-4000-8000-000000000312",
       digest,
-      `dev_${"A".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000321",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
+      "hidden",
     ]);
-    expect(snapshots[17]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      `src_${"B".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000322",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
-    ]);
-    expect(snapshots[18]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      `src_${"B".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000323",
-      digest,
-      context,
-      "2026-07-16T10:05:00.000Z",
-    ]);
-    expect(snapshots[19]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      "00000000-0000-4000-8000-000000000323",
-      digest,
-      context,
-      "00000000-0000-4000-8000-000000000306",
-      5,
-      false,
-      `src_${"B".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000324",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
-    ]);
-    expect(snapshots[20]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      `src_${"B".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000325",
-      digest,
-      context,
-      "2026-07-16T10:05:00.000Z",
-    ]);
-    expect(snapshots[21]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      "00000000-0000-4000-8000-000000000325",
-      digest,
-      context,
-      "00000000-0000-4000-8000-000000000306",
-      6,
-      false,
-      `src_${"B".repeat(22)}`,
-      "00000000-0000-4000-8000-000000000326",
-      "req_AAAAAAAAAAAAAAAAAAAAAA",
-    ]);
-    expect(snapshots[22]?.values).toEqual([
-      "00000000-0000-4000-8000-000000000312",
-      digest,
-      "2026-07-13",
-    ]);
+    expect(snapshots[14]?.values).toEqual(["00000000-0000-4000-8000-000000000303", digest]);
     expect(digest).toEqual(Buffer.alloc(32, 0x51));
     expect(context).toEqual(Buffer.alloc(32, 0x52));
     expect(credential).toEqual(Buffer.alloc(32, 0x53));

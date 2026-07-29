@@ -11,5 +11,5 @@ const http = createEnrollmentHttp({
 });
 
 export function POST(request: Request): Promise<Response> {
-  return http.sourceReactivationOptions(request);
+  return http.accountTargetVerify(request, "installation_revoke");
 }

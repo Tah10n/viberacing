@@ -4,6 +4,7 @@ import type { VerifyAuthenticationResponseOpts } from "@simplewebauthn/server";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  accountTargetActionContextDigest,
   createPasskeyRegistrationOptions,
   createRecoveryPasskeyRegistrationOptions,
   passkeyAddContextDigest,
@@ -12,13 +13,10 @@ import {
   passkeyContextDigest,
   passkeyLoginContextDigest,
   passkeyLoginCredentialId,
-  pairingApprovalContextDigest,
   passkeyRevokeContextDigest,
   profileDeletionContextDigest,
   recoveryCodeRotationContextDigest,
   recoveryPasskeyContextDigest,
-  sourceReactivationContextDigest,
-  sourceUnlinkContextDigest,
   verifyInitialPasskey,
   verifyPasskeyLogin,
 } from "./passkey-registration";
@@ -237,44 +235,6 @@ describe("passkey login", () => {
       ),
     );
     expect(
-      pairingApprovalContextDigest(
-        "00000000-0000-4000-8000-000000000101",
-        "00000000-0000-4000-8000-000000000102",
-        "new",
-        `src_${"A".repeat(22)}`,
-        "race.example.com",
-        "https://race.example.com",
-      ),
-    ).not.toEqual(
-      pairingApprovalContextDigest(
-        "00000000-0000-4000-8000-000000000101",
-        "00000000-0000-4000-8000-000000000103",
-        "new",
-        `src_${"A".repeat(22)}`,
-        "race.example.com",
-        "https://race.example.com",
-      ),
-    );
-    expect(
-      pairingApprovalContextDigest(
-        "00000000-0000-4000-8000-000000000101",
-        "00000000-0000-4000-8000-000000000102",
-        "new",
-        `src_${"A".repeat(22)}`,
-        "race.example.com",
-        "https://race.example.com",
-      ),
-    ).not.toEqual(
-      pairingApprovalContextDigest(
-        "00000000-0000-4000-8000-000000000101",
-        "00000000-0000-4000-8000-000000000102",
-        "existing",
-        `src_${"A".repeat(22)}`,
-        "race.example.com",
-        "https://race.example.com",
-      ),
-    );
-    expect(
       profileDeletionContextDigest(
         "00000000-0000-4000-8000-000000000101",
         "00000000-0000-4000-8000-000000000102",
@@ -324,31 +284,35 @@ describe("passkey login", () => {
       ),
     );
     expect(
-      sourceReactivationContextDigest(
+      accountTargetActionContextDigest(
         "00000000-0000-4000-8000-000000000101",
-        `src_${"A".repeat(22)}`,
+        "account_unlink",
+        `acc_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
       ),
     ).not.toEqual(
-      sourceReactivationContextDigest(
+      accountTargetActionContextDigest(
         "00000000-0000-4000-8000-000000000101",
-        `src_${"B".repeat(22)}`,
+        "account_reactivate",
+        `acc_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
       ),
     );
     expect(
-      sourceUnlinkContextDigest(
+      accountTargetActionContextDigest(
         "00000000-0000-4000-8000-000000000101",
-        `src_${"A".repeat(22)}`,
+        "device_revoke",
+        `dev_${"A".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
       ),
     ).not.toEqual(
-      sourceReactivationContextDigest(
+      accountTargetActionContextDigest(
         "00000000-0000-4000-8000-000000000101",
-        `src_${"A".repeat(22)}`,
+        "device_revoke",
+        `dev_${"B".repeat(22)}`,
         "race.example.com",
         "https://race.example.com",
       ),

@@ -5,16 +5,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseJoinRequest,
+  readAccountTargetActionChallenge,
   readEnrollmentSession,
   readInitialPasskeyChallenge,
   readPasskeyAddChallenge,
   readPasskeyChallenge,
-  readPairingApprovalChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
   readRecoveryAuthorityChallenge,
-  readSourceActionChallenge,
 } from "./enrollment-domain";
 
 const secret = Buffer.alloc(32, 0x42);
@@ -84,14 +83,10 @@ describe("enrollment domain", () => {
       ...challenge,
       handle: "pixel_driver",
     } as const;
-    const sourceReactivationChallenge = {
+    const accountTargetChallenge = {
       ...challenge,
-      sourceId: `src_${"A".repeat(22)}`,
-    } as const;
-    const pairingApprovalChallenge = {
-      ...sourceReactivationChallenge,
-      pairingId: "00000000-0000-4000-8000-000000000107",
-      sourceChoice: "new",
+      purpose: "account_unlink",
+      targetId: `acc_${"B".repeat(22)}`,
     } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
@@ -121,11 +116,8 @@ describe("enrollment domain", () => {
     expect(readProfileDeletionChallenge(profileDeletionChallenge, now)).toEqual(
       profileDeletionChallenge,
     );
-    expect(readSourceActionChallenge(sourceReactivationChallenge, now)).toEqual(
-      sourceReactivationChallenge,
-    );
-    expect(readPairingApprovalChallenge(pairingApprovalChallenge, now)).toEqual(
-      pairingApprovalChallenge,
+    expect(readAccountTargetActionChallenge(accountTargetChallenge, now)).toEqual(
+      accountTargetChallenge,
     );
     expect(readRecoveryAuthorityChallenge(recoveryAuthority, now)).toEqual(recoveryAuthority);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
@@ -134,7 +126,6 @@ describe("enrollment domain", () => {
     expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(profileDeletionChallenge, now)).toBeUndefined();
-    expect(readPasskeyChallenge(sourceReactivationChallenge, now)).toBeUndefined();
     expect(readInitialPasskeyChallenge(challenge, now)).toBeUndefined();
     expect(
       readInitialPasskeyChallenge(
@@ -142,7 +133,6 @@ describe("enrollment domain", () => {
         now,
       ),
     ).toBeUndefined();
-    expect(readSourceActionChallenge(pairingApprovalChallenge, now)).toBeUndefined();
     expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyAddChallenge(
@@ -165,23 +155,21 @@ describe("enrollment domain", () => {
     expect(
       readProfileDeletionChallenge({ ...profileDeletionChallenge, extra: true }, now),
     ).toBeUndefined();
-    expect(readSourceActionChallenge(challenge, now)).toBeUndefined();
-    expect(readSourceActionChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(readAccountTargetActionChallenge(challenge, now)).toBeUndefined();
     expect(
-      readSourceActionChallenge({ ...sourceReactivationChallenge, sourceId: "bad" }, now),
+      readAccountTargetActionChallenge(
+        { ...accountTargetChallenge, purpose: "device_revoke", targetId: `dev_${"C".repeat(22)}` },
+        now,
+      ),
+    ).toMatchObject({ purpose: "device_revoke", targetId: `dev_${"C".repeat(22)}` });
+    expect(
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, targetId: "bad" }, now),
     ).toBeUndefined();
     expect(
-      readSourceActionChallenge({ ...sourceReactivationChallenge, extra: true }, now),
-    ).toBeUndefined();
-    expect(readPairingApprovalChallenge(sourceReactivationChallenge, now)).toBeUndefined();
-    expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, pairingId: "bad" }, now),
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, purpose: "unknown" }, now),
     ).toBeUndefined();
     expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceChoice: "other" }, now),
-    ).toBeUndefined();
-    expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceId: "bad" }, now),
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, extra: true }, now),
     ).toBeUndefined();
     expect(readRecoveryAuthorityChallenge(challenge, now)).toBeUndefined();
     expect(

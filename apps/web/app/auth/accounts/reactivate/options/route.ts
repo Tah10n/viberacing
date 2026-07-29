@@ -11,5 +11,5 @@ const http = createEnrollmentHttp({
 });
 
 export function POST(request: Request): Promise<Response> {
-  return http.sourceUnlinkVerify(request);
+  return http.accountTargetOptions(request, "account_reactivate");
 }

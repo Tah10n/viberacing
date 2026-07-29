@@ -11,5 +11,5 @@ const http = createEnrollmentHttp({
 });
 
 export function POST(request: Request): Promise<Response> {
-  return http.deviceRevoke(request);
+  return http.accountTargetVerify(request, "account_unlink");
 }

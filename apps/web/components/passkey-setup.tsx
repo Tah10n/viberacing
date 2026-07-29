@@ -677,27 +677,60 @@ export function RecoveryCodeRotation({ locale }: RecoveryCodeRotationProps) {
   );
 }
 
-interface SourcePasskeyActionButtonProps {
-  readonly action: "reactivate" | "unlink";
+type AccountTargetAction = "reactivate" | "unlink" | "revoke-device" | "revoke-installation";
+
+interface AccountTargetPasskeyActionButtonProps {
+  readonly action: AccountTargetAction;
   readonly label: string;
   readonly locale: Locale;
-  readonly sourceControl: string;
+  readonly targetControl: string;
 }
 
-function SourcePasskeyActionButton({
+function AccountTargetPasskeyActionButton({
   action,
   label,
   locale,
-  sourceControl,
-}: SourcePasskeyActionButtonProps) {
+  targetControl,
+}: AccountTargetPasskeyActionButtonProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const copy = joinTranslations[locale];
-  const unlink = action === "unlink";
-  const optionsPath = unlink ? "/auth/sources/unlink/options" : "/auth/sources/reactivate/options";
-  const verifyPath = unlink ? "/auth/sources/unlink/verify" : "/auth/sources/reactivate/verify";
-  const actionLabel = unlink ? copy.unlinkSource : copy.reactivateSource;
-  const busyLabel = unlink ? copy.unlinkingSource : copy.reactivatingSource;
+  const actionConfig: Record<
+    AccountTargetAction,
+    Readonly<{
+      actionLabel: string;
+      busyLabel: string;
+      optionsPath: string;
+      verifyPath: string;
+    }>
+  > = {
+    reactivate: {
+      actionLabel: copy.reactivateAccount,
+      busyLabel: copy.reactivatingAccount,
+      optionsPath: "/auth/accounts/reactivate/options",
+      verifyPath: "/auth/accounts/reactivate/verify",
+    },
+    unlink: {
+      actionLabel: copy.unlinkAccount,
+      busyLabel: copy.unlinkingAccount,
+      optionsPath: "/auth/accounts/unlink/options",
+      verifyPath: "/auth/accounts/unlink/verify",
+    },
+    "revoke-device": {
+      actionLabel: copy.revokeDevice,
+      busyLabel: copy.revokingDevice,
+      optionsPath: "/auth/devices/revoke/options",
+      verifyPath: "/auth/devices/revoke/verify",
+    },
+    "revoke-installation": {
+      actionLabel: copy.revokeInstallation,
+      busyLabel: copy.revokingInstallation,
+      optionsPath: "/auth/installations/revoke/options",
+      verifyPath: "/auth/installations/revoke/verify",
+    },
+  };
+  const config = actionConfig[action];
+  const destructive = action !== "reactivate";
 
   async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -711,8 +744,8 @@ function SourcePasskeyActionButton({
     setBusy(true);
     setError(false);
     try {
-      const optionsResponse = await fetch(optionsPath, {
-        body: JSON.stringify({ sourceControl }),
+      const optionsResponse = await fetch(config.optionsPath, {
+        body: JSON.stringify({ targetControl }),
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json", "content-type": "application/json" },
@@ -724,7 +757,7 @@ function SourcePasskeyActionButton({
       }
       const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
       const response = await startAuthentication({ optionsJSON: options });
-      const verification = await fetch(verifyPath, {
+      const verification = await fetch(config.verifyPath, {
         body: JSON.stringify({ response }),
         cache: "no-store",
         credentials: "same-origin",
@@ -745,12 +778,12 @@ function SourcePasskeyActionButton({
   return (
     <form className="passkey-revoke" onSubmit={(event) => void submit(event)}>
       <button
-        aria-label={`${actionLabel}: ${label}`}
-        className={unlink ? "danger-action" : "secondary-action"}
+        aria-label={`${config.actionLabel}: ${label}`}
+        className={destructive ? "danger-action" : "secondary-action"}
         disabled={busy}
         type="submit"
       >
-        {busy ? busyLabel : actionLabel}
+        {busy ? config.busyLabel : config.actionLabel}
       </button>
       <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
         {error ? copy.genericError : ""}
@@ -759,18 +792,26 @@ function SourcePasskeyActionButton({
   );
 }
 
-interface SourceActionButtonProps {
+interface AccountTargetActionButtonProps {
   readonly label: string;
   readonly locale: Locale;
-  readonly sourceControl: string;
+  readonly targetControl: string;
 }
 
-export function SourceReactivationButton(props: SourceActionButtonProps) {
-  return <SourcePasskeyActionButton action="reactivate" {...props} />;
+export function AccountReactivationButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="reactivate" {...props} />;
 }
 
-export function SourceUnlinkButton(props: SourceActionButtonProps) {
-  return <SourcePasskeyActionButton action="unlink" {...props} />;
+export function AccountUnlinkButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="unlink" {...props} />;
+}
+
+export function DeviceRevokeButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="revoke-device" {...props} />;
+}
+
+export function InstallationRevokeButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="revoke-installation" {...props} />;
 }
 
 interface ProfileDeletionFormProps {

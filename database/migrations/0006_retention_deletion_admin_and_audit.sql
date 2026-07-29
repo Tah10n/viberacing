@@ -529,6 +529,42 @@ BEGIN
     RETURN;
   END IF;
 
+  UPDATE viberacing_private.recovery_authorities
+  SET state = 'revoked',
+      revoked_at = v_now
+  WHERE state = 'active'
+    AND expires_at <= v_now;
+
+  WITH candidates AS MATERIALIZED (
+    SELECT authority.ctid
+    FROM viberacing_private.recovery_authorities AS authority
+    WHERE (
+      authority.state = 'completed'
+      AND authority.completed_at <= v_now - interval '30 days'
+    ) OR (
+      authority.state = 'revoked'
+      AND authority.revoked_at <= v_now - interval '30 days'
+    )
+    ORDER BY authority.expires_at, authority.recovery_authority_id
+    LIMIT p_batch_size
+    FOR UPDATE OF authority SKIP LOCKED
+  )
+  DELETE FROM viberacing_private.recovery_authorities AS authority
+  USING candidates
+  WHERE authority.ctid = candidates.ctid;
+
+  WITH candidates AS MATERIALIZED (
+    SELECT proposal.ctid
+    FROM viberacing_private.car_recipe_proposals AS proposal
+    WHERE proposal.expires_at <= v_now
+    ORDER BY proposal.expires_at, proposal.proposal_id
+    LIMIT p_batch_size
+    FOR UPDATE OF proposal SKIP LOCKED
+  )
+  DELETE FROM viberacing_private.car_recipe_proposals AS proposal
+  USING candidates
+  WHERE proposal.ctid = candidates.ctid;
+
   WITH candidates AS MATERIALIZED (
     SELECT challenge.ctid
     FROM viberacing_private.auth_challenges AS challenge

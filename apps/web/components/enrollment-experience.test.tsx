@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AccountDashboard } from "@/lib/enrollment-service";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import { AccountExperience } from "./account-experience";
@@ -112,6 +113,75 @@ function batchPairingReviewFixture() {
       },
     },
   } as const;
+}
+
+function accountDashboardFixture(
+  overrides: Readonly<{
+    accountState?: "active" | "paused" | "quarantined" | "unlinked";
+    accountStatus?: "connected" | "paused" | "quarantined" | "removed" | "syncing";
+    publicVisibility?: "hidden" | "public";
+  }> = {},
+): AccountDashboard {
+  const state = overrides.accountState ?? "active";
+  const status =
+    overrides.accountStatus ??
+    (state === "active"
+      ? "connected"
+      : state === "paused"
+        ? "paused"
+        : state === "quarantined"
+          ? "quarantined"
+          : "removed");
+  return {
+    accounts: [
+      {
+        accountingRevision: 1,
+        connectedDeviceCount: state === "active" ? 1 : 0,
+        control: "opaque-account-control",
+        expectedReaderVersion: "1.0.0",
+        identityAssurance: "community_local",
+        lastSuccessfulSyncDate: "2026-07-28",
+        observedReaderVersion: "1.0.0",
+        privateLabel: "Personal account",
+        provider: "codex",
+        quarantineReason: state === "quarantined" ? "anomaly_review" : null,
+        state,
+        status,
+        todayTokenTotal: "700",
+        weeklyTokenTotal: "2800",
+      },
+    ],
+    installations: [
+      {
+        accounts: [
+          {
+            deviceControl: state === "active" ? "opaque-device-control" : null,
+            deviceState: state === "active" ? "active" : "revoked",
+            privateLabel: "Personal account",
+          },
+        ],
+        architecture: "x86_64",
+        connectedDate: "2026-07-14",
+        connectorVersion: "1.2.3",
+        control: "opaque-installation-control",
+        label: "Studio PC",
+        lastSeenDate: "2026-07-28",
+        osFamily: "windows",
+        state: "active",
+      },
+    ],
+    ranking: {
+      participantCount: 10,
+      providerBreakdownVisible: false,
+      publicVisibility: overrides.publicVisibility ?? "public",
+      rankPosition: 2,
+      seasonEnd: "2026-08-02",
+      seasonStart: "2026-07-27",
+      seasonState: "open",
+      snapshotGeneratedAt: "2026-07-29T09:42Z",
+      weeklyTokenTotal: "2800",
+    },
+  };
 }
 
 afterEach(() => {
@@ -332,29 +402,11 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("shows only bounded passkey and active-device fields on the account page", () => {
+  it("shows only bounded private dashboard fields on the account page", () => {
     const passkeyId = "00000000-0000-4000-8000-000000000511";
-    const deviceId = `dev_${"A".repeat(22)}`;
-    const sourceId = `src_${"B".repeat(22)}`;
-    const sourceControl = "opaque-source-control";
     const markup = renderToStaticMarkup(
       <AccountExperience
-        activeDeviceInventory={[
-          {
-            devices: [
-              {
-                activatedOn: "2026-07-14",
-                architecture: "x86_64",
-                connectorVersion: "1.2.3",
-                deviceId,
-                label: "Studio PC",
-                osFamily: "windows",
-              },
-            ],
-            sourceControl,
-            state: "active",
-          },
-        ]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[
@@ -373,44 +425,31 @@ describe("enrollment experience", () => {
             state: "revoked",
           },
         ]}
-        score={{
-          activeDays: 7,
-          dailyScores: [100, 200, 300, 400, 500, 600, 700],
-          seasonEnd: "2026-07-19",
-          seasonFinalized: false,
-          seasonStart: "2026-07-13",
-          sourceCount: 2,
-          weeklyScore: 2800,
-        }}
-        visibility="public"
       />,
     );
     expect(markup).toContain("Your passkeys");
     expect(markup).toContain("Recovery codes");
-    expect(markup).toContain("Sources and connected devices");
+    expect(markup).toContain("Connected agents and accounts");
     expect(markup).toContain("Studio PC");
-    expect(markup).toContain('action="/auth/devices/revoke"');
-    expect(markup).toContain(`name="deviceId" value="${deviceId}"`);
-    expect(markup).toContain(`name="sourceControl" value="${sourceControl}"`);
-    expect(markup).toContain('action="/auth/sources/pause"');
-    expect(markup).toContain("Unlink source permanently");
-    expect(markup).toContain('dateTime="2026-07-14"');
-    expect(markup).not.toContain(sourceId);
+    expect(markup).toContain('action="/auth/accounts/pause"');
+    expect(markup).toContain("Unlink account permanently");
+    expect(markup).toContain("Revoke installation");
+    expect(markup).toContain("Revoke device");
     expect(markup).not.toContain("vrr1_");
+    expect(markup).not.toContain("Source 1");
+    expect(markup).not.toContain("acc_");
+    expect(markup).not.toContain("dev_");
+    expect(markup).not.toContain("ins_");
     expect(markup).toContain("Public profile");
     expect(markup).toContain("Delete profile");
     expect(markup).toContain('name="handle"');
-    expect(markup).toContain("Eligible scores can appear in the Community race");
+    expect(markup).toContain("Eligible token totals can appear in the Community race");
     expect(markup).toContain('href="/?profile=pixel_driver#profile"');
     expect(markup).toContain("View public profile");
     expect(markup).toContain('action="/auth/profile/visibility"');
     expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
-    expect(markup).toContain("Current-week score");
-    expect(markup).toContain("2,800 pts");
-    expect(markup).toContain('aria-label="Mon: 100 pts"');
-    expect(markup).toContain('aria-label="Sun: 700 pts"');
-    expect(markup.match(/<progress/g)).toHaveLength(7);
-    expect(markup).toContain("Exact token totals and per-source values stay private");
+    expect(markup).toContain("Current ranking");
+    expect(markup).toContain("2,800 tokens");
     expect(markup).not.toContain("raw_tokens");
     expect(markup).toContain("Current session");
     expect(markup).toContain("Revoked");
@@ -422,46 +461,33 @@ describe("enrollment experience", () => {
     const hidden = renderToStaticMarkup(
       <AccountExperience
         actionUnavailable
-        activeDeviceInventory={[
-          {
-            devices: [],
-            sourceControl: "opaque-source-control",
-            state: "paused",
-          },
-          {
-            devices: [],
-            sourceControl: "opaque-unlinked-source-control",
-            state: "unlinked",
-          },
-        ]}
+        dashboard={accountDashboardFixture({
+          accountState: "paused",
+          publicVisibility: "hidden",
+        })}
         handle="pixel_driver"
         locale="ru"
         passkeys={[]}
-        score={null}
-        visibility="hidden"
       />,
     );
     expect(hidden).toContain("Публичный профиль выключен");
-    expect(hidden).toContain("Возобновить источник");
-    expect(hidden.match(/aria-label="Отключить источник навсегда:/g)).toHaveLength(1);
-    expect(hidden).toContain("не осталось активных прав устройства");
+    expect(hidden).toContain("Переподключить аккаунт");
+    expect(hidden).toContain("Отключить аккаунт навсегда");
     expect(hidden).toContain('type="hidden" name="visibility" value="public"');
     expect(hidden).not.toContain("Открыть публичный профиль");
     expect(hidden).toContain("Не удалось изменить аккаунт");
-    expect(hidden).toContain("Для скрытого профиля текущий результат не показывается");
 
     const unavailable = renderToStaticMarkup(
       <AccountExperience
-        activeDeviceInventory={undefined}
+        dashboard={undefined}
         handle="pixel_driver"
         locale="en"
         passkeys={undefined}
-        visibility={undefined}
       />,
     );
     expect(unavailable).toContain("Profile visibility is temporarily unavailable");
-    expect(unavailable).toContain("Current score is temporarily unavailable");
-    expect(unavailable).toContain("Source and device details are temporarily unavailable");
+    expect(unavailable).toContain("Private ranking details are temporarily unavailable");
+    expect(unavailable).toContain("Connected account details are temporarily unavailable");
     expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });
 
@@ -482,10 +508,9 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
-        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -559,11 +584,10 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="public"
       />,
     );
     const button = [...mounted.container.querySelectorAll("button")].find(
@@ -616,10 +640,9 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
-        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -640,7 +663,8 @@ describe("enrollment experience", () => {
     );
     await act(async () => {
       mounted.container
-        .querySelector(".passkey-revoke")
+        .querySelector('button[aria-label^="Revoke passkey"]')
+        ?.closest("form")
         ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -666,9 +690,9 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("uses only an opaque source control before fresh-passkey reactivation", async () => {
+  it("uses only an opaque account control before fresh-passkey reconnection", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
-    const sourceControl = "opaque-source-control";
+    const targetControl = "opaque-account-control";
     const fetchMock = vi
       .fn<(input: string, init: RequestInit) => Promise<Response>>()
       .mockResolvedValueOnce(
@@ -680,89 +704,88 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[
-          {
-            devices: [],
-            sourceControl,
-            state: "paused",
-          },
-        ]}
+        dashboard={accountDashboardFixture({
+          accountState: "paused",
+          publicVisibility: "hidden",
+        })}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="hidden"
       />,
     );
     await act(async () => {
       mounted.container
-        .querySelector(".passkey-revoke")
-        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      "/auth/sources/reactivate/options",
-      "/auth/sources/reactivate/verify",
-    ]);
-    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
-    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
-    expect(typeof optionsBody).toBe("string");
-    expect(typeof verificationBody).toBe("string");
-    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
-      throw new Error("expected serialized source reactivation request bodies");
-    }
-    expect(JSON.parse(optionsBody)).toEqual({ sourceControl });
-    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
-    expect(optionsBody).not.toContain("src_");
-    expect(mounted.container.textContent).toContain("could not be completed");
-    act(() => {
-      mounted.root.unmount();
-    });
-  });
-
-  it("uses only an opaque source control before permanent fresh-passkey unlink", async () => {
-    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
-    const sourceControl = "opaque-source-control";
-    const fetchMock = vi
-      .fn<(input: string, init: RequestInit) => Promise<Response>>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ challenge: "synthetic" }), {
-          headers: { "content-type": "application/json; charset=utf-8" },
-        }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 401 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(
-      <AccountExperience
-        activeDeviceInventory={[{ devices: [], sourceControl, state: "quarantined" }]}
-        handle="pixel_driver"
-        locale="en"
-        passkeys={[]}
-        visibility="hidden"
-      />,
-    );
-    await act(async () => {
-      mounted.container
-        .querySelector('button[aria-label^="Unlink source permanently"]')
+        .querySelector('button[aria-label^="Reconnect account"]')
         ?.closest("form")
         ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      "/auth/sources/unlink/options",
-      "/auth/sources/unlink/verify",
+      "/auth/accounts/reactivate/options",
+      "/auth/accounts/reactivate/verify",
     ]);
     const optionsBody = fetchMock.mock.calls[0]?.[1].body;
     const verificationBody = fetchMock.mock.calls[1]?.[1].body;
     expect(typeof optionsBody).toBe("string");
     expect(typeof verificationBody).toBe("string");
     if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
-      throw new Error("expected serialized source unlink request bodies");
+      throw new Error("expected serialized account reactivation request bodies");
     }
-    expect(JSON.parse(optionsBody)).toEqual({ sourceControl });
+    expect(JSON.parse(optionsBody)).toEqual({ targetControl });
     expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
-    expect(optionsBody).not.toContain("src_");
+    expect(optionsBody).not.toContain("acc_");
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("uses only an opaque account control before permanent fresh-passkey unlink", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const targetControl = "opaque-account-control";
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        dashboard={accountDashboardFixture({
+          accountState: "quarantined",
+          publicVisibility: "hidden",
+        })}
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[]}
+      />,
+    );
+    await act(async () => {
+      mounted.container
+        .querySelector('button[aria-label^="Unlink account permanently"]')
+        ?.closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/accounts/unlink/options",
+      "/auth/accounts/unlink/verify",
+    ]);
+    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof optionsBody).toBe("string");
+    expect(typeof verificationBody).toBe("string");
+    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
+      throw new Error("expected serialized account unlink request bodies");
+    }
+    expect(JSON.parse(optionsBody)).toEqual({ targetControl });
+    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
+    expect(optionsBody).not.toContain("acc_");
     expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
@@ -782,11 +805,10 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="public"
       />,
     );
     const input = mounted.container.querySelector<HTMLInputElement>('input[name="handle"]');
@@ -867,7 +889,7 @@ describe("enrollment experience", () => {
     expect(mounted.container.innerHTML).not.toContain("acc_");
 
     const selectors = mounted.container.querySelectorAll<HTMLSelectElement>(
-      ".pairing-source-option select",
+      ".pairing-account-option select",
     );
     expect(selectors).toHaveLength(3);
     expect(selectors[0]?.value).toBe(`attach:${fixture.accountControl}`);
@@ -948,7 +970,7 @@ describe("enrollment experience", () => {
     });
 
     const privateLabel = mounted.container.querySelector<HTMLInputElement>(
-      '.pairing-source-option input[type="text"]',
+      '.pairing-account-option input[type="text"]',
     );
     if (privateLabel === null) {
       throw new Error("expected a private label input");
@@ -1017,10 +1039,9 @@ describe("enrollment experience", () => {
       renderToStaticMarkup(<JoinExperience enrollmentEnabled />),
       renderToStaticMarkup(
         <AccountExperience
-          activeDeviceInventory={[]}
+          dashboard={accountDashboardFixture()}
           handle="pixel_driver"
           locale="en"
-          visibility="public"
           passkeys={[
             {
               createdOn: "2026-07-15",

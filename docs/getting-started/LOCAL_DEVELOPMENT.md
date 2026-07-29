@@ -565,13 +565,11 @@ also require `VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS`, a deployment-reviewed in
 5000; do not commit the chosen production timing value. The tracked values are non-working
 placeholders and intentionally do not publish deployment work factors or response timing. The
 `/connect` approval path additionally requires a distinct canonical 32-byte
-`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL` plus deployment-reviewed private integers in
-`VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT` and `VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS`. Do not
-commit real keys or selected production attempt policy. A manual flow also needs an externally
-issued invite whose stored digest matches its 256-bit secret; this repository intentionally provides
-no runnable issuer shortcut or sample valid invite. The library-only Admin kernel cannot issue one
-without future Access/admin/passkey/audit/host adapters. Never reuse these values between
-development, staging, and production.
+`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. Do not commit real keys. A manual flow also
+needs an externally issued invite whose stored digest matches its 256-bit secret; this repository
+intentionally provides no runnable issuer shortcut or sample valid invite. The library-only Admin
+kernel cannot issue one without future Access/admin/passkey/audit/host adapters. Never reuse these
+values between development, staging, and production.
 
 Constructing the start/activation pairing service additionally requires a fresh, distinct 32-byte
 canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`; the code key above

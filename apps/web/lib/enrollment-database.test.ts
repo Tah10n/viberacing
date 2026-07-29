@@ -7,20 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 import { createEnrollmentDatabase, EnrollmentDatabaseError } from "./enrollment-database";
 import type { EnrollmentDatabaseClient, EnrollmentDatabasePool } from "./pairing-database-pool";
 
-function accountScoreRows() {
-  return Array.from({ length: 7 }, (_, index) => ({
-    active_days: 7,
-    daily_score: (index + 1) * 100,
-    score_date: `2026-07-${String(13 + index).padStart(2, "0")}`,
-    season_end: "2026-07-19",
-    season_finalized: false,
-    season_start: "2026-07-13",
-    source_count: 2,
-    visibility: "public",
-    weekly_score: 2800,
-  }));
-}
-
 function carRecipeStateRow() {
   return {
     active_chassis: "roadster",
@@ -46,17 +32,14 @@ function carRecipeStateRow() {
   };
 }
 
-const accountOverviewRequest = {
-  seasonStart: "2026-07-13",
-  sessionId: "00000000-0000-4000-8000-000000000403",
-  sessionVerifierDigest: new Uint8Array(32),
-};
-
 function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
   const releases: boolean[] = [];
   const client: EnrollmentDatabaseClient = {
     approveCarRecipe: vi.fn(() => Promise.resolve([{ approved: true }])),
-    completePairingApproval: vi.fn(() => Promise.resolve([{ approved: true }])),
+    completeAgentAccountReactivation: vi.fn(() => Promise.resolve([{ completed: true }])),
+    completeAgentAccountUnlink: vi.fn(() => Promise.resolve([{ completed: true }])),
+    completeDeviceKeyRevocation: vi.fn(() => Promise.resolve([{ completed: true }])),
+    completeInstallationRevocation: vi.fn(() => Promise.resolve([{ completed: true }])),
     completeInitialPasskey: vi.fn(() => Promise.resolve([{ registered: true }])),
     completePasskeyAddition: vi.fn(() => Promise.resolve([{ added: true }])),
     completePasskeyLogin: vi.fn(() =>
@@ -80,16 +63,12 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     completePasskeyRevocation: vi.fn(() => Promise.resolve([{ revoked: true }])),
     completeProfileDeletion: vi.fn(() => Promise.resolve([{ deleted: true }])),
     completeRecoveryCodeReplacement: vi.fn(() => Promise.resolve([{ replaced: true }])),
-    completeSourceReactivation: vi.fn(() => Promise.resolve([{ reactivated: true }])),
-    completeSourceUnlink: vi.fn(() => Promise.resolve([{ unlinked: true }])),
     createPasskeyAddChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
-    createPairingApprovalChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createProfileDeletionChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
+    createAccountTargetChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createRecoveryCodeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
-    createSourceReactivationChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
-    createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     enrollProfile: vi.fn(() =>
       Promise.resolve([
         {
@@ -102,9 +81,9 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
-    pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
+    pauseAgentAccount: vi.fn(() => Promise.resolve([{ paused: true }])),
     proposeCarRecipe: vi.fn(() => Promise.resolve([{ proposed: true }])),
-    readAccountOverview: vi.fn(() => Promise.resolve(accountScoreRows())),
+    readAgentAccountDashboard: vi.fn(() => Promise.resolve([])),
     readCarRecipeState: vi.fn(() =>
       Promise.resolve([
         {
@@ -131,21 +110,6 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
-    readActiveDeviceInventory: vi.fn(() =>
-      Promise.resolve([
-        {
-          activated_on: "2026-07-14",
-          architecture: "x86_64",
-          connector_version: "1.2.3",
-          device_id: `dev_${"A".repeat(22)}`,
-          device_label: "Studio PC",
-          device_state: "active",
-          os_family: "windows",
-          source_id: `src_${"B".repeat(22)}`,
-          source_state: "active",
-        },
-      ]),
-    ),
     readPasskeyInventory: vi.fn(() =>
       Promise.resolve([
         {
@@ -164,7 +128,21 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
         },
       ]),
     ),
-    readPairingApproval: vi.fn(() => Promise.resolve([])),
+    readPrivateDashboardRanking: vi.fn(() =>
+      Promise.resolve([
+        {
+          participant_count: 10,
+          provider_breakdown_visible: false,
+          public_visibility: "public",
+          rank_position: "2",
+          season_end: "2026-07-19",
+          season_start: "2026-07-13",
+          season_state: "open",
+          snapshot_generated_at: "2026-07-16T10:00Z",
+          weekly_token_total: "2800",
+        },
+      ]),
+    ),
     readPasskeyLoginMaterial: vi.fn(() =>
       Promise.resolve([
         {
@@ -189,9 +167,11 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
       releases.push(destroy);
     },
     revokeEnrollmentSession: vi.fn(() => Promise.resolve([{ revoked: true }])),
-    revokeDevice: vi.fn(() => Promise.resolve([{ revoked: true }])),
     rejectCarRecipe: vi.fn(() => Promise.resolve([{ rejected: true }])),
     setProfileVisibility: vi.fn(() => Promise.resolve([{ visibility: "hidden" }])),
+    setProviderBreakdownVisibility: vi.fn(() =>
+      Promise.resolve([{ provider_breakdown_visible: false }]),
+    ),
     startRecovery: vi.fn(() => Promise.resolve([{ started: true }])),
     verifyRuntimeBoundary: vi.fn(() =>
       Promise.resolve([
@@ -213,21 +193,16 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
 }
 
 const profile = {
-  auditEventId: "00000000-0000-4000-8000-000000000405",
   githubUserId: 123,
   handle: "pending_0000000000004000",
   inviteId: "00000000-0000-4000-8000-000000000401",
   inviteRequired: true,
   inviteVerifierDigest: new Uint8Array(32),
   locale: "en" as const,
-  motionPreference: "system" as const,
   profileId: "00000000-0000-4000-8000-000000000402",
-  requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
   sessionExpiresAt: "2026-08-15T10:00:00.000Z",
   sessionId: "00000000-0000-4000-8000-000000000403",
   sessionVerifierDigest: new Uint8Array(32),
-  streakVisible: false,
-  theme: "neon-night" as const,
 };
 
 describe("enrollment database", () => {
@@ -254,21 +229,17 @@ describe("enrollment database", () => {
     ).resolves.toBe(true);
     await expect(
       database.completeInitialPasskey({
-        auditEventId: profile.auditEventId,
         backupEligible: false,
         backupState: false,
-        challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000404",
         contextDigest: new Uint8Array(32),
         cosePublicKey: new Uint8Array(77),
         credentialId: new Uint8Array(32),
         handle: "pixel_driver",
         passkeyId: "00000000-0000-4000-8000-000000000406",
-        requestId: profile.requestId,
         rotatedSessionExpiresAt: profile.sessionExpiresAt,
         rotatedSessionId: "00000000-0000-4000-8000-000000000407",
         rotatedSessionVerifierDigest: new Uint8Array(32),
-        rotationAuditEventId: "00000000-0000-4000-8000-000000000408",
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
         signCount: 0,
@@ -280,27 +251,6 @@ describe("enrollment database", () => {
       passkeyId: "00000000-0000-4000-8000-000000000406",
       signCount: 1,
     });
-    await expect(
-      database.readActiveDeviceInventory({
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-      }),
-    ).resolves.toEqual([
-      {
-        devices: [
-          {
-            activatedOn: "2026-07-14",
-            architecture: "x86_64",
-            connectorVersion: "1.2.3",
-            deviceId: `dev_${"A".repeat(22)}`,
-            label: "Studio PC",
-            osFamily: "windows",
-          },
-        ],
-        sourceId: `src_${"B".repeat(22)}`,
-        state: "active",
-      },
-    ]);
     await expect(
       database.readPasskeyInventory({
         sessionId: profile.sessionId,
@@ -334,10 +284,8 @@ describe("enrollment database", () => {
     ).resolves.toBe(true);
     await expect(
       database.completePasskeyAddition({
-        auditEventId: profile.auditEventId,
         backupEligible: false,
         backupState: false,
-        challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000411",
         contextDigest: new Uint8Array(32),
         cosePublicKey: new Uint8Array(77),
@@ -345,7 +293,6 @@ describe("enrollment database", () => {
         label: "Backup passkey",
         observedSignCount: 2,
         passkeyId: "00000000-0000-4000-8000-000000000412",
-        requestId: profile.requestId,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
         signCount: 0,
@@ -361,18 +308,14 @@ describe("enrollment database", () => {
         expiresAt: "2026-07-16T10:05:00.000Z",
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
-        targetPasskeyId: "00000000-0000-4000-8000-000000000407",
       }),
     ).resolves.toBe(true);
     await expect(
       database.completePasskeyRevocation({
-        auditEventId: profile.auditEventId,
         backupState: false,
-        challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000411",
         contextDigest: new Uint8Array(32),
         observedSignCount: 2,
-        requestId: profile.requestId,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
         targetPasskeyId: "00000000-0000-4000-8000-000000000407",
@@ -391,10 +334,8 @@ describe("enrollment database", () => {
     ).resolves.toBe(true);
     await expect(
       database.completeRecoveryCodeReplacement({
-        auditEventId: profile.auditEventId,
         backupState: false,
         batchId: "00000000-0000-4000-8000-000000000414",
-        challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000413",
         contextDigest: new Uint8Array(32),
         observedSignCount: 3,
@@ -402,7 +343,6 @@ describe("enrollment database", () => {
           { length: 10 },
           (_, index) => `00000000-0000-4000-8000-${String(500 + index).padStart(12, "0")}`,
         ),
-        requestId: profile.requestId,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
         verifierPhcs: Array.from(
@@ -425,15 +365,10 @@ describe("enrollment database", () => {
     ).resolves.toBe(true);
     await expect(
       database.completeProfileDeletion({
-        auditEventId: profile.auditEventId,
         backupState: false,
-        challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000413",
         contextDigest: new Uint8Array(32),
-        deletionJobId: "00000000-0000-4000-8000-000000000414",
         observedSignCount: 3,
-        profileRefDigest: new Uint8Array(32),
-        requestId: profile.requestId,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
         typedHandle: profile.handle,
@@ -441,69 +376,7 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe(true);
     await expect(
-      database.pauseSource({
-        auditEventId: profile.auditEventId,
-        requestId: profile.requestId,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceId: `src_${"A".repeat(22)}`,
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      database.createSourceReactivationChallenge({
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000415",
-        contextDigest: new Uint8Array(32),
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceId: `src_${"A".repeat(22)}`,
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      database.completeSourceReactivation({
-        auditEventId: profile.auditEventId,
-        backupState: false,
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000415",
-        contextDigest: new Uint8Array(32),
-        observedSignCount: 4,
-        requestId: profile.requestId,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceId: `src_${"A".repeat(22)}`,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      database.createSourceUnlinkChallenge({
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000416",
-        contextDigest: new Uint8Array(32),
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceId: `src_${"A".repeat(22)}`,
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      database.completeSourceUnlink({
-        auditEventId: profile.auditEventId,
-        backupState: false,
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000416",
-        contextDigest: new Uint8Array(32),
-        observedSignCount: 5,
-        requestId: profile.requestId,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceId: `src_${"A".repeat(22)}`,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
-      }),
-    ).resolves.toBe(true);
-    await expect(
       database.completePasskeyLogin({
-        auditEventId: profile.auditEventId,
         backupState: false,
         challengeDigest: new Uint8Array(32),
         challengeExpiresAt: "2026-07-16T10:05:00.000Z",
@@ -512,7 +385,6 @@ describe("enrollment database", () => {
         credentialId: new Uint8Array(32),
         observedSignCount: 2,
         passkeyId: "00000000-0000-4000-8000-000000000406",
-        requestId: profile.requestId,
         sessionExpiresAt: profile.sessionExpiresAt,
         sessionId: "00000000-0000-4000-8000-000000000410",
         sessionVerifierDigest: new Uint8Array(32),
@@ -530,19 +402,16 @@ describe("enrollment database", () => {
     });
     await expect(
       database.startRecovery({
-        auditEventId: profile.auditEventId,
         authorityId: "00000000-0000-4000-8000-000000000421",
         authorityVerifierDigest: new Uint8Array(32),
         challengeDigest: new Uint8Array(32),
         contextDigest: new Uint8Array(32),
         expiresAt: "2026-07-16T10:05:00.000Z",
         recoveryCodeId: "00000000-0000-4000-8000-000000000420",
-        requestId: profile.requestId,
       }),
     ).resolves.toBe(true);
     await expect(
       database.completeRecoveryRegistration({
-        auditEventId: profile.auditEventId,
         authorityId: "00000000-0000-4000-8000-000000000421",
         authorityVerifierDigest: new Uint8Array(32),
         backupEligible: true,
@@ -553,7 +422,6 @@ describe("enrollment database", () => {
         credentialId: new Uint8Array(32),
         label: "Replacement passkey",
         passkeyId: "00000000-0000-4000-8000-000000000422",
-        requestId: profile.requestId,
         sessionExpiresAt: profile.sessionExpiresAt,
         sessionId: "00000000-0000-4000-8000-000000000423",
         sessionVerifierDigest: new Uint8Array(32),
@@ -570,22 +438,6 @@ describe("enrollment database", () => {
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe("public");
-    const accountOverview = await database.readAccountOverview(accountOverviewRequest);
-    expect(accountOverview).toEqual({
-      score: {
-        activeDays: 7,
-        dailyScores: [100, 200, 300, 400, 500, 600, 700],
-        seasonEnd: "2026-07-19",
-        seasonFinalized: false,
-        seasonStart: "2026-07-13",
-        sourceCount: 2,
-        weeklyScore: 2800,
-      },
-      visibility: "public",
-    });
-    expect(Object.isFrozen(accountOverview)).toBe(true);
-    expect(Object.isFrozen(accountOverview.score)).toBe(true);
-    expect(Object.isFrozen(accountOverview.score?.dailyScores)).toBe(true);
     await expect(
       database.setProfileVisibility({
         publiclyVisible: false,
@@ -594,166 +446,179 @@ describe("enrollment database", () => {
       }),
     ).resolves.toBe("hidden");
     await expect(
-      database.revokeDevice({
-        auditEventId: profile.auditEventId,
-        deviceId: `dev_${"A".repeat(22)}`,
-        requestId: profile.requestId,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-      }),
-    ).resolves.toBe(true);
-    await expect(
       database.revokeSession({
-        auditEventId: profile.auditEventId,
-        requestId: profile.requestId,
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
       }),
     ).resolves.toBe(true);
-    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(28);
-    expect(releases).toEqual(Array.from({ length: 28 }, () => false));
+    expect(client.verifyRuntimeBoundary).toHaveBeenCalledTimes(20);
+    expect(releases).toEqual(Array.from({ length: 20 }, () => false));
   });
 
-  it("maps only one exact pending pairing and composes its approval writes", async () => {
-    const row = {
-      architecture: "x86_64",
-      candidate_index: 1,
-      connector_version: "1.2.3",
-      device_label: "Studio PC",
-      expires_at: "2026-07-16T10:09:00.000Z",
-      os_family: "windows",
-      pairing_id: "00000000-0000-4000-8000-000000000430",
-      public_key: Buffer.alloc(32, 0x44),
-    };
-    const { database } = fixture({
-      readPairingApproval: vi.fn(() => Promise.resolve([row])),
-    });
-    const read = {
-      attemptLimit: 6,
-      codeDigests: [new Uint8Array(32), new Uint8Array(32)] as const,
-      secondaryActive: false,
+  it("maps exact private ranking and grouped agent-account dashboard rows", async () => {
+    const request = {
       sessionId: profile.sessionId,
       sessionVerifierDigest: new Uint8Array(32),
-      windowSeconds: 600,
     };
-
-    const material = await database.readPairingApproval(read);
-    expect(material).toMatchObject({
+    const firstAccountId = `acc_${"A".repeat(22)}`;
+    const secondAccountId = `acc_${"B".repeat(22)}`;
+    const installationId = `ins_${"C".repeat(22)}`;
+    const deviceId = `dev_${"D".repeat(22)}`;
+    const base = {
+      account_state: "active",
+      accounting_revision: 1,
+      agent_account_id: firstAccountId,
       architecture: "x86_64",
-      candidateIndex: 1,
-      connectorVersion: "1.2.3",
-      deviceLabel: "Studio PC",
-      expiresAt: "2026-07-16T10:09:00.000Z",
-      osFamily: "windows",
-      pairingId: row.pairing_id,
+      connected_date: "2026-07-14",
+      connector_version: "1.2.3",
+      device_id: deviceId,
+      device_state: "active",
+      expected_reader_version: "codex_daily_usage_v1",
+      identity_assurance: "community_local",
+      installation_id: installationId,
+      installation_label: "Studio PC",
+      installation_state: "active",
+      last_seen_date: "2026-07-16",
+      last_successful_sync_date: "2026-07-16",
+      observed_reader_version: "codex_daily_usage_v1",
+      os_family: "windows",
+      private_label: "Personal account",
+      provider_code: "codex",
+      quarantine_reason: null,
+      status_code: "connected",
+      today_token_total: "9007199254740993",
+      weekly_token_total: "999999999999999999999999999999999999999999999999999999999999",
+    };
+    const withoutDevice = {
+      ...base,
+      agent_account_id: secondAccountId,
+      architecture: null,
+      connected_date: null,
+      connector_version: null,
+      device_id: null,
+      device_state: null,
+      installation_id: null,
+      installation_label: null,
+      installation_state: null,
+      last_seen_date: null,
+      last_successful_sync_date: null,
+      observed_reader_version: null,
+      os_family: null,
+      private_label: "Work account",
+      status_code: "needs_login",
+      today_token_total: "0",
+      weekly_token_total: "0",
+    };
+    const { database } = fixture({
+      readAgentAccountDashboard: () => Promise.resolve([base, withoutDevice]),
     });
-    expect(material?.publicKey).toEqual(Buffer.alloc(32, 0x44));
-    material?.publicKey.fill(0);
-    await expect(
-      database.createPairingApprovalChallenge({
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000431",
-        contextDigest: new Uint8Array(32),
-        expiresAt: "2026-07-16T10:05:00.000Z",
-        pairingId: row.pairing_id,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        sourceChoice: "new",
-        sourceId: `src_${"A".repeat(22)}`,
-        userCodeDigest: new Uint8Array(32),
-      }),
-    ).resolves.toBe(true);
-    await expect(
-      database.completePairingApproval({
-        auditEventId: profile.auditEventId,
-        backupState: false,
-        challengeDigest: new Uint8Array(32),
-        challengeId: "00000000-0000-4000-8000-000000000431",
-        contextDigest: new Uint8Array(32),
-        observedSignCount: 4,
-        pairingId: row.pairing_id,
-        requestId: profile.requestId,
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000406",
-      }),
-    ).resolves.toBe(true);
 
-    await expect(
-      fixture({
-        readPairingApproval: vi.fn(() =>
-          Promise.resolve([{ ...row, public_key: Buffer.alloc(32) }]),
-        ),
-      }).database.readPairingApproval(read),
-    ).rejects.toMatchObject({ code: "result_invalid" });
-    await expect(
-      fixture({
-        readPairingApproval: vi.fn(() => Promise.resolve([row, row])),
-      }).database.readPairingApproval(read),
-    ).rejects.toMatchObject({ code: "result_invalid" });
-  });
-
-  it("accepts only an exact bounded account score projection", async () => {
-    for (const visibility of ["hidden", "public"] as const) {
-      const empty = fixture({
-        readAccountOverview: () =>
-          Promise.resolve([
-            {
-              active_days: null,
-              daily_score: null,
-              score_date: null,
-              season_end: null,
-              season_finalized: null,
-              season_start: null,
-              source_count: null,
-              visibility,
-              weekly_score: null,
-            },
-          ]),
-      });
-      await expect(empty.database.readAccountOverview(accountOverviewRequest)).resolves.toEqual({
-        score: null,
-        visibility,
-      });
-      expect(empty.releases).toEqual([false]);
-    }
-
-    const validRows = accountScoreRows();
-    const invalidResults: readonly unknown[] = [
-      validRows.slice(0, 6),
-      [...validRows, validRows[6]],
-      validRows.map((row, index) => (index === 3 ? { ...row, season_end: "2026-07-20" } : row)),
-      validRows.map((row) => ({ ...row, visibility: "hidden" })),
-      validRows.map((row, index) => (index === 1 ? { ...row, score_date: "2026-07-16" } : row)),
-      validRows.map((row, index) => ({
-        ...row,
-        score_date: `2026-07-${String(6 + index).padStart(2, "0")}`,
-        season_end: "2026-07-12",
-        season_start: "2026-07-06",
-      })),
-      validRows.map((row) => ({ ...row, weekly_score: 2799 })),
-      [
+    await expect(database.readPrivateDashboardRanking(request)).resolves.toEqual({
+      participantCount: 10,
+      providerBreakdownVisible: false,
+      publicVisibility: "public",
+      rankPosition: 2,
+      seasonEnd: "2026-07-19",
+      seasonStart: "2026-07-13",
+      seasonState: "open",
+      snapshotGeneratedAt: "2026-07-16T10:00Z",
+      weeklyTokenTotal: "2800",
+    });
+    await expect(database.readAgentAccountDashboard(request)).resolves.toEqual({
+      accounts: [
         {
-          ...validRows[0],
-          active_days: null,
-          daily_score: null,
-          score_date: null,
-          season_end: null,
-          season_finalized: null,
-          season_start: null,
-          source_count: null,
+          accountingRevision: 1,
+          agentAccountId: firstAccountId,
+          devices: [{ deviceId, installationId, state: "active" }],
+          expectedReaderVersion: "codex_daily_usage_v1",
+          identityAssurance: "community_local",
+          lastSuccessfulSyncDate: "2026-07-16",
+          observedReaderVersion: "codex_daily_usage_v1",
+          privateLabel: "Personal account",
+          provider: "codex",
+          quarantineReason: null,
+          state: "active",
+          status: "connected",
+          todayTokenTotal: "9007199254740993",
+          weeklyTokenTotal: "999999999999999999999999999999999999999999999999999999999999",
+        },
+        {
+          accountingRevision: 1,
+          agentAccountId: secondAccountId,
+          devices: [],
+          expectedReaderVersion: "codex_daily_usage_v1",
+          identityAssurance: "community_local",
+          lastSuccessfulSyncDate: null,
+          observedReaderVersion: null,
+          privateLabel: "Work account",
+          provider: "codex",
+          quarantineReason: null,
+          state: "active",
+          status: "needs_login",
+          todayTokenTotal: "0",
+          weeklyTokenTotal: "0",
         },
       ],
-      validRows.map((row) => ({ ...row, raw_tokens: 123 })),
-    ];
+      installations: [
+        {
+          accounts: [
+            {
+              agentAccountId: firstAccountId,
+              deviceId,
+              deviceState: "active",
+              privateLabel: "Personal account",
+            },
+          ],
+          architecture: "x86_64",
+          connectedDate: "2026-07-14",
+          connectorVersion: "1.2.3",
+          installationId,
+          label: "Studio PC",
+          lastSeenDate: "2026-07-16",
+          osFamily: "windows",
+          state: "active",
+        },
+      ],
+    });
 
-    for (const rows of invalidResults) {
-      const invalid = fixture({ readAccountOverview: () => Promise.resolve(rows) });
+    for (const rows of [
+      [{ ...base, today_token_total: `${base.weekly_token_total}0` }, withoutDevice],
+      [{ ...base, observed_reader_version: null }, withoutDevice],
+      [{ ...base, status_code: "needs_login" }, withoutDevice],
+      [{ ...base, extra_private_value: "sentinel" }, withoutDevice],
+      [base, { ...withoutDevice, status_code: "connected" }],
+      [base, base],
+    ]) {
       await expect(
-        invalid.database.readAccountOverview(accountOverviewRequest),
+        fixture({
+          readAgentAccountDashboard: () => Promise.resolve(rows),
+        }).database.readAgentAccountDashboard(request),
       ).rejects.toMatchObject({ code: "result_invalid" });
-      expect(invalid.releases).toEqual([true]);
     }
+
+    await expect(
+      fixture({
+        readPrivateDashboardRanking: () =>
+          Promise.resolve([
+            {
+              participant_count: null,
+              provider_breakdown_visible: false,
+              public_visibility: "hidden",
+              rank_position: null,
+              season_end: "2026-07-19",
+              season_start: "2026-07-13",
+              season_state: "pending",
+              snapshot_generated_at: null,
+              weekly_token_total: null,
+            },
+          ]),
+      }).database.readPrivateDashboardRanking(request),
+    ).resolves.toMatchObject({
+      participantCount: null,
+      publicVisibility: "hidden",
+      seasonState: "pending",
+      weeklyTokenTotal: null,
+    });
   });
 
   it("destroys a checkout after boundary, query, or result failure", async () => {
@@ -813,31 +678,6 @@ describe("enrollment database", () => {
       }),
     ).rejects.toMatchObject({ code: "result_invalid" });
     expect(malformedInventory.releases).toEqual([true]);
-
-    const malformedDeviceInventory = fixture({
-      readActiveDeviceInventory: () =>
-        Promise.resolve([
-          {
-            activated_on: "2026-07-14",
-            architecture: "x86_64",
-            connector_version: "1.2.3",
-            device_id: `dev_${"A".repeat(22)}`,
-            device_key_id: "00000000-0000-4000-8000-000000000499",
-            device_label: "Studio PC",
-            device_state: "active",
-            os_family: "windows",
-            source_id: `src_${"B".repeat(22)}`,
-            source_state: "active",
-          },
-        ]),
-    });
-    await expect(
-      malformedDeviceInventory.database.readActiveDeviceInventory({
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-      }),
-    ).rejects.toMatchObject({ code: "result_invalid" });
-    expect(malformedDeviceInventory.releases).toEqual([true]);
 
     const malformedVisibility = fixture({
       readProfileVisibility: () => Promise.resolve([{ visibility: "private" }]),
@@ -988,61 +828,6 @@ describe("enrollment database", () => {
       });
       expect(invalid.releases).toEqual([true]);
     }
-  });
-
-  it("keeps empty owned sources visible and enforces the active-device ceiling", async () => {
-    const emptySource = fixture({
-      readActiveDeviceInventory: () =>
-        Promise.resolve([
-          {
-            activated_on: null,
-            architecture: null,
-            connector_version: null,
-            device_id: null,
-            device_label: null,
-            device_state: null,
-            os_family: null,
-            source_id: `src_${"A".repeat(22)}`,
-            source_state: "paused",
-          },
-        ]),
-    });
-    await expect(
-      emptySource.database.readActiveDeviceInventory({
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-      }),
-    ).resolves.toEqual([
-      {
-        devices: [],
-        sourceId: `src_${"A".repeat(22)}`,
-        state: "paused",
-      },
-    ]);
-
-    const overflow = fixture({
-      readActiveDeviceInventory: () =>
-        Promise.resolve(
-          Array.from({ length: 65 }, (_, index) => ({
-            activated_on: "2026-07-14",
-            architecture: "x86_64",
-            connector_version: "1.2.3",
-            device_id: `dev_${String(index).padStart(22, "0")}`,
-            device_label: `Device ${String(index).padStart(2, "0")}`,
-            device_state: "active",
-            os_family: "windows",
-            source_id: `src_${"B".repeat(22)}`,
-            source_state: "active",
-          })),
-        ),
-    });
-    await expect(
-      overflow.database.readActiveDeviceInventory({
-        sessionId: profile.sessionId,
-        sessionVerifierDigest: new Uint8Array(32),
-      }),
-    ).rejects.toMatchObject({ code: "result_invalid" });
-    expect(overflow.releases).toEqual([true]);
   });
 
   it("contains connection and release failures without reflecting driver detail", async () => {

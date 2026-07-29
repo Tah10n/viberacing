@@ -4,10 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const pageMock = vi.hoisted(() => ({
   readEnrollmentPageAccount: vi.fn(() =>
     Promise.resolve({
-      activeDeviceInventory: [],
       carRecipeState: { active: null, proposal: null },
+      dashboard: undefined,
       passkeys: [],
-      score: null,
       session: {
         expiresAt: 2_000_000_000,
         handle: "pixel_driver",
@@ -18,7 +17,6 @@ const pageMock = vi.hoisted(() => ({
         sessionVerifier: "A".repeat(43),
         version: 1 as const,
       },
-      visibility: "public" as const,
     }),
   ),
 }));

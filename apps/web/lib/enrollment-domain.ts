@@ -54,20 +54,12 @@ const profileDeletionChallengeKeys = new Set([
   "handle",
   "version",
 ]);
-const sourceActionChallengeKeys = new Set([
+const accountTargetActionChallengeKeys = new Set([
   "challenge",
   "challengeId",
   "expiresAt",
-  "sourceId",
-  "version",
-]);
-const pairingApprovalChallengeKeys = new Set([
-  "challenge",
-  "challengeId",
-  "expiresAt",
-  "pairingId",
-  "sourceChoice",
-  "sourceId",
+  "purpose",
+  "targetId",
   "version",
 ]);
 const recoveryAuthorityKeys = new Set([
@@ -131,13 +123,12 @@ export interface ProfileDeletionChallenge extends PasskeyRegistrationChallenge {
   readonly handle: string;
 }
 
-export interface SourceActionChallenge extends PasskeyRegistrationChallenge {
-  readonly sourceId: string;
-}
+export type AccountTargetActionPurpose =
+  "account_reactivate" | "account_unlink" | "device_revoke" | "installation_revoke";
 
-export interface PairingApprovalChallenge extends SourceActionChallenge {
-  readonly pairingId: string;
-  readonly sourceChoice: "existing" | "new";
+export interface AccountTargetActionChallenge extends PasskeyRegistrationChallenge {
+  readonly purpose: AccountTargetActionPurpose;
+  readonly targetId: string;
 }
 
 export interface RecoveryAuthorityChallenge {
@@ -363,47 +354,31 @@ export function readProfileDeletionChallenge(
   return Object.freeze(value as unknown as ProfileDeletionChallenge);
 }
 
-export function readSourceActionChallenge(
+export function readAccountTargetActionChallenge(
   value: unknown,
   nowSeconds: number,
-): SourceActionChallenge | undefined {
+): AccountTargetActionChallenge | undefined {
   if (
     !isPlainObject(value) ||
-    !exactKeys(value, sourceActionChallengeKeys) ||
+    !exactKeys(value, accountTargetActionChallengeKeys) ||
     value.version !== 1 ||
     !canonicalBase64Url32(value.challenge) ||
     typeof value.challengeId !== "string" ||
     !uuidV4Pattern.test(value.challengeId) ||
-    typeof value.sourceId !== "string" ||
-    !/^src_[A-Za-z0-9_-]{22}$/.test(value.sourceId) ||
+    (value.purpose !== "account_reactivate" &&
+      value.purpose !== "account_unlink" &&
+      value.purpose !== "device_revoke" &&
+      value.purpose !== "installation_revoke") ||
+    typeof value.targetId !== "string" ||
+    ((value.purpose === "account_reactivate" || value.purpose === "account_unlink") &&
+      !/^acc_[A-Za-z0-9_-]{22}$/.test(value.targetId)) ||
+    (value.purpose === "device_revoke" && !/^dev_[A-Za-z0-9_-]{22}$/.test(value.targetId)) ||
+    (value.purpose === "installation_revoke" && !/^ins_[A-Za-z0-9_-]{22}$/.test(value.targetId)) ||
     !futureExpiry(value.expiresAt, nowSeconds, 300)
   ) {
     return undefined;
   }
-  return Object.freeze(value as unknown as SourceActionChallenge);
-}
-
-export function readPairingApprovalChallenge(
-  value: unknown,
-  nowSeconds: number,
-): PairingApprovalChallenge | undefined {
-  if (
-    !isPlainObject(value) ||
-    !exactKeys(value, pairingApprovalChallengeKeys) ||
-    value.version !== 1 ||
-    !canonicalBase64Url32(value.challenge) ||
-    typeof value.challengeId !== "string" ||
-    !uuidV4Pattern.test(value.challengeId) ||
-    typeof value.pairingId !== "string" ||
-    !uuidV4Pattern.test(value.pairingId) ||
-    (value.sourceChoice !== "existing" && value.sourceChoice !== "new") ||
-    typeof value.sourceId !== "string" ||
-    !/^src_[A-Za-z0-9_-]{22}$/.test(value.sourceId) ||
-    !futureExpiry(value.expiresAt, nowSeconds, 300)
-  ) {
-    return undefined;
-  }
-  return Object.freeze(value as unknown as PairingApprovalChallenge);
+  return Object.freeze(value as unknown as AccountTargetActionChallenge);
 }
 
 export function readPasskeyAddChallenge(
