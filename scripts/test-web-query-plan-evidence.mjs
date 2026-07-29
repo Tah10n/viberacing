@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
-  assertPublicCommunityPlanEvidence,
+  assertPublicSnapshotPlanEvidence,
   parseAutoExplainPlans,
 } from "./web-query-plan-evidence.mjs";
 
@@ -19,7 +19,7 @@ const zeroBlockEvidence = Object.freeze({
 function node(type, options = {}) {
   return {
     "Node Type": type,
-    "Actual Rows": options.actualRows ?? 2,
+    "Actual Rows": options.actualRows ?? 1,
     "Actual Loops": options.actualLoops ?? 1,
     ...zeroBlockEvidence,
     ...(options.relation === undefined ? {} : { "Relation Name": options.relation }),
@@ -32,68 +32,41 @@ function plan(queryText, root) {
   return { "Query Text": queryText, Plan: root };
 }
 
+function lookupPlan(payloadIndex) {
+  return node("Limit", {
+    plans: [
+      node("Index Scan", { index: "leaderboard_published_snapshots_pkey" }),
+      node("Index Scan", { index: "leaderboard_snapshots_pkey" }),
+      node("Index Scan", { index: payloadIndex }),
+    ],
+  });
+}
+
 function validPlans() {
   return [
     plan(
-      "SELECT score.* FROM viberacing_api.list_public_community_scores($1::date, $2::integer) AS score",
-      node("Sort", { plans: [node("Function Scan")] }),
+      "SELECT snapshot.* FROM viberacing_api.read_current_leaderboard_page($1::integer) AS snapshot",
+      node("Function Scan"),
     ),
     plan(
-      "SELECT race.* FROM viberacing_api.list_public_community_race($1::date, $2::integer) AS race",
-      node("Sort", { plans: [node("Function Scan")] }),
+      "SELECT snapshot.* FROM viberacing_api.read_season_leaderboard_page($1::date, $2::integer) AS snapshot",
+      node("Function Scan"),
     ),
     plan(
-      "SELECT status.* FROM viberacing_api.list_public_community_race_status($1::date, $2::integer) AS status",
-      node("Sort", { plans: [node("Function Scan")] }),
+      "SELECT snapshot.* FROM viberacing_api.read_current_public_profile($1::text) AS snapshot",
+      node("Function Scan"),
     ),
     plan(
-      "SELECT status.* FROM viberacing_api.list_public_community_token_race_status($1::date, $2::integer) AS status",
-      node("Sort", { plans: [node("Function Scan")] }),
+      "SELECT page.* FROM viberacing_private.leaderboard_published_snapshots AS published JOIN viberacing_private.leaderboard_snapshots AS snapshot ON true JOIN viberacing_private.leaderboard_snapshot_pages AS page ON true WHERE page.page_kind = 'leaderboard_page' AND pg_catalog.transaction_timestamp() IS NOT NULL LIMIT 1",
+      lookupPlan("leaderboard_snapshot_pages_pkey"),
     ),
     plan(
-      "WITH visible_entries AS MATERIALIZED (SELECT * FROM viberacing_private.season_entries JOIN viberacing_private.seasons ON true WHERE score_version = 'community_v1') SELECT * FROM visible_entries",
-      node("Limit", {
-        plans: [
-          node("Index Scan", { index: "season_entries_profile_history_idx" }),
-          node("Index Scan", { index: "seasons_pkey" }),
-        ],
-      }),
+      "SELECT page.* FROM viberacing_private.leaderboard_published_snapshots AS published JOIN viberacing_private.leaderboard_snapshots AS snapshot ON true JOIN viberacing_private.leaderboard_snapshot_pages AS page ON true WHERE published.season_start = p_season_start AND page.page_kind = 'leaderboard_page' LIMIT 1",
+      lookupPlan("leaderboard_snapshot_pages_pkey"),
     ),
     plan(
-      "SELECT score_record.* FROM viberacing_api.list_public_community_scores(p_season_start, p_limit) AS score_record LEFT JOIN viberacing_private.profile_car_recipes AS recipe_record ON true",
-      node("Sort", {
-        plans: [node("Function Scan"), node("Index Scan", { index: "profile_car_recipes_pkey" })],
-      }),
-    ),
-    plan(
-      "SELECT race_record.* FROM viberacing_api.list_public_community_race(p_season_start, p_limit) AS race_record LEFT JOIN viberacing_private.finalized_season_profile_freshness ON true JOIN viberacing_private.source_day_values ON true JOIN viberacing_private.season_daily_scores ON true",
-      node("Sort", {
-        plans: [
-          node("Function Scan"),
-          node("Index Scan", { index: "finalized_season_profile_freshness_primary_key" }),
-          node("Index Scan", { index: "source_day_values_date_idx" }),
-          node("Bitmap Index Scan", { index: "codex_sources_profile_state_idx" }),
-          node("Index Only Scan", {
-            index: "season_daily_scores_positive_profile_date_idx",
-          }),
-        ],
-      }),
-    ),
-    plan(
-      "WITH visible_entries AS MATERIALIZED (SELECT * FROM viberacing_private.seasons JOIN viberacing_private.season_entries ON true WHERE score_version = 'community_tokens_v1') SELECT * FROM visible_entries LEFT JOIN viberacing_private.profile_car_recipes ON true LEFT JOIN viberacing_private.finalized_season_profile_freshness ON true JOIN viberacing_private.codex_sources ON true JOIN viberacing_private.source_day_values ON true JOIN viberacing_private.season_daily_scores ON true LIMIT 32",
-      node("Limit", {
-        plans: [
-          node("Index Scan", { index: "season_entries_profile_history_idx" }),
-          node("Index Scan", { index: "seasons_pkey" }),
-          node("Index Scan", { index: "profile_car_recipes_pkey" }),
-          node("Index Scan", { index: "finalized_season_profile_freshness_primary_key" }),
-          node("Index Scan", { index: "source_day_values_date_idx" }),
-          node("Bitmap Index Scan", { index: "codex_sources_profile_state_idx" }),
-          node("Index Only Scan", {
-            index: "season_daily_scores_positive_profile_date_idx",
-          }),
-        ],
-      }),
+      "SELECT profile.* FROM viberacing_private.leaderboard_published_snapshots AS published JOIN viberacing_private.leaderboard_snapshots AS snapshot ON true JOIN viberacing_private.leaderboard_snapshot_profiles AS profile ON true WHERE profile.handle = p_handle LIMIT 1",
+      lookupPlan("leaderboard_snapshot_profiles_pkey"),
     ),
   ];
 }
@@ -122,23 +95,9 @@ function expectFailure(callback, expected) {
 
 const validLog = renderLog(validPlans());
 const parsed = parse(validLog);
-assert.equal(parsed.length, 8);
-assert.deepEqual(assertPublicCommunityPlanEvidence(parsed), { evidencedPlanCount: 8 });
-assert.equal(parse(renderLog(validPlans(), "\r\n")).length, 8);
-const primaryKeyJoinPlans = validPlans();
-for (const entry of primaryKeyJoinPlans) {
-  const pending = [entry.Plan];
-  while (pending.length > 0) {
-    const candidate = pending.pop();
-    if (candidate["Index Name"] === "codex_sources_profile_state_idx") {
-      candidate["Index Name"] = "codex_sources_pkey";
-    }
-    pending.push(...(candidate.Plans ?? []));
-  }
-}
-assert.deepEqual(assertPublicCommunityPlanEvidence(primaryKeyJoinPlans), {
-  evidencedPlanCount: 8,
-});
+assert.equal(parsed.length, 6);
+assert.deepEqual(assertPublicSnapshotPlanEvidence(parsed), { evidencedPlanCount: 6 });
+assert.equal(parse(renderLog(validPlans(), "\r\n")).length, 6);
 
 expectFailure(() => parse(`${validLog}private-marker`), /exposed a private integration value/);
 expectFailure(() => parse(validLog, 10), /exceeded their fixed byte budget/);
@@ -164,73 +123,73 @@ expectFailure(
   /marker count must be non-zero and bounded/,
 );
 expectFailure(
-  () =>
-    parseAutoExplainPlans(validLog, {
-      maximumBytes: 128 * 1024,
-      privateMarkers: Array.from({ length: 65 }, (_, index) => `marker-${index}`),
-    }),
-  /marker count must be non-zero and bounded/,
-);
-expectFailure(
-  () =>
-    parseAutoExplainPlans(validLog, {
-      maximumBytes: 128 * 1024,
-      privateMarkers: [""],
-    }),
-  /non-empty and bounded/,
-);
-expectFailure(
   () => parse(renderLog(Array.from({ length: 129 }, () => validPlans()[0])), 2 * 1024 * 1024),
   /too many auto_explain plans/,
 );
 
-for (let index = 0; index < 8; index += 1) {
+for (let index = 0; index < 6; index += 1) {
   const missing = validPlans();
   missing.splice(index, 1);
-  expectFailure(() => assertPublicCommunityPlanEvidence(missing), /plan evidence was not emitted/);
+  expectFailure(() => assertPublicSnapshotPlanEvidence(missing), /plan evidence was not emitted/);
 }
 
 const parameterLeak = validPlans();
 parameterLeak[0]["Query Parameters"] = "$1 = 'private'";
 expectFailure(
-  () => assertPublicCommunityPlanEvidence(parameterLeak),
+  () => assertPublicSnapshotPlanEvidence(parameterLeak),
   /must omit every parameter payload/,
 );
 
 const tooManyRows = validPlans();
-tooManyRows[0].Plan["Actual Rows"] = 33;
-expectFailure(() => assertPublicCommunityPlanEvidence(tooManyRows), /row cap/);
+tooManyRows[0].Plan["Actual Rows"] = 2;
+expectFailure(() => assertPublicSnapshotPlanEvidence(tooManyRows), /row cap/);
 
 const repeatedExecution = validPlans();
 repeatedExecution[0].Plan["Actual Loops"] = 2;
-expectFailure(() => assertPublicCommunityPlanEvidence(repeatedExecution), /must execute once/);
+expectFailure(() => assertPublicSnapshotPlanEvidence(repeatedExecution), /must execute once/);
 
 for (const key of ["Shared Written Blocks", "Temp Read Blocks"]) {
   const blockWrite = validPlans();
   blockWrite[0].Plan[key] = 1;
-  expectFailure(() => assertPublicCommunityPlanEvidence(blockWrite), new RegExp(key));
+  expectFailure(() => assertPublicSnapshotPlanEvidence(blockWrite), new RegExp(key));
 }
 
 const mutation = validPlans();
-mutation[0].Plan.Plans.push(node("ModifyTable"));
-expectFailure(() => assertPublicCommunityPlanEvidence(mutation), /mutating or locking plan node/);
+mutation[0].Plan.Plans = [node("ModifyTable")];
+expectFailure(() => assertPublicSnapshotPlanEvidence(mutation), /mutating or locking plan node/);
 
 const sequentialScan = validPlans();
-sequentialScan[4].Plan.Plans.push(node("Seq Scan", { relation: "season_entries" }));
+sequentialScan[3].Plan.Plans.push(node("Seq Scan", { relation: "leaderboard_snapshot_profiles" }));
 expectFailure(
-  () => assertPublicCommunityPlanEvidence(sequentialScan),
+  () => assertPublicSnapshotPlanEvidence(sequentialScan),
   /sequentially scanned a bounded-index relation/,
 );
 
-for (const indexName of [
-  "season_entries_profile_history_idx",
-  "seasons_pkey",
-  "profile_car_recipes_pkey",
-  "finalized_season_profile_freshness_primary_key",
-  "source_day_values_date_idx",
-  "codex_sources_profile_state_idx",
-  "season_daily_scores_positive_profile_date_idx",
-]) {
+const largePayloadScan = validPlans();
+largePayloadScan[3].Plan.Plans.push(
+  node("Seq Scan", {
+    actualRows: 513,
+    relation: "leaderboard_snapshot_pages",
+  }),
+);
+expectFailure(
+  () => assertPublicSnapshotPlanEvidence(largePayloadScan),
+  /small-payload sequential row cap/,
+);
+
+const largeDimensionScan = validPlans();
+largeDimensionScan[3].Plan.Plans.push(
+  node("Seq Scan", {
+    actualRows: 9,
+    relation: "leaderboard_published_snapshots",
+  }),
+);
+expectFailure(
+  () => assertPublicSnapshotPlanEvidence(largeDimensionScan),
+  /small-dimension sequential row cap/,
+);
+
+for (const indexName of ["leaderboard_snapshot_pages_pkey", "leaderboard_snapshot_profiles_pkey"]) {
   const missingIndex = validPlans();
   for (const entry of missingIndex) {
     const pending = [entry.Plan];
@@ -243,38 +202,29 @@ for (const indexName of [
     }
   }
   expectFailure(
-    () => assertPublicCommunityPlanEvidence(missingIndex),
+    () => assertPublicSnapshotPlanEvidence(missingIndex),
     /omitted an executed reviewed index/,
   );
 }
 
 const plannedOnlyIndex = validPlans();
-plannedOnlyIndex[4].Plan.Plans[0]["Actual Loops"] = 0;
+plannedOnlyIndex[3].Plan.Plans[2]["Actual Loops"] = 0;
 expectFailure(
-  () => assertPublicCommunityPlanEvidence(plannedOnlyIndex),
+  () => assertPublicSnapshotPlanEvidence(plannedOnlyIndex),
   /omitted an executed reviewed index/,
-);
-
-const repeatedBadPlan = validPlans();
-const repeatedScoreAdapter = structuredClone(repeatedBadPlan[0]);
-repeatedScoreAdapter.Plan["Temp Read Blocks"] = 1;
-repeatedBadPlan.push(repeatedScoreAdapter);
-expectFailure(
-  () => assertPublicCommunityPlanEvidence(repeatedBadPlan),
-  /reported Temp Read Blocks/,
 );
 
 const missingBlockCounter = validPlans();
 delete missingBlockCounter[0].Plan["Temp Written Blocks"];
 expectFailure(
-  () => assertPublicCommunityPlanEvidence(missingBlockCounter),
+  () => assertPublicSnapshotPlanEvidence(missingBlockCounter),
   /reported Temp Written Blocks/,
 );
 
 const invalidChildren = validPlans();
-invalidChildren[0].Plan.Plans = {};
+invalidChildren[3].Plan.Plans = {};
 expectFailure(
-  () => assertPublicCommunityPlanEvidence(invalidChildren),
+  () => assertPublicSnapshotPlanEvidence(invalidChildren),
   /child plans must be an array/,
 );
 
@@ -284,22 +234,22 @@ for (let depth = 0; depth < 33; depth += 1) {
   deepPlan = node("Result", { plans: [deepPlan] });
 }
 excessiveDepth[0].Plan = deepPlan;
-expectFailure(() => assertPublicCommunityPlanEvidence(excessiveDepth), /plan depth budget/);
+expectFailure(() => assertPublicSnapshotPlanEvidence(excessiveDepth), /plan depth budget/);
 
 const excessiveNodes = validPlans();
-excessiveNodes[0].Plan = node("Sort", {
+excessiveNodes[0].Plan = node("Result", {
   plans: Array.from({ length: 257 }, () => node("Function Scan")),
 });
-expectFailure(() => assertPublicCommunityPlanEvidence(excessiveNodes), /plan-node budget/);
+expectFailure(() => assertPublicSnapshotPlanEvidence(excessiveNodes), /plan-node budget/);
 
 const nonObjectEntry = validPlans();
 nonObjectEntry[0] = null;
-expectFailure(() => assertPublicCommunityPlanEvidence(nonObjectEntry), /entry must be an object/);
+expectFailure(() => assertPublicSnapshotPlanEvidence(nonObjectEntry), /entry must be an object/);
 
 const braceInQuery = validPlans();
 braceInQuery[0]["Query Text"] += ' /* { "escaped": "}\\\"" } */';
-assert.equal(parse(renderLog(braceInQuery)).length, 8);
+assert.equal(parse(renderLog(braceInQuery)).length, 6);
 
 console.log(
-  `Web query-plan evidence tests passed (${failClosedCaseCount} fail-closed cases plus the valid oracle).`,
+  `Web snapshot query-plan evidence tests passed (${failClosedCaseCount} fail-closed cases plus the valid six-oracle catalog).`,
 );

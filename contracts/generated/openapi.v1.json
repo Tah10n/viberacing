@@ -729,7 +729,7 @@
       "get": {
         "operationId": "getSeasonLeaderboardV1",
         "summary": "Read one precomputed historical leaderboard snapshot page",
-        "description": "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
         "parameters": [
           {
             "name": "seasonStart",
@@ -1047,14 +1047,14 @@
         "x-viberacing-path-policy": "closed",
         "x-viberacing-request-body-policy": "none",
         "x-viberacing-request-contract": "none",
-        "x-viberacing-status": "contract-only"
+        "x-viberacing-status": "implemented-local"
       }
     },
     "/v1/leaderboards/current": {
       "get": {
         "operationId": "getCurrentLeaderboardV1",
         "summary": "Read one precomputed current leaderboard snapshot page",
-        "description": "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
         "parameters": [
           {
             "name": "trustTier",
@@ -1355,14 +1355,14 @@
         "x-viberacing-path-policy": "none",
         "x-viberacing-request-body-policy": "none",
         "x-viberacing-request-contract": "none",
-        "x-viberacing-status": "contract-only"
+        "x-viberacing-status": "implemented-local"
       }
     },
     "/v1/profiles/{handle}": {
       "get": {
         "operationId": "getCurrentPublicProfileV1",
         "summary": "Read one precomputed current public profile summary",
-        "description": "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
+        "description": "Implemented and verified in this repository. Its presence here does not prove deployment.",
         "parameters": [
           {
             "name": "handle",
@@ -1664,7 +1664,7 @@
         "x-viberacing-path-policy": "closed",
         "x-viberacing-request-body-policy": "none",
         "x-viberacing-request-contract": "none",
-        "x-viberacing-status": "contract-only"
+        "x-viberacing-status": "implemented-local"
       }
     },
     "/v1/usage": {
@@ -3182,6 +3182,6 @@
       }
     }
   },
-  "x-viberacing-contract-source": "sha256:cc1bc14900833fb161d51df37fa7d638a8dae59303aede01c2ca246bb11384af",
+  "x-viberacing-contract-source": "sha256:476e7bc2affd60f6e829085727e0ab8e702b96d222ac322db97a34e8611aaab2",
   "x-viberacing-status": "mixed-local"
 }

@@ -2,9 +2,9 @@ import "server-only";
 
 import process from "node:process";
 
-const publicRankingEnabledName = "VIBERACING_PUBLIC_RANKING_ENABLED";
+const publicSnapshotsEnabledName = "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED";
 
-export interface PublicRankingConfig {
+export interface PublicSnapshotConfig {
   readonly enabled: boolean;
 }
 
@@ -13,7 +13,7 @@ function readEnvironmentValue(environment: unknown): string | undefined {
     if (environment === null || typeof environment !== "object") {
       return undefined;
     }
-    const descriptor = Object.getOwnPropertyDescriptor(environment, publicRankingEnabledName);
+    const descriptor = Object.getOwnPropertyDescriptor(environment, publicSnapshotsEnabledName);
     if (
       descriptor === undefined ||
       !("value" in descriptor) ||
@@ -28,8 +28,8 @@ function readEnvironmentValue(environment: unknown): string | undefined {
   }
 }
 
-export function resolvePublicRankingConfig(
+export function resolvePublicSnapshotConfig(
   environment: unknown = process.env,
-): PublicRankingConfig {
+): PublicSnapshotConfig {
   return Object.freeze({ enabled: readEnvironmentValue(environment) === "true" });
 }

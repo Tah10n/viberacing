@@ -341,6 +341,23 @@ describe("generated clean product contracts", () => {
     ).toBe(false);
   });
 
+  it("validates the contract maximum of 100 fully populated leaderboard participants", () => {
+    const snapshot = validLeaderboardSnapshot();
+    const participants = Array.from({ length: 100 }, (_, index) => ({
+      ...snapshot.participants[0],
+      handle: `racer${String(index + 1).padStart(5, "0")}`,
+      rankPosition: index + 1,
+      displayPosition: index + 1,
+    }));
+    expect(
+      validateLeaderboardSnapshotV1({
+        ...snapshot,
+        participantCount: participants.length,
+        participants,
+      }).ok,
+    ).toBe(true);
+  });
+
   it("validates a precomputed public profile and explicit absent car recipe", () => {
     const profile = {
       schemaVersion: 1,

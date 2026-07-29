@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const invalidRequest = new Request(
-  "https://viberacing.invalid/v1/community/race?seasonStart=2026-07-14",
+  "https://viberacing.invalid/v1/leaderboards/current?trustTier=community&page=01",
 );
 
-describe("public Community race Next.js entrypoint", () => {
+describe("current leaderboard Next.js entrypoint", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
   });
 
-  it("stays disabled under a non-enabling deployment value", async () => {
-    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "false");
+  it("stays disabled under every non-enabling deployment value", async () => {
+    vi.stubEnv("VIBERACING_PUBLIC_SNAPSHOTS_ENABLED", "false");
     const route = await import("./route");
 
     expect(route.dynamic).toBe("force-dynamic");
@@ -19,15 +19,15 @@ describe("public Community race Next.js entrypoint", () => {
     await expect(route.GET(invalidRequest)).resolves.toMatchObject({ status: 503 });
   });
 
-  it("evaluates the existing request boundary only after exact enablement", async () => {
-    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "true");
+  it("parses the request only after exact module-load enablement", async () => {
+    vi.stubEnv("VIBERACING_PUBLIC_SNAPSHOTS_ENABLED", "true");
     const route = await import("./route");
 
     await expect(route.GET(invalidRequest)).resolves.toMatchObject({ status: 400 });
   });
 
-  it("dispatches every non-GET Next.js method through the closed 405 response", async () => {
-    vi.stubEnv("VIBERACING_PUBLIC_RANKING_ENABLED", "false");
+  it("dispatches every non-GET method through one closed 405 response", async () => {
+    vi.stubEnv("VIBERACING_PUBLIC_SNAPSHOTS_ENABLED", "false");
     const route = await import("./route");
 
     for (const handler of [
@@ -41,7 +41,6 @@ describe("public Community race Next.js entrypoint", () => {
       const response = handler();
       expect(response.status).toBe(405);
       expect(response.headers.get("allow")).toBe("GET");
-      expect(response.headers.get("vary")).toBe("Accept");
       await expect(response.json()).resolves.toMatchObject({
         errorCode: "method_not_allowed",
         status: 405,

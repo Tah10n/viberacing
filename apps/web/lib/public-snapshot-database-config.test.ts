@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  PublicScoreDatabaseConfigurationError,
-  resolvePublicScoreDatabaseConfig,
-  type PublicScoreDatabaseConfigurationErrorCode,
-} from "./public-score-database-config";
+  PublicSnapshotDatabaseConfigurationError,
+  resolvePublicSnapshotDatabaseConfig,
+  type PublicSnapshotDatabaseConfigurationErrorCode,
+} from "./public-snapshot-database-config";
 
 const privatePassword = "private-password-that-must-not-be-reflected";
 const baseEnvironment = {
@@ -19,30 +19,30 @@ const baseEnvironment = {
 
 function expectConfigurationError(
   environment: Readonly<Record<string, string | undefined>>,
-  code: PublicScoreDatabaseConfigurationErrorCode,
+  code: PublicSnapshotDatabaseConfigurationErrorCode,
 ): void {
   try {
-    resolvePublicScoreDatabaseConfig(environment);
+    resolvePublicSnapshotDatabaseConfig(environment);
   } catch (error) {
-    expect(error).toBeInstanceOf(PublicScoreDatabaseConfigurationError);
+    expect(error).toBeInstanceOf(PublicSnapshotDatabaseConfigurationError);
     expect(error).toMatchObject({
       code,
-      message: "Public score database configuration is invalid.",
-      name: "PublicScoreDatabaseConfigurationError",
+      message: "Public snapshot database configuration is invalid.",
+      name: "PublicSnapshotDatabaseConfigurationError",
     });
     expect(String(error)).not.toContain(privatePassword);
     return;
   }
-  throw new Error("expected public score database configuration to fail");
+  throw new Error("expected public snapshot database configuration to fail");
 }
 
-describe("public score database configuration", () => {
+describe("public snapshot database configuration", () => {
   it("builds one frozen, bounded loopback-only development pool configuration", () => {
-    const config = resolvePublicScoreDatabaseConfig(baseEnvironment);
+    const config = resolvePublicSnapshotDatabaseConfig(baseEnvironment);
 
     expect(config).toMatchObject({
       allowExitOnIdle: true,
-      application_name: "viberacing-web-public-score",
+      application_name: "viberacing-web-public-snapshot",
       client_encoding: "UTF8",
       connectionTimeoutMillis: 2_000,
       database: "viberacing_local",
@@ -72,7 +72,7 @@ describe("public score database configuration", () => {
   });
 
   it("requires certificate and hostname verification for a production DNS endpoint", () => {
-    const config = resolvePublicScoreDatabaseConfig({
+    const config = resolvePublicSnapshotDatabaseConfig({
       ...baseEnvironment,
       NODE_ENV: "production",
       VIBERACING_WEB_DATABASE_HOST: "scores.db.example",
@@ -88,7 +88,7 @@ describe("public score database configuration", () => {
     "permits explicit cleartext only on a non-production loopback host: %s",
     (host) => {
       expect(
-        resolvePublicScoreDatabaseConfig({
+        resolvePublicSnapshotDatabaseConfig({
           ...baseEnvironment,
           VIBERACING_WEB_DATABASE_HOST: host,
         }).ssl,
@@ -145,7 +145,7 @@ describe("public score database configuration", () => {
     );
 
     expectConfigurationError(environment, "transport_insecure");
-    expect(resolvePublicScoreDatabaseConfig({ ...baseEnvironment, NODE_ENV: "test" }).ssl).toBe(
+    expect(resolvePublicSnapshotDatabaseConfig({ ...baseEnvironment, NODE_ENV: "test" }).ssl).toBe(
       false,
     );
   });

@@ -41,8 +41,7 @@ VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base6
 VIBERACING_CAR_PROPOSALS_ENABLED=false
 VIBERACING_ENROLLMENT_ENABLED=false
 VIBERACING_PAIRING_ENABLED=false
-VIBERACING_PUBLIC_RANKING_ENABLED=false
-VIBERACING_TOKEN_RANKING_ENABLED=false
+VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false
 VIBERACING_SOURCE_CREATION_ENABLED=false
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
@@ -107,8 +106,8 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace(
-      "VIBERACING_TOKEN_RANKING_ENABLED=false",
-      "VIBERACING_TOKEN_RANKING_ENABLED=true",
+      "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false",
+      "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true",
     ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,
@@ -157,15 +156,6 @@ assert.match(
     goodEnvExample.replace(
       "VIBERACING_JOBS_SCHEDULER_ENABLED=false",
       "VIBERACING_JOBS_SCHEDULER_ENABLED=true",
-    ),
-  ).join("\n"),
-  /must retain the reviewed public-safe example value/,
-);
-assert.match(
-  validateEnvExampleText(
-    goodEnvExample.replace(
-      "VIBERACING_PUBLIC_RANKING_ENABLED=false",
-      "VIBERACING_PUBLIC_RANKING_ENABLED=true",
     ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,

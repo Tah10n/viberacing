@@ -255,7 +255,7 @@ describe("validation resource and exception safety", () => {
     expect(
       validateContract(
         arraySchema,
-        Array.from({ length: 65 }, () => 1),
+        Array.from({ length: 101 }, () => 1),
         {
           maxArrayItems: 0,
         },

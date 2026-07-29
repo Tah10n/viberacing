@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  createPublicScoreAdmission,
-  PublicScoreAdmissionConfigurationError,
-} from "./public-score-admission";
+  createPublicSnapshotAdmission,
+  PublicSnapshotAdmissionConfigurationError,
+} from "./public-snapshot-admission";
 
-describe("public score admission", () => {
+describe("public snapshot admission", () => {
   it.each([0, -1, 1.5, 33, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects an unsafe concurrency limit: %o",
     (limit) => {
-      expect(() => createPublicScoreAdmission(limit)).toThrow(
-        PublicScoreAdmissionConfigurationError,
+      expect(() => createPublicSnapshotAdmission(limit)).toThrow(
+        PublicSnapshotAdmissionConfigurationError,
       );
     },
   );
 
   it("admits only the fixed active budget and releases leases idempotently", () => {
-    const admission = createPublicScoreAdmission(2);
+    const admission = createPublicSnapshotAdmission(2);
     const first = admission.tryAcquire();
     const second = admission.tryAcquire();
 

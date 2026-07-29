@@ -29,7 +29,7 @@
       "revision": 5,
       "name": "seasons_ranking_and_snapshots",
       "path": "database/migrations/0005_seasons_ranking_and_snapshots.sql",
-      "sha256": "f7df8e65f3afea707c5f43d32d7063c560e95c026d02c2c17151852621750c2e"
+      "sha256": "9ce5d43e971ebd1930ceef37e3453dccfa4960fe25cdf9d5419cc1be2df0a41a"
     },
     {
       "revision": 6,

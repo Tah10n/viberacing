@@ -8,8 +8,10 @@ apply.
 
 - `lib/race-data.ts` is synthetic test/demo input only. Never paste exports, logs, account data, or
   workstation-derived values into it.
-- Client-facing `SyntheticRacePayload` contains scores and presentation fields, not raw tokens or
-  source/account identifiers. Keep raw activity on the server side of the page boundary.
+- Client-facing leaderboard/race payloads contain exact decimal token strings and public
+  presentation fields, never source/account/device identifiers or raw daily observations. Do not
+  approximate an exact decimal; a transitional visual adapter may accept only a proven safe integer,
+  and the final semantic leaderboard must keep the canonical string.
 - Community results are self-reported. Keep the disclaimer visible and Verified mode unreachable.
 - `CarRecipe` remains a closed enum with fixed repository-owned output. Do not add arbitrary text,
   markup, styles, colors, files, SVG, or URLs.
@@ -20,11 +22,10 @@ apply.
   recipe. They may only create or replace the pending exact recipe through the dedicated body-bound
   signed route after active source/device revalidation and nonce consumption; they cannot read,
   approve, reject, or activate it. Physical expired-row cleanup is a separate bounded Jobs
-  capability. The public race projection may expose only the exact current active recipe for an
-  `active` profile. The separate status projection may add only complete-UTC-day freshness and the
-  preference-gated derived streak; keep exact receipt time, daily scores, preferences, proposal
-  identity, state, and timestamps private and both older contracts unchanged. The repository Agent
-  Skill is only a local reducer into the same fixed device command and creates no Web route or
+  capability. A public leaderboard participant or profile summary may expose only the exact current
+  active recipe for an `active` profile; explicit `null` means no active recipe. Keep exact receipt
+  time, daily totals, preferences, proposal identity, state, and timestamps private. The repository
+  Agent Skill is only a local reducer into the same fixed device command and creates no Web route or
   authority. Combined synthetic scheduler/PostgreSQL cleanup evidence exists; do not claim a
   deployed cleanup cadence, additional agent service ingress, production login, or deployment until
   separate evidence exists.
@@ -48,28 +49,24 @@ apply.
   fingerprinting, or account state to local storage.
 - Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
   remote asset, or capability merely to silence a failure.
-- Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
+- Keep compose `DATABASE_*` owner credentials out of Web code. The public-snapshot adapter uses only
   `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
   Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
-  wire it outside the four exact `/v1/community/scores`, `/v1/community/race`,
-  `/v1/community/race/status`, and `/v1/community/tokens` boundaries.
+  wire it outside the three exact `GET /v1/leaderboards/current`,
+  `GET /v1/leaderboards/{seasonStart}`, and `GET /v1/profiles/{handle}` boundaries. Public reads
+  consume only materialized snapshot payloads and must never aggregate raw ranking state.
 - Keep `auto_explain` and plan-log access confined to the opt-in disposable Web PostgreSQL harness.
   Only its synthetic owner may provision database-scoped, parameter-disabled capture for the narrow
   synthetic login; product Web code must not load it, alter settings, consume plans, or create a
-  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, eight exact
-  adapter/projection oracle classes, and container-bound deletion. Do not claim the small fixed
-  fixture is representative load, latency, capacity, production statistics, monitoring, or
-  deployment.
-- Keep all three public ranking GETs behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` resolved
-  once per route-module evaluation. Every alternate or unreadable state must return the existing
-  generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
-  the tracked example false. Do not add a truthy/default-on parser, per-request environment read,
-  alternate enable source, or claim dynamic/deployed route and cache denial.
-- Keep the direct-token GET independently behind exact `VIBERACING_TOKEN_RANKING_ENABLED=true`
+  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, six exact
+  adapter/projection oracle classes, bounded small-table planner variance, and container-bound
+  deletion. The 10,001-profile fixture is synthetic scale evidence only; do not claim production
+  latency, capacity, statistics, monitoring, or deployment.
+- Keep all three public snapshot GETs behind exact `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true`
   resolved once per route-module evaluation. Every alternate or unreadable state must return the
-  same generic 503 before URL/query/header parsing, admission acquisition, or store construction;
-  keep the tracked example false. Do not let this decision enable or disable the three compatible
-  score routes.
+  existing generic 503 before URL/query/header parsing, admission acquisition, or store
+  construction; keep the tracked example false. Do not add a truthy/default-on parser, per-request
+  environment read, alternate enable source, or claim dynamic/deployed route and cache denial.
 - Keep connector pairing start/poll and signed-in approval options/verification behind exact
   `VIBERACING_PAIRING_ENABLED=true` resolved once per route-module evaluation. Disabled POST may
   cancel its body but must return the existing generic 503 before request parsing, runtime/service
@@ -155,9 +152,11 @@ apply.
 - Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
   correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
   CORS/auth/retry semantics to the common problem-response boundary.
-- The score route must continue to reject duplicate/unknown query parameters, validate
-  `CommunityScoreQueryV1`, negotiate `Accept`, acquire bounded admission before database work, keep
-  it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
+- Public snapshot routes must reject duplicate/unknown query and path values, negotiate bounded
+  `Accept` and `If-None-Match`, acquire four-call no-queue admission before database work, and
+  retain it until settlement. Successful open snapshots use the reviewed shared-cache policy and
+  payload-bound ETag; immutable cache is allowed only for a finalized historical URL. Problems are
+  generic `no-store`, and every response remains same-origin with no cookies or CORS.
 - Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
   material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
   detail. The activation application may call activation only through the closed ADR 0027
@@ -207,12 +206,14 @@ production build; it does not replace manual image review or cross-browser relea
 The PostgreSQL integration command is an opt-in Docker-backed synthetic gate, not part of root
 `verify`. It builds and starts the emitted standalone Next production boundary only on loopback,
 bundles the reviewed `pg` driver, creates one ephemeral self-signed DNS certificate plus disposable
-narrow and deliberately widened Web logins, checks all four public score/race/status/token
-contracts, TLS 1.2/1.3, full private-table non-mutation, and eight plan oracles, and proves the
-four-request no-queue boundary with a controlled database lock plus a rejected fifth request. It
-removes every ephemeral key, process/container/network/storage resource. It does not prove a
-deployment certificate/login, external TLS/edge path, cache, edge policy, monitoring, load/capacity,
-real-user data, or deployment.
+narrow and deliberately widened Web logins, creates 10,001 profiles with 30,003 AgentAccounts,
+builds 100 current snapshot pages across a complete historical seven-day scale window, checks the
+three final routes plus four absent legacy routes, TLS 1.2/1.3, exact contracts, ETag/304/cache
+policy, full private-table non-mutation, zero target-fixture temp I/O, and six plan oracles, and
+proves the four-request no-queue boundary with a controlled database lock plus a rejected fifth
+request. It removes every ephemeral key, process/container/network/storage resource. It does not
+prove a deployment certificate/login, external TLS/edge path, edge policy, monitoring,
+representative production capacity, real-user data, or deployment.
 
 Use `pnpm run verify:release` only for release/publication preparation or broad cross-cutting work.
 Focused commands plus the root development gate do not replace the staged public-data scan and

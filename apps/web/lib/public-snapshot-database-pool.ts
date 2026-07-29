@@ -2,21 +2,21 @@ import "server-only";
 
 import { Pool } from "pg";
 
-import type { PublicScoreDatabaseConfig } from "./public-score-database-config";
+import type { PublicSnapshotDatabaseConfig } from "./public-snapshot-database-config";
 
-export type PublicScoreDatabasePoolSignal = "idle_client_error";
-export type PublicScoreDatabasePoolSignalSink = (
-  signal: PublicScoreDatabasePoolSignal,
+export type PublicSnapshotDatabasePoolSignal = "idle_client_error";
+export type PublicSnapshotDatabasePoolSignalSink = (
+  signal: PublicSnapshotDatabasePoolSignal,
 ) => Promise<void> | void;
 
-export interface PublicScoreDatabaseClient {
+export interface PublicSnapshotDatabaseClient {
   query(text: string, values?: readonly unknown[]): Promise<unknown>;
   release(destroy?: boolean): void;
 }
 
-export interface PublicScoreDatabasePool {
+export interface PublicSnapshotDatabasePool {
   close(): Promise<void>;
-  connect(): Promise<PublicScoreDatabaseClient>;
+  connect(): Promise<PublicSnapshotDatabaseClient>;
 }
 
 interface NodePostgresPool {
@@ -30,15 +30,15 @@ interface NodePostgresClient {
   release(destroy?: boolean): void;
 }
 
-type NodePostgresPoolFactory = (config: PublicScoreDatabaseConfig) => NodePostgresPool;
+type NodePostgresPoolFactory = (config: PublicSnapshotDatabaseConfig) => NodePostgresPool;
 
-function defaultPoolFactory(config: PublicScoreDatabaseConfig): NodePostgresPool {
+function defaultPoolFactory(config: PublicSnapshotDatabaseConfig): NodePostgresPool {
   return new Pool(config);
 }
 
 function signalSafely(
-  sink: PublicScoreDatabasePoolSignalSink | undefined,
-  signal: PublicScoreDatabasePoolSignal,
+  sink: PublicSnapshotDatabasePoolSignalSink | undefined,
+  signal: PublicSnapshotDatabasePoolSignal,
 ): void {
   try {
     const result = sink?.(signal);
@@ -50,7 +50,7 @@ function signalSafely(
   }
 }
 
-function wrapClient(client: NodePostgresClient): PublicScoreDatabaseClient {
+function wrapClient(client: NodePostgresClient): PublicSnapshotDatabaseClient {
   return Object.freeze({
     async query(text: string, values: readonly unknown[] = []): Promise<unknown> {
       const result = await client.query({ text, values: [...values] });
@@ -62,11 +62,11 @@ function wrapClient(client: NodePostgresClient): PublicScoreDatabaseClient {
   });
 }
 
-export function createPublicScoreDatabasePool(
-  config: PublicScoreDatabaseConfig,
-  signalSink?: PublicScoreDatabasePoolSignalSink,
+export function createPublicSnapshotDatabasePool(
+  config: PublicSnapshotDatabaseConfig,
+  signalSink?: PublicSnapshotDatabasePoolSignalSink,
   poolFactory: NodePostgresPoolFactory = defaultPoolFactory,
-): PublicScoreDatabasePool {
+): PublicSnapshotDatabasePool {
   const pool = poolFactory(config);
   pool.on("error", () => {
     signalSafely(signalSink, "idle_client_error");
@@ -76,7 +76,7 @@ export function createPublicScoreDatabasePool(
     async close(): Promise<void> {
       await pool.end();
     },
-    async connect(): Promise<PublicScoreDatabaseClient> {
+    async connect(): Promise<PublicSnapshotDatabaseClient> {
       return wrapClient(await pool.connect());
     },
   });

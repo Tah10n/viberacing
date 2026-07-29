@@ -17,12 +17,12 @@ const portPattern = /^[1-9][0-9]{0,4}$/;
 const minimumPasswordLength = 16;
 const maximumPasswordLength = 1_024;
 
-export const publicScoreDatabaseConcurrencyLimit = 4;
-export const publicScoreDatabaseConnectionTimeoutMs = 2_000;
-export const publicScoreDatabaseQueryTimeoutMs = 6_000;
-export const publicScoreDatabaseStatementTimeoutMs = 5_000;
+export const publicSnapshotDatabaseConcurrencyLimit = 4;
+export const publicSnapshotDatabaseConnectionTimeoutMs = 2_000;
+export const publicSnapshotDatabaseQueryTimeoutMs = 6_000;
+export const publicSnapshotDatabaseStatementTimeoutMs = 5_000;
 
-export type PublicScoreDatabaseConfigurationErrorCode =
+export type PublicSnapshotDatabaseConfigurationErrorCode =
   | "database_invalid"
   | "environment_unreadable"
   | "host_invalid"
@@ -32,21 +32,21 @@ export type PublicScoreDatabaseConfigurationErrorCode =
   | "transport_insecure"
   | "user_invalid";
 
-export class PublicScoreDatabaseConfigurationError extends Error {
-  readonly code: PublicScoreDatabaseConfigurationErrorCode;
+export class PublicSnapshotDatabaseConfigurationError extends Error {
+  readonly code: PublicSnapshotDatabaseConfigurationErrorCode;
 
-  constructor(code: PublicScoreDatabaseConfigurationErrorCode) {
-    super("Public score database configuration is invalid.");
-    this.name = "PublicScoreDatabaseConfigurationError";
+  constructor(code: PublicSnapshotDatabaseConfigurationErrorCode) {
+    super("Public snapshot database configuration is invalid.");
+    this.name = "PublicSnapshotDatabaseConfigurationError";
     this.code = code;
   }
 }
 
-export interface PublicScoreDatabaseConfig {
+export interface PublicSnapshotDatabaseConfig {
   readonly allowExitOnIdle: true;
-  readonly application_name: "viberacing-web-public-score";
+  readonly application_name: "viberacing-web-public-snapshot";
   readonly client_encoding: "UTF8";
-  readonly connectionTimeoutMillis: typeof publicScoreDatabaseConnectionTimeoutMs;
+  readonly connectionTimeoutMillis: typeof publicSnapshotDatabaseConnectionTimeoutMs;
   readonly database: string;
   readonly host: string;
   readonly idle_in_transaction_session_timeout: 5_000;
@@ -54,28 +54,28 @@ export interface PublicScoreDatabaseConfig {
   readonly keepAlive: true;
   readonly keepAliveInitialDelayMillis: 5_000;
   readonly lock_timeout: 1_000;
-  readonly max: typeof publicScoreDatabaseConcurrencyLimit;
+  readonly max: typeof publicSnapshotDatabaseConcurrencyLimit;
   readonly maxLifetimeSeconds: 300;
   readonly maxUses: 1_000;
   readonly min: 0;
   readonly options: "-c role=viberacing_web -c search_path=pg_catalog,pg_temp -c default_transaction_read_only=on";
   readonly password: string;
   readonly port: number;
-  readonly query_timeout: typeof publicScoreDatabaseQueryTimeoutMs;
+  readonly query_timeout: typeof publicSnapshotDatabaseQueryTimeoutMs;
   readonly ssl:
     | false
     | Readonly<{
         minVersion: "TLSv1.2";
         rejectUnauthorized: true;
       }>;
-  readonly statement_timeout: typeof publicScoreDatabaseStatementTimeoutMs;
+  readonly statement_timeout: typeof publicSnapshotDatabaseStatementTimeoutMs;
   readonly user: string;
 }
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
-function fail(code: PublicScoreDatabaseConfigurationErrorCode): never {
-  throw new PublicScoreDatabaseConfigurationError(code);
+function fail(code: PublicSnapshotDatabaseConfigurationErrorCode): never {
+  throw new PublicSnapshotDatabaseConfigurationError(code);
 }
 
 function readEnvironmentValue(environment: Environment, key: string): string | undefined {
@@ -106,7 +106,7 @@ function validHost(value: string | undefined): value is string {
   );
 }
 
-function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
+function buildConfig(environment: Environment): PublicSnapshotDatabaseConfig {
   const host = readEnvironmentValue(environment, environmentKeys.host);
   const portValue = readEnvironmentValue(environment, environmentKeys.port);
   const database = readEnvironmentValue(environment, environmentKeys.database);
@@ -135,7 +135,7 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
     fail("password_invalid");
   }
 
-  let ssl: PublicScoreDatabaseConfig["ssl"];
+  let ssl: PublicSnapshotDatabaseConfig["ssl"];
   if (tlsMode === "disable") {
     const loopback = host === "localhost" || host === "127.0.0.1" || host === "::1";
     const explicitLocalEnvironment =
@@ -153,11 +153,11 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
     fail("tls_mode_invalid");
   }
 
-  const config: PublicScoreDatabaseConfig = {
+  const config: PublicSnapshotDatabaseConfig = {
     allowExitOnIdle: true,
-    application_name: "viberacing-web-public-score",
+    application_name: "viberacing-web-public-snapshot",
     client_encoding: "UTF8",
-    connectionTimeoutMillis: publicScoreDatabaseConnectionTimeoutMs,
+    connectionTimeoutMillis: publicSnapshotDatabaseConnectionTimeoutMs,
     database,
     host,
     idle_in_transaction_session_timeout: 5_000,
@@ -165,7 +165,7 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
     keepAlive: true,
     keepAliveInitialDelayMillis: 5_000,
     lock_timeout: 1_000,
-    max: publicScoreDatabaseConcurrencyLimit,
+    max: publicSnapshotDatabaseConcurrencyLimit,
     maxLifetimeSeconds: 300,
     maxUses: 1_000,
     min: 0,
@@ -173,9 +173,9 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
       "-c role=viberacing_web -c search_path=pg_catalog,pg_temp -c default_transaction_read_only=on",
     password,
     port,
-    query_timeout: publicScoreDatabaseQueryTimeoutMs,
+    query_timeout: publicSnapshotDatabaseQueryTimeoutMs,
     ssl,
-    statement_timeout: publicScoreDatabaseStatementTimeoutMs,
+    statement_timeout: publicSnapshotDatabaseStatementTimeoutMs,
     user,
   };
   Object.defineProperty(config, "password", {
@@ -193,13 +193,13 @@ function buildConfig(environment: Environment): PublicScoreDatabaseConfig {
   return Object.freeze(config);
 }
 
-export function resolvePublicScoreDatabaseConfig(
+export function resolvePublicSnapshotDatabaseConfig(
   environment: Environment = process.env,
-): PublicScoreDatabaseConfig {
+): PublicSnapshotDatabaseConfig {
   try {
     return buildConfig(environment);
   } catch (error) {
-    if (error instanceof PublicScoreDatabaseConfigurationError) {
+    if (error instanceof PublicSnapshotDatabaseConfigurationError) {
       throw error;
     }
     fail("environment_unreadable");

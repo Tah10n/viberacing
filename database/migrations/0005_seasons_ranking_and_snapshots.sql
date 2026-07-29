@@ -331,6 +331,26 @@ CREATE TRIGGER leaderboard_snapshots_enforce_delete
 BEFORE DELETE ON viberacing_private.leaderboard_snapshots
 FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_delete();
 
+CREATE FUNCTION viberacing_private.enforce_snapshot_payload_insert()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM inserted_payload_rows AS inserted
+    LEFT JOIN viberacing_private.leaderboard_snapshots AS snapshot
+      ON snapshot.snapshot_id = inserted.snapshot_id
+    WHERE snapshot.state IS DISTINCT FROM 'building'
+  ) THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+  RETURN NULL;
+END
+$function$;
+
 CREATE FUNCTION viberacing_private.enforce_snapshot_payload_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -338,18 +358,6 @@ VOLATILE
 SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
-  IF TG_OP = 'INSERT' THEN
-    IF NOT EXISTS (
-      SELECT 1
-      FROM viberacing_private.leaderboard_snapshots AS snapshot
-      WHERE snapshot.snapshot_id = NEW.snapshot_id
-        AND snapshot.state = 'building'
-    ) THEN
-      PERFORM viberacing_private.operation_failed();
-    END IF;
-    RETURN NEW;
-  END IF;
-
   IF TG_OP = 'DELETE'
     AND current_setting('viberacing.snapshot_delete', true) = OLD.snapshot_id
   THEN
@@ -361,57 +369,122 @@ BEGIN
 END
 $function$;
 
+CREATE TRIGGER leaderboard_snapshot_pages_insert_guard
+AFTER INSERT ON viberacing_private.leaderboard_snapshot_pages
+REFERENCING NEW TABLE AS inserted_payload_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_insert();
+
 CREATE TRIGGER leaderboard_snapshot_pages_immutable
-BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_pages
+BEFORE UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_pages
 FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_mutation();
+
+CREATE TRIGGER leaderboard_snapshot_profiles_insert_guard
+AFTER INSERT ON viberacing_private.leaderboard_snapshot_profiles
+REFERENCING NEW TABLE AS inserted_payload_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_insert();
 
 CREATE TRIGGER leaderboard_snapshot_profiles_immutable
-BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_profiles
+BEFORE UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_profiles
 FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_mutation();
 
-CREATE FUNCTION viberacing_private.enforce_derived_total_mutation()
+CREATE FUNCTION viberacing_private.enforce_derived_total_insert()
 RETURNS trigger
 LANGUAGE plpgsql
 VOLATILE
 SET search_path = pg_catalog, pg_temp
 AS $function$
-DECLARE
-  v_season_start date;
-  v_trust_tier text;
 BEGIN
-  IF TG_OP = 'DELETE' THEN
-    v_season_start := OLD.season_start;
-    v_trust_tier := OLD.trust_tier;
-  ELSE
-    v_season_start := NEW.season_start;
-    v_trust_tier := NEW.trust_tier;
-  END IF;
   IF EXISTS (
     SELECT 1
-    FROM viberacing_private.seasons AS season
-    WHERE season.season_start = v_season_start
-      AND season.trust_tier = v_trust_tier
-      AND season.state = 'finalized'
-  ) AND NOT (
-    TG_OP = 'DELETE'
-    AND current_setting('viberacing.profile_purge', true) = OLD.profile_id::text
+    FROM inserted_derived_rows AS inserted
+    JOIN viberacing_private.seasons AS season
+      ON season.season_start = inserted.season_start
+      AND season.trust_tier = inserted.trust_tier
+    WHERE season.state = 'finalized'
   ) THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
-  IF TG_OP = 'DELETE' THEN
-    RETURN OLD;
-  END IF;
-  RETURN NEW;
+  RETURN NULL;
 END
 $function$;
 
-CREATE TRIGGER season_profile_totals_finalized_guard
-BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.season_profile_totals
-FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_derived_total_mutation();
+CREATE FUNCTION viberacing_private.enforce_derived_total_update()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM (
+      SELECT season_start, trust_tier FROM old_derived_rows
+      UNION
+      SELECT season_start, trust_tier FROM new_derived_rows
+    ) AS changed
+    JOIN viberacing_private.seasons AS season
+      ON season.season_start = changed.season_start
+      AND season.trust_tier = changed.trust_tier
+    WHERE season.state = 'finalized'
+  ) THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+  RETURN NULL;
+END
+$function$;
 
-CREATE TRIGGER season_profile_provider_totals_finalized_guard
-BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.season_profile_provider_totals
-FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_derived_total_mutation();
+CREATE FUNCTION viberacing_private.enforce_derived_total_delete()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM deleted_derived_rows AS deleted
+    JOIN viberacing_private.seasons AS season
+      ON season.season_start = deleted.season_start
+      AND season.trust_tier = deleted.trust_tier
+    WHERE season.state = 'finalized'
+      AND current_setting('viberacing.profile_purge', true)
+        IS DISTINCT FROM deleted.profile_id::text
+  ) THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+  RETURN NULL;
+END
+$function$;
+
+CREATE TRIGGER season_profile_totals_insert_guard
+AFTER INSERT ON viberacing_private.season_profile_totals
+REFERENCING NEW TABLE AS inserted_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_insert();
+
+CREATE TRIGGER season_profile_totals_update_guard
+AFTER UPDATE ON viberacing_private.season_profile_totals
+REFERENCING OLD TABLE AS old_derived_rows NEW TABLE AS new_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_update();
+
+CREATE TRIGGER season_profile_totals_delete_guard
+AFTER DELETE ON viberacing_private.season_profile_totals
+REFERENCING OLD TABLE AS deleted_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_delete();
+
+CREATE TRIGGER season_profile_provider_totals_insert_guard
+AFTER INSERT ON viberacing_private.season_profile_provider_totals
+REFERENCING NEW TABLE AS inserted_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_insert();
+
+CREATE TRIGGER season_profile_provider_totals_update_guard
+AFTER UPDATE ON viberacing_private.season_profile_provider_totals
+REFERENCING OLD TABLE AS old_derived_rows NEW TABLE AS new_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_update();
+
+CREATE TRIGGER season_profile_provider_totals_delete_guard
+AFTER DELETE ON viberacing_private.season_profile_provider_totals
+REFERENCING OLD TABLE AS deleted_derived_rows
+FOR EACH STATEMENT EXECUTE FUNCTION viberacing_private.enforce_derived_total_delete();
 
 CREATE FUNCTION viberacing_private.enforce_observation_seasons_open()
 RETURNS trigger
@@ -554,6 +627,7 @@ RETURNS text
 LANGUAGE plpgsql
 VOLATILE
 SET search_path = pg_catalog, pg_temp
+SET work_mem = '64MB'
 AS $function$
 DECLARE
   v_generated_at timestamptz := pg_catalog.clock_timestamp();
@@ -565,7 +639,6 @@ DECLARE
   v_payload_digest bytea;
   v_payload_inventory text;
   v_previous_snapshot_id text;
-  v_profile record;
   v_public_state text;
   v_race_count integer;
   v_revision bigint;
@@ -741,7 +814,6 @@ BEGIN
     p_finalized,
     v_participant_count
   );
-
   v_page_count := greatest(1, pg_catalog.ceil(v_participant_count / 100.0)::integer);
   FOR v_page_number IN 1..v_page_count LOOP
     SELECT coalesce(
@@ -952,87 +1024,86 @@ BEGIN
     v_payload_digest
   );
 
-  FOR v_profile IN
+  WITH provider_breakdowns AS MATERIALIZED (
     SELECT
-      profile.profile_id,
+      provider_total.profile_id,
+      pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'percentage',
+          provider_total.percentage,
+          'provider',
+          provider_total.provider_code
+        )
+        ORDER BY provider_total.provider_code
+      ) AS breakdown
+    FROM viberacing_private.season_profile_provider_totals AS provider_total
+    WHERE provider_total.season_start = v_season.season_start
+      AND provider_total.trust_tier = 'community'
+    GROUP BY provider_total.profile_id
+  ),
+  profile_payloads AS MATERIALIZED (
+    SELECT
       profile.handle,
-      profile.provider_breakdown_visible,
-      profile_total.weekly_token_total,
-      profile_total.rank_position,
-      profile_total.freshness_days
+      (
+        pg_catalog.jsonb_build_object(
+          'carRecipe',
+          NULL,
+          'freshnessDays',
+          profile_total.freshness_days,
+          'handle',
+          profile.handle,
+          'participantCount',
+          v_participant_count,
+          'rankPosition',
+          profile_total.rank_position,
+          'schemaVersion',
+          1,
+          'season',
+          pg_catalog.jsonb_build_object(
+            'seasonEnd',
+            v_season.season_end::text,
+            'seasonStart',
+            v_season.season_start::text,
+            'seasonState',
+            v_public_state
+          ),
+          'trustTier',
+          'community',
+          'weeklyTokenTotal',
+          profile_total.weekly_token_total::text
+        ) || CASE
+          WHEN profile.provider_breakdown_visible THEN
+            pg_catalog.jsonb_build_object(
+              'providerBreakdown',
+              coalesce(provider_breakdown.breakdown, jsonb '[]')
+            )
+          ELSE jsonb '{}'
+        END
+      )::text AS canonical_payload
     FROM viberacing_private.season_profile_totals AS profile_total
     JOIN viberacing_private.profiles AS profile
       ON profile.profile_id = profile_total.profile_id
+    LEFT JOIN provider_breakdowns AS provider_breakdown
+      ON provider_breakdown.profile_id = profile_total.profile_id
     WHERE profile_total.season_start = v_season.season_start
       AND profile_total.trust_tier = 'community'
       AND profile_total.rank_position IS NOT NULL
-    ORDER BY profile.handle
-  LOOP
-    v_payload := (
-      pg_catalog.jsonb_build_object(
-        'freshnessDays',
-        v_profile.freshness_days,
-        'handle',
-        v_profile.handle,
-        'participantCount',
-        v_participant_count,
-        'rankPosition',
-        v_profile.rank_position,
-        'schemaVersion',
-        1,
-        'season',
-        pg_catalog.jsonb_build_object(
-          'seasonEnd',
-          v_season.season_end::text,
-          'seasonStart',
-          v_season.season_start::text,
-          'seasonState',
-          v_public_state
-        ),
-        'trustTier',
-        'community',
-        'weeklyTokenTotal',
-        v_profile.weekly_token_total::text
-      ) || CASE
-        WHEN v_profile.provider_breakdown_visible THEN
-          pg_catalog.jsonb_build_object(
-            'providerBreakdown',
-            (
-              SELECT coalesce(
-                pg_catalog.jsonb_agg(
-                  pg_catalog.jsonb_build_object(
-                    'percentage',
-                    provider_total.percentage,
-                    'provider',
-                    provider_total.provider_code
-                  )
-                  ORDER BY provider_total.provider_code
-                ),
-                jsonb '[]'
-              )
-              FROM viberacing_private.season_profile_provider_totals AS provider_total
-              WHERE provider_total.season_start = v_season.season_start
-                AND provider_total.trust_tier = 'community'
-                AND provider_total.profile_id = v_profile.profile_id
-            )
-          )
-        ELSE jsonb '{}'
-      END
-    )::text;
-    v_payload_digest := pg_catalog.sha256(pg_catalog.convert_to(v_payload, 'UTF8'));
-    INSERT INTO viberacing_private.leaderboard_snapshot_profiles (
-      snapshot_id,
-      handle,
-      canonical_payload,
-      payload_digest
+  )
+  INSERT INTO viberacing_private.leaderboard_snapshot_profiles (
+    snapshot_id,
+    handle,
+    canonical_payload,
+    payload_digest
+  )
+  SELECT
+    v_snapshot_id,
+    profile_payload.handle,
+    profile_payload.canonical_payload,
+    pg_catalog.sha256(
+      pg_catalog.convert_to(profile_payload.canonical_payload, 'UTF8')
     )
-    VALUES (
-      v_snapshot_id,
-      v_profile.handle,
-      v_payload,
-      v_payload_digest
-    );
-  END LOOP;
+  FROM profile_payloads AS profile_payload
+  ORDER BY profile_payload.handle;
 
   IF (
     SELECT pg_catalog.count(*)
@@ -1400,7 +1471,7 @@ AS $function$
   SELECT
     page.canonical_payload,
     page.payload_digest,
-    snapshot.etag::text,
+    '"' || pg_catalog.encode(page.payload_digest, 'hex') || '"',
     snapshot.generated_at,
     snapshot.finalized
   FROM viberacing_private.leaderboard_published_snapshots AS published
@@ -1443,7 +1514,7 @@ AS $function$
   SELECT
     page.canonical_payload,
     page.payload_digest,
-    snapshot.etag::text,
+    '"' || pg_catalog.encode(page.payload_digest, 'hex') || '"',
     snapshot.generated_at,
     snapshot.finalized
   FROM viberacing_private.leaderboard_published_snapshots AS published
@@ -1477,7 +1548,7 @@ AS $function$
   SELECT
     page.canonical_payload,
     page.payload_digest,
-    snapshot.etag::text,
+    '"' || pg_catalog.encode(page.payload_digest, 'hex') || '"',
     snapshot.generated_at,
     snapshot.finalized
   FROM viberacing_private.leaderboard_published_snapshots AS published
@@ -1516,7 +1587,7 @@ AS $function$
   SELECT
     profile.canonical_payload,
     profile.payload_digest,
-    snapshot.etag::text,
+    '"' || pg_catalog.encode(profile.payload_digest, 'hex') || '"',
     snapshot.generated_at,
     snapshot.finalized
   FROM viberacing_private.leaderboard_published_snapshots AS published
@@ -1558,7 +1629,7 @@ AS $function$
   SELECT
     profile.canonical_payload,
     profile.payload_digest,
-    snapshot.etag::text,
+    '"' || pg_catalog.encode(profile.payload_digest, 'hex') || '"',
     snapshot.generated_at,
     snapshot.finalized
   FROM viberacing_private.leaderboard_published_snapshots AS published

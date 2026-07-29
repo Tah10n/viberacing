@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 
 import { validateManifest } from "./check-database.mjs";
 import {
-  assertPublicCommunityPlanEvidence,
+  assertPublicSnapshotPlanEvidence,
   parseAutoExplainPlans,
 } from "./web-query-plan-evidence.mjs";
 
@@ -44,7 +44,7 @@ const wideWebLogin = "viberacing_web_wide_login";
 const wideWebPassword = "synthetic-wide-web-integration-password";
 const extraRole = "viberacing_web_extra";
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
-const maximumResponseBytes = 16 * 1024;
+const maximumResponseBytes = 1024 * 1024;
 const maximumServerOutputBytes = 512 * 1024;
 const maximumBlockerOutputBytes = 64 * 1024;
 const maximumDatabaseLogBytes = 2 * 1024 * 1024;
@@ -54,32 +54,25 @@ const serverCloseTimeoutMs = 15_000;
 const databaseBlockerTimeoutMs = 10_000;
 const blockedQueryObservationTimeoutMs = 2_000;
 const admissionRejectionTimeoutMs = 1_500;
+const snapshotBuildCommandTimeoutMs = 300_000;
+const snapshotCatalogBudgetMs = 300_000;
 const databaseBlockerReadyMarker = "viberacing_web_admission_blocker_ready";
 
 const fixture = Object.freeze({
-  alphaProfileId: "00000000-0000-4000-8000-000000032101",
-  alphaSourceId: `src_${"W".repeat(22)}`,
-  betaProfileId: "00000000-0000-4000-8000-000000032102",
-  betaSourceId: `src_${"X".repeat(22)}`,
-  hiddenProfileId: "00000000-0000-4000-8000-000000032103",
+  hiddenProfileId: "00000000-0000-4000-8000-000000010001",
+  outsideTop32Handle: "racer09999",
+  participantCount: 10_000,
+  profileCount: 10_001,
 });
 const privateValueMarkers = Object.freeze([
-  ...Object.values(fixture),
+  fixture.hiddenProfileId,
   webLogin,
   webPassword,
   wideWebLogin,
   wideWebPassword,
   extraRole,
-  "web_hidden",
-  "900000000000032101",
-  "900000000000032102",
-  "900000000000032103",
-  `syn_${"W".repeat(22)}`,
-  `syn_${"X".repeat(22)}`,
-  `syn_${"Y".repeat(22)}`,
-  `syn_${"Z".repeat(22)}`,
-  `dev_${"W".repeat(22)}`,
-  `dev_${"X".repeat(22)}`,
+  "900000000000010001",
+  `syn_${"S".repeat(22)}`,
 ]);
 
 function derLength(length) {
@@ -297,8 +290,8 @@ function psqlArguments() {
   ];
 }
 
-function psql(sql, label) {
-  const result = docker(psqlArguments(), { input: sql, timeout: 30_000 });
+function psql(sql, label, timeout = 30_000) {
+  const result = docker(psqlArguments(), { input: sql, timeout });
   requireSuccess(result, label);
 }
 
@@ -321,7 +314,7 @@ function assertAutoExplainEvidence() {
     maximumBytes: maximumDatabaseLogBytes,
     privateMarkers: privateValueMarkers,
   });
-  assert.deepEqual(assertPublicCommunityPlanEvidence(plans), { evidencedPlanCount: 8 });
+  assert.deepEqual(assertPublicSnapshotPlanEvidence(plans), { evidencedPlanCount: 6 });
 }
 
 async function stopDatabaseReadBlocker(blocker) {
@@ -428,7 +421,7 @@ async function startDatabaseReadBlocker() {
   try {
     child.stdin.write(`BEGIN;
 SET LOCAL ROLE viberacing_owner;
-LOCK TABLE viberacing_private.season_entries IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE viberacing_private.leaderboard_snapshot_pages IN ACCESS EXCLUSIVE MODE;
 \\echo ${databaseBlockerReadyMarker}
 `);
     await waitWithDeadline(
@@ -446,7 +439,7 @@ LOCK TABLE viberacing_private.season_entries IN ACCESS EXCLUSIVE MODE;
   }
 }
 
-function readBlockedScoreQueryCount(label) {
+function readBlockedSnapshotQueryCount(label) {
   const value = psqlScalar(
     `SELECT pg_catalog.count(*)::text
 FROM pg_catalog.pg_stat_activity AS activity
@@ -456,7 +449,7 @@ WHERE activity.datname = '${databaseName}'
   AND activity.wait_event_type = 'Lock'
   AND pg_catalog.strpos(
     activity.query,
-    'viberacing_api.list_public_community_scores('
+    'viberacing_api.read_current_leaderboard_page('
   ) > 0;`,
     label,
   );
@@ -483,7 +476,7 @@ JOIN pg_catalog.pg_stat_ssl AS tls
   ON tls.pid = activity.pid
 WHERE activity.datname = '${databaseName}'
   AND activity.usename = '${webLogin}'
-  AND activity.application_name = 'viberacing-web-public-score';`,
+  AND activity.application_name = 'viberacing-web-public-snapshot';`,
       label,
     ),
   );
@@ -492,17 +485,17 @@ WHERE activity.datname = '${databaseName}'
   assert.equal(observation.allTls, true);
 }
 
-async function waitForBlockedScoreQueries() {
+async function waitForBlockedSnapshotQueries() {
   const deadline = Date.now() + blockedQueryObservationTimeoutMs;
   let lastCount = 0;
   while (Date.now() < deadline) {
-    lastCount = readBlockedScoreQueryCount("blocked Web score-query observation");
+    lastCount = readBlockedSnapshotQueryCount("blocked Web snapshot-query observation");
     if (lastCount === 4) {
       return;
     }
     await sleep(25);
   }
-  throw new Error(`expected four blocked Web score queries, observed ${lastCount}`);
+  throw new Error(`expected four blocked Web snapshot queries, observed ${lastCount}`);
 }
 
 function buildWorkspace(relativePath, label) {
@@ -520,8 +513,7 @@ function nextProcessEnvironment() {
     CI: "1",
     NEXT_TELEMETRY_DISABLED: "1",
     NODE_ENV: "production",
-    VIBERACING_PUBLIC_RANKING_ENABLED: "true",
-    VIBERACING_TOKEN_RANKING_ENABLED: "true",
+    VIBERACING_PUBLIC_SNAPSHOTS_ENABLED: "true",
   };
   for (const key of ["SystemRoot", "TEMP", "TMP", "WINDIR"]) {
     const value = process.env[key];
@@ -542,6 +534,7 @@ function buildWebApplication() {
   const result = run(process.execPath, [nextBin, "build"], {
     cwd: webRoot,
     env: nextProcessEnvironment(),
+    timeout: 300_000,
   });
   requireSuccess(result, "Web production build");
   const serverStats = lstatSync(standaloneServerPath);
@@ -687,7 +680,13 @@ BEGIN
     ORDER BY table_name
   LOOP
     EXECUTE pg_catalog.format(
-      'SELECT COALESCE(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(candidate) ORDER BY pg_catalog.to_jsonb(candidate)::text), ''[]''::jsonb) FROM %I.%I AS candidate',
+      'SELECT pg_catalog.jsonb_build_object(
+        ''count'', pg_catalog.count(*),
+        ''hashMax'', coalesce(pg_catalog.max(pg_catalog.hashtextextended(pg_catalog.to_jsonb(candidate)::text, 0)), 0),
+        ''hashMin'', coalesce(pg_catalog.min(pg_catalog.hashtextextended(pg_catalog.to_jsonb(candidate)::text, 0)), 0),
+        ''hashSum'', coalesce(pg_catalog.sum(pg_catalog.hashtextextended(pg_catalog.to_jsonb(candidate)::text, 0)::numeric), 0),
+        ''hashXor'', coalesce(pg_catalog.bit_xor(pg_catalog.hashtextextended(pg_catalog.to_jsonb(candidate)::text, 0)), 0)
+      ) FROM %I.%I AS candidate',
       'viberacing_private',
       private_table.table_name
     )
@@ -879,7 +878,7 @@ async function startConfiguredProductionNextServer(
 
 async function readBoundedResponseBytes(response, path) {
   if (response.body === null) {
-    throw new Error(`${path} returned no readable body.`);
+    return Buffer.alloc(0);
   }
   const reader = response.body.getReader();
   const chunks = [];
@@ -915,29 +914,40 @@ async function readBoundedResponseBytes(response, path) {
   }
 }
 
-async function getJson(baseUrl, path, seasonStart, timeoutMs = serverRequestTimeoutMs) {
-  const response = await fetch(`${baseUrl}${path}?seasonStart=${seasonStart}`, {
-    headers: { accept: "application/json" },
+async function requestBounded(
+  baseUrl,
+  path,
+  { accept = "application/json", ifNoneMatch, timeoutMs = serverRequestTimeoutMs } = {},
+) {
+  const headers = { accept };
+  if (ifNoneMatch !== undefined) {
+    headers["if-none-match"] = ifNoneMatch;
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers,
     redirect: "error",
     signal: AbortSignal.timeout(timeoutMs),
   });
   const bodyBytes = await readBoundedResponseBytes(response, path);
-  assert.ok(bodyBytes.byteLength > 0, `${path} must return a body`);
   let body;
+  let bodyText = "";
   try {
-    body = JSON.parse(bodyBytes.toString("utf8"));
-  } catch {
-    throw new Error(`${path} returned malformed JSON.`);
+    bodyText = bodyBytes.toString("utf8");
+    const contentType = response.headers.get("content-type") ?? "";
+    if (
+      bodyText.length > 0 &&
+      /(?:application\/json|application\/problem\+json)/i.test(contentType)
+    ) {
+      body = JSON.parse(bodyText);
+    }
   } finally {
     bodyBytes.fill(0);
   }
-  return Object.freeze({ body, headers: response.headers, status: response.status });
+  return Object.freeze({ body, bodyText, headers: response.headers, status: response.status });
 }
 
-function assertCommonResponseHeaders(result) {
-  assert.equal(result.headers.get("cache-control"), "no-store");
+function assertSecurityResponseHeaders(result) {
   assert.match(result.headers.get("x-request-id") ?? "", requestIdPattern);
-  assert.match(result.headers.get("vary") ?? "", /(?:^|,\s*)Accept(?:,|$)/i);
   assert.equal(result.headers.get("access-control-allow-origin"), null);
   assert.equal(result.headers.get("set-cookie"), null);
   assert.equal(result.headers.get("x-powered-by"), null);
@@ -950,11 +960,14 @@ function assertNoPrivateResponseValues(body) {
   const serialized = JSON.stringify(body);
   for (const marker of [
     ...privateValueMarkers,
-    "accepted_snapshot_id",
+    "accepted_observation_id",
     "accepted_sync_id",
+    "agent_account_id",
+    "account_fingerprint_digest",
+    "device_id",
     "github_user_id",
     "profile_id",
-    "source_id",
+    "private_label",
   ]) {
     assert.equal(
       serialized.includes(marker),
@@ -964,517 +977,650 @@ function assertNoPrivateResponseValues(body) {
   }
 }
 
-function assertUnavailable(result, validateProblemDetailsV1) {
-  assert.equal(result.status, 503);
+function assertProblem(result, expectedStatus, expectedCode, validateProblemDetailsV1) {
+  assert.equal(result.status, expectedStatus);
   assert.equal(result.headers.get("content-type"), "application/problem+json; charset=utf-8");
-  assertCommonResponseHeaders(result);
+  assert.equal(result.headers.get("cache-control"), "no-store");
+  assertSecurityResponseHeaders(result);
   const requestId = result.headers.get("x-request-id");
-  assert.deepEqual(result.body, {
-    schemaVersion: 1,
-    requestId,
-    errorCode: "temporarily_unavailable",
-    title: "Temporarily unavailable",
-    status: 503,
-    retryable: true,
-  });
+  assert.equal(result.body?.schemaVersion, 1);
+  assert.equal(result.body?.requestId, requestId);
+  assert.equal(result.body?.errorCode, expectedCode);
+  assert.equal(result.body?.status, expectedStatus);
+  assert.equal(typeof result.body?.title, "string");
+  assert.equal(typeof result.body?.retryable, "boolean");
   assert.equal(validateProblemDetailsV1(result.body).ok, true);
   assertNoPrivateResponseValues(result.body);
 }
 
-function assertSuccess(result, expected, validate) {
+function assertSnapshotSuccess(result, validate, expectedCacheControl, expectedFreshness) {
   assert.equal(result.status, 200);
   assert.equal(result.headers.get("content-type"), "application/json; charset=utf-8");
-  assertCommonResponseHeaders(result);
-  assert.deepEqual(result.body, expected);
+  assert.equal(result.headers.get("cache-control"), expectedCacheControl);
+  assert.match(result.headers.get("etag") ?? "", /^"[a-f0-9]{64}"$/);
+  assert.match(result.headers.get("vary") ?? "", /(?:^|,\s*)Accept(?:,|$)/i);
+  const freshness = result.headers.get("x-viberacing-snapshot-freshness");
+  if (Array.isArray(expectedFreshness)) {
+    assert.equal(expectedFreshness.includes(freshness), true);
+  } else {
+    assert.equal(freshness, expectedFreshness);
+  }
+  assertSecurityResponseHeaders(result);
   assert.equal(validate(result.body).ok, true);
   assertNoPrivateResponseValues(result.body);
-}
-
-function seedSyntheticState(scoreSeasonStart, tokenSeasonStart) {
-  psql(
-    `BEGIN;
-SET LOCAL ROLE viberacing_owner;
-
-INSERT INTO viberacing_private.profiles (
-  profile_id,
-  github_user_id,
-  handle,
-  state,
-  streak_visible,
-  hidden_at,
-  deletion_requested_at
-)
-VALUES
-  (
-    '${fixture.alphaProfileId}',
-    900000000000032101,
-    'web_alpha',
-    'active',
-    true,
-    NULL,
-    NULL
-  ),
-  (
-    '${fixture.betaProfileId}',
-    900000000000032102,
-    'web_beta',
-    'active',
-    false,
-    NULL,
-    NULL
-  ),
-  (
-    '${fixture.hiddenProfileId}',
-    900000000000032103,
-    'web_hidden',
-    'hidden',
-    true,
-    pg_catalog.statement_timestamp(),
-    NULL
-  );
-
-INSERT INTO viberacing_private.profile_car_recipes (
-  profile_id,
-  schema_version,
-  chassis,
-  nose,
-  cockpit,
-  wing,
-  wheels,
-  palette,
-  trail,
-  seed
-)
-VALUES
-  (
-    '${fixture.alphaProfileId}',
-    1,
-    'formula',
-    'wedge',
-    'canopy',
-    'high',
-    'slick',
-    'magenta',
-    'spark',
-    321
-  ),
-  (
-    '${fixture.hiddenProfileId}',
-    1,
-    'roadster',
-    'classic',
-    'open',
-    'low',
-    'street',
-    'sunburst',
-    'grid',
-    323
-  );
-
-INSERT INTO viberacing_private.seasons (
-  season_start,
-  season_end,
-  score_version,
-  grace_ends_at
-)
-VALUES
-  (
-    DATE '${scoreSeasonStart}',
-    DATE '${scoreSeasonStart}' + 6,
-    'community_v1',
-    viberacing_private.community_season_grace_ends_at(DATE '${scoreSeasonStart}')
-  ),
-  (
-    DATE '${tokenSeasonStart}',
-    DATE '${tokenSeasonStart}' + 6,
-    'community_tokens_v1',
-    viberacing_private.community_season_grace_ends_at(DATE '${tokenSeasonStart}')
-  );
-
-INSERT INTO viberacing_private.season_entries (
-  season_start,
-  profile_id,
-  weekly_score,
-  active_days,
-  contributing_source_count,
-  rank_position,
-  display_order,
-  computed_at
-)
-VALUES
-  (
-    DATE '${scoreSeasonStart}',
-    '${fixture.hiddenProfileId}',
-    900,
-    7,
-    3,
-    1,
-    1,
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    DATE '${scoreSeasonStart}',
-    '${fixture.alphaProfileId}',
-    700,
-    6,
-    2,
-    2,
-    2,
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    DATE '${scoreSeasonStart}',
-    '${fixture.betaProfileId}',
-    500,
-    5,
-    1,
-    3,
-    3,
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    DATE '${tokenSeasonStart}',
-    '${fixture.hiddenProfileId}',
-    9000,
-    7,
-    3,
-    1,
-    1,
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    DATE '${tokenSeasonStart}',
-    '${fixture.alphaProfileId}',
-    1234,
-    7,
-    2,
-    2,
-    2,
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    DATE '${tokenSeasonStart}',
-    '${fixture.betaProfileId}',
-    1234,
-    5,
-    1,
-    2,
-    3,
-    pg_catalog.statement_timestamp()
-  );
-
-INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
-VALUES
-  ('${fixture.alphaSourceId}', '${fixture.alphaProfileId}', 'active'),
-  ('${fixture.betaSourceId}', '${fixture.betaProfileId}', 'active');
-
-INSERT INTO viberacing_private.source_day_values (
-  source_id,
-  codex_reported_date,
-  tokens,
-  accepted_snapshot_id,
-  accepted_sync_id,
-  accepted_device_id,
-  first_accepted_at,
-  last_accepted_at
-)
-VALUES
-  (
-    '${fixture.alphaSourceId}',
-    DATE '${scoreSeasonStart}',
-    1000,
-    NULL,
-    'syn_' || pg_catalog.repeat('W', 22),
-    'dev_' || pg_catalog.repeat('W', 22),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
-  ),
-  (
-    '${fixture.betaSourceId}',
-    DATE '${scoreSeasonStart}',
-    900,
-    NULL,
-    'syn_' || pg_catalog.repeat('X', 22),
-    'dev_' || pg_catalog.repeat('X', 22),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
-  ),
-  (
-    '${fixture.alphaSourceId}',
-    DATE '${tokenSeasonStart}',
-    1234,
-    NULL,
-    'syn_' || pg_catalog.repeat('Y', 22),
-    'dev_' || pg_catalog.repeat('W', 22),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
-  ),
-  (
-    '${fixture.betaSourceId}',
-    DATE '${tokenSeasonStart}',
-    1234,
-    NULL,
-    'syn_' || pg_catalog.repeat('Z', 22),
-    'dev_' || pg_catalog.repeat('X', 22),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC'),
-    ((pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::timestamp AT TIME ZONE 'UTC')
-  );
-
-INSERT INTO viberacing_private.season_daily_scores (
-  season_start,
-  profile_id,
-  score_date,
-  daily_score
-)
-SELECT
-  DATE '${scoreSeasonStart}',
-  profile_score.profile_id,
-  DATE '${scoreSeasonStart}' + day_record.day_offset,
-  CASE
-    WHEN day_record.day_offset < profile_score.positive_day_count THEN 100
-    ELSE 0
-  END::smallint
-FROM (
-  VALUES
-    ('${fixture.alphaProfileId}'::uuid, 7),
-    ('${fixture.betaProfileId}'::uuid, 5)
-) AS profile_score(profile_id, positive_day_count)
-CROSS JOIN pg_catalog.generate_series(0, 6) AS day_record(day_offset)
-UNION ALL
-SELECT
-  DATE '${tokenSeasonStart}',
-  profile_score.profile_id,
-  DATE '${tokenSeasonStart}' + day_record.day_offset,
-  CASE
-    WHEN day_record.day_offset < profile_score.positive_day_count THEN 200
-    ELSE 0
-  END::bigint
-FROM (
-  VALUES
-    ('${fixture.alphaProfileId}'::uuid, 7),
-    ('${fixture.betaProfileId}'::uuid, 5)
-) AS profile_score(profile_id, positive_day_count)
-CROSS JOIN pg_catalog.generate_series(0, 6) AS day_record(day_offset);
-
-COMMIT;`,
-    "synthetic Web public-ranking fixture",
-  );
 }
 
 function utcDateDifference(laterDate, earlierDate) {
   const later = Date.parse(`${laterDate}T00:00:00.000Z`);
   const earlier = Date.parse(`${earlierDate}T00:00:00.000Z`);
-  assert.equal(Number.isSafeInteger(later), true, `invalid later UTC date: ${laterDate}`);
-  assert.equal(Number.isSafeInteger(earlier), true, `invalid earlier UTC date: ${earlierDate}`);
+  assert.equal(Number.isFinite(later), true);
+  assert.equal(Number.isFinite(earlier), true);
   const difference = (later - earlier) / 86_400_000;
-  assert.equal(Number.isSafeInteger(difference), true, "UTC date difference must be integral");
+  assert.equal(Number.isSafeInteger(difference), true);
   return difference;
 }
 
-function expectedPages(scoreSeasonStart, tokenSeasonStart, observedDate, acceptedDate) {
-  const scoreSeasonEnd = new Date(Date.parse(`${scoreSeasonStart}T00:00:00.000Z`) + 6 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const tokenSeasonEnd = new Date(Date.parse(`${tokenSeasonStart}T00:00:00.000Z`) + 6 * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
-  const observedSeasonDay = utcDateDifference(observedDate, scoreSeasonStart);
-  const freshnessDays = Math.min(
-    65_535,
-    Math.max(0, utcDateDifference(observedDate, acceptedDate)),
+function readSyntheticCalendar() {
+  const calendar = JSON.parse(
+    psqlScalar(
+      `WITH current_season AS (
+  SELECT (
+    (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
+    - (
+      extract(
+        isodow FROM (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
+      )::integer - 1
+    )
+  ) AS season_start
+)
+SELECT pg_catalog.jsonb_build_object(
+  'currentSeasonStart', current_season.season_start::text,
+  'currentUsageDayOffset', (
+    (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
+      - current_season.season_start
+  ),
+  'historicalSeasonStart', (current_season.season_start - 14)::text
+)::text
+FROM current_season;`,
+      "synthetic snapshot calendar discovery",
+    ),
   );
-  assert.ok(observedSeasonDay >= 0, "the observed date must not precede the seeded season");
-  const streakDays = 7 + (observedDate <= scoreSeasonEnd ? Math.min(7, observedSeasonDay + 1) : 7);
-  const scoreParticipants = [
-    {
-      seasonStart: scoreSeasonStart,
-      seasonEnd: scoreSeasonEnd,
-      scoreVersion: "community_v1",
-      seasonFinalized: false,
-      handle: "web_alpha",
-      weeklyScore: 700,
-      activeDays: 6,
-      sourceCount: 2,
-      rankPosition: 1,
-      displayPosition: 1,
-    },
-    {
-      seasonStart: scoreSeasonStart,
-      seasonEnd: scoreSeasonEnd,
-      scoreVersion: "community_v1",
-      seasonFinalized: false,
-      handle: "web_beta",
-      weeklyScore: 500,
-      activeDays: 5,
-      sourceCount: 1,
-      rankPosition: 2,
-      displayPosition: 2,
-    },
-  ];
-  const alphaRecipe = {
-    schemaVersion: 1,
-    chassis: "formula",
-    nose: "wedge",
-    cockpit: "canopy",
-    wing: "high",
-    wheels: "slick",
-    palette: "magenta",
-    trail: "spark",
-    seed: 321,
-  };
-  const tokenParticipants = [
-    {
-      seasonStart: tokenSeasonStart,
-      seasonEnd: tokenSeasonEnd,
-      metricVersion: "community_tokens_v1",
-      seasonFinalized: false,
-      handle: "web_alpha",
-      weeklyTokenTotal: 1234,
-      activeDays: 7,
-      sourceCount: 2,
-      rankPosition: 1,
-      displayPosition: 1,
-      carRecipe: alphaRecipe,
-      freshnessDays,
-      streakDays: 7,
-    },
-    {
-      seasonStart: tokenSeasonStart,
-      seasonEnd: tokenSeasonEnd,
-      metricVersion: "community_tokens_v1",
-      seasonFinalized: false,
-      handle: "web_beta",
-      weeklyTokenTotal: 1234,
-      activeDays: 5,
-      sourceCount: 1,
-      rankPosition: 1,
-      displayPosition: 2,
-      freshnessDays,
-    },
-  ];
-  return Object.freeze({
-    race: {
-      schemaVersion: 1,
-      trustTier: "community",
-      selfReported: true,
-      participants: [
-        { ...scoreParticipants[0], carRecipe: alphaRecipe },
-        { ...scoreParticipants[1] },
-      ],
-    },
-    score: {
-      schemaVersion: 1,
-      trustTier: "community",
-      selfReported: true,
-      participants: scoreParticipants,
-    },
-    status: {
-      schemaVersion: 1,
-      trustTier: "community",
-      selfReported: true,
-      participants: [
-        {
-          ...scoreParticipants[0],
-          carRecipe: alphaRecipe,
-          freshnessDays,
-          streakDays,
-        },
-        { ...scoreParticipants[1], freshnessDays },
-      ],
-    },
-    token: {
-      schemaVersion: 1,
-      trustTier: "community",
-      selfReported: true,
-      participants: tokenParticipants,
-    },
-  });
+  assert.match(calendar.currentSeasonStart, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(calendar.historicalSeasonStart, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(Number.isSafeInteger(calendar.currentUsageDayOffset), true);
+  assert.ok(calendar.currentUsageDayOffset >= 0 && calendar.currentUsageDayOffset <= 6);
+  assert.equal(new Date(`${calendar.currentSeasonStart}T00:00:00.000Z`).getUTCDay(), 1);
+  assert.equal(new Date(`${calendar.historicalSeasonStart}T00:00:00.000Z`).getUTCDay(), 1);
+  assert.equal(utcDateDifference(calendar.currentSeasonStart, calendar.historicalSeasonStart), 14);
+  return Object.freeze(calendar);
 }
 
-function readCurrentUtcDate(label) {
-  const date = psqlScalar(
-    "SELECT (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date::text;",
-    label,
+function prepareSyntheticSnapshotScale(calendar) {
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+
+INSERT INTO viberacing_private.agent_accounting_revisions (
+  provider_code,
+  accounting_revision,
+  reader_contract_version,
+  scope_kind,
+  utc_date_semantics,
+  maximum_backfill_days,
+  minimum_connector_version,
+  enabled_for_new_accounts
+)
+VALUES (
+  'claude_code',
+  1,
+  'synthetic_scale_fixture_v1',
+  'agent_account',
+  'provider_utc_date',
+  35,
+  '0.0.0',
+  false
+);
+\\echo fixture_accounting_revision_ready
+
+INSERT INTO viberacing_private.profiles (
+  profile_id,
+  github_user_id,
+  handle,
+  locale,
+  theme,
+  motion_preference,
+  public_visibility,
+  provider_breakdown_visible,
+  state,
+  created_at,
+  updated_at,
+  hidden_at
+)
+SELECT
+  (
+    '00000000-0000-4000-8000-'
+      || pg_catalog.lpad(profile_number::text, 12, '0')
+  )::uuid,
+  900000000000000000::bigint + profile_number,
+  'racer' || pg_catalog.lpad(profile_number::text, 5, '0'),
+  CASE WHEN profile_number % 5 = 0 THEN 'ru' ELSE 'en' END,
+  CASE
+    WHEN profile_number % 3 = 0 THEN 'neon'
+    WHEN profile_number % 3 = 1 THEN 'classic'
+    ELSE 'mono'
+  END,
+  CASE WHEN profile_number % 7 = 0 THEN 'reduce' ELSE 'system' END,
+  'hidden',
+  false,
+  'enrolling',
+  '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC',
+  '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC',
+  '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC'
+FROM pg_catalog.generate_series(1, ${fixture.profileCount}) AS profile_number;
+
+UPDATE viberacing_private.profiles AS profile
+SET state = 'active',
+    public_visibility = CASE
+      WHEN profile.handle = 'racer10001' THEN 'hidden'
+      ELSE 'public'
+    END,
+    updated_at = profile.created_at + interval '1 second';
+\\echo fixture_profiles_ready
+
+WITH account_kinds AS (
+  SELECT *
+  FROM (
+    VALUES
+      ('c'::text, 'codex'::text, 'Codex Personal'::text),
+      ('d'::text, 'codex'::text, 'Codex Work'::text),
+      ('l'::text, 'claude_code'::text, 'Claude Code Work'::text)
+  ) AS value(account_prefix, provider_code, private_label)
+)
+INSERT INTO viberacing_private.agent_accounts (
+  agent_account_id,
+  profile_id,
+  provider_code,
+  accounting_revision,
+  scope_kind,
+  fingerprint_kind,
+  account_fingerprint_digest,
+  private_label,
+  identity_assurance,
+  state,
+  created_at,
+  state_changed_at
+)
+SELECT
+  'acc_' || account.account_prefix
+    || pg_catalog.lpad(profile_number::text, 21, '0'),
+  (
+    '00000000-0000-4000-8000-'
+      || pg_catalog.lpad(profile_number::text, 12, '0')
+  )::uuid,
+  account.provider_code,
+  1,
+  'agent_account',
+  'unavailable',
+  NULL,
+  account.private_label || ' ' || profile_number::text,
+  'community_local',
+  'active',
+  '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC',
+  '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC'
+FROM pg_catalog.generate_series(1, ${fixture.profileCount}) AS profile_number
+CROSS JOIN account_kinds AS account;
+\\echo fixture_accounts_ready
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  trust_tier,
+  season_end,
+  metric_version,
+  accounting_policy_version,
+  state,
+  opened_at,
+  grace_ends_at
+)
+VALUES
+  (
+    '${calendar.historicalSeasonStart}',
+    'community',
+    '${calendar.historicalSeasonStart}'::date + 6,
+    'provider_reported_tokens_v1',
+    'agent_account_cumulative_utc_v1',
+    'grace',
+    '${calendar.historicalSeasonStart}'::date::timestamp AT TIME ZONE 'UTC',
+    (
+      ('${calendar.historicalSeasonStart}'::date + 7)::timestamp AT TIME ZONE 'UTC'
+    ) + interval '48 hours'
+  ),
+  (
+    '${calendar.currentSeasonStart}',
+    'community',
+    '${calendar.currentSeasonStart}'::date + 6,
+    'provider_reported_tokens_v1',
+    'agent_account_cumulative_utc_v1',
+    'open',
+    '${calendar.currentSeasonStart}'::date::timestamp AT TIME ZONE 'UTC',
+    (
+      ('${calendar.currentSeasonStart}'::date + 7)::timestamp AT TIME ZONE 'UTC'
+    ) + interval '48 hours'
   );
-  assert.match(date, /^\d{4}-\d{2}-\d{2}$/);
-  return date;
+\\echo fixture_seasons_ready
+
+WITH account_values AS (
+  SELECT
+    account.agent_account_id,
+    substring(profile.handle FROM 6)::integer AS profile_number,
+    CASE substring(account.agent_account_id FROM 5 FOR 1)
+      WHEN 'c' THEN 5
+      WHEN 'd' THEN 3
+      ELSE 2
+    END AS account_weight
+  FROM viberacing_private.agent_accounts AS account
+  JOIN viberacing_private.profiles AS profile
+    ON profile.profile_id = account.profile_id
+),
+usage_values AS (
+  SELECT
+    account.agent_account_id,
+    '${calendar.currentSeasonStart}'::date + day_offset AS usage_date,
+    (
+      CASE
+        WHEN account.profile_number IN (1, 2) THEN 10000
+        ELSE 10002 - account.profile_number
+      END
+      * account.account_weight
+    )::numeric(30, 0) AS cumulative_token_total
+  FROM account_values AS account
+  CROSS JOIN pg_catalog.generate_series(
+    0,
+    ${calendar.currentUsageDayOffset}
+  ) AS day_offset
+  UNION ALL
+  SELECT
+    account.agent_account_id,
+    '${calendar.historicalSeasonStart}'::date + day_offset AS usage_date,
+    (
+      CASE
+        WHEN account.profile_number IN (1, 2) THEN 100
+        ELSE 10002 - account.profile_number
+      END
+      * account.account_weight
+    )::numeric(30, 0) AS cumulative_token_total
+  FROM account_values AS account
+  CROSS JOIN pg_catalog.generate_series(0, 6) AS day_offset
+)
+INSERT INTO viberacing_private.agent_account_day_totals (
+  agent_account_id,
+  usage_date,
+  cumulative_token_total,
+  accepted_observation_id,
+  accepted_sync_id,
+  accepted_device_id,
+  first_accepted_at,
+  last_accepted_at,
+  provenance_redacted_at
+)
+SELECT
+  usage.agent_account_id,
+  usage.usage_date,
+  usage.cumulative_token_total,
+  NULL,
+  'syn_${"S".repeat(22)}',
+  NULL,
+  usage.usage_date::timestamp AT TIME ZONE 'UTC',
+  usage.usage_date::timestamp AT TIME ZONE 'UTC',
+  usage.usage_date::timestamp AT TIME ZONE 'UTC'
+FROM usage_values AS usage;
+\\echo fixture_day_totals_ready
+
+INSERT INTO viberacing_private.ranking_refresh_outbox (
+  season_start,
+  trust_tier,
+  dirty_since,
+  last_observation_id,
+  attempt_count,
+  next_attempt_at,
+  state
+)
+VALUES
+  (
+    '${calendar.historicalSeasonStart}',
+    'community',
+    pg_catalog.clock_timestamp(),
+    NULL,
+    0,
+    pg_catalog.clock_timestamp(),
+    'pending'
+  ),
+  (
+    '${calendar.currentSeasonStart}',
+    'community',
+    pg_catalog.clock_timestamp(),
+    NULL,
+    0,
+    pg_catalog.clock_timestamp(),
+    'pending'
+  );
+\\echo fixture_outbox_ready
+
+COMMIT;`,
+    "10k multi-account multi-provider snapshot fixture",
+    120_000,
+  );
 }
 
-function readFixtureAcceptedDate() {
-  const acceptedDate = psqlScalar(
-    `SELECT CASE
-  WHEN pg_catalog.count(*) = 4
-    AND pg_catalog.count(
-      DISTINCT (source_value.last_accepted_at AT TIME ZONE 'UTC')::date
-    ) = 1
-  THEN pg_catalog.min(
-    (source_value.last_accepted_at AT TIME ZONE 'UTC')::date
-  )::text
-  ELSE ''
-END
-FROM viberacing_private.source_day_values AS source_value
-WHERE source_value.source_id IN ('${fixture.alphaSourceId}', '${fixture.betaSourceId}');`,
-    "synthetic Web accepted-date observation",
+function buildSyntheticSnapshots(calendar, contracts) {
+  psql("SELECT pg_catalog.pg_stat_reset();", "snapshot-build statistics reset");
+  const startedAt = Date.now();
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.refresh_next_dirty_community_season();
+COMMIT;`,
+    "historical snapshot refresh through Jobs capability",
+    snapshotBuildCommandTimeoutMs,
   );
-  assert.match(acceptedDate, /^\d{4}-\d{2}-\d{2}$/);
-  return acceptedDate;
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.refresh_next_dirty_community_season();
+COMMIT;`,
+    "current 10k snapshot refresh through Jobs capability",
+    snapshotBuildCommandTimeoutMs,
+  );
+  psql(
+    `BEGIN;
+SET LOCAL ROLE viberacing_jobs;
+SELECT * FROM viberacing_api.finalize_next_due_community_season();
+COMMIT;`,
+    "historical snapshot finalization through Jobs capability",
+    snapshotBuildCommandTimeoutMs,
+  );
+  const elapsedMilliseconds = Date.now() - startedAt;
+  assert.ok(
+    elapsedMilliseconds > 0 && elapsedMilliseconds <= snapshotCatalogBudgetMs,
+    `snapshot refresh exceeded the fixed ${snapshotCatalogBudgetMs}-millisecond scale budget (${elapsedMilliseconds}ms)`,
+  );
+
+  const tempBytes = psqlScalar(
+    `SELECT pg_catalog.pg_stat_force_next_flush();
+SELECT temp_bytes::text
+FROM pg_catalog.pg_stat_database
+WHERE datname = pg_catalog.current_database();`,
+    "snapshot-build temporary-I/O evidence",
+  );
+  assert.equal(tempBytes, "0", "the target snapshot fixture must not spill to temporary storage");
+
+  const state = JSON.parse(
+    psqlScalar(
+      `WITH current_snapshot AS (
+  SELECT published.snapshot_id
+  FROM viberacing_private.leaderboard_published_snapshots AS published
+  WHERE published.season_start = '${calendar.currentSeasonStart}'
+    AND published.trust_tier = 'community'
+),
+historical_snapshot AS (
+  SELECT published.snapshot_id
+  FROM viberacing_private.leaderboard_published_snapshots AS published
+  WHERE published.season_start = '${calendar.historicalSeasonStart}'
+    AND published.trust_tier = 'community'
+),
+required_indexes(index_name) AS (
+  VALUES
+    ('agent_account_day_totals_date_account_idx'),
+    ('agent_accounts_profile_provider_idx'),
+    ('leaderboard_published_snapshots_pkey'),
+    ('leaderboard_snapshot_pages_pkey'),
+    ('leaderboard_snapshot_profiles_pkey'),
+    ('leaderboard_snapshots_pkey'),
+    ('profiles_public_handle_idx'),
+    ('season_profile_totals_rank_idx')
+)
+SELECT pg_catalog.jsonb_build_object(
+  'accountCount', (
+    SELECT pg_catalog.count(*) FROM viberacing_private.agent_accounts
+  ),
+  'currentPageCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.leaderboard_snapshot_pages AS page
+    JOIN current_snapshot ON current_snapshot.snapshot_id = page.snapshot_id
+    WHERE page.page_kind = 'leaderboard_page'
+  ),
+  'currentParticipantCount', (
+    SELECT snapshot.participant_count
+    FROM viberacing_private.leaderboard_snapshots AS snapshot
+    JOIN current_snapshot ON current_snapshot.snapshot_id = snapshot.snapshot_id
+  ),
+  'dayCount', (
+    SELECT pg_catalog.count(DISTINCT total.usage_date)
+    FROM viberacing_private.agent_account_day_totals AS total
+    WHERE total.usage_date BETWEEN
+      '${calendar.historicalSeasonStart}'::date
+      AND '${calendar.historicalSeasonStart}'::date + 6
+  ),
+  'equalTopRank', (
+    SELECT pg_catalog.count(DISTINCT total.rank_position) = 1
+      AND pg_catalog.min(total.rank_position) = 1
+    FROM viberacing_private.season_profile_totals AS total
+    JOIN viberacing_private.profiles AS profile
+      ON profile.profile_id = total.profile_id
+    WHERE total.season_start = '${calendar.currentSeasonStart}'
+      AND total.trust_tier = 'community'
+      AND profile.handle IN ('racer00001', 'racer00002')
+  ),
+  'historicalFinalized', (
+    SELECT snapshot.finalized
+    FROM viberacing_private.leaderboard_snapshots AS snapshot
+    JOIN historical_snapshot ON historical_snapshot.snapshot_id = snapshot.snapshot_id
+  ),
+  'hiddenProfileSummaryCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.leaderboard_snapshot_profiles AS profile
+    JOIN current_snapshot ON current_snapshot.snapshot_id = profile.snapshot_id
+    WHERE profile.handle = 'racer10001'
+  ),
+  'maximumPageBytes', (
+    SELECT pg_catalog.max(pg_catalog.octet_length(page.canonical_payload))
+    FROM viberacing_private.leaderboard_snapshot_pages AS page
+    JOIN current_snapshot ON current_snapshot.snapshot_id = page.snapshot_id
+    WHERE page.page_kind = 'leaderboard_page'
+  ),
+  'minimumAccountsPerProfile', (
+    SELECT pg_catalog.min(account_count)
+    FROM (
+      SELECT pg_catalog.count(*) AS account_count
+      FROM viberacing_private.agent_accounts
+      GROUP BY profile_id
+    ) AS counts
+  ),
+  'outsideTop32SummaryCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.leaderboard_snapshot_profiles AS profile
+    JOIN current_snapshot ON current_snapshot.snapshot_id = profile.snapshot_id
+    WHERE profile.handle = '${fixture.outsideTop32Handle}'
+  ),
+  'providerCount', (
+    SELECT pg_catalog.count(DISTINCT total.provider_code)
+    FROM viberacing_private.season_profile_provider_totals AS total
+    WHERE total.season_start = '${calendar.currentSeasonStart}'
+      AND total.trust_tier = 'community'
+  ),
+  'requiredIndexCount', (
+    SELECT pg_catalog.count(*)
+    FROM pg_catalog.pg_indexes AS index_value
+    JOIN required_indexes
+      ON required_indexes.index_name = index_value.indexname
+    WHERE index_value.schemaname = 'viberacing_private'
+  ),
+  'snapshotBytes', (
+    SELECT
+      coalesce((
+        SELECT pg_catalog.sum(pg_catalog.octet_length(page.canonical_payload))
+        FROM viberacing_private.leaderboard_snapshot_pages AS page
+        JOIN current_snapshot ON current_snapshot.snapshot_id = page.snapshot_id
+      ), 0)
+      + coalesce((
+        SELECT pg_catalog.sum(pg_catalog.octet_length(profile.canonical_payload))
+        FROM viberacing_private.leaderboard_snapshot_profiles AS profile
+        JOIN current_snapshot ON current_snapshot.snapshot_id = profile.snapshot_id
+      ), 0)
+  ),
+  'top32Count', (
+    SELECT page.participant_count
+    FROM viberacing_private.leaderboard_snapshot_pages AS page
+    JOIN current_snapshot ON current_snapshot.snapshot_id = page.snapshot_id
+    WHERE page.page_kind = 'race_top32'
+      AND page.page_number = 1
+  )
+)::text;`,
+      "10k snapshot scale evidence",
+    ),
+  );
+  assert.equal(state.accountCount, fixture.profileCount * 3);
+  assert.equal(state.currentPageCount, 100);
+  assert.equal(state.currentParticipantCount, fixture.participantCount);
+  assert.equal(state.dayCount, 7);
+  assert.equal(state.equalTopRank, true);
+  assert.equal(state.historicalFinalized, true);
+  assert.equal(state.hiddenProfileSummaryCount, 0);
+  assert.equal(state.minimumAccountsPerProfile, 3);
+  assert.equal(state.outsideTop32SummaryCount, 1);
+  assert.equal(state.providerCount, 2);
+  assert.equal(state.requiredIndexCount, 8);
+  assert.equal(state.top32Count, 32);
+  assert.ok(state.maximumPageBytes > 1_000 && state.maximumPageBytes <= 65_536);
+  assert.ok(state.snapshotBytes > 1_000_000 && state.snapshotBytes <= 16 * 1024 * 1024);
+
+  const currentContract = contracts.validateLeaderboardSnapshotV1(
+    JSON.parse(
+      psqlScalar(
+        "SELECT canonical_payload FROM viberacing_api.read_current_leaderboard_page(1);",
+        "current 10k snapshot contract evidence",
+      ),
+    ),
+  );
+  assert.equal(currentContract.ok, true, JSON.stringify(currentContract));
+  const historicalContract = contracts.validateLeaderboardSnapshotV1(
+    JSON.parse(
+      psqlScalar(
+        `SELECT canonical_payload
+FROM viberacing_api.read_season_leaderboard_page(
+  '${calendar.historicalSeasonStart}'::date,
+  1
+);`,
+        "historical finalized snapshot contract evidence",
+      ),
+    ),
+  );
+  assert.equal(historicalContract.ok, true, JSON.stringify(historicalContract));
+  const profileContract = contracts.validatePublicProfileSummaryV1(
+    JSON.parse(
+      psqlScalar(
+        `SELECT canonical_payload
+FROM viberacing_api.read_current_public_profile('${fixture.outsideTop32Handle}');`,
+        "outside-top32 profile contract evidence",
+      ),
+    ),
+  );
+  assert.equal(profileContract.ok, true, JSON.stringify(profileContract));
+  return Object.freeze({ elapsedMilliseconds, state: Object.freeze(state) });
 }
 
-async function exerciseUnavailableRoutes(
-  databasePort,
-  scoreSeasonStart,
-  tokenSeasonStart,
-  validateProblemDetailsV1,
-  tlsCertificatePath,
-) {
+function assertSnapshotEntityTag(result) {
+  const digest = createHash("sha256").update(result.bodyText, "utf8").digest("hex");
+  assert.equal(result.headers.get("etag"), `"${digest}"`);
+}
+
+async function exerciseNoSnapshot(databasePort, contracts, tlsCertificatePath) {
+  const before = readPrivateStateFingerprint("pre-empty-snapshot request fingerprint");
+  const server = await startConfiguredProductionNextServer(
+    databasePort,
+    webLogin,
+    webPassword,
+    tlsCertificatePath,
+  );
+  try {
+    const result = await requestBounded(
+      `http://127.0.0.1:${server.port}`,
+      "/v1/leaderboards/current?trustTier=community&page=1",
+    );
+    assertProblem(result, 503, "temporarily_unavailable", contracts.validateProblemDetailsV1);
+  } finally {
+    await stopProductionNextServer(server);
+  }
+  assert.equal(
+    readPrivateStateFingerprint("post-empty-snapshot request fingerprint"),
+    before,
+    "an unavailable public snapshot request must not create a season or mutate state",
+  );
+}
+
+async function exerciseWidenedLoginDenial(databasePort, contracts, tlsCertificatePath) {
+  const before = readPrivateStateFingerprint("pre-widened-login request fingerprint");
   const server = await startConfiguredProductionNextServer(
     databasePort,
     wideWebLogin,
     wideWebPassword,
     tlsCertificatePath,
   );
-  const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
-    for (const [path, seasonStart] of [
-      ["/v1/community/scores", scoreSeasonStart],
-      ["/v1/community/race", scoreSeasonStart],
-      ["/v1/community/race/status", scoreSeasonStart],
-      ["/v1/community/tokens", tokenSeasonStart],
-    ]) {
-      assertUnavailable(await getJson(baseUrl, path, seasonStart), validateProblemDetailsV1);
-    }
+    const result = await requestBounded(
+      `http://127.0.0.1:${server.port}`,
+      "/v1/leaderboards/current?trustTier=community&page=1",
+    );
+    assertProblem(result, 503, "temporarily_unavailable", contracts.validateProblemDetailsV1);
   } finally {
     await stopProductionNextServer(server);
   }
+  assert.equal(
+    readPrivateStateFingerprint("post-widened-login request fingerprint"),
+    before,
+    "the deliberately widened Web login must fail before private-state mutation",
+  );
 }
 
-async function exerciseNoQueueAdmission(baseUrl, seasonStart, expectedScore, contracts) {
+async function exerciseSnapshotNoQueueAdmission(baseUrl, expected, contracts) {
   const blocker = await startDatabaseReadBlocker();
   const inFlightRequests = [];
   let blockerStopped = false;
   try {
     for (let index = 0; index < 4; index += 1) {
-      const request = getJson(baseUrl, "/v1/community/scores", seasonStart);
+      const request = requestBounded(
+        baseUrl,
+        "/v1/leaderboards/current?trustTier=community&page=1",
+      );
       void request.catch(() => undefined);
       inFlightRequests.push(request);
     }
-    await waitForBlockedScoreQueries();
+    await waitForBlockedSnapshotQueries();
 
-    assertUnavailable(
-      await getJson(baseUrl, "/v1/community/scores", seasonStart, admissionRejectionTimeoutMs),
+    assertProblem(
+      await requestBounded(baseUrl, "/v1/leaderboards/current?trustTier=community&page=1", {
+        timeoutMs: admissionRejectionTimeoutMs,
+      }),
+      503,
+      "temporarily_unavailable",
       contracts.validateProblemDetailsV1,
     );
     assert.equal(
-      readBlockedScoreQueryCount("post-rejection blocked Web score-query observation"),
+      readBlockedSnapshotQueryCount("post-rejection blocked Web snapshot-query observation"),
       4,
-      "the rejected fifth request must not add a fifth public-score query",
+      "the rejected fifth request must not add a fifth snapshot query",
     );
 
     await stopDatabaseReadBlocker(blocker);
     blockerStopped = true;
     const settledRequests = await Promise.all(inFlightRequests);
     for (const result of settledRequests) {
-      assertSuccess(result, expectedScore, contracts.validateCommunityScorePageV1);
+      assertSnapshotSuccess(
+        result,
+        contracts.validateLeaderboardSnapshotV1,
+        "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+        ["fresh", "stale-under-5m"],
+      );
+      assert.deepEqual(result.body, expected);
     }
   } finally {
     if (!blockerStopped) {
@@ -1484,14 +1630,7 @@ async function exerciseNoQueueAdmission(baseUrl, seasonStart, expectedScore, con
   }
 }
 
-async function exerciseSuccessfulRoutes(
-  databasePort,
-  scoreSeasonStart,
-  tokenSeasonStart,
-  acceptedDate,
-  contracts,
-  tlsCertificatePath,
-) {
+async function exerciseSnapshotRoutes(databasePort, calendar, contracts, tlsCertificatePath) {
   const server = await startConfiguredProductionNextServer(
     databasePort,
     webLogin,
@@ -1500,50 +1639,104 @@ async function exerciseSuccessfulRoutes(
   );
   const baseUrl = `http://127.0.0.1:${server.port}`;
   try {
-    const stableExpected = expectedPages(
-      scoreSeasonStart,
-      tokenSeasonStart,
-      acceptedDate,
-      acceptedDate,
+    const currentPath = "/v1/leaderboards/current?trustTier=community&page=1";
+    const current = await requestBounded(baseUrl, currentPath);
+    assertSnapshotSuccess(
+      current,
+      contracts.validateLeaderboardSnapshotV1,
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+      ["fresh", "stale-under-5m"],
     );
-    assertSuccess(
-      await getJson(baseUrl, "/v1/community/scores", scoreSeasonStart),
-      stableExpected.score,
-      contracts.validateCommunityScorePageV1,
+    assert.equal(current.body.participantCount, fixture.participantCount);
+    assert.equal(current.body.page, 1);
+    assert.equal(current.body.pageSize, 100);
+    assert.equal(current.body.participants.length, 100);
+    assert.equal(current.body.participants[0].rankPosition, 1);
+    assert.equal(current.body.participants[1].rankPosition, 1);
+    assert.equal(current.body.participants[2].rankPosition, 3);
+    assertSnapshotEntityTag(current);
+    assertWebTlsConnection("production Web snapshot TLS connection observation");
+
+    const conditional = await requestBounded(baseUrl, currentPath, {
+      ifNoneMatch: current.headers.get("etag"),
+    });
+    assert.equal(conditional.status, 304);
+    assert.equal(conditional.bodyText, "");
+    assert.equal(conditional.headers.get("etag"), current.headers.get("etag"));
+    assert.equal(
+      conditional.headers.get("cache-control"),
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
     );
-    assertWebTlsConnection("production Web TLS connection observation");
-    assertSuccess(
-      await getJson(baseUrl, "/v1/community/race", scoreSeasonStart),
-      stableExpected.race,
-      contracts.validateCommunityRacePageV1,
+    assertSecurityResponseHeaders(conditional);
+
+    const lastPage = await requestBounded(
+      baseUrl,
+      "/v1/leaderboards/current?trustTier=community&page=100",
     );
-    let statusValidated = false;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const beforeDate = readCurrentUtcDate(`pre-status UTC date attempt ${attempt}`);
-      const statusResult = await getJson(baseUrl, "/v1/community/race/status", scoreSeasonStart);
-      const tokenResult = await getJson(baseUrl, "/v1/community/tokens", tokenSeasonStart);
-      const afterDate = readCurrentUtcDate(`post-status UTC date attempt ${attempt}`);
-      if (beforeDate === afterDate) {
-        const expected = expectedPages(
-          scoreSeasonStart,
-          tokenSeasonStart,
-          beforeDate,
-          acceptedDate,
-        );
-        assertSuccess(statusResult, expected.status, contracts.validateCommunityRaceStatusPageV1);
-        assertSuccess(
-          tokenResult,
-          expected.token,
-          contracts.validateCommunityTokenRaceStatusPageV1,
-        );
-        statusValidated = true;
-        break;
-      }
+    assertSnapshotSuccess(
+      lastPage,
+      contracts.validateLeaderboardSnapshotV1,
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+      ["fresh", "stale-under-5m"],
+    );
+    assert.equal(lastPage.body.page, 100);
+    assert.equal(lastPage.body.nextPage, null);
+    assert.equal(lastPage.body.participants.length, 100);
+
+    const historical = await requestBounded(
+      baseUrl,
+      `/v1/leaderboards/${calendar.historicalSeasonStart}?trustTier=community&page=1`,
+    );
+    assertSnapshotSuccess(
+      historical,
+      contracts.validateLeaderboardSnapshotV1,
+      "public, max-age=3600, s-maxage=31536000, immutable",
+      "finalized",
+    );
+    assert.equal(historical.body.seasonStart, calendar.historicalSeasonStart);
+    assert.equal(historical.body.seasonState, "finalized");
+    assertSnapshotEntityTag(historical);
+
+    const outsideProfile = await requestBounded(
+      baseUrl,
+      `/v1/profiles/${fixture.outsideTop32Handle}?trustTier=community`,
+    );
+    assertSnapshotSuccess(
+      outsideProfile,
+      contracts.validatePublicProfileSummaryV1,
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+      ["fresh", "stale-under-5m"],
+    );
+    assert.equal(outsideProfile.body.handle, fixture.outsideTop32Handle);
+    assert.ok(outsideProfile.body.rankPosition > 32);
+    assertSnapshotEntityTag(outsideProfile);
+
+    assertProblem(
+      await requestBounded(baseUrl, "/v1/profiles/racer10001?trustTier=community"),
+      404,
+      "not_found",
+      contracts.validateProblemDetailsV1,
+    );
+    assertProblem(
+      await requestBounded(baseUrl, "/v1/leaderboards/current?trustTier=community&page=101"),
+      404,
+      "not_found",
+      contracts.validateProblemDetailsV1,
+    );
+
+    for (const legacyPath of [
+      "/v1/community/scores",
+      "/v1/community/race",
+      "/v1/community/race/status",
+      "/v1/community/tokens",
+    ]) {
+      const result = await requestBounded(baseUrl, legacyPath);
+      assert.equal(result.status, 404, `${legacyPath} must be absent from the emitted server`);
+      assert.equal(result.headers.get("set-cookie"), null);
+      assert.equal(result.headers.get("access-control-allow-origin"), null);
     }
-    if (!statusValidated) {
-      throw new Error("UTC date did not remain stable around the bounded status request.");
-    }
-    await exerciseNoQueueAdmission(baseUrl, scoreSeasonStart, stableExpected.score, contracts);
+
+    await exerciseSnapshotNoQueueAdmission(baseUrl, current.body, contracts);
   } finally {
     await stopProductionNextServer(server);
   }
@@ -1635,58 +1828,15 @@ COMMIT;`,
       "narrow and deliberately widened synthetic Web logins",
     );
 
-    const calendar = JSON.parse(
-      psqlScalar(
-        `WITH current_season AS (
-  SELECT (
-    (pg_catalog.statement_timestamp() AT TIME ZONE 'UTC')::date
-    - (
-      pg_catalog.date_part(
-        'isodow',
-        pg_catalog.statement_timestamp() AT TIME ZONE 'UTC'
-      )::integer - 1
-    )
-  ) AS season_start
-)
-SELECT pg_catalog.jsonb_build_object(
-  'seasonStart', current_season.season_start::text,
-  'tokenSeasonStart', (current_season.season_start - 7)::text
-)::text
-FROM current_season;`,
-        "current Community season discovery",
-      ),
-    );
-    assert.match(calendar.seasonStart, /^\d{4}-\d{2}-\d{2}$/);
-    assert.match(calendar.tokenSeasonStart, /^\d{4}-\d{2}-\d{2}$/);
-    assert.equal(new Date(`${calendar.seasonStart}T00:00:00.000Z`).getUTCDay(), 1);
-    assert.equal(new Date(`${calendar.tokenSeasonStart}T00:00:00.000Z`).getUTCDay(), 1);
-    assert.equal(utcDateDifference(calendar.seasonStart, calendar.tokenSeasonStart), 7);
-
-    seedSyntheticState(calendar.seasonStart, calendar.tokenSeasonStart);
-    const acceptedDate = readFixtureAcceptedDate();
+    await exerciseNoSnapshot(databasePort, contracts, tlsMaterial.certificatePath);
+    const calendar = readSyntheticCalendar();
+    prepareSyntheticSnapshotScale(calendar);
+    const scaleEvidence = buildSyntheticSnapshots(calendar, contracts);
     const initialState = readPrivateStateFingerprint("initial Web private-state fingerprint");
 
-    await exerciseUnavailableRoutes(
-      databasePort,
-      calendar.seasonStart,
-      calendar.tokenSeasonStart,
-      contracts.validateProblemDetailsV1,
-      tlsMaterial.certificatePath,
-    );
-    assert.equal(
-      readPrivateStateFingerprint("post-rejection Web private-state fingerprint"),
-      initialState,
-      "the widened login must fail closed before mutating any private table",
-    );
+    await exerciseWidenedLoginDenial(databasePort, contracts, tlsMaterial.certificatePath);
 
-    await exerciseSuccessfulRoutes(
-      databasePort,
-      calendar.seasonStart,
-      calendar.tokenSeasonStart,
-      acceptedDate,
-      contracts,
-      tlsMaterial.certificatePath,
-    );
+    await exerciseSnapshotRoutes(databasePort, calendar, contracts, tlsMaterial.certificatePath);
     assert.equal(
       readPrivateStateFingerprint("post-success Web private-state fingerprint"),
       initialState,
@@ -1695,7 +1845,7 @@ FROM current_season;`,
     assertAutoExplainEvidence();
 
     console.log(
-      "Web PostgreSQL integration passed (two built production Next processes over synthetic verified TLS, four real HTTP routes, eight bounded query-plan oracles, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).",
+      `Web PostgreSQL integration passed (10,001 profiles, 30,003 AgentAccounts, two synthetic providers, one complete seven-day historical scale window with current usage bounded to elapsed UTC days, 100 materialized current pages, ${scaleEvidence.elapsedMilliseconds}ms bounded snapshot catalog, zero target-fixture temp bytes, three built production Next processes over synthetic verified TLS, three final HTTP routes, four removed legacy routes, six bounded query-plan oracles, ETag/304 and cache policy, four-slot no-queue admission, least-privilege denial, exact contracts, and read-only stored state).`,
     );
   } catch (error) {
     primaryFailure = error;

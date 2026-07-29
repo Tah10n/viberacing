@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { resolvePublicScoreDatabaseConfig } from "./public-score-database-config";
+import { resolvePublicSnapshotDatabaseConfig } from "./public-snapshot-database-config";
 import {
-  createPublicScoreDatabasePool,
-  type PublicScoreDatabasePoolSignal,
-} from "./public-score-database-pool";
+  createPublicSnapshotDatabasePool,
+  type PublicSnapshotDatabasePoolSignal,
+} from "./public-snapshot-database-pool";
 
-const config = resolvePublicScoreDatabaseConfig({
+const config = resolvePublicSnapshotDatabaseConfig({
   NODE_ENV: "development",
   VIBERACING_WEB_DATABASE_HOST: "127.0.0.1",
   VIBERACING_WEB_DATABASE_NAME: "viberacing_local",
@@ -16,7 +16,7 @@ const config = resolvePublicScoreDatabaseConfig({
   VIBERACING_WEB_DATABASE_USER: "viberacing_web_login",
 });
 
-describe("public score database pool", () => {
+describe("public snapshot database pool", () => {
   it("wraps the driver behind the narrow query, release, and close boundary", async () => {
     const rows = [{ public: true }];
     const driverQueries: { text: string; values: unknown[] }[] = [];
@@ -43,7 +43,7 @@ describe("public score database pool", () => {
         return this;
       },
     };
-    const pool = createPublicScoreDatabasePool(config, undefined, (receivedConfig) => {
+    const pool = createPublicSnapshotDatabasePool(config, undefined, (receivedConfig) => {
       expect(receivedConfig).toBe(config);
       return driverPool;
     });
@@ -65,7 +65,7 @@ describe("public score database pool", () => {
 
   it("reports idle-driver errors only through one stable non-reflective signal", () => {
     const privateMessage = "private-driver-error-that-must-not-be-reflected";
-    const signals: PublicScoreDatabasePoolSignal[] = [];
+    const signals: PublicSnapshotDatabasePoolSignal[] = [];
     let idleErrorListener: ((error: Error) => void) | undefined;
     const driverPool = {
       connect(): Promise<never> {
@@ -81,7 +81,7 @@ describe("public score database pool", () => {
       },
     };
 
-    createPublicScoreDatabasePool(
+    createPublicSnapshotDatabasePool(
       config,
       (signal) => {
         signals.push(signal);
@@ -114,7 +114,7 @@ describe("public score database pool", () => {
       throw new Error("monitoring failure");
     });
 
-    createPublicScoreDatabasePool(config, sink, () => driverPool);
+    createPublicSnapshotDatabasePool(config, sink, () => driverPool);
 
     expect(() => idleErrorListener?.(new Error("driver failure"))).not.toThrow();
     expect(sink).toHaveBeenCalledWith("idle_client_error");
@@ -137,7 +137,7 @@ describe("public score database pool", () => {
     };
     const sink = vi.fn(() => Promise.reject(new Error("monitoring failure")));
 
-    createPublicScoreDatabasePool(config, sink, () => driverPool);
+    createPublicSnapshotDatabasePool(config, sink, () => driverPool);
     idleErrorListener?.(new Error("driver failure"));
 
     await expect(Promise.resolve()).resolves.toBeUndefined();

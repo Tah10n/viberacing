@@ -116,7 +116,7 @@ export default defineConfig([
       "lib/pairing-database-pool.ts",
       "lib/pairing-possession-verifier.ts",
       "lib/connector-car-proposal-verifier.ts",
-      "lib/public-score-database-pool.ts",
+      "lib/public-snapshot-database-pool.ts",
       "tests/**/*.ts",
     ],
     rules: {
@@ -186,7 +186,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["lib/{batch-pairing-database,pairing-database-pool,public-score-database-pool}.ts"],
+    files: ["lib/{batch-pairing-database,pairing-database-pool,public-snapshot-database-pool}.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

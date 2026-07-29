@@ -3,26 +3,25 @@
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile with committed synthetic fallback data. It is suitable for local design, accessibility,
 localization, and scoring review. The visible race, leaderboard, and selectable participant summary
-now request the current server-selected Community week from the exact same-origin direct-token route
-first, use the legacy race-status route when that surface is unavailable, validate the bounded
-response in the browser, and retain the labeled synthetic fallback on any failure. Community
-summaries add complete-UTC-day freshness and an optional preference-gated streak to the public score
-or direct weekly token total, source-count, and current-car fields. Exact receipt time, daily/source
-detail, device counts, and identifiers remain absent; the selected handle is carried only in a
-canonical `/?profile=handle#profile` URL. Invalid or duplicate values are ignored, a missing current
-top-32 row is not replaced, and a public signed-in profile links to its current summary. An ordinary
-same-tab selection updates the summary and URL without a reload; modified clicks retain native link
-behavior. The fallback demo garage and default product shell remain synthetic and unauthenticated,
-with no deployment database login, real user data, or deployment. A separate opt-in integration uses
-only disposable synthetic Web logins and data. The same page exposes an EN/RU score simulator backed
-by the production scoring functions. It accepts only one canonical non-negative safe integer and one
-to seven active days, keeps both values only in component memory, and never fetches, logs, persists,
-submits, or preloads account or race data. A separate local Phase 2 slice now implements invite
-redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations, initial passkey
-registration, returning login, a session-scoped passkey inventory, an account page, public-profile
-hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey
-addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion
-request, fresh-passkey recovery-code rotation with one-time display, one-time recovery-code
+now request page 1 of the current server-selected Community snapshot through the exact same-origin
+leaderboard route, validate the bounded response in the browser, and retain the labeled synthetic
+fallback on any failure. Community summaries use only the public snapshot fields; exact receipt
+time, daily/account detail, device counts, and identifiers remain absent. The selected handle is
+carried only in a canonical `/?profile=handle#profile` URL. Invalid or duplicate values are ignored,
+a missing current top-32 row is not replaced, and a public signed-in profile links to its current
+summary. An ordinary same-tab selection updates the summary and URL without a reload; modified
+clicks retain native link behavior. The fallback demo garage and default product shell remain
+synthetic and unauthenticated, with no deployment database login, real user data, or deployment. A
+separate opt-in integration uses only disposable synthetic Web logins and data. The same page
+exposes an EN/RU score simulator backed by the production scoring functions. It accepts only one
+canonical non-negative safe integer and one to seven active days, keeps both values only in
+component memory, and never fetches, logs, persists, submits, or preloads account or race data. A
+separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
+encrypted HttpOnly continuations, initial passkey registration, returning login, a session-scoped
+passkey inventory, an account page, public-profile hide/show, source
+inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey addition, revocation
+of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion request,
+fresh-passkey recovery-code rotation with one-time display, one-time recovery-code
 replacement-passkey sign-in, and logout. It fails closed without externally provisioned
 configuration. A signed-in `/connect` page also performs one session-rate-limited pending-code
 lookup, displays only bounded device evidence and a full public-key fingerprint, then requires a
@@ -51,9 +50,9 @@ pnpm run dev:web
 
 The development command binds Next.js to the `localhost` loopback hostname so local WebAuthn uses
 its standards-defined development origin without exposing the server to the LAN. No `.env` file is
-needed for the synthetic race. Live local score/race/status reads additionally require exact
-`VIBERACING_PUBLIC_RANKING_ENABLED=true` before their route modules load; the tracked example stays
-false and the browser keeps the labeled synthetic fallback. The optional server-only
+needed for the synthetic race. Local snapshot reads additionally require exact
+`VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true` before their route modules load; the tracked example
+stays false and the browser keeps the labeled synthetic fallback. The optional server-only
 `VIBERACING_PUBLIC_ORIGIN` setting controls absolute social metadata and is mandatory for a hosted
 deployment; it is public configuration, not a secret. The emitted home HTML uses the exact
 discoverability phrase `vibecode rating` in honest self-reported leaderboard copy, publishes one
@@ -109,9 +108,9 @@ enrollment additionally requires exact `VIBERACING_ENROLLMENT_ENABLED=true` befo
 pages and all four GitHub/initial-passkey route modules load. Manual pairing requires exact
 `VIBERACING_PAIRING_ENABLED=true` before all four pairing route modules load. New-source pairing
 also requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` before the `/connect` page and both
-approval modules load. Changing a value afterward does not reload an existing worker. The
-direct-token public route independently requires exact `VIBERACING_TOKEN_RANKING_ENABLED=true`;
-enabling or disabling it does not change the legacy public-ranking decision.
+approval modules load. Changing a value afterward does not reload an existing worker. The three
+public snapshot routes independently require exact `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true`;
+enabling or disabling them does not change enrollment, pairing, or source-creation decisions.
 
 ## Module map
 
@@ -119,13 +118,11 @@ enabling or disabling it does not change the legacy public-ranking decision.
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `app/page.tsx`                                                                   | Selects the current week and builds the synthetic fallback               | Must pass only public labels and presentation data into the client tree              |
 | `lib/race-data.ts`                                                               | Clearly synthetic raw activity fixtures and payload projection           | Marked `server-only`; never replace with exports or real account data                |
-| `lib/public-community-race.ts`                                                   | Loads the token race first with a legacy status fallback                 | Lazy exact same-origin GET; no credentials/cache; closed metric/status/recipe fields |
-| `lib/public-community-score-mapper.ts`                                           | Validates the exact SQL score, race, status, and token projections       | Server-only, four exact top-32 shapes, and fail-closed                               |
-| `lib/public-community-score-store.ts`                                            | Executes the four fixed public score/race/status/token procedures        | Canonical Monday only; verifies every checkout; routes construct lazily              |
-| `lib/public-community-score-route.ts`                                            | Parses and serializes all four public GET boundaries                     | Exact paths/query/Accept, generic errors, admission, deadlines, and no CORS          |
-| `lib/public-ranking-config.ts`                                                   | Resolves one shared default-off public-ranking decision                  | Exact own string value; no database/request field or reflection                      |
-| `lib/public-token-ranking-config.ts`                                             | Resolves the independent default-off direct-token decision               | Exact own string value; no database/request field or reflection                      |
-| `lib/public-score-admission.ts`                                                  | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                               |
+| `lib/public-snapshot-client.ts`                                                  | Loads and validates current snapshot page 1 for the visible race         | Exact same-origin GET; no credentials; closed generated contract                     |
+| `lib/public-snapshot-store.ts`                                                   | Executes the three fixed materialized-snapshot procedures                | No aggregation; verifies role, payload digest, ETag, and generated contract          |
+| `lib/public-snapshot-route.ts`                                                   | Parses and serializes the three public snapshot GET boundaries           | Exact path/query/headers, generic errors, admission, cache policy, and no CORS       |
+| `lib/public-snapshot-config.ts`                                                  | Resolves one shared default-off public-snapshot decision                 | Exact own string value; no database/request field or reflection                      |
+| `lib/public-snapshot-admission.ts`                                               | Enforces the no-queue public-read concurrency ceiling                    | Four active reads; lease held until adapter settlement                               |
 | `lib/public-http-problem.ts`                                                     | Generates opaque request IDs and closed public error responses           | Server-only; validates the contract; no inbound ID, CORS, detail, or cause           |
 | `app/join`, `app/login`, `app/recover`, `app/account`, `app/connect`, `app/auth` | Routes enrollment, recovery, account, pairing approval, deletion, logout | Thin session/browser entrypoints; no admin                                           |
 | `app/v1/connector/pairing`                                                       | Routes anonymous connector pairing start/poll                            | Exact POST and default-off pairing decision; delegates to the closed HTTP boundary   |
@@ -154,8 +151,8 @@ enabling or disabling it does not change the legacy public-ranking decision.
 | `lib/pairing-transport-service.ts`                                               | Owns one start/poll application composition                              | One pool/key set/rate policy and aggregate four-call admission                       |
 | `lib/pairing-http.ts`                                                            | Parses and serializes the connector pairing HTTP contract                | Exact path/media/body/header; no-store/no-CORS; generic bounded problems             |
 | `lib/pairing-database-pool.ts`                                                   | Wraps `pg` with fixed pairing start/approval/activation calls            | No generic query; copies/clears byte parameters; stable idle-error signal            |
-| `lib/public-score-database-config.ts`                                            | Parses the dedicated Web login and TLS/pool contract                     | Owner settings are separate; production is verify-full; errors reflect no value      |
-| `lib/public-score-database-pool.ts`                                              | Wraps `pg` with narrow connect/query/release/close authority             | Four connections; bounded waits; stable idle-error signal only                       |
+| `lib/public-snapshot-database-config.ts`                                         | Parses the dedicated Web login and TLS/pool contract                     | Owner settings are separate; production is verify-full; errors reflect no value      |
+| `lib/public-snapshot-database-pool.ts`                                           | Wraps `pg` with narrow connect/query/release/close authority             | Four connections; bounded waits; stable idle-error signal only                       |
 | `lib/scoring.ts`                                                                 | Bounded daily/weekly score and deterministic rank calculation            | Treat all future device input as untrusted and validate before calling               |
 | `lib/score-simulator.ts`                                                         | Parses hypothetical input and projects daily/weekly score                | Canonical safe integer and one-to-seven days; delegates to production scoring        |
 | `lib/race-types.ts`                                                              | Client-safe participant and demo-profile shape                           | Must not gain raw tokens or source/account identifiers                               |
@@ -180,82 +177,89 @@ API. It owns all eleven `ProblemDetailsV1` status/title/retry mappings, validate
 and emits `application/problem+json`, `Cache-Control: no-store`, and the matching `x-request-id`. It
 emits no CORS header, cookie, detail, exception cause, hostname, SQL, or submitted value.
 
-The local `GET /v1/community/scores`, `GET /v1/community/race`, and `GET /v1/community/race/status`
-routes share one closed boundary but hardwire independent response validators and fixed database
-calls. Each resolves exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` once at module load. A disabled
-GET returns the existing generic 503 before URL/query/`Accept`, admission acquisition, or store
-construction; non-GET methods retain 405. Once enabled, each generates one token at entry, rejects a
-body and every wrong path or missing/duplicate/unknown/non-canonical query, validates
-`CommunityScoreQueryV1`, performs bounded `Accept` negotiation, and acquires one of four no-queue
-admission leases before constructing its store. The lease remains held until the adapter promise
-settles. The route validates the final page again before JSON serialization and adds `Vary: Accept`
-without CORS. Every other Next.js route method receives the closed 405 response and `Allow: GET`;
-the stable score and legacy race responses reject the separate status fields.
-
-The additive `GET /v1/community/tokens` route uses the same closed boundary but resolves only exact
-`VIBERACING_TOKEN_RANKING_ENABLED=true` at module load. It calls the fixed token projection and
-returns only `community_tokens_v1` with direct `weeklyTokenTotal`, shared rank, cosmetic recipe,
-rounded freshness, and optional streak. It does not expose a provider, source/day breakdown, exact
-receipt time, or legacy score. The browser tries this route first and uses the legacy status route
-only when the token surface is unavailable.
+The local `GET /v1/leaderboards/current`, `GET /v1/leaderboards/{seasonStart}`, and
+`GET /v1/profiles/{handle}` routes share one closed boundary and three fixed materialized-snapshot
+database calls. Each resolves exact `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true` once at module load.
+A disabled GET returns the existing generic 503 before URL/query/header parsing, admission
+acquisition, or store construction; non-GET methods retain 405. Once enabled, each generates one
+opaque request ID at entry, rejects a body and every wrong path or
+missing/duplicate/unknown/non-canonical query, requires exact `trustTier=community`, performs
+bounded `Accept` and `If-None-Match` parsing, and acquires one of four no-queue admission leases
+before constructing its store. Leaderboard routes additionally require a canonical positive page;
+the profile route accepts only the canonical public handle. The lease remains held until the adapter
+promise settles. The route revalidates each canonical stored payload and its SHA-256-bound ETag
+before returning byte-identical JSON. Every response varies on `Accept`; success returns no cookie
+or CORS header, and every other Next.js method receives the closed 405 response with `Allow: GET`.
 
 The route has no outer `Promise.race` that could return while database work continued. Its deadline
 policy is the adapter's enforced two-second connection timeout, six-second query timeout, and
 five-second PostgreSQL statement timeout; failed clients are destroyed before admission is released.
-Exhausted admission and transient/configuration failures map to 503, while projection or internal
-invariant failure maps to a generic 500. The documented 429 remains reserved: no client-rate policy
-is claimed. No raw URL/header, SQL, driver error, configuration value, or row value is logged or
-reflected.
+Exhausted admission, missing current snapshot, and transient/configuration failures map to 503;
+missing pages, seasons, hidden profiles, and handles map to 404 only after the store proves an
+available snapshot where required. Projection or internal-invariant failure maps to a generic 500.
+The documented 429 remains reserved: no client-rate policy is claimed. No raw URL/header, SQL,
+driver error, configuration value, or row value is logged or reflected.
 
-The generated contract marks all four routes `implemented-local` with one bounded Monday
-`seasonStart`, `no-store`, `Vary: Accept`, same-origin/no-CORS semantics, and closed
-200/400/406/429/500/503 responses. The legacy race response preserves the ten score fields and may
-add one exact current `CarRecipeV1`. The status response separately requires privacy-rounded
-`freshnessDays` and may add preference-gated `streakDays`; proposal state, exact receipt time, and
-daily score history enter no route. There is no deployment certificate/login, external TLS/edge
-route, shared cache, edge rate policy, or representative/deployed query-plan, load, or capacity
-result. The local home page loads the status client only after hydration and keeps its synthetic
-fallback on every failure.
+Open snapshots use `public, max-age=0, s-maxage=60, stale-while-revalidate=300`, a payload-bound
+strong ETag, and a bounded freshness classification. Stale last-good payloads remain readable and
+carry a standard warning instead of forcing live aggregation or an empty ranking. Only a finalized
+historical season URL may use `public, max-age=3600, s-maxage=31536000, immutable`. Matching
+`If-None-Match` produces an empty 304 with the same cache, ETag, freshness, and request-ID headers.
+All problems remain generic `no-store`. The current leaderboard URL and profile URL are never
+treated as immutable because their selected snapshot can change.
+
+The generated contract marks all three routes `implemented-local` with bounded canonical paths and
+queries, shared-cache/ETag behavior, `Vary: Accept`, same-origin/no-CORS semantics, and closed
+200/304/400/404/406/429/500/503 responses. Leaderboard pages expose exact decimal token strings,
+rank and display positions, bounded provider mix, rounded freshness, and optional approved
+`CarRecipeV1`; current profile summaries additionally expose season totals even when the profile is
+outside the first 32 display rows. Account/source identifiers, proposal state, exact receipt time,
+and daily account history enter no route. There is no deployment certificate/login, external
+TLS/edge route, deployed shared cache, edge rate policy, or representative/deployed query-plan,
+load, or capacity result. The local home page loads current page 1 only after hydration and keeps
+its synthetic fallback on every failure.
 
 The opt-in `test:web:postgres-integration` gate builds the emitted standalone artifact, explicitly
 bundles Next's otherwise externalized reviewed `pg` driver, and applies the reviewed migration
 ledger to a one-off PostgreSQL container. It generates one ephemeral self-signed certificate for an
-exact local DNS name, enables PostgreSQL TLS, seeds only obviously synthetic profiles, and invokes
-all four GETs through two emitted Next production processes. A login with one extra role membership
-must receive only the closed generic 503 on every route while a full private-table fingerprint
-remains unchanged. A narrow login with only `viberacing_web` must return the exact score, race,
-status, and token contracts, omit hidden/private state, observe TLS 1.2 or 1.3 in `pg_stat_ssl`, and
-leave the same fingerprint unchanged. Only that narrow synthetic login receives
-superuser-provisioned, database-scoped `auto_explain` settings. Parameter values are disabled; a
-two-mebibyte parser budget requires all four fixed adapter calls and all four nested projection
-plans, at most 32 root rows, one execution, the reviewed score/race/status indexes, no
-mutation/locking node, no sequential scan of the bounded-index relations, and no dirty/written or
-temporary block. The bounded plan log is private-marker scanned, discarded, and removed with the
-container. The harness then uses a bounded owner-held table lock to hold exactly four observed score
-queries, requires a fifth request to return the same closed generic 503 without adding a fifth
-public-score query, rolls back the lock, and validates the first four exact 200 responses. It bounds
-and discards both Next and blocker output, then removes all ephemeral key material, three processes,
-the container, network, and storage. This proves no deployment certificate/login, external TLS/edge
-path, cache, edge rate policy, monitoring, representative plan/load/capacity result, real-user data,
-or deployment.
+exact local DNS name, enables PostgreSQL TLS, and seeds 10,001 obviously synthetic profiles with
+30,003 provider-attributed AgentAccounts. A complete historical seven-day window plus only elapsed
+days of the current UTC week produce 100 current leaderboard pages and profile summaries outside the
+first 32 rows. A deliberately widened login must receive only the closed generic 503 while a full
+private-table fingerprint remains unchanged. A narrow login with only `viberacing_web` must return
+exact current, historical, and profile contracts, ETag/304/cache behavior, hidden/missing 404s,
+current-snapshot 503, TLS 1.2 or 1.3 in `pg_stat_ssl`, zero target-fixture temporary I/O, and the
+same private-state fingerprint. All four removed `/v1/community/*` routes must remain 404.
 
-## Score database adapter configuration
+Only the narrow synthetic login receives superuser-provisioned, database-scoped `auto_explain`
+settings. Parameter values are disabled; a two-mebibyte parser budget requires three fixed adapter
+calls and three nested snapshot lookup projections, bounded root rows, one execution, the reviewed
+snapshot indexes, no mutation/locking node, and no dirty/written or temporary block. The bounded
+plan log is private-marker scanned, discarded, and removed with the container. The harness then uses
+a bounded owner-held lock to hold exactly four observed snapshot queries, requires a fifth request
+to return the same closed generic 503 without adding a fifth query, releases the lock, and validates
+the first four exact 200 responses. It bounds and discards both Next and blocker output, then
+removes all ephemeral key material, three processes, the container, network, and storage. This
+proves no deployment certificate/login, external TLS/edge path, deployed cache, edge rate policy,
+monitoring, representative load/capacity result, real-user data, or deployment.
+
+## Snapshot database adapter configuration
 
 Only an exactly enabled route can reach the adapter. It is then constructed lazily when a client
-reaches an exact score, race, or status request; an invalid or absent database configuration returns
-the generic unavailable response and the page keeps its synthetic fallback. Importing or building
-the page does not connect. The module-load gate is not a deployed or dynamic switch and proves no
-old-instance drain, route/cache denial, or operator audit. The adapter uses only the
-`VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The separate `DATABASE_*` values
-belong to the disposable compose bootstrap owner and are forbidden for Web reads. The repository
-creates no reusable working login; the integration harness creates only per-run synthetic logins in
-its disposable database.
+reaches an exact current leaderboard, historical leaderboard, or current profile request; an invalid
+or absent database configuration returns the generic unavailable response and the page keeps its
+synthetic fallback. Importing or building the page does not connect. The module-load gate is not a
+deployed or dynamic switch and proves no old-instance drain, route/cache denial, or operator audit.
+The adapter uses only the `VIBERACING_WEB_DATABASE_*` settings documented in `.env.example`. The
+separate `DATABASE_*` values belong to the disposable compose bootstrap owner and are forbidden for
+Web reads. The repository creates no reusable working login; the integration harness creates only
+per-run synthetic logins in its disposable database.
 
 Local adapter work requires an infrastructure-provisioned login whose only group membership is
 `viberacing_web`. Cleartext requires explicit `NODE_ENV=development` or `test` plus loopback. Every
 other environment requires `verify-full`, a certificate-valid multi-label DNS name, and TLS 1.2 or
 later. The pool checks the effective Web role, narrow login membership/attributes, database
-capability, search path, and read-only state before every fixed parameterized score query. No
+capability, search path, and read-only state before every fixed parameterized snapshot query. No
 setting, driver error, SQL, or row value belongs in logs or client responses.
 
 ## Invite and initial-passkey enrollment
@@ -606,17 +610,17 @@ two-candidate SQL, read-write role probes, the shared strict proof, hostile inpu
 shapes, server IDs, admission/timing, generic failures, clearing, release, and close without a real
 key or connection. Canvas tests execute real render loops against a typed context stub, including
 animated and no-context paths. Visible-score tests cover current-week selection, the exact
-credential-free token-first/legacy-fallback fetch, closed public response mapping, freshness/streak
-presentation and bounds, legacy-component rejection, success/fallback states, and empty standings.
-Preference tests cover valid settings, reduced motion, pausing, invalid/blocked storage, and
-cleanup.
+credential-free current-snapshot fetch, closed public response mapping, freshness/token presentation
+and bounds, unsafe-decimal rejection, success/fallback states, and empty standings. Preference tests
+cover valid settings, reduced motion, pausing, invalid/blocked storage, and cleanup.
 
 The separate Docker-backed Web integration exercises the otherwise-thin framework entrypoints with
-real loopback HTTP and the actual `pg` adapter. It validates all four closed contracts, the
-every-checkout least-privilege probe, widened-login fail-closed behavior, hidden/private omission,
-eight bounded adapter/nested-projection plan oracles, four-slot no-queue admission, and complete
-private-table non-mutation. It remains synthetic local evidence, not representative load, live,
-capacity, or deployed behavior.
+real loopback HTTP and the actual `pg` adapter. It validates the three final contracts, four absent
+legacy routes, the every-checkout least-privilege probe, widened-login fail-closed behavior,
+hidden/private omission, payload-bound ETags, six bounded adapter/nested-projection plan oracles,
+four-slot no-queue admission, zero target-fixture temporary I/O, and complete private-table
+non-mutation. It remains synthetic local scale evidence, not representative load, live, capacity, or
+deployed behavior.
 
 Coverage thresholds apply to product components and libraries. Small framework entrypoints are
 excluded from unit coverage and exercised by `next build`; counting imports as unit coverage would

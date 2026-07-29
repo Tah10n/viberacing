@@ -69,7 +69,7 @@ import {
   verifyPasskeyLogin,
   type RegisteredPasskey,
 } from "./passkey-registration";
-import { currentCommunitySeasonStart } from "./public-community-race";
+import { currentCommunitySeasonStart } from "./public-snapshot-client";
 import { createPublicRequestId } from "./public-http-problem";
 import type { PairingUserCodeVerifier } from "./pairing-user-code-verifier";
 import {

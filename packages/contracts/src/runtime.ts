@@ -78,10 +78,10 @@ interface DataDescriptor {
 }
 
 const defaultLimits: Required<ValidationLimits> = {
-  maxArrayItems: 64,
+  maxArrayItems: 100,
   maxDepth: 12,
   maxIssues: 16,
-  maxNodes: 512,
+  maxNodes: 4096,
   maxObjectKeys: 64,
 };
 

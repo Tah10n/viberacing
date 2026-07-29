@@ -620,6 +620,28 @@ BEGIN
     RAISE EXCEPTION 'provider-breakdown opt-in was not respected';
   END IF;
 
+  IF NOT (
+    SELECT canonical_payload::jsonb ? 'carRecipe'
+      AND canonical_payload::jsonb -> 'carRecipe' = jsonb 'null'
+    FROM viberacing_private.leaderboard_snapshot_profiles
+    WHERE snapshot_id = v_current_snapshot
+      AND handle = 'rank-alpha'
+  ) THEN
+    RAISE EXCEPTION 'public profile snapshot omitted the explicit absent car recipe';
+  END IF;
+
+  IF NOT (
+    SELECT snapshot.etag
+      = '"' || pg_catalog.encode(snapshot.payload_digest, 'hex') || '"'
+    FROM viberacing_api.read_current_leaderboard_page(1) AS snapshot
+  ) OR NOT (
+    SELECT snapshot.etag
+      = '"' || pg_catalog.encode(snapshot.payload_digest, 'hex') || '"'
+    FROM viberacing_api.read_current_public_profile('rank-alpha') AS snapshot
+  ) THEN
+    RAISE EXCEPTION 'public snapshot ETag did not bind the exact returned payload';
+  END IF;
+
   IF (
     SELECT (canonical_payload::jsonb ->> 'rankPosition')::bigint
     FROM viberacing_private.leaderboard_snapshot_profiles
@@ -1121,6 +1143,19 @@ BEGIN
     'EXECUTE'
   ) THEN
     RAISE EXCEPTION 'snapshot capability grants are not least privileged';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'viberacing_private'
+      AND procedure.proname = 'build_community_snapshot'
+      AND procedure.pronargs = 2
+      AND 'work_mem=64MB' = ANY(procedure.proconfig)
+  ) THEN
+    RAISE EXCEPTION 'snapshot builder omitted its bounded no-spill work_mem';
   END IF;
 END
 $grant_assertion$;

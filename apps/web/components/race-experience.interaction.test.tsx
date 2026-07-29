@@ -171,21 +171,13 @@ describe("RaceExperience interactions", () => {
           JSON.stringify({
             participants: [
               {
-                activeDays: 6,
                 displayPosition: 1,
                 freshnessDays: 0,
                 handle: "visible_driver",
                 rankPosition: 1,
-                scoreVersion: "community_v1",
-                seasonEnd: "2026-07-19",
-                seasonFinalized: false,
-                seasonStart: "2026-07-13",
-                sourceCount: 2,
-                streakDays: 12,
-                weeklyScore: 6123,
+                weeklyTokenTotal: "6123",
               },
               {
-                activeDays: 4,
                 carRecipe: {
                   schemaVersion: 1,
                   chassis: "rally",
@@ -201,16 +193,20 @@ describe("RaceExperience interactions", () => {
                 freshnessDays: 1,
                 handle: "second_driver",
                 rankPosition: 2,
-                scoreVersion: "community_v1",
-                seasonEnd: "2026-07-19",
-                seasonFinalized: false,
-                seasonStart: "2026-07-13",
-                sourceCount: 1,
-                weeklyScore: 4096,
+                weeklyTokenTotal: "4096",
               },
             ],
+            generatedAt: "2026-07-13T12:00:00.000000Z",
+            metricVersion: "provider_reported_tokens_v1",
+            nextPage: null,
+            page: 1,
+            pageSize: 100,
+            participantCount: 2,
             schemaVersion: 1,
-            selfReported: true,
+            seasonEnd: "2026-07-19",
+            seasonStart: "2026-07-13",
+            seasonState: "open",
+            snapshotRevision: 1,
             trustTier: "community",
           }),
           { headers: { "content-type": "application/json; charset=utf-8" } },
@@ -224,7 +220,7 @@ describe("RaceExperience interactions", () => {
 
     const app = mounted.container.querySelector<HTMLElement>(".race-app");
     expect(app?.dataset.scoreSource).toBe("community");
-    expect(mounted.container.textContent).toContain("Community standings");
+    expect(mounted.container.textContent).toContain("Community leaderboard");
     expect(mounted.container.textContent).toContain("visible_driver");
     expect(mounted.container.textContent).toContain("Visual marker");
     expect(mounted.container.textContent).not.toContain("neon_otter");
@@ -232,7 +228,7 @@ describe("RaceExperience interactions", () => {
     const profile = mounted.container.querySelector<HTMLElement>("#profile");
     expect(profile?.textContent).toContain("Community profile");
     expect(profile?.textContent).toContain("second_driver");
-    expect(profile?.textContent).toContain("4,096 pts");
+    expect(profile?.textContent).toContain("4,096 tokens");
     expect(profile?.textContent).toContain("#2");
     expect(profile?.textContent).toContain("1 day");
     expect(profile?.querySelector(".daily-bars")).toBeNull();
@@ -255,13 +251,12 @@ describe("RaceExperience interactions", () => {
     expect(firstProfile?.getAttribute("aria-current")).toBe("true");
     expect(profile?.textContent).toContain("visible_driver");
     expect(profile?.textContent).toContain("today");
-    expect(profile?.textContent).toContain("12d");
     expect(window.location.pathname + window.location.search + window.location.hash).toBe(
       "/?profile=visible_driver#profile",
     );
     expect(scrollIntoView).toHaveBeenCalled();
     expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/race/status?seasonStart=2026-07-13",
+      "/v1/leaderboards/current?trustTier=community&page=1",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
     );
 
@@ -303,22 +298,24 @@ describe("RaceExperience interactions", () => {
           JSON.stringify({
             participants: [
               {
-                activeDays: 6,
                 displayPosition: 1,
                 freshnessDays: 0,
                 handle: "token_driver",
-                metricVersion: "community_tokens_v1",
                 rankPosition: 1,
-                seasonEnd: "2026-08-02",
-                seasonFinalized: false,
-                seasonStart: "2026-07-27",
-                sourceCount: 1,
-                streakDays: 6,
-                weeklyTokenTotal: 12_345_678,
+                weeklyTokenTotal: "12345678",
               },
             ],
+            generatedAt: "2026-07-27T12:00:00.000000Z",
+            metricVersion: "provider_reported_tokens_v1",
+            nextPage: null,
+            page: 1,
+            pageSize: 100,
+            participantCount: 1,
             schemaVersion: 1,
-            selfReported: true,
+            seasonEnd: "2026-08-02",
+            seasonStart: "2026-07-27",
+            seasonState: "open",
+            snapshotRevision: 1,
             trustTier: "community",
           }),
           { headers: { "content-type": "application/json; charset=utf-8" } },
@@ -342,7 +339,7 @@ describe("RaceExperience interactions", () => {
     expect(mounted.container.querySelector('a[href="#simulator"]')).toBeNull();
     expect(fetchScore).toHaveBeenCalledOnce();
     expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/tokens?seasonStart=2026-07-27",
+      "/v1/leaderboards/current?trustTier=community&page=1",
       expect.objectContaining({ credentials: "omit", method: "GET" }),
     );
 
@@ -386,9 +383,18 @@ describe("RaceExperience interactions", () => {
         Promise.resolve(
           new Response(
             JSON.stringify({
+              generatedAt: "2026-07-13T12:00:00.000000Z",
+              metricVersion: "provider_reported_tokens_v1",
+              nextPage: null,
+              page: 1,
+              pageSize: 100,
+              participantCount: 0,
               participants: [],
               schemaVersion: 1,
-              selfReported: true,
+              seasonEnd: "2026-07-19",
+              seasonStart: "2026-07-13",
+              seasonState: "open",
+              snapshotRevision: 1,
               trustTier: "community",
             }),
             { headers: { "content-type": "application/json; charset=utf-8" } },

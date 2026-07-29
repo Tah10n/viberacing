@@ -16,7 +16,6 @@ import {
   type Locale,
 } from "@/lib/i18n";
 import type { PublicRaceParticipant, SyntheticRacePayload } from "@/lib/race-types";
-import type { PublicCommunityRaceMetric } from "@/lib/public-community-race";
 import { isRaceThemeId, raceThemeIds, type RaceThemeId } from "@/lib/theme";
 
 type MotionPreference = "system" | "on" | "off";
@@ -24,7 +23,7 @@ type ScoreSource = "community" | "fallback" | "synthetic";
 
 type ScoreState =
   | Readonly<{
-      metric: PublicCommunityRaceMetric;
+      metric: "tokens";
       participants: readonly PublicRaceParticipant[];
       source: "community";
     }>
@@ -113,9 +112,9 @@ export function RaceExperience({
       return undefined;
     }
     const controller = new AbortController();
-    void import("@/lib/public-community-race")
-      .then(({ loadPreferredPublicCommunityRace }) =>
-        loadPreferredPublicCommunityRace(communitySeasonStart, controller.signal),
+    void import("@/lib/public-snapshot-client")
+      .then(({ loadCurrentPublicSnapshotRace }) =>
+        loadCurrentPublicSnapshotRace(communitySeasonStart, controller.signal),
       )
       .then((result) => {
         if (controller.signal.aborted) {
@@ -146,7 +145,7 @@ export function RaceExperience({
   const canvasAnimated = motionEnabled && !racePaused;
   const participants =
     scoreState.source === "community" ? scoreState.participants : payload.participants;
-  const tokenRanking = scoreState.source === "community" && scoreState.metric === "tokens";
+  const tokenRanking = scoreState.source === "community";
   const metricLabel = tokenRanking ? translation.weeklyTokens : translation.score;
   const metricUnit = tokenRanking ? translation.tokens : translation.points;
   const selectedCommunityParticipant =
