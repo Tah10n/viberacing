@@ -184,6 +184,8 @@ try {
   const homeResponse = await waitForHome(origin, child, processState);
   const html = await homeResponse.text();
   const normalizedHtml = html.toLowerCase();
+  const semanticTableIndex = html.indexOf('class="semantic-leaderboard"');
+  const raceLoadingIndex = html.indexOf('class="race-loading"');
   const canonicalTag = html.match(/<link\b[^>]*\brel="canonical"[^>]*>/u)?.[0];
   const canonicalHref = canonicalTag?.match(/\bhref="(?<href>[^"]+)"/u)?.groups?.href;
   const failedHomeContracts = [
@@ -197,6 +199,12 @@ try {
     [homeResponse.headers.get("content-security-policy") !== null, "content security policy"],
     [html.includes(expectedOrigin), "public origin"],
     [normalizedHtml.includes("vibecode rating"), "search phrase"],
+    [html.includes("All your coding agents. Every account. One GitHub profile."), "exact hero"],
+    [semanticTableIndex >= 0, "semantic leaderboard"],
+    [raceLoadingIndex > semanticTableIndex, "semantic leaderboard before lazy race enhancement"],
+    [!normalizedHtml.includes("<canvas"), "no server-rendered race canvas"],
+    [!normalizedHtml.includes("score simulator"), "removed score simulator"],
+    [!normalizedHtml.includes("weekly score"), "removed score terminology"],
     [canonicalHref === expectedOrigin || canonicalHref === `${expectedOrigin}/`, "root canonical"],
   ]
     .filter(([passedContract]) => !passedContract)
@@ -320,5 +328,5 @@ if (!passed) {
 }
 
 console.log(
-  "Web standalone smoke passed (search metadata, discovery endpoints, static asset, production headers, three final default-off snapshot routes, and four absent legacy routes).",
+  "Web standalone smoke passed (exact hero, SSR-first semantic leaderboard, lazy race boundary, search metadata, discovery endpoints, static asset, production headers, three final default-off snapshot routes, and four absent legacy routes).",
 );

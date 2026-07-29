@@ -530,6 +530,31 @@ async function runPhase1AccessibilityTreeAudit(connection, sessionId) {
   }
 }
 
+async function waitForLazyRace(connection, sessionId) {
+  const deadline = Date.now() + commandTimeoutMilliseconds;
+  while (Date.now() < deadline) {
+    const ready = await evaluate(
+      connection,
+      sessionId,
+      `(() => {
+        const canvas = document.querySelector(".race-canvas");
+        const description = canvas?.getAttribute("aria-describedby");
+        return (
+          canvas instanceof HTMLCanvasElement &&
+          canvas.getAttribute("role") === "img" &&
+          Boolean(canvas.getAttribute("aria-label")) &&
+          Boolean(description && document.getElementById(description)?.textContent?.trim())
+        );
+      })()`,
+    );
+    if (ready === true) {
+      return;
+    }
+    await delay(50);
+  }
+  throw new Error("lazy race did not expose its semantic alternative before the fixed deadline");
+}
+
 async function runPhase1ForcedColorsAudit(connection, sessionId) {
   await clearDocumentFocus(connection, sessionId);
   const forwardFocus = [];
@@ -550,12 +575,12 @@ async function runPhase1ForcedColorsAudit(connection, sessionId) {
         ".brand-pixels",
         ".demo-badge",
         ".primary-action",
+        ".secondary-action",
         ".pixel-button:not(:disabled)",
         ".trust-banner",
+        ".race-alternative",
         ".race-console",
         ".race-canvas",
-        ".simulator-panel",
-        ".simulator-results > div",
         ".table-region",
         ".profile-grid article",
         ".method-grid article"
@@ -785,6 +810,7 @@ async function runPhase1WebVitalsAudit(connection, sessionId, settleRequestActio
         theme: "classic-grand-prix",
         width: 1280,
       });
+      await waitForLazyRace(connection, sessionId);
       await settleRequestActions();
       const pauseTarget = await evaluate(
         connection,
@@ -982,7 +1008,7 @@ async function waitForStableState(connection, sessionId, expected) {
       state.appTheme === expected.theme &&
       state.appMotion === expectedMotion &&
       state.lang === expected.locale &&
-      state.dataSource === "synthetic" &&
+      state.dataSource === "fallback" &&
       JSON.stringify(state.controls) ===
         JSON.stringify([expected.theme, expected.locale, expectedMotion])
     ) {
@@ -1383,6 +1409,7 @@ async function main() {
         sessionId,
       );
       await waitForStableState(connection, sessionId, accessibilityState);
+      await waitForLazyRace(connection, sessionId);
       await settleRequestActions();
       await connection.send("Target.activateTarget", { targetId });
       await connection.send("Accessibility.enable", {}, sessionId);
@@ -1403,6 +1430,7 @@ async function main() {
       );
       await reload(connection, sessionId);
       await waitForStableState(connection, sessionId, accessibilityState);
+      await waitForLazyRace(connection, sessionId);
       await settleRequestActions();
       await runPhase1ForcedColorsAudit(connection, sessionId);
       webVitalsAudits = await runPhase1WebVitalsAudit(connection, sessionId, settleRequestActions);

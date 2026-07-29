@@ -1,8 +1,8 @@
 {
-  "browserProduct": "Chrome/150.0.7871.129",
+  "browserProduct": "Chrome/150.0.7871.187",
   "captureMethod": "isolated-headless-cdp",
   "capturePlatform": "win32-x64",
-  "capturedAt": "2026-07-18",
+  "capturedAt": "2026-07-29",
   "content": "synthetic-fallback",
   "entries": [
     {
@@ -12,8 +12,8 @@
       "theme": "classic-grand-prix",
       "viewport": "compact",
       "width": 320,
-      "bytes": 23456,
-      "sha256": "05377c8b81c6d437a71a8cb3e34730df85d703979d67d9513d3bb9fcabf2449a"
+      "bytes": 23349,
+      "sha256": "f09d002297ea5b5839350fa4b996bb3b24f3c34cdebbffca89cc5cc009cd3eb6"
     },
     {
       "file": "compact-320x568-en-cyber-rally.png",
@@ -22,8 +22,8 @@
       "theme": "cyber-rally",
       "viewport": "compact",
       "width": 320,
-      "bytes": 24203,
-      "sha256": "b59121c73d2b6a44b2a0a2365dcc989d2d11506fbeb6ca66c2c01ff8b3ef9eb1"
+      "bytes": 23690,
+      "sha256": "962346036ca1bcf153bea6e13e0eb12987705a1880fafb859a62c3f8221631c0"
     },
     {
       "file": "compact-320x568-en-neon-night.png",
@@ -32,8 +32,8 @@
       "theme": "neon-night",
       "viewport": "compact",
       "width": 320,
-      "bytes": 24041,
-      "sha256": "eb38ea1d293511a419ad9fbaed512559a257881a1a69303506b4dfa5a832fb7a"
+      "bytes": 23597,
+      "sha256": "e585926f41153257b192182828e811fea9e358ed4613be9ba972a9c478f7c3c7"
     },
     {
       "file": "compact-320x568-ru-classic-grand-prix.png",
@@ -42,8 +42,8 @@
       "theme": "classic-grand-prix",
       "viewport": "compact",
       "width": 320,
-      "bytes": 24667,
-      "sha256": "15c6724bfe6d3a95bc266990cf202cfe5f60c76fd8d2f86e4cd167ddb2cb8abe"
+      "bytes": 22785,
+      "sha256": "3a3ecb3b2a14ab9ac428cca049e7276fefbbd1ad07ca6f9d16e8b22934247de8"
     },
     {
       "file": "compact-320x568-ru-cyber-rally.png",
@@ -52,8 +52,8 @@
       "theme": "cyber-rally",
       "viewport": "compact",
       "width": 320,
-      "bytes": 26522,
-      "sha256": "b0b36228439d8c1b79f63b02c2b66fdf291541aa3d4ab9cd870a61085e767c09"
+      "bytes": 22951,
+      "sha256": "552d988bfd623a34ff36a9b01c2a13cdf0f120612bfc00f19a0649727b747182"
     },
     {
       "file": "compact-320x568-ru-neon-night.png",
@@ -62,8 +62,8 @@
       "theme": "neon-night",
       "viewport": "compact",
       "width": 320,
-      "bytes": 26302,
-      "sha256": "d03fb8d7890421b9b5947db0fcb9fb8fb55ca5516a343730c3e06c39f72933c5"
+      "bytes": 23132,
+      "sha256": "e4428a0c5daffeeb0179e2af8340fd5bc4b9e0d6ddbd055dcc1bae305103f9d9"
     },
     {
       "file": "desktop-1280x720-en-classic-grand-prix.png",
@@ -72,8 +72,8 @@
       "theme": "classic-grand-prix",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 51276,
-      "sha256": "dfe01e3a91e46fa582afc8500afbc311df778791d1a2616c5671afbef96f8514"
+      "bytes": 70200,
+      "sha256": "d6fd5cf2b27f917527474ca5c3c37382877b5a1eedd605289187805502143d7d"
     },
     {
       "file": "desktop-1280x720-en-cyber-rally.png",
@@ -82,8 +82,8 @@
       "theme": "cyber-rally",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 54012,
-      "sha256": "e1cca18a803d02c34ed99248f9d0eb12fde309b05257e82f6bd7acb05c3f9502"
+      "bytes": 73142,
+      "sha256": "a6528d4af7d63f1199eb291205cc76f52c5f4fcbf9a7e3006aee8f6b0d21ebf7"
     },
     {
       "file": "desktop-1280x720-en-neon-night.png",
@@ -92,8 +92,8 @@
       "theme": "neon-night",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 53584,
-      "sha256": "41704d576d729ba6ee0c90e734962b19f7b07c355c6346de86cba976addf7a0a"
+      "bytes": 72527,
+      "sha256": "3b4fc70ce23dbb8108e5d20e04d44bb7ca7b08a2363361b95c1a268cfad5c3c2"
     },
     {
       "file": "desktop-1280x720-ru-classic-grand-prix.png",
@@ -102,8 +102,8 @@
       "theme": "classic-grand-prix",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 56274,
-      "sha256": "27d8be02d86bcfc8a825fd007134bb2794d13b91385389dc4334fee12ac6031d"
+      "bytes": 75267,
+      "sha256": "7948ce49b4a12183462f6cbe46ee0e0cada05a1a795179dd2e94f5e057fa6d60"
     },
     {
       "file": "desktop-1280x720-ru-cyber-rally.png",
@@ -112,8 +112,8 @@
       "theme": "cyber-rally",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 59790,
-      "sha256": "97380c3fd31c8a1e6b850f8a5889ead250c31b24712941a7d0aceeb37fea24ae"
+      "bytes": 79301,
+      "sha256": "46b50481afe69a71dae0497a403160ff3c8f48b1fabe337ce41d2578d8f27e1f"
     },
     {
       "file": "desktop-1280x720-ru-neon-night.png",
@@ -122,8 +122,8 @@
       "theme": "neon-night",
       "viewport": "desktop",
       "width": 1280,
-      "bytes": 59545,
-      "sha256": "5a92323d3e5425f726c886521ff047fe84475c0e60afeae4b426276c5a6de15f"
+      "bytes": 78291,
+      "sha256": "0111b1707a3f4e21ec2bd47e23081aaa960d8ef086c81aa4c65599cbc533a6cb"
     },
     {
       "file": "mobile-390x844-en-classic-grand-prix.png",
@@ -132,8 +132,8 @@
       "theme": "classic-grand-prix",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 39174,
-      "sha256": "582d790a75fc4ba566815e7501688ab773696304c97f6939f6ae19c7485038af"
+      "bytes": 43880,
+      "sha256": "01c163286254b21ef89d713d3a79c1f2be5f900bdf6f16bac0487a71b8e9fe80"
     },
     {
       "file": "mobile-390x844-en-cyber-rally.png",
@@ -142,8 +142,8 @@
       "theme": "cyber-rally",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 41004,
-      "sha256": "cc2b53913de2d21ad0fdc33883a8865263d61a261e7be8d001945a997da1edc5"
+      "bytes": 44152,
+      "sha256": "3770d370c4c7add2b6b6fea030f1e0a61cae8c9164f89e58ad4f8de647e819e9"
     },
     {
       "file": "mobile-390x844-en-neon-night.png",
@@ -152,8 +152,8 @@
       "theme": "neon-night",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 40613,
-      "sha256": "356af69312e41fcf68d286a4391d88ef14aa3bbe2c1b2aeb62869cb8ad0d0c42"
+      "bytes": 43862,
+      "sha256": "6b1d1e1aca6b61edb3191face23e3dc6084adf5a12c81bf24b04a48b7e55db67"
     },
     {
       "file": "mobile-390x844-ru-classic-grand-prix.png",
@@ -162,8 +162,8 @@
       "theme": "classic-grand-prix",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 37793,
-      "sha256": "d1b8f9e436faff1948e8f974ca13897bcada4c0664496289dd345ee0f7c6090a"
+      "bytes": 43906,
+      "sha256": "aa9a10c8fe635df6d3585e042b90760cfe076bb6653c9ca99d336fce326b81e2"
     },
     {
       "file": "mobile-390x844-ru-cyber-rally.png",
@@ -172,8 +172,8 @@
       "theme": "cyber-rally",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 40172,
-      "sha256": "3751c3c0beef456c57cf9bc44bd383dc68cf0b0441cecada0185a75554b01acb"
+      "bytes": 44425,
+      "sha256": "6077ca4c7f5017129e0c94524aa061b5bd9e4e94ef7bd3727231c9ccc8f098d3"
     },
     {
       "file": "mobile-390x844-ru-neon-night.png",
@@ -182,8 +182,8 @@
       "theme": "neon-night",
       "viewport": "mobile",
       "width": 390,
-      "bytes": 39859,
-      "sha256": "90244e870a5afdc019048656c72111c2b733c27e557176f0a14977d962123036"
+      "bytes": 44020,
+      "sha256": "e6c5cb94e3a712d626112d56725fd8b1c748dcf4ca8c54174eb6201a3e0afd36"
     }
   ],
   "motion": "off",

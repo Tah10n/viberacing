@@ -9,18 +9,19 @@ const english = {
   brand: "Vibe Racing",
   car: "Car",
   carProposal: "Next-week car proposal",
-  communityDetail:
-    "Scores are self-reported by participating users. They are not audited or endorsed by OpenAI.",
-  communityDataBadge: "Community standings",
+  change: "Change",
+  coder: "Coder",
+  communityDetail: "Community · self-reported by connected devices",
+  communityDataBadge: "Community · self-reported",
   communityDataSecurityNote:
-    "Community standings contain only public derived scores and day-rounded status. Cars are visual markers until profile recipes exist. This page uses no trackers, remote fonts, account credentials, or raw token totals.",
-  communityCarCopy:
-    "This car is a stable visual marker for the standings, not a published profile recipe.",
+    "Public snapshots contain only a handle, exact weekly total, rank, rounded freshness, optional approved car, and opt-in provider percentages.",
+  communityCarCopy: "No approved public car is available for this profile.",
   communityNotice: "Community leaderboard",
   communityProfile: "Community profile",
   communityProfilePrivacy:
-    "Daily detail, exact sync time, token totals, device counts, and source identifiers stay private.",
+    "Account labels, device details, exact sync times, and daily totals stay private.",
   communityWeek: "Current Community week",
+  continueWithGithub: "Continue with GitHub",
   currentWeek: "Current demo week",
   dailyActivity: "Daily score",
   dataControl: "Data control",
@@ -34,43 +35,42 @@ const english = {
   exactTokensPrivate: "Exact token counts and source identifiers stay private.",
   freshness: "Freshness",
   heroCopy:
-    "A privacy-first vibecode rating and weekly token leaderboard where coding activity becomes a deterministic pixel-art race.",
-  heroTitle: "Build fast. Race fair.",
-  joinRace: "Join with invite",
+    "Vibe Racing adds provider-reported tokens from connected accounts of supported coding agents. No model, price, or subscription multipliers.",
+  heroTitle: "All your coding agents. Every account. One GitHub profile.",
+  howRankingWorks: "How ranking works",
+  joinRace: "Continue with GitHub",
   language: "Language",
   leaderboard: "Leaderboard",
   liveRace: "Weekly race",
-  methodology: "Scoring method",
-  methodologyCopy:
-    "Each day uses a capped logarithmic score. Weekly rank uses score, then active days; equal results share a rank. Streak and freshness are informational only.",
+  methodology: "Ranking method",
   motion: "Motion",
   motionOff: "Reduced",
   motionOn: "On",
   motionSystem: "Device setting",
-  noGlobalClaim: "Ranking covers Vibe Racing participants only — never every Codex user.",
+  noGlobalClaim:
+    "This community vibecode rating covers Vibe Racing participants only — never every coding-agent user.",
   noParticipants: "No Community participants yet.",
+  noApprovedCar: "No approved public car yet.",
   noRawTokens: "No raw token totals",
   pauseRace: "Pause race",
   points: "pts",
   primaryNavigation: "Primary navigation",
   privacyByDefault: "Privacy by default",
   profile: "Profile",
-  profileNotRanked: "This profile is not in the current top 32.",
+  profileNotFound: "This public profile is not present in the current snapshot.",
+  profileNotRanked: "This profile is not on the current leaderboard page.",
+  profileUnavailable: "The public profile summary is temporarily unavailable.",
+  providerBreakdown: "Provider mix",
   rank: "Rank",
+  rankMovementUnavailable: "Not available in this snapshot",
+  raceAlternative: "Race standings",
+  raceLoading: "Race visual loads after the semantic leaderboard.",
   resumeRace: "Resume race",
   score: "Weekly score",
   securityNote:
     "This page uses synthetic fixtures, no trackers, no remote fonts, and no account or connector credentials.",
   sharedRank: "Shared rank",
   signIn: "Sign in",
-  simulator: "Score simulator",
-  simulatorActiveDays: "Active days this week",
-  simulatorCopy:
-    "Try the public Community formula with a hypothetical daily token total. Nothing leaves this page, is stored, or changes a standing.",
-  simulatorDailyResult: "Points per active day",
-  simulatorInvalidInput: "Enter a whole number from 0 through 9,007,199,254,740,991.",
-  simulatorTokenLabel: "Hypothetical tokens per active day",
-  simulatorWeeklyResult: "Projected weekly score",
   sourceCount: "Sources",
   sourcesAggregated: "Multiple accounts can be summed as separate approved sources.",
   streak: "Streak",
@@ -81,7 +81,9 @@ const english = {
   themeNeon: "Neon Night Arcade",
   todayScore: "Today",
   tokenMethodologyCopy:
-    "Rank is the exact accepted weekly total; ties share a place. Codex totals are self-reported. Tokenizers differ, so this is not a compute or cost comparison.",
+    "Rank is the exact sum of accepted provider-reported weekly totals across connected agent accounts. Ties share a rank. There are no model, price, subscription, account-count, or device-count multipliers.",
+  tokenQualityDisclaimer:
+    "This measures token usage, not code quality. Tokenizers differ between agents.",
   tokenPrivacyCopy:
     "The weekly total is public; daily totals, exact sync time, devices, and source IDs stay private.",
   tokens: "tokens",
@@ -102,18 +104,19 @@ const russian: Record<TranslationKey, string> = {
   brand: "Vibe Racing",
   car: "Машина",
   carProposal: "Машина на следующую неделю",
-  communityDetail:
-    "Результаты заявляют сами участники. Они не проверяются и не подтверждаются OpenAI.",
-  communityDataBadge: "Рейтинг сообщества",
+  change: "Изменение",
+  coder: "Разработчик",
+  communityDetail: "Community · данные заявлены подключёнными устройствами",
+  communityDataBadge: "Community · данные участников",
   communityDataSecurityNote:
-    "В рейтинге сообщества отображаются только публичные производные баллы и округлённый до дня статус. Машины служат визуальными маркерами, пока нет рецептов профиля. Здесь нет трекеров, внешних шрифтов, данных входа и точных токенов.",
-  communityCarCopy:
-    "Эта машина — постоянный визуальный маркер в таблице, а не опубликованный рецепт профиля.",
+    "Публичный snapshot содержит только handle, точную недельную сумму, ранг, округлённую свежесть, опциональную подтверждённую машину и открытые проценты providers.",
+  communityCarCopy: "Для этого профиля нет подтверждённой публичной машины.",
   communityNotice: "Рейтинг сообщества",
   communityProfile: "Профиль сообщества",
   communityProfilePrivacy:
-    "Баллы по дням, точное время синхронизации, токены, число устройств и идентификаторы источников остаются приватными.",
+    "Названия аккаунтов, данные устройств, точное время синхронизации и дневные суммы остаются приватными.",
   communityWeek: "Текущая неделя сообщества",
+  continueWithGithub: "Продолжить с GitHub",
   currentWeek: "Текущая демо-неделя",
   dailyActivity: "Баллы по дням",
   dataControl: "Управление данными",
@@ -127,43 +130,42 @@ const russian: Record<TranslationKey, string> = {
   exactTokensPrivate: "Точные токены и идентификаторы источников остаются приватными.",
   freshness: "Обновление",
   heroCopy:
-    "Приватный vibecode rating и недельный рейтинг токенов, где активность в кодинге превращается в детерминированную пиксельную гонку.",
-  heroTitle: "Коди быстро. Гоняй честно.",
-  joinRace: "Войти по приглашению",
+    "Vibe Racing складывает provider-reported tokens из подключённых аккаунтов поддерживаемых coding agents. Без коэффициентов по модели, цене или подписке.",
+  heroTitle: "Все ваши coding agents. Все аккаунты. Один GitHub-профиль.",
+  howRankingWorks: "Как считается рейтинг",
+  joinRace: "Продолжить с GitHub",
   language: "Язык",
   leaderboard: "Таблица лидеров",
   liveRace: "Недельная гонка",
-  methodology: "Формула баллов",
-  methodologyCopy:
-    "За день начисляются ограниченные логарифмические баллы. Ранг зависит от суммы и активных дней; равные результаты делят место. Серия и обновление носят только справочный характер.",
+  methodology: "Как считается рейтинг",
   motion: "Анимация",
   motionOff: "Снижена",
   motionOn: "Включена",
   motionSystem: "Как на устройстве",
-  noGlobalClaim: "Рейтинг охватывает только участников Vibe Racing, а не всех пользователей Codex.",
+  noGlobalClaim:
+    "Этот community vibecode rating охватывает только участников Vibe Racing, а не всех пользователей coding agents.",
   noParticipants: "В рейтинге сообщества пока нет участников.",
+  noApprovedCar: "Подтверждённой публичной машины пока нет.",
   noRawTokens: "Без публикации токенов",
   pauseRace: "Остановить гонку",
   points: "б.",
   primaryNavigation: "Основная навигация",
   privacyByDefault: "Приватность по умолчанию",
   profile: "Профиль",
-  profileNotRanked: "Этого профиля нет в текущей тридцатке лидеров.",
+  profileNotFound: "Этого публичного профиля нет в текущем snapshot.",
+  profileNotRanked: "Этого профиля нет на текущей странице рейтинга.",
+  profileUnavailable: "Публичная сводка профиля временно недоступна.",
+  providerBreakdown: "Распределение по providers",
   rank: "Место",
+  rankMovementUnavailable: "Нет в этом snapshot",
+  raceAlternative: "Позиции в гонке",
+  raceLoading: "Визуальная гонка загружается после основной таблицы.",
   resumeRace: "Продолжить гонку",
   score: "Баллы за неделю",
   securityNote:
     "На странице только синтетические данные: без трекеров, внешних шрифтов, аккаунтов и ключей коннектора.",
   sharedRank: "Общее место",
   signIn: "Войти",
-  simulator: "Симулятор баллов",
-  simulatorActiveDays: "Активные дни за неделю",
-  simulatorCopy:
-    "Проверьте публичную формулу Community на условном числе токенов за день. Значение не покидает страницу, не сохраняется и не влияет на рейтинг.",
-  simulatorDailyResult: "Баллы за активный день",
-  simulatorInvalidInput: "Введите целое число от 0 до 9 007 199 254 740 991.",
-  simulatorTokenLabel: "Условные токены за активный день",
-  simulatorWeeklyResult: "Баллы за неделю",
   sourceCount: "Источники",
   sourcesAggregated:
     "Несколько аккаунтов можно суммировать как отдельные подтверждённые источники.",
@@ -175,7 +177,9 @@ const russian: Record<TranslationKey, string> = {
   themeNeon: "Неоновая аркада",
   todayScore: "Сегодня",
   tokenMethodologyCopy:
-    "Место определяет точная принятая сумма за неделю; равные суммы делят место. Итоги Codex заявляют сами участники. Токенизаторы отличаются, поэтому это не сравнение вычислений или стоимости.",
+    "Место определяет точная сумма принятых provider-reported недельных итогов всех подключённых agent accounts. Равные суммы делят место. Коэффициентов по модели, цене, подписке, числу аккаунтов или устройств нет.",
+  tokenQualityDisclaimer:
+    "Это рейтинг количества токенов, а не качества кода. Токенизаторы разных агентов отличаются.",
   tokenPrivacyCopy:
     "Недельная сумма публична; дневные суммы, точное время синхронизации, устройства и источники приватны.",
   tokens: "токенов",
@@ -212,6 +216,19 @@ export function isLocale(value: unknown): value is Locale {
 
 export function formatScore(value: number, locale: Locale): string {
   return new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US").format(value);
+}
+
+export function formatExactTokenTotal(value: string, locale: Locale): string {
+  if (!/^(?:0|[1-9][0-9]{0,59})$/.test(value)) {
+    throw new RangeError("token total must be one canonical non-negative decimal");
+  }
+  const separator = locale === "ru" ? "\u00a0" : ",";
+  const firstGroupLength = value.length % 3 || 3;
+  const groups = [value.slice(0, firstGroupLength)];
+  for (let index = firstGroupLength; index < value.length; index += 3) {
+    groups.push(value.slice(index, index + 3));
+  }
+  return groups.join(separator);
 }
 
 export function formatCarChassis(value: CarChassis, locale: Locale): string {

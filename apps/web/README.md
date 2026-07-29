@@ -2,33 +2,32 @@
 
 This workspace is the Phase 1 product shell: a responsive pixel-art race, Community leaderboard, and
 demo profile with committed synthetic fallback data. It is suitable for local design, accessibility,
-localization, and scoring review. The visible race, leaderboard, and selectable participant summary
-now request page 1 of the current server-selected Community snapshot through the exact same-origin
-leaderboard route, validate the bounded response in the browser, and retain the labeled synthetic
-fallback on any failure. Community summaries use only the public snapshot fields; exact receipt
-time, daily/account detail, device counts, and identifiers remain absent. The selected handle is
-carried only in a canonical `/?profile=handle#profile` URL. Invalid or duplicate values are ignored,
-a missing current top-32 row is not replaced, and a public signed-in profile links to its current
-summary. An ordinary same-tab selection updates the summary and URL without a reload; modified
-clicks retain native link behavior. The fallback demo garage and default product shell remain
-synthetic and unauthenticated, with no deployment database login, real user data, or deployment. A
-separate opt-in integration uses only disposable synthetic Web logins and data. The same page
-exposes an EN/RU score simulator backed by the production scoring functions. It accepts only one
-canonical non-negative safe integer and one to seven active days, keeps both values only in
-component memory, and never fetches, logs, persists, submits, or preloads account or race data. A
-separate local Phase 2 slice now implements invite redemption, GitHub OAuth state plus PKCE,
-encrypted HttpOnly continuations, initial passkey registration, returning login, a session-scoped
-passkey inventory, an account page, public-profile hide/show, source
-inventory/pause/reactivation/unlink, active-device revoke, fresh backup-passkey addition, revocation
-of an owned non-current passkey, an exact-handle fresh-passkey profile-deletion request,
-fresh-passkey recovery-code rotation with one-time display, one-time recovery-code
-replacement-passkey sign-in, and logout. It fails closed without externally provisioned
-configuration. A signed-in `/connect` page also performs one session-rate-limited pending-code
-lookup, displays only bounded device evidence and a full public-key fingerprint, then requires a
-separate fresh passkey assertion before atomic approval for an explicitly selected new or active
-existing source. Existing-source controls are encrypted and session-bound; raw source IDs do not
-enter HTML. Connector start/poll and both signed-in approval routes remain unavailable unless each
-route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the tracked example stays false.
+localization, and direct-token ranking review. The visible race, leaderboard, and selectable
+participant summary server-render page 1 of the current server-selected Community snapshot before
+any canvas or browser enhancement and retain a clearly labeled synthetic direct-token fallback on
+any failure. The four-column semantic table remains readable with JavaScript or animation disabled;
+the top-32 race loads afterward from that same payload and positions cars only by rank/display
+position. Exact decimal totals remain strings through the DOM. Community summaries use only the
+public snapshot fields; exact receipt time, daily/account detail, device counts, and identifiers
+remain absent. The selected handle is carried only in a canonical `/?profile=handle#profile` URL,
+and the separately materialized profile summary remains available outside page 1. An ordinary
+same-tab selection updates the summary and URL without a reload; modified clicks retain native link
+behavior. The fallback and default product shell remain synthetic and unauthenticated, with no
+deployment database login, real user data, or deployment. A separate opt-in integration uses only
+disposable synthetic Web logins and data. The legacy simulator, logarithmic score, points
+terminology, and public score/race/status consumers are absent. A separate local Phase 2 slice now
+implements invite redemption, GitHub OAuth state plus PKCE, encrypted HttpOnly continuations,
+initial passkey registration, returning login, a session-scoped passkey inventory, an account page,
+public-profile hide/show, source inventory/pause/reactivation/unlink, active-device revoke, fresh
+backup-passkey addition, revocation of an owned non-current passkey, an exact-handle fresh-passkey
+profile-deletion request, fresh-passkey recovery-code rotation with one-time display, one-time
+recovery-code replacement-passkey sign-in, and logout. It fails closed without externally
+provisioned configuration. A signed-in `/connect` page also performs one session-rate-limited
+pending-code lookup, displays only bounded device evidence and a full public-key fingerprint, then
+requires a separate fresh passkey assertion before atomic approval for an explicitly selected new or
+active existing source. Existing-source controls are encrypted and session-bound; raw source IDs do
+not enter HTML. Connector start/poll and both signed-in approval routes remain unavailable unless
+each route module resolves exact `VIBERACING_PAIRING_ENABLED=true`; the tracked example stays false.
 Creating a new source additionally requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in the
 page and both approval modules. Its tracked example stays false; active existing-source pairing
 remains available when pairing itself is enabled. These flows have no live-user or deployment
@@ -74,9 +73,9 @@ the emitted standalone artifact, bundles the reviewed `pg` driver, and launches 
 processes on loopback against a TLS-enabled disposable PostgreSQL database with one ephemeral
 self-signed DNS certificate. It verifies widened-login denial, exact narrow-login contracts, TLS
 1.2/1.3, and that neither path mutates private tables. Its test-only database-scoped `auto_explain`
-configuration additionally verifies the four fixed adapter plans and their four nested
-score/race/status/token projections without logging parameters or retaining the plan log. It also
-proves the four-request no-queue admission boundary with four observed blocked score queries and a
+configuration additionally verifies the three fixed adapter plans and their three nested
+materialized-snapshot projections without logging parameters or retaining the plan log. It also
+proves the shared four-request no-queue admission boundary with four observed blocked reads and a
 rejected fifth request. The Docker gate is intentionally outside root `verify`.
 
 The separate stored viewport evidence covers every combination of three reviewed breakpoints, both
@@ -85,7 +84,7 @@ verifies the exact PNG inventory, dimensions, digests, and public metadata polic
 explicit local `verify:phase1-visual-baselines` run additionally refuses browser product/platform
 drift, decodes both images inside isolated Chromium, and requires zero changed pixels without
 writing repository files. It then dispatches browser keyboard events through CDP, requires the
-closed 16-target focus order plus skip-target transfer and pause-button activation, validates named
+closed 23-target focus order plus skip-target transfer and pause-button activation, validates named
 landmarks/controls/table/canvas in Chromium's accessibility tree, and repeats the focus/border
 checks with forced colors active. Finally, it disables Chromium's network cache and takes three LCP,
 CLS, and trusted pointer-interaction duration samples in both animation-on and reduced-motion
@@ -116,9 +115,11 @@ enabling or disabling them does not change enrollment, pairing, or source-creati
 
 | Path                                                                             | Responsibility                                                           | Trust boundary                                                                       |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `app/page.tsx`                                                                   | Selects the current week and builds the synthetic fallback               | Must pass only public labels and presentation data into the client tree              |
-| `lib/race-data.ts`                                                               | Clearly synthetic raw activity fixtures and payload projection           | Marked `server-only`; never replace with exports or real account data                |
-| `lib/public-snapshot-client.ts`                                                  | Loads and validates current snapshot page 1 for the visible race         | Exact same-origin GET; no credentials; closed generated contract                     |
+| `app/page.tsx`                                                                   | Selects the current week and server-renders one snapshot or fallback     | Must pass only validated public snapshot data into the client tree                   |
+| `lib/race-data.ts`                                                               | Clearly synthetic exact-token fallback projection                        | Marked `server-only`; never replace with exports or real account data                |
+| `lib/public-home-snapshot.ts`                                                    | Loads current page/profile materializations for SSR                      | Shared four-call admission; exact gate; no raw aggregation or partial payload        |
+| `lib/public-season.ts`                                                           | Derives the current UTC week and validates public handles                | Pure bounded helpers; no environment, storage, or request authority                  |
+| `lib/race-visual.ts`                                                             | Reduces one page to at most 32 rank-positioned visual cars               | Never reads or converts weekly token totals                                          |
 | `lib/public-snapshot-store.ts`                                                   | Executes the three fixed materialized-snapshot procedures                | No aggregation; verifies role, payload digest, ETag, and generated contract          |
 | `lib/public-snapshot-route.ts`                                                   | Parses and serializes the three public snapshot GET boundaries           | Exact path/query/headers, generic errors, admission, cache policy, and no CORS       |
 | `lib/public-snapshot-config.ts`                                                  | Resolves one shared default-off public-snapshot decision                 | Exact own string value; no database/request field or reflection                      |
@@ -153,9 +154,7 @@ enabling or disabling them does not change enrollment, pairing, or source-creati
 | `lib/pairing-database-pool.ts`                                                   | Wraps `pg` with fixed pairing start/approval/activation calls            | No generic query; copies/clears byte parameters; stable idle-error signal            |
 | `lib/public-snapshot-database-config.ts`                                         | Parses the dedicated Web login and TLS/pool contract                     | Owner settings are separate; production is verify-full; errors reflect no value      |
 | `lib/public-snapshot-database-pool.ts`                                           | Wraps `pg` with narrow connect/query/release/close authority             | Four connections; bounded waits; stable idle-error signal only                       |
-| `lib/scoring.ts`                                                                 | Bounded daily/weekly score and deterministic rank calculation            | Treat all future device input as untrusted and validate before calling               |
-| `lib/score-simulator.ts`                                                         | Parses hypothetical input and projects daily/weekly score                | Canonical safe integer and one-to-seven days; delegates to production scoring        |
-| `lib/race-types.ts`                                                              | Client-safe participant and demo-profile shape                           | Must not gain raw tokens or source/account identifiers                               |
+| `lib/race-types.ts`                                                              | Client-safe snapshot and rank-only race shapes                           | Exact totals stay strings; no source/account/device or daily-observation fields      |
 | `lib/public-origin.ts`                                                           | Strict parser for the canonical social-metadata origin                   | Server-only; hosted origins require HTTPS DNS and no extra URL parts                 |
 | `lib/car-recipe.ts`                                                              | Versioned closed-enum renderer and code-native sprites                   | Client-safe type/render data only; no schema runtime or arbitrary content            |
 | `lib/car-proposal-service.ts`                                                    | Owns exact-session proposal/read/approve/reject composition              | Generated validation, hashed/cleared proof, server IDs, opaque decision control      |
@@ -164,8 +163,7 @@ enabling or disabling them does not change enrollment, pairing, or source-creati
 | `lib/connector-car-proposal-http.ts`                                             | Owns the closed device proposal POST boundary                            | Exact path/body/headers, four-call no-queue admission, generic no-store result       |
 | `components/car-recipe-preview.tsx`                                              | Server-renders one exact recipe in all three themes                      | Semantic indexed pixels; no client script, inline user style, SVG, file, or URL      |
 | `components/pixel-race-canvas.tsx`                                               | Deterministic code-native renderer                                       | Draws fixed primitives only; semantic DOM description is mandatory                   |
-| `components/score-simulator.tsx`                                                 | Renders the local-only EN/RU public score simulator                      | Component memory only; no form, name, fetch, storage, log, account, or standing      |
-| `components/race-experience.tsx`                                                 | EN/RU race, selectable summary, theme, and motion controls               | Community summary uses closed public fields; storage is non-personal preferences     |
+| `components/race-experience.tsx`                                                 | SSR-first EN/RU leaderboard, lazy race, public profile, and controls     | Exact totals never become Number; storage is non-personal preferences only           |
 | `proxy.ts`                                                                       | Per-response nonce CSP                                                   | Keep production CSP fail-closed and free of remote origins                           |
 | `next.config.ts`                                                                 | Static security headers and build isolation                              | Turbopack must remain pinned to this repository root                                 |
 
@@ -216,8 +214,9 @@ rank and display positions, bounded provider mix, rounded freshness, and optiona
 outside the first 32 display rows. Account/source identifiers, proposal state, exact receipt time,
 and daily account history enter no route. There is no deployment certificate/login, external
 TLS/edge route, deployed shared cache, edge rate policy, or representative/deployed query-plan,
-load, or capacity result. The local home page loads current page 1 only after hydration and keeps
-its synthetic fallback on every failure.
+load, or capacity result. The local home page reads only current materializations during SSR, keeps
+its direct-token synthetic fallback on every failure, and does not issue one browser request per
+participant.
 
 The opt-in `test:web:postgres-integration` gate builds the emitted standalone artifact, explicitly
 bundles Next's otherwise externalized reviewed `pg` driver, and applies the reviewed migration
@@ -527,36 +526,40 @@ the synthetic home page and build do not construct the service.
 
 ## Public client data contract
 
-The validated Community page may receive only public handles plus bounded weekly score, rank,
-active-day count, source count, season metadata, and an optional exact active `CarRecipeV1`. The UI
-derives an opaque presentation ID and uses a fixed repository-owned visual-marker car when that
-recipe is absent; it receives no proposal state, Community daily detail, or device count. The
-optional page query contains one already-public canonical handle only; it is neither sent to the
-race API nor persisted in browser storage.
+The validated Community home receives page 1 of one materialized leaderboard plus, when available,
+one separately materialized public profile. A leaderboard row contains only a public handle, one
+canonical decimal weekly-token string, competition rank, rounded freshness, and an optional exact
+active `CarRecipeV1`; participant count and closed season metadata belong to the page. The profile
+adds only its trust tier and optional opt-in provider percentages. The UI uses a fixed
+repository-owned fallback car recipe when a row has no approved recipe, and the canvas receives only
+rank/display position, handle, and visual recipe. It receives no proposal state, account count,
+installation count, device detail, source detail, model detail, daily observation, or exact receipt
+time. The optional page query contains one already-public canonical handle only; it is not persisted
+in browser storage.
 
-The synthetic fallback may additionally receive only:
+The labeled synthetic fallback uses the same public shape:
 
-- opaque synthetic participant IDs and handles;
-- bounded weekly score, rank, active-day count, streak display, and freshness;
-- the synthetic demo profile's bounded daily scores;
-- aggregate source/device counts;
-- a validated enum-only `CarRecipe`.
+- public synthetic handles;
+- canonical decimal weekly-token strings, competition ranks, and rounded freshness;
+- closed season metadata and participant count;
+- an optional exact `CarRecipeV1`.
 
-The browser payload must not contain raw token buckets, source IDs, Codex account IDs, email,
-provider credentials, access tokens, prompts, conversation data, repository data, local paths,
-internal abuse signals, or arbitrary URLs. Tests recursively inspect the current payload for these
-classes. Future production DTOs require runtime schema validation and the same negative assertions.
+The browser payload must not contain raw token buckets, account or installation identifiers, source
+or device identifiers, provider credentials, access tokens, prompts, conversation data, repository
+data, local paths, internal abuse signals, or arbitrary URLs. Tests exercise the exact runtime
+schemas and negative boundaries.
 
-Multiple Codex accounts are represented as separate approved sources under one profile in the
-planned product. Their activity may be summed only after source-bound authorization, with a single
-profile daily/weekly cap and same-source device deduplication. The prototype demonstrates the
-aggregate source count; it does not pair or verify accounts.
+Multiple supported agent accounts may contribute only through server-side accepted observations and
+atomic usage accounting. Public Web code receives the resulting exact weekly sum and cannot infer
+how many accounts, installations, devices, observations, or providers contributed to it.
 
 ## Security and privacy behavior
 
-- Every ranking surface says Community/self-reported and explicitly disclaims OpenAI verification.
-- Verified mode is disabled; scores confer no prize, privilege, or authorization.
-- Exact activity is projected to bounded scores before client serialization.
+- Every ranking surface says Community/self-reported, states that token usage is not code quality,
+  and warns that tokenizers differ between agents.
+- Verified mode is disabled; rank and token totals confer no prize, privilege, or authorization.
+- Weekly totals remain canonical decimal strings through validation, SSR, selection, formatting, and
+  the DOM; no client ranking path converts them to JavaScript `Number`.
 - CSP uses a fresh cryptographic nonce for each navigation and `strict-dynamic` in production.
 - Framing, MIME sniffing, unnecessary browser capabilities, referrer leakage, and remote image
   sources are denied by policy. WebAuthn creation remains same-origin for initial enrollment, and
@@ -568,8 +571,8 @@ aggregate source count; it does not pair or verify accounts.
   encrypted HttpOnly cookies; rendering still works when local storage is blocked.
 - There are no trackers, analytics calls, remote fonts, or remote images. The synthetic race needs
   no runtime secret. Enrollment reads only its exact server-side OAuth/cookie/RP settings when an
-  auth route or authenticated page is reached; the score and pairing adapters likewise construct
-  their dedicated server boundaries lazily.
+  auth route or authenticated page is reached; the public-snapshot and pairing adapters likewise
+  construct their dedicated server boundaries lazily.
 - The pure pairing kernel accepts only one exact plain-object material tuple, copies the fixed
   challenge/public-key bytes, reconstructs the versioned message, and uses strict Ed25519 semantics.
   It returns only a generic boolean. The separate activation application owns protected poll lookup,
@@ -609,10 +612,11 @@ cases additionally cover exact HMAC derivation and rotation, protected configura
 two-candidate SQL, read-write role probes, the shared strict proof, hostile input/result/dependency
 shapes, server IDs, admission/timing, generic failures, clearing, release, and close without a real
 key or connection. Canvas tests execute real render loops against a typed context stub, including
-animated and no-context paths. Visible-score tests cover current-week selection, the exact
-credential-free current-snapshot fetch, closed public response mapping, freshness/token presentation
-and bounds, unsafe-decimal rejection, success/fallback states, and empty standings. Preference tests
-cover valid settings, reduced motion, pausing, invalid/blocked storage, and cleanup.
+animated and no-context paths. Public-home tests cover module gate, shared admission, exact SSR
+snapshot/profile mapping, missing/unavailable profiles, 60-digit string formatting, semantic
+no-canvas output, same-tab selection, reduced motion, delayed race enhancement, fallback, and empty
+standings. Preference tests cover valid settings, reduced motion, pausing, invalid/blocked storage,
+and cleanup.
 
 The separate Docker-backed Web integration exercises the otherwise-thin framework entrypoints with
 real loopback HTTP and the actual `pg` adapter. It validates the three final contracts, four absent

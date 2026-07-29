@@ -4,6 +4,7 @@ import {
   dayLabels,
   formatCarChassis,
   formatDayCount,
+  formatExactTokenTotal,
   formatFreshness,
   formatScore,
   isLocale,
@@ -26,6 +27,11 @@ describe("localization", () => {
   it("formats scores, days, freshness, and closed car enums for each locale", () => {
     expect(formatScore(1234, "en")).toBe("1,234");
     expect(formatScore(1234, "ru")).toMatch(/^1[\s\u00a0]234$/);
+    expect(formatExactTokenTotal("123456789012345678901234567890", "en")).toBe(
+      "123,456,789,012,345,678,901,234,567,890",
+    );
+    expect(formatExactTokenTotal("1234567", "ru")).toBe("1\u00a0234\u00a0567");
+    expect(() => formatExactTokenTotal("01", "en")).toThrow(RangeError);
     expect(formatFreshness(0, "en")).toBe("today");
     expect(formatFreshness(2, "ru")).toBe("2 дня");
     expect(formatFreshness(null, "en")).toBe("—");

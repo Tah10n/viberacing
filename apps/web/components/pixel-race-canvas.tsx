@@ -3,14 +3,13 @@
 import { useEffect, useRef } from "react";
 
 import { buildCarSprite, buildCarTrail, carPalette, type SpritePixel } from "@/lib/car-recipe";
-import type { PublicRaceParticipant } from "@/lib/race-types";
-import { scoreProgress } from "@/lib/scoring";
+import type { RaceVisualParticipant } from "@/lib/race-types";
 import { canvasThemes, type RaceThemeId } from "@/lib/theme";
 
 interface PixelRaceCanvasProps {
   readonly animate: boolean;
   readonly description: string;
-  readonly participants: readonly PublicRaceParticipant[];
+  readonly participants: readonly RaceVisualParticipant[];
   readonly theme: RaceThemeId;
 }
 
@@ -76,7 +75,7 @@ function pixelColor(pixel: SpritePixel, palette: ReturnType<typeof carPalette>):
 
 function drawCar(
   context: CanvasRenderingContext2D,
-  participant: PublicRaceParticipant,
+  participant: RaceVisualParticipant,
   theme: RaceThemeId,
   x: number,
   y: number,
@@ -112,7 +111,7 @@ function drawCar(
 
 function drawFrame(
   context: CanvasRenderingContext2D,
-  participants: readonly PublicRaceParticipant[],
+  participants: readonly RaceVisualParticipant[],
   theme: RaceThemeId,
   frame: number,
 ): void {
@@ -120,10 +119,9 @@ function drawFrame(
   drawCity(context, theme);
   drawTrack(context, theme, frame % 16);
   const visibleParticipants = participants.slice(0, 5);
-  const leaderScore = visibleParticipants[0]?.weeklyScore ?? 0;
   for (const [index, participant] of visibleParticipants.entries()) {
-    const progress = scoreProgress(participant.weeklyScore, leaderScore);
-    const x = 18 + progress * 230 - index * 2;
+    const rankOffset = Math.min(participant.rankPosition - 1, 10);
+    const x = 250 - rankOffset * 21 - index * 2;
     const bob = frame === 0 ? 0 : (frame + index) % 2;
     drawCar(context, participant, theme, x, 77 + index * 17 + bob);
   }

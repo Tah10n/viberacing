@@ -10,8 +10,8 @@ apply.
   workstation-derived values into it.
 - Client-facing leaderboard/race payloads contain exact decimal token strings and public
   presentation fields, never source/account/device identifiers or raw daily observations. Do not
-  approximate an exact decimal; a transitional visual adapter may accept only a proven safe integer,
-  and the final semantic leaderboard must keep the canonical string.
+  approximate an exact decimal or pass totals through JavaScript `Number`; format the canonical
+  string directly. Canvas position derives from rank/display position, never from a coerced total.
 - Community results are self-reported. Keep the disclaimer visible and Verified mode unreachable.
 - `CarRecipe` remains a closed enum with fixed repository-owned output. Do not add arbitrary text,
   markup, styles, colors, files, SVG, or URLs.
@@ -225,12 +225,11 @@ manual diff review.
   boundary.
 - Update `lib/i18n.ts` with EN/RU key parity for every user-visible string.
 - Prefer semantic HTML as the authoritative experience. Canvas is enhancement and must retain a
-  useful accessible description and reduced-motion behavior.
-- Keep scoring/ranking deterministic, bounded, and covered at caps, invalid inputs, and ties.
-- Keep the public score simulator explicitly hypothetical and local-only. Accept one canonical
-  non-negative safe integer plus one to seven active days, call the production scoring functions,
-  and retain input only in component memory. Do not add a form name/action, fetch, logging,
-  persistence, account/race prefill, raw-token display outside the control, or standing mutation.
+  useful accessible description and reduced-motion behavior. The exact snapshot table must
+  server-render before the lazy canvas, remain useful with JavaScript disabled, expose only
+  rank/coder/weekly tokens/change as competitive columns, and keep the Community disclaimer visible.
+- Do not restore the score simulator, logarithmic scoring, points terminology, active/source/device
+  ranking factors, or any legacy `/v1/community/*` browser consumer.
 - Exercise actual state changes and production code paths in tests. Do not lower coverage thresholds
   or disable axe rules except for jsdom's documented inability to measure visual contrast; browser
   evidence must cover that gap.
