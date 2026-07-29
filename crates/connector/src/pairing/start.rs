@@ -447,6 +447,10 @@ mod tests {
 
     #[test]
     fn signs_exact_manifest_digest_and_context_without_raw_provider_data() {
+        let vector: Value = serde_json::from_str(include_str!(
+            "../../../../contracts/v1/connector-pairing-start-possession.test-vector.json"
+        ))
+        .unwrap();
         let signed_at = "2026-07-28T12:34:56.789Z".to_owned();
         let client_id = "AQEBAQEBAQEBAQEBAQEBAQ".to_owned();
         let nonce = [2_u8; 16];
@@ -494,6 +498,17 @@ mod tests {
             .verifying_key()
             .verify_strict(message.as_bytes(), &signature)
             .unwrap();
+        assert_eq!(
+            serde_json::to_value(prepared.manifest()).unwrap(),
+            vector["manifest"]
+        );
+        assert_eq!(
+            String::from_utf8(manifest_json).unwrap(),
+            vector["canonicalManifest"]
+        );
+        assert_eq!(digest_hex, vector["manifestDigest"]);
+        assert_eq!(message, vector["possessionMessage"]);
+        assert_eq!(proof["signature"], vector["possessionSignature"]);
     }
 
     #[test]

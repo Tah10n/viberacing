@@ -25,7 +25,7 @@ CREATE TABLE viberacing_private.agent_providers (
 
 INSERT INTO viberacing_private.agent_providers (provider_code, display_name, state)
 VALUES
-  ('codex', 'Codex', 'recognized'),
+  ('codex', 'Codex', 'supported'),
   ('claude_code', 'Claude Code', 'recognized'),
   ('opencode', 'opencode', 'recognized'),
   ('qwen_code', 'Qwen Code', 'recognized'),
@@ -70,8 +70,8 @@ CREATE TABLE viberacing_private.agent_accounting_revisions (
     UNIQUE (provider_code, accounting_revision, scope_kind)
 );
 
--- This exact revision is recognized but remains disabled until its final reader, privacy, portable,
--- and end-to-end evidence is present later in this branch.
+-- Codex is the only supported reader in this bootstrap. Its exact 0.144.5 candidate parser,
+-- portable boundary, batch pairing, and first-sync path are covered by repository-owned evidence.
 INSERT INTO viberacing_private.agent_accounting_revisions (
   provider_code,
   accounting_revision,
@@ -90,7 +90,7 @@ VALUES (
   'provider_utc_date',
   35,
   '0.0.0',
-  false
+  true
 );
 
 CREATE TABLE viberacing_private.agent_accounts (
@@ -269,6 +269,7 @@ CREATE TABLE viberacing_private.pairing_transactions (
     REFERENCES viberacing_private.connector_installations(installation_id) ON DELETE CASCADE,
   profile_id uuid REFERENCES viberacing_private.profiles(profile_id) ON DELETE CASCADE,
   manifest_digest bytea NOT NULL,
+  start_proof_digest bytea NOT NULL UNIQUE,
   poll_verifier_digest bytea NOT NULL UNIQUE,
   user_code_verifier_digest bytea NOT NULL UNIQUE,
   possession_challenge bytea NOT NULL,
@@ -283,6 +284,7 @@ CREATE TABLE viberacing_private.pairing_transactions (
     CHECK (pairing_id ~ '^pair_[A-Za-z0-9_-]{22}$'),
   CONSTRAINT pairing_transactions_digest_shape CHECK (
     pg_catalog.octet_length(manifest_digest) = 32
+    AND pg_catalog.octet_length(start_proof_digest) = 32
     AND pg_catalog.octet_length(poll_verifier_digest) = 32
     AND pg_catalog.octet_length(user_code_verifier_digest) = 32
     AND pg_catalog.octet_length(possession_challenge) = 32
@@ -345,6 +347,42 @@ CREATE TABLE viberacing_private.pairing_code_attempt_windows (
   )
 );
 
+CREATE TABLE viberacing_private.pairing_request_windows (
+  operation varchar(5) NOT NULL,
+  bucket smallint NOT NULL,
+  window_started_at timestamptz(3) NOT NULL,
+  attempt_count integer NOT NULL,
+  CONSTRAINT pairing_request_windows_operation CHECK (operation IN ('start', 'poll')),
+  CONSTRAINT pairing_request_windows_bucket CHECK (bucket BETWEEN -1 AND 63),
+  CONSTRAINT pairing_request_windows_state_shape CHECK (
+    (
+      attempt_count = 0
+      AND window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    )
+    OR (
+      attempt_count BETWEEN 1 AND 1000001
+      AND window_started_at > TIMESTAMPTZ '1970-01-01 00:00:00+00'
+    )
+  ),
+  CONSTRAINT pairing_request_windows_identity PRIMARY KEY (operation, bucket)
+);
+
+INSERT INTO viberacing_private.pairing_request_windows (
+  operation,
+  bucket,
+  window_started_at,
+  attempt_count
+)
+SELECT
+  operation_record.operation,
+  bucket_record.bucket,
+  TIMESTAMPTZ '1970-01-01 00:00:00+00',
+  0
+FROM (
+  VALUES ('poll'::varchar(5)), ('start'::varchar(5))
+) AS operation_record(operation)
+CROSS JOIN pg_catalog.generate_series(-1, 63) AS bucket_record(bucket);
+
 CREATE TABLE viberacing_private.pairing_candidates (
   pairing_id varchar(27) NOT NULL
     REFERENCES viberacing_private.pairing_transactions(pairing_id) ON DELETE CASCADE,
@@ -357,6 +395,9 @@ CREATE TABLE viberacing_private.pairing_candidates (
   fingerprint_digest bytea,
   proposed_sync_public_key bytea NOT NULL UNIQUE,
   safe_local_display_label varchar(64) NOT NULL,
+  preview_current_week_token_total varchar(60) NOT NULL,
+  preview_last_usage_date date,
+  preview_status varchar(24) NOT NULL,
   decision varchar(16) NOT NULL DEFAULT 'pending',
   target_agent_account_id varchar(26),
   approved_device_key_id varchar(26),
@@ -392,6 +433,19 @@ CREATE TABLE viberacing_private.pairing_candidates (
   CONSTRAINT pairing_candidates_label_bounded CHECK (
     pg_catalog.length(safe_local_display_label) BETWEEN 1 AND 64
     AND safe_local_display_label !~ '[[:cntrl:]]'
+  ),
+  CONSTRAINT pairing_candidates_preview_total_canonical CHECK (
+    preview_current_week_token_total ~ '^(0|[1-9][0-9]{0,59})$'
+  ),
+  CONSTRAINT pairing_candidates_preview_status_closed CHECK (
+    preview_status IN (
+      'ready',
+      'incomplete_period',
+      'reader_error',
+      'unavailable',
+      'unsupported_scope',
+      'unsupported_version'
+    )
   ),
   CONSTRAINT pairing_candidates_decision_closed CHECK (
     decision IN ('pending', 'create', 'attach_existing', 'skip')
@@ -523,6 +577,7 @@ BEGIN
   IF NEW.pairing_id <> OLD.pairing_id
     OR NEW.installation_id <> OLD.installation_id
     OR NEW.manifest_digest <> OLD.manifest_digest
+    OR NEW.start_proof_digest <> OLD.start_proof_digest
     OR NEW.poll_verifier_digest <> OLD.poll_verifier_digest
     OR NEW.user_code_verifier_digest <> OLD.user_code_verifier_digest
     OR NEW.possession_challenge <> OLD.possession_challenge
@@ -560,6 +615,9 @@ BEGIN
     OR NEW.fingerprint_digest IS DISTINCT FROM OLD.fingerprint_digest
     OR NEW.proposed_sync_public_key <> OLD.proposed_sync_public_key
     OR NEW.safe_local_display_label <> OLD.safe_local_display_label
+    OR NEW.preview_current_week_token_total <> OLD.preview_current_week_token_total
+    OR NEW.preview_last_usage_date IS DISTINCT FROM OLD.preview_last_usage_date
+    OR NEW.preview_status <> OLD.preview_status
     OR OLD.decision <> 'pending'
     OR NEW.decision = 'pending'
   THEN
@@ -605,6 +663,156 @@ CREATE TRIGGER agent_accounting_revisions_enforce_update
 BEFORE UPDATE ON viberacing_private.agent_accounting_revisions
 FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_accounting_revision_update();
 
+CREATE FUNCTION viberacing_api.admit_pairing_transport_request(
+  p_operation text,
+  p_client_identity_digest bytea,
+  p_global_limit integer,
+  p_bucket_limit integer,
+  p_window_seconds integer
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+SET lock_timeout = '5s'
+SET statement_timeout = '5s'
+AS $function$
+DECLARE
+  now_at timestamptz(3) := pg_catalog.statement_timestamp();
+  client_bucket smallint;
+  global_allowed boolean;
+  bucket_allowed boolean;
+BEGIN
+  IF p_operation IS NULL
+    OR p_operation NOT IN ('start', 'poll')
+    OR pg_catalog.octet_length(p_client_identity_digest) IS DISTINCT FROM 32
+    OR p_global_limit IS NULL
+    OR p_global_limit NOT BETWEEN 1 AND 1000000
+    OR p_bucket_limit IS NULL
+    OR p_bucket_limit NOT BETWEEN 1 AND p_global_limit
+    OR p_window_seconds IS NULL
+    OR p_window_seconds NOT BETWEEN 1 AND 3600 THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  client_bucket := (pg_catalog.get_byte(p_client_identity_digest, 0) % 64)::smallint;
+
+  -- Every caller takes the operation-global row before its fixed client bucket. The two-row
+  -- deterministic order prevents deadlocks and counts saturate one above the accepted maximum.
+  UPDATE viberacing_private.pairing_request_windows AS window_record
+  SET
+    window_started_at = CASE
+      WHEN window_record.window_started_at
+        + pg_catalog.make_interval(secs => p_window_seconds) <= now_at
+        THEN now_at
+      ELSE window_record.window_started_at
+    END,
+    attempt_count = CASE
+      WHEN window_record.window_started_at
+        + pg_catalog.make_interval(secs => p_window_seconds) <= now_at
+        THEN 1
+      ELSE LEAST(window_record.attempt_count + 1, 1000001)
+    END
+  WHERE window_record.operation = p_operation
+    AND window_record.bucket = -1
+  RETURNING window_record.attempt_count <= p_global_limit
+  INTO global_allowed;
+
+  UPDATE viberacing_private.pairing_request_windows AS window_record
+  SET
+    window_started_at = CASE
+      WHEN window_record.window_started_at
+        + pg_catalog.make_interval(secs => p_window_seconds) <= now_at
+        THEN now_at
+      ELSE window_record.window_started_at
+    END,
+    attempt_count = CASE
+      WHEN window_record.window_started_at
+        + pg_catalog.make_interval(secs => p_window_seconds) <= now_at
+        THEN 1
+      ELSE LEAST(window_record.attempt_count + 1, 1000001)
+    END
+  WHERE window_record.operation = p_operation
+    AND window_record.bucket = client_bucket
+  RETURNING window_record.attempt_count <= p_bucket_limit
+  INTO bucket_allowed;
+
+  IF global_allowed IS NULL OR bucket_allowed IS NULL THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  RETURN global_allowed AND bucket_allowed;
+EXCEPTION
+  WHEN data_exception OR integrity_constraint_violation OR lock_not_available THEN
+    PERFORM viberacing_private.operation_failed();
+    RETURN false;
+END
+$function$;
+
+CREATE FUNCTION viberacing_api.reset_expired_pairing_request_windows()
+RETURNS TABLE (
+  reset_windows integer
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+SET lock_timeout = '5s'
+SET statement_timeout = '30s'
+AS $function$
+DECLARE
+  candidate record;
+  changed_rows bigint;
+  cutoff_at timestamptz(3);
+  inventory_count bigint;
+BEGIN
+  SELECT pg_catalog.count(*)
+  INTO inventory_count
+  FROM viberacing_private.pairing_request_windows;
+
+  IF inventory_count <> 130 THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  -- Admission accepts at most a one-hour window. Resetting only older rows preserves every valid
+  -- policy while bounding retained aggregate timestamps and counts after traffic stops.
+  cutoff_at := pg_catalog.clock_timestamp() - INTERVAL '1 hour';
+  reset_windows := 0;
+
+  FOR candidate IN
+    SELECT
+      window_record.operation,
+      window_record.bucket
+    FROM viberacing_private.pairing_request_windows AS window_record
+    WHERE window_record.attempt_count > 0
+      AND window_record.window_started_at <= cutoff_at
+    ORDER BY window_record.operation, window_record.bucket
+    LIMIT 130
+    FOR UPDATE OF window_record
+  LOOP
+    UPDATE viberacing_private.pairing_request_windows AS window_record
+    SET
+      window_started_at = TIMESTAMPTZ '1970-01-01 00:00:00+00',
+      attempt_count = 0
+    WHERE window_record.operation = candidate.operation
+      AND window_record.bucket = candidate.bucket
+      AND window_record.attempt_count > 0
+      AND window_record.window_started_at <= cutoff_at;
+
+    GET DIAGNOSTICS changed_rows = ROW_COUNT;
+    IF changed_rows <> 1 THEN
+      PERFORM viberacing_private.operation_failed();
+    END IF;
+    reset_windows := reset_windows + 1;
+  END LOOP;
+
+  RETURN NEXT;
+EXCEPTION
+  WHEN lock_not_available OR integrity_constraint_violation THEN
+    PERFORM viberacing_private.operation_failed();
+    RETURN;
+END
+$function$;
+
 CREATE FUNCTION viberacing_api.start_pairing_batch(
   p_pairing_id text,
   p_installation_id text,
@@ -614,6 +822,7 @@ CREATE FUNCTION viberacing_api.start_pairing_batch(
   p_os_family text,
   p_architecture text,
   p_manifest_digest bytea,
+  p_start_proof_digest bytea,
   p_poll_verifier_digest bytea,
   p_user_code_verifier_digest bytea,
   p_possession_challenge bytea,
@@ -638,6 +847,7 @@ BEGIN
     OR p_installation_id IS NULL
     OR p_candidates IS NULL
     OR p_manifest_digest IS NULL
+    OR p_start_proof_digest IS NULL
     OR p_poll_verifier_digest IS NULL
     OR p_user_code_verifier_digest IS NULL
     OR p_possession_challenge IS NULL
@@ -645,6 +855,7 @@ BEGIN
     OR p_installation_id !~ '^ins_[A-Za-z0-9_-]{22}$'
     OR pg_catalog.octet_length(p_installation_public_key) <> 32
     OR pg_catalog.octet_length(p_manifest_digest) <> 32
+    OR pg_catalog.octet_length(p_start_proof_digest) <> 32
     OR pg_catalog.octet_length(p_poll_verifier_digest) <> 32
     OR pg_catalog.octet_length(p_user_code_verifier_digest) <> 32
     OR pg_catalog.octet_length(p_possession_challenge) <> 32
@@ -652,9 +863,6 @@ BEGIN
     OR p_expires_at > pg_catalog.transaction_timestamp() + interval '10 minutes'
     OR pg_catalog.jsonb_typeof(p_candidates) <> 'array'
     OR pg_catalog.jsonb_array_length(p_candidates) NOT BETWEEN 1 AND 16
-    OR p_manifest_digest <> pg_catalog.sha256(
-      pg_catalog.convert_to(p_candidates::text, 'UTF8')
-    )
   THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
@@ -704,6 +912,7 @@ BEGIN
     pairing_id,
     installation_id,
     manifest_digest,
+    start_proof_digest,
     poll_verifier_digest,
     user_code_verifier_digest,
     possession_challenge,
@@ -713,6 +922,7 @@ BEGIN
     p_pairing_id,
     p_installation_id,
     p_manifest_digest,
+    p_start_proof_digest,
     p_poll_verifier_digest,
     p_user_code_verifier_digest,
     p_possession_challenge,
@@ -728,7 +938,7 @@ BEGIN
     INTO v_key_count
     FROM pg_catalog.jsonb_object_keys(v_candidate);
 
-    IF v_key_count <> 9
+    IF v_key_count <> 10
       OR NOT v_candidate ?& ARRAY[
         'candidateId',
         'provider',
@@ -738,7 +948,8 @@ BEGIN
         'fingerprintKind',
         'fingerprintDigest',
         'syncPublicKey',
-        'displayLabel'
+        'displayLabel',
+        'preview'
       ]
       OR pg_catalog.jsonb_typeof(v_candidate -> 'candidateId') <> 'string'
       OR pg_catalog.jsonb_typeof(v_candidate -> 'provider') <> 'string'
@@ -747,6 +958,7 @@ BEGIN
       OR pg_catalog.jsonb_typeof(v_candidate -> 'fingerprintKind') <> 'string'
       OR pg_catalog.jsonb_typeof(v_candidate -> 'syncPublicKey') <> 'string'
       OR pg_catalog.jsonb_typeof(v_candidate -> 'displayLabel') <> 'string'
+      OR pg_catalog.jsonb_typeof(v_candidate -> 'preview') <> 'object'
       OR (v_candidate ->> 'candidateId') !~ '^cand_[A-Za-z0-9_-]{22}$'
       OR (v_candidate ->> 'provider') NOT IN (
         'codex',
@@ -767,6 +979,38 @@ BEGIN
       OR (v_candidate ->> 'syncPublicKey') !~ '^[a-f0-9]{64}$'
       OR pg_catalog.length(v_candidate ->> 'displayLabel') NOT BETWEEN 1 AND 64
       OR (v_candidate ->> 'displayLabel') ~ '[[:cntrl:]]'
+      OR (
+        SELECT pg_catalog.count(*)
+        FROM pg_catalog.jsonb_object_keys(v_candidate -> 'preview')
+      ) <> 3
+      OR NOT (v_candidate -> 'preview') ?& ARRAY[
+        'currentWeekTokenTotal',
+        'lastUsageDate',
+        'status'
+      ]
+      OR pg_catalog.jsonb_typeof(
+        v_candidate -> 'preview' -> 'currentWeekTokenTotal'
+      ) <> 'string'
+      OR (v_candidate -> 'preview' ->> 'currentWeekTokenTotal')
+        !~ '^(0|[1-9][0-9]{0,59})$'
+      OR pg_catalog.jsonb_typeof(v_candidate -> 'preview' -> 'status') <> 'string'
+      OR (v_candidate -> 'preview' ->> 'status') NOT IN (
+        'ready',
+        'incomplete_period',
+        'reader_error',
+        'unavailable',
+        'unsupported_scope',
+        'unsupported_version'
+      )
+      OR (
+        pg_catalog.jsonb_typeof(v_candidate -> 'preview' -> 'lastUsageDate')
+          NOT IN ('string', 'null')
+      )
+      OR (
+        pg_catalog.jsonb_typeof(v_candidate -> 'preview' -> 'lastUsageDate') = 'string'
+        AND (v_candidate -> 'preview' ->> 'lastUsageDate')
+          !~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$'
+      )
     THEN
       PERFORM viberacing_private.operation_failed();
     END IF;
@@ -810,7 +1054,10 @@ BEGIN
       fingerprint_kind,
       fingerprint_digest,
       proposed_sync_public_key,
-      safe_local_display_label
+      safe_local_display_label,
+      preview_current_week_token_total,
+      preview_last_usage_date,
+      preview_status
     )
     VALUES (
       p_pairing_id,
@@ -822,7 +1069,14 @@ BEGIN
       v_candidate ->> 'fingerprintKind',
       v_fingerprint,
       v_key,
-      v_candidate ->> 'displayLabel'
+      v_candidate ->> 'displayLabel',
+      v_candidate -> 'preview' ->> 'currentWeekTokenTotal',
+      CASE
+        WHEN pg_catalog.jsonb_typeof(v_candidate -> 'preview' -> 'lastUsageDate') = 'null'
+        THEN NULL
+        ELSE (v_candidate -> 'preview' ->> 'lastUsageDate')::date
+      END,
+      v_candidate -> 'preview' ->> 'status'
     );
   END LOOP;
 
@@ -848,12 +1102,17 @@ RETURNS TABLE (
   architecture text,
   installation_public_key bytea,
   manifest_digest bytea,
+  expires_at timestamptz,
   candidate_id text,
   provider_code text,
   reader_version text,
   accounting_revision integer,
   fingerprint_kind text,
-  safe_local_display_label text
+  fingerprint_digest bytea,
+  safe_local_display_label text,
+  preview_current_week_token_total text,
+  preview_last_usage_date date,
+  preview_status text
 )
 LANGUAGE plpgsql
 VOLATILE
@@ -877,12 +1136,17 @@ BEGIN
     installation.architecture::text,
     installation.installation_public_key,
     pairing.manifest_digest,
+    pairing.expires_at,
     candidate.candidate_id::text,
     candidate.provider_code::text,
     candidate.reader_version::text,
     candidate.accounting_revision,
     candidate.fingerprint_kind::text,
-    candidate.safe_local_display_label::text
+    candidate.fingerprint_digest,
+    candidate.safe_local_display_label::text,
+    candidate.preview_current_week_token_total::text,
+    candidate.preview_last_usage_date,
+    candidate.preview_status::text
   FROM viberacing_private.pairing_transactions AS pairing
   JOIN viberacing_private.connector_installations AS installation
     ON installation.installation_id = pairing.installation_id
@@ -899,6 +1163,50 @@ BEGIN
   IF NOT FOUND THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
+END
+$function$;
+
+CREATE FUNCTION viberacing_api.read_agent_accounts_for_pairing(
+  p_session_id uuid,
+  p_session_verifier_digest bytea
+)
+RETURNS TABLE (
+  agent_account_id text,
+  provider_code text,
+  accounting_revision integer,
+  scope_kind text,
+  fingerprint_kind text,
+  fingerprint_digest bytea,
+  private_label text,
+  account_state text
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_profile_id uuid;
+BEGIN
+  v_profile_id := viberacing_private.authenticate_session(
+    p_session_id,
+    p_session_verifier_digest
+  );
+  RETURN QUERY
+  SELECT
+    account.agent_account_id::text,
+    account.provider_code::text,
+    account.accounting_revision,
+    account.scope_kind::text,
+    account.fingerprint_kind::text,
+    account.account_fingerprint_digest,
+    account.private_label::text,
+    account.state::text
+  FROM viberacing_private.agent_accounts AS account
+  WHERE account.profile_id = v_profile_id
+    AND account.state IN ('active', 'paused')
+  ORDER BY account.provider_code, account.created_at, account.agent_account_id
+  LIMIT 128;
 END
 $function$;
 
@@ -976,9 +1284,11 @@ CREATE FUNCTION viberacing_api.approve_pairing_batch(
   p_session_verifier_digest bytea,
   p_pairing_id text,
   p_manifest_digest bytea,
-  p_decision_digest bytea,
+  p_context_digest bytea,
   p_challenge_id uuid,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_decisions jsonb
 )
 RETURNS integer
@@ -988,7 +1298,6 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
-  v_context_digest bytea;
   v_created_account_id text;
   v_decision jsonb;
   v_decision_count integer;
@@ -1000,14 +1309,11 @@ DECLARE
 BEGIN
   IF p_decisions IS NULL
     OR p_manifest_digest IS NULL
-    OR p_decision_digest IS NULL
+    OR p_context_digest IS NULL
     OR pg_catalog.jsonb_typeof(p_decisions) <> 'array'
     OR pg_catalog.jsonb_array_length(p_decisions) NOT BETWEEN 1 AND 16
     OR pg_catalog.octet_length(p_manifest_digest) <> 32
-    OR pg_catalog.octet_length(p_decision_digest) <> 32
-    OR p_decision_digest <> pg_catalog.sha256(
-      pg_catalog.convert_to(p_decisions::text, 'UTF8')
-    )
+    OR pg_catalog.octet_length(p_context_digest) <> 32
   THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
@@ -1026,22 +1332,15 @@ BEGIN
     PERFORM viberacing_private.operation_failed();
   END IF;
 
-  v_context_digest := pg_catalog.sha256(
-    pg_catalog.convert_to(
-      'pairing_batch_approval_v1' || chr(10)
-        || p_pairing_id || chr(10)
-        || pg_catalog.encode(p_manifest_digest, 'hex') || chr(10)
-        || pg_catalog.encode(p_decision_digest, 'hex'),
-      'UTF8'
-    )
-  );
   v_profile_id := viberacing_api.consume_auth_challenge(
     p_session_id,
     p_session_verifier_digest,
     p_challenge_id,
     'pairing_batch_approval',
-    v_context_digest,
-    p_verified_passkey_id
+    p_context_digest,
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
 
   SELECT pg_catalog.count(*)::integer
@@ -1277,8 +1576,7 @@ AS $function$
     ON installation.installation_id = pairing.installation_id
   WHERE pairing.pairing_id = p_pairing_id
     AND pairing.poll_verifier_digest = p_poll_verifier_digest
-    AND pairing.state IN ('approved', 'activated')
-    AND pairing.expires_at > pg_catalog.transaction_timestamp()
+    AND pairing.state IN ('pending', 'approved', 'activated', 'rejected', 'expired')
   LIMIT 1
 $function$;
 
@@ -1386,7 +1684,11 @@ CREATE FUNCTION viberacing_api.poll_pairing_batch(
 )
 RETURNS TABLE (
   pairing_state text,
-  activated_account_count integer
+  candidate_id text,
+  activation_state text,
+  agent_account_id text,
+  device_id text,
+  device_key_id text
 )
 LANGUAGE sql
 STABLE
@@ -1401,18 +1703,34 @@ AS $function$
       ELSE pairing.state
     END::text,
     CASE
-      WHEN pairing.state = 'activated' THEN (
-        SELECT pg_catalog.count(*)::integer
-        FROM viberacing_private.pairing_candidates AS candidate
-        WHERE candidate.pairing_id = pairing.pairing_id
-          AND candidate.decision IN ('create', 'attach_existing')
-      )
-      ELSE 0
+      WHEN candidate.candidate_id IS NULL THEN NULL
+      ELSE candidate.candidate_id::text
+    END,
+    CASE
+      WHEN candidate.decision = 'skip' THEN 'skipped'
+      WHEN pairing.state = 'activated'
+        AND candidate.decision IN ('create', 'attach_existing')
+      THEN 'active'
+      ELSE 'pending'
+    END::text,
+    CASE
+      WHEN pairing.state = 'activated' THEN candidate.target_agent_account_id::text
+      ELSE NULL
+    END,
+    CASE
+      WHEN pairing.state = 'activated' THEN candidate.approved_device_id::text
+      ELSE NULL
+    END,
+    CASE
+      WHEN pairing.state = 'activated' THEN candidate.approved_device_key_id::text
+      ELSE NULL
     END
   FROM viberacing_private.pairing_transactions AS pairing
+  LEFT JOIN viberacing_private.pairing_candidates AS candidate
+    ON candidate.pairing_id = pairing.pairing_id
   WHERE pairing.pairing_id = p_pairing_id
     AND pairing.poll_verifier_digest = p_poll_verifier_digest
-  LIMIT 1
+  ORDER BY candidate.candidate_id
 $function$;
 
 CREATE FUNCTION viberacing_api.read_agent_account_inventory(
@@ -1502,6 +1820,8 @@ CREATE FUNCTION viberacing_api.reactivate_agent_account(
   p_challenge_id uuid,
   p_context_digest bytea,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_agent_account_id text
 )
 RETURNS void
@@ -1519,7 +1839,9 @@ BEGIN
     p_challenge_id,
     'account_reactivate',
     p_context_digest,
-    p_verified_passkey_id
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
   UPDATE viberacing_private.agent_accounts
   SET state = 'active'
@@ -1538,6 +1860,8 @@ CREATE FUNCTION viberacing_api.unlink_agent_account(
   p_challenge_id uuid,
   p_context_digest bytea,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_agent_account_id text
 )
 RETURNS void
@@ -1555,7 +1879,9 @@ BEGIN
     p_challenge_id,
     'account_unlink',
     p_context_digest,
-    p_verified_passkey_id
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
   UPDATE viberacing_private.agent_accounts
   SET state = 'unlinked'
@@ -1578,7 +1904,10 @@ CREATE FUNCTION viberacing_api.revoke_device_key(
   p_session_id uuid,
   p_session_verifier_digest bytea,
   p_challenge_id uuid,
+  p_context_digest bytea,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_device_id text
 )
 RETURNS void
@@ -1588,22 +1917,17 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
-  v_context_digest bytea;
   v_profile_id uuid;
 BEGIN
-  v_context_digest := pg_catalog.sha256(
-    pg_catalog.convert_to(
-      'device_revoke_v1' || chr(10) || p_device_id,
-      'UTF8'
-    )
-  );
   v_profile_id := viberacing_api.consume_auth_challenge(
     p_session_id,
     p_session_verifier_digest,
     p_challenge_id,
     'device_revoke',
-    v_context_digest,
-    p_verified_passkey_id
+    p_context_digest,
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
   UPDATE viberacing_private.device_keys
   SET state = 'revoked',
@@ -1623,6 +1947,8 @@ CREATE FUNCTION viberacing_api.revoke_connector_installation(
   p_challenge_id uuid,
   p_context_digest bytea,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_installation_id text
 )
 RETURNS integer
@@ -1641,7 +1967,9 @@ BEGIN
     p_challenge_id,
     'installation_revoke',
     p_context_digest,
-    p_verified_passkey_id
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
   UPDATE viberacing_private.connector_installations
   SET state = 'revoked',
@@ -1750,20 +2078,34 @@ CREATE POLICY pairing_code_attempt_windows_owner_only
   USING (CURRENT_USER = 'viberacing_owner')
   WITH CHECK (CURRENT_USER = 'viberacing_owner');
 
+ALTER TABLE viberacing_private.pairing_request_windows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE viberacing_private.pairing_request_windows FORCE ROW LEVEL SECURITY;
+CREATE POLICY pairing_request_windows_owner_only
+  ON viberacing_private.pairing_request_windows
+  USING (CURRENT_USER = 'viberacing_owner')
+  WITH CHECK (CURRENT_USER = 'viberacing_owner');
+
 REVOKE ALL ON ALL TABLES IN SCHEMA viberacing_private FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA viberacing_private FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA viberacing_private FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA viberacing_api FROM PUBLIC;
 
+GRANT EXECUTE ON FUNCTION viberacing_api.admit_pairing_transport_request(
+  text, bytea, integer, integer, integer
+) TO viberacing_web;
+GRANT EXECUTE ON FUNCTION viberacing_api.reset_expired_pairing_request_windows()
+  TO viberacing_jobs;
 GRANT EXECUTE ON FUNCTION viberacing_api.start_pairing_batch(
-  text, text, bytea, text, text, text, text, bytea, bytea, bytea, bytea, timestamptz, jsonb
+  text, text, bytea, text, text, text, text, bytea, bytea, bytea, bytea, bytea, timestamptz, jsonb
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.read_pairing_batch_for_approval(uuid, bytea, text)
+  TO viberacing_web;
+GRANT EXECUTE ON FUNCTION viberacing_api.read_agent_accounts_for_pairing(uuid, bytea)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.read_pairing_batch_by_code(uuid, bytea, bytea, bytea)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.approve_pairing_batch(
-  uuid, bytea, text, bytea, bytea, uuid, uuid, jsonb
+  uuid, bytea, text, bytea, bytea, uuid, uuid, bigint, boolean, jsonb
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.read_pairing_possession_material(text, bytea)
   TO viberacing_web;
@@ -1776,15 +2118,17 @@ GRANT EXECUTE ON FUNCTION viberacing_api.read_agent_account_inventory(uuid, byte
 GRANT EXECUTE ON FUNCTION viberacing_api.pause_agent_account(uuid, bytea, text)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.reactivate_agent_account(
-  uuid, bytea, uuid, bytea, uuid, text
+  uuid, bytea, uuid, bytea, uuid, bigint, boolean, text
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.unlink_agent_account(
-  uuid, bytea, uuid, bytea, uuid, text
+  uuid, bytea, uuid, bytea, uuid, bigint, boolean, text
 ) TO viberacing_web;
-GRANT EXECUTE ON FUNCTION viberacing_api.revoke_device_key(uuid, bytea, uuid, uuid, text)
+GRANT EXECUTE ON FUNCTION viberacing_api.revoke_device_key(
+  uuid, bytea, uuid, bytea, uuid, bigint, boolean, text
+)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.revoke_connector_installation(
-  uuid, bytea, uuid, bytea, uuid, text
+  uuid, bytea, uuid, bytea, uuid, bigint, boolean, text
 ) TO viberacing_web;
 
 INSERT INTO viberacing_private.schema_migrations (revision, name)

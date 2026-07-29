@@ -15,9 +15,9 @@ const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
 const inactiveVerifierPrefix = "viberacing-pairing-user-code-verifier-inactive-v1";
 const invalidVerifierPrefix = "viberacing-pairing-user-code-verifier-invalid-v1";
 
-export const pairingUserCodeAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const pairingUserCodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const pairingUserCodeLength = 14;
-export const pairingUserCodePattern = /^[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){2}$/;
+export const pairingUserCodePattern = /^[A-HJ-NP-Z2-9]{4}(?:-[A-HJ-NP-Z2-9]{4}){2}$/;
 export const pairingUserCodeVerifierDigestBytes = 32;
 export const pairingUserCodeVerifierKeyBytes = 32;
 export const pairingUserCodeVerifierPrefix = "viberacing-pairing-user-code-verifier-v1";

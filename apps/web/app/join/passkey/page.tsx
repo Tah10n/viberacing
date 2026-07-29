@@ -21,10 +21,11 @@ export default async function PasskeyPage() {
   if (session.passkeyRegistered) {
     redirect("/account");
   }
+  const initialHandle = session.handle.startsWith("pending_") ? undefined : session.handle;
   return (
     <PasskeySetup
       enrollmentEnabled={enrollmentConfig.enabled}
-      handle={session.handle}
+      {...(initialHandle === undefined ? {} : { initialHandle })}
       locale={session.locale}
     />
   );

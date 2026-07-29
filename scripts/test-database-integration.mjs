@@ -493,12 +493,14 @@ SELECT created
 FROM viberacing_api.open_github_profile(
   '20000000-0000-4000-8000-${suffix}',
   ${githubId},
-  'concurrent-driver',
+  'pending_2000000000004000',
   'en',
   '21000000-0000-4000-8000-${suffix}',
   pg_catalog.decode(pg_catalog.repeat('${digestByte}', 32), 'hex'),
   pg_catalog.transaction_timestamp() + interval '20 minutes',
-  NULL
+  NULL,
+  NULL,
+  false
 );
 `;
   const [first, second] = await Promise.all([
@@ -523,6 +525,63 @@ FROM viberacing_api.open_github_profile(
     ),
     "2",
     "both converged OAuth completions must retain their own bounded session",
+  );
+
+  const inviteId = "24000000-0000-4000-8000-000000000001";
+  requireSuccess(
+    psql(`
+SET ROLE viberacing_admin;
+SELECT viberacing_api.issue_invite(
+  '${inviteId}',
+  pg_catalog.decode(pg_catalog.repeat('61', 32), 'hex'),
+  'BETA_ACCESS',
+  pg_catalog.transaction_timestamp() + interval '7 days'
+);
+`),
+    "concurrent invite setup",
+  );
+  const invitedContender = (profilePrefix, githubUserId, sessionPrefix, digestByte) => `
+SET ROLE viberacing_web;
+SELECT created
+FROM viberacing_api.open_github_profile(
+  '${profilePrefix}-0000-4000-8000-000000000001',
+  ${githubUserId},
+  'pending_${profilePrefix.replace("-", "")}00004000',
+  'en',
+  '${sessionPrefix}-0000-4000-8000-000000000001',
+  pg_catalog.decode(pg_catalog.repeat('${digestByte}', 32), 'hex'),
+  pg_catalog.transaction_timestamp() + interval '20 minutes',
+  '${inviteId}',
+  pg_catalog.decode(pg_catalog.repeat('61', 32), 'hex'),
+  true
+);
+`;
+  const invitedResults = await Promise.all([
+    spawnPsql(invitedContender("22000000", 9_200_000_000_001, "23000000", "62")),
+    spawnPsql(invitedContender("22000001", 9_200_000_000_002, "23000001", "63")),
+  ]);
+  assert.equal(
+    invitedResults.filter((result) => result.code === 0).length,
+    1,
+    "exactly one concurrent profile must redeem an invite",
+  );
+  assert.equal(
+    psqlValue(
+      `SELECT pg_catalog.count(*)
+       FROM viberacing_private.profiles
+       WHERE github_user_id IN (9200000000001, 9200000000002);`,
+    ),
+    "1",
+    "one invite admitted more than one GitHub identity",
+  );
+  assert.equal(
+    psqlValue(
+      `SELECT state || ':' || (redeemed_by_profile_id IS NOT NULL)::text
+       FROM viberacing_private.invites
+       WHERE invite_id = '${inviteId}';`,
+    ),
+    "redeemed:true",
+    "the winning invite redemption was not committed exactly once",
   );
 
   requireSuccess(
@@ -756,15 +815,26 @@ SELECT pg_catalog.json_build_object(
   requireSuccess(
     psql(`
 SET ROLE viberacing_owner;
-UPDATE viberacing_private.agent_accounting_revisions
-SET enabled_for_new_accounts = false
-WHERE provider_code = 'codex'
-  AND accounting_revision = 1;
-UPDATE viberacing_private.agent_providers
-SET state = 'recognized'
-WHERE provider_code = 'codex';
+DO $assertion$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.agent_providers
+    WHERE provider_code = 'codex'
+      AND state = 'supported'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.agent_accounting_revisions
+    WHERE provider_code = 'codex'
+      AND accounting_revision = 1
+      AND enabled_for_new_accounts
+  ) THEN
+    RAISE EXCEPTION 'Codex support baseline drifted during concurrency oracle';
+  END IF;
+END
+$assertion$;
 `),
-    "restore pre-reader provider state after concurrency oracle",
+    "verify supported Codex reader state after concurrency oracle",
   );
 
   const ledger = JSON.parse(
@@ -835,5 +905,5 @@ FROM viberacing_private.schema_migrations;
 }
 
 console.log(
-  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, direct-token ranking across 208 public profiles, immutable last-good/final snapshots, two-session refresh-overlap suppression, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
+  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, single-use invite contention, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, direct-token ranking across 208 public profiles, immutable last-good/final snapshots, two-session refresh-overlap suppression, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
 );

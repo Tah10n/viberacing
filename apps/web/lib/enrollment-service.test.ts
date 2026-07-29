@@ -44,6 +44,8 @@ import type {
 } from "./pairing-database-pool";
 
 const now = new Date("2026-07-16T10:00:00.000Z");
+const profileHandle = "pixel_driver";
+const activeProfileId = "00000000-0000-4000-8000-000000000501";
 const config = resolveEnrollmentConfig({
   GITHUB_CLIENT_ID: "Ov23abcdefghijklmno",
   GITHUB_CLIENT_SECRET: "a".repeat(40),
@@ -61,13 +63,9 @@ const config = resolveEnrollmentConfig({
   WEBAUTHN_RP_ID: "race.example.com",
 });
 const join: JoinRequest = Object.freeze({
-  handle: "pixel_driver",
   inviteDigest: Buffer.alloc(32, 0x41).toString("base64url"),
-  inviteId: "00000000-0000-4000-8000-000000000501",
+  inviteId: activeProfileId,
   locale: "en",
-  motionPreference: "system",
-  streakVisible: false,
-  theme: "neon-night",
 });
 
 const derivePairingCode = vi.fn((code: unknown) => {
@@ -140,7 +138,7 @@ function createFixture() {
       return Promise.resolve({
         handle: "pixel_driver",
         locale: "en" as const,
-        profileId: join.inviteId,
+        profileId: activeProfileId,
       });
     }),
     completeRecoveryRegistration: vi.fn((input: EnrollmentDatabaseRecoveryCompletion) => {
@@ -156,7 +154,7 @@ function createFixture() {
       return Promise.resolve({
         handle: "pixel_driver",
         locale: "en" as const,
-        profileId: join.inviteId,
+        profileId: activeProfileId,
       });
     }),
     completePasskeyRevocation: vi.fn((input: EnrollmentDatabasePasskeyRevocation) => {
@@ -273,10 +271,19 @@ function createFixture() {
     enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) => {
       enrollmentWrite = {
         ...input,
-        inviteVerifierDigest: Buffer.from(input.inviteVerifierDigest),
+        ...(input.inviteVerifierDigest === undefined
+          ? {}
+          : { inviteVerifierDigest: Buffer.from(input.inviteVerifierDigest) }),
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
-      return Promise.resolve(true);
+      return Promise.resolve({
+        created: true,
+        handle: input.handle,
+        locale: input.locale,
+        profileId: input.profileId,
+        profileState: "enrolling" as const,
+        sessionCreated: true,
+      });
     }),
     proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
     readAccountOverview: vi.fn((input: EnrollmentDatabaseAccountOverviewRequest) => {
@@ -549,21 +556,27 @@ describe("enrollment service", () => {
       start?.oauthCookie ?? "",
       new AbortController().signal,
       true,
+      true,
     );
     expect(callback).toBeDefined();
+    expect(callback?.outcome).toBe("continue");
+    if (callback?.outcome !== "continue") {
+      throw new Error("Expected enrollment continuation.");
+    }
     expect(exchangeGithub).toHaveBeenCalledOnce();
-    const enrollingSession = service.readSession(callback?.sessionCookie);
+    const enrollingSession = service.readSession(callback.sessionCookie);
     expect(enrollingSession).toMatchObject({
       expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
-      handle: "pixel_driver",
+      handle: "pending_0000000000004000",
       locale: "en",
       passkeyRegistered: false,
     });
     expect(database.enrollProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         githubUserId: 123_456,
-        handle: "pixel_driver",
+        handle: "pending_0000000000004000",
         inviteId: join.inviteId,
+        inviteRequired: true,
         profileId: "00000000-0000-4000-8000-000000000502",
       }),
     );
@@ -574,7 +587,11 @@ describe("enrollment service", () => {
         .digest(),
     );
 
-    const passkeyStart = await service.beginPasskey(callback?.sessionCookie ?? "", true);
+    const passkeyStart = await service.beginPasskey(
+      callback.sessionCookie,
+      { handle: profileHandle },
+      true,
+    );
     expect(passkeyStart?.options.challenge).toHaveLength(43);
     expect(database.createPasskeyChallenge).toHaveBeenCalledOnce();
     expect(challengeSessionDigest()).toEqual(
@@ -584,9 +601,9 @@ describe("enrollment service", () => {
     );
     expect(challengeSessionDigestInput()).toEqual(Buffer.alloc(32));
     const completion = await service.completePasskey(
-      callback?.sessionCookie ?? "",
+      callback.sessionCookie,
       passkeyStart?.passkeyCookie ?? "",
-      { label: "Primary passkey", response: { id: "synthetic" } },
+      { response: { id: "synthetic" } },
       true,
     );
     expect(completion).toBeDefined();
@@ -594,6 +611,7 @@ describe("enrollment service", () => {
     expect(database.completeInitialPasskey).toHaveBeenCalledWith(
       expect.objectContaining({
         challengeId: "00000000-0000-4000-8000-000000000505",
+        handle: profileHandle,
         passkeyId: "00000000-0000-4000-8000-000000000506",
         rotatedSessionId: "00000000-0000-4000-8000-000000000508",
         rotatedSessionExpiresAt: new Date(now.valueOf() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -649,9 +667,12 @@ describe("enrollment service", () => {
           inaccessible,
           inaccessible as unknown as AbortSignal,
           enrollmentEnabled,
+          enrollmentEnabled,
         ),
       ).resolves.toBeUndefined();
-      await expect(service.beginPasskey(inaccessible, enrollmentEnabled)).resolves.toBeUndefined();
+      await expect(
+        service.beginPasskey(inaccessible, hostileBody, enrollmentEnabled),
+      ).resolves.toBeUndefined();
       await expect(
         service.completePasskey(inaccessible, inaccessible, hostileBody, enrollmentEnabled),
       ).resolves.toBeUndefined();
@@ -732,7 +753,7 @@ describe("enrollment service", () => {
     const pairingId = "00000000-0000-4000-8000-000000001001";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -867,7 +888,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000512";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -932,7 +953,7 @@ describe("enrollment service", () => {
     const sourceId = `src_${"B".repeat(22)}`;
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1042,7 +1063,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x45);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1086,7 +1107,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000514";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1142,7 +1163,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000515";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1246,7 +1267,7 @@ describe("enrollment service", () => {
     ).resolves.toBeUndefined();
     const otherSessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1280,7 +1301,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x47);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1316,7 +1337,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x48);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1355,7 +1376,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x46);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1431,7 +1452,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x46);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1500,7 +1521,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000520";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1519,7 +1540,7 @@ describe("enrollment service", () => {
     expect(recoveryChallengeWrite()?.contextDigest).toEqual(
       createHash("sha256")
         .update(
-          `viberacing-recovery-code-rotation-v1\n${sessionId}\n${join.inviteId}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          `viberacing-recovery-code-rotation-v1\n${sessionId}\n${activeProfileId}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
           "utf8",
         )
         .digest(),
@@ -1670,7 +1691,7 @@ describe("enrollment service", () => {
       signCount: 3,
     });
     expect(service.readSession(completed?.sessionCookie)).toMatchObject({
-      handle: join.handle,
+      handle: profileHandle,
       passkeyRegistered: true,
       profileId: join.inviteId,
       sessionId: "00000000-0000-4000-8000-000000000505",
@@ -1736,7 +1757,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000520";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1748,7 +1769,7 @@ describe("enrollment service", () => {
     await expect(
       service.beginProfileDeletion(sessionCookie, { handle: "other_driver" }),
     ).resolves.toBeUndefined();
-    const start = await service.beginProfileDeletion(sessionCookie, { handle: join.handle });
+    const start = await service.beginProfileDeletion(sessionCookie, { handle: profileHandle });
     expect(start?.options.challenge).toBe(authenticationChallenge);
     expect(database.createProfileDeletionChallenge).toHaveBeenCalledOnce();
     expect(deletionChallengeWrite()).toMatchObject({
@@ -1759,7 +1780,7 @@ describe("enrollment service", () => {
     expect(deletionChallengeWrite()?.contextDigest).toEqual(
       createHash("sha256")
         .update(
-          `viberacing-profile-deletion-v1\n${sessionId}\n${join.inviteId}\n${join.handle}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          `viberacing-profile-deletion-v1\n${sessionId}\n${activeProfileId}\n${profileHandle}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
           "utf8",
         )
         .digest(),
@@ -1785,7 +1806,7 @@ describe("enrollment service", () => {
       observedSignCount: 4,
       profileRefDigest: Buffer.alloc(32, 0x22),
       sessionId,
-      typedHandle: join.handle,
+      typedHandle: profileHandle,
       verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
     });
     expect(deletionProfileRefDigestInput()).toEqual(Buffer.alloc(32));
@@ -1854,7 +1875,7 @@ describe("enrollment service", () => {
     );
   });
 
-  it("fails closed for mismatched state, invalid cookies, repeated registration, and unsafe labels", async () => {
+  it("fails closed for mismatched state, invalid cookies, repeated registration, and legacy labels", async () => {
     const { database, exchangeGithub, service, verifyPasskey } = createFixture();
     const start = service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
@@ -1869,10 +1890,13 @@ describe("enrollment service", () => {
         start?.oauthCookie ?? "",
         new AbortController().signal,
         true,
+        true,
       ),
     ).resolves.toBeUndefined();
     expect(exchangeGithub).not.toHaveBeenCalled();
-    await expect(service.beginPasskey("invalid", true)).resolves.toBeUndefined();
+    await expect(
+      service.beginPasskey("invalid", { handle: profileHandle }, true),
+    ).resolves.toBeUndefined();
     await expect(service.completePasskey("invalid", "invalid", {}, true)).resolves.toBeUndefined();
     await expect(service.logout("invalid")).resolves.toBe(true);
     expect(database.enrollProfile).not.toHaveBeenCalled();
@@ -1883,11 +1907,23 @@ describe("enrollment service", () => {
       start?.oauthCookie ?? "",
       new AbortController().signal,
       true,
+      true,
     );
-    const passkey = await service.beginPasskey(callback?.sessionCookie ?? "", true);
+    expect(callback?.outcome).toBe("continue");
+    if (callback?.outcome !== "continue") {
+      throw new Error("Expected enrollment continuation.");
+    }
+    await expect(
+      service.beginPasskey(callback.sessionCookie, { handle: "pending_forbidden" }, true),
+    ).resolves.toBeUndefined();
+    const passkey = await service.beginPasskey(
+      callback.sessionCookie,
+      { handle: profileHandle },
+      true,
+    );
     await expect(
       service.completePasskey(
-        callback?.sessionCookie ?? "",
+        callback.sessionCookie,
         passkey?.passkeyCookie ?? "",
         {
           label: "unsafe\nlabel",
@@ -1899,19 +1935,16 @@ describe("enrollment service", () => {
     expect(verifyPasskey).not.toHaveBeenCalled();
 
     const completed = await service.completePasskey(
-      callback?.sessionCookie ?? "",
+      callback.sessionCookie,
       passkey?.passkeyCookie ?? "",
-      { label: "Primary passkey", response: {} },
+      { response: {} },
       true,
     );
     await expect(
       service.completePasskey(
         completed?.sessionCookie ?? "",
         passkey?.passkeyCookie ?? "",
-        {
-          label: "Primary passkey",
-          response: {},
-        },
+        { response: {} },
         true,
       ),
     ).resolves.toBeUndefined();
@@ -1920,7 +1953,7 @@ describe("enrollment service", () => {
 
   it("contains unavailable dependencies and invalid clocks", async () => {
     const fixture = createFixture();
-    vi.mocked(fixture.database.enrollProfile).mockResolvedValue(false);
+    vi.mocked(fixture.database.enrollProfile).mockRejectedValue(new Error("database unavailable"));
     const start = fixture.service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
     await expect(
@@ -1929,6 +1962,7 @@ describe("enrollment service", () => {
         state,
         start?.oauthCookie ?? "",
         new AbortController().signal,
+        true,
         true,
       ),
     ).resolves.toBeUndefined();
@@ -1954,14 +1988,14 @@ describe("enrollment service", () => {
         Promise.resolve({
           handle: "pixel_driver",
           locale: "en" as const,
-          profileId: join.inviteId,
+          profileId: activeProfileId,
         }),
       ),
       completeRecoveryRegistration: vi.fn(() =>
         Promise.resolve({
           handle: "pixel_driver",
           locale: "en" as const,
-          profileId: join.inviteId,
+          profileId: activeProfileId,
         }),
       ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
@@ -1977,7 +2011,16 @@ describe("enrollment service", () => {
       createRecoveryCodeChallenge: vi.fn(() => Promise.resolve(true)),
       createSourceReactivationChallenge: vi.fn(() => Promise.resolve(true)),
       createSourceUnlinkChallenge: vi.fn(() => Promise.resolve(true)),
-      enrollProfile: vi.fn(() => Promise.resolve(true)),
+      enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) =>
+        Promise.resolve({
+          created: true,
+          handle: input.handle,
+          locale: input.locale,
+          profileId: input.profileId,
+          profileState: "enrolling" as const,
+          sessionCreated: true,
+        }),
+      ),
       pauseSource: vi.fn(() => Promise.resolve(true)),
       proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
       readAccountOverview: vi.fn(() =>
@@ -2026,6 +2069,7 @@ describe("enrollment service", () => {
         "opaque",
         new AbortController().signal,
         true,
+        true,
       ),
     ).resolves.toBeUndefined();
     expect(database.enrollProfile).not.toHaveBeenCalled();
@@ -2056,6 +2100,7 @@ describe("enrollment service", () => {
                 challenge: Buffer.alloc(32, 7).toString("base64url"),
                 challengeId: "00000000-0000-4000-8000-000000000505",
                 expiresAt: seconds + 300,
+                handle: profileHandle,
                 version: 1,
               },
         seal: () => {
@@ -2076,18 +2121,12 @@ describe("enrollment service", () => {
           signCount: 0,
         }),
     });
-    await expect(passkeyService.beginPasskey("session", true)).resolves.toBeUndefined();
+    await expect(
+      passkeyService.beginPasskey("session", { handle: profileHandle }, true),
+    ).resolves.toBeUndefined();
     expect(database.createPasskeyChallenge).not.toHaveBeenCalled();
     await expect(
-      passkeyService.completePasskey(
-        "session",
-        "passkey",
-        {
-          label: "Primary passkey",
-          response: {},
-        },
-        true,
-      ),
+      passkeyService.completePasskey("session", "passkey", { response: {} }, true),
     ).resolves.toBeUndefined();
     expect(database.completeInitialPasskey).not.toHaveBeenCalled();
   });

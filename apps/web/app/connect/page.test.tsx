@@ -7,29 +7,25 @@ const sessionMock = vi.hoisted(() => ({
 
 vi.mock("@/lib/enrollment-page-session", () => sessionMock);
 
-describe("connect page source-creation entrypoint", () => {
+describe("connect page batch-pairing entrypoint", () => {
   afterEach(() => {
-    vi.unstubAllEnvs();
     vi.resetModules();
     sessionMock.readEnrollmentPageConnect.mockClear();
   });
 
   it.each([
-    ["false", false],
-    ["true", true],
-  ] as const)(
-    "forwards environment value %s as the literal decision %s",
-    async (value, expected) => {
-      vi.stubEnv("VIBERACING_SOURCE_CREATION_ENABLED", value);
-      const page = await import("./page");
-      const element = await page.default();
+    ["7K9M-P2QR-W4XY", "7K9M-P2QR-W4XY"],
+    ["lower-case", undefined],
+    [["7K9M-P2QR-W4XY"] as string[], undefined],
+  ] as const)("forwards only one canonical deep-link code %#", async (code, expected) => {
+    const page = await import("./page");
+    const element = await page.default({ searchParams: Promise.resolve({ code }) });
 
-      expect(isValidElement<{ sourceCreationEnabled: boolean }>(element)).toBe(true);
-      if (!isValidElement<{ sourceCreationEnabled: boolean }>(element)) {
-        throw new Error("expected the connect experience element");
-      }
-      expect(element.props.sourceCreationEnabled).toBe(expected);
-      expect(sessionMock.readEnrollmentPageConnect).toHaveBeenCalledOnce();
-    },
-  );
+    expect(isValidElement<{ initialCode?: string }>(element)).toBe(true);
+    if (!isValidElement<{ initialCode?: string }>(element)) {
+      throw new Error("expected the connect experience element");
+    }
+    expect(element.props.initialCode).toBe(expected);
+    expect(sessionMock.readEnrollmentPageConnect).toHaveBeenCalledOnce();
+  });
 });

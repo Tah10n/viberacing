@@ -23,6 +23,7 @@ import type {
 import {
   enrollmentPatterns,
   readEnrollmentSession,
+  readInitialPasskeyChallenge,
   readPasskeyAddChallenge,
   readPasskeyChallenge,
   readPairingApprovalChallenge,
@@ -32,6 +33,7 @@ import {
   readRecoveryAuthorityChallenge,
   readSourceActionChallenge,
   type EnrollmentSession,
+  type InitialPasskeyChallenge,
   type JoinRequest,
   type PasskeyAddChallenge,
   type PairingApprovalChallenge,
@@ -86,7 +88,8 @@ const pendingSessionLifetimeSeconds = 15 * 60;
 const activeSessionLifetimeSeconds = 30 * 24 * 60 * 60;
 const sourceControlLifetimeSeconds = 15 * 60;
 const base64Url32Pattern = /^[A-Za-z0-9_-]{43}$/;
-const registrationBodyKeys = new Set(["label", "response"]);
+const registrationBodyKeys = new Set(["response"]);
+const initialPasskeyStartBodyKeys = new Set(["handle"]);
 const authenticationBodyKeys = new Set(["response"]);
 const addStartBodyKeys = new Set(["label"]);
 const addBodyKeys = new Set(["authentication", "registration"]);
@@ -124,9 +127,9 @@ export interface EnrollmentStartDecision {
   readonly redirectUrl: string;
 }
 
-export interface EnrollmentCallbackDecision {
-  readonly sessionCookie: string;
-}
+export type EnrollmentCallbackDecision =
+  | Readonly<{ outcome: "existing_profile" }>
+  | Readonly<{ outcome: "continue"; sessionCookie: string }>;
 
 export interface PasskeyOptionsDecision {
   readonly options: Awaited<ReturnType<typeof createPasskeyRegistrationOptions>>;
@@ -216,6 +219,7 @@ export interface EnrollmentService {
   beginLogin(): Promise<PasskeyLoginOptionsDecision | undefined>;
   beginPasskey(
     sessionCookie: string,
+    body: unknown,
     enrollmentEnabled: unknown,
   ): Promise<PasskeyOptionsDecision | undefined>;
   beginPasskeyAdd(
@@ -254,6 +258,7 @@ export interface EnrollmentService {
     oauthCookie: string,
     signal: AbortSignal,
     enrollmentEnabled: unknown,
+    inviteGateEnabled: unknown,
   ): Promise<EnrollmentCallbackDecision | undefined>;
   completeLogin(
     loginCookie: string,
@@ -341,8 +346,11 @@ interface EnrollmentServiceDependencies {
 }
 
 interface RegistrationBody {
-  readonly label: string;
   readonly response: unknown;
+}
+
+interface InitialPasskeyStartBody {
+  readonly handle: string;
 }
 
 interface AuthenticationBody {
@@ -480,18 +488,39 @@ function readRegistrationBody(value: unknown): RegistrationBody | undefined {
   }
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record);
-  const label = readPasskeyLabel(record.label);
   if (
     keys.length !== registrationBodyKeys.size ||
     keys.some((key) => !registrationBodyKeys.has(key)) ||
-    label === undefined ||
     record.response === null ||
     typeof record.response !== "object" ||
     Array.isArray(record.response)
   ) {
     return undefined;
   }
-  return Object.freeze({ label, response: record.response });
+  return Object.freeze({ response: record.response });
+}
+
+function readInitialPasskeyStartBody(value: unknown): InitialPasskeyStartBody | undefined {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (
+    keys.length !== initialPasskeyStartBodyKeys.size ||
+    keys.some((key) => !initialPasskeyStartBodyKeys.has(key)) ||
+    typeof record.handle !== "string" ||
+    !enrollmentPatterns.handle.test(record.handle) ||
+    record.handle.startsWith("pending_")
+  ) {
+    return undefined;
+  }
+  return Object.freeze({ handle: record.handle });
 }
 
 function readAuthenticationBody(value: unknown): AuthenticationBody | undefined {
@@ -788,6 +817,14 @@ function validRecoveryCodeBatch(
     phcs.add(verifierPhc);
   }
   return true;
+}
+
+function provisionalHandle(profileId: string): string | undefined {
+  if (!enrollmentPatterns.uuidV4.test(profileId)) {
+    return undefined;
+  }
+  const value = `pending_${profileId.replaceAll("-", "").slice(0, 16)}`;
+  return enrollmentPatterns.handle.test(value) ? value : undefined;
 }
 
 export function createEnrollmentService(
@@ -1375,14 +1412,21 @@ export function createEnrollmentService(
     },
     async beginPasskey(
       sessionCookie: string,
+      body: unknown,
       enrollmentEnabled: unknown,
     ): Promise<PasskeyOptionsDecision | undefined> {
       if (enrollmentEnabled !== true) {
         return undefined;
       }
       const session = readSession(sessionCookie);
+      const start = readInitialPasskeyStartBody(body);
       const seconds = currentSeconds();
-      if (session === undefined || session.passkeyRegistered || seconds === undefined) {
+      if (
+        session === undefined ||
+        session.passkeyRegistered ||
+        start === undefined ||
+        seconds === undefined
+      ) {
         return undefined;
       }
       let sessionVerifier: Buffer | undefined;
@@ -1390,7 +1434,7 @@ export function createEnrollmentService(
       let challengeDigest: Buffer | undefined;
       let contextDigest: Buffer | undefined;
       try {
-        const options = await createOptions(session.profileId, session.handle, config.webauthnRpId);
+        const options = await createOptions(session.profileId, start.handle, config.webauthnRpId);
         if (!base64Url32Pattern.test(options.challenge)) {
           return undefined;
         }
@@ -1402,7 +1446,7 @@ export function createEnrollmentService(
         challengeDigest = passkeyChallengeDigest(options.challenge);
         contextDigest = passkeyContextDigest(
           session.profileId,
-          session.handle,
+          start.handle,
           config.webauthnRpId,
           config.webauthnOrigin,
         );
@@ -1411,10 +1455,11 @@ export function createEnrollmentService(
           return undefined;
         }
         const expiresAt = seconds + passkeyLifetimeSeconds;
-        const challenge: PasskeyRegistrationChallenge = Object.freeze({
+        const challenge: InitialPasskeyChallenge = Object.freeze({
           challenge: options.challenge,
           challengeId,
           expiresAt,
+          handle: start.handle,
           version: 1,
         });
         const sealedChallenge = cookieCodec.seal("passkey", challenge);
@@ -1423,6 +1468,7 @@ export function createEnrollmentService(
           challengeId,
           contextDigest,
           expiresAt: new Date(expiresAt * 1000).toISOString(),
+          handle: start.handle,
           sessionId: session.sessionId,
           sessionVerifierDigest: sessionDigest,
         });
@@ -1754,6 +1800,7 @@ export function createEnrollmentService(
       oauthCookie: string,
       signal: AbortSignal,
       enrollmentEnabled: unknown,
+      inviteGateEnabled: unknown,
     ): Promise<EnrollmentCallbackDecision | undefined> {
       if (enrollmentEnabled !== true) {
         return undefined;
@@ -1774,26 +1821,33 @@ export function createEnrollmentService(
         if (githubUserId === undefined) {
           return undefined;
         }
-        inviteDigest = digestBase64Url(pending.inviteDigest);
+        inviteDigest =
+          pending.inviteDigest === undefined ? undefined : digestBase64Url(pending.inviteDigest);
         sessionSecret = randomSecret(randomBytes);
-        if (inviteDigest === undefined || sessionSecret === undefined) {
+        if (
+          sessionSecret === undefined ||
+          (inviteGateEnabled === true) !== (inviteDigest !== undefined) ||
+          (inviteGateEnabled === true) !== (pending.inviteId !== undefined)
+        ) {
           return undefined;
         }
         sessionDigest = createHash("sha256").update(sessionSecret).digest();
         const profileId = randomUuid();
+        const handle = provisionalHandle(profileId);
         const sessionId = randomUuid();
         const auditEventId = randomUuid();
         if (
           !enrollmentPatterns.uuidV4.test(profileId) ||
+          handle === undefined ||
           !enrollmentPatterns.uuidV4.test(sessionId) ||
           !enrollmentPatterns.uuidV4.test(auditEventId)
         ) {
           return undefined;
         }
         const expiresAt = seconds + pendingSessionLifetimeSeconds;
-        const session: EnrollmentSession = Object.freeze({
+        const provisionalSession: EnrollmentSession = Object.freeze({
           expiresAt,
-          handle: pending.handle,
+          handle,
           locale: pending.locale,
           passkeyRegistered: false,
           profileId,
@@ -1801,27 +1855,48 @@ export function createEnrollmentService(
           sessionVerifier: sessionSecret.toString("base64url"),
           version: 1,
         });
-        const sealedSession = cookieCodec.seal("session", session);
-        const enrolled = await database.enrollProfile({
+        const provisionalSessionCookie = cookieCodec.seal("session", provisionalSession);
+        const opened = await database.enrollProfile({
           auditEventId,
           githubUserId,
-          handle: pending.handle,
-          inviteId: pending.inviteId,
-          inviteVerifierDigest: inviteDigest,
+          handle,
+          ...(pending.inviteId === undefined ? {} : { inviteId: pending.inviteId }),
+          inviteRequired: inviteGateEnabled === true,
+          ...(inviteDigest === undefined ? {} : { inviteVerifierDigest: inviteDigest }),
           locale: pending.locale,
-          motionPreference: pending.motionPreference,
+          motionPreference: "system",
           profileId,
           requestId: createRequestId(),
           sessionExpiresAt: new Date(expiresAt * 1000).toISOString(),
           sessionId,
           sessionVerifierDigest: sessionDigest,
-          streakVisible: pending.streakVisible,
-          theme: pending.theme,
+          streakVisible: false,
+          theme: "classic-grand-prix",
         });
-        if (!enrolled) {
-          return undefined;
+        if (!opened.sessionCreated) {
+          return opened.profileState === "active"
+            ? Object.freeze({ outcome: "existing_profile" })
+            : undefined;
         }
-        return Object.freeze({ sessionCookie: sealedSession });
+        const session: EnrollmentSession = Object.freeze({
+          expiresAt,
+          handle: opened.handle,
+          locale: opened.locale,
+          passkeyRegistered: false,
+          profileId: opened.profileId,
+          sessionId,
+          sessionVerifier: sessionSecret.toString("base64url"),
+          version: 1,
+        });
+        return Object.freeze({
+          outcome: "continue",
+          sessionCookie:
+            opened.profileId === profileId &&
+            opened.handle === handle &&
+            opened.locale === pending.locale
+              ? provisionalSessionCookie
+              : cookieCodec.seal("session", session),
+        });
       } catch {
         return undefined;
       } finally {
@@ -2062,7 +2137,7 @@ export function createEnrollmentService(
       const challenge =
         seconds === undefined
           ? undefined
-          : readPasskeyChallenge(cookieCodec.open("passkey", passkeyCookie), seconds);
+          : readInitialPasskeyChallenge(cookieCodec.open("passkey", passkeyCookie), seconds);
       if (
         session === undefined ||
         session.passkeyRegistered ||
@@ -2102,7 +2177,7 @@ export function createEnrollmentService(
         challengeDigest = passkeyChallengeDigest(challenge.challenge);
         contextDigest = passkeyContextDigest(
           session.profileId,
-          session.handle,
+          challenge.handle,
           config.webauthnRpId,
           config.webauthnOrigin,
         );
@@ -2122,6 +2197,7 @@ export function createEnrollmentService(
         const sealedSession = cookieCodec.seal("session", {
           ...session,
           expiresAt: activeSessionExpiresAt,
+          handle: challenge.handle,
           passkeyRegistered: true,
           sessionId: rotatedSessionId,
           sessionVerifier: rotatedSessionSecret.toString("base64url"),
@@ -2135,7 +2211,7 @@ export function createEnrollmentService(
           contextDigest,
           cosePublicKey: passkey.cosePublicKey,
           credentialId: passkey.credentialId,
-          label: registration.label,
+          handle: challenge.handle,
           passkeyId,
           requestId: createRequestId(),
           rotatedSessionExpiresAt: new Date(activeSessionExpiresAt * 1000).toISOString(),

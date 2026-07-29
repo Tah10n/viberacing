@@ -76,6 +76,7 @@ interface EnrollmentHttpDependencies {
   readonly carProposalsEnabled?: unknown;
   readonly enrollmentEnabled?: unknown;
   readonly getRuntime: () => EnrollmentRuntime;
+  readonly inviteGateEnabled?: unknown;
   readonly pairingEnabled?: unknown;
   readonly sourceCreationEnabled?: unknown;
 }
@@ -412,11 +413,15 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           oauthCookie,
           AbortSignal.timeout(10_000),
           dependencies.enrollmentEnabled,
+          dependencies.inviteGateEnabled,
         );
         if (decision === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=unavailable", [
             clearOauth,
           ]);
+        }
+        if (decision.outcome === "existing_profile") {
+          return redirect(currentRuntime.config.publicOrigin, "/login", [clearOauth]);
         }
         return redirect(currentRuntime.config.publicOrigin, "/join/passkey", [
           clearOauth,
@@ -1799,7 +1804,14 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         return problem("temporarily_unavailable");
       }
       try {
-        if ((await boundedBody(request, 2)) !== "{}") {
+        const body = await boundedBody(request, 64);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
           return problem("invalid_request");
         }
         const sessionCookie = readCookie(
@@ -1811,6 +1823,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         }
         const decision = await currentRuntime.service.beginPasskey(
           sessionCookie,
+          parsed,
           dependencies.enrollmentEnabled,
         );
         if (decision === undefined) {
@@ -1980,7 +1993,8 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
       try {
         const body = await boundedBody(request, 1024);
-        const join = body === undefined ? undefined : parseJoinRequest(body);
+        const join =
+          body === undefined ? undefined : parseJoinRequest(body, dependencies.inviteGateEnabled);
         if (join === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=invalid");
         }

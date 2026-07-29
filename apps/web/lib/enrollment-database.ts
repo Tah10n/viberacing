@@ -182,7 +182,7 @@ export interface EnrollmentDatabase {
     input: EnrollmentDatabaseSourceReactivationChallenge,
   ): Promise<boolean>;
   createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean>;
-  enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
+  enrollProfile(input: EnrollmentDatabaseProfile): Promise<GithubProfileOpen>;
   pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
   proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<boolean>;
   readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview>;
@@ -254,6 +254,15 @@ export interface PasskeyLoginProfile {
   readonly profileId: string;
 }
 
+export interface GithubProfileOpen {
+  readonly created: boolean;
+  readonly handle: string;
+  readonly locale: "en" | "ru";
+  readonly profileId: string;
+  readonly profileState: "active" | "enrolling";
+  readonly sessionCreated: boolean;
+}
+
 export interface PairingApprovalMaterial {
   readonly architecture: "aarch64" | "x86_64";
   readonly candidateIndex: 1 | 2;
@@ -317,6 +326,47 @@ function exactBooleanRow(value: unknown, key: string): boolean {
     fail("result_invalid");
   }
   return row[key];
+}
+
+function exactGithubProfileOpen(value: unknown): GithubProfileOpen {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    fail("result_invalid");
+  }
+  const row = value[0];
+  const expected = new Set([
+    "created",
+    "handle",
+    "locale",
+    "profile_id",
+    "profile_state",
+    "session_created",
+  ]);
+  const keys = Object.keys(row);
+  if (
+    keys.length !== expected.size ||
+    keys.some((key) => !expected.has(key)) ||
+    typeof row.created !== "boolean" ||
+    typeof row.handle !== "string" ||
+    !enrollmentPatterns.handle.test(row.handle) ||
+    (row.locale !== "en" && row.locale !== "ru") ||
+    typeof row.profile_id !== "string" ||
+    !enrollmentPatterns.uuidV4.test(row.profile_id) ||
+    (row.profile_state !== "active" && row.profile_state !== "enrolling") ||
+    typeof row.session_created !== "boolean" ||
+    (row.profile_state === "active" && (row.created || row.session_created)) ||
+    (row.profile_state === "enrolling" && !row.session_created) ||
+    (row.created && !row.handle.startsWith("pending_"))
+  ) {
+    fail("result_invalid");
+  }
+  return Object.freeze({
+    created: row.created,
+    handle: row.handle,
+    locale: row.locale,
+    profileId: row.profile_id,
+    profileState: row.profile_state,
+    sessionCreated: row.session_created,
+  });
 }
 
 function exactProfileVisibility(value: unknown): ProfileVisibility {
@@ -1034,11 +1084,8 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "created"),
       );
     },
-    enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean> {
-      return execute(
-        (client) => client.enrollProfile(input),
-        (value) => exactBooleanRow(value, "enrolled"),
-      );
+    enrollProfile(input: EnrollmentDatabaseProfile): Promise<GithubProfileOpen> {
+      return execute((client) => client.enrollProfile(input), exactGithubProfileOpen);
     },
     pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean> {
       return execute(

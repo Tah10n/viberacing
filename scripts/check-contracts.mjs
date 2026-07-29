@@ -43,6 +43,7 @@ const policyFiles = [
 const vectorFiles = [
   "connector-car-proposal-device-request.test-vector.json",
   "connector-pairing-possession.test-vector.json",
+  "connector-pairing-start-possession.test-vector.json",
   "connector-usage-sync-device-request.test-vector.json",
 ];
 const expectedContractFiles = [
@@ -969,6 +970,36 @@ if (isObject(pairingVector)) {
     report(
       "contracts/v1/connector-pairing-possession.test-vector.json",
       "pairing possession vector is not self-consistent",
+    );
+  }
+}
+
+const pairingStartVector = readJson(
+  "contracts/v1/connector-pairing-start-possession.test-vector.json",
+);
+if (isObject(pairingStartVector)) {
+  const canonicalManifest = JSON.stringify(pairingStartVector.manifest);
+  const manifestDigest = createHash("sha256").update(canonicalManifest, "utf8").digest("hex");
+  const expectedMessage = [
+    "viberacing-pairing-start-possession-v1",
+    manifestDigest,
+    pairingStartVector.clientRateIdentifier,
+    pairingStartVector.signedAt,
+    pairingStartVector.nonce,
+  ].join("\n");
+  if (
+    pairingStartVector.canonicalManifest !== canonicalManifest ||
+    pairingStartVector.manifestDigest !== manifestDigest ||
+    pairingStartVector.possessionMessage !== expectedMessage ||
+    !verifyEd25519(
+      pairingStartVector.manifest?.installationPublicKey,
+      expectedMessage,
+      pairingStartVector.possessionSignature,
+    )
+  ) {
+    report(
+      "contracts/v1/connector-pairing-start-possession.test-vector.json",
+      "pairing start possession vector is not self-consistent",
     );
   }
 }

@@ -1,16 +1,18 @@
 import "server-only";
 
 import { Buffer } from "node:buffer";
-import crypto from "node:crypto";
+import { createHash } from "node:crypto";
 
-const clientIdPattern = /^[A-Za-z0-9_-]{22}$/;
+const startIdentifierPattern = /^[A-Za-z0-9_-]{22}$/;
+const pollTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const decimalIntegerPattern = /^(?:0|[1-9][0-9]*)$/;
-const rateDigestPrefix = Buffer.from("viberacing-pairing-client-rate-v1\n", "utf8");
+const startDigestPrefix = Buffer.from("viberacing-pairing-start-rate-v1\n", "utf8");
+const pollDigestPrefix = Buffer.from("viberacing-pairing-poll-rate-v1\n", "utf8");
 const maximumGlobalLimit = 1_000_000;
 const maximumWindowSeconds = 3_600;
 
-export const pairingClientIdBytes = 16;
-export const pairingClientIdHeader = "x-viberacing-client-id";
+export const pairingStartRateIdentifierBytes = 16;
+export const pairingPollTokenBytes = 32;
 
 export type PairingRateOperation = "poll" | "start";
 
@@ -24,7 +26,7 @@ export interface PairingRatePolicy {
   limits(operation: PairingRateOperation): PairingRateLimits;
 }
 
-export interface PairingClientIdentity {
+export interface PairingRateIdentity {
   readonly accepted: boolean;
   readonly digest: Buffer;
 }
@@ -55,7 +57,7 @@ function readInteger(
 ): number {
   let value: string | undefined;
   try {
-    value = environment[name];
+    value = Reflect.get(environment, name);
   } catch {
     fail("environment_unreadable");
   }
@@ -96,31 +98,18 @@ function readLimits(environment: Environment, operation: "POLL" | "START"): Pair
   return Object.freeze({ bucketLimit, globalLimit, windowSeconds });
 }
 
-export function resolvePairingRatePolicy(
-  environment: Environment = process.env,
-): PairingRatePolicy {
-  const poll = readLimits(environment, "POLL");
-  const start = readLimits(environment, "START");
-  return Object.freeze({
-    limits(operation: string): PairingRateLimits {
-      if (operation === "poll") {
-        return poll;
-      }
-      if (operation === "start") {
-        return start;
-      }
-      return fail("rate_invalid");
-    },
-  });
-}
-
-export function derivePairingClientIdentity(value: unknown): PairingClientIdentity {
-  let decoded = Buffer.alloc(pairingClientIdBytes);
+function deriveIdentity(
+  value: unknown,
+  pattern: RegExp,
+  byteLength: number,
+  digestPrefix: Buffer,
+): PairingRateIdentity {
+  let decoded = Buffer.alloc(byteLength);
   let accepted = false;
   try {
-    if (typeof value === "string" && clientIdPattern.test(value)) {
+    if (typeof value === "string" && pattern.test(value)) {
       const candidate = Buffer.from(value, "base64url");
-      if (candidate.length === pairingClientIdBytes && candidate.toString("base64url") === value) {
+      if (candidate.length === byteLength && candidate.toString("base64url") === value) {
         decoded.fill(0);
         decoded = candidate;
         accepted = true;
@@ -128,16 +117,40 @@ export function derivePairingClientIdentity(value: unknown): PairingClientIdenti
         candidate.fill(0);
       }
     }
-    const digest = crypto.createHash("sha256").update(rateDigestPrefix).update(decoded).digest();
+    const digest = createHash("sha256").update(digestPrefix).update(decoded).digest();
     return Object.freeze({ accepted, digest });
   } catch {
-    const digest = crypto
-      .createHash("sha256")
-      .update(rateDigestPrefix)
-      .update(Buffer.alloc(pairingClientIdBytes))
+    const digest = createHash("sha256")
+      .update(digestPrefix)
+      .update(Buffer.alloc(byteLength))
       .digest();
     return Object.freeze({ accepted: false, digest });
   } finally {
     decoded.fill(0);
   }
+}
+
+export function resolvePairingRatePolicy(
+  environment: Environment = process.env,
+): PairingRatePolicy {
+  const poll = readLimits(environment, "POLL");
+  const start = readLimits(environment, "START");
+  return Object.freeze({
+    limits(operation: PairingRateOperation): PairingRateLimits {
+      return operation === "poll" ? poll : start;
+    },
+  });
+}
+
+export function derivePairingStartRateIdentity(value: unknown): PairingRateIdentity {
+  return deriveIdentity(
+    value,
+    startIdentifierPattern,
+    pairingStartRateIdentifierBytes,
+    startDigestPrefix,
+  );
+}
+
+export function derivePairingPollRateIdentity(value: unknown): PairingRateIdentity {
+  return deriveIdentity(value, pollTokenPattern, pairingPollTokenBytes, pollDigestPrefix);
 }

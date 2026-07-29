@@ -525,7 +525,16 @@ describe("pairing database pool", () => {
 
   it("exposes only fixed enrollment, passkey, profile, and session procedures on the shared Web/Auth pool", async () => {
     const returnedRows = [
-      [{ enrolled: true }],
+      [
+        {
+          created: true,
+          handle: "pending_0000000000004000",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000302",
+          profile_state: "enrolling",
+          session_created: true,
+        },
+      ],
       [{ created: true }],
       [{ registered: true }],
       [
@@ -628,8 +637,9 @@ describe("pairing database pool", () => {
       client.enrollProfile({
         auditEventId: "00000000-0000-4000-8000-000000000305",
         githubUserId: 123,
-        handle: "pixel_driver",
+        handle: "pending_0000000000004000",
         inviteId: "00000000-0000-4000-8000-000000000301",
+        inviteRequired: true,
         inviteVerifierDigest: digest,
         locale: "en",
         motionPreference: "system",
@@ -641,13 +651,23 @@ describe("pairing database pool", () => {
         streakVisible: false,
         theme: "neon-night",
       }),
-    ).resolves.toEqual([{ enrolled: true }]);
+    ).resolves.toEqual([
+      {
+        created: true,
+        handle: "pending_0000000000004000",
+        locale: "en",
+        profile_id: "00000000-0000-4000-8000-000000000302",
+        profile_state: "enrolling",
+        session_created: true,
+      },
+    ]);
     await expect(
       client.createPasskeyChallenge({
         challengeDigest: digest,
         challengeId: "00000000-0000-4000-8000-000000000304",
         contextDigest: context,
         expiresAt: "2026-07-16T10:05:00.000Z",
+        handle: "pixel_driver",
         sessionId: "00000000-0000-4000-8000-000000000303",
         sessionVerifierDigest: digest,
       }),
@@ -662,7 +682,7 @@ describe("pairing database pool", () => {
         contextDigest: context,
         cosePublicKey: publicKey,
         credentialId: credential,
-        label: "Primary passkey",
+        handle: "pixel_driver",
         passkeyId: "00000000-0000-4000-8000-000000000306",
         requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
         rotatedSessionExpiresAt: "2026-08-15T10:00:00.000Z",
@@ -920,9 +940,9 @@ describe("pairing database pool", () => {
     ]);
 
     expect(snapshots.map(({ text }) => text)).toEqual([
-      expect.stringContaining("enroll_profile"),
-      expect.stringContaining("create_auth_challenge"),
-      expect.stringContaining("consume_auth_challenge"),
+      expect.stringContaining("open_github_profile"),
+      expect.stringContaining("begin_initial_passkey"),
+      expect.stringContaining("complete_initial_passkey"),
       expect.stringContaining("read_passkey_verification_material"),
       expect.stringContaining("complete_passkey_login_session"),
       expect.stringContaining("read_passkey_inventory"),
@@ -944,8 +964,8 @@ describe("pairing database pool", () => {
       expect.stringContaining("unlink_source"),
       expect.stringContaining("read_profile_score"),
     ]);
-    expect(snapshots[2]?.text).toContain("register_initial_passkey");
-    expect(snapshots[2]?.text).toContain("rotate_session");
+    expect(snapshots[2]?.text).toContain("complete_initial_passkey");
+    expect(snapshots[2]?.text).not.toContain("rotate_session");
     expect(snapshots[2]?.text).toContain("AS MATERIALIZED");
     expect(snapshots[8]?.text).toContain("add_passkey");
     expect(snapshots[8]?.text).toContain("AS MATERIALIZED");

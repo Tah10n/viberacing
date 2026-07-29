@@ -14,14 +14,7 @@ import type { EnrollmentService } from "./enrollment-service";
 const origin = "https://race.example.com";
 const inviteCode =
   "vri_00000000-0000-4000-8000-000000000601_" + Buffer.alloc(32, 1).toString("base64url");
-const joinBody = new URLSearchParams({
-  handle: "pixel_driver",
-  inviteCode,
-  locale: "en",
-  motionPreference: "system",
-  streakVisible: "false",
-  theme: "neon-night",
-}).toString();
+const joinBody = new URLSearchParams({ inviteCode, locale: "en" }).toString();
 const config = resolveEnrollmentConfig({
   GITHUB_CLIENT_ID: "Ov23abcdefghijklmno",
   GITHUB_CLIENT_SECRET: "a".repeat(40),
@@ -136,7 +129,9 @@ function serviceFixture(): EnrollmentService {
       }),
     ),
     cancelGithub: vi.fn(() => true),
-    completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
+    completeGithub: vi.fn(() =>
+      Promise.resolve({ outcome: "continue" as const, sessionCookie: "opaque-session" }),
+    ),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
@@ -174,6 +169,11 @@ describe("enrollment HTTP boundary", () => {
   beforeEach(() => {
     service = serviceFixture();
     runtime = {
+      batchPairingService: {
+        beginApproval: vi.fn(() => Promise.resolve(undefined)),
+        completeApproval: vi.fn(() => Promise.resolve(false)),
+        review: vi.fn(() => Promise.resolve(undefined)),
+      },
       carProposalService: {
         approve: vi.fn(() => Promise.resolve(true)),
         propose: vi.fn(() => Promise.resolve(true)),
@@ -246,6 +246,7 @@ describe("enrollment HTTP boundary", () => {
       admission: createEnrollmentAdmission(),
       enrollmentEnabled: true,
       getRuntime: () => runtime,
+      inviteGateEnabled: true,
     });
     const response = await http.start(
       post("/auth/github/start", joinBody, "application/x-www-form-urlencoded"),
@@ -281,6 +282,7 @@ describe("enrollment HTTP boundary", () => {
       admission: createEnrollmentAdmission(),
       enrollmentEnabled: true,
       getRuntime: () => runtime,
+      inviteGateEnabled: true,
     });
     const response = await http.callback(
       new Request(`${origin}/auth/github/callback?code=valid_code&state=valid_state`, {
@@ -296,6 +298,7 @@ describe("enrollment HTTP boundary", () => {
       "valid_state",
       "opaque-oauth",
       expect.any(AbortSignal),
+      true,
       true,
     );
 
@@ -422,7 +425,12 @@ describe("enrollment HTTP boundary", () => {
       getRuntime: () => runtime,
     });
     const options = await http.passkeyOptions(
-      post("/auth/passkey/options", "{}", "application/json", "viberacing_session=opaque-session"),
+      post(
+        "/auth/passkey/options",
+        JSON.stringify({ handle: "pixel_driver" }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
     );
     expect(options.status).toBe(200);
     expect(options.headers.get("set-cookie")).toContain("viberacing_passkey=opaque-passkey");
@@ -430,12 +438,16 @@ describe("enrollment HTTP boundary", () => {
     const optionsBody = JSON.parse(await options.text()) as unknown;
     expect(optionsBody).toBeTypeOf("object");
     expect(typeof (optionsBody as Record<string, unknown>).challenge).toBe("string");
-    expect(service.beginPasskey).toHaveBeenCalledWith("opaque-session", true);
+    expect(service.beginPasskey).toHaveBeenCalledWith(
+      "opaque-session",
+      { handle: "pixel_driver" },
+      true,
+    );
 
     const verification = await http.passkeyVerify(
       post(
         "/auth/passkey/verify",
-        JSON.stringify({ label: "Primary passkey", response: { id: "synthetic" } }),
+        JSON.stringify({ response: { id: "synthetic" } }),
         "application/json",
         "viberacing_session=opaque-session; viberacing_passkey=opaque-passkey",
       ),
@@ -446,20 +458,21 @@ describe("enrollment HTTP boundary", () => {
     expect(service.completePasskey).toHaveBeenCalledWith(
       "opaque-session",
       "opaque-passkey",
-      { label: "Primary passkey", response: { id: "synthetic" } },
+      { response: { id: "synthetic" } },
       true,
     );
 
+    vi.mocked(service.beginPasskey).mockResolvedValueOnce(undefined);
     await expect(
       http.passkeyOptions(
         post(
           "/auth/passkey/options",
-          " {}",
+          "{}",
           "application/json",
           "viberacing_session=opaque-session",
         ),
       ),
-    ).resolves.toMatchObject({ status: 400 });
+    ).resolves.toMatchObject({ status: 401 });
   });
 
   it("binds passkey addition to the session and two fresh ceremonies", async () => {

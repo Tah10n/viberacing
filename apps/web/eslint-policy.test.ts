@@ -110,7 +110,8 @@ describe("frontend lint policy", () => {
       const restrictedImports = result?.messages.filter(
         ({ message, ruleId }) =>
           ruleId === "no-restricted-imports" &&
-          (message.includes("Only passkey-registration") || message.includes("Only passkey-setup")),
+          (message.includes("Only passkey-registration") ||
+            message.includes("Only browser-webauthn")),
       );
       const restrictedSyntax = result?.messages.filter(
         ({ message, ruleId }) => ruleId === "no-restricted-syntax" && message.includes("WebAuthn"),

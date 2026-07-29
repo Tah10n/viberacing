@@ -10,27 +10,10 @@ const uuidV4Pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const invitePattern = new RegExp(
   `^vri_(${uuidV4Pattern.source.slice(1, -1)})_([A-Za-z0-9_-]{43})$`,
 );
-const joinKeys = new Set([
-  "handle",
-  "inviteCode",
-  "locale",
-  "motionPreference",
-  "streakVisible",
-  "theme",
-]);
-const pendingKeys = new Set([
-  "codeVerifier",
-  "expiresAt",
-  "handle",
-  "inviteDigest",
-  "inviteId",
-  "locale",
-  "motionPreference",
-  "state",
-  "streakVisible",
-  "theme",
-  "version",
-]);
+const openJoinKeys = new Set(["locale"]);
+const invitedJoinKeys = new Set(["inviteCode", "locale"]);
+const pendingBaseKeys = new Set(["codeVerifier", "expiresAt", "locale", "state", "version"]);
+const pendingInvitedKeys = new Set([...pendingBaseKeys, "inviteDigest", "inviteId"]);
 const sessionKeys = new Set([
   "expiresAt",
   "handle",
@@ -42,6 +25,13 @@ const sessionKeys = new Set([
   "version",
 ]);
 const challengeKeys = new Set(["challenge", "challengeId", "expiresAt", "version"]);
+const initialPasskeyChallengeKeys = new Set([
+  "challenge",
+  "challengeId",
+  "expiresAt",
+  "handle",
+  "version",
+]);
 const addChallengeKeys = new Set([
   "authenticationChallenge",
   "challengeId",
@@ -90,13 +80,9 @@ const recoveryAuthorityKeys = new Set([
 ]);
 
 export interface JoinRequest {
-  readonly handle: string;
-  readonly inviteDigest: string;
-  readonly inviteId: string;
+  readonly inviteDigest?: string;
+  readonly inviteId?: string;
   readonly locale: "en" | "ru";
-  readonly motionPreference: "off" | "on" | "system";
-  readonly streakVisible: boolean;
-  readonly theme: "classic-grand-prix" | "cyber-rally" | "neon-night";
 }
 
 export interface PendingEnrollment extends JoinRequest {
@@ -122,6 +108,10 @@ export interface PasskeyRegistrationChallenge {
   readonly challengeId: string;
   readonly expiresAt: number;
   readonly version: 1;
+}
+
+export interface InitialPasskeyChallenge extends PasskeyRegistrationChallenge {
+  readonly handle: string;
 }
 
 export interface PasskeyAddChallenge {
@@ -196,53 +186,40 @@ function futureExpiry(value: unknown, nowSeconds: number, maximumSeconds: number
 function joinFields(
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & JoinRequest {
-  return (
-    typeof value.handle === "string" &&
-    handlePattern.test(value.handle) &&
+  const noInvite = value.inviteId === undefined && value.inviteDigest === undefined;
+  const exactInvite =
     typeof value.inviteId === "string" &&
     uuidV4Pattern.test(value.inviteId) &&
-    canonicalBase64Url32(value.inviteDigest) &&
-    (value.locale === "en" || value.locale === "ru") &&
-    (value.motionPreference === "off" ||
-      value.motionPreference === "on" ||
-      value.motionPreference === "system") &&
-    typeof value.streakVisible === "boolean" &&
-    (value.theme === "classic-grand-prix" ||
-      value.theme === "cyber-rally" ||
-      value.theme === "neon-night")
-  );
+    canonicalBase64Url32(value.inviteDigest);
+  return (value.locale === "en" || value.locale === "ru") && (noInvite || exactInvite);
 }
 
-export function parseJoinRequest(body: string): JoinRequest | undefined {
-  if (body.length === 0 || body.length > 1024) {
+export function parseJoinRequest(
+  body: string,
+  inviteGateEnabled: unknown = false,
+): JoinRequest | undefined {
+  if (body.length === 0 || body.length > 256) {
     return undefined;
   }
   const parameters = new URLSearchParams(body);
   const keys = [...parameters.keys()];
+  const expectedKeys = inviteGateEnabled === true ? invitedJoinKeys : openJoinKeys;
   if (
-    keys.length !== joinKeys.size ||
+    keys.length !== expectedKeys.size ||
     new Set(keys).size !== keys.length ||
-    keys.some((key) => !joinKeys.has(key))
+    keys.some((key) => !expectedKeys.has(key))
   ) {
     return undefined;
   }
-  const handle = parameters.get("handle");
-  const inviteCode = parameters.get("inviteCode");
   const locale = parameters.get("locale");
-  const motionPreference = parameters.get("motionPreference");
-  const streakVisible = parameters.get("streakVisible");
-  const theme = parameters.get("theme");
-  const inviteMatch = inviteCode?.match(invitePattern);
-  if (
-    handle === null ||
-    !handlePattern.test(handle) ||
-    inviteMatch === undefined ||
-    inviteMatch === null ||
-    (locale !== "en" && locale !== "ru") ||
-    (motionPreference !== "off" && motionPreference !== "on" && motionPreference !== "system") ||
-    (streakVisible !== "true" && streakVisible !== "false") ||
-    (theme !== "classic-grand-prix" && theme !== "cyber-rally" && theme !== "neon-night")
-  ) {
+  if (locale !== "en" && locale !== "ru") {
+    return undefined;
+  }
+  if (inviteGateEnabled !== true) {
+    return Object.freeze({ locale });
+  }
+  const inviteMatch = parameters.get("inviteCode")?.match(invitePattern);
+  if (inviteMatch === undefined || inviteMatch === null) {
     return undefined;
   }
   const inviteId = inviteMatch[1];
@@ -256,13 +233,9 @@ export function parseJoinRequest(body: string): JoinRequest | undefined {
       return undefined;
     }
     return Object.freeze({
-      handle,
       inviteDigest: createHash("sha256").update(secret).digest("base64url"),
       inviteId,
       locale,
-      motionPreference,
-      streakVisible: streakVisible === "true",
-      theme,
     });
   } finally {
     secret.fill(0);
@@ -275,7 +248,7 @@ export function readPendingEnrollment(
 ): PendingEnrollment | undefined {
   if (
     !isPlainObject(value) ||
-    !exactKeys(value, pendingKeys) ||
+    (!exactKeys(value, pendingBaseKeys) && !exactKeys(value, pendingInvitedKeys)) ||
     value.version !== 1 ||
     !joinFields(value) ||
     !canonicalBase64Url32(value.codeVerifier) ||
@@ -327,6 +300,27 @@ export function readPasskeyChallenge(
     return undefined;
   }
   return Object.freeze(value as unknown as PasskeyRegistrationChallenge);
+}
+
+export function readInitialPasskeyChallenge(
+  value: unknown,
+  nowSeconds: number,
+): InitialPasskeyChallenge | undefined {
+  if (
+    !isPlainObject(value) ||
+    !exactKeys(value, initialPasskeyChallengeKeys) ||
+    value.version !== 1 ||
+    !canonicalBase64Url32(value.challenge) ||
+    typeof value.challengeId !== "string" ||
+    !uuidV4Pattern.test(value.challengeId) ||
+    typeof value.handle !== "string" ||
+    !handlePattern.test(value.handle) ||
+    value.handle.startsWith("pending_") ||
+    !futureExpiry(value.expiresAt, nowSeconds, 300)
+  ) {
+    return undefined;
+  }
+  return Object.freeze(value as unknown as InitialPasskeyChallenge);
 }
 
 export function readPasskeyRevokeChallenge(

@@ -353,6 +353,14 @@ try {
     /pairing possession vector is not self-consistent/u,
   );
   await expectFail(
+    "pairing-start-vector-drift",
+    (root) =>
+      mutateJson(root, "connector-pairing-start-possession.test-vector.json", (vector) => {
+        vector.manifest.candidates[0].safeDisplayLabel = "mutated";
+      }),
+    /pairing start possession vector is not self-consistent/u,
+  );
+  await expectFail(
     "duplicate-json-key",
     (root) => {
       const path = jsonPath(root, "usage-sync.schema.json");

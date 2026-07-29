@@ -1,32 +1,21 @@
 import "server-only";
 
 import { Buffer } from "node:buffer";
-import crypto from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { pairingChallengeBytes, pairingIdPattern } from "./pairing-possession-verifier";
 import { pairingPollTokenBytes } from "./pairing-poll-verifier";
 import { pairingUserCodeAlphabet, pairingUserCodePattern } from "./pairing-user-code-verifier";
 
-const materialEntropyBytes = pairingPollTokenBytes + pairingChallengeBytes + 8;
+const identifierBytes = 16;
+const userCodeEntropyBytes = 8;
+const entropyBytes =
+  identifierBytes + pairingPollTokenBytes + pairingChallengeBytes + userCodeEntropyBytes;
 const userCodeMask = (1n << 60n) - 1n;
-const pairingLifetimeMs = 9 * 60 * 1_000;
 
-export const pairingStartLifetimeMs = pairingLifetimeMs;
-
-export type PairingStartMaterialErrorCode = "clock_unavailable" | "entropy_unavailable";
-
-export class PairingStartMaterialError extends Error {
-  readonly code: PairingStartMaterialErrorCode;
-
-  constructor(code: PairingStartMaterialErrorCode) {
-    super("Pairing start material is unavailable.");
-    this.name = "PairingStartMaterialError";
-    this.code = code;
-  }
-}
+export const pairingStartLifetimeMs = 9 * 60 * 1_000;
 
 export interface PairingStartMaterial {
-  readonly deviceKeyId: string;
   readonly expiresAt: string;
   readonly pairingChallenge: Buffer;
   readonly pairingChallengeBase64Url: string;
@@ -36,20 +25,16 @@ export interface PairingStartMaterial {
   clear(): void;
 }
 
-function fail(code: PairingStartMaterialErrorCode): never {
-  throw new PairingStartMaterialError(code);
-}
-
-function createUuid(): string {
-  const value = crypto.randomUUID();
+function encodeIdentifier(prefix: "pair_", bytes: Buffer): string {
+  const value = `${prefix}${bytes.toString("base64url")}`;
   if (!pairingIdPattern.test(value)) {
-    fail("entropy_unavailable");
+    throw new Error("pairing material unavailable");
   }
   return value;
 }
 
-function encodeUserCode(entropy: Buffer): string {
-  let value = entropy.readBigUInt64BE() & userCodeMask;
+function encodeUserCode(bytes: Buffer): string {
+  let value = bytes.readBigUInt64BE() & userCodeMask;
   const characters = Array.from({ length: 12 }, () => {
     const character = pairingUserCodeAlphabet[Number(value & 31n)];
     value >>= 5n;
@@ -59,68 +44,59 @@ function encodeUserCode(entropy: Buffer): string {
     .slice(8)
     .join("")}`;
   if (!pairingUserCodePattern.test(code)) {
-    fail("entropy_unavailable");
+    throw new Error("pairing material unavailable");
   }
   return code;
 }
 
-function createExpiry(): string {
-  try {
-    const now = Date.now();
-    const expiryMilliseconds = now + pairingLifetimeMs;
-    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(expiryMilliseconds)) {
-      fail("clock_unavailable");
-    }
-    const expiresAt = new Date(expiryMilliseconds).toISOString();
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(expiresAt)) {
-      fail("clock_unavailable");
-    }
-    return expiresAt;
-  } catch (error) {
-    if (error instanceof PairingStartMaterialError) {
-      throw error;
-    }
-    fail("clock_unavailable");
-  }
-}
-
-export function createPairingStartMaterial(): PairingStartMaterial {
+export function createPairingStartMaterial(
+  nowMilliseconds = Date.now(),
+  generate = randomBytes,
+): PairingStartMaterial {
   let entropy: Buffer | undefined;
-  let pairingChallenge: Buffer | undefined;
+  let challenge: Buffer | undefined;
   try {
-    const generated = crypto.randomBytes(materialEntropyBytes) as unknown;
-    if (!Buffer.isBuffer(generated) || generated.length !== materialEntropyBytes) {
-      fail("entropy_unavailable");
+    if (!Number.isSafeInteger(nowMilliseconds) || nowMilliseconds < 0) {
+      throw new Error("pairing material unavailable");
     }
-    entropy = generated;
-    const pollToken = entropy.subarray(0, pairingPollTokenBytes).toString("base64url");
-    pairingChallenge = Buffer.from(
-      entropy.subarray(pairingPollTokenBytes, pairingPollTokenBytes + pairingChallengeBytes),
-    );
-    const userCode = encodeUserCode(
-      entropy.subarray(pairingPollTokenBytes + pairingChallengeBytes),
-    );
-    const pairingChallengeBase64Url = pairingChallenge.toString("base64url");
-    const material = {
+    entropy = generate(entropyBytes);
+    if (!Buffer.isBuffer(entropy) || entropy.length !== entropyBytes) {
+      throw new Error("pairing material unavailable");
+    }
+    let combined = 0;
+    for (const byte of entropy) {
+      combined |= byte;
+    }
+    if (combined === 0) {
+      throw new Error("pairing material unavailable");
+    }
+    const identifier = entropy.subarray(0, identifierBytes);
+    const pollStart = identifierBytes;
+    const challengeStart = pollStart + pairingPollTokenBytes;
+    const codeStart = challengeStart + pairingChallengeBytes;
+    challenge = Buffer.from(entropy.subarray(challengeStart, codeStart));
+    const expiresAt = new Date(nowMilliseconds + pairingStartLifetimeMs).toISOString();
+    if (!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/.test(expiresAt)) {
+      throw new Error("pairing material unavailable");
+    }
+    const retainedChallenge = Buffer.from(challenge);
+    let cleared = false;
+    return Object.freeze({
       clear(): void {
-        pairingChallenge?.fill(0);
+        if (!cleared) {
+          cleared = true;
+          retainedChallenge.fill(0);
+        }
       },
-      deviceKeyId: createUuid(),
-      expiresAt: createExpiry(),
-      pairingChallenge,
-      pairingChallengeBase64Url,
-      pairingId: createUuid(),
-      pollToken,
-      userCode,
-    } satisfies PairingStartMaterial;
-    return Object.freeze(material);
-  } catch (error) {
-    pairingChallenge?.fill(0);
-    if (error instanceof PairingStartMaterialError) {
-      throw error;
-    }
-    return fail("entropy_unavailable");
+      expiresAt,
+      pairingChallenge: retainedChallenge,
+      pairingChallengeBase64Url: retainedChallenge.toString("base64url"),
+      pairingId: encodeIdentifier("pair_", identifier),
+      pollToken: entropy.subarray(pollStart, challengeStart).toString("base64url"),
+      userCode: encodeUserCode(entropy.subarray(codeStart)),
+    });
   } finally {
     entropy?.fill(0);
+    challenge?.fill(0);
   }
 }

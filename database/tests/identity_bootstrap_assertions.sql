@@ -42,7 +42,7 @@ BEGIN
   WHERE namespace.nspname = 'viberacing_private'
     AND relation.relkind = 'r';
 
-  IF v_private_table_count <> 30 OR v_forced_rls_count <> v_private_table_count THEN
+  IF v_private_table_count <> 31 OR v_forced_rls_count <> v_private_table_count THEN
     RAISE EXCEPTION 'private tables are not exactly force-RLS protected';
   END IF;
 
@@ -50,12 +50,12 @@ BEGIN
     SELECT 1
     FROM viberacing_private.agent_providers
     WHERE provider_code = 'codex'
-      AND state = 'recognized'
+      AND state = 'supported'
   ) OR (
     SELECT pg_catalog.count(*)
     FROM viberacing_private.agent_providers
   ) <> 6 THEN
-    RAISE EXCEPTION 'closed recognized provider inventory is invalid';
+    RAISE EXCEPTION 'closed provider inventory or Codex support state is invalid';
   END IF;
 
   IF EXISTS (

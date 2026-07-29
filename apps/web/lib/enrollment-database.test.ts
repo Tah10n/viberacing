@@ -90,7 +90,18 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
     createRecoveryCodeChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createSourceReactivationChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
     createSourceUnlinkChallenge: vi.fn(() => Promise.resolve([{ created: true }])),
-    enrollProfile: vi.fn(() => Promise.resolve([{ enrolled: true }])),
+    enrollProfile: vi.fn(() =>
+      Promise.resolve([
+        {
+          created: true,
+          handle: "pending_0000000000004000",
+          locale: "en",
+          profile_id: "00000000-0000-4000-8000-000000000402",
+          profile_state: "enrolling",
+          session_created: true,
+        },
+      ]),
+    ),
     pauseSource: vi.fn(() => Promise.resolve([{ paused: true }])),
     proposeCarRecipe: vi.fn(() => Promise.resolve([{ proposed: true }])),
     readAccountOverview: vi.fn(() => Promise.resolve(accountScoreRows())),
@@ -204,8 +215,9 @@ function fixture(overrides: Partial<EnrollmentDatabaseClient> = {}) {
 const profile = {
   auditEventId: "00000000-0000-4000-8000-000000000405",
   githubUserId: 123,
-  handle: "pixel_driver",
+  handle: "pending_0000000000004000",
   inviteId: "00000000-0000-4000-8000-000000000401",
+  inviteRequired: true,
   inviteVerifierDigest: new Uint8Array(32),
   locale: "en" as const,
   motionPreference: "system" as const,
@@ -221,13 +233,21 @@ const profile = {
 describe("enrollment database", () => {
   it("probes every checkout and exposes only the fixed identity operations", async () => {
     const { client, database, releases } = fixture();
-    await expect(database.enrollProfile(profile)).resolves.toBe(true);
+    await expect(database.enrollProfile(profile)).resolves.toEqual({
+      created: true,
+      handle: "pending_0000000000004000",
+      locale: "en",
+      profileId: profile.profileId,
+      profileState: "enrolling",
+      sessionCreated: true,
+    });
     await expect(
       database.createPasskeyChallenge({
         challengeDigest: new Uint8Array(32),
         challengeId: "00000000-0000-4000-8000-000000000404",
         contextDigest: new Uint8Array(32),
         expiresAt: "2026-07-16T10:05:00.000Z",
+        handle: "pixel_driver",
         sessionId: profile.sessionId,
         sessionVerifierDigest: new Uint8Array(32),
       }),
@@ -242,7 +262,7 @@ describe("enrollment database", () => {
         contextDigest: new Uint8Array(32),
         cosePublicKey: new Uint8Array(77),
         credentialId: new Uint8Array(32),
-        label: "Primary passkey",
+        handle: "pixel_driver",
         passkeyId: "00000000-0000-4000-8000-000000000406",
         requestId: profile.requestId,
         rotatedSessionExpiresAt: profile.sessionExpiresAt,

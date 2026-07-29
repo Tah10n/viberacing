@@ -5,9 +5,10 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import {
-  derivePairingClientIdentity,
-  pairingClientIdBytes,
-  pairingClientIdHeader,
+  derivePairingPollRateIdentity,
+  derivePairingStartRateIdentity,
+  pairingPollTokenBytes,
+  pairingStartRateIdentifierBytes,
   PairingRatePolicyConfigurationError,
   resolvePairingRatePolicy,
 } from "./pairing-rate-policy";
@@ -21,7 +22,7 @@ const validEnvironment = Object.freeze({
   VIBERACING_WEB_PAIRING_START_WINDOW_SECONDS: "60",
 });
 
-describe("pairing rate policy", () => {
+describe("batch pairing rate policy", () => {
   it("returns only the reviewed start and poll limits", () => {
     const policy = resolvePairingRatePolicy(validEnvironment);
 
@@ -35,8 +36,8 @@ describe("pairing rate policy", () => {
       globalLimit: 1200,
       windowSeconds: 60,
     });
-    expect(pairingClientIdBytes).toBe(16);
-    expect(pairingClientIdHeader).toBe("x-viberacing-client-id");
+    expect(pairingStartRateIdentifierBytes).toBe(16);
+    expect(pairingPollTokenBytes).toBe(32);
     expect(Object.isFrozen(policy)).toBe(true);
     expect(Object.isFrozen(policy.limits("start"))).toBe(true);
   });
@@ -53,34 +54,43 @@ describe("pairing rate policy", () => {
     );
   });
 
-  it("derives a fixed digest from one canonical anonymous client id", () => {
-    const clientId = Buffer.alloc(pairingClientIdBytes, 0x7a).toString("base64url");
-    const first = derivePairingClientIdentity(clientId);
-    const second = derivePairingClientIdentity(clientId);
+  it("domain-separates fixed digests for canonical start and poll identities", () => {
+    const shared = Buffer.alloc(pairingPollTokenBytes, 0x7a);
+    const start = derivePairingStartRateIdentity(
+      shared.subarray(0, pairingStartRateIdentifierBytes).toString("base64url"),
+    );
+    const poll = derivePairingPollRateIdentity(shared.toString("base64url"));
+    const repeated = derivePairingPollRateIdentity(shared.toString("base64url"));
 
-    expect(first.accepted).toBe(true);
-    expect(first.digest).toHaveLength(32);
-    expect(first.digest).toEqual(second.digest);
-    expect(first.digest).not.toEqual(Buffer.alloc(32));
-    expect(Object.isFrozen(first)).toBe(true);
+    expect(start.accepted).toBe(true);
+    expect(poll.accepted).toBe(true);
+    expect(start.digest).toHaveLength(32);
+    expect(poll.digest).toEqual(repeated.digest);
+    expect(start.digest).not.toEqual(poll.digest);
 
-    first.digest.fill(0);
-    second.digest.fill(0);
+    shared.fill(0);
+    start.digest.fill(0);
+    poll.digest.fill(0);
+    repeated.digest.fill(0);
   });
 
-  it.each([undefined, null, "", "A".repeat(21), "!".repeat(22)])(
-    "uses one fixed dummy digest for malformed input: %o",
-    (value) => {
-      const actual = derivePairingClientIdentity(value);
-      const expected = derivePairingClientIdentity(undefined);
+  it.each([
+    [derivePairingStartRateIdentity, undefined],
+    [derivePairingStartRateIdentity, "A".repeat(21)],
+    [derivePairingStartRateIdentity, "!".repeat(22)],
+    [derivePairingPollRateIdentity, null],
+    [derivePairingPollRateIdentity, "A".repeat(42)],
+    [derivePairingPollRateIdentity, "!".repeat(43)],
+  ] as const)("uses an operation-local dummy digest for malformed input", (derive, value) => {
+    const actual = derive(value);
+    const expected = derive(undefined);
 
-      expect(actual.accepted).toBe(false);
-      expect(actual.digest).toEqual(expected.digest);
+    expect(actual.accepted).toBe(false);
+    expect(actual.digest).toEqual(expected.digest);
 
-      actual.digest.fill(0);
-      expected.digest.fill(0);
-    },
-  );
+    actual.digest.fill(0);
+    expected.digest.fill(0);
+  });
 
   it("contains an unreadable environment without reflecting it", () => {
     const environment = new Proxy(validEnvironment, {

@@ -184,83 +184,60 @@ SELECT
   AND pg_catalog.count(*) = 1 AS approved
 FROM pairing_approval`;
 
-const enrollProfileQuery = `WITH profile_enrollment AS MATERIALIZED (
-  SELECT viberacing_api.enroll_profile(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
-    $4::bigint,
-    $5::text,
-    $6::text,
-    $7::text,
-    $8::text,
-    $9::boolean,
-    $10::uuid,
-    $11::bytea,
-    $12::timestamptz,
-    $13::uuid,
-    $14::text
-  ) AS ignored
-)
-SELECT pg_catalog.count(*) = 1 AS enrolled
-FROM profile_enrollment`;
+const enrollProfileQuery = `SELECT
+  opened.profile_id,
+  opened.handle,
+  opened.locale,
+  opened.profile_state,
+  opened.created,
+  opened.session_created
+FROM viberacing_api.open_github_profile(
+  $1::uuid,
+  $2::bigint,
+  $3::text,
+  $4::text,
+  $5::uuid,
+  $6::bytea,
+  $7::timestamptz,
+  $8::uuid,
+  $9::bytea,
+  $10::boolean
+) AS opened`;
 
 const createPasskeyChallengeQuery = `WITH challenge_creation AS MATERIALIZED (
-  SELECT viberacing_api.create_auth_challenge(
+  SELECT viberacing_api.begin_initial_passkey(
     $1::uuid,
     $2::bytea,
-    $3::uuid,
-    'passkey_registration'::text,
-    $4::bytea,
+    $3::text,
+    $4::uuid,
     $5::bytea,
-    $6::timestamptz
+    $6::bytea,
+    $7::timestamptz
   ) AS ignored
 )
 SELECT pg_catalog.count(*) = 1 AS created
 FROM challenge_creation`;
 
-const completeInitialPasskeyQuery = `WITH challenge_consumption AS MATERIALIZED (
-  SELECT viberacing_api.consume_auth_challenge(
+const completeInitialPasskeyQuery = `WITH passkey_completion AS MATERIALIZED (
+  SELECT viberacing_api.complete_initial_passkey(
     $1::uuid,
     $2::bytea,
     $3::uuid,
-    'passkey_registration'::text,
     $4::bytea,
-    $5::bytea
-  ) AS consumed
-), passkey_registration AS MATERIALIZED (
-  SELECT viberacing_api.register_initial_passkey(
-    $1::uuid,
-    $2::bytea,
-    $3::uuid,
+    $5::text,
     $6::uuid,
     $7::bytea,
     $8::bytea,
-    $9::text,
-    $10::bigint,
+    $9::bigint,
+    $10::boolean,
     $11::boolean,
-    $12::boolean,
-    $13::uuid,
-    $14::text
-  ) AS ignored
-  FROM challenge_consumption
-  WHERE consumed
-), session_rotation AS MATERIALIZED (
-  SELECT viberacing_api.rotate_session(
-    $1::uuid,
-    $2::bytea,
-    $15::uuid,
-    $16::bytea,
-    $17::timestamptz,
-    $18::uuid,
-    $14::text
+    $12::uuid,
+    $13::bytea,
+    $14::timestamptz
   ) AS profile_id
-  FROM passkey_registration
 )
-SELECT
-  (SELECT consumed FROM challenge_consumption)
-  AND pg_catalog.count(*) = 1 AS registered
-FROM session_rotation`;
+SELECT pg_catalog.count(*) = 1 AS registered
+FROM passkey_completion`;
 
 const revokeEnrollmentSessionQuery = `SELECT viberacing_api.revoke_session(
   $1::uuid,
@@ -833,8 +810,9 @@ export interface EnrollmentDatabaseProfile {
   readonly auditEventId: string;
   readonly githubUserId: number;
   readonly handle: string;
-  readonly inviteId: string;
-  readonly inviteVerifierDigest: Uint8Array;
+  readonly inviteId?: string;
+  readonly inviteRequired: boolean;
+  readonly inviteVerifierDigest?: Uint8Array;
   readonly locale: "en" | "ru";
   readonly motionPreference: "off" | "on" | "system";
   readonly profileId: string;
@@ -851,6 +829,7 @@ export interface EnrollmentDatabasePasskeyChallenge {
   readonly challengeId: string;
   readonly contextDigest: Uint8Array;
   readonly expiresAt: string;
+  readonly handle: string;
   readonly sessionId: string;
   readonly sessionVerifierDigest: Uint8Array;
 }
@@ -864,7 +843,7 @@ export interface EnrollmentDatabaseInitialPasskey {
   readonly contextDigest: Uint8Array;
   readonly cosePublicKey: Uint8Array;
   readonly credentialId: Uint8Array;
-  readonly label: string;
+  readonly handle: string;
   readonly passkeyId: string;
   readonly requestId: string;
   readonly rotatedSessionExpiresAt: string;
@@ -1365,21 +1344,17 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
           input.sessionId,
           sessionVerifierDigest,
           input.challengeId,
-          challengeDigest,
           contextDigest,
+          input.handle,
           input.passkeyId,
           credentialId,
           cosePublicKey,
-          input.label,
           input.signCount,
           input.backupEligible,
           input.backupState,
-          input.auditEventId,
-          input.requestId,
           input.rotatedSessionId,
           rotatedSessionVerifierDigest,
           input.rotatedSessionExpiresAt,
-          input.rotationAuditEventId,
         ]);
       } finally {
         sessionVerifierDigest.fill(0);
@@ -1675,6 +1650,7 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
         return await fixedQuery(createPasskeyChallengeQuery, [
           input.sessionId,
           sessionVerifierDigest,
+          input.handle,
           input.challengeId,
           challengeDigest,
           contextDigest,
@@ -1795,27 +1771,26 @@ function wrapClient(client: NodePostgresClient): WebAuthDatabaseClient {
       }
     },
     async enrollProfile(input: EnrollmentDatabaseProfile): Promise<unknown> {
-      const inviteVerifierDigest = Buffer.from(input.inviteVerifierDigest);
+      const inviteVerifierDigest =
+        input.inviteVerifierDigest === undefined
+          ? undefined
+          : Buffer.from(input.inviteVerifierDigest);
       const sessionVerifierDigest = Buffer.from(input.sessionVerifierDigest);
       try {
         return await fixedQuery(enrollProfileQuery, [
-          input.inviteId,
-          inviteVerifierDigest,
           input.profileId,
           input.githubUserId,
           input.handle,
           input.locale,
-          input.theme,
-          input.motionPreference,
-          input.streakVisible,
           input.sessionId,
           sessionVerifierDigest,
           input.sessionExpiresAt,
-          input.auditEventId,
-          input.requestId,
+          input.inviteId ?? null,
+          inviteVerifierDigest ?? null,
+          input.inviteRequired,
         ]);
       } finally {
-        inviteVerifierDigest.fill(0);
+        inviteVerifierDigest?.fill(0);
         sessionVerifierDigest.fill(0);
       }
     },

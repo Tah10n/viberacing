@@ -245,18 +245,22 @@ $function$;
 CREATE FUNCTION viberacing_api.open_github_profile(
   p_profile_id uuid,
   p_github_user_id bigint,
-  p_handle text,
+  p_provisional_handle text,
   p_locale text,
   p_session_id uuid,
   p_session_verifier_digest bytea,
   p_session_expires_at timestamptz,
-  p_invite_verifier_digest bytea DEFAULT NULL
+  p_invite_id uuid,
+  p_invite_verifier_digest bytea,
+  p_invite_required boolean
 )
 RETURNS TABLE (
   profile_id uuid,
   handle text,
+  locale text,
   profile_state text,
-  created boolean
+  created boolean,
+  session_created boolean
 )
 LANGUAGE plpgsql
 VOLATILE
@@ -267,20 +271,32 @@ DECLARE
   v_now timestamptz := pg_catalog.transaction_timestamp();
   v_profile viberacing_private.profiles%ROWTYPE;
   v_created boolean := false;
-  v_invite_id uuid;
+  v_session_created boolean := false;
 BEGIN
   IF p_profile_id IS NULL
     OR p_github_user_id IS NULL
     OR p_github_user_id <= 0
-    OR p_handle IS NULL
-    OR p_handle !~ '^[a-z0-9](?:[a-z0-9_-]{1,22}[a-z0-9])$'
+    OR p_provisional_handle IS NULL
+    OR p_provisional_handle !~ '^pending_[a-f0-9]{16}$'
     OR p_locale NOT IN ('en', 'ru')
     OR p_session_id IS NULL
+    OR p_session_verifier_digest IS NULL
     OR pg_catalog.octet_length(p_session_verifier_digest) <> 32
     OR p_session_expires_at <= v_now
     OR p_session_expires_at > v_now + interval '24 hours'
-    OR (p_invite_verifier_digest IS NOT NULL
-      AND pg_catalog.octet_length(p_invite_verifier_digest) <> 32)
+    OR p_invite_required IS NULL
+    OR (
+      p_invite_required
+      AND (
+        p_invite_id IS NULL
+        OR p_invite_verifier_digest IS NULL
+        OR pg_catalog.octet_length(p_invite_verifier_digest) <> 32
+      )
+    )
+    OR (
+      NOT p_invite_required
+      AND (p_invite_id IS NOT NULL OR p_invite_verifier_digest IS NOT NULL)
+    )
   THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
@@ -296,15 +312,15 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    IF p_invite_verifier_digest IS NOT NULL THEN
-      SELECT invite.invite_id
-      INTO v_invite_id
+    IF p_invite_required THEN
+      PERFORM 1
       FROM viberacing_private.invites AS invite
-      WHERE invite.verifier_digest = p_invite_verifier_digest
+      WHERE invite.invite_id = p_invite_id
+        AND invite.verifier_digest = p_invite_verifier_digest
         AND invite.state = 'active'
         AND invite.expires_at > v_now
       FOR UPDATE;
-      IF v_invite_id IS NULL THEN
+      IF NOT FOUND THEN
         PERFORM viberacing_private.operation_failed();
       END IF;
     END IF;
@@ -316,8 +332,7 @@ BEGIN
       locale,
       hidden_at
     )
-    VALUES (p_profile_id, p_github_user_id, p_handle, p_locale, v_now)
-    ON CONFLICT (github_user_id) DO NOTHING;
+    VALUES (p_profile_id, p_github_user_id, p_provisional_handle, p_locale, v_now);
 
     SELECT profile.*
     INTO v_profile
@@ -327,12 +342,13 @@ BEGIN
 
     IF v_profile.profile_id = p_profile_id THEN
       v_created := true;
-      IF v_invite_id IS NOT NULL THEN
+      IF p_invite_required THEN
         UPDATE viberacing_private.invites
         SET state = 'redeemed',
             redeemed_at = v_now,
             redeemed_by_profile_id = v_profile.profile_id
-        WHERE invite_id = v_invite_id
+        WHERE invite_id = p_invite_id
+          AND verifier_digest = p_invite_verifier_digest
           AND state = 'active';
         IF NOT FOUND THEN
           PERFORM viberacing_private.operation_failed();
@@ -345,23 +361,99 @@ BEGIN
     PERFORM viberacing_private.operation_failed();
   END IF;
 
-  INSERT INTO viberacing_private.sessions (
+  IF v_profile.state = 'enrolling' THEN
+    INSERT INTO viberacing_private.sessions (
+      session_id,
+      profile_id,
+      verifier_digest,
+      authentication_kind,
+      expires_at
+    )
+    VALUES (
+      p_session_id,
+      v_profile.profile_id,
+      p_session_verifier_digest,
+      'github',
+      p_session_expires_at
+    );
+    v_session_created := true;
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    v_profile.profile_id,
+    v_profile.handle::text,
+    v_profile.locale::text,
+    v_profile.state::text,
+    v_created,
+    v_session_created;
+EXCEPTION
+  WHEN unique_violation OR check_violation OR foreign_key_violation THEN
+    PERFORM viberacing_private.operation_failed();
+END
+$function$;
+
+CREATE FUNCTION viberacing_api.begin_initial_passkey(
+  p_session_id uuid,
+  p_session_verifier_digest bytea,
+  p_handle text,
+  p_challenge_id uuid,
+  p_challenge_digest bytea,
+  p_context_digest bytea,
+  p_expires_at timestamptz
+)
+RETURNS uuid
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_profile_id uuid;
+BEGIN
+  v_profile_id := viberacing_private.authenticate_session(
+    p_session_id,
+    p_session_verifier_digest
+  );
+  IF p_handle IS NULL
+    OR p_handle !~ '^[a-z0-9](?:[a-z0-9_-]{1,22}[a-z0-9])$'
+    OR p_handle ~ '^pending_'
+    OR p_challenge_id IS NULL
+    OR pg_catalog.octet_length(p_challenge_digest) <> 32
+    OR pg_catalog.octet_length(p_context_digest) <> 32
+    OR p_expires_at <= pg_catalog.transaction_timestamp()
+    OR p_expires_at > pg_catalog.transaction_timestamp() + interval '5 minutes'
+  THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  UPDATE viberacing_private.profiles
+  SET handle = p_handle
+  WHERE profile_id = v_profile_id
+    AND state = 'enrolling';
+  IF NOT FOUND THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  INSERT INTO viberacing_private.auth_challenges (
+    challenge_id,
     session_id,
     profile_id,
-    verifier_digest,
-    authentication_kind,
+    purpose,
+    challenge_digest,
+    context_digest,
     expires_at
   )
   VALUES (
+    p_challenge_id,
     p_session_id,
-    v_profile.profile_id,
-    p_session_verifier_digest,
-    'github',
-    p_session_expires_at
+    v_profile_id,
+    'initial_passkey',
+    p_challenge_digest,
+    p_context_digest,
+    p_expires_at
   );
-
-  RETURN QUERY
-  SELECT v_profile.profile_id, v_profile.handle::text, v_profile.state::text, v_created;
+  RETURN p_challenge_id;
 EXCEPTION
   WHEN unique_violation OR check_violation OR foreign_key_violation THEN
     PERFORM viberacing_private.operation_failed();
@@ -442,7 +534,9 @@ CREATE FUNCTION viberacing_api.consume_auth_challenge(
   p_challenge_id uuid,
   p_purpose text,
   p_context_digest bytea,
-  p_verified_passkey_id uuid
+  p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean
 )
 RETURNS uuid
 LANGUAGE plpgsql
@@ -457,6 +551,26 @@ BEGIN
     p_session_id,
     p_session_verifier_digest
   );
+  IF (
+      p_purpose = 'initial_passkey'
+      AND (
+        p_verified_passkey_id IS NOT NULL
+        OR p_new_sign_count IS NOT NULL
+        OR p_backup_state IS NOT NULL
+      )
+    )
+    OR (
+      p_purpose <> 'initial_passkey'
+      AND (
+        p_verified_passkey_id IS NULL
+        OR p_new_sign_count IS NULL
+        OR p_new_sign_count < 0
+        OR p_backup_state IS NULL
+      )
+    )
+  THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
 
   UPDATE viberacing_private.auth_challenges AS challenge
   SET state = 'consumed',
@@ -482,24 +596,42 @@ BEGIN
   IF NOT FOUND THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
+
+  IF p_purpose <> 'initial_passkey' THEN
+    UPDATE viberacing_private.passkeys
+    SET sign_count = p_new_sign_count,
+        backup_state = p_backup_state,
+        last_used_at = pg_catalog.transaction_timestamp()
+    WHERE passkey_id = p_verified_passkey_id
+      AND profile_id = v_profile_id
+      AND state = 'active'
+      AND p_new_sign_count >= sign_count
+      AND (NOT p_backup_state OR backup_eligible);
+    IF NOT FOUND THEN
+      PERFORM viberacing_private.operation_failed();
+    END IF;
+  END IF;
   RETURN v_profile_id;
 END
 $function$;
 
-CREATE FUNCTION viberacing_api.register_initial_passkey(
+CREATE FUNCTION viberacing_api.complete_initial_passkey(
   p_session_id uuid,
   p_session_verifier_digest bytea,
   p_challenge_id uuid,
   p_context_digest bytea,
+  p_handle text,
   p_passkey_id uuid,
   p_credential_id bytea,
   p_cose_public_key bytea,
   p_sign_count bigint,
   p_backup_eligible boolean,
   p_backup_state boolean,
-  p_label text
+  p_rotated_session_id uuid,
+  p_rotated_session_verifier_digest bytea,
+  p_rotated_session_expires_at timestamptz
 )
-RETURNS void
+RETURNS uuid
 LANGUAGE plpgsql
 VOLATILE
 SECURITY DEFINER
@@ -507,6 +639,7 @@ SET search_path = pg_catalog, pg_temp
 AS $function$
 DECLARE
   v_profile_id uuid;
+  v_now timestamptz := pg_catalog.transaction_timestamp();
 BEGIN
   v_profile_id := viberacing_api.consume_auth_challenge(
     p_session_id,
@@ -514,10 +647,22 @@ BEGIN
     p_challenge_id,
     'initial_passkey',
     p_context_digest,
+    NULL,
+    NULL,
     NULL
   );
 
-  IF p_passkey_id IS NULL OR p_sign_count < 0 THEN
+  IF p_handle IS NULL
+    OR p_handle !~ '^[a-z0-9](?:[a-z0-9_-]{1,22}[a-z0-9])$'
+    OR p_handle ~ '^pending_'
+    OR p_passkey_id IS NULL
+    OR p_sign_count < 0
+    OR p_rotated_session_id IS NULL
+    OR p_rotated_session_id = p_session_id
+    OR pg_catalog.octet_length(p_rotated_session_verifier_digest) <> 32
+    OR p_rotated_session_expires_at <= v_now
+    OR p_rotated_session_expires_at > v_now + interval '31 days'
+  THEN
     PERFORM viberacing_private.operation_failed();
   END IF;
 
@@ -525,6 +670,7 @@ BEGIN
   FROM viberacing_private.profiles
   WHERE profile_id = v_profile_id
     AND state = 'enrolling'
+    AND handle = p_handle
   FOR UPDATE;
   IF NOT FOUND THEN
     PERFORM viberacing_private.operation_failed();
@@ -548,13 +694,41 @@ BEGIN
     p_sign_count,
     p_backup_eligible,
     p_backup_state,
-    p_label
+    'This device'
   );
 
   UPDATE viberacing_private.profiles
   SET state = 'active'
   WHERE profile_id = v_profile_id
     AND state = 'enrolling';
+
+  UPDATE viberacing_private.sessions
+  SET state = 'revoked',
+      revoked_at = v_now
+  WHERE session_id = p_session_id
+    AND profile_id = v_profile_id
+    AND state = 'active';
+  IF NOT FOUND THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  INSERT INTO viberacing_private.sessions (
+    session_id,
+    profile_id,
+    verifier_digest,
+    authentication_kind,
+    authenticated_by_passkey_id,
+    expires_at
+  )
+  VALUES (
+    p_rotated_session_id,
+    v_profile_id,
+    p_rotated_session_verifier_digest,
+    'passkey',
+    p_passkey_id,
+    p_rotated_session_expires_at
+  );
+  RETURN v_profile_id;
 EXCEPTION
   WHEN unique_violation OR check_violation OR foreign_key_violation THEN
     PERFORM viberacing_private.operation_failed();
@@ -788,6 +962,8 @@ CREATE FUNCTION viberacing_api.request_profile_deletion(
   p_challenge_id uuid,
   p_context_digest bytea,
   p_verified_passkey_id uuid,
+  p_new_sign_count bigint,
+  p_backup_state boolean,
   p_typed_handle text
 )
 RETURNS void
@@ -805,7 +981,9 @@ BEGIN
     p_challenge_id,
     'profile_delete',
     p_context_digest,
-    p_verified_passkey_id
+    p_verified_passkey_id,
+    p_new_sign_count,
+    p_backup_state
   );
 
   UPDATE viberacing_private.profiles
@@ -869,16 +1047,20 @@ REVOKE ALL ON ALL FUNCTIONS IN SCHEMA viberacing_api FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION viberacing_api.issue_invite(uuid, bytea, text, timestamptz)
   TO viberacing_admin;
 GRANT EXECUTE ON FUNCTION viberacing_api.open_github_profile(
-  uuid, bigint, text, text, uuid, bytea, timestamptz, bytea
+  uuid, bigint, text, text, uuid, bytea, timestamptz, uuid, bytea, boolean
+) TO viberacing_web;
+GRANT EXECUTE ON FUNCTION viberacing_api.begin_initial_passkey(
+  uuid, bytea, text, uuid, bytea, bytea, timestamptz
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.create_auth_challenge(
   uuid, bytea, uuid, text, bytea, bytea, timestamptz
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.consume_auth_challenge(
-  uuid, bytea, uuid, text, bytea, uuid
+  uuid, bytea, uuid, text, bytea, uuid, bigint, boolean
 ) TO viberacing_web;
-GRANT EXECUTE ON FUNCTION viberacing_api.register_initial_passkey(
-  uuid, bytea, uuid, bytea, uuid, bytea, bytea, bigint, boolean, boolean, text
+GRANT EXECUTE ON FUNCTION viberacing_api.complete_initial_passkey(
+  uuid, bytea, uuid, bytea, text, uuid, bytea, bytea, bigint, boolean, boolean,
+  uuid, bytea, timestamptz
 ) TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.create_passkey_login_challenge(
   uuid, bytea, bytea, timestamptz
@@ -893,7 +1075,7 @@ GRANT EXECUTE ON FUNCTION viberacing_api.read_private_profile(uuid, bytea)
 GRANT EXECUTE ON FUNCTION viberacing_api.set_profile_visibility(uuid, bytea, text)
   TO viberacing_web;
 GRANT EXECUTE ON FUNCTION viberacing_api.request_profile_deletion(
-  uuid, bytea, uuid, bytea, uuid, text
+  uuid, bytea, uuid, bytea, uuid, bigint, boolean, text
 ) TO viberacing_web;
 
 INSERT INTO viberacing_private.schema_migrations (revision, name)

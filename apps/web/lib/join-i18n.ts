@@ -54,7 +54,9 @@ const english = {
   inviteHint: "Use the one-time invite exactly as it was issued.",
   inviteLabel: "Invite code",
   joinCopy:
-    "Redeem one invite, confirm your GitHub identity, then create a passkey. Vibe Racing requests no extra OAuth scope, keeps only your numeric GitHub user ID, and immediately discards the token and other response fields.",
+    "Confirm your GitHub identity, choose a public racing handle, then create a passkey named “This device”. Vibe Racing requests no extra OAuth scope, keeps only your numeric GitHub user ID, and immediately discards the token and other response fields.",
+  joinInviteCopy:
+    "Redeem one invite, confirm your GitHub identity, choose a public racing handle, then create a passkey named “This device”. The invite is consumed only when a new profile is created.",
   joinTitle: "Join the Community race",
   language: "Language",
   loginCopy:
@@ -84,7 +86,7 @@ const english = {
   passkeyTitle: "Protect your profile",
   privacyNote:
     "Email, repositories, prompts, conversations, Codex credentials, and exact token totals are neither retained nor used.",
-  primaryPasskey: "Primary passkey",
+  primaryPasskey: "The passkey label is set automatically to “This device”.",
   recoveryCodesCopy:
     "A fresh passkey check replaces every previous recovery code. The site stores only protected verifiers and shows the codes once without logging or saving them.",
   recoveryCodesGenerate: "Generate new recovery codes",
@@ -204,7 +206,9 @@ const russian: Record<JoinTranslationKey, string> = {
   inviteHint: "Введите одноразовый инвайт точно в выданном виде.",
   inviteLabel: "Код приглашения",
   joinCopy:
-    "Активируйте инвайт, подтвердите личность через GitHub и создайте ключ доступа. Vibe Racing не запрашивает дополнительных OAuth-разрешений, сохраняет только числовой GitHub ID и сразу удаляет токен и остальные поля ответа.",
+    "Подтвердите личность через GitHub, выберите публичное имя пилота и создайте ключ доступа «Это устройство». Vibe Racing не запрашивает дополнительных OAuth-разрешений, сохраняет только числовой GitHub ID и сразу удаляет токен и остальные поля ответа.",
+  joinInviteCopy:
+    "Активируйте один инвайт, подтвердите личность через GitHub, выберите публичное имя пилота и создайте ключ доступа «Это устройство». Инвайт расходуется только при создании нового профиля.",
   joinTitle: "Присоединиться к гонке сообщества",
   language: "Язык",
   loginCopy:
@@ -234,7 +238,7 @@ const russian: Record<JoinTranslationKey, string> = {
   passkeyTitle: "Защитите профиль",
   privacyNote:
     "Email, репозитории, промпты, диалоги, данные входа Codex и точное число токенов не сохраняются и не используются.",
-  primaryPasskey: "Основной ключ доступа",
+  primaryPasskey: "Название ключа автоматически задаётся как «This device».",
   recoveryCodesCopy:
     "После свежей проверки ключа доступа все прежние коды восстановления становятся недействительными. Сайт хранит только защищённые проверочные значения и показывает коды один раз, не записывая их или содержимое в логи.",
   recoveryCodesGenerate: "Создать новые коды восстановления",
