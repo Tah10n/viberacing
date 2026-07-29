@@ -14,7 +14,7 @@ const config = resolveJobsDatabaseConfig({
 });
 
 describe("Jobs database pool", () => {
-  it("passes only structured queries, forwards destroy release, and closes the pool", async () => {
+  it("exposes only the thirteen structured clean-schema capabilities", async () => {
     const query = vi.fn((structuredQuery: { text: string; values: unknown[] }) => {
       void structuredQuery;
       return Promise.resolve({ rows: [{ value: 1 }] });
@@ -36,143 +36,66 @@ describe("Jobs database pool", () => {
     const pool = createJobsDatabasePool(config, signal, factory);
     const client = await pool.connect();
 
-    await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredAuthState(6)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredCarRecipeProposals(7)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredInvites(8)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredIngestState(9)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredPairingState(10)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredSessions(11)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupTerminalDeletionJobs(12)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.purgeProfileDeletions(10)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.refreshCommunitySeason("2026-07-13")).resolves.toEqual([{ value: 1 }]);
-    await expect(client.finalizeCommunitySeason("2026-07-06")).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupExpiredAuditEvents(13)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.redactAgedPairingApprovalProvenance(14)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupAgedRevokedPasskeys(15)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupAgedRevokedDevices(16)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.resetExpiredPairingRequestWindows()).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupAbandonedEnrollments(17)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.cleanupFinalizedSourceDayValues(18)).resolves.toEqual([{ value: 1 }]);
-    await expect(client.finalizeCommunitySeasonBacklog()).resolves.toEqual([{ value: 1 }]);
+    await client.verifyRuntimeBoundary();
+    await client.ensureCurrentSeason();
+    await client.refreshDirtyLeaderboard();
+    await client.finalizeDueSeason();
+    await client.cleanupExpiredRankingEvents(1);
+    await client.cleanupExpiredUsageNonces(2);
+    await client.cleanupExpiredUsageHistory(3);
+    await client.cleanupExpiredPairingState(4);
+    await client.cleanupExpiredAuthState(5);
+    await client.cleanupAgedRevokedAuthority(6);
+    await client.cleanupSnapshotHistory(7);
+    await client.purgeProfileDeletions(8);
+    await client.cleanupTerminalDeletionJobs(9);
+    await client.resetExpiredPairingRequestWindows();
+
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(19);
-    expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
-    expect(query.mock.calls[0]![0].text).toContain("CURRENT_USER = 'viberacing_jobs'");
-    expect(query.mock.calls[1]![0]).toMatchObject({ values: [6] });
-    expect(query.mock.calls[1]![0].text).toContain(
-      "viberacing_api.cleanup_expired_auth_state($1::integer)",
-    );
-    expect(query.mock.calls[1]![0].text).toContain(
-      "cleanup.deleted_used_recovery_codes AS deleted_used_recovery_codes",
-    );
-    expect(query.mock.calls[2]![0]).toMatchObject({ values: [7] });
-    expect(query.mock.calls[2]![0].text).toContain(
-      "viberacing_api.cleanup_expired_car_recipe_proposals($1::integer)",
-    );
-    expect(query.mock.calls[2]![0].text).toContain(
-      "cleanup.deleted_proposals AS deleted_proposals",
-    );
-    expect(query.mock.calls[3]![0]).toMatchObject({ values: [8] });
-    expect(query.mock.calls[3]![0].text).toContain(
-      "viberacing_api.cleanup_expired_invites($1::integer)",
-    );
-    expect(query.mock.calls[3]![0].text).toContain("cleanup.deleted_invites AS deleted_invites");
-    expect(query.mock.calls[4]![0]).toMatchObject({ values: [9] });
-    expect(query.mock.calls[4]![0].text).toContain(
-      "viberacing_api.cleanup_expired_ingest_state($1::integer)",
-    );
-    expect(query.mock.calls[4]![0].text).toContain(
-      "cleanup.deleted_origin_nonces AS deleted_origin_nonces",
-    );
-    expect(query.mock.calls[5]![0]).toMatchObject({ values: [10] });
-    expect(query.mock.calls[5]![0].text).toContain(
-      "viberacing_api.cleanup_expired_pairing_state($1::integer)",
-    );
-    expect(query.mock.calls[5]![0].text).toContain(
-      "cleanup.deleted_pending_keys AS deleted_pending_keys",
-    );
-    expect(query.mock.calls[6]![0]).toMatchObject({ values: [11] });
-    expect(query.mock.calls[6]![0].text).toContain(
-      "viberacing_api.cleanup_expired_sessions($1::integer)",
-    );
-    expect(query.mock.calls[6]![0].text).toContain("cleanup.deleted_sessions AS deleted_sessions");
-    expect(query.mock.calls[7]![0]).toMatchObject({ values: [12] });
-    expect(query.mock.calls[7]![0].text).toContain(
-      "viberacing_api.cleanup_terminal_deletion_jobs($1::integer)",
-    );
-    expect(query.mock.calls[7]![0].text).toContain(
-      "cleanup.deleted_deletion_jobs AS deleted_deletion_jobs",
-    );
-    expect(query.mock.calls[8]![0]).toMatchObject({ values: [10] });
-    expect(query.mock.calls[8]![0].text).toContain(
-      "viberacing_api.purge_profile_deletions($1::integer)",
-    );
-    expect(query.mock.calls[8]![0].text).toContain("purge.purged_profiles AS purged_profiles");
-    expect(query.mock.calls[9]![0]).toMatchObject({ values: ["2026-07-13"] });
-    expect(query.mock.calls[9]![0].text).toContain(
-      "viberacing_api.refresh_community_season($1::date)",
-    );
-    expect(query.mock.calls[10]![0]).toMatchObject({ values: ["2026-07-06"] });
-    expect(query.mock.calls[10]![0].text).toContain(
-      "viberacing_api.finalize_community_season($1::date)",
-    );
-    expect(query.mock.calls[11]![0]).toMatchObject({ values: [13] });
-    expect(query.mock.calls[11]![0].text).toContain(
-      "viberacing_api.cleanup_expired_audit_events($1::integer)",
-    );
-    expect(query.mock.calls[11]![0].text).toContain(
-      "cleanup.deleted_audit_events AS deleted_audit_events",
-    );
-    expect(query.mock.calls[12]![0]).toMatchObject({ values: [14] });
-    expect(query.mock.calls[12]![0].text).toContain(
-      "viberacing_api.redact_aged_pairing_approval_provenance($1::integer)",
-    );
-    expect(query.mock.calls[12]![0].text).toContain(
-      "cleanup.redacted_pairings AS redacted_pairings",
-    );
-    expect(query.mock.calls[13]![0]).toMatchObject({ values: [15] });
-    expect(query.mock.calls[13]![0].text).toContain(
-      "viberacing_api.cleanup_aged_revoked_passkeys($1::integer)",
-    );
-    expect(query.mock.calls[13]![0].text).toContain("cleanup.deleted_passkeys AS deleted_passkeys");
-    expect(query.mock.calls[14]![0]).toMatchObject({ values: [16] });
-    expect(query.mock.calls[14]![0].text).toContain(
-      "viberacing_api.cleanup_aged_revoked_devices($1::integer)",
-    );
-    expect(query.mock.calls[14]![0].text).toContain(
-      "cleanup.deleted_device_keys AS deleted_device_keys",
-    );
-    expect(query.mock.calls[14]![0].text).toContain("cleanup.deleted_pairings AS deleted_pairings");
-    expect(query.mock.calls[15]![0]).toMatchObject({ values: [] });
-    expect(query.mock.calls[15]![0].text).toContain(
-      "viberacing_api.reset_expired_pairing_request_windows()",
-    );
-    expect(query.mock.calls[15]![0].text).toContain("reset.reset_windows AS reset_windows");
-    expect(query.mock.calls[16]![0]).toMatchObject({ values: [17] });
-    expect(query.mock.calls[16]![0].text).toContain(
-      "viberacing_api.cleanup_abandoned_enrollments($1::integer)",
-    );
-    expect(query.mock.calls[16]![0].text).toContain(
-      "cleanup.deleted_enrollments AS deleted_enrollments",
-    );
-    expect(query.mock.calls[17]![0]).toMatchObject({ values: [18] });
-    expect(query.mock.calls[17]![0].text).toContain(
-      "viberacing_api.cleanup_finalized_source_day_values($1::integer)",
-    );
-    expect(query.mock.calls[17]![0].text).toContain(
-      "cleanup.deleted_source_day_values AS deleted_source_day_values",
-    );
-    expect(query.mock.calls[18]![0]).toMatchObject({ values: [] });
-    expect(query.mock.calls[18]![0].text).toContain(
-      "viberacing_api.finalize_community_season_backlog()",
-    );
-    expect(query.mock.calls[18]![0].text).toContain(
-      "finalization.finalized_season_count AS finalized_season_count",
-    );
+    expect(query).toHaveBeenCalledTimes(14);
+    const calls = query.mock.calls.map(([structured]) => structured);
+    expect(calls[0]).toMatchObject({ values: [] });
+    expect(calls[0]?.text).toContain("CURRENT_USER = 'viberacing_jobs'");
+    expect(calls[0]?.text).toContain("default_transaction_read_only");
+    expect(calls.slice(1).map(({ values }) => values)).toEqual([
+      [],
+      [],
+      [],
+      [1],
+      [2],
+      [3],
+      [4],
+      [5],
+      [6],
+      [7],
+      [8],
+      [9],
+      [],
+    ]);
+    const sql = calls
+      .slice(1)
+      .map(({ text }) => text)
+      .join("\n");
+    for (const capability of [
+      "ensure_current_community_season()",
+      "refresh_next_dirty_community_season()",
+      "finalize_next_due_community_season()",
+      "cleanup_expired_ranking_events($1::integer)",
+      "cleanup_expired_usage_nonces($1::integer)",
+      "cleanup_expired_usage_history($1::integer)",
+      "cleanup_expired_pairing_state($1::integer)",
+      "cleanup_expired_auth_state($1::integer)",
+      "cleanup_aged_revoked_authority($1::integer)",
+      "cleanup_snapshot_history($1::integer)",
+      "purge_profile_deletions($1::integer)",
+      "cleanup_terminal_deletion_jobs($1::integer)",
+      "reset_expired_pairing_request_windows()",
+    ]) {
+      expect(sql).toContain(`viberacing_api.${capability}`);
+    }
+
     client.release(true);
     expect(release).toHaveBeenCalledWith(true);
-
     errorListener?.(new Error("private driver detail"));
     expect(signal).toHaveBeenCalledWith("idle_client_error");
     await pool.close();

@@ -1032,6 +1032,49 @@ BEGIN
   END;
 
   BEGIN
+    INSERT INTO viberacing_private.leaderboard_snapshot_pages (
+      snapshot_id,
+      page_kind,
+      page_number,
+      participant_count,
+      canonical_payload,
+      payload_digest
+    )
+    VALUES (
+      v_final_snapshot,
+      'leaderboard_page',
+      9999,
+      0,
+      '{}',
+      pg_catalog.sha256(pg_catalog.convert_to('{}', 'UTF8'))
+    );
+    RAISE EXCEPTION 'late finalized snapshot payload insert unexpectedly succeeded';
+  EXCEPTION
+    WHEN SQLSTATE 'P0001' THEN
+      NULL;
+  END;
+
+  BEGIN
+    DELETE FROM viberacing_private.leaderboard_snapshot_pages
+    WHERE snapshot_id = v_final_snapshot
+      AND page_kind = 'race_top32'
+      AND page_number = 1;
+    RAISE EXCEPTION 'finalized snapshot payload deletion unexpectedly succeeded';
+  EXCEPTION
+    WHEN SQLSTATE 'P0001' THEN
+      NULL;
+  END;
+
+  BEGIN
+    DELETE FROM viberacing_private.leaderboard_snapshots
+    WHERE snapshot_id = v_final_snapshot;
+    RAISE EXCEPTION 'finalized snapshot deletion unexpectedly succeeded';
+  EXCEPTION
+    WHEN SQLSTATE 'P0001' THEN
+      NULL;
+  END;
+
+  BEGIN
     UPDATE viberacing_private.season_profile_totals
     SET weekly_token_total = weekly_token_total + 1
     WHERE season_start = v_rank_season

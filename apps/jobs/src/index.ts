@@ -1,10 +1,10 @@
 export {
-  CommunityMaintenanceError,
-  createConfiguredCommunityMaintenanceRunner,
+  JobsMaintenanceError,
+  createConfiguredJobsMaintenanceRunner,
   maximumCleanupBatchSize,
   maximumProfileDeletionPurgeBatchSize,
-  type CommunityMaintenanceErrorCode,
-  type CommunityMaintenanceJob,
-  type CommunityMaintenanceResult,
-  type ConfiguredCommunityMaintenanceRunner,
-} from "./community-maintenance.js";
+  type ConfiguredJobsMaintenanceRunner,
+  type JobsMaintenanceErrorCode,
+  type JobsMaintenanceJob,
+  type JobsMaintenanceResult,
+} from "./maintenance.js";

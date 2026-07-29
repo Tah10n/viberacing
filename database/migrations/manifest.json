@@ -17,19 +17,25 @@
       "revision": 3,
       "name": "agent_accounts_installations_and_pairing",
       "path": "database/migrations/0003_agent_accounts_installations_and_pairing.sql",
-      "sha256": "4f9d86043112a1ca229646511a2d7b7d211adf75f943d4f41c6c11ccfecec412"
+      "sha256": "f6f45a744a453c7471bdfdad2e7b83010bd79e87da9b6307fc77187e7a6bccae"
     },
     {
       "revision": 4,
       "name": "usage_ingest_replay_and_idempotency",
       "path": "database/migrations/0004_usage_ingest_replay_and_idempotency.sql",
-      "sha256": "bdcb18e32763d34082d4a8ce27eeff8205b624f974fdc7ba7c310c91dec37882"
+      "sha256": "46835a3fcb1973e8a9b82dfc32d98f987bff64b1fc1fc2895ac41e5a45f208ff"
     },
     {
       "revision": 5,
       "name": "seasons_ranking_and_snapshots",
       "path": "database/migrations/0005_seasons_ranking_and_snapshots.sql",
-      "sha256": "3265c8fbb6e19edd82c23ddb67996fefa020ae7bb2459e1e90a45202aeb31d39"
+      "sha256": "f7df8e65f3afea707c5f43d32d7063c560e95c026d02c2c17151852621750c2e"
+    },
+    {
+      "revision": 6,
+      "name": "retention_deletion_admin_and_audit",
+      "path": "database/migrations/0006_retention_deletion_admin_and_audit.sql",
+      "sha256": "0511e7f934117da861c0d18881ca5037468135b325b0acf4f571b50e8aa059de"
     }
   ]
 }

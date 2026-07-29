@@ -304,25 +304,70 @@ CREATE TRIGGER leaderboard_snapshots_enforce_update
 BEFORE UPDATE ON viberacing_private.leaderboard_snapshots
 FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_update();
 
-CREATE FUNCTION viberacing_private.reject_snapshot_payload_update()
+CREATE FUNCTION viberacing_private.enforce_snapshot_delete()
 RETURNS trigger
 LANGUAGE plpgsql
 VOLATILE
 SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
+  IF OLD.finalized OR EXISTS (
+    SELECT 1
+    FROM viberacing_private.leaderboard_published_snapshots AS published
+    WHERE published.snapshot_id = OLD.snapshot_id
+  ) THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+  PERFORM pg_catalog.set_config(
+    'viberacing.snapshot_delete',
+    OLD.snapshot_id,
+    true
+  );
+  RETURN OLD;
+END
+$function$;
+
+CREATE TRIGGER leaderboard_snapshots_enforce_delete
+BEFORE DELETE ON viberacing_private.leaderboard_snapshots
+FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_delete();
+
+CREATE FUNCTION viberacing_private.enforce_snapshot_payload_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM viberacing_private.leaderboard_snapshots AS snapshot
+      WHERE snapshot.snapshot_id = NEW.snapshot_id
+        AND snapshot.state = 'building'
+    ) THEN
+      PERFORM viberacing_private.operation_failed();
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE'
+    AND current_setting('viberacing.snapshot_delete', true) = OLD.snapshot_id
+  THEN
+    RETURN OLD;
+  END IF;
+
   PERFORM viberacing_private.operation_failed();
   RETURN NULL;
 END
 $function$;
 
 CREATE TRIGGER leaderboard_snapshot_pages_immutable
-BEFORE UPDATE ON viberacing_private.leaderboard_snapshot_pages
-FOR EACH ROW EXECUTE FUNCTION viberacing_private.reject_snapshot_payload_update();
+BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_pages
+FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_mutation();
 
 CREATE TRIGGER leaderboard_snapshot_profiles_immutable
-BEFORE UPDATE ON viberacing_private.leaderboard_snapshot_profiles
-FOR EACH ROW EXECUTE FUNCTION viberacing_private.reject_snapshot_payload_update();
+BEFORE INSERT OR UPDATE OR DELETE ON viberacing_private.leaderboard_snapshot_profiles
+FOR EACH ROW EXECUTE FUNCTION viberacing_private.enforce_snapshot_payload_mutation();
 
 CREATE FUNCTION viberacing_private.enforce_derived_total_mutation()
 RETURNS trigger
@@ -347,6 +392,9 @@ BEGIN
     WHERE season.season_start = v_season_start
       AND season.trust_tier = v_trust_tier
       AND season.state = 'finalized'
+  ) AND NOT (
+    TG_OP = 'DELETE'
+    AND current_setting('viberacing.profile_purge', true) = OLD.profile_id::text
   ) THEN
     PERFORM viberacing_private.operation_failed();
   END IF;

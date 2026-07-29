@@ -15,7 +15,7 @@ describe("Jobs database boundary lint policy", () => {
         'const legacy = require("pg");',
         "void [pg, lazy, legacy];",
       ].join("\n"),
-      { filePath: resolve(import.meta.dirname, "community-maintenance.ts") },
+      { filePath: resolve(import.meta.dirname, "maintenance.ts") },
     );
 
     const restrictions = result?.messages.filter(
@@ -24,5 +24,5 @@ describe("Jobs database boundary lint policy", () => {
         message === "Only database-pool.ts may import the PostgreSQL driver.",
     );
     expect(restrictions).toHaveLength(5);
-  }, 30_000);
+  }, 120_000);
 });

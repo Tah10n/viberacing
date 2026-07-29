@@ -71,7 +71,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0060](0060-fail-closed-enrollment-enable-gate.md)                  | Fail-closed enrollment enable gate                                   | Accepted; local gate; deployed operation pending       |
 | [0061](0061-bounded-abandoned-enrollment-retention-cleanup.md)      | Bounded abandoned-enrollment retention cleanup                       | Accepted; local catalog; deployment pending            |
 | [0062](0062-finalized-source-day-retention-cleanup.md)              | Finalized source-day retention cleanup                               | Accepted; local catalog; deployment pending            |
-| [0063](0063-default-off-local-jobs-scheduler.md)                    | Default-off local Jobs scheduler                                     | Accepted; local scheduler; deployment pending          |
+| [0063](0063-default-off-local-jobs-scheduler.md)                    | Default-off local Jobs scheduler                                     | Superseded by ADR 0076                                 |
 | [0064](0064-default-off-reviewed-migration-runner.md)               | Default-off reviewed migration runner                                | Accepted; local PostgreSQL gate; deployment pending    |
 | [0065](0065-bounded-historical-season-backlog-finalization.md)      | Bounded historical season backlog finalization                       | Accepted; local catalog; deployment pending            |
 | [0066](0066-bounded-admin-invite-issuance-kernel.md)                | Bounded Admin invitation issuance kernel                             | Accepted; Access local; passkey/audit/host pending     |

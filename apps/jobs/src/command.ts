@@ -1,15 +1,13 @@
 import {
-  createConfiguredCommunityMaintenanceRunner,
+  createConfiguredJobsMaintenanceRunner,
   maximumCleanupBatchSize,
   maximumProfileDeletionPurgeBatchSize,
-  type CommunityMaintenanceJob,
-  type ConfiguredCommunityMaintenanceRunner,
-} from "./community-maintenance.js";
+  type ConfiguredJobsMaintenanceRunner,
+  type JobsMaintenanceJob,
+} from "./maintenance.js";
 
 const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
-const minimumSeasonStart = "1999-12-27";
-const maximumSeasonStart = "2099-12-28";
 
 export type JobsCommandErrorCode = "invalid_arguments";
 
@@ -25,7 +23,7 @@ export class JobsCommandError extends Error {
 
 type Environment = Readonly<Record<string, string | undefined>>;
 type OutputWriter = (message: string) => void;
-type RunnerFactory = (environment: Environment) => ConfiguredCommunityMaintenanceRunner;
+type RunnerFactory = (environment: Environment) => ConfiguredJobsMaintenanceRunner;
 
 export interface JobsCliDependencies {
   readonly environment?: Environment;
@@ -38,42 +36,26 @@ function fail(): never {
   throw new JobsCommandError("invalid_arguments");
 }
 
-function readArgumentArray(value: unknown): readonly string[] {
+function readSingleArgument(value: unknown): string {
   try {
     if (
       !Array.isArray(value) ||
       Object.getPrototypeOf(value) !== Array.prototype ||
-      value.length > 2
+      value.length !== 1 ||
+      Reflect.ownKeys(value).length !== 2
     ) {
       fail();
     }
-    const keys = Reflect.ownKeys(value);
+    const descriptor = Object.getOwnPropertyDescriptor(value, "0");
     if (
-      keys.length !== value.length + 1 ||
-      keys.some(
-        (key) =>
-          key !== "length" &&
-          (typeof key !== "string" ||
-            !/^(?:0|[1-9][0-9]*)$/.test(key) ||
-            Number(key) >= value.length),
-      )
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      !descriptor.enumerable ||
+      typeof descriptor.value !== "string"
     ) {
       fail();
     }
-    const result: string[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      if (
-        descriptor === undefined ||
-        !("value" in descriptor) ||
-        !descriptor.enumerable ||
-        typeof descriptor.value !== "string"
-      ) {
-        fail();
-      }
-      result.push(descriptor.value);
-    }
-    return Object.freeze(result);
+    return descriptor.value;
   } catch (error) {
     if (error instanceof JobsCommandError) {
       throw error;
@@ -82,135 +64,65 @@ function readArgumentArray(value: unknown): readonly string[] {
   }
 }
 
-function validSeasonStart(value: unknown): value is string {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    value < minimumSeasonStart ||
-    value > maximumSeasonStart
-  ) {
-    return false;
+export function parseJobsCommand(value: unknown): JobsMaintenanceJob {
+  const command = readSingleArgument(value);
+  switch (command) {
+    case "ensure-current-season":
+      return Object.freeze({ kind: "ensure_current_season" });
+    case "refresh-dirty-leaderboard":
+      return Object.freeze({ kind: "refresh_dirty_leaderboard" });
+    case "finalize-due-season":
+      return Object.freeze({ kind: "finalize_due_season" });
+    case "reset-expired-pairing-request-windows":
+      return Object.freeze({ kind: "reset_expired_pairing_request_windows" });
+    case "cleanup-expired-pairing-state":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_expired_pairing_state",
+      });
+    case "cleanup-expired-usage-nonces":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_expired_usage_nonces",
+      });
+    case "cleanup-expired-usage-history":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_expired_usage_history",
+      });
+    case "cleanup-expired-auth-state":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_expired_auth_state",
+      });
+    case "cleanup-aged-revoked-authority":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_aged_revoked_authority",
+      });
+    case "cleanup-snapshot-history":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_snapshot_history",
+      });
+    case "cleanup-expired-ranking-events":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_expired_ranking_events",
+      });
+    case "purge-profile-deletions":
+      return Object.freeze({
+        batchSize: maximumProfileDeletionPurgeBatchSize,
+        kind: "purge_profile_deletions",
+      });
+    case "cleanup-terminal-deletion-jobs":
+      return Object.freeze({
+        batchSize: maximumCleanupBatchSize,
+        kind: "cleanup_terminal_deletion_jobs",
+      });
+    default:
+      fail();
   }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return (
-    Number.isFinite(date.valueOf()) &&
-    date.toISOString().slice(0, 10) === value &&
-    date.getUTCDay() === 1
-  );
-}
-
-export function parseJobsCommand(value: unknown): CommunityMaintenanceJob {
-  const argumentsValue = readArgumentArray(value);
-  if (
-    argumentsValue.length === 1 &&
-    argumentsValue[0] === "reset-expired-pairing-request-windows"
-  ) {
-    return Object.freeze({ kind: "reset_expired_pairing_request_windows" });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "finalize-community-backlog") {
-    return Object.freeze({ kind: "finalize_community_season_backlog" });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-abandoned-enrollments") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_abandoned_enrollments",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-ingest-state") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_ingest_state",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-finalized-source-day-values") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_finalized_source_day_values",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-auth-state") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_auth_state",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-audit-events") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_audit_events",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-car-recipe-proposals") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_car_recipe_proposals",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-invites") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_invites",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-aged-revoked-passkeys") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_aged_revoked_passkeys",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-aged-revoked-devices") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_aged_revoked_devices",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-pairing-state") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_pairing_state",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-expired-sessions") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_expired_sessions",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "cleanup-terminal-deletion-jobs") {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "cleanup_terminal_deletion_jobs",
-    });
-  }
-  if (argumentsValue.length === 1 && argumentsValue[0] === "purge-profile-deletions") {
-    return Object.freeze({
-      batchSize: maximumProfileDeletionPurgeBatchSize,
-      kind: "purge_profile_deletions",
-    });
-  }
-  if (
-    argumentsValue.length === 1 &&
-    argumentsValue[0] === "redact-aged-pairing-approval-provenance"
-  ) {
-    return Object.freeze({
-      batchSize: maximumCleanupBatchSize,
-      kind: "redact_aged_pairing_approval_provenance",
-    });
-  }
-  if (argumentsValue.length !== 2) {
-    fail();
-  }
-  const seasonStart = argumentsValue[1];
-  if (!validSeasonStart(seasonStart)) {
-    fail();
-  }
-  if (argumentsValue[0] === "refresh-community-season") {
-    return Object.freeze({ kind: "refresh_community_season", seasonStart });
-  }
-  if (argumentsValue[0] === "finalize-community-season") {
-    return Object.freeze({ kind: "finalize_community_season", seasonStart });
-  }
-  fail();
 }
 
 function writeSafely(writer: OutputWriter, message: string): boolean {
@@ -235,7 +147,7 @@ export async function runJobsCli(
   dependencies: JobsCliDependencies = {},
 ): Promise<0 | 1> {
   const stderr = dependencies.stderr ?? defaultStderr;
-  let job: CommunityMaintenanceJob;
+  let job: JobsMaintenanceJob;
   try {
     job = parseJobsCommand(argumentsValue);
   } catch {
@@ -243,9 +155,9 @@ export async function runJobsCli(
     return 1;
   }
 
-  let runner: ConfiguredCommunityMaintenanceRunner;
+  let runner: ConfiguredJobsMaintenanceRunner;
   try {
-    const runnerFactory = dependencies.runnerFactory ?? createConfiguredCommunityMaintenanceRunner;
+    const runnerFactory = dependencies.runnerFactory ?? createConfiguredJobsMaintenanceRunner;
     runner = runnerFactory(dependencies.environment ?? process.env);
   } catch {
     writeSafely(stderr, failedMessage);

@@ -454,6 +454,12 @@ try {
     }),
     "season ranking and snapshot oracle",
   );
+  requireSuccess(
+    psql(readFileSync(resolve(root, "database", "tests", "retention_jobs.sql"), "utf8"), {
+      timeout: 120_000,
+    }),
+    "retention and Jobs oracle",
+  );
 
   const refreshMutexHolder = startRefreshMutexHolder();
   await refreshMutexHolder.held;

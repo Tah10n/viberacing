@@ -196,20 +196,35 @@ CREATE TABLE viberacing_private.agent_account_day_totals (
     REFERENCES viberacing_private.agent_accounts(agent_account_id) ON DELETE RESTRICT,
   usage_date date NOT NULL,
   cumulative_token_total numeric(30, 0) NOT NULL,
-  accepted_observation_id varchar(26) NOT NULL
-    REFERENCES viberacing_private.usage_observations(observation_id) ON DELETE RESTRICT,
+  accepted_observation_id varchar(26)
+    REFERENCES viberacing_private.usage_observations(observation_id) ON DELETE SET NULL,
   accepted_sync_id varchar(26) NOT NULL,
-  accepted_device_id varchar(26) NOT NULL
-    REFERENCES viberacing_private.device_keys(device_id) ON DELETE RESTRICT,
+  accepted_device_id varchar(26)
+    REFERENCES viberacing_private.device_keys(device_id) ON DELETE SET NULL,
   first_accepted_at timestamptz NOT NULL,
   last_accepted_at timestamptz NOT NULL,
+  provenance_redacted_at timestamptz,
   PRIMARY KEY (agent_account_id, usage_date),
   CONSTRAINT agent_account_day_totals_nonnegative
     CHECK (cumulative_token_total >= 0),
   CONSTRAINT agent_account_day_totals_sync_id_canonical
     CHECK (accepted_sync_id ~ '^syn_[A-Za-z0-9_-]{22}$'),
   CONSTRAINT agent_account_day_totals_time_order
-    CHECK (last_accepted_at >= first_accepted_at)
+    CHECK (
+      last_accepted_at >= first_accepted_at
+      AND (
+        (
+          accepted_observation_id IS NOT NULL
+          AND accepted_device_id IS NOT NULL
+          AND provenance_redacted_at IS NULL
+        )
+        OR (
+          accepted_observation_id IS NULL
+          AND accepted_device_id IS NULL
+          AND provenance_redacted_at >= last_accepted_at
+        )
+      )
+    )
 );
 
 CREATE INDEX agent_account_day_totals_date_account_idx
@@ -350,9 +365,29 @@ VOLATILE
 SET search_path = pg_catalog, pg_temp
 AS $function$
 BEGIN
+  IF current_setting('viberacing.usage_retention', true) = 'on'
+    AND NEW.agent_account_id = OLD.agent_account_id
+    AND NEW.usage_date = OLD.usage_date
+    AND NEW.cumulative_token_total = OLD.cumulative_token_total
+    AND NEW.accepted_sync_id = OLD.accepted_sync_id
+    AND NEW.first_accepted_at = OLD.first_accepted_at
+    AND NEW.last_accepted_at = OLD.last_accepted_at
+    AND OLD.accepted_observation_id IS NOT NULL
+    AND OLD.accepted_device_id IS NOT NULL
+    AND OLD.provenance_redacted_at IS NULL
+    AND NEW.accepted_observation_id IS NULL
+    AND NEW.accepted_device_id IS NULL
+    AND NEW.provenance_redacted_at >= OLD.last_accepted_at
+  THEN
+    RETURN NEW;
+  END IF;
+
   IF NEW.agent_account_id <> OLD.agent_account_id
     OR NEW.usage_date <> OLD.usage_date
     OR NEW.cumulative_token_total <= OLD.cumulative_token_total
+    OR NEW.accepted_observation_id IS NULL
+    OR NEW.accepted_device_id IS NULL
+    OR NEW.provenance_redacted_at IS NOT NULL
     OR NEW.first_accepted_at <> OLD.first_accepted_at
     OR NEW.last_accepted_at < OLD.last_accepted_at
   THEN
@@ -825,7 +860,8 @@ BEGIN
           accepted_observation_id = EXCLUDED.accepted_observation_id,
           accepted_sync_id = EXCLUDED.accepted_sync_id,
           accepted_device_id = EXCLUDED.accepted_device_id,
-          last_accepted_at = EXCLUDED.last_accepted_at
+          last_accepted_at = EXCLUDED.last_accepted_at,
+          provenance_redacted_at = NULL
       WHERE agent_account_day_totals.cumulative_token_total
         < EXCLUDED.cumulative_token_total;
       GET DIAGNOSTICS v_row_count = ROW_COUNT;

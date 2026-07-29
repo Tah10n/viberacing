@@ -6,19 +6,19 @@ import {
   runJobsCli,
   type JobsCliDependencies,
 } from "./command.js";
-import type { ConfiguredCommunityMaintenanceRunner } from "./community-maintenance.js";
+import type { ConfiguredJobsMaintenanceRunner } from "./maintenance.js";
 
 const privateDetail = "private command detail must not leak";
 
 function createRunner(): {
   close: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
-  runner: ConfiguredCommunityMaintenanceRunner;
+  runner: ConfiguredJobsMaintenanceRunner;
 } {
   const execute = vi.fn(() =>
     Promise.resolve({
-      kind: "refresh_community_season" as const,
-      profileCount: 1,
+      kind: "refresh_dirty_leaderboard" as const,
+      outcome: "idle" as const,
     }),
   );
   const close = vi.fn(() => Promise.resolve());
@@ -39,55 +39,25 @@ function outputDependencies(
   };
 }
 
+const commandCases = [
+  ["ensure-current-season", { kind: "ensure_current_season" }],
+  ["refresh-dirty-leaderboard", { kind: "refresh_dirty_leaderboard" }],
+  ["finalize-due-season", { kind: "finalize_due_season" }],
+  ["reset-expired-pairing-request-windows", { kind: "reset_expired_pairing_request_windows" }],
+  ["cleanup-expired-pairing-state", { batchSize: 1_000, kind: "cleanup_expired_pairing_state" }],
+  ["cleanup-expired-usage-nonces", { batchSize: 1_000, kind: "cleanup_expired_usage_nonces" }],
+  ["cleanup-expired-usage-history", { batchSize: 1_000, kind: "cleanup_expired_usage_history" }],
+  ["cleanup-expired-auth-state", { batchSize: 1_000, kind: "cleanup_expired_auth_state" }],
+  ["cleanup-aged-revoked-authority", { batchSize: 1_000, kind: "cleanup_aged_revoked_authority" }],
+  ["cleanup-snapshot-history", { batchSize: 1_000, kind: "cleanup_snapshot_history" }],
+  ["cleanup-expired-ranking-events", { batchSize: 1_000, kind: "cleanup_expired_ranking_events" }],
+  ["purge-profile-deletions", { batchSize: 10, kind: "purge_profile_deletions" }],
+  ["cleanup-terminal-deletion-jobs", { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" }],
+] as const;
+
 describe("Jobs command", () => {
-  it.each([
-    [["reset-expired-pairing-request-windows"], { kind: "reset_expired_pairing_request_windows" }],
-    [["finalize-community-backlog"], { kind: "finalize_community_season_backlog" }],
-    [
-      ["cleanup-abandoned-enrollments"],
-      { batchSize: 1_000, kind: "cleanup_abandoned_enrollments" },
-    ],
-    [
-      ["cleanup-finalized-source-day-values"],
-      { batchSize: 1_000, kind: "cleanup_finalized_source_day_values" },
-    ],
-    [["cleanup-aged-revoked-devices"], { batchSize: 1_000, kind: "cleanup_aged_revoked_devices" }],
-    [
-      ["cleanup-aged-revoked-passkeys"],
-      { batchSize: 1_000, kind: "cleanup_aged_revoked_passkeys" },
-    ],
-    [["cleanup-expired-auth-state"], { batchSize: 1_000, kind: "cleanup_expired_auth_state" }],
-    [["cleanup-expired-audit-events"], { batchSize: 1_000, kind: "cleanup_expired_audit_events" }],
-    [
-      ["cleanup-expired-car-recipe-proposals"],
-      { batchSize: 1_000, kind: "cleanup_expired_car_recipe_proposals" },
-    ],
-    [["cleanup-expired-invites"], { batchSize: 1_000, kind: "cleanup_expired_invites" }],
-    [["cleanup-expired-ingest-state"], { batchSize: 1_000, kind: "cleanup_expired_ingest_state" }],
-    [
-      ["cleanup-expired-pairing-state"],
-      { batchSize: 1_000, kind: "cleanup_expired_pairing_state" },
-    ],
-    [["cleanup-expired-sessions"], { batchSize: 1_000, kind: "cleanup_expired_sessions" }],
-    [
-      ["cleanup-terminal-deletion-jobs"],
-      { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" },
-    ],
-    [["purge-profile-deletions"], { batchSize: 10, kind: "purge_profile_deletions" }],
-    [
-      ["redact-aged-pairing-approval-provenance"],
-      { batchSize: 1_000, kind: "redact_aged_pairing_approval_provenance" },
-    ],
-    [
-      ["refresh-community-season", "2026-07-13"],
-      { kind: "refresh_community_season", seasonStart: "2026-07-13" },
-    ],
-    [
-      ["finalize-community-season", "2099-12-28"],
-      { kind: "finalize_community_season", seasonStart: "2099-12-28" },
-    ],
-  ] as const)("parses one closed command", (argumentsValue, expected) => {
-    const result = parseJobsCommand([...argumentsValue]);
+  it.each(commandCases)("parses one closed no-argument command", (command, expected) => {
+    const result = parseJobsCommand([command]);
     expect(result).toEqual(expected);
     expect(Object.isFrozen(result)).toBe(true);
   });
@@ -96,29 +66,10 @@ describe("Jobs command", () => {
     null,
     {},
     [],
-    ["reset-expired-pairing-request-windows", "unexpected"],
-    ["finalize-community-backlog", "unexpected"],
-    ["cleanup-abandoned-enrollments", "unexpected"],
-    ["cleanup-finalized-source-day-values", "unexpected"],
-    ["cleanup-aged-revoked-devices", "unexpected"],
-    ["cleanup-aged-revoked-passkeys", "unexpected"],
-    ["cleanup-expired-auth-state", "unexpected"],
-    ["cleanup-expired-audit-events", "unexpected"],
-    ["cleanup-expired-car-recipe-proposals", "unexpected"],
-    ["cleanup-expired-invites", "unexpected"],
-    ["cleanup-expired-ingest-state", "unexpected"],
-    ["cleanup-expired-pairing-state", "unexpected"],
-    ["cleanup-expired-sessions", "unexpected"],
-    ["cleanup-terminal-deletion-jobs", "unexpected"],
-    ["purge-profile-deletions", "unexpected"],
-    ["redact-aged-pairing-approval-provenance", "unexpected"],
-    ["refresh-community-season", "2026-07-13", "unexpected"],
-    ["refresh-community-season"],
-    ["refresh-community-season", "2026-07-14"],
-    ["refresh-community-season", "2026-02-30"],
-    ["refresh-community-season", "1999-12-20"],
-    ["finalize-community-season", "2100-01-04"],
-    ["unknown", "2026-07-13"],
+    ["refresh-dirty-leaderboard", "unexpected"],
+    ["refresh-community-season", "2026-07-13"],
+    ["cleanup-expired-ingest-state"],
+    ["unknown"],
     [1],
   ])("rejects invalid CLI arguments", (argumentsValue) => {
     expect(() => parseJobsCommand(argumentsValue)).toThrow(
@@ -138,13 +89,13 @@ describe("Jobs command", () => {
       enumerable: true,
       get() {
         getterCalls += 1;
-        return "cleanup-expired-ingest-state";
+        return "refresh-dirty-leaderboard";
       },
     });
     accessor.length = 1;
-    const extended = ["cleanup-expired-ingest-state"];
+    const extended = ["refresh-dirty-leaderboard"];
     Object.defineProperty(extended, "extra", { enumerable: true, value: true });
-    const trapped = new Proxy(["cleanup-expired-ingest-state"], {
+    const trapped = new Proxy(["refresh-dirty-leaderboard"], {
       ownKeys() {
         throw new Error(privateDetail);
       },
@@ -167,13 +118,8 @@ describe("Jobs command", () => {
       },
     });
 
-    await expect(
-      runJobsCli(["refresh-community-season", "2026-07-13"], dependencies),
-    ).resolves.toBe(0);
-    expect(fixture.execute).toHaveBeenCalledWith({
-      kind: "refresh_community_season",
-      seasonStart: "2026-07-13",
-    });
+    await expect(runJobsCli(["refresh-dirty-leaderboard"], dependencies)).resolves.toBe(0);
+    expect(fixture.execute).toHaveBeenCalledWith({ kind: "refresh_dirty_leaderboard" });
     expect(fixture.close).toHaveBeenCalledOnce();
     expect(dependencies.output).toEqual(["Vibe Racing Jobs command completed.\n"]);
     expect(dependencies.errors).toEqual([]);
@@ -186,14 +132,11 @@ describe("Jobs command", () => {
     await expect(runJobsCli(["unknown"], dependencies)).resolves.toBe(1);
     expect(runnerFactory).not.toHaveBeenCalled();
     expect(dependencies.errors).toEqual(["Vibe Racing Jobs command failed.\n"]);
-    expect(dependencies.errors.join("")).not.toContain(privateDetail);
   });
 
   it("uses the default configured factory but fails closed before a connection", async () => {
     const dependencies = outputDependencies({ environment: {} });
-    await expect(
-      runJobsCli(["refresh-community-season", "2026-07-13"], dependencies),
-    ).resolves.toBe(1);
+    await expect(runJobsCli(["refresh-dirty-leaderboard"], dependencies)).resolves.toBe(1);
     expect(dependencies.errors).toEqual(["Vibe Racing Jobs command failed.\n"]);
   });
 
@@ -202,7 +145,7 @@ describe("Jobs command", () => {
     const runnerFactory = vi.fn(() => fixture.runner);
     const dependencies = outputDependencies({ runnerFactory });
 
-    await runJobsCli(["cleanup-expired-ingest-state"], dependencies);
+    await runJobsCli(["cleanup-expired-usage-nonces"], dependencies);
     expect(runnerFactory).toHaveBeenCalledWith(process.env);
   });
 
@@ -225,9 +168,7 @@ describe("Jobs command", () => {
         },
       });
 
-      await expect(
-        runJobsCli(["refresh-community-season", "2026-07-13"], dependencies),
-      ).resolves.toBe(1);
+      await expect(runJobsCli(["refresh-dirty-leaderboard"], dependencies)).resolves.toBe(1);
       expect(dependencies.output).toEqual([]);
       expect(dependencies.errors).toEqual(["Vibe Racing Jobs command failed.\n"]);
       expect(dependencies.errors.join("")).not.toContain(privateDetail);
@@ -235,22 +176,20 @@ describe("Jobs command", () => {
     },
   );
 
-  it("converts a completion writer failure to a stable failure", async () => {
+  it("contains output-writer failures and default writer details", async () => {
     const fixture = createRunner();
     const errors: string[] = [];
-    const code = await runJobsCli(["cleanup-expired-ingest-state"], {
-      runnerFactory: () => fixture.runner,
-      stderr: (message) => errors.push(message),
-      stdout: () => {
-        throw new Error(privateDetail);
-      },
-    });
-
-    expect(code).toBe(1);
+    await expect(
+      runJobsCli(["cleanup-expired-usage-nonces"], {
+        runnerFactory: () => fixture.runner,
+        stderr: (message) => errors.push(message),
+        stdout: () => {
+          throw new Error(privateDetail);
+        },
+      }),
+    ).resolves.toBe(1);
     expect(errors).toEqual(["Vibe Racing Jobs command failed.\n"]);
-  });
 
-  it("contains a failure writer exception", async () => {
     await expect(
       runJobsCli(["unknown"], {
         stderr: () => {
@@ -266,7 +205,7 @@ describe("Jobs command", () => {
     const fixture = createRunner();
 
     await expect(
-      runJobsCli(["cleanup-expired-ingest-state"], {
+      runJobsCli(["cleanup-expired-usage-nonces"], {
         runnerFactory: () => fixture.runner,
       }),
     ).resolves.toBe(0);

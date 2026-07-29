@@ -1,52 +1,49 @@
 # Vibe Racing Jobs
 
-This private workspace is the local one-shot application boundary for eighteen existing PostgreSQL
-maintenance capabilities:
+This private workspace is the one-shot application boundary for the clean-bootstrap maintenance
+catalog. It can invoke exactly thirteen reviewed PostgreSQL capabilities:
 
-- delete one bounded batch of abandoned `enrolling` profiles only after all exact enrollment-session
-  and registration-challenge authority expires and no other profile-bound runtime state exists,
-  permanently removing the redeemed invite while retaining redacted audit evidence;
-- delete one bounded batch of expired authentication challenges and restricted recovery state;
-- delete one bounded batch of database audit events only after 180 days of retention;
-- delete one bounded batch of expired unredeemed invites while preserving redeemed provenance;
-- delete one bounded batch of expired private CarRecipe proposals while preserving active recipes;
-- delete one bounded batch of expired ingest nonces and raw snapshots;
-- delete one bounded batch of finalized source/day values only after a terminal season has retained
-  its exact rows for 30 days and a smaller rounded freshness projection passes integrity checks;
-- delete one bounded batch of expired non-activated pairings and their pending keys;
-- delete one bounded batch of passkeys only after 180 days in revoked state and only when no
-  session, verifying/authorized challenge, or pairing reference remains;
-- delete one bounded batch of minimized activated pairings and their exact revoked device-key rows
-  only after 180 days and only when no approval, challenge, nonce, or raw-snapshot reference
-  remains;
-- reset positive anonymous pairing request windows only after the maximum one-hour duration while
-  preserving the fixed 130-row matrix;
-- redact the exact approving session/passkey references from one bounded batch of activated pairings
-  only after 180 days while preserving their profile/source/device bindings;
-- delete one bounded batch of expired sessions that are no longer retained by rotation or pairing
-  provenance;
-- purge one bounded batch of due deletion-pending profiles and their primary data;
-- delete one bounded batch of terminal profile-deletion jobs only after 30 days of retention;
-- refresh one open Community season;
-- finalize at most one oldest grace-eligible Community season already represented by open or
-  retained source/day state, without a caller-selected date; and
-- idempotently finalize one Community season after its server-enforced grace deadline.
+1. ensure the current UTC Community season;
+2. refresh at most one due dirty Community leaderboard;
+3. finalize at most one due Community season;
+4. delete a bounded batch of expired ranking/audit events;
+5. delete bounded expired origin and device nonces;
+6. redact expired observation provenance while preserving accepted cumulative totals, then delete
+   bounded expired observation and idempotency evidence;
+7. delete bounded expired pairing batches plus their unbound provisional installations and
+   AgentAccounts;
+8. delete bounded expired authentication challenges, sessions, invites, and used recovery codes;
+9. redact aged pairing approval provenance and delete bounded unreferenced revoked passkeys,
+   devices, and installations;
+10. delete bounded abandoned or superseded non-final snapshot revisions while retaining every
+    published pointer and finalized snapshot;
+11. purge at most ten deletion-pending profiles only after no current mutable public snapshot
+    contains their handle;
+12. delete bounded terminal deletion-job evidence after its fixed 30-day retention; and
+13. reset expired positive pairing-admission windows while preserving the exact 130-row inventory.
 
-It is not an external audit sink, scheduler, deployment, monitoring backend, correction system,
-cache/backup/tombstone purge system, or production-capacity claim. The separate default-off
-`@viberacing/jobs-scheduler` workspace can invoke this same exported runner through a fixed UTC
-catalog; it adds no command or database capability. PostgreSQL remains authoritative for server
-time, serialization, scoring, grace closure, finalization, deletion state, and row bounds.
+PostgreSQL owns clocks, season selection, eligibility, deterministic ordering, row bounds,
+maintenance mutexes, retry state, snapshot publication, deletion state, and transactionality. The
+runner accepts no date, SQL, identifier, provider, trust tier, retry count, or caller-selected batch
+size. It returns no private row, date, identifier, or affected count to the CLI.
+
+This package is not a scheduler, external audit sink, monitor, correction system, backup/cache
+purger, deployed service, or production-capacity result. The separate default-off
+`@viberacing/jobs-scheduler` package can invoke only the same exported runner.
 
 ## Security boundary
 
-The runner opens at most one database client and probes that the effective role is exactly
-`viberacing_jobs`, the session login is a narrow non-owner login that can set no other group role,
-and the search path is `pg_catalog,pg_temp`. It then calls exactly one parameterized
-`viberacing_api` function, validates the one-row allowlisted result, destroys the client on failure,
-and closes the pool.
+The pool ceiling is one. Before every capability the runner proves:
 
-Only these environment names are read:
+- the effective role is exactly `viberacing_jobs`;
+- the distinct login can set only that reviewed group role;
+- the login has no superuser, owner, create-database, create-role, replication, bypass-RLS, database
+  CREATE, or TEMPORARY authority;
+- the search path is exactly `pg_catalog,pg_temp`; and
+- the session is read-write.
+
+It then executes one fixed parameterized function, validates one closed result row, destroys a
+failed client, and closes the pool. Only these environment names are read:
 
 ```text
 NODE_ENV
@@ -58,65 +55,44 @@ VIBERACING_JOBS_DATABASE_PASSWORD
 VIBERACING_JOBS_DATABASE_TLS_MODE
 ```
 
-`VIBERACING_JOBS_DATABASE_TLS_MODE` is either `verify-full`, or `disable` only for an explicit
-development/test loopback connection. Configuration objects redact the password from enumeration and
-JSON serialization. The repository contains no production login provisioning, certificate, or
-environment value. Its integration harness creates only obviously synthetic logins and passwords
-inside one disposable local PostgreSQL container and removes that container and storage afterward.
+TLS is `verify-full`, except explicit test/development loopback may select `disable`. Configuration
+objects hide the password from enumeration and JSON serialization. No credential, certificate, or
+enable value is tracked.
 
 ## Build and invoke
 
 From the repository root:
 
-The command examples below are local development surfaces, not incident actions. Before diagnosing
-or retrying a profile purge in any shared environment, follow the checked
-[profile deletion failure rehearsal runbook](../../docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md).
-It permits no raw package command against shared data and requires a reviewed deployment-owned
-controller, one fixed attempt, and protected aggregate verification.
-
 ```text
 pnpm run build:jobs
 pnpm run test:jobs:postgres-integration
-pnpm --filter @viberacing/jobs start -- cleanup-abandoned-enrollments
-pnpm --filter @viberacing/jobs start -- cleanup-expired-auth-state
-pnpm --filter @viberacing/jobs start -- cleanup-expired-audit-events
-pnpm --filter @viberacing/jobs start -- cleanup-expired-car-recipe-proposals
-pnpm --filter @viberacing/jobs start -- cleanup-expired-invites
-pnpm --filter @viberacing/jobs start -- cleanup-expired-ingest-state
-pnpm --filter @viberacing/jobs start -- cleanup-finalized-source-day-values
+pnpm --filter @viberacing/jobs start -- ensure-current-season
+pnpm --filter @viberacing/jobs start -- refresh-dirty-leaderboard
+pnpm --filter @viberacing/jobs start -- finalize-due-season
+pnpm --filter @viberacing/jobs start -- cleanup-expired-ranking-events
+pnpm --filter @viberacing/jobs start -- cleanup-expired-usage-nonces
+pnpm --filter @viberacing/jobs start -- cleanup-expired-usage-history
 pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state
-pnpm --filter @viberacing/jobs start -- cleanup-aged-revoked-passkeys
-pnpm --filter @viberacing/jobs start -- cleanup-aged-revoked-devices
-pnpm --filter @viberacing/jobs start -- reset-expired-pairing-request-windows
-pnpm --filter @viberacing/jobs start -- redact-aged-pairing-approval-provenance
-pnpm --filter @viberacing/jobs start -- cleanup-expired-sessions
+pnpm --filter @viberacing/jobs start -- cleanup-expired-auth-state
+pnpm --filter @viberacing/jobs start -- cleanup-aged-revoked-authority
+pnpm --filter @viberacing/jobs start -- cleanup-snapshot-history
 pnpm --filter @viberacing/jobs start -- purge-profile-deletions
 pnpm --filter @viberacing/jobs start -- cleanup-terminal-deletion-jobs
-pnpm --filter @viberacing/jobs start -- refresh-community-season 2026-07-13
-pnpm --filter @viberacing/jobs start -- finalize-community-backlog
-pnpm --filter @viberacing/jobs start -- finalize-community-season 2026-07-06
+pnpm --filter @viberacing/jobs start -- reset-expired-pairing-request-windows
 ```
 
-The dates above are synthetic examples. A valid command prints only a stable completion sentence;
-all failures print only a stable failure sentence and return a nonzero exit code. Neither path
-prints the command input, affected counts, configuration, SQL, or exception detail.
+A valid command prints only `Vibe Racing Jobs command completed.`. Every failure prints only
+`Vibe Racing Jobs command failed.` and returns nonzero. Neither path prints command input, results,
+configuration, SQL, exceptions, or protected values.
 
-The Docker-backed CLI integration command applies the checksum-validated migration manifest, creates
-a least-privileged synthetic Jobs login plus a deliberately widened negative-control login, runs all
-eighteen built CLI commands as separate processes, verifies their generic output and exact database
-effects, and cleans up its container, network, and storage. The separate opt-in scheduler PostgreSQL
-modes (`postgres-integration`, timer, lifecycle, emitted-process, wall-clock-process, and
-signal-process) compose the production scheduler core with this real runner and the same disposable
-PostgreSQL boundary under fixed and real clocks. Together they prove the exact ordered catalog,
-widened-login non-mutation, recurring execution with overlap suppression, graceful lifecycle and
-OS-signal settlement, failure/crash containment with clean-schema retry, one controlled uncommitted
-post-insert transaction rollback, and one local host-timer recurring refresh. They do not prove
-committed/external-effect or every-capability recovery, an external audit sink, deployed signal
-path, production TLS/credentials, durable cadence, monitoring, capacity, real-user retention, or
-deployment; see [IMPLEMENTATION_STATUS.md](../../docs/IMPLEMENTATION_STATUS.md) and
-[ADR 0063](../../docs/decisions/0063-default-off-local-jobs-scheduler.md).
+The Docker-backed command integration applies the six-file checksum-validated clean bootstrap,
+creates one narrow login and one deliberately widened negative control, fingerprints every private
+table around the denial, runs all thirteen built commands as separate processes, verifies exact
+generic output, current-season creation, admission-window mutation, connection cleanup, and removes
+the disposable database. The database integration separately exercises every retention and deletion
+mutation, including observation-provenance redaction followed by a higher cumulative sync and
+fresh-passkey profile deletion before purge.
 
-The exact-pinned `pg` dependency is the same already reviewed PostgreSQL protocol client used by the
-Web adapter. Node.js has no built-in PostgreSQL client, and reusing this package adds no new package
-version or transitive dependency family. The lockfile and dependency inventory still record this
-workspace as a separate direct consumer.
+These are local synthetic results. They do not prove production credentials or TLS, deployed
+cadence, orchestration, monitoring, capacity, real-user retention, committed external-side-effect
+recovery, backup/cache purge, or deployment.
