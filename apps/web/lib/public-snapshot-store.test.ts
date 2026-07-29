@@ -209,9 +209,7 @@ describe("public snapshot store", () => {
       finalized: false,
     });
 
-    expect(fixture.queries[1]?.text).toContain(
-      "viberacing_api.read_season_leaderboard_page",
-    );
+    expect(fixture.queries[1]?.text).toContain("viberacing_api.read_season_leaderboard_page");
     expect(fixture.queries[1]?.values).toEqual(["2026-07-20", 2]);
     expect(fixture.queries[3]?.text).toContain(
       "viberacing_api.read_current_public_profile($1::text)",
@@ -223,14 +221,25 @@ describe("public snapshot store", () => {
   });
 
   it.each([
-    ["current page", (store: ReturnType<typeof createPublicSnapshotStore>) =>
-      store.readCurrentLeaderboard(0)],
-    ["historical season", (store: ReturnType<typeof createPublicSnapshotStore>) =>
-      store.readSeasonLeaderboard("2026-07-28", 1)],
-    ["historical page", (store: ReturnType<typeof createPublicSnapshotStore>) =>
-      store.readSeasonLeaderboard("2026-07-20", "01")],
-    ["profile handle", (store: ReturnType<typeof createPublicSnapshotStore>) =>
-      store.readCurrentProfile("../private")],
+    [
+      "current page",
+      (store: ReturnType<typeof createPublicSnapshotStore>) => store.readCurrentLeaderboard(0),
+    ],
+    [
+      "historical season",
+      (store: ReturnType<typeof createPublicSnapshotStore>) =>
+        store.readSeasonLeaderboard("2026-07-28", 1),
+    ],
+    [
+      "historical page",
+      (store: ReturnType<typeof createPublicSnapshotStore>) =>
+        store.readSeasonLeaderboard("2026-07-20", "01"),
+    ],
+    [
+      "profile handle",
+      (store: ReturnType<typeof createPublicSnapshotStore>) =>
+        store.readCurrentProfile("../private"),
+    ],
   ])("rejects invalid %s before a checkout", async (_label, operation) => {
     const fixture = scriptedPool([]);
     await expectStoreError(operation(createPublicSnapshotStore(fixture.pool)), "invalid_input");
@@ -305,10 +314,7 @@ describe("public snapshot store", () => {
     },
   ])("rejects malformed fixed-query output %#", async ({ code, rows }) => {
     const fixture = scriptedPool([rows]);
-    await expectStoreError(
-      createPublicSnapshotStore(fixture.pool).readCurrentLeaderboard(1),
-      code,
-    );
+    await expectStoreError(createPublicSnapshotStore(fixture.pool).readCurrentLeaderboard(1), code);
     expect(fixture.releases).toEqual([false]);
   });
 
@@ -347,10 +353,7 @@ describe("public snapshot store", () => {
     },
   ])("contains a database boundary failure %#", async ({ code, options }) => {
     const fixture = scriptedPool([[snapshotRow(leaderboardPayload())]], options);
-    await expectStoreError(
-      createPublicSnapshotStore(fixture.pool).readCurrentLeaderboard(1),
-      code,
-    );
+    await expectStoreError(createPublicSnapshotStore(fixture.pool).readCurrentLeaderboard(1), code);
     if (code === "query_failed" || code === "runtime_boundary_mismatch") {
       expect(fixture.releases).toEqual([true]);
     }

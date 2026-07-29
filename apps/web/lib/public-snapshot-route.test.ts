@@ -22,9 +22,7 @@ import { PublicSnapshotStoreError } from "./public-snapshot-store";
 const generatedAt = "2026-07-27T12:00:00.000000Z";
 const now = () => Date.parse("2026-07-27T12:01:00.000Z");
 
-function leaderboardPayload(
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function leaderboardPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     generatedAt,
     metricVersion: "provider_reported_tokens_v1",
@@ -87,10 +85,7 @@ function snapshotRecord(
   };
 }
 
-function currentRequest(
-  suffix = "?trustTier=community&page=1",
-  init: RequestInit = {},
-): Request {
+function currentRequest(suffix = "?trustTier=community&page=1", init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
   if (!headers.has("accept")) {
     headers.set("accept", "application/json");
@@ -117,7 +112,7 @@ function currentRoute(
 }
 
 async function problemCode(response: Response): Promise<string> {
-  return (await response.json() as { errorCode: string }).errorCode;
+  return ((await response.json()) as { errorCode: string }).errorCode;
 }
 
 describe("public snapshot route", () => {
@@ -157,7 +152,9 @@ describe("public snapshot route", () => {
     }
     expect(
       parseCurrentLeaderboardRequest(
-        new Request("https://viberacing.example/v1/leaderboards/current?trustTier=community&page=1#x"),
+        new Request(
+          "https://viberacing.example/v1/leaderboards/current?trustTier=community&page=1#x",
+        ),
       ),
     ).toBeUndefined();
   });
@@ -179,9 +176,7 @@ describe("public snapshot route", () => {
     expect(parsePublicProfileRequest(profileRequest, { handle: "demo_driver" })).toMatchObject({
       handle: "demo_driver",
     });
-    expect(
-      parsePublicProfileRequest(profileRequest, { handle: "../private" }),
-    ).toBeUndefined();
+    expect(parsePublicProfileRequest(profileRequest, { handle: "../private" })).toBeUndefined();
   });
 
   it("serves the exact canonical payload with open shared caching and no private headers", async () => {
@@ -202,27 +197,26 @@ describe("public snapshot route", () => {
     expect(read).toHaveBeenCalledWith(1);
   });
 
-  it.each([
-    (etag: string) => etag,
-    (etag: string) => `W/${etag}`,
-    () => "*",
-  ])("returns bodyless 304 for a matching conditional %#", async (conditional) => {
-    const record = snapshotRecord(leaderboardPayload());
-    const response = await currentRoute(() => Promise.resolve(record)).get(
-      currentRequest("?trustTier=community&page=1", {
-        headers: {
-          accept: "application/json",
-          "if-none-match": conditional(String(record.etag)),
-        },
-      }),
-    );
+  it.each([(etag: string) => etag, (etag: string) => `W/${etag}`, () => "*"])(
+    "returns bodyless 304 for a matching conditional %#",
+    async (conditional) => {
+      const record = snapshotRecord(leaderboardPayload());
+      const response = await currentRoute(() => Promise.resolve(record)).get(
+        currentRequest("?trustTier=community&page=1", {
+          headers: {
+            accept: "application/json",
+            "if-none-match": conditional(String(record.etag)),
+          },
+        }),
+      );
 
-    expect(response.status).toBe(304);
-    expect(await response.text()).toBe("");
-    expect(response.headers.get("etag")).toBe(record.etag);
-    expect(response.headers.has("content-type")).toBe(false);
-    expect(response.headers.get("cache-control")).toBe(publicSnapshotOpenCacheControl);
-  });
+      expect(response.status).toBe(304);
+      expect(await response.text()).toBe("");
+      expect(response.headers.get("etag")).toBe(record.etag);
+      expect(response.headers.has("content-type")).toBe(false);
+      expect(response.headers.get("cache-control")).toBe(publicSnapshotOpenCacheControl);
+    },
+  );
 
   it("serves a nonmatching conditional normally and rejects malformed conditions", async () => {
     const record = snapshotRecord(leaderboardPayload());
@@ -298,10 +292,9 @@ describe("public snapshot route", () => {
       readCurrentProfile: read,
     });
     const response = await route.get(
-      new Request(
-        "https://viberacing.example/v1/profiles/demo_driver?trustTier=community",
-        { headers: { accept: "application/json" } },
-      ),
+      new Request("https://viberacing.example/v1/profiles/demo_driver?trustTier=community", {
+        headers: { accept: "application/json" },
+      }),
       Promise.resolve({ handle: "demo_driver" }),
     );
 
@@ -340,10 +333,9 @@ describe("public snapshot route", () => {
   it("returns 405 for non-GET methods and the explicit method boundary", async () => {
     const route = currentRoute(() => Promise.resolve(snapshotRecord(leaderboardPayload())));
     const response = await route.get(
-      new Request(
-        "https://viberacing.example/v1/leaderboards/current?trustTier=community&page=1",
-        { method: "POST" },
-      ),
+      new Request("https://viberacing.example/v1/leaderboards/current?trustTier=community&page=1", {
+        method: "POST",
+      }),
     );
     const explicit = route.methodNotAllowed();
 
@@ -414,17 +406,9 @@ describe("public snapshot route", () => {
 
   it.each([
     [new PublicSnapshotStoreError("not_found"), 404, "not_found"],
-    [
-      new PublicSnapshotStoreError("snapshot_unavailable"),
-      503,
-      "temporarily_unavailable",
-    ],
+    [new PublicSnapshotStoreError("snapshot_unavailable"), 503, "temporarily_unavailable"],
     [new PublicSnapshotStoreError("query_failed"), 503, "temporarily_unavailable"],
-    [
-      new PublicSnapshotDatabaseConfigurationError("host_invalid"),
-      503,
-      "temporarily_unavailable",
-    ],
+    [new PublicSnapshotDatabaseConfigurationError("host_invalid"), 503, "temporarily_unavailable"],
     [new PublicSnapshotStoreError("projection_rejected"), 500, "internal_error"],
     [new Error("private internal detail"), 500, "internal_error"],
   ])("maps one opaque dependency failure %#", async (error, status, code) => {
@@ -462,10 +446,7 @@ describe("public snapshot route", () => {
       "https://viberacing.example/v1/leaderboards/2026-07-20?trustTier=community&page=1",
     );
 
-    const invalid = await seasonRoute.get(
-      request,
-      Promise.resolve({ seasonStart: "2026-07-21" }),
-    );
+    const invalid = await seasonRoute.get(request, Promise.resolve({ seasonStart: "2026-07-21" }));
     const rejected = await seasonRoute.get(
       request,
       Promise.reject(new Error("private router detail")),

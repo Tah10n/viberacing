@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const request = new Request(
-  "https://viberacing.invalid/v1/profiles/UPPER?trustTier=community",
-);
+const request = new Request("https://viberacing.invalid/v1/profiles/UPPER?trustTier=community");
 const context = { params: Promise.resolve({ handle: "UPPER" }) };
 
 describe("public profile Next.js entrypoint", () => {

@@ -48,14 +48,8 @@ const tokenPattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const qualityPattern = /^(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)$/;
 const pagePattern = /^(?:[1-9]|[1-9][0-9]{1,3}|10000)$/;
 const entityTagPattern = /^(?:W\/)?"[a-f0-9]{64}"$/;
-const generatedAtPattern =
-  /^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/;
-const recordKeys = new Set([
-  "canonicalPayload",
-  "etag",
-  "finalized",
-  "generatedAt",
-]);
+const generatedAtPattern = /^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/;
+const recordKeys = new Set(["canonicalPayload", "etag", "finalized", "generatedAt"]);
 const unavailableStoreErrors = new Set<PublicSnapshotStoreErrorCode>([
   "connection_release_failed",
   "connection_unavailable",
@@ -102,8 +96,7 @@ interface PublicSnapshotRouteBaseDependencies {
   readonly now?: () => number;
 }
 
-export interface CurrentLeaderboardRouteDependencies
-  extends PublicSnapshotRouteBaseDependencies {
+export interface CurrentLeaderboardRouteDependencies extends PublicSnapshotRouteBaseDependencies {
   readonly readCurrentLeaderboard: (page: number) => Promise<unknown>;
 }
 
@@ -381,9 +374,9 @@ function parseRequestUrl(request: Request): URL | undefined {
   }
 }
 
-function parseHeaders(request: Request):
-  | Readonly<{ conditional: ParsedConditionalHeader }>
-  | undefined {
+function parseHeaders(
+  request: Request,
+): Readonly<{ conditional: ParsedConditionalHeader }> | undefined {
   try {
     if (!acceptsPublicSnapshotJson(request.headers.get("accept"))) {
       return undefined;
@@ -397,9 +390,7 @@ function parseHeaders(request: Request):
 
 function acceptProblem(request: Request): "invalid_request" | "not_acceptable" | undefined {
   try {
-    return acceptsPublicSnapshotJson(request.headers.get("accept"))
-      ? undefined
-      : "not_acceptable";
+    return acceptsPublicSnapshotJson(request.headers.get("accept")) ? undefined : "not_acceptable";
   } catch {
     return "invalid_request";
   }
@@ -509,9 +500,7 @@ function validateRecord<T>(
     if (
       !isPlainRecord(value) ||
       Reflect.ownKeys(value).length !== recordKeys.size ||
-      Reflect.ownKeys(value).some(
-        (key) => typeof key !== "string" || !recordKeys.has(key),
-      )
+      Reflect.ownKeys(value).some((key) => typeof key !== "string" || !recordKeys.has(key))
     ) {
       return undefined;
     }
@@ -561,10 +550,7 @@ function validateLeaderboardRecord(
   );
 }
 
-function validateProfileRecord(
-  value: unknown,
-  handle: string,
-): PublicSnapshotRecord | undefined {
+function validateProfileRecord(value: unknown, handle: string): PublicSnapshotRecord | undefined {
   return validateRecord(
     value,
     validatePublicProfileSummaryV1,
@@ -574,20 +560,12 @@ function validateProfileRecord(
   );
 }
 
-function conditionalMatches(
-  conditional: ParsedConditionalHeader,
-  etag: string,
-): boolean {
+function conditionalMatches(conditional: ParsedConditionalHeader, etag: string): boolean {
   return conditional.any || conditional.tags.includes(etag);
 }
 
 type SnapshotFreshness =
-  | "finalized"
-  | "fresh"
-  | "stale-under-5m"
-  | "stale-under-1h"
-  | "stale-under-1d"
-  | "stale-over-1d";
+  "finalized" | "fresh" | "stale-under-5m" | "stale-under-1h" | "stale-under-1d" | "stale-over-1d";
 
 function snapshotFreshness(
   record: PublicSnapshotRecord,

@@ -36,8 +36,7 @@ const snapshotRowColumns = [
 const snapshotRowColumnSet = new Set<string>(snapshotRowColumns);
 const maximumLeaderboardPayloadBytes = 1_048_576;
 const maximumProfilePayloadBytes = 65_536;
-const generatedAtPattern =
-  /^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/;
+const generatedAtPattern = /^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z$/;
 const etagPattern = /^"[a-f0-9]{64}"$/;
 
 const runtimeBoundaryQuery = `SELECT
@@ -139,12 +138,8 @@ export interface PublicSnapshotRecord {
 }
 
 export interface PublicSnapshotStore {
-  readonly readCurrentLeaderboard: (
-    page: unknown,
-  ) => Promise<PublicSnapshotRecord>;
-  readonly readCurrentProfile: (
-    handle: unknown,
-  ) => Promise<PublicSnapshotRecord>;
+  readonly readCurrentLeaderboard: (page: unknown) => Promise<PublicSnapshotRecord>;
+  readonly readCurrentProfile: (handle: unknown) => Promise<PublicSnapshotRecord>;
   readonly readSeasonLeaderboard: (
     seasonStart: unknown,
     page: unknown,
@@ -350,13 +345,9 @@ async function requireCurrentSnapshot(pool: PublicSnapshotDatabasePool): Promise
   }
 }
 
-export function createPublicSnapshotStore(
-  pool: PublicSnapshotDatabasePool,
-): PublicSnapshotStore {
+export function createPublicSnapshotStore(pool: PublicSnapshotDatabasePool): PublicSnapshotStore {
   return Object.freeze({
-    async readCurrentLeaderboard(
-      page: unknown,
-    ): Promise<PublicSnapshotRecord> {
+    async readCurrentLeaderboard(page: unknown): Promise<PublicSnapshotRecord> {
       const query = validateLeaderboardQueryV1({ page, trustTier: "community" });
       if (!query.ok) {
         fail("invalid_input");
@@ -372,9 +363,7 @@ export function createPublicSnapshotStore(
       fail("not_found");
     },
 
-    async readCurrentProfile(
-      handle: unknown,
-    ): Promise<PublicSnapshotRecord> {
+    async readCurrentProfile(handle: unknown): Promise<PublicSnapshotRecord> {
       const path = validatePublicProfilePathV1({ handle });
       if (!path.ok) {
         fail("invalid_input");
@@ -402,10 +391,7 @@ export function createPublicSnapshotStore(
         fail("invalid_input");
       }
       const row = readOneRow(
-        await readRows(pool, seasonLeaderboardQuery, [
-          path.value.seasonStart,
-          query.value.page,
-        ]),
+        await readRows(pool, seasonLeaderboardQuery, [path.value.seasonStart, query.value.page]),
       );
       if (row === undefined) {
         fail("not_found");
@@ -414,9 +400,7 @@ export function createPublicSnapshotStore(
         row,
         maximumLeaderboardPayloadBytes,
         validateLeaderboardSnapshotV1,
-        (value) =>
-          value.seasonStart === path.value.seasonStart &&
-          value.page === query.value.page,
+        (value) => value.seasonStart === path.value.seasonStart && value.page === query.value.page,
       );
     },
   });
@@ -445,9 +429,6 @@ export function createConfiguredPublicSnapshotStore(
   signalSink?: PublicSnapshotDatabasePoolSignalSink,
 ): ConfiguredPublicSnapshotStore {
   return createCloseablePublicSnapshotStore(
-    createPublicSnapshotDatabasePool(
-      resolvePublicSnapshotDatabaseConfig(environment),
-      signalSink,
-    ),
+    createPublicSnapshotDatabasePool(resolvePublicSnapshotDatabaseConfig(environment), signalSink),
   );
 }
