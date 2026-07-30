@@ -1,262 +1,84 @@
 # ADR 0063: Default-off local Jobs scheduler
 
-- Status: Accepted (local scheduler and synthetic PostgreSQL composition; deployment pending)
+- Status: Superseded
 - Date: 2026-07-19
 - Decision owners: Jobs, Security, Privacy, Operations, and Database
 - Supersedes: Scheduler-pending portion of ADR 0014
-- Superseded by: None
+- Superseded by: ADR 0076
 
 ## Context
 
-The repository has eighteen reviewed one-shot Jobs capabilities. Their inputs, result shapes,
-database role, connection ceiling, statement deadlines, row bounds, lock orders, and idempotency are
-already enforced in `@viberacing/jobs` and PostgreSQL. An opt-in synthetic integration proves each
-emitted command against a disposable least-privileged login.
+This decision introduced the first default-off in-process scheduler for the former pre-release
+Community/source model. It established useful security properties: exact true-only enablement before
+protected configuration, a closed catalog, one runner, sequential execution, no overlapping cycles,
+generic failure signals, and bounded first-signal shutdown.
 
-Nothing invokes those commands on a recurring basis. Expiry makes authority unusable, but physical
-cleanup, redaction, fixed-window reset, profile purge, scoring refresh, and terminal season
-finalization still depend on an operator starting individual processes. A scheduler therefore needs
-to close the local application gap without creating a generic maintenance API, accepting operational
-commands from configuration, or implying that a deployed cadence and monitor exist.
-
-This boundary crosses TB-07 and TB-11. A compromised or misconfigured scheduler could repeatedly
-exercise all Jobs capabilities, starve interactive services through lock contention, silently skip
-retention, derive a wrong season from local time, overlap itself, or print private database results.
-VR-DATA-001 and VR-INGEST-002 remain non-negotiable: the scheduler may select only reviewed Jobs
-objects, while PostgreSQL remains authoritative for time-sensitive eligibility, serialization, grace
-closure, terminal state, and deletion bounds.
+The repository had not shipped or accepted real-user data. ADR 0076 therefore selected a clean-slate
+AgentAccount/provider-reported-token model, removed the old migration and scoring catalog, and made
+the former eighteen-function schedule obsolete.
 
 ## Decision
 
-Add a separate private `@viberacing/jobs-scheduler` workspace. It depends only on `@viberacing/jobs`
-and Node platform timers. Its lint policy rejects direct PostgreSQL, filesystem, network, TLS, and
-subprocess imports. The existing one-shot CLI remains unchanged and independently invocable.
+ADR 0076 retains the scheduler boundary but replaces its authority with the clean-bootstrap Jobs
+catalog:
 
-The scheduler is admitted only when `VIBERACING_JOBS_SCHEDULER_ENABLED` is the exact string `true`.
-The enable value is read before the Jobs runner is constructed and therefore before any
-`VIBERACING_JOBS_DATABASE_*` value is read or a pool exists. Missing, false, malformed,
-getter-failing, and tracked example values fail closed. The scheduler accepts no process argument.
-No second flag, truthy parser, file, request, or runtime toggle can enable it.
+- PostgreSQL, not the scheduler, selects current, dirty, and due seasons;
+- the scheduler supplies no date or caller-selected batch;
+- the fixed hourly catalog contains thirteen capabilities;
+- minute slots refresh one due dirty leaderboard;
+- five-minute slots refresh and then attempt one due finalization;
+- hourly slots execute the full dependency-ordered retention, purge, and reset catalog;
+- dirty refresh uses coalesced outbox state, a private row mutex, bounded retry, atomic publication,
+  and last-good snapshot retention; and
+- profile deletion lockdown revokes Web and connector authority before the bounded purge.
 
-The schedule is compiled into one closed UTC catalog:
-
-- poll the in-memory schedule once per minute;
-- refresh the current Monday-based Community season at most once per uninterrupted five-minute
-  process slot;
-- finalize the latest Community season whose fixed Wednesday 00:00 UTC grace boundary has elapsed at
-  most once per UTC day;
-- advance at most one oldest data-backed historical Community season through ADR 0065's no-argument
-  capability per uninterrupted UTC-hour process slot;
-- run the fifteen cleanup, redaction, reset, and profile-purge objects at most once per
-  uninterrupted UTC-hour process slot.
-
-The hourly catalog is dependency-ordered. Aged pairing approval provenance is redacted before
-expired-session deletion, which runs before aged revoked-passkey and revoked-device deletion. This
-allows one sequential cycle to release and then remove newly unreferenced retained rows while every
-database function still repeats its own eligibility checks under the reviewed mutex order.
-
-On Monday and Tuesday the latest grace-eligible finalization target is the season starting two
-Mondays earlier. From Wednesday through Sunday it is the immediately preceding Monday. This avoids
-depending on local time and still closes the most recent terminal boundary after an ordinary weekend
-outage. The supported clock and generated Monday labels stay inside the existing `1999-12-27`
-through `2099-12-28` Jobs contract. A non-integer, out-of-range, or backward wall clock fails the
-cycle without reaching the runner.
-
-This catalog does not scan arbitrary historical dates. ADR 0065's database capability derives only
-the oldest grace-eligible week already represented by an open season or retained accepted source/day
-state, advances at most one season, and returns no date. It adds no run ledger or queue; any future
-durable run state still needs its own privacy, capacity, and recovery decision.
-
-Each catalog slot is marked in memory before invocation. Due objects run sequentially through one
-configured Jobs runner and its existing one-client pool. A timer firing during a cycle is ignored;
-cycles never overlap. A failed object does not receive an immediate retry and does not prevent later
-fixed objects in that cycle. Only the next fixed slot or a process restart can retry it. Restarting
-may repeat the current slot, which is safe only because every admitted PostgreSQL capability is
-bounded and idempotent or converges on the same terminal state.
-
-The schedule validates its due collection as one frozen dense array of at most eighteen entries. The
-Jobs runner then revalidates every individual object before selecting one prepared capability. No
-result is used to widen later work. Counts, dates, commands, identifiers, SQL, configuration, driver
-errors, and stacks are discarded.
-
-An optional process signal receives only `cycle_failed`, once for a cycle containing any failed
-object or schedule decision. The production entry point turns that value into one generic sentence;
-it does not identify the failing job. There is no run history, queue, retry counter, metric, trace,
-health route, listener, or external monitoring backend in this slice.
-
-The first `SIGINT` or `SIGTERM` clears the interval, prevents another object from starting, waits
-for only the currently settling Jobs call, and closes the runner. Existing Jobs client and database
-deadlines bound that call. A fixed 35-second process deadline, second signal, or close failure
-forces an unsuccessful exit. The scheduler never abandons a live client merely to report success.
+The current implementation and evidence are described by
+[ADR 0076](0076-clean-agent-account-provider-reported-token-ranking.md),
+[Vibe Racing Jobs](../../apps/jobs/README.md), and
+[the Jobs scheduler](../../apps/jobs-scheduler/README.md).
 
 ## Security and privacy consequences
 
-The new workspace receives broad temporal authority but no new database capability. Compromise can
-invoke only the same eighteen functions already granted to the Jobs login, sequentially and with
-their fixed inputs. The database role probe still runs before every capability, failed clients are
-destroyed, and the pool ceiling remains one. Default-off startup limits accidental execution from a
-preview, developer shell, or incomplete deployment.
-
-The fixed catalog and no-overlap rule reduce command injection, environment poisoning, retry storms,
-and self-contention under VR-ABUSE-DATABASE-ROLE, VR-ABUSE-SEASON-RACE, and
-VR-ABUSE-RESOURCE-EXHAUSTION. They do not establish capacity. One hourly cycle can still be delayed
-by bounded lock or query waits, and a compromised valid Jobs credential can exercise every granted
-function until the principal is revoked.
-
-No personal, account, usage, or security field is added. In-memory slot numbers and the current
-clock are Operational control state and disappear with the process. The scheduler does not retain
-results or dates. A generic failure sentence may be captured by a deployment log outside this
-repository; its access, retention, alert routing, and correlation remain deployment work. Adding a
-run ledger, job name, affected count, timestamp, error code, or operator identity requires a new
-privacy-map entry before collection.
-
-This local scheduler is not evidence that any process is deployed or continuously running. It does
-not provide a production Jobs credential/certificate, hosted timer result, single-replica lease,
-cross-replica coordination, alert owner, capacity measurement, external audit sink, backup purge,
-restore replay, cache invalidation, deletion notification, or real-user retention result. Multiple
-deployed replicas would each have independent in-memory slots; PostgreSQL idempotency preserves
-correctness, but load and cadence must be reviewed before deployment.
+The scheduler remains a broad temporal authority but gains no database capability beyond the Jobs
+role. It is default-off, accepts no process arguments, stores slot state only in memory, runs
+through one-client Jobs confinement, and emits no job name, result, date, identifier, SQL,
+configuration, or exception. Multiple deployed replicas would still have independent slots;
+PostgreSQL idempotency preserves correctness, but deployment cadence, capacity, replica count,
+alerting, and recovery remain separate operational evidence.
 
 ## Alternatives considered
 
-- **Accept cron command and date strings from environment:** rejected because it would turn
-  deployment configuration into a command/date injection surface and bypass the closed Jobs object
-  inventory.
-- **Run every capability on every one-minute poll:** rejected because logical expiry is already
-  enforced by PostgreSQL and unnecessary repeated calls would increase lock and connection load.
-- **Persist a scheduler queue or last-run table:** deferred because it introduces operational
-  identifiers, retention, recovery, migration, and multi-replica semantics beyond this local slice.
-- **Spawn the one-shot CLI for every job:** rejected because subprocess paths, environment copying,
-  output budgets, and reap semantics add authority without improving the already reviewed runner
-  boundary.
-- **Run due jobs concurrently:** rejected because the single-client Jobs ceiling, maintenance mutex
-  ordering, predictable load, and bounded shutdown are clearer when invocation is sequential.
-- **Retry a failed object immediately:** rejected because failure may represent database saturation,
-  lock contention, or invalid deployment credentials. The next fixed slot is the only local retry
-  boundary until monitoring and backoff policy are reviewed.
-- **Silently enable scheduling when database configuration exists:** rejected because credential
-  presence is not operator authorization to perform recurring destructive maintenance.
-- **Claim production scheduling from this process loop:** rejected because a binary and timer tests
-  do not prove a hosted replica, credential, uptime, cadence, monitoring, or capacity.
+- Retaining the eighteen-function source-era catalog was rejected because the clean-slate
+  AgentAccount model has different ownership, ranking, retention, and deletion semantics.
+- Allowing callers to select jobs, dates, or batch sizes was rejected because it would widen the
+  scheduler into an ambient database-control plane.
+- Running overlapping timers was rejected because PostgreSQL idempotency is a safety backstop, not a
+  reason to create avoidable concurrent work.
+- Claiming a deployed cadence from local timer tests was rejected because replica topology,
+  orchestration, monitoring, and recovery are external evidence.
 
 ## Migration and rollback
 
-There is no database or public protocol migration. `@viberacing/jobs` gains only a package export
-for its existing runner and types. The workspace graph and lockfile gain one internal consumer and
-no new external package version. The later OS-signal evidence adds one digest-pinned, test-profile
-Linux Node image that is pulled separately and never redistributed; the production package graph
-remains unchanged.
+There is no compatibility migration because all affected state was unreleased and synthetic. Local
+databases built from the superseded catalog are discarded and rebuilt from the seven-revision clean
+bootstrap. No production deployment or real-user data migration is claimed.
 
-Rollback is to set the exact enable latch to any value other than `true`, stop the process, and then
-remove the scheduler workspace, root scripts, verifier entries, documentation, and lockfile importer
-in a reviewed change. The one-shot Jobs commands and PostgreSQL procedures remain safe and available
-for explicit recovery. Rollback must not weaken expiry, finalization immutability, database grants,
-or procedure bounds.
+Rollback of an application build disables the exact startup latch and replaces the process. It does
+not reinterpret committed database state or restore work already completed by a reviewed Jobs
+capability. Database repair, if ever required after publication, is a new forward revision.
 
 ## Verification
 
-Local evidence includes:
-
-- exact true-only configuration and proof that no Jobs database field is inspected before it;
-- UTC Monday, Wednesday grace, year-boundary, supported-range, backward-clock, five-minute, hourly,
-  and daily schedule cases;
-- an exact frozen maximum-eighteen due collection and rejection of sparse, accessor-backed,
-  oversized, mutable, or extra-key arrays;
-- sequential initial execution, ignored overlapping ticks, no next object after shutdown, current
-  object settlement, and idempotent close;
-- continuation after one failed object with one closed signal and containment of a throwing sink;
-- partial-start cleanup, invalid dependency/runner/schedule containment, interval setup failure, and
-  combined shutdown failure;
-- first-signal graceful close, shutdown during startup, second-signal/deadline/close-failure forced
-  exit, invalid controller/dependency denial, and hostile proxy containment;
-- 94 scheduler tests at 100% statement, branch, function, and line coverage, including the explicit
-  provenance/session/passkey/device dependency order and a lint-policy regression for static,
-  exported, dynamic, and legacy forbidden runtime imports plus built-in module-loader escape paths,
-  strict TypeScript, production build, and a built-entrypoint check that rejects disabled and
-  argument-bearing startup without reflective output;
-- the existing separate synthetic Jobs PostgreSQL integration for all eighteen emitted database
-  capabilities;
-- an opt-in combined integration that builds the production scheduler core and Jobs runner, injects
-  one fixed UTC clock/timer, executes the exact ordered eighteen-job catalog against one disposable
-  PostgreSQL database, fingerprints every private table before and after a widened-login denial, and
-  verifies exact stored state through the narrow login;
-- a separate opt-in timer integration that advances the fixed clock by one hour, invokes the
-  production interval handler twice during the active real-runner cycle, proves the exact recurring
-  seventeen-job catalog plus overlap and same-slot suppression, and verifies the rearmed terminal
-  pairing-rate-window reset;
-- a separate opt-in lifecycle integration that composes the production process state machine with
-  that fixed-clock core and real runner, starts the penultimate real-runner call before injecting
-  its first handler, proves that active call settles and the later scheduler job does not start, and
-  requires exact interval/deadline/handler/runner cleanup plus exit code 0. The harness invokes the
-  omitted reset only afterward before the shared exact-state oracle;
-- a separate opt-in emitted-process integration that creates a bounded link-free production-only
-  runtime under pinned Linux Node and starts the built entry point with exact enable and
-  narrow-login configuration. The harness temporarily revokes only the Jobs role's exact
-  backlog-function grant. The first process must emit one generic cycle-failure line, leave that
-  backlog unchanged, reach the later terminal reset, and exit with code 0 after `SIGTERM`. The
-  harness restores and rechecks the grant, rearms the marker, holds the scoring mutex, and starts
-  the same runtime again. It must observe the first finalization lock-wait, deliver `SIGKILL`,
-  require exit 137 plus session release, and prove the backlog and marker remain unchanged. After
-  the holder is released, a restart must finalize the backlog before a silent code-0 signal exit.
-  The harness then rearms the marker, installs one disposable `AFTER INSERT` barrier for a second
-  backlog, and starts the same runtime again. It must observe that call waiting on the barrier only
-  after the first daily projection insert, deliver a second `SIGKILL`, require exit 137 plus session
-  release, and prove the season/entry/daily rows rolled back while the source/day input and marker
-  remain. The test-only trigger/function must be removed and absent before a clean-schema restart
-  finalizes that backlog exactly once. A final rearm/restart must prove another silent repeated
-  cycle, session cleanup after all six starts, runtime-fingerprint revalidation, and the same exact
-  stored state;
-- a separate opt-in wall-clock integration that uses the same bounded link-free production-only
-  runtime shape under pinned Linux Node, starts the unchanged emitted entry point, waits for the
-  startup catalog, records its open-season refresh timestamp, and then holds the scoring mutex until
-  a native minute-timer callback reaches refresh in a later real five-minute slot. It delivers
-  `SIGTERM`, releases the holder before the database deadline, and requires active-refresh
-  settlement, a newer timestamp, silent code-0 exit, session release, and runtime-fingerprint
-  revalidation;
-- a separate opt-in OS-signal integration that creates a link-free runtime from only the built
-  scheduler, built Jobs runner, and exact installed 14-package production graph, mounts it read-only
-  under a pinned Linux Node 24.18 image, and joins only the disposable PostgreSQL network namespace.
-  An owner holder blocks the emitted first finalization call until the exact database wait is
-  observed; the harness delivers `SIGTERM`, releases the holder before the database deadline, and
-  requires that active call to settle without refresh or any later job. The process must exit
-  silently with code 0, release its database session, leave its runtime fingerprint unchanged, and
-  pass the shared final-state oracle only after the seventeen omitted one-shot commands run
-  separately. Secretless CI declares all six scheduler commands, but this tree claims only the
-  observed local passes.
-
-The fixed-clock, timer, and lifecycle integrations invoke production components in-process. The
-timer handler is called directly and therefore does not exercise host-timer delivery; the lifecycle
-signal handler is called directly and therefore does not exercise OS-signal delivery. The
-emitted-process integration temporarily removes only the Jobs role's backlog-function grant. It
-requires one generic failure signal, an unchanged backlog, and later terminal-job settlement before
-a code-0 `SIGTERM` exit. The harness restores and rechecks the exact grant, rearms the marker, holds
-the scoring mutex, and starts the pinned-Linux container from the same runtime. It observes the
-first finalization lock-wait, delivers `SIGKILL`, requires exit 137 plus session release, and proves
-the backlog and marker remain unchanged. After releasing the holder, a restart finalizes the backlog
-before a silent signal exit. A disposable post-insert barrier then holds a second backlog after its
-first daily projection insert; a second abrupt process loss must roll back that whole transaction.
-The barrier is removed before a clean-schema retry finalizes that backlog exactly once. A final
-rearm/restart proves another silent repeated cycle before the runtime fingerprint is revalidated. It
-therefore proves local failure/crash containment, later-job continuation, successful clean-schema
-retries, a later repeated restart, four graceful post-startup `SIGTERM` settlements, two abrupt
-active-call `SIGKILL` exits, and one controlled uncommitted post-insert transaction rollback. The
-separate wall-clock emitted integration leaves `Date.now()` and native `setInterval(60_000)`
-unchanged, observes a later-slot production refresh blocked on PostgreSQL, delivers an OS `SIGTERM`,
-and requires that refresh to settle before silent code-0 exit. It therefore proves one local
-host-timer recurring call and graceful signal settlement. The other pinned-Linux integration
-exercises the same OS-delivered graceful `SIGTERM` boundary while the first finalization call is
-active and proves that no later job starts. The process result does not prove recovery from
-committed/external effects or every Jobs capability or automatic privilege repair, and it does not
-exercise a deployment-controller restart or orchestrator stop grace. None proves that a production
-clock remains stable, a deployment has one replica, durable cadence is maintained, a representative
-or real-user historical backlog is recovered, production TLS/credentials work, or a real-user
-retention/deletion deadline is met.
+Repository tests cover exact enablement, the closed thirteen-capability catalog, fixed-clock slot
+selection, overlap suppression, sequential order, bounded shutdown, failure containment, real
+timers, emitted child processes, and disposable least-privileged PostgreSQL composition. These are
+local synthetic results only; they do not prove a hosted scheduler, durable cadence, production
+credentials, external signal routing, monitoring, capacity, or recovery from committed external side
+effects.
 
 ## References
 
-- [Bounded Community maintenance runner](0014-bounded-community-maintenance-job-runner.md)
-- [Community season grace and immutable finalization](0008-community-season-grace-and-finalization.md)
+- [Clean AgentAccount provider-reported token ranking](0076-clean-agent-account-provider-reported-token-ranking.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Threat model](../security/THREAT_MODEL.md)
-- [Abuse cases](../security/ABUSE_CASES.md)
 - [Privacy data map](../security/PRIVACY_DATA_MAP.md)

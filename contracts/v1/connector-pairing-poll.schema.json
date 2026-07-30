@@ -2,16 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.viberacing.example/v1/connector-pairing-poll.schema.json",
   "title": "ConnectorPairingPollV1",
-  "description": "Closed polling request that presents one short-lived token and the exact pending-key possession signature.",
+  "description": "Closed polling request that presents one short-lived token and the exact installation-key possession signature for this pairing batch.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "pollToken", "possessionSignature"],
+  "required": ["schemaVersion", "pairingId", "pollToken", "possessionSignature"],
   "properties": {
     "schemaVersion": {
       "type": "integer",
       "const": 1,
       "minimum": 1,
       "maximum": 1
+    },
+    "pairingId": {
+      "type": "string",
+      "minLength": 27,
+      "maxLength": 27,
+      "pattern": "^pair_[A-Za-z0-9_-]{22}$"
     },
     "pollToken": {
       "type": "string",

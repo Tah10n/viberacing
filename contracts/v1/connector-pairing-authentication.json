@@ -3,24 +3,36 @@
   "protocolId": "viberacing-device-pairing-possession-v1",
   "algorithm": "Ed25519",
   "publicKeyBytes": 32,
-  "challengeBytes": 32,
   "signatureBytes": 64,
+  "nonceBytes": 16,
+  "challengeBytes": 32,
   "binaryEncoding": "base64url-unpadded",
+  "digestAlgorithm": "SHA-256",
+  "digestEncoding": "lowercase-hex",
   "canonicalMessageEncoding": "UTF-8",
   "canonicalMessageSeparator": "LF",
   "canonicalMessageTrailingSeparator": false,
-  "messagePrefix": "viberacing-pairing-possession-v1",
-  "pairingIdPattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-  "canonicalFields": [
-    "messagePrefix",
-    "pairingId",
-    "pairingChallengeBase64Url",
-    "devicePublicKeyBase64Url"
-  ],
+  "pairingIdPattern": "^pair_[A-Za-z0-9_-]{22}$",
+  "startProof": {
+    "messagePrefix": "viberacing-pairing-start-possession-v1",
+    "maximumAgeMilliseconds": 60000,
+    "maximumFutureSkewMilliseconds": 5000,
+    "canonicalFields": [
+      "messagePrefix",
+      "manifestDigest",
+      "clientRateIdentifier",
+      "signedAt",
+      "nonce"
+    ]
+  },
+  "pollProof": {
+    "messagePrefix": "viberacing-pairing-poll-possession-v1",
+    "canonicalFields": ["messagePrefix", "pairingId", "pairingChallenge", "installationPublicKey"]
+  },
   "activationPreconditions": [
     "exact-poll-verifier-match",
-    "browser-approved-transaction",
-    "unexpired-pending-device-key",
-    "strict-possession-signature"
+    "browser-approved-complete-batch",
+    "unexpired-pending-installation",
+    "strict-installation-possession-signature"
   ]
 }

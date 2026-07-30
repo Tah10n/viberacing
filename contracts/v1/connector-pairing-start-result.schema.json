@@ -2,17 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.viberacing.example/v1/connector-pairing-start-result.schema.json",
   "title": "ConnectorPairingStartResultV1",
-  "description": "One-time short-lived pairing material returned only after a pending transaction is committed.",
+  "description": "One-time short-lived batch pairing material returned only after the pending transaction is committed.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "requestId",
     "pairingId",
     "pollToken",
-    "pairingChallengeBase64Url",
+    "pairingChallenge",
     "userCode",
-    "expiresAt"
+    "approvalUrl",
+    "expiresAt",
+    "requestId"
   ],
   "properties": {
     "schemaVersion": {
@@ -21,17 +22,11 @@
       "minimum": 1,
       "maximum": 1
     },
-    "requestId": {
-      "type": "string",
-      "minLength": 26,
-      "maxLength": 26,
-      "pattern": "^req_[A-Za-z0-9_-]{22}$"
-    },
     "pairingId": {
       "type": "string",
-      "minLength": 36,
-      "maxLength": 36,
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "minLength": 27,
+      "maxLength": 27,
+      "pattern": "^pair_[A-Za-z0-9_-]{22}$"
     },
     "pollToken": {
       "type": "string",
@@ -39,7 +34,7 @@
       "maxLength": 43,
       "pattern": "^[A-Za-z0-9_-]{43}$"
     },
-    "pairingChallengeBase64Url": {
+    "pairingChallenge": {
       "type": "string",
       "minLength": 43,
       "maxLength": 43,
@@ -51,12 +46,24 @@
       "maxLength": 14,
       "pattern": "^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
     },
+    "approvalUrl": {
+      "type": "string",
+      "minLength": 35,
+      "maxLength": 512,
+      "pattern": "^(?:https://(?:[A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\])(?::[0-9]{2,5})?|http://(?:localhost|127\\.0\\.0\\.1|\\[::1\\])(?::[0-9]{2,5})?)/connect\\?code=[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$"
+    },
     "expiresAt": {
       "type": "string",
       "format": "date-time",
       "minLength": 24,
       "maxLength": 24,
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+      "pattern": "^20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "requestId": {
+      "type": "string",
+      "minLength": 26,
+      "maxLength": 26,
+      "pattern": "^req_[A-Za-z0-9_-]{22}$"
     }
   }
 }

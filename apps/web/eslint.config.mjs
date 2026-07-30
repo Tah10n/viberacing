@@ -110,12 +110,13 @@ export default defineConfig([
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx}"],
     ignores: [
       "**/*.test.{ts,tsx}",
-      "components/passkey-setup.tsx",
+      "lib/browser-webauthn.ts",
       "lib/passkey-registration.ts",
+      "lib/batch-pairing-database.ts",
       "lib/pairing-database-pool.ts",
       "lib/pairing-possession-verifier.ts",
       "lib/connector-car-proposal-verifier.ts",
-      "lib/public-score-database-pool.ts",
+      "lib/public-snapshot-database-pool.ts",
       "tests/**/*.ts",
     ],
     rules: {
@@ -133,7 +134,7 @@ export default defineConfig([
             },
             {
               name: "@simplewebauthn/browser",
-              message: "Only passkey-setup.tsx may start a browser WebAuthn ceremony.",
+              message: "Only browser-webauthn.ts may own browser WebAuthn ceremonies.",
             },
             {
               name: "@simplewebauthn/server",
@@ -161,7 +162,7 @@ export default defineConfig([
             },
             {
               name: "@simplewebauthn/browser",
-              message: "Browser WebAuthn code belongs only in passkey-setup.tsx.",
+              message: "Browser WebAuthn code belongs only in browser-webauthn.ts.",
             },
           ],
         },
@@ -185,7 +186,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["lib/{pairing-database-pool,public-score-database-pool}.ts"],
+    files: ["lib/{batch-pairing-database,pairing-database-pool,public-snapshot-database-pool}.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -225,7 +226,7 @@ export default defineConfig([
             },
             {
               name: "@simplewebauthn/browser",
-              message: "Only passkey-setup.tsx may start a browser WebAuthn ceremony.",
+              message: "Only browser-webauthn.ts may own browser WebAuthn ceremonies.",
             },
             {
               name: "@simplewebauthn/server",
@@ -237,7 +238,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["components/passkey-setup.tsx"],
+    files: ["lib/browser-webauthn.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

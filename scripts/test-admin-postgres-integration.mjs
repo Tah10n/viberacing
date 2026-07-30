@@ -377,7 +377,7 @@ function readPublishedPostgresPort() {
 
 function readPrivateStateFingerprint(label, excludeAdminTargets = false) {
   const targetFilter = excludeAdminTargets
-    ? "AND table_name NOT IN ('audit_events', 'invites')"
+    ? "AND table_name NOT IN ('admin_audit_events', 'invites')"
     : "";
   const canonicalState = psqlScalar(
     `CREATE TEMP TABLE admin_integration_fingerprints (
@@ -427,14 +427,14 @@ function readAdminTargetState() {
     (
       SELECT pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
-          'createdAtMs', (pg_catalog.date_part('epoch', invite.created_at) * 1000)::bigint,
+          'createdAtMs', (pg_catalog.date_part('epoch', invite.issued_at) * 1000)::bigint,
           'expiresAtMs', (pg_catalog.date_part('epoch', invite.expires_at) * 1000)::bigint,
           'inviteId', invite.invite_id::text,
           'redeemedAtMs', CASE
             WHEN invite.redeemed_at IS NULL THEN NULL
             ELSE (pg_catalog.date_part('epoch', invite.redeemed_at) * 1000)::bigint
           END,
-          'redeemedProfileId', invite.redeemed_profile_id::text,
+          'redeemedProfileId', invite.redeemed_by_profile_id::text,
           'state', invite.state,
           'verifierDigestHex', pg_catalog.encode(invite.verifier_digest, 'hex')
         )
@@ -452,13 +452,12 @@ function readAdminTargetState() {
           'auditEventId', audit.audit_event_id::text,
           'eventType', audit.event_type,
           'occurredAtMs', (pg_catalog.date_part('epoch', audit.occurred_at) * 1000)::bigint,
-          'profileId', audit.profile_id::text,
           'reasonCode', audit.reason_code,
           'requestId', audit.request_id
         )
         ORDER BY audit.audit_event_id
       )
-      FROM viberacing_private.audit_events AS audit
+      FROM viberacing_private.admin_audit_events AS audit
     ),
     '[]'::jsonb
   )
@@ -583,7 +582,6 @@ function assertExactAdminState(state, nowMs) {
     "auditEventId",
     "eventType",
     "occurredAtMs",
-    "profileId",
     "reasonCode",
     "requestId",
   ]);
@@ -592,7 +590,6 @@ function assertExactAdminState(state, nowMs) {
     auditEventId: fixture.auditEventId,
     eventType: "invite.issued",
     occurredAtMs: invite.createdAtMs,
-    profileId: null,
     reasonCode: "BETA_ADMISSION",
     requestId: fixture.requestId,
   });

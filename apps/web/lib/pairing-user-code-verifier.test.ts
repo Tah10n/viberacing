@@ -16,7 +16,7 @@ const pollPrimaryKey = Buffer.alloc(32, 0x11);
 const pollSecondaryKey = Buffer.alloc(32, 0x22);
 const codePrimaryKey = Buffer.alloc(32, 0x33);
 const codeSecondaryKey = Buffer.alloc(32, 0x44);
-const userCode = "0123-4567-89AB";
+const userCode = "2345-6789-ABCD";
 const baseEnvironment = {
   VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL: codePrimaryKey.toString("base64url"),
   VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL: pollPrimaryKey.toString("base64url"),
@@ -95,7 +95,8 @@ describe("pairing user-code verifier", () => {
     1234,
     "",
     "A".repeat(10_000),
-    "0123-4567-89AI",
+    "0123-4567-89AB",
+    "2345-6789-ABCI",
     "0123456789AB",
     "0123-4567-89ab",
   ])("uses fixed invalid-code work but never accepts malformed input: %o", (value) => {

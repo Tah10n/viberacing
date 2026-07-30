@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CommunitySyncVerifierConfigurationError,
   type CommunitySyncVerificationError,
-  type CommunitySyncVerifierOptions,
 } from "./community-sync-verifier";
 import {
   OriginProofConfigurationError,
@@ -53,14 +52,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function createDependencies(): ConfiguredCommunitySyncVerifierDependencies & {
-  readonly consumeOriginNonce: ReturnType<
-    typeof vi.fn<CommunitySyncVerifierOptions["consumeOriginNonce"]>
-  >;
-} {
-  const consumeOriginNonce = vi.fn<CommunitySyncVerifierOptions["consumeOriginNonce"]>(() => true);
+function createDependencies(): ConfiguredCommunitySyncVerifierDependencies {
   return {
-    consumeOriginNonce,
     now: () => nowMilliseconds,
     readDeviceVerificationMaterial: () => null,
   };
@@ -142,10 +135,6 @@ describe("configured Community sync verifier", () => {
         message: "Community sync request rejected.",
       }),
     );
-    expect(dependencies.consumeOriginNonce).toHaveBeenCalledOnce();
-    expect(dependencies.consumeOriginNonce).toHaveBeenCalledWith(
-      expect.objectContaining({ expiresAtMilliseconds: nowMilliseconds + 60_000, keyId }),
-    );
     expect(Reflect.ownKeys(verifier)).toEqual([]);
     expect(JSON.stringify(verifier)).toBe("{}");
   });
@@ -160,7 +149,6 @@ describe("configured Community sync verifier", () => {
     await expect(
       verifier.verify(originAuthenticatedInvalidBodyRequest(primaryKeyId, primaryKey)),
     ).rejects.toMatchObject({ code: "invalid_body" });
-    expect(dependencies.consumeOriginNonce).toHaveBeenCalledOnce();
   });
 
   it("accepts an exact null-prototype dependency record", async () => {
@@ -174,7 +162,6 @@ describe("configured Community sync verifier", () => {
     await expect(
       verifier.verify(originAuthenticatedInvalidBodyRequest(primaryKeyId, primaryKey)),
     ).rejects.toMatchObject({ code: "invalid_body" });
-    expect(dependencies.consumeOriginNonce).toHaveBeenCalledOnce();
   });
 
   it("overwrites both temporary decoded rotation keys after verifier construction", () => {
@@ -287,23 +274,20 @@ describe("configured Community sync verifier", () => {
   it.each([
     null,
     [],
-    { consumeOriginNonce: () => true, now: () => nowMilliseconds },
+    { now: () => nowMilliseconds },
     {
-      consumeOriginNonce: () => true,
       extra: true,
       now: () => nowMilliseconds,
       readDeviceVerificationMaterial: () => null,
     },
     {
-      get consumeOriginNonce() {
+      get now() {
         throw new Error("synthetic accessor detail");
       },
-      now: () => nowMilliseconds,
       readDeviceVerificationMaterial: () => null,
     },
     {
-      consumeOriginNonce: true,
-      now: () => nowMilliseconds,
+      now: true,
       readDeviceVerificationMaterial: () => null,
     },
     new Proxy(

@@ -1,11 +1,11 @@
 # ADR 0068: Multi-agent token accounting and leaderboard
 
-- Status: Proposed
+- Status: Superseded
 - Date: 2026-07-21
 - Decision owners: Product and Web/Auth, Ingest, Connector, and Database owners
 - Supersedes: None while Proposed (if accepted, would partially supersede the Codex-only scope in
   ADR 0001 and ADR 0002)
-- Superseded by: None
+- Superseded by: ADR 0076
 
 ## Context
 

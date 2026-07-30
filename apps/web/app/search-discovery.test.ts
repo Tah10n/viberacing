@@ -15,8 +15,13 @@ describe("public search discovery", () => {
   it("describes the public site with the exact user-facing search phrase", () => {
     expect(metadata.description).toContain("vibecode rating");
     expect(metadata.keywords).toEqual(
-      expect.arrayContaining(["vibecode rating", "vibe coding rating", "Codex token leaderboard"]),
+      expect.arrayContaining([
+        "vibecode rating",
+        "vibe coding rating",
+        "coding agents token leaderboard",
+      ]),
     );
+    expect(metadata.keywords).not.toContain("Codex token leaderboard");
     expect(metadata.title).toBeTypeOf("object");
     if (
       typeof metadata.title !== "object" ||
@@ -48,8 +53,14 @@ describe("public search discovery", () => {
     expect(metadata.twitter.card).toBe("summary_large_image");
     expect(metadata.twitter.description).toContain("vibecode rating");
     expect(manifest().description).toContain("vibecode rating");
-    expect(translations.en.heroCopy).toContain("vibecode rating");
-    expect(translations.ru.heroCopy).toContain("vibecode rating");
+    expect(translations.en.heroTitle).toBe(
+      "All your coding agents. Every account. One GitHub profile.",
+    );
+    expect(translations.ru.heroTitle).toBe(
+      "Все ваши coding agents. Все аккаунты. Один GitHub-профиль.",
+    );
+    expect(translations.en.noGlobalClaim).toContain("vibecode rating");
+    expect(translations.ru.noGlobalClaim).toContain("vibecode rating");
   });
 
   it("publishes one canonical public URL through robots and the sitemap", () => {

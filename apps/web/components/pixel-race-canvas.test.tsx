@@ -2,7 +2,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getSyntheticRacePayload } from "@/lib/race-data";
+import { getSyntheticPublicHomePayload } from "@/lib/race-data";
+import { toRaceVisualParticipants } from "@/lib/race-visual";
 
 import { PixelRaceCanvas } from "./pixel-race-canvas";
 
@@ -33,7 +34,9 @@ function mountCanvas(animate: boolean): MountedCanvas {
       createElement(PixelRaceCanvas, {
         animate,
         description: "Five cars racing toward a checkered line",
-        participants: getSyntheticRacePayload().participants,
+        participants: toRaceVisualParticipants(
+          getSyntheticPublicHomePayload("2026-07-27").leaderboard.participants,
+        ),
         theme: "neon-night",
       }),
     );
@@ -76,7 +79,9 @@ describe("PixelRaceCanvas", () => {
         createElement(PixelRaceCanvas, {
           animate: true,
           description: "Five cars racing toward a checkered line",
-          participants: getSyntheticRacePayload().participants,
+          participants: toRaceVisualParticipants(
+            getSyntheticPublicHomePayload("2026-07-27").leaderboard.participants,
+          ),
           theme: "cyber-rally",
         }),
       );

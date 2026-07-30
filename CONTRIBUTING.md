@@ -99,9 +99,10 @@ Then inspect the complete `git diff --cached`. Automated pattern checks do not r
 meaning, decoded binary metadata, asset provenance, unreachable local Git objects, or remotes that
 will actually be pushed. Do not claim application build or test success until those checks exist.
 
-Project maintainers also run `pnpm run check:publication` before the first public source push. It is
-intentionally not part of normal verification because an unpublished tree is expected to fail until
-hosted identities and controls exist.
+The initial public source push has completed. Project maintainers continue to run
+`pnpm run check:publication` for source-only publication and release preparation. It remains
+separate from normal verification because ordinary local development must not depend on hosted
+publication state.
 
 The public source-only upload and hosted-control sequence is documented in
 [First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).

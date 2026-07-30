@@ -1,10 +1,11 @@
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 
 import { buildGeneratedArtifacts, readContractSources } from "./lib/contract-generation.mjs";
+import { implementedContractEvidence } from "./lib/contract-evidence.mjs";
 
 const args = process.argv.slice(2);
 if (!(args.length === 0 || (args.length === 2 && args[0] === "--root" && args[1]))) {
@@ -14,12 +15,47 @@ if (!(args.length === 0 || (args.length === 2 && args[0] === "--root" && args[1]
 
 const root = args.length === 0 ? resolve(import.meta.dirname, "..") : resolve(args[1]);
 const findings = [];
-const schemaKeys = new Set([
+const schemaFiles = [
+  "agent-provider.schema.json",
+  "car-recipe.schema.json",
+  "connector-car-proposal-result.schema.json",
+  "connector-discovery-manifest.schema.json",
+  "connector-pairing-approval.schema.json",
+  "connector-pairing-poll-result.schema.json",
+  "connector-pairing-poll.schema.json",
+  "connector-pairing-start-result.schema.json",
+  "connector-pairing-start.schema.json",
+  "leaderboard-query.schema.json",
+  "leaderboard-season-path.schema.json",
+  "leaderboard-snapshot.schema.json",
+  "problem-details.schema.json",
+  "public-profile-path.schema.json",
+  "public-profile-query.schema.json",
+  "public-profile-summary.schema.json",
+  "usage-sync-result.schema.json",
+  "usage-sync.schema.json",
+];
+const policyFiles = [
+  "connector-car-proposal-authentication.json",
+  "connector-pairing-authentication.json",
+  "connector-pairing-transport.json",
+  "connector-usage-sync-authentication.json",
+];
+const vectorFiles = [
+  "connector-car-proposal-device-request.test-vector.json",
+  "connector-pairing-possession.test-vector.json",
+  "connector-pairing-start-possession.test-vector.json",
+  "connector-usage-sync-device-request.test-vector.json",
+];
+const expectedContractFiles = [
+  ...schemaFiles,
+  ...policyFiles,
+  ...vectorFiles,
+  "manifest.json",
+].sort();
+const schemaKeywords = new Set([
   "$id",
   "$schema",
-  "x-viberacing-dateMaximum",
-  "x-viberacing-dateMinimum",
-  "x-viberacing-isoWeekday",
   "additionalProperties",
   "const",
   "description",
@@ -37,266 +73,222 @@ const schemaKeys = new Set([
   "required",
   "title",
   "type",
+  "x-viberacing-dateMaximum",
+  "x-viberacing-dateMinimum",
+  "x-viberacing-isoWeekday",
   "x-viberacing-optionalProperties",
   "x-viberacing-uniqueBy",
 ]);
-const schemaTypes = new Set(["array", "boolean", "integer", "object", "string"]);
-const forbiddenConnectorFields = new Set([
-  "accessToken",
-  "accountId",
-  "accountingRevision",
-  "activeDays",
-  "apiKey",
-  "conversation",
-  "dailyScore",
-  "displayPosition",
-  "email",
-  "githubUserId",
-  "handle",
-  "moderationState",
-  "metricVersion",
-  "profileId",
-  "provider",
-  "prompt",
-  "rank",
-  "rankPosition",
-  "receivedAt",
-  "repository",
-  "score",
-  "scoreVersion",
-  "season",
-  "seasonEnd",
-  "seasonFinalized",
-  "seasonStart",
-  "selfReported",
-  "sourceCount",
-  "streak",
-  "trustTier",
-  "weeklyScore",
-  "weeklyTokenTotal",
-]);
-const expectedFields = new Map([
+const schemaTypes = new Set(["array", "boolean", "integer", "null", "object", "string"]);
+const expectedSchemaFields = new Map([
   [
     "car-recipe.schema.json",
-    ["schemaVersion", "chassis", "nose", "cockpit", "wing", "wheels", "palette", "trail", "seed"],
+    ["chassis", "cockpit", "nose", "palette", "schemaVersion", "seed", "trail", "wheels", "wing"],
+  ],
+  ["connector-car-proposal-result.schema.json", ["outcome", "requestId", "schemaVersion"]],
+  [
+    "connector-discovery-manifest.schema.json",
+    [
+      "architecture",
+      "candidates",
+      "connectorVersion",
+      "installationPublicKey",
+      "osFamily",
+      "schemaVersion",
+    ],
   ],
   [
-    "community-race-page.schema.json",
-    ["schemaVersion", "trustTier", "selfReported", "participants"],
+    "connector-pairing-approval.schema.json",
+    ["decisions", "manifestDigest", "pairingId", "schemaVersion"],
   ],
   [
-    "community-race-status-page.schema.json",
-    ["schemaVersion", "trustTier", "selfReported", "participants"],
+    "connector-pairing-poll-result.schema.json",
+    ["candidateActivations", "pairingState", "requestId", "schemaVersion"],
   ],
   [
-    "community-score-page.schema.json",
-    ["schemaVersion", "trustTier", "selfReported", "participants"],
+    "connector-pairing-poll.schema.json",
+    ["pairingId", "pollToken", "possessionSignature", "schemaVersion"],
   ],
-  ["community-score-query.schema.json", ["seasonStart"]],
-  [
-    "community-token-race-status-page.schema.json",
-    ["schemaVersion", "trustTier", "selfReported", "participants"],
-  ],
-  ["connector-car-proposal-result.schema.json", ["schemaVersion", "requestId", "outcome"]],
-  ["connector-pairing-poll-result.schema.json", ["schemaVersion", "requestId", "deviceBindings"]],
-  ["connector-pairing-poll.schema.json", ["schemaVersion", "pollToken", "possessionSignature"]],
   [
     "connector-pairing-start-result.schema.json",
     [
-      "schemaVersion",
-      "requestId",
+      "approvalUrl",
+      "expiresAt",
+      "pairingChallenge",
       "pairingId",
       "pollToken",
-      "pairingChallengeBase64Url",
+      "requestId",
+      "schemaVersion",
       "userCode",
-      "expiresAt",
     ],
   ],
   [
     "connector-pairing-start.schema.json",
+    ["clientRateIdentifier", "discoveryManifest", "installationPossessionProof", "schemaVersion"],
+  ],
+  ["leaderboard-query.schema.json", ["page", "trustTier"]],
+  ["leaderboard-season-path.schema.json", ["seasonStart"]],
+  [
+    "leaderboard-snapshot.schema.json",
     [
+      "generatedAt",
+      "metricVersion",
+      "nextPage",
+      "page",
+      "pageSize",
+      "participantCount",
+      "participants",
       "schemaVersion",
-      "devicePublicKeyBase64Url",
-      "deviceLabel",
-      "connectorVersion",
-      "osFamily",
-      "architecture",
+      "seasonEnd",
+      "seasonStart",
+      "seasonState",
+      "snapshotRevision",
+      "trustTier",
     ],
   ],
   [
     "problem-details.schema.json",
-    ["schemaVersion", "requestId", "status", "errorCode", "title", "retryable"],
+    ["errorCode", "requestId", "retryable", "schemaVersion", "status", "title"],
+  ],
+  ["public-profile-path.schema.json", ["handle"]],
+  ["public-profile-query.schema.json", ["trustTier"]],
+  [
+    "public-profile-summary.schema.json",
+    [
+      "carRecipe",
+      "freshnessDays",
+      "handle",
+      "participantCount",
+      "providerBreakdown",
+      "rankPosition",
+      "schemaVersion",
+      "season",
+      "trustTier",
+      "weeklyTokenTotal",
+    ],
   ],
   [
     "usage-sync-result.schema.json",
-    ["schemaVersion", "requestId", "syncId", "outcome", "acceptedEntries"],
+    [
+      "acceptedEntries",
+      "nextAllowedSyncAt",
+      "outcome",
+      "recoveryAction",
+      "requestId",
+      "schemaVersion",
+      "syncId",
+    ],
   ],
   [
     "usage-sync.schema.json",
     [
-      "schemaVersion",
-      "sourceId",
-      "syncId",
-      "observedAt",
+      "agentAccountId",
       "clientVersion",
-      "agentVersion",
       "dailyEntries",
+      "observedAt",
+      "readerVersion",
+      "schemaVersion",
+      "syncId",
     ],
   ],
 ]);
-const publicProblemCodes = [
-  "conflict",
-  "forbidden",
-  "internal_error",
-  "invalid_request",
-  "method_not_allowed",
-  "not_acceptable",
-  "not_found",
-  "rate_limited",
-  "temporarily_unavailable",
-  "unauthorized",
-  "validation_failed",
-];
-const publicProblemTitles = [
-  "Conflict",
-  "Forbidden",
-  "Internal server error",
-  "Invalid request",
-  "Method not allowed",
-  "Not acceptable",
-  "Not found",
-  "Rate limited",
-  "Temporarily unavailable",
-  "Unauthorized",
-  "Validation failed",
-];
-const implementedLocalEvidencePaths = new Map([
-  [
-    "getCommunityRaceStatusV1",
-    [
-      "apps/web/app/v1/community/race/status/route.test.ts",
-      "apps/web/app/v1/community/race/status/route.ts",
-      "apps/web/lib/public-community-race.test.ts",
-      "apps/web/lib/public-community-race.ts",
-      "apps/web/lib/public-community-score-mapper.test.ts",
-      "apps/web/lib/public-community-score-mapper.ts",
-      "apps/web/lib/public-community-score-route.test.ts",
-      "apps/web/lib/public-community-score-route.ts",
-      "apps/web/lib/public-community-score-store.test.ts",
-      "apps/web/lib/public-community-score-store.ts",
-      "database/migrations/0029_community_public_race_status.sql",
-      "database/tests/public_score_read.sql",
-    ],
-  ],
-  [
-    "getCommunityRaceV1",
-    [
-      "apps/web/app/v1/community/race/route.test.ts",
-      "apps/web/app/v1/community/race/route.ts",
-      "apps/web/lib/public-community-race.test.ts",
-      "apps/web/lib/public-community-race.ts",
-      "apps/web/lib/public-community-score-mapper.test.ts",
-      "apps/web/lib/public-community-score-mapper.ts",
-      "apps/web/lib/public-community-score-route.test.ts",
-      "apps/web/lib/public-community-score-route.ts",
-      "apps/web/lib/public-community-score-store.test.ts",
-      "apps/web/lib/public-community-score-store.ts",
-    ],
-  ],
-  [
-    "getCommunityScoresV1",
-    [
-      "apps/web/app/v1/community/scores/route.test.ts",
-      "apps/web/app/v1/community/scores/route.ts",
-      "apps/web/lib/public-community-score-route.test.ts",
-      "apps/web/lib/public-community-score-route.ts",
-      "apps/web/lib/public-score-admission.test.ts",
-      "apps/web/lib/public-score-admission.ts",
-    ],
-  ],
-  [
-    "getCommunityTokensV1",
-    [
-      "apps/web/app/v1/community/tokens/route.test.ts",
-      "apps/web/app/v1/community/tokens/route.ts",
-      "apps/web/lib/public-community-score-mapper.test.ts",
-      "apps/web/lib/public-community-score-mapper.ts",
-      "apps/web/lib/public-community-score-route.test.ts",
-      "apps/web/lib/public-community-score-route.ts",
-      "apps/web/lib/public-community-score-store.test.ts",
-      "apps/web/lib/public-community-score-store.ts",
-      "database/migrations/0042_direct_community_token_leaderboard.sql",
-      "database/tests/community_token_leaderboard.sql",
-    ],
-  ],
-  [
-    "postCommunityUsageSyncV1",
-    [
-      "apps/edge/src/worker.mjs",
-      "apps/edge/test/worker.test.mjs",
-      "apps/ingest/src/community-sync-application.test.ts",
-      "apps/ingest/src/community-sync-application.ts",
-      "apps/ingest/src/community-sync-database.test.ts",
-      "apps/ingest/src/community-sync-database.ts",
-      "apps/ingest/src/community-sync-http-server.test.ts",
-      "apps/ingest/src/community-sync-http-server.ts",
-      "apps/ingest/src/community-sync-verifier.test.ts",
-      "apps/ingest/src/community-sync-verifier.ts",
-      "database/migrations/0041_agent_source_provider_foundation.sql",
-      "database/tests/usage_ingest.sql",
-      "scripts/test-ingest-postgres-integration.mjs",
-    ],
-  ],
+const expectedOptionalFields = new Map([
+  ["public-profile-summary.schema.json", ["providerBreakdown"]],
+  ["usage-sync-result.schema.json", ["nextAllowedSyncAt", "recoveryAction"]],
+]);
+const expectedOperations = new Map([
   [
     "postConnectorCarProposalV1",
-    [
-      "apps/web/app/v1/connector/cars/proposals/route.test.ts",
-      "apps/web/app/v1/connector/cars/proposals/route.ts",
-      "apps/web/lib/connector-car-proposal-admission.test.ts",
-      "apps/web/lib/connector-car-proposal-admission.ts",
-      "apps/web/lib/connector-car-proposal-application.test.ts",
-      "apps/web/lib/connector-car-proposal-application.ts",
-      "apps/web/lib/connector-car-proposal-database.test.ts",
-      "apps/web/lib/connector-car-proposal-database.ts",
-      "apps/web/lib/connector-car-proposal-http.test.ts",
-      "apps/web/lib/connector-car-proposal-http.ts",
-      "apps/web/lib/connector-car-proposal-service.test.ts",
-      "apps/web/lib/connector-car-proposal-service.ts",
-      "apps/web/lib/connector-car-proposal-verifier.test.ts",
-      "apps/web/lib/connector-car-proposal-verifier.ts",
-      "crates/connector/src/car_proposal.rs",
-      "crates/connector/src/connect/car_proposal_command.rs",
-      "database/migrations/0028_connector_car_proposal_ingress.sql",
-      "database/tests/car_recipe_device_proposal_concurrency_assertions.sql",
-      "database/tests/car_recipe_device_proposal_concurrency_setup.sql",
-      "database/tests/car_recipe_proposals.sql",
-      "scripts/test-database-integration.mjs",
-    ],
+    {
+      authenticationContract: "connector-car-proposal-authentication.json",
+      cacheControl: "no-store",
+      method: "post",
+      path: "/v1/connector/cars/proposals",
+      pathSchema: "none",
+      querySchema: "none",
+      requestSchema: "CarRecipeV1",
+      responseSchema: "ConnectorCarProposalResultV1",
+    },
   ],
   [
     "postConnectorPairingPollV1",
-    [
-      "apps/web/app/v1/connector/pairing/poll/route.test.ts",
-      "apps/web/app/v1/connector/pairing/poll/route.ts",
-      "apps/web/lib/pairing-http.test.ts",
-      "apps/web/lib/pairing-http.ts",
-      "apps/web/lib/pairing-rate-policy.test.ts",
-      "apps/web/lib/pairing-rate-policy.ts",
-    ],
+    {
+      authenticationContract: "connector-pairing-transport.json",
+      cacheControl: "no-store",
+      method: "post",
+      path: "/v1/connector/pairing/poll",
+      pathSchema: "none",
+      querySchema: "none",
+      requestSchema: "ConnectorPairingPollV1",
+      responseSchema: "ConnectorPairingPollResultV1",
+    },
   ],
   [
     "postConnectorPairingStartV1",
-    [
-      "apps/web/app/v1/connector/pairing/start/route.test.ts",
-      "apps/web/app/v1/connector/pairing/start/route.ts",
-      "apps/web/lib/pairing-http.test.ts",
-      "apps/web/lib/pairing-http.ts",
-      "apps/web/lib/pairing-rate-policy.test.ts",
-      "apps/web/lib/pairing-rate-policy.ts",
-    ],
+    {
+      authenticationContract: "connector-pairing-transport.json",
+      cacheControl: "no-store",
+      method: "post",
+      path: "/v1/connector/pairing/start",
+      pathSchema: "none",
+      querySchema: "none",
+      requestSchema: "ConnectorPairingStartV1",
+      responseSchema: "ConnectorPairingStartResultV1",
+    },
+  ],
+  [
+    "getSeasonLeaderboardV1",
+    {
+      authenticationContract: "none",
+      cacheControl: "snapshot-by-season-state",
+      method: "get",
+      path: "/v1/leaderboards/{seasonStart}",
+      pathSchema: "LeaderboardSeasonPathV1",
+      querySchema: "LeaderboardQueryV1",
+      requestSchema: "none",
+      responseSchema: "LeaderboardSnapshotV1",
+    },
+  ],
+  [
+    "getCurrentLeaderboardV1",
+    {
+      authenticationContract: "none",
+      cacheControl: "snapshot-by-season-state",
+      method: "get",
+      path: "/v1/leaderboards/current",
+      pathSchema: "none",
+      querySchema: "LeaderboardQueryV1",
+      requestSchema: "none",
+      responseSchema: "LeaderboardSnapshotV1",
+    },
+  ],
+  [
+    "getCurrentPublicProfileV1",
+    {
+      authenticationContract: "none",
+      cacheControl: "snapshot-by-season-state",
+      method: "get",
+      path: "/v1/profiles/{handle}",
+      pathSchema: "PublicProfilePathV1",
+      querySchema: "PublicProfileQueryV1",
+      requestSchema: "none",
+      responseSchema: "PublicProfileSummaryV1",
+    },
+  ],
+  [
+    "postUsageSyncV1",
+    {
+      authenticationContract: "connector-usage-sync-authentication.json",
+      cacheControl: "no-store",
+      method: "post",
+      path: "/v1/usage",
+      pathSchema: "none",
+      querySchema: "none",
+      requestSchema: "UsageSyncV1",
+      responseSchema: "UsageSyncResultV1",
+    },
   ],
 ]);
-
 function report(scope, message) {
   findings.push(`${scope} — ${message}`);
 }
@@ -305,635 +297,318 @@ function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function sameEntries(left, right) {
-  return left.length === right.length && left.every((entry, index) => entry === right[index]);
+function sameSet(left, right) {
+  return (
+    left.length === right.length &&
+    [...left].sort().every((entry, index) => entry === [...right].sort()[index])
+  );
 }
 
-function validatePairingPolicy(record) {
-  const { policy, relativePath } = record;
-  const expectedKeys = [
-    "activationPreconditions",
-    "algorithm",
-    "binaryEncoding",
-    "canonicalFields",
-    "canonicalMessageEncoding",
-    "canonicalMessageSeparator",
-    "canonicalMessageTrailingSeparator",
-    "challengeBytes",
-    "messagePrefix",
-    "pairingIdPattern",
-    "protocolId",
-    "publicKeyBytes",
-    "schemaVersion",
-    "signatureBytes",
-  ];
-  if (
-    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
-    policy.schemaVersion !== 1 ||
-    policy.protocolId !== "viberacing-device-pairing-possession-v1" ||
-    policy.algorithm !== "Ed25519" ||
-    policy.publicKeyBytes !== 32 ||
-    policy.challengeBytes !== 32 ||
-    policy.signatureBytes !== 64 ||
-    policy.binaryEncoding !== "base64url-unpadded" ||
-    policy.canonicalMessageEncoding !== "UTF-8" ||
-    policy.canonicalMessageSeparator !== "LF" ||
-    policy.canonicalMessageTrailingSeparator !== false ||
-    policy.messagePrefix !== "viberacing-pairing-possession-v1" ||
-    policy.pairingIdPattern !==
-      "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" ||
-    !Array.isArray(policy.canonicalFields) ||
-    !sameEntries(policy.canonicalFields, [
-      "messagePrefix",
-      "pairingId",
-      "pairingChallengeBase64Url",
-      "devicePublicKeyBase64Url",
-    ]) ||
-    !Array.isArray(policy.activationPreconditions) ||
-    !sameEntries(policy.activationPreconditions, [
-      "exact-poll-verifier-match",
-      "browser-approved-transaction",
-      "unexpired-pending-device-key",
-      "strict-possession-signature",
-    ])
-  ) {
-    report(relativePath, "pairing possession policy differs from the reviewed boundary");
-  }
-}
-
-function validatePairingTransportPolicy(record) {
-  const { policy, relativePath } = record;
-  const expectedKeys = [
-    "cacheControl",
-    "clientIdAuthority",
-    "clientIdBytes",
-    "clientIdEncoding",
-    "clientIdHeader",
-    "corsPolicy",
-    "databaseQueryDeadlineMilliseconds",
-    "databaseStatementDeadlineMilliseconds",
-    "distributedRatePolicy",
-    "localConcurrency",
-    "mediaType",
-    "methods",
-    "possessionPolicy",
-    "protocolId",
-    "requestBodyBytes",
-    "responseBodyBytes",
-    "schemaVersion",
-  ];
-  if (
-    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
-    policy.schemaVersion !== 1 ||
-    policy.protocolId !== "viberacing-connector-pairing-transport-v1" ||
-    !isObject(policy.methods) ||
-    !sameEntries(Object.keys(policy.methods).sort(), ["poll", "start"]) ||
-    policy.methods.start !== "POST /v1/connector/pairing/start" ||
-    policy.methods.poll !== "POST /v1/connector/pairing/poll" ||
-    policy.mediaType !== "application/json" ||
-    policy.requestBodyBytes !== 1024 ||
-    policy.responseBodyBytes !== 2048 ||
-    policy.clientIdHeader !== "x-viberacing-client-id" ||
-    policy.clientIdBytes !== 16 ||
-    policy.clientIdEncoding !== "base64url-unpadded" ||
-    policy.clientIdAuthority !== "anonymous-rate-shaping-only" ||
-    policy.distributedRatePolicy !== "global-and-64-fixed-client-buckets" ||
-    policy.localConcurrency !== 4 ||
-    policy.databaseStatementDeadlineMilliseconds !== 5000 ||
-    policy.databaseQueryDeadlineMilliseconds !== 6000 ||
-    policy.cacheControl !== "no-store" ||
-    policy.corsPolicy !== "same-origin-no-cors-headers" ||
-    policy.possessionPolicy !== "connector-pairing-authentication.json"
-  ) {
-    report(relativePath, "pairing transport policy differs from the reviewed boundary");
-  }
-}
-
-function validateCarProposalPolicy(record) {
-  const { policy, relativePath } = record;
-  const expectedKeys = [
-    "binaryEncoding",
-    "canonicalMessageEncoding",
-    "canonicalMessageSeparator",
-    "canonicalMessageTrailingSeparator",
-    "deviceSignature",
-    "digestEncoding",
-    "maximumBodyBytes",
-    "maximumDecodedJsonStringCodeUnits",
-    "maximumHeaderNameCharacters",
-    "maximumHeaderPairs",
-    "maximumHeaderValueCharacters",
-    "maximumJsonArrayItems",
-    "maximumJsonDepth",
-    "maximumJsonNodes",
-    "maximumJsonNumberCharacters",
-    "maximumJsonObjectMembers",
-    "mediaType",
-    "method",
-    "protocolId",
-    "requestFreshness",
-    "requestTarget",
-    "schemaVersion",
-  ];
-  const signature = policy.deviceSignature;
-  const freshness = policy.requestFreshness;
-  if (
-    !sameEntries(Object.keys(policy).sort(), expectedKeys) ||
-    policy.schemaVersion !== 1 ||
-    policy.protocolId !== "viberacing-connector-car-proposal-auth-v1" ||
-    policy.method !== "POST" ||
-    policy.requestTarget !== "/v1/connector/cars/proposals" ||
-    policy.mediaType !== "application/json" ||
-    policy.maximumBodyBytes !== 512 ||
-    policy.maximumHeaderPairs !== 32 ||
-    policy.maximumHeaderNameCharacters !== 64 ||
-    policy.maximumHeaderValueCharacters !== 256 ||
-    policy.maximumJsonDepth !== 2 ||
-    policy.maximumJsonNodes !== 10 ||
-    policy.maximumJsonObjectMembers !== 9 ||
-    policy.maximumJsonArrayItems !== 0 ||
-    policy.maximumJsonNumberCharacters !== 5 ||
-    policy.maximumDecodedJsonStringCodeUnits !== 16 ||
-    policy.canonicalMessageEncoding !== "UTF-8" ||
-    policy.canonicalMessageSeparator !== "LF" ||
-    policy.canonicalMessageTrailingSeparator !== false ||
-    policy.binaryEncoding !== "base64url-unpadded" ||
-    policy.digestEncoding !== "base64url-unpadded" ||
-    !isObject(freshness) ||
-    !sameEntries(Object.keys(freshness).sort(), [
-      "maximumAgeBoundary",
-      "maximumAgeMilliseconds",
-      "maximumFutureSkewBoundary",
-      "maximumFutureSkewMilliseconds",
-    ]) ||
-    freshness.maximumAgeMilliseconds !== 300_000 ||
-    freshness.maximumAgeBoundary !== "exclusive" ||
-    freshness.maximumFutureSkewMilliseconds !== 120_000 ||
-    freshness.maximumFutureSkewBoundary !== "inclusive" ||
-    !isObject(signature) ||
-    !sameEntries(Object.keys(signature).sort(), [
-      "algorithm",
-      "canonicalFields",
-      "deviceIdPattern",
-      "headers",
-      "messagePrefix",
-      "nonceBytes",
-      "publicKeyBytes",
-      "signatureBytes",
-    ]) ||
-    signature.messagePrefix !== "viberacing-car-proposal-request-v1" ||
-    signature.algorithm !== "Ed25519" ||
-    signature.publicKeyBytes !== 32 ||
-    signature.signatureBytes !== 64 ||
-    signature.nonceBytes !== 16 ||
-    signature.deviceIdPattern !== "^dev_[A-Za-z0-9_-]{22}$" ||
-    !isObject(signature.headers) ||
-    !isDeepStrictEqual(signature.headers, {
-      deviceId: "x-viberacing-device-id",
-      timestamp: "x-viberacing-device-timestamp",
-      nonce: "x-viberacing-device-nonce",
-      signature: "x-viberacing-device-signature",
-    }) ||
-    !sameEntries(signature.canonicalFields ?? [], [
-      "messagePrefix",
-      "method",
-      "requestTarget",
-      "bodyDigestBase64Url",
-      "deviceId",
-      "nonce",
-      "timestamp",
-    ])
-  ) {
-    report(relativePath, "connector car proposal policy differs from the reviewed boundary");
-  }
-}
-
-function validateCarProposalVector() {
-  const relativePath = "contracts/v1/connector-car-proposal-device-request.test-vector.json";
-  const absolutePath = resolve(root, relativePath);
-  if (!existsSync(absolutePath)) {
-    report(relativePath, "shared connector car proposal vector is missing");
-    return;
-  }
-  const stats = lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    report(relativePath, "shared connector car proposal vector must be a regular file");
-    return;
-  }
-  let vector;
-  try {
-    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
-  } catch {
-    report(relativePath, "shared connector car proposal vector must be valid JSON");
-    return;
-  }
-  const expectedKeys = [
-    "body",
-    "bodyDigestBase64Url",
-    "deviceId",
-    "deviceNonceBase64Url",
-    "deviceNonceBytes",
-    "devicePublicKeyBase64Url",
-    "deviceSignatureBase64Url",
-    "deviceSignatureMessage",
-    "deviceTimestamp",
-    "schemaVersion",
-  ];
-  const nonce = Buffer.from(Array.from({ length: 16 }, (_, index) => index));
-  const canonicalBase64Url = (value, expectedBytes) => {
-    if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
-      return false;
+function hasDuplicateJsonObjectKey(text) {
+  let cursor = 0;
+  let duplicate = false;
+  const whitespace = () => {
+    while (/\s/u.test(text[cursor] ?? "")) {
+      cursor += 1;
     }
-    const decoded = Buffer.from(value, "base64url");
-    return (
-      decoded.length === expectedBytes &&
-      decoded.toString("base64url") === value &&
-      value.length === Math.ceil((expectedBytes * 8) / 6)
-    );
   };
-  const expectedBody =
-    '{"schemaVersion":1,"chassis":"formula","nose":"wedge","cockpit":"canopy","wing":"high","wheels":"slick","palette":"turbo-blue","trail":"spark","seed":4242}';
-  const expectedDigest = createHash("sha256").update(expectedBody).digest("base64url");
-  if (
-    !isObject(vector) ||
-    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
-    vector.schemaVersion !== 1 ||
-    vector.deviceId !== "dev_CCCCCCCCCCCCCCCCCCCCCC" ||
-    !sameEntries(vector.deviceNonceBytes ?? [], [...nonce]) ||
-    vector.deviceNonceBase64Url !== nonce.toString("base64url") ||
-    vector.deviceTimestamp !== "2026-07-15T12:34:56.789Z" ||
-    vector.body !== expectedBody ||
-    vector.bodyDigestBase64Url !== expectedDigest ||
-    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
-    !canonicalBase64Url(vector.deviceSignatureBase64Url, 64) ||
-    vector.deviceSignatureMessage !==
-      [
-        "viberacing-car-proposal-request-v1",
-        "POST",
-        "/v1/connector/cars/proposals",
-        expectedDigest,
-        vector.deviceId,
-        vector.deviceNonceBase64Url,
-        vector.deviceTimestamp,
-      ].join("\n")
-  ) {
-    report(relativePath, "shared connector car proposal vector differs from the reviewed boundary");
-  }
-}
-
-function validateUsageSyncVector() {
-  const relativePath = "contracts/v1/connector-usage-sync-device-request.test-vector.json";
-  const absolutePath = resolve(root, relativePath);
-  if (!existsSync(absolutePath)) {
-    report(relativePath, "shared connector usage vector is missing");
-    return;
-  }
-  const stats = lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    report(relativePath, "shared connector usage vector must be a regular file");
-    return;
-  }
-  let vector;
-  try {
-    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
-  } catch {
-    report(relativePath, "shared connector usage vector must be valid JSON");
-    return;
-  }
-  const expectedKeys = [
-    "body",
-    "bodyDigestBase64Url",
-    "deviceId",
-    "deviceNonceBase64Url",
-    "deviceNonceBytes",
-    "devicePublicKeyBase64Url",
-    "deviceSignatureBase64Url",
-    "deviceSignatureMessage",
-    "observedAt",
-    "schemaVersion",
-    "sourceId",
-    "syncId",
-  ];
-  const nonce = Buffer.from(Array.from({ length: 16 }, (_, index) => index));
-  const expectedBody =
-    '{"schemaVersion":1,"sourceId":"src_AAAAAAAAAAAAAAAAAAAAAA","syncId":"syn_BBBBBBBBBBBBBBBBBBBBBB","observedAt":"2026-07-15T12:34:56.789Z","clientVersion":"0.0.0","agentVersion":"0.144.5","dailyEntries":[{"reportedDate":"2026-07-13","dailyTokenTotal":123},{"reportedDate":"2026-07-14","dailyTokenTotal":456}]}';
-  const expectedDigest = createHash("sha256").update(expectedBody).digest("base64url");
-  const canonicalBase64Url = (value, expectedBytes) => {
-    if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value)) {
-      return false;
+  const stringToken = () => {
+    const start = cursor;
+    cursor += 1;
+    while (cursor < text.length) {
+      if (text[cursor] === "\\") {
+        cursor += 2;
+      } else if (text[cursor] === '"') {
+        cursor += 1;
+        return JSON.parse(text.slice(start, cursor));
+      } else {
+        cursor += 1;
+      }
     }
-    const decoded = Buffer.from(value, "base64url");
-    return (
-      decoded.length === expectedBytes &&
-      decoded.toString("base64url") === value &&
-      value.length === Math.ceil((expectedBytes * 8) / 6)
-    );
+    throw new Error("unterminated JSON string");
   };
-  if (
-    !isObject(vector) ||
-    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
-    vector.schemaVersion !== 1 ||
-    vector.sourceId !== "src_AAAAAAAAAAAAAAAAAAAAAA" ||
-    vector.syncId !== "syn_BBBBBBBBBBBBBBBBBBBBBB" ||
-    vector.observedAt !== "2026-07-15T12:34:56.789Z" ||
-    vector.deviceId !== "dev_CCCCCCCCCCCCCCCCCCCCCC" ||
-    !sameEntries(vector.deviceNonceBytes ?? [], [...nonce]) ||
-    vector.deviceNonceBase64Url !== nonce.toString("base64url") ||
-    vector.body !== expectedBody ||
-    vector.bodyDigestBase64Url !== expectedDigest ||
-    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
-    !canonicalBase64Url(vector.deviceSignatureBase64Url, 64) ||
-    vector.deviceSignatureMessage !==
-      [
-        "viberacing-device-request-v1",
-        "POST",
-        "/v1/community/usage",
-        expectedDigest,
-        vector.deviceId,
-        vector.deviceNonceBase64Url,
-        vector.observedAt,
-        vector.syncId,
-      ].join("\n")
-  ) {
-    report(relativePath, "shared connector usage vector differs from the reviewed boundary");
-  }
-}
-
-function validatePairingVector() {
-  const relativePath = "contracts/v1/connector-pairing-possession.test-vector.json";
-  const absolutePath = resolve(root, relativePath);
-  if (!existsSync(absolutePath)) {
-    report(relativePath, "shared pairing possession vector is missing");
-    return;
-  }
-  const stats = lstatSync(absolutePath);
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    report(relativePath, "shared pairing possession vector must be a regular file");
-    return;
-  }
-  let vector;
-  try {
-    vector = JSON.parse(readFileSync(absolutePath, "utf8"));
-  } catch {
-    report(relativePath, "shared pairing possession vector must be valid JSON");
-    return;
-  }
-  const expectedKeys = [
-    "devicePublicKeyBase64Url",
-    "pairingChallengeBase64Url",
-    "pairingChallengeBytes",
-    "pairingId",
-    "possessionMessage",
-    "possessionSignatureBase64Url",
-    "protocolId",
-    "schemaVersion",
-  ];
-  const challenge = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
-  const challengeBase64Url = challenge.toString("base64url");
-  const canonicalBase64Url = (value, expectedBytes) => {
-    const expectedCharacters = Math.ceil((expectedBytes * 8) / 6);
-    if (
-      typeof value !== "string" ||
-      value.length !== expectedCharacters ||
-      !/^[A-Za-z0-9_-]+$/.test(value)
-    ) {
-      return false;
+  const value = () => {
+    whitespace();
+    if (text[cursor] === "{") {
+      object();
+      return;
     }
-    const decoded = Buffer.from(value, "base64url");
-    return decoded.length === expectedBytes && decoded.toString("base64url") === value;
+    if (text[cursor] === "[") {
+      cursor += 1;
+      whitespace();
+      while (text[cursor] !== "]") {
+        value();
+        whitespace();
+        if (text[cursor] === ",") {
+          cursor += 1;
+          whitespace();
+        } else {
+          break;
+        }
+      }
+      cursor += 1;
+      return;
+    }
+    if (text[cursor] === '"') {
+      stringToken();
+      return;
+    }
+    while (cursor < text.length && !/[\s,\]}]/u.test(text[cursor] ?? "")) {
+      cursor += 1;
+    }
   };
-  if (
-    !isObject(vector) ||
-    !sameEntries(Object.keys(vector).sort(), expectedKeys) ||
-    vector.schemaVersion !== 1 ||
-    vector.protocolId !== "viberacing-device-pairing-possession-v1" ||
-    typeof vector.pairingId !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      vector.pairingId,
-    ) ||
-    !Array.isArray(vector.pairingChallengeBytes) ||
-    !sameEntries(vector.pairingChallengeBytes, [...challenge]) ||
-    vector.pairingChallengeBase64Url !== challengeBase64Url ||
-    !canonicalBase64Url(vector.devicePublicKeyBase64Url, 32) ||
-    !canonicalBase64Url(vector.possessionSignatureBase64Url, 64) ||
-    vector.possessionMessage !==
-      [
-        "viberacing-pairing-possession-v1",
-        vector.pairingId,
-        challengeBase64Url,
-        vector.devicePublicKeyBase64Url,
-      ].join("\n")
-  ) {
-    report(relativePath, "shared pairing possession vector differs from the reviewed boundary");
-  }
-}
-
-function validatePrimitiveConstraints(schema, scope) {
-  if (schema.const !== undefined) {
-    const validConst =
-      (schema.type === "string" && typeof schema.const === "string") ||
-      (schema.type === "integer" && Number.isSafeInteger(schema.const)) ||
-      (schema.type === "boolean" && typeof schema.const === "boolean");
-    if (!validConst) {
-      report(scope, "const does not match the declared primitive type");
+  const object = () => {
+    cursor += 1;
+    const keys = new Set();
+    whitespace();
+    while (text[cursor] !== "}") {
+      const key = stringToken();
+      if (keys.has(key)) {
+        duplicate = true;
+      }
+      keys.add(key);
+      whitespace();
+      cursor += 1;
+      value();
+      whitespace();
+      if (text[cursor] === ",") {
+        cursor += 1;
+        whitespace();
+      } else {
+        break;
+      }
     }
-  }
-  if (schema.enum !== undefined) {
-    const entryMatchesType = (entry) =>
-      (schema.type === "string" && typeof entry === "string") ||
-      (schema.type === "integer" && Number.isSafeInteger(entry)) ||
-      (schema.type === "boolean" && typeof entry === "boolean");
-    if (
-      !Array.isArray(schema.enum) ||
-      schema.enum.length === 0 ||
-      schema.enum.length > 32 ||
-      !schema.enum.every((entry) => entryMatchesType(entry)) ||
-      new Set(schema.enum.map((entry) => `${typeof entry}:${String(entry)}`)).size !==
-        schema.enum.length
-    ) {
-      report(scope, "enum must contain 1 to 32 unique primitive values");
-    }
-  }
+    cursor += 1;
+  };
+  value();
+  return duplicate;
 }
 
-function calendarDate(value) {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const match = /^((?:1999|20[0-9]{2}|2100))-([0-9]{2})-([0-9]{2})$/.exec(value);
-  if (match === null) {
-    return undefined;
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-    ? date
-    : undefined;
-}
-
-function validateSchemaNode(schema, scope, depth, state) {
-  state.nodes += 1;
-  if (depth > 8 || state.nodes > 200) {
-    report(scope, "schema exceeds the reviewed structure budget");
-    return;
-  }
+function validateSchema(schema, scope, topLevel = false) {
   if (!isObject(schema)) {
     report(scope, "schema node must be an object");
     return;
   }
   for (const key of Object.keys(schema)) {
-    if (!schemaKeys.has(key)) {
+    if (!schemaKeywords.has(key)) {
       report(scope, `unsupported schema keyword ${JSON.stringify(key)}`);
     }
   }
-  if (!schemaTypes.has(schema.type)) {
-    report(scope, "type must be one supported scalar, array, or object type");
-    return;
-  }
   if (
-    schema.description !== undefined &&
-    (typeof schema.description !== "string" ||
-      schema.description.length === 0 ||
-      schema.description.length > 300 ||
-      /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(schema.description))
+    topLevel &&
+    (schema.$schema !== "https://json-schema.org/draft/2020-12/schema" ||
+      typeof schema.$id !== "string" ||
+      typeof schema.title !== "string" ||
+      typeof schema.description !== "string")
   ) {
-    report(scope, "description must be bounded printable text");
-  }
-  validatePrimitiveConstraints(schema, scope);
-  const hasDateExtension =
-    schema["x-viberacing-dateMaximum"] !== undefined ||
-    schema["x-viberacing-dateMinimum"] !== undefined ||
-    schema["x-viberacing-isoWeekday"] !== undefined;
-  if (hasDateExtension && schema.type !== "string") {
-    report(scope, "date extensions are supported only on date strings");
-  }
-  if (schema["x-viberacing-optionalProperties"] !== undefined && schema.type !== "object") {
-    report(scope, "optional properties are supported only on closed objects");
+    report(scope, "top-level schema identity or description is incomplete");
   }
 
-  if (schema.type === "object") {
-    if (schema.additionalProperties !== false) {
-      report(scope, "object schemas must set additionalProperties to false");
-    }
-    if (!isObject(schema.properties)) {
-      report(scope, "object schemas must define a properties map");
-      return;
-    }
-    const properties = Object.keys(schema.properties);
-    if (properties.length === 0 || properties.length > 32) {
-      report(scope, "object schemas must contain 1 to 32 properties");
-    }
-    const optionalProperties = schema["x-viberacing-optionalProperties"];
-    if (optionalProperties === undefined) {
-      if (!Array.isArray(schema.required) || !sameEntries(schema.required, properties)) {
-        report(scope, "every property must be required in the same reviewed order");
-      }
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  if (
+    types.length === 0 ||
+    types.length > 2 ||
+    new Set(types).size !== types.length ||
+    types.some((type) => !schemaTypes.has(type)) ||
+    (types.length === 2 && (!types.includes("null") || types[1] !== "null"))
+  ) {
+    report(scope, "schema type must be one supported type or one ordered nullable union");
+    return;
+  }
+
+  const objectType = types.includes("object");
+  if (objectType) {
+    if (schema.additionalProperties !== false || !isObject(schema.properties)) {
+      report(scope, "object schemas must be closed and declare properties");
     } else {
-      const optionalPropertyList = Array.isArray(optionalProperties) ? optionalProperties : [];
-      const optionalPropertySet = new Set(optionalPropertyList);
-      const reviewedOptionalOrder = properties.filter((name) => optionalPropertySet.has(name));
+      const propertyNames = Object.keys(schema.properties);
+      const required = Array.isArray(schema.required) ? schema.required : [];
       if (
-        !Array.isArray(optionalProperties) ||
-        optionalProperties.length === 0 ||
-        optionalProperties.length > 8 ||
-        optionalPropertySet.size !== optionalProperties.length ||
-        !sameEntries(optionalPropertyList, reviewedOptionalOrder)
+        propertyNames.length > 64 ||
+        new Set(required).size !== required.length ||
+        required.some((name) => !propertyNames.includes(name)) ||
+        propertyNames.some((name) => !/^[a-z][A-Za-z0-9]*$/u.test(name))
       ) {
-        report(scope, "optional properties must be a bounded ordered subset of object fields");
+        report(scope, "object property or required inventory is invalid");
       }
-      const requiredProperties = properties.filter((name) => !optionalPropertySet.has(name));
-      if (!Array.isArray(schema.required) || !sameEntries(schema.required, requiredProperties)) {
-        report(scope, "required properties must exclude only the reviewed optional fields");
+      const optional = propertyNames.filter((name) => !required.includes(name));
+      const declaredOptional = schema["x-viberacing-optionalProperties"];
+      if (
+        (optional.length === 0 && declaredOptional !== undefined) ||
+        (optional.length > 0 &&
+          (!Array.isArray(declaredOptional) || !sameSet(optional, declaredOptional)))
+      ) {
+        report(scope, "optional properties must be declared exactly");
+      }
+      for (const [name, child] of Object.entries(schema.properties)) {
+        validateSchema(child, `${scope}.properties.${name}`);
       }
     }
-    for (const [name, propertySchema] of Object.entries(schema.properties)) {
-      if (!/^[a-z][A-Za-z0-9]*$/.test(name)) {
-        report(scope, `property name is not lower camel case: ${JSON.stringify(name)}`);
-      }
-      validateSchemaNode(propertySchema, `${scope}.${name}`, depth + 1, state);
-    }
-  } else if (schema.type === "array") {
+  } else if (
+    schema.additionalProperties !== undefined ||
+    schema.properties !== undefined ||
+    schema.required !== undefined ||
+    schema["x-viberacing-optionalProperties"] !== undefined
+  ) {
+    report(scope, "non-object schema carries object-only keywords");
+  }
+
+  if (types.includes("array")) {
     if (
+      !isObject(schema.items) ||
       !Number.isSafeInteger(schema.minItems) ||
       !Number.isSafeInteger(schema.maxItems) ||
       schema.minItems < 0 ||
-      schema.maxItems < 1 ||
-      schema.maxItems > 64 ||
-      schema.minItems > schema.maxItems
+      schema.maxItems < schema.minItems ||
+      schema.maxItems > 256
     ) {
-      report(scope, "arrays must have reviewed minItems/maxItems bounds no greater than 64");
+      report(scope, "array schema must have bounded items");
+    } else {
+      validateSchema(schema.items, `${scope}.items`);
+      if (
+        schema["x-viberacing-uniqueBy"] !== undefined &&
+        (!types.includes("array") ||
+          !isObject(schema.items.properties) ||
+          !Object.hasOwn(schema.items.properties, schema["x-viberacing-uniqueBy"]))
+      ) {
+        report(scope, "array unique-key extension must name an item property");
+      }
     }
-    validateSchemaNode(schema.items, `${scope}[]`, depth + 1, state);
-    const uniqueBy = schema["x-viberacing-uniqueBy"];
-    if (
-      uniqueBy !== undefined &&
-      (typeof uniqueBy !== "string" ||
-        schema.items?.type !== "object" ||
-        !Object.hasOwn(schema.items?.properties ?? {}, uniqueBy) ||
-        !schema.items?.required?.includes(uniqueBy))
-    ) {
-      report(scope, "x-viberacing-uniqueBy must name a required item property");
-    }
-  } else if (schema.type === "string") {
+  } else if (
+    schema.items !== undefined ||
+    schema.minItems !== undefined ||
+    schema.maxItems !== undefined ||
+    schema["x-viberacing-uniqueBy"] !== undefined
+  ) {
+    report(scope, "non-array schema carries array-only keywords");
+  }
+
+  if (types.includes("string")) {
     if (
       !Number.isSafeInteger(schema.minLength) ||
       !Number.isSafeInteger(schema.maxLength) ||
       schema.minLength < 0 ||
-      schema.maxLength < 1 ||
-      schema.maxLength > 256 ||
-      schema.minLength > schema.maxLength
+      schema.maxLength < schema.minLength ||
+      schema.maxLength > 4096
     ) {
-      report(scope, "strings must have reviewed minLength/maxLength bounds no greater than 256");
+      report(scope, "string schema must have finite length bounds");
     }
     if (schema.pattern !== undefined) {
-      if (
-        typeof schema.pattern !== "string" ||
-        schema.pattern.length > 256 ||
-        !schema.pattern.startsWith("^") ||
-        !schema.pattern.endsWith("$")
-      ) {
-        report(scope, "patterns must be bounded and fully anchored");
-      } else {
-        try {
-          new RegExp(schema.pattern, "u");
-        } catch {
-          report(scope, "pattern is not a valid Unicode regular expression");
-        }
+      try {
+        new RegExp(schema.pattern, "u");
+      } catch {
+        report(scope, "string pattern is invalid");
       }
     }
-    if (schema.format !== undefined && !["date", "date-time"].includes(schema.format)) {
-      report(scope, "only date and date-time formats are supported");
-    }
-    const dateMaximum = schema["x-viberacing-dateMaximum"];
-    const dateMinimum = schema["x-viberacing-dateMinimum"];
-    const isoWeekday = schema["x-viberacing-isoWeekday"];
-    if (dateMaximum !== undefined || dateMinimum !== undefined || isoWeekday !== undefined) {
-      const parsedMaximum = calendarDate(dateMaximum);
-      const parsedMinimum = calendarDate(dateMinimum);
-      if (
-        schema.format !== "date" ||
-        parsedMaximum === undefined ||
-        parsedMinimum === undefined ||
-        !Number.isSafeInteger(isoWeekday) ||
-        isoWeekday < 1 ||
-        isoWeekday > 7 ||
-        parsedMinimum.valueOf() > parsedMaximum.valueOf()
-      ) {
-        report(scope, "date extensions must define one valid ordered range and ISO weekday");
-      }
-    }
-  } else if (schema.type === "integer") {
-    if (
-      !Number.isSafeInteger(schema.minimum) ||
+  }
+  if (
+    types.includes("integer") &&
+    (!Number.isSafeInteger(schema.minimum) ||
       !Number.isSafeInteger(schema.maximum) ||
-      schema.minimum > schema.maximum
-    ) {
-      report(scope, "integers must have safe minimum and maximum bounds");
+      schema.maximum < schema.minimum)
+  ) {
+    report(scope, "integer schema must have safe inclusive bounds");
+  }
+  if (
+    schema.enum !== undefined &&
+    (!Array.isArray(schema.enum) ||
+      schema.enum.length === 0 ||
+      schema.enum.length > 64 ||
+      new Set(schema.enum.map((entry) => JSON.stringify(entry))).size !== schema.enum.length)
+  ) {
+    report(scope, "enum must be a bounded unique closed list");
+  }
+}
+
+function allPropertyNames(schema, names = new Set()) {
+  if (!isObject(schema)) {
+    return names;
+  }
+  if (isObject(schema.properties)) {
+    for (const [name, child] of Object.entries(schema.properties)) {
+      names.add(name);
+      allPropertyNames(child, names);
     }
+  }
+  if (isObject(schema.items)) {
+    allPropertyNames(schema.items, names);
+  }
+  return names;
+}
+
+function objectCore(schema) {
+  return {
+    type: schema.type,
+    additionalProperties: schema.additionalProperties,
+    ...(schema["x-viberacing-optionalProperties"] === undefined
+      ? {}
+      : { "x-viberacing-optionalProperties": schema["x-viberacing-optionalProperties"] }),
+    required: schema.required,
+    properties: schema.properties,
+  };
+}
+
+function verifyEd25519(publicKeyBase64Url, message, signatureBase64Url) {
+  try {
+    const rawPublicKey = Buffer.from(publicKeyBase64Url, "base64url");
+    const key = createPublicKey({
+      key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), rawPublicKey]),
+      format: "der",
+      type: "spki",
+    });
+    return (
+      rawPublicKey.length === 32 &&
+      Buffer.from(signatureBase64Url, "base64url").length === 64 &&
+      verify(null, Buffer.from(message, "utf8"), key, Buffer.from(signatureBase64Url, "base64url"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function readJson(relativePath) {
+  const absolutePath = resolve(root, relativePath);
+  try {
+    const text = readFileSync(absolutePath, "utf8").replaceAll("\r\n", "\n");
+    if (hasDuplicateJsonObjectKey(text)) {
+      report(relativePath, "duplicate JSON object key is forbidden");
+    }
+    return JSON.parse(text);
+  } catch (error) {
+    report(relativePath, `could not parse regular JSON: ${error.message}`);
+    return undefined;
+  }
+}
+
+const contractDirectory = resolve(root, "contracts", "v1");
+if (!existsSync(contractDirectory)) {
+  report("contracts/v1", "contract directory is missing");
+} else {
+  const entries = readdirSync(contractDirectory, { withFileTypes: true });
+  const actualFiles = entries
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .sort();
+  if (!sameSet(actualFiles, expectedContractFiles)) {
+    report("contracts/v1", "file inventory differs from the clean version 1 contract catalog");
+  }
+  for (const entry of entries) {
+    const path = resolve(contractDirectory, entry.name);
+    if (!entry.isFile() || lstatSync(path).isSymbolicLink()) {
+      report(
+        `contracts/v1/${entry.name}`,
+        "contract entries must be regular non-symbolic-link files",
+      );
+    }
+  }
+}
+
+for (const file of expectedContractFiles) {
+  const relativePath = `contracts/v1/${file}`;
+  if (existsSync(resolve(root, relativePath))) {
+    readJson(relativePath);
+  } else {
+    report(relativePath, "required clean contract file is missing");
   }
 }
 
@@ -941,827 +616,414 @@ let sources;
 try {
   sources = readContractSources(root);
 } catch (error) {
-  report("contracts/v1", error.message);
+  report("contracts/v1/manifest.json", error.message);
 }
 
 if (sources !== undefined) {
-  const { manifest, operations, policies, records } = sources;
-  const manifestStats = lstatSync(resolve(root, "contracts", "v1", "manifest.json"));
-  if (manifestStats.isSymbolicLink() || !manifestStats.isFile()) {
-    report("contracts/v1/manifest.json", "manifest must be a regular non-symbolic-link file");
+  const records = new Map(sources.records.map((record) => [record.entry.file, record]));
+  if (!sameSet([...records.keys()], schemaFiles)) {
+    report(
+      "contracts/v1/manifest.json",
+      "schema catalog differs from the clean contract inventory",
+    );
   }
   if (
-    !isObject(manifest) ||
-    Object.keys(manifest).sort().join(",") !==
-      "contractVersion,operations,policies,schemaVersion,schemas" ||
-    manifest.schemaVersion !== 1 ||
-    manifest.contractVersion !== "v1" ||
-    !Array.isArray(manifest.schemas) ||
-    !Array.isArray(manifest.policies) ||
-    !Array.isArray(manifest.operations)
-  ) {
-    report("contracts/v1/manifest.json", "manifest shape or version is invalid");
-  }
-
-  if (
-    !sameEntries(
-      policies.map(({ entry }) => entry.file),
-      [
-        "connector-car-proposal-authentication.json",
-        "connector-pairing-authentication.json",
-        "connector-pairing-transport.json",
-        "connector-usage-sync-authentication.json",
-      ],
+    !sameSet(
+      sources.policies.map((record) => record.entry.file),
+      policyFiles,
     )
   ) {
-    report("contracts/v1/manifest.json", "authentication policy inventory differs from review");
+    report(
+      "contracts/v1/manifest.json",
+      "policy catalog differs from the clean contract inventory",
+    );
   }
-  const listedPolicies = new Set(policies.map(({ entry }) => entry.file));
-  for (const record of policies) {
-    const stats = lstatSync(resolve(root, record.relativePath));
-    if (stats.isSymbolicLink() || !stats.isFile()) {
-      report(record.relativePath, "authentication policies must be regular files");
-    }
-    if (!isObject(record.entry) || Object.keys(record.entry).sort().join(",") !== "file,policyId") {
-      report("contracts/v1/manifest.json", "authentication policy entry is invalid");
-    }
-    if (record.entry.file === "connector-car-proposal-authentication.json") {
-      validateCarProposalPolicy(record);
-    } else if (record.entry.file === "connector-pairing-authentication.json") {
-      validatePairingPolicy(record);
-    } else if (record.entry.file === "connector-pairing-transport.json") {
-      validatePairingTransportPolicy(record);
+
+  for (const record of sources.records) {
+    validateSchema(record.schema, record.relativePath, true);
+    const expectedFields = expectedSchemaFields.get(record.entry.file);
+    if (expectedFields !== undefined) {
+      const actualFields = Object.keys(record.schema.properties ?? []);
+      if (!sameSet(actualFields, expectedFields)) {
+        report(record.relativePath, "top-level field inventory differs from the reviewed contract");
+      }
+      const expectedOptional = expectedOptionalFields.get(record.entry.file) ?? [];
+      const expectedRequired = expectedFields.filter((field) => !expectedOptional.includes(field));
+      if (!sameSet(record.schema.required ?? [], expectedRequired)) {
+        report(record.relativePath, "top-level required field inventory differs from review");
+      }
     }
   }
-  const usageSyncPolicy = policies.find(
-    ({ entry }) => entry.file === "connector-usage-sync-authentication.json",
+
+  const providerSchema = records.get("agent-provider.schema.json")?.schema;
+  if (providerSchema?.type !== "string" || !isDeepStrictEqual(providerSchema.enum, ["codex"])) {
+    report(
+      "contracts/v1/agent-provider.schema.json",
+      "built-in reader provider enum differs from evidence",
+    );
+  }
+
+  const discoverySchema = records.get("connector-discovery-manifest.schema.json")?.schema;
+  const startSchema = records.get("connector-pairing-start.schema.json")?.schema;
+  if (
+    !isObject(discoverySchema) ||
+    !isObject(startSchema?.properties?.discoveryManifest) ||
+    !isDeepStrictEqual(
+      objectCore(discoverySchema),
+      objectCore(startSchema.properties.discoveryManifest),
+    )
+  ) {
+    report(
+      "contracts/v1/connector-pairing-start.schema.json",
+      "embedded discovery manifest has drifted from ConnectorDiscoveryManifestV1",
+    );
+  }
+  const approvalSchema = records.get("connector-pairing-approval.schema.json")?.schema;
+  if (
+    !isDeepStrictEqual(approvalSchema?.properties?.decisions?.items?.properties?.action?.enum, [
+      "attach_existing",
+      "create",
+      "skip",
+    ])
+  ) {
+    report(
+      "contracts/v1/connector-pairing-approval.schema.json",
+      "pairing decision action enum differs from review",
+    );
+  }
+  const pollResultNames = allPropertyNames(
+    records.get("connector-pairing-poll-result.schema.json")?.schema,
+  );
+  if (
+    ["accountFingerprintDigest", "githubUserId", "passkeyId", "privateLabel", "profileId"].some(
+      (field) => pollResultNames.has(field),
+    )
+  ) {
+    report(
+      "contracts/v1/connector-pairing-poll-result.schema.json",
+      "private server identity leaked into connector activation result",
+    );
+  }
+
+  const usageSchema = records.get("usage-sync.schema.json")?.schema;
+  const usageNames = allPropertyNames(usageSchema);
+  for (const forbidden of [
+    "accountingRevision",
+    "deviceCount",
+    "model",
+    "price",
+    "profileId",
+    "provider",
+    "rank",
+    "sourceCount",
+    "subscription",
+    "trustTier",
+    "weeklyTokenTotal",
+  ]) {
+    if (usageNames.has(forbidden)) {
+      report(
+        "contracts/v1/usage-sync.schema.json",
+        "provider or server-derived field leaked into upload",
+      );
+    }
+  }
+  const dailyTotal = usageSchema?.properties?.dailyEntries?.items?.properties?.dailyTokenTotal;
+  if (
+    dailyTotal?.type !== "string" ||
+    dailyTotal.maxLength !== 30 ||
+    dailyTotal.pattern !== "^(?:0|[1-9][0-9]{0,29})$"
+  ) {
+    report(
+      "contracts/v1/usage-sync.schema.json",
+      "daily token total is not an exact decimal string",
+    );
+  }
+
+  for (const [file, forbiddenFields] of [
+    [
+      "connector-discovery-manifest.schema.json",
+      [
+        "accessToken",
+        "apiKey",
+        "code",
+        "conversation",
+        "email",
+        "localPath",
+        "login",
+        "model",
+        "prompt",
+        "repository",
+      ],
+    ],
+    [
+      "leaderboard-snapshot.schema.json",
+      [
+        "accountCount",
+        "agentAccountId",
+        "deviceCount",
+        "deviceId",
+        "email",
+        "profileId",
+        "sourceCount",
+      ],
+    ],
+    [
+      "public-profile-summary.schema.json",
+      [
+        "agentAccountId",
+        "deviceCount",
+        "deviceId",
+        "email",
+        "privateLabel",
+        "profileId",
+        "sourceCount",
+      ],
+    ],
+  ]) {
+    const names = allPropertyNames(records.get(file)?.schema);
+    if (forbiddenFields.some((field) => names.has(field))) {
+      report(
+        `contracts/v1/${file}`,
+        "private or non-competitive field leaked into public contract",
+      );
+    }
+  }
+
+  const leaderboardSchema = records.get("leaderboard-snapshot.schema.json")?.schema;
+  const participant = leaderboardSchema?.properties?.participants?.items;
+  if (
+    leaderboardSchema?.properties?.metricVersion?.const !== "provider_reported_tokens_v1" ||
+    leaderboardSchema?.properties?.trustTier?.const !== "community" ||
+    participant?.properties?.weeklyTokenTotal?.type !== "string" ||
+    participant?.properties?.freshnessDays?.type?.[1] !== "null" ||
+    !sameSet(participant?.properties?.providerBreakdown?.items?.required ?? [], [
+      "provider",
+      "percentage",
+    ])
+  ) {
+    report(
+      "contracts/v1/leaderboard-snapshot.schema.json",
+      "direct-token snapshot semantics differ from review",
+    );
+  }
+  const profileSchema = records.get("public-profile-summary.schema.json")?.schema;
+  if (
+    profileSchema?.properties?.weeklyTokenTotal?.type !== "string" ||
+    !isDeepStrictEqual(profileSchema?.properties?.carRecipe?.type, ["object", "null"])
+  ) {
+    report(
+      "contracts/v1/public-profile-summary.schema.json",
+      "profile total or car nullability differs from review",
+    );
+  }
+
+  if (sources.operations.length !== expectedOperations.size) {
+    report("contracts/v1/manifest.json", "operation count differs from the clean route surface");
+  }
+  for (const operation of sources.operations) {
+    const expected = expectedOperations.get(operation.entry.operationId);
+    if (
+      expected === undefined ||
+      Object.entries(expected).some(([key, value]) => operation.entry[key] !== value) ||
+      operation.entry.problemSchema !== "ProblemDetailsV1" ||
+      operation.entry.corsPolicy !== "same-origin"
+    ) {
+      report(
+        "contracts/v1/manifest.json",
+        `operation ${operation.entry.operationId} differs from review`,
+      );
+    }
+    if (operation.entry.path.startsWith("/v1/community/")) {
+      report("contracts/v1/manifest.json", "legacy Community route survived the clean replacement");
+    }
+    if (operation.entry.implementationStatus === "implemented-local") {
+      const evidence = implementedContractEvidence.get(operation.entry.operationId);
+      if (evidence === undefined) {
+        report(
+          "contracts/v1/manifest.json",
+          `implemented-local operation ${operation.entry.operationId} has no reviewed evidence policy`,
+        );
+      } else {
+        for (const [relativePath, requiredTokens] of evidence) {
+          const absolutePath = resolve(root, relativePath);
+          if (!existsSync(absolutePath) || !lstatSync(absolutePath).isFile()) {
+            report(relativePath, "implemented-local contract evidence is missing");
+            continue;
+          }
+          const text = readFileSync(absolutePath, "utf8");
+          if (requiredTokens.some((token) => !text.includes(token))) {
+            report(
+              relativePath,
+              "implemented-local evidence does not contain the reviewed boundary",
+            );
+          }
+        }
+      }
+    }
+  }
+
+  const pairingPolicy = sources.policies.find(
+    (record) => record.entry.file === "connector-pairing-authentication.json",
   )?.policy;
   if (
-    !isObject(usageSyncPolicy) ||
-    !isDeepStrictEqual(usageSyncPolicy, {
-      schemaVersion: 1,
-      protocolId: "viberacing-usage-sync-auth-v1",
-      method: "POST",
-      requestTarget: "/v1/community/usage",
-      mediaType: "application/json",
-      maximumBodyBytes: 8192,
-      maximumRawHeaderPairs: 64,
-      maximumHeaderNameCharacters: 64,
-      maximumHeaderValueCharacters: 256,
-      maximumJsonDepth: 8,
-      maximumJsonNodes: 128,
-      maximumJsonObjectMembers: 64,
-      maximumJsonArrayItems: 64,
-      maximumJsonNumberCharacters: 64,
-      maximumDecodedJsonStringCodeUnits: 256,
-      canonicalMessageEncoding: "UTF-8",
-      canonicalMessageSeparator: "LF",
-      canonicalMessageTrailingSeparator: false,
-      binaryEncoding: "base64url-unpadded",
-      digestEncoding: "base64url-unpadded",
-      httpTransport: {
-        framework: "fastify-v5",
-        admissionMode: "no-queue",
-        admissionLimit: 4,
-        maximumHeaderBytes: 16384,
-        maximumConnections: 32,
-        maximumRequestsPerSocket: 16,
-        requestTimeoutMilliseconds: 5000,
-        handlerTimeoutMilliseconds: 33000,
-        connectionTimeoutMilliseconds: 34000,
-        keepAliveTimeoutMilliseconds: 5000,
-        trustProxy: false,
-        forwardedHeadersTrusted: false,
-        inboundRequestIdAccepted: false,
-        requestLogging: false,
-        acceptPolicy: "closed-json",
-        cacheControl: "no-store",
-        corsPolicy: "same-origin",
-      },
-      originProof: {
-        messagePrefix: "viberacing-origin-proof-v1",
-        algorithm: "HMAC-SHA-256",
-        keyBytes: 32,
-        proofBytes: 32,
-        nonceBytes: 16,
-        maximumAgeMilliseconds: 60000,
-        maximumAgeBoundary: "exclusive",
-        maximumFutureSkewMilliseconds: 5000,
-        maximumFutureSkewBoundary: "inclusive",
-        keyIdPattern: "^edge_[A-Za-z0-9_-]{1,22}$",
-        headers: {
-          keyId: "x-viberacing-origin-key-id",
-          timestamp: "x-viberacing-origin-timestamp",
-          nonce: "x-viberacing-origin-nonce",
-          proof: "x-viberacing-origin-proof",
-        },
-        canonicalFields: [
-          "messagePrefix",
-          "keyId",
-          "method",
-          "requestTarget",
-          "bodyDigestBase64Url",
-          "timestamp",
-          "nonce",
-        ],
-      },
-      deviceSignature: {
-        messagePrefix: "viberacing-device-request-v1",
-        algorithm: "Ed25519",
-        publicKeyBytes: 32,
-        signatureBytes: 64,
-        nonceBytes: 16,
-        deviceIdPattern: "^dev_[A-Za-z0-9_-]{22}$",
-        idempotencyKeyPattern: "^syn_[A-Za-z0-9_-]{22}$",
-        headers: {
-          deviceId: "x-viberacing-device-id",
-          timestamp: "x-viberacing-device-timestamp",
-          nonce: "x-viberacing-device-nonce",
-          signature: "x-viberacing-device-signature",
-          idempotencyKey: "idempotency-key",
-        },
-        canonicalFields: [
-          "messagePrefix",
-          "method",
-          "requestTarget",
-          "bodyDigestBase64Url",
-          "deviceId",
-          "nonce",
-          "timestamp",
-          "idempotencyKey",
-        ],
-      },
-    })
+    pairingPolicy?.algorithm !== "Ed25519" ||
+    pairingPolicy.pairingIdPattern !== "^pair_[A-Za-z0-9_-]{22}$" ||
+    pairingPolicy.startProof?.messagePrefix !== "viberacing-pairing-start-possession-v1" ||
+    pairingPolicy.pollProof?.messagePrefix !== "viberacing-pairing-poll-possession-v1" ||
+    !isDeepStrictEqual(pairingPolicy.pollProof?.canonicalFields, [
+      "messagePrefix",
+      "pairingId",
+      "pairingChallenge",
+      "installationPublicKey",
+    ])
+  ) {
+    report(
+      "contracts/v1/connector-pairing-authentication.json",
+      "batch pairing possession policy differs from review",
+    );
+  }
+  const transportPolicy = sources.policies.find(
+    (record) => record.entry.file === "connector-pairing-transport.json",
+  )?.policy;
+  if (
+    !isDeepStrictEqual(transportPolicy?.methods, {
+      poll: "POST /v1/connector/pairing/poll",
+      start: "POST /v1/connector/pairing/start",
+    }) ||
+    transportPolicy?.requestBodyBytes !== 32768 ||
+    transportPolicy?.clientRateIdentifierLocation !== "request-body" ||
+    transportPolicy?.cacheControl !== "no-store"
+  ) {
+    report(
+      "contracts/v1/connector-pairing-transport.json",
+      "pairing transport differs from review",
+    );
+  }
+  const usagePolicy = sources.policies.find(
+    (record) => record.entry.file === "connector-usage-sync-authentication.json",
+  )?.policy;
+  if (
+    usagePolicy?.requestTarget !== "/v1/usage" ||
+    usagePolicy?.maximumBodyBytes !== 8192 ||
+    usagePolicy?.deviceSignature?.deviceIdPattern !== "^dev_[A-Za-z0-9_-]{22}$" ||
+    usagePolicy?.deviceSignature?.idempotencyKeyPattern !== "^syn_[A-Za-z0-9_-]{22}$"
   ) {
     report(
       "contracts/v1/connector-usage-sync-authentication.json",
-      "usage sync authentication differs from the reviewed boundary",
+      "usage authentication policy differs from review",
     );
-  }
-  validateCarProposalVector();
-  validateUsageSyncVector();
-  validatePairingVector();
-
-  let previousFile = "";
-  const listedFiles = new Set();
-  for (const [index, record] of records.entries()) {
-    const { entry, schema } = record;
-    const scope = record.relativePath;
-    if (
-      !isObject(entry) ||
-      Object.keys(entry).sort().join(",") !== "exportName,file,typeName" ||
-      !/^[a-z][A-Za-z0-9]*$/.test(entry.exportName ?? "") ||
-      !/^[A-Z][A-Za-z0-9]*V1$/.test(entry.typeName ?? "")
-    ) {
-      report("contracts/v1/manifest.json", `schema entry ${String(index + 1)} is invalid`);
-    }
-    if (previousFile && previousFile.localeCompare(entry.file) >= 0) {
-      report("contracts/v1/manifest.json", "schema entries must be uniquely sorted by file");
-    }
-    previousFile = entry.file;
-    listedFiles.add(entry.file);
-
-    const stats = lstatSync(resolve(root, scope));
-    if (stats.isSymbolicLink() || !stats.isFile()) {
-      report(scope, "contract sources must be regular non-symbolic-link files");
-    }
-    if (
-      schema?.$schema !== "https://json-schema.org/draft/2020-12/schema" ||
-      schema?.$id !== `https://schemas.viberacing.example/v1/${entry.file}` ||
-      schema?.title !== entry.typeName ||
-      typeof schema?.description !== "string"
-    ) {
-      report(scope, "root schema identity, title, or description is invalid");
-    }
-    validateSchemaNode(schema, scope, 0, { nodes: 0 });
-
-    const fields = Object.keys(schema?.properties ?? {});
-    const expected = expectedFields.get(entry.file);
-    if (expected === undefined || !sameEntries(fields, expected)) {
-      report(scope, "top-level fields differ from the reviewed contract boundary");
-    }
-    if (entry.file === "usage-sync.schema.json") {
-      const dailyEntry = schema?.properties?.dailyEntries?.items;
-      const expectedDailyFields = ["reportedDate", "dailyTokenTotal"];
-      if (!sameEntries(Object.keys(dailyEntry?.properties ?? {}), expectedDailyFields)) {
-        report(scope, "sync daily-entry fields differ from the exact writable allowlist");
-      }
-      const nestedNames = [];
-      const collectNames = (node) => {
-        for (const [name, child] of Object.entries(node?.properties ?? {})) {
-          nestedNames.push(name);
-          collectNames(child);
-          if (child?.items) {
-            collectNames(child.items);
-          }
-        }
-      };
-      collectNames(schema);
-      for (const name of nestedNames) {
-        if (forbiddenConnectorFields.has(name)) {
-          report(
-            scope,
-            `connector-writable schema contains server-owned or prohibited field ${name}`,
-          );
-        }
-      }
-      const expectedUniqueField = "reportedDate";
-      if (schema?.properties?.dailyEntries?.["x-viberacing-uniqueBy"] !== expectedUniqueField) {
-        report(scope, `daily entries must remain unique by ${expectedUniqueField}`);
-      }
-    }
-    if (
-      entry.file === "community-race-page.schema.json" ||
-      entry.file === "community-race-status-page.schema.json" ||
-      entry.file === "community-score-page.schema.json"
-    ) {
-      const isRacePage = entry.file !== "community-score-page.schema.json";
-      const isStatusPage = entry.file === "community-race-status-page.schema.json";
-      const participantArray = schema?.properties?.participants;
-      const participantProperties = participantArray?.items?.properties ?? {};
-      const participantFields = Object.keys(participantProperties);
-      const scoreParticipantFields = [
-        "seasonStart",
-        "seasonEnd",
-        "scoreVersion",
-        "seasonFinalized",
-        "handle",
-        "weeklyScore",
-        "activeDays",
-        "sourceCount",
-        "rankPosition",
-        "displayPosition",
-      ];
-      const requiredParticipantFields = isStatusPage
-        ? [...scoreParticipantFields, "freshnessDays"]
-        : scoreParticipantFields;
-      const expectedParticipantFields = isStatusPage
-        ? [
-            "seasonStart",
-            "seasonEnd",
-            "scoreVersion",
-            "seasonFinalized",
-            "handle",
-            "carRecipe",
-            "weeklyScore",
-            "activeDays",
-            "sourceCount",
-            "rankPosition",
-            "displayPosition",
-            "freshnessDays",
-            "streakDays",
-          ]
-        : isRacePage
-          ? [
-              "seasonStart",
-              "seasonEnd",
-              "scoreVersion",
-              "seasonFinalized",
-              "handle",
-              "carRecipe",
-              "weeklyScore",
-              "activeDays",
-              "sourceCount",
-              "rankPosition",
-              "displayPosition",
-            ]
-          : requiredParticipantFields;
-      if (
-        schema?.properties?.trustTier?.const !== "community" ||
-        schema?.properties?.selfReported?.const !== true
-      ) {
-        report(
-          scope,
-          isRacePage
-            ? "Community race trust metadata must remain explicit and constant"
-            : "Community score trust metadata must remain explicit and constant",
-        );
-      }
-      if (
-        participantArray?.minItems !== 0 ||
-        participantArray?.maxItems !== 32 ||
-        participantArray?.["x-viberacing-uniqueBy"] !== "displayPosition"
-      ) {
-        report(
-          scope,
-          isRacePage
-            ? "Community race participants must remain a bounded unique display page"
-            : "Community score participants must remain a bounded unique display page",
-        );
-      }
-      if (
-        !sameEntries(participantFields, expectedParticipantFields) ||
-        !sameEntries(participantArray?.items?.required ?? [], requiredParticipantFields)
-      ) {
-        report(
-          scope,
-          isRacePage
-            ? "Community race participant fields differ from the public allowlist"
-            : "Community score participant fields differ from the public allowlist",
-        );
-      }
-      if (isRacePage) {
-        const carRecipeSchema = records.find(
-          (candidate) => candidate.entry.file === "car-recipe.schema.json",
-        )?.schema;
-        const canonicalCarRecipeShape = {
-          type: carRecipeSchema?.type,
-          additionalProperties: carRecipeSchema?.additionalProperties,
-          required: carRecipeSchema?.required,
-          properties: carRecipeSchema?.properties,
-        };
-        if (
-          participantArray?.items?.required?.includes("carRecipe") ||
-          !isDeepStrictEqual(participantProperties.carRecipe, canonicalCarRecipeShape)
-        ) {
-          report(scope, "Community race CarRecipe differs from the canonical optional recipe");
-        }
-      }
-      if (
-        isStatusPage &&
-        (participantArray?.items?.required?.includes("streakDays") ||
-          !participantArray?.items?.required?.includes("freshnessDays") ||
-          !sameEntries(participantArray?.items?.["x-viberacing-optionalProperties"] ?? [], [
-            "carRecipe",
-            "streakDays",
-          ]))
-      ) {
-        report(scope, "Community race status visibility fields differ from the reviewed boundary");
-      }
-      const exactIntegerBounds = [
-        ["weeklyScore", 0, 7000],
-        ["activeDays", 0, 7],
-        ["sourceCount", 0, 32],
-        ["rankPosition", 1, 32],
-        ["displayPosition", 1, 32],
-        ...(isStatusPage
-          ? [
-              ["freshnessDays", 0, 65535],
-              ["streakDays", 0, 36533],
-            ]
-          : []),
-      ];
-      if (
-        exactIntegerBounds.some(([name, minimum, maximum]) => {
-          const field = participantProperties[name];
-          return field?.minimum !== minimum || field?.maximum !== maximum;
-        }) ||
-        participantProperties.scoreVersion?.minLength !== 3 ||
-        participantProperties.scoreVersion?.maxLength !== 32 ||
-        participantProperties.scoreVersion?.pattern !== "^[a-z][a-z0-9_]{2,31}$" ||
-        participantProperties.handle?.minLength !== 3 ||
-        participantProperties.handle?.maxLength !== 24 ||
-        participantProperties.handle?.pattern !== "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$" ||
-        participantProperties.seasonStart?.format !== "date" ||
-        participantProperties.seasonStart?.pattern !==
-          "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
-        participantProperties.seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
-        participantProperties.seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
-        participantProperties.seasonStart?.["x-viberacing-isoWeekday"] !== 1 ||
-        participantProperties.seasonEnd?.format !== "date" ||
-        participantProperties.seasonEnd?.pattern !==
-          "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$" ||
-        participantProperties.seasonEnd?.["x-viberacing-dateMinimum"] !== "2000-01-02" ||
-        participantProperties.seasonEnd?.["x-viberacing-dateMaximum"] !== "2100-01-03" ||
-        participantProperties.seasonEnd?.["x-viberacing-isoWeekday"] !== 7
-      ) {
-        report(
-          scope,
-          isRacePage
-            ? "Community race participant bounds differ from the reviewed projection"
-            : "Community score participant bounds differ from the reviewed projection",
-        );
-      }
-    }
-    if (entry.file === "community-token-race-status-page.schema.json") {
-      const participantArray = schema?.properties?.participants;
-      const participantProperties = participantArray?.items?.properties ?? {};
-      const expectedParticipantFields = [
-        "seasonStart",
-        "seasonEnd",
-        "metricVersion",
-        "seasonFinalized",
-        "handle",
-        "carRecipe",
-        "weeklyTokenTotal",
-        "activeDays",
-        "sourceCount",
-        "rankPosition",
-        "displayPosition",
-        "freshnessDays",
-        "streakDays",
-      ];
-      const requiredParticipantFields = [
-        "seasonStart",
-        "seasonEnd",
-        "metricVersion",
-        "seasonFinalized",
-        "handle",
-        "weeklyTokenTotal",
-        "activeDays",
-        "sourceCount",
-        "rankPosition",
-        "displayPosition",
-        "freshnessDays",
-      ];
-      const carRecipeSchema = records.find(
-        (candidate) => candidate.entry.file === "car-recipe.schema.json",
-      )?.schema;
-      const canonicalCarRecipeShape = {
-        type: carRecipeSchema?.type,
-        additionalProperties: carRecipeSchema?.additionalProperties,
-        required: carRecipeSchema?.required,
-        properties: carRecipeSchema?.properties,
-      };
-      const exactIntegerBounds = [
-        ["weeklyTokenTotal", 0, 9_007_199_254_740_991],
-        ["activeDays", 0, 7],
-        ["sourceCount", 0, 32],
-        ["rankPosition", 1, 32],
-        ["displayPosition", 1, 32],
-        ["freshnessDays", 0, 65_535],
-        ["streakDays", 0, 36_533],
-      ];
-      if (
-        schema?.properties?.trustTier?.const !== "community" ||
-        schema?.properties?.selfReported?.const !== true ||
-        participantArray?.minItems !== 0 ||
-        participantArray?.maxItems !== 32 ||
-        participantArray?.["x-viberacing-uniqueBy"] !== "displayPosition" ||
-        !sameEntries(Object.keys(participantProperties), expectedParticipantFields) ||
-        !sameEntries(participantArray?.items?.required ?? [], requiredParticipantFields) ||
-        !sameEntries(participantArray?.items?.["x-viberacing-optionalProperties"] ?? [], [
-          "carRecipe",
-          "streakDays",
-        ]) ||
-        !isDeepStrictEqual(participantProperties.carRecipe, canonicalCarRecipeShape) ||
-        exactIntegerBounds.some(([name, minimum, maximum]) => {
-          const field = participantProperties[name];
-          return field?.minimum !== minimum || field?.maximum !== maximum;
-        }) ||
-        participantProperties.metricVersion?.const !== "community_tokens_v1" ||
-        participantProperties.metricVersion?.minLength !== 19 ||
-        participantProperties.metricVersion?.maxLength !== 19 ||
-        participantProperties.handle?.minLength !== 3 ||
-        participantProperties.handle?.maxLength !== 24 ||
-        participantProperties.handle?.pattern !== "^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$" ||
-        participantProperties.seasonStart?.format !== "date" ||
-        participantProperties.seasonStart?.pattern !==
-          "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
-        participantProperties.seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
-        participantProperties.seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
-        participantProperties.seasonStart?.["x-viberacing-isoWeekday"] !== 1 ||
-        participantProperties.seasonEnd?.format !== "date" ||
-        participantProperties.seasonEnd?.pattern !==
-          "^(?:20[0-9]{2}-[0-9]{2}-[0-9]{2}|2100-01-03)$" ||
-        participantProperties.seasonEnd?.["x-viberacing-dateMinimum"] !== "2000-01-02" ||
-        participantProperties.seasonEnd?.["x-viberacing-dateMaximum"] !== "2100-01-03" ||
-        participantProperties.seasonEnd?.["x-viberacing-isoWeekday"] !== 7
-      ) {
-        report(scope, "Community token participant boundary differs from ADR 0072");
-      }
-    }
-    if (entry.file === "community-score-query.schema.json") {
-      const seasonStart = schema?.properties?.seasonStart;
-      if (
-        seasonStart?.minLength !== 10 ||
-        seasonStart?.maxLength !== 10 ||
-        seasonStart?.pattern !== "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$" ||
-        seasonStart?.format !== "date" ||
-        seasonStart?.["x-viberacing-dateMinimum"] !== "1999-12-27" ||
-        seasonStart?.["x-viberacing-dateMaximum"] !== "2099-12-28" ||
-        seasonStart?.["x-viberacing-isoWeekday"] !== 1
-      ) {
-        report(scope, "Community score query differs from the reviewed season boundary");
-      }
-    }
-    if (entry.file === "car-recipe.schema.json") {
-      const properties = schema?.properties ?? {};
-      const exactEnums = [
-        ["chassis", ["formula", "rally", "roadster"]],
-        ["nose", ["classic", "scoop", "wedge"]],
-        ["cockpit", ["canopy", "open", "rally"]],
-        ["wing", ["high", "low", "none"]],
-        ["wheels", ["all-terrain", "slick", "street"]],
-        ["palette", ["magenta", "mint", "redline", "sunburst", "turbo-blue"]],
-        ["trail", ["grid", "none", "spark"]],
-      ];
-      if (
-        properties.schemaVersion?.const !== 1 ||
-        properties.schemaVersion?.minimum !== 1 ||
-        properties.schemaVersion?.maximum !== 1 ||
-        properties.seed?.minimum !== 0 ||
-        properties.seed?.maximum !== 65_535 ||
-        exactEnums.some(([name, values]) => !sameEntries(properties[name]?.enum ?? [], values))
-      ) {
-        report(scope, "CarRecipe version, enum set, or seed bounds differ from ADR 0005");
-      }
-    }
-    if (entry.file === "connector-car-proposal-result.schema.json") {
-      const outcome = schema?.properties?.outcome;
-      const requestId = schema?.properties?.requestId;
-      const schemaVersion = schema?.properties?.schemaVersion;
-      if (
-        schemaVersion?.const !== 1 ||
-        schemaVersion?.minimum !== 1 ||
-        schemaVersion?.maximum !== 1 ||
-        requestId?.minLength !== 26 ||
-        requestId?.maxLength !== 26 ||
-        requestId?.pattern !== "^req_[A-Za-z0-9_-]{22}$" ||
-        outcome?.const !== "accepted" ||
-        outcome?.minLength !== 8 ||
-        outcome?.maxLength !== 8
-      ) {
-        report(scope, "connector car proposal result differs from the generic acknowledgement");
-      }
-    }
-    if (entry.file === "problem-details.schema.json") {
-      const errorCode = schema?.properties?.errorCode;
-      const requestId = schema?.properties?.requestId;
-      const retryable = schema?.properties?.retryable;
-      const schemaVersion = schema?.properties?.schemaVersion;
-      const status = schema?.properties?.status;
-      const title = schema?.properties?.title;
-      if (
-        schemaVersion?.const !== 1 ||
-        schemaVersion?.minimum !== 1 ||
-        schemaVersion?.maximum !== 1 ||
-        requestId?.minLength !== 26 ||
-        requestId?.maxLength !== 26 ||
-        requestId?.pattern !== "^req_[A-Za-z0-9_-]{22}$" ||
-        status?.minimum !== 400 ||
-        status?.maximum !== 599 ||
-        !sameEntries(errorCode?.enum ?? [], publicProblemCodes) ||
-        errorCode?.minLength !== 8 ||
-        errorCode?.maxLength !== 23 ||
-        !sameEntries(title?.enum ?? [], publicProblemTitles) ||
-        title?.minLength !== 1 ||
-        title?.maxLength !== 23 ||
-        retryable?.type !== "boolean"
-      ) {
-        report(scope, "public problem contract differs from the reviewed HTTP boundary");
-      }
-    }
-  }
-
-  const publicRaceStatusOperation = operations[0];
-  if (
-    operations.length !== 8 ||
-    publicRaceStatusOperation?.entry.method !== "get" ||
-    publicRaceStatusOperation.entry.path !== "/v1/community/race/status" ||
-    publicRaceStatusOperation.entry.operationId !== "getCommunityRaceStatusV1" ||
-    publicRaceStatusOperation.entry.implementationStatus !== "implemented-local" ||
-    publicRaceStatusOperation.entry.summary !== "Read one bounded Community race status page" ||
-    publicRaceStatusOperation.entry.admissionPolicy !== "no-queue-4" ||
-    publicRaceStatusOperation.entry.authenticationContract !== "none" ||
-    publicRaceStatusOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
-    publicRaceStatusOperation.entry.requestSchema !== "none" ||
-    publicRaceStatusOperation.entry.responseSchema !== "CommunityRaceStatusPageV1" ||
-    publicRaceStatusOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(publicRaceStatusOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
-    publicRaceStatusOperation.entry.queryPolicy !== "closed-single-value" ||
-    publicRaceStatusOperation.entry.requestBodyPolicy !== "none" ||
-    publicRaceStatusOperation.entry.cacheControl !== "no-store" ||
-    publicRaceStatusOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "public Community race status operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const publicRaceOperation = operations[1];
-  if (
-    operations.length !== 8 ||
-    publicRaceOperation?.entry.method !== "get" ||
-    publicRaceOperation.entry.path !== "/v1/community/race" ||
-    publicRaceOperation.entry.operationId !== "getCommunityRaceV1" ||
-    publicRaceOperation.entry.implementationStatus !== "implemented-local" ||
-    publicRaceOperation.entry.summary !== "Read one bounded Community race page" ||
-    publicRaceOperation.entry.admissionPolicy !== "no-queue-4" ||
-    publicRaceOperation.entry.authenticationContract !== "none" ||
-    publicRaceOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
-    publicRaceOperation.entry.requestSchema !== "none" ||
-    publicRaceOperation.entry.responseSchema !== "CommunityRacePageV1" ||
-    publicRaceOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(publicRaceOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
-    publicRaceOperation.entry.queryPolicy !== "closed-single-value" ||
-    publicRaceOperation.entry.requestBodyPolicy !== "none" ||
-    publicRaceOperation.entry.cacheControl !== "no-store" ||
-    publicRaceOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "public Community race operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const publicScoreOperation = operations[2];
-  if (
-    operations.length !== 8 ||
-    publicScoreOperation?.entry.method !== "get" ||
-    publicScoreOperation.entry.path !== "/v1/community/scores" ||
-    publicScoreOperation.entry.operationId !== "getCommunityScoresV1" ||
-    publicScoreOperation.entry.implementationStatus !== "implemented-local" ||
-    publicScoreOperation.entry.summary !== "Read one bounded Community score page" ||
-    publicScoreOperation.entry.admissionPolicy !== "no-queue-4" ||
-    publicScoreOperation.entry.authenticationContract !== "none" ||
-    publicScoreOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
-    publicScoreOperation.entry.requestSchema !== "none" ||
-    publicScoreOperation.entry.responseSchema !== "CommunityScorePageV1" ||
-    publicScoreOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(publicScoreOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
-    publicScoreOperation.entry.queryPolicy !== "closed-single-value" ||
-    publicScoreOperation.entry.requestBodyPolicy !== "none" ||
-    publicScoreOperation.entry.cacheControl !== "no-store" ||
-    publicScoreOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "public Community score operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const publicTokenOperation = operations[3];
-  if (
-    publicTokenOperation?.entry.method !== "get" ||
-    publicTokenOperation.entry.path !== "/v1/community/tokens" ||
-    publicTokenOperation.entry.operationId !== "getCommunityTokensV1" ||
-    publicTokenOperation.entry.implementationStatus !== "implemented-local" ||
-    publicTokenOperation.entry.summary !== "Read one bounded Community token leaderboard page" ||
-    publicTokenOperation.entry.admissionPolicy !== "no-queue-4" ||
-    publicTokenOperation.entry.authenticationContract !== "none" ||
-    publicTokenOperation.entry.querySchema !== "CommunityScoreQueryV1" ||
-    publicTokenOperation.entry.requestSchema !== "none" ||
-    publicTokenOperation.entry.responseSchema !== "CommunityTokenRaceStatusPageV1" ||
-    publicTokenOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(publicTokenOperation.entry.problemStatuses, [400, 406, 429, 500, 503]) ||
-    publicTokenOperation.entry.queryPolicy !== "closed-single-value" ||
-    publicTokenOperation.entry.requestBodyPolicy !== "none" ||
-    publicTokenOperation.entry.cacheControl !== "no-store" ||
-    publicTokenOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "public Community token operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const communityUsageSyncOperation = operations[4];
-  if (
-    communityUsageSyncOperation?.entry.method !== "post" ||
-    communityUsageSyncOperation.entry.path !== "/v1/community/usage" ||
-    communityUsageSyncOperation.entry.operationId !== "postCommunityUsageSyncV1" ||
-    communityUsageSyncOperation.entry.implementationStatus !== "implemented-local" ||
-    communityUsageSyncOperation.entry.summary !==
-      "Submit one bounded provider-neutral Community usage snapshot" ||
-    communityUsageSyncOperation.entry.admissionPolicy !== "no-queue-4" ||
-    communityUsageSyncOperation.entry.authenticationContract !==
-      "connector-usage-sync-authentication.json" ||
-    communityUsageSyncOperation.entry.querySchema !== "none" ||
-    communityUsageSyncOperation.entry.requestSchema !== "UsageSyncV1" ||
-    communityUsageSyncOperation.entry.responseSchema !== "UsageSyncResultV1" ||
-    communityUsageSyncOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(
-      communityUsageSyncOperation.entry.problemStatuses,
-      [400, 401, 405, 406, 422, 500, 503],
-    ) ||
-    communityUsageSyncOperation.entry.queryPolicy !== "none" ||
-    communityUsageSyncOperation.entry.requestBodyPolicy !== "exact-raw-json-8192" ||
-    communityUsageSyncOperation.entry.cacheControl !== "no-store" ||
-    communityUsageSyncOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report(
-      "contracts/v1/manifest.json",
-      "provider-neutral Community usage sync operation differs from the reviewed HTTP contract",
-    );
-  }
-
-  const carProposalOperation = operations[5];
-  if (
-    carProposalOperation?.entry.method !== "post" ||
-    carProposalOperation.entry.path !== "/v1/connector/cars/proposals" ||
-    carProposalOperation.entry.operationId !== "postConnectorCarProposalV1" ||
-    carProposalOperation.entry.implementationStatus !== "implemented-local" ||
-    carProposalOperation.entry.summary !== "Submit one bounded device-authenticated car proposal" ||
-    carProposalOperation.entry.admissionPolicy !== "no-queue-4" ||
-    carProposalOperation.entry.authenticationContract !==
-      "connector-car-proposal-authentication.json" ||
-    carProposalOperation.entry.querySchema !== "none" ||
-    carProposalOperation.entry.requestSchema !== "CarRecipeV1" ||
-    carProposalOperation.entry.responseSchema !== "ConnectorCarProposalResultV1" ||
-    carProposalOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(
-      carProposalOperation.entry.problemStatuses,
-      [400, 401, 405, 406, 422, 429, 500, 503],
-    ) ||
-    carProposalOperation.entry.queryPolicy !== "none" ||
-    carProposalOperation.entry.requestBodyPolicy !== "exact-raw-json-512" ||
-    carProposalOperation.entry.cacheControl !== "no-store" ||
-    carProposalOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report("contracts/v1/manifest.json", "connector car proposal operation differs from review");
-  }
-
-  const pairingPollOperation = operations[6];
-  if (
-    pairingPollOperation?.entry.method !== "post" ||
-    pairingPollOperation.entry.path !== "/v1/connector/pairing/poll" ||
-    pairingPollOperation.entry.operationId !== "postConnectorPairingPollV1" ||
-    pairingPollOperation.entry.implementationStatus !== "implemented-local" ||
-    pairingPollOperation.entry.summary !== "Poll and complete one approved connector pairing" ||
-    pairingPollOperation.entry.admissionPolicy !== "no-queue-4" ||
-    pairingPollOperation.entry.authenticationContract !== "connector-pairing-transport.json" ||
-    pairingPollOperation.entry.querySchema !== "none" ||
-    pairingPollOperation.entry.requestSchema !== "ConnectorPairingPollV1" ||
-    pairingPollOperation.entry.responseSchema !== "ConnectorPairingPollResultV1" ||
-    pairingPollOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(pairingPollOperation.entry.problemStatuses, [400, 405, 406, 429, 500, 503]) ||
-    pairingPollOperation.entry.queryPolicy !== "none" ||
-    pairingPollOperation.entry.requestBodyPolicy !== "exact-raw-json-1024" ||
-    pairingPollOperation.entry.cacheControl !== "no-store" ||
-    pairingPollOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report("contracts/v1/manifest.json", "pairing poll operation differs from review");
-  }
-
-  const pairingStartOperation = operations[7];
-  if (
-    pairingStartOperation?.entry.method !== "post" ||
-    pairingStartOperation.entry.path !== "/v1/connector/pairing/start" ||
-    pairingStartOperation.entry.operationId !== "postConnectorPairingStartV1" ||
-    pairingStartOperation.entry.implementationStatus !== "implemented-local" ||
-    pairingStartOperation.entry.summary !== "Start one bounded connector pairing transaction" ||
-    pairingStartOperation.entry.admissionPolicy !== "no-queue-4" ||
-    pairingStartOperation.entry.authenticationContract !== "connector-pairing-transport.json" ||
-    pairingStartOperation.entry.querySchema !== "none" ||
-    pairingStartOperation.entry.requestSchema !== "ConnectorPairingStartV1" ||
-    pairingStartOperation.entry.responseSchema !== "ConnectorPairingStartResultV1" ||
-    pairingStartOperation.entry.problemSchema !== "ProblemDetailsV1" ||
-    !sameEntries(pairingStartOperation.entry.problemStatuses, [400, 405, 406, 429, 500, 503]) ||
-    pairingStartOperation.entry.queryPolicy !== "none" ||
-    pairingStartOperation.entry.requestBodyPolicy !== "exact-raw-json-1024" ||
-    pairingStartOperation.entry.cacheControl !== "no-store" ||
-    pairingStartOperation.entry.corsPolicy !== "same-origin"
-  ) {
-    report("contracts/v1/manifest.json", "pairing start operation differs from review");
-  }
-
-  for (const operation of operations) {
-    if (operation.entry.implementationStatus !== "implemented-local") {
-      continue;
-    }
-    const evidencePaths = implementedLocalEvidencePaths.get(operation.entry.operationId);
-    if (evidencePaths === undefined) {
-      report(
-        "contracts/v1/manifest.json",
-        `implemented-local operation ${operation.entry.operationId} has no evidence policy`,
-      );
-      continue;
-    }
-    for (const relativePath of evidencePaths) {
-      const absolutePath = resolve(root, relativePath);
-      if (!existsSync(absolutePath)) {
-        report(relativePath, "implemented-local contract evidence is missing");
-      } else {
-        const stats = lstatSync(absolutePath);
-        if (stats.isSymbolicLink() || !stats.isFile()) {
-          report(relativePath, "implemented-local contract evidence must be a regular file");
-        }
-      }
-    }
-  }
-
-  const schemaDirectory = resolve(root, "contracts", "v1");
-  for (const entry of readdirSync(schemaDirectory, { withFileTypes: true })) {
-    if (entry.name.endsWith(".schema.json") && !listedFiles.has(entry.name)) {
-      report(`contracts/v1/${entry.name}`, "schema is not listed in the version manifest");
-    }
-    if (
-      /^connector-[a-z0-9]+(?:-[a-z0-9]+)*-authentication\.json$/.test(entry.name) &&
-      !listedPolicies.has(entry.name)
-    ) {
-      report(`contracts/v1/${entry.name}`, "authentication policy is not listed in the manifest");
-    }
   }
 
   try {
     const expectedArtifacts = await buildGeneratedArtifacts(root);
     for (const [relativePath, expected] of expectedArtifacts) {
       const absolutePath = resolve(root, relativePath);
-      if (!existsSync(absolutePath)) {
+      if (!existsSync(absolutePath) || !lstatSync(absolutePath).isFile()) {
         report(relativePath, "generated contract artifact is missing");
-      } else {
-        const stats = lstatSync(absolutePath);
-        if (stats.isSymbolicLink() || !stats.isFile()) {
-          report(relativePath, "generated artifact must be a regular non-symbolic-link file");
-        } else if (readFileSync(absolutePath, "utf8").replaceAll("\r\n", "\n") !== expected) {
-          report(relativePath, "generated contract artifact has drifted from canonical schemas");
-        }
+      } else if (readFileSync(absolutePath, "utf8").replaceAll("\r\n", "\n") !== expected) {
+        report(relativePath, "generated contract artifact has drifted from canonical sources");
       }
     }
   } catch (error) {
     report("generated contracts", `could not generate expected artifacts: ${error.message}`);
+  }
+}
+
+const pairingVector = readJson("contracts/v1/connector-pairing-possession.test-vector.json");
+if (isObject(pairingVector)) {
+  const encodedChallenge = Buffer.from(pairingVector.pairingChallengeBytes ?? []).toString(
+    "base64url",
+  );
+  const expectedMessage = [
+    "viberacing-pairing-poll-possession-v1",
+    pairingVector.pairingId,
+    pairingVector.pairingChallenge,
+    pairingVector.installationPublicKey,
+  ].join("\n");
+  if (
+    pairingVector.pairingChallenge !== encodedChallenge ||
+    pairingVector.possessionMessage !== expectedMessage ||
+    !verifyEd25519(
+      pairingVector.installationPublicKey,
+      expectedMessage,
+      pairingVector.possessionSignature,
+    )
+  ) {
+    report(
+      "contracts/v1/connector-pairing-possession.test-vector.json",
+      "pairing possession vector is not self-consistent",
+    );
+  }
+}
+
+const pairingStartVector = readJson(
+  "contracts/v1/connector-pairing-start-possession.test-vector.json",
+);
+if (isObject(pairingStartVector)) {
+  const canonicalManifest = JSON.stringify(pairingStartVector.manifest);
+  const manifestDigest = createHash("sha256").update(canonicalManifest, "utf8").digest("hex");
+  const expectedMessage = [
+    "viberacing-pairing-start-possession-v1",
+    manifestDigest,
+    pairingStartVector.clientRateIdentifier,
+    pairingStartVector.signedAt,
+    pairingStartVector.nonce,
+  ].join("\n");
+  if (
+    pairingStartVector.canonicalManifest !== canonicalManifest ||
+    pairingStartVector.manifestDigest !== manifestDigest ||
+    pairingStartVector.possessionMessage !== expectedMessage ||
+    !verifyEd25519(
+      pairingStartVector.manifest?.installationPublicKey,
+      expectedMessage,
+      pairingStartVector.possessionSignature,
+    )
+  ) {
+    report(
+      "contracts/v1/connector-pairing-start-possession.test-vector.json",
+      "pairing start possession vector is not self-consistent",
+    );
+  }
+}
+
+for (const [file, requestTarget, messagePrefix] of [
+  [
+    "connector-car-proposal-device-request.test-vector.json",
+    "/v1/connector/cars/proposals",
+    "viberacing-car-proposal-request-v1",
+  ],
+  [
+    "connector-usage-sync-device-request.test-vector.json",
+    "/v1/usage",
+    "viberacing-device-request-v1",
+  ],
+]) {
+  const relativePath = `contracts/v1/${file}`;
+  const vector = readJson(relativePath);
+  if (!isObject(vector)) {
+    continue;
+  }
+  const bodyDigest = createHash("sha256")
+    .update(vector.body ?? "", "utf8")
+    .digest("base64url");
+  const timestamp = vector.deviceTimestamp ?? JSON.parse(vector.body ?? "{}").observedAt;
+  const fields = [
+    messagePrefix,
+    "POST",
+    requestTarget,
+    bodyDigest,
+    vector.deviceId,
+    vector.deviceNonceBase64Url,
+    timestamp,
+    ...(file.startsWith("connector-usage") ? [JSON.parse(vector.body ?? "{}").syncId] : []),
+  ];
+  const message = fields.join("\n");
+  if (
+    vector.bodyDigestBase64Url !== bodyDigest ||
+    vector.deviceSignatureMessage !== message ||
+    !verifyEd25519(vector.devicePublicKeyBase64Url, message, vector.deviceSignatureBase64Url)
+  ) {
+    report(relativePath, "device request vector is not self-consistent");
   }
 }
 
@@ -1774,5 +1036,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Contract check passed (${String(sources.records.length)} schemas, ${String(sources.policies.length)} policies, ${String(sources.operations.length)} operations, 2 generated artifacts).`,
+  `Contract check passed (${String(schemaFiles.length)} schemas, ${String(policyFiles.length)} policies, ${String(expectedOperations.size)} operations, 3 signed vectors, 2 generated artifacts).`,
 );

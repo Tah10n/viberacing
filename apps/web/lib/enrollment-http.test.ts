@@ -14,22 +14,13 @@ import type { EnrollmentService } from "./enrollment-service";
 const origin = "https://race.example.com";
 const inviteCode =
   "vri_00000000-0000-4000-8000-000000000601_" + Buffer.alloc(32, 1).toString("base64url");
-const joinBody = new URLSearchParams({
-  handle: "pixel_driver",
-  inviteCode,
-  locale: "en",
-  motionPreference: "system",
-  streakVisible: "false",
-  theme: "neon-night",
-}).toString();
+const joinBody = new URLSearchParams({ inviteCode, locale: "en" }).toString();
 const config = resolveEnrollmentConfig({
   GITHUB_CLIENT_ID: "Ov23abcdefghijklmno",
   GITHUB_CLIENT_SECRET: "a".repeat(40),
   NODE_ENV: "test",
   SESSION_SECRET: Buffer.alloc(32, 2).toString("base64url"),
   VIBERACING_PUBLIC_ORIGIN: origin,
-  VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "6",
-  VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "600",
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
   VIBERACING_RECOVERY_ARGON2_PASSES: "2",
@@ -54,18 +45,10 @@ function post(path: string, body: string, contentType: string, cookie?: string):
 
 function serviceFixture(): EnrollmentService {
   return {
-    beginPairingApproval: vi.fn(() =>
+    beginAccountTargetAction: vi.fn(() =>
       Promise.resolve({
-        options: { challenge: Buffer.alloc(32, 13).toString("base64url") },
-        pairing: {
-          architecture: "x86_64" as const,
-          connectorVersion: "1.2.3",
-          deviceLabel: "Studio PC",
-          expiresAt: "2026-07-16T10:09:00.000Z",
-          osFamily: "windows" as const,
-          publicKeyFingerprint: `SHA256:${Buffer.alloc(32, 14).toString("base64url")}`,
-        },
-        pairingApprovalCookie: "opaque-pairing-approval",
+        actionCookie: "opaque-account-target",
+        options: { challenge: Buffer.alloc(32, 15).toString("base64url") },
       }),
     ),
     beginGithub: vi.fn(() => ({
@@ -123,24 +106,14 @@ function serviceFixture(): EnrollmentService {
         recoveryCookie: "opaque-recovery",
       }),
     ),
-    beginSourceReactivation: vi.fn(() =>
-      Promise.resolve({
-        options: { challenge: Buffer.alloc(32, 9).toString("base64url") },
-        sourceReactivationCookie: "opaque-source-reactivation",
-      }),
-    ),
-    beginSourceUnlink: vi.fn(() =>
-      Promise.resolve({
-        options: { challenge: Buffer.alloc(32, 10).toString("base64url") },
-        sourceUnlinkCookie: "opaque-source-unlink",
-      }),
-    ),
     cancelGithub: vi.fn(() => true),
-    completeGithub: vi.fn(() => Promise.resolve({ sessionCookie: "opaque-session" })),
+    completeGithub: vi.fn(() =>
+      Promise.resolve({ outcome: "continue" as const, sessionCookie: "opaque-session" }),
+    ),
+    completeAccountTargetAction: vi.fn(() => Promise.resolve(true)),
     completeLogin: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskey: vi.fn(() => Promise.resolve({ sessionCookie: "active-session" })),
     completePasskeyAdd: vi.fn(() => Promise.resolve(true)),
-    completePairingApproval: vi.fn(() => Promise.resolve(true)),
     completePasskeyRevoke: vi.fn(() => Promise.resolve(true)),
     completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
     completeRecoveryCodeRotation: vi.fn(() =>
@@ -153,17 +126,16 @@ function serviceFixture(): EnrollmentService {
       }),
     ),
     completeRecovery: vi.fn(() => Promise.resolve({ sessionCookie: "recovered-session" })),
-    completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
-    completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
     logout: vi.fn(() => Promise.resolve(true)),
-    readAccountOverview: vi.fn(() => Promise.resolve(undefined)),
-    readActiveDeviceInventory: vi.fn(() => Promise.resolve(undefined)),
+    pauseAgentAccount: vi.fn(() => Promise.resolve(true)),
+    readAccountDashboard: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyInventory: vi.fn(() => Promise.resolve(undefined)),
     readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
     readSession: vi.fn(() => undefined),
-    pauseSource: vi.fn(() => Promise.resolve(true)),
-    revokeDevice: vi.fn(() => Promise.resolve(true)),
     setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
+    setProviderBreakdownVisibility: vi.fn((_sessionCookie, visible: boolean) =>
+      Promise.resolve(visible),
+    ),
   };
 }
 
@@ -174,6 +146,11 @@ describe("enrollment HTTP boundary", () => {
   beforeEach(() => {
     service = serviceFixture();
     runtime = {
+      batchPairingService: {
+        beginApproval: vi.fn(() => Promise.resolve(undefined)),
+        completeApproval: vi.fn(() => Promise.resolve(false)),
+        review: vi.fn(() => Promise.resolve(undefined)),
+      },
       carProposalService: {
         approve: vi.fn(() => Promise.resolve(true)),
         propose: vi.fn(() => Promise.resolve(true)),
@@ -246,6 +223,7 @@ describe("enrollment HTTP boundary", () => {
       admission: createEnrollmentAdmission(),
       enrollmentEnabled: true,
       getRuntime: () => runtime,
+      inviteGateEnabled: true,
     });
     const response = await http.start(
       post("/auth/github/start", joinBody, "application/x-www-form-urlencoded"),
@@ -281,6 +259,7 @@ describe("enrollment HTTP boundary", () => {
       admission: createEnrollmentAdmission(),
       enrollmentEnabled: true,
       getRuntime: () => runtime,
+      inviteGateEnabled: true,
     });
     const response = await http.callback(
       new Request(`${origin}/auth/github/callback?code=valid_code&state=valid_state`, {
@@ -296,6 +275,7 @@ describe("enrollment HTTP boundary", () => {
       "valid_state",
       "opaque-oauth",
       expect.any(AbortSignal),
+      true,
       true,
     );
 
@@ -422,7 +402,12 @@ describe("enrollment HTTP boundary", () => {
       getRuntime: () => runtime,
     });
     const options = await http.passkeyOptions(
-      post("/auth/passkey/options", "{}", "application/json", "viberacing_session=opaque-session"),
+      post(
+        "/auth/passkey/options",
+        JSON.stringify({ handle: "pixel_driver" }),
+        "application/json",
+        "viberacing_session=opaque-session",
+      ),
     );
     expect(options.status).toBe(200);
     expect(options.headers.get("set-cookie")).toContain("viberacing_passkey=opaque-passkey");
@@ -430,12 +415,16 @@ describe("enrollment HTTP boundary", () => {
     const optionsBody = JSON.parse(await options.text()) as unknown;
     expect(optionsBody).toBeTypeOf("object");
     expect(typeof (optionsBody as Record<string, unknown>).challenge).toBe("string");
-    expect(service.beginPasskey).toHaveBeenCalledWith("opaque-session", true);
+    expect(service.beginPasskey).toHaveBeenCalledWith(
+      "opaque-session",
+      { handle: "pixel_driver" },
+      true,
+    );
 
     const verification = await http.passkeyVerify(
       post(
         "/auth/passkey/verify",
-        JSON.stringify({ label: "Primary passkey", response: { id: "synthetic" } }),
+        JSON.stringify({ response: { id: "synthetic" } }),
         "application/json",
         "viberacing_session=opaque-session; viberacing_passkey=opaque-passkey",
       ),
@@ -446,20 +435,21 @@ describe("enrollment HTTP boundary", () => {
     expect(service.completePasskey).toHaveBeenCalledWith(
       "opaque-session",
       "opaque-passkey",
-      { label: "Primary passkey", response: { id: "synthetic" } },
+      { response: { id: "synthetic" } },
       true,
     );
 
+    vi.mocked(service.beginPasskey).mockResolvedValueOnce(undefined);
     await expect(
       http.passkeyOptions(
         post(
           "/auth/passkey/options",
-          " {}",
+          "{}",
           "application/json",
           "viberacing_session=opaque-session",
         ),
       ),
-    ).resolves.toMatchObject({ status: 400 });
+    ).resolves.toMatchObject({ status: 401 });
   });
 
   it("binds passkey addition to the session and two fresh ceremonies", async () => {
@@ -662,8 +652,6 @@ describe("enrollment HTTP boundary", () => {
     expect(verification.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_recovery=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_recovery_codes=");
-    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
-    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
     expect(verification.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.completeProfileDeletion).toHaveBeenCalledWith(
       "opaque-session",
@@ -698,54 +686,6 @@ describe("enrollment HTTP boundary", () => {
     );
     crossOrigin.headers.set("origin", "https://attacker.example");
     await expect(http.profileDeletionOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
-  });
-
-  it("revokes only one exact owned device from a same-origin session form", async () => {
-    const http = createEnrollmentHttp({
-      admission: createEnrollmentAdmission(),
-      getRuntime: () => runtime,
-    });
-    const deviceId = `dev_${"A".repeat(22)}`;
-    const response = await http.deviceRevoke(
-      post(
-        "/auth/devices/revoke",
-        new URLSearchParams({ deviceId }).toString(),
-        "application/x-www-form-urlencoded",
-        "viberacing_session=opaque-session",
-      ),
-    );
-    expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe(`${origin}/account`);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(service.revokeDevice).toHaveBeenCalledWith("opaque-session", deviceId);
-
-    await expect(
-      http.deviceRevoke(
-        post(
-          "/auth/devices/revoke",
-          `deviceId=${deviceId}&deviceId=${deviceId}`,
-          "application/x-www-form-urlencoded",
-          "viberacing_session=opaque-session",
-        ),
-      ),
-    ).resolves.toMatchObject({ status: 400 });
-    await expect(
-      http.deviceRevoke(
-        post(
-          "/auth/devices/revoke",
-          new URLSearchParams({ deviceId }).toString(),
-          "application/x-www-form-urlencoded",
-        ),
-      ),
-    ).resolves.toMatchObject({ status: 303 });
-    const crossOrigin = post(
-      "/auth/devices/revoke",
-      new URLSearchParams({ deviceId }).toString(),
-      "application/x-www-form-urlencoded",
-      "viberacing_session=opaque-session",
-    );
-    crossOrigin.headers.set("origin", "https://attacker.example");
-    await expect(http.deviceRevoke(crossOrigin)).resolves.toMatchObject({ status: 400 });
   });
 
   it("changes profile visibility only from the exact same-origin session form", async () => {
@@ -804,246 +744,122 @@ describe("enrollment HTTP boundary", () => {
     ).resolves.toMatchObject({ status: 400 });
   });
 
-  it("pauses one opaque source control and reactivates it only after fresh passkey proof", async () => {
+  it("bounds private account controls and fresh-passkey actions to exact same-origin routes", async () => {
     const http = createEnrollmentHttp({
       admission: createEnrollmentAdmission(),
       getRuntime: () => runtime,
     });
-    const sourceControl = "opaque-source-control";
-    const paused = await http.sourcePause(
+    const targetControl = "opaque-target-control";
+    const paused = await http.accountPause(
       post(
-        "/auth/sources/pause",
-        new URLSearchParams({ sourceControl }).toString(),
+        "/auth/accounts/pause",
+        new URLSearchParams({ targetControl }).toString(),
         "application/x-www-form-urlencoded",
         "viberacing_session=opaque-session",
       ),
     );
     expect(paused.status).toBe(303);
     expect(paused.headers.get("location")).toBe(`${origin}/account`);
-    expect(service.pauseSource).toHaveBeenCalledWith("opaque-session", sourceControl);
+    expect(paused.headers.get("cache-control")).toBe("no-store");
+    expect(paused.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(service.pauseAgentAccount).toHaveBeenCalledWith("opaque-session", targetControl);
 
-    const options = await http.sourceReactivationOptions(
-      post(
-        "/auth/sources/reactivate/options",
-        JSON.stringify({ sourceControl }),
-        "application/json",
-        "viberacing_session=opaque-session",
-      ),
-    );
-    expect(options.status).toBe(200);
-    expect(options.headers.get("set-cookie")).toContain(
-      "viberacing_source_reactivation=opaque-source-reactivation",
-    );
-    expect(options.headers.get("set-cookie")).toContain("Path=/auth/sources/reactivate");
-    expect(service.beginSourceReactivation).toHaveBeenCalledWith("opaque-session", {
-      sourceControl,
-    });
-
-    const verification = await http.sourceReactivationVerify(
-      post(
-        "/auth/sources/reactivate/verify",
-        JSON.stringify({ response: { id: "synthetic" } }),
-        "application/json",
-        "viberacing_session=opaque-session; viberacing_source_reactivation=opaque-source-reactivation",
-      ),
-    );
-    expect(verification.status).toBe(204);
-    expect(verification.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
-    expect(service.completeSourceReactivation).toHaveBeenCalledWith(
-      "opaque-session",
-      "opaque-source-reactivation",
-      { response: { id: "synthetic" } },
-    );
-
-    const unlinkOptions = await http.sourceUnlinkOptions(
-      post(
-        "/auth/sources/unlink/options",
-        JSON.stringify({ sourceControl }),
-        "application/json",
-        "viberacing_session=opaque-session",
-      ),
-    );
-    expect(unlinkOptions.status).toBe(200);
-    expect(unlinkOptions.headers.get("set-cookie")).toContain(
-      "viberacing_source_unlink=opaque-source-unlink",
-    );
-    expect(unlinkOptions.headers.get("set-cookie")).toContain("Path=/auth/sources/unlink");
-    expect(service.beginSourceUnlink).toHaveBeenCalledWith("opaque-session", { sourceControl });
-
-    const unlinkVerification = await http.sourceUnlinkVerify(
-      post(
-        "/auth/sources/unlink/verify",
-        JSON.stringify({ response: { id: "synthetic" } }),
-        "application/json",
-        "viberacing_session=opaque-session; viberacing_source_unlink=opaque-source-unlink",
-      ),
-    );
-    expect(unlinkVerification.status).toBe(204);
-    expect(unlinkVerification.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
-    expect(service.completeSourceUnlink).toHaveBeenCalledWith(
-      "opaque-session",
-      "opaque-source-unlink",
-      { response: { id: "synthetic" } },
-    );
-
-    await expect(
-      http.sourcePause(
+    const actions = [
+      {
+        cookie: "viberacing_account_reactivation",
+        path: "/auth/accounts/reactivate",
+        purpose: "account_reactivate" as const,
+      },
+      {
+        cookie: "viberacing_account_unlink",
+        path: "/auth/accounts/unlink",
+        purpose: "account_unlink" as const,
+      },
+      {
+        cookie: "viberacing_device_revocation",
+        path: "/auth/devices/revoke",
+        purpose: "device_revoke" as const,
+      },
+      {
+        cookie: "viberacing_installation_revocation",
+        path: "/auth/installations/revoke",
+        purpose: "installation_revoke" as const,
+      },
+    ];
+    for (const action of actions) {
+      const options = await http.accountTargetOptions(
         post(
-          "/auth/sources/pause",
-          `sourceControl=${sourceControl}&sourceControl=${sourceControl}`,
+          `${action.path}/options`,
+          JSON.stringify({ targetControl }),
+          "application/json",
+          "viberacing_session=opaque-session",
+        ),
+        action.purpose,
+      );
+      expect(options.status).toBe(200);
+      expect(options.headers.get("cache-control")).toBe("no-store");
+      expect(options.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(options.headers.get("set-cookie")).toContain(`${action.cookie}=opaque-account-target`);
+      expect(options.headers.get("set-cookie")).toContain(`Path=${action.path}`);
+      expect(service.beginAccountTargetAction).toHaveBeenLastCalledWith(
+        "opaque-session",
+        { targetControl },
+        action.purpose,
+      );
+
+      const verification = await http.accountTargetVerify(
+        post(
+          `${action.path}/verify`,
+          JSON.stringify({ response: { id: "synthetic" } }),
+          "application/json",
+          `viberacing_session=opaque-session; ${action.cookie}=opaque-account-target`,
+        ),
+        action.purpose,
+      );
+      expect(verification.status).toBe(204);
+      expect(verification.headers.get("cache-control")).toBe("no-store");
+      expect(verification.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(verification.headers.get("set-cookie")).toContain(`${action.cookie}=`);
+      expect(service.completeAccountTargetAction).toHaveBeenLastCalledWith(
+        "opaque-session",
+        "opaque-account-target",
+        { response: { id: "synthetic" } },
+        action.purpose,
+      );
+    }
+
+    const providerBreakdown = await http.profileProviderBreakdownVisibility(
+      post(
+        "/auth/profile/provider-breakdown",
+        "providerBreakdown=shown",
+        "application/x-www-form-urlencoded",
+        "viberacing_session=opaque-session",
+      ),
+    );
+    expect(providerBreakdown.status).toBe(303);
+    expect(providerBreakdown.headers.get("location")).toBe(`${origin}/account`);
+    expect(service.setProviderBreakdownVisibility).toHaveBeenCalledWith("opaque-session", true);
+
+    const crossOrigin = post(
+      "/auth/accounts/unlink/options",
+      JSON.stringify({ targetControl }),
+      "application/json",
+      "viberacing_session=opaque-session",
+    );
+    crossOrigin.headers.set("origin", "https://attacker.example");
+    await expect(http.accountTargetOptions(crossOrigin, "account_unlink")).resolves.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      http.accountPause(
+        post(
+          "/auth/accounts/pause",
+          `targetControl=${targetControl}&targetControl=${targetControl}`,
           "application/x-www-form-urlencoded",
           "viberacing_session=opaque-session",
         ),
       ),
     ).resolves.toMatchObject({ status: 400 });
-    const crossOrigin = post(
-      "/auth/sources/reactivate/options",
-      JSON.stringify({ sourceControl }),
-      "application/json",
-      "viberacing_session=opaque-session",
-    );
-    crossOrigin.headers.set("origin", "https://attacker.example");
-    await expect(http.sourceReactivationOptions(crossOrigin)).resolves.toMatchObject({
-      status: 400,
-    });
-  });
-
-  it.each([false, undefined, "true", 1])(
-    "fails closed before pairing runtime, request parsing, or admission acquisition for enable value %#",
-    async (pairingEnabled) => {
-      const getRuntime = vi.fn(() => {
-        throw new Error("runtime-must-not-run");
-      });
-      const tryAcquire = vi.fn(() => {
-        throw new Error("admission-must-not-run");
-      });
-      const http = createEnrollmentHttp({
-        admission: Object.freeze({ tryAcquire }),
-        getRuntime,
-        pairingEnabled,
-      });
-      const makeHostileRequest = () =>
-        new Proxy(new Request(`${origin}/auth/pairing/options`, { method: "POST" }), {
-          get(_target, key) {
-            if (key === "body") {
-              return null;
-            }
-            throw new Error(`request-field-must-not-run:${String(key)}`);
-          },
-        });
-
-      for (const invoke of [
-        (request: Request) => http.pairingApprovalOptions(request),
-        (request: Request) => http.pairingApprovalVerify(request),
-      ]) {
-        const response = await invoke(makeHostileRequest());
-        expect(response.status).toBe(503);
-        expect(response.headers.get("cache-control")).toBe("no-store");
-        expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-        expect(response.headers.has("access-control-allow-origin")).toBe(false);
-        await expect(response.json()).resolves.toMatchObject({
-          errorCode: "temporarily_unavailable",
-          status: 503,
-        });
-      }
-      expect(getRuntime).not.toHaveBeenCalled();
-      expect(tryAcquire).not.toHaveBeenCalled();
-    },
-  );
-
-  it("serves pairing review and approval as two closed same-origin steps", async () => {
-    const http = createEnrollmentHttp({
-      admission: createEnrollmentAdmission(),
-      getRuntime: () => runtime,
-      pairingEnabled: true,
-      sourceCreationEnabled: false,
-    });
-    const options = await http.pairingApprovalOptions(
-      post(
-        "/auth/pairing/options",
-        JSON.stringify({
-          sourceChoice: "existing",
-          sourceControl: "opaque-source-control",
-          userCode: "7K9M-P2QR-W4XY",
-        }),
-        "application/json",
-        "viberacing_session=opaque-session",
-      ),
-    );
-    expect(options.status).toBe(200);
-    expect(options.headers.get("cache-control")).toBe("no-store");
-    expect(options.headers.get("referrer-policy")).toBe("no-referrer");
-    expect(options.headers.get("set-cookie")).toContain(
-      "viberacing_pairing_approval=opaque-pairing-approval",
-    );
-    expect(options.headers.get("set-cookie")).toContain("Path=/auth/pairing");
-    await expect(options.json()).resolves.toMatchObject({
-      options: { challenge: Buffer.alloc(32, 13).toString("base64url") },
-      pairing: {
-        architecture: "x86_64",
-        connectorVersion: "1.2.3",
-        deviceLabel: "Studio PC",
-        osFamily: "windows",
-      },
-    });
-    expect(service.beginPairingApproval).toHaveBeenCalledWith(
-      "opaque-session",
-      {
-        sourceChoice: "existing",
-        sourceControl: "opaque-source-control",
-        userCode: "7K9M-P2QR-W4XY",
-      },
-      false,
-    );
-
-    const verification = await http.pairingApprovalVerify(
-      post(
-        "/auth/pairing/verify",
-        JSON.stringify({ response: { id: "synthetic" } }),
-        "application/json",
-        "viberacing_session=opaque-session; viberacing_pairing_approval=opaque-pairing-approval",
-      ),
-    );
-    expect(verification.status).toBe(204);
-    expect(verification.headers.get("set-cookie")).toContain("viberacing_pairing_approval=");
-    expect(verification.headers.get("set-cookie")).toContain("Max-Age=0");
-    expect(service.completePairingApproval).toHaveBeenCalledWith(
-      "opaque-session",
-      "opaque-pairing-approval",
-      { response: { id: "synthetic" } },
-      false,
-    );
-
-    const crossOrigin = post(
-      "/auth/pairing/options",
-      JSON.stringify({ sourceChoice: "new", userCode: "7K9M-P2QR-W4XY" }),
-      "application/json",
-      "viberacing_session=opaque-session",
-    );
-    crossOrigin.headers.set("origin", "https://attacker.example");
-    await expect(http.pairingApprovalOptions(crossOrigin)).resolves.toMatchObject({ status: 400 });
-    await expect(
-      http.pairingApprovalOptions(
-        post(
-          "/auth/pairing/options",
-          "x".repeat(1025),
-          "application/json",
-          "viberacing_session=opaque-session",
-        ),
-      ),
-    ).resolves.toMatchObject({ status: 400 });
-    expect(service.beginPairingApproval).toHaveBeenCalledOnce();
-    await expect(
-      http.pairingApprovalVerify(
-        post(
-          "/auth/pairing/verify",
-          JSON.stringify({ response: { id: "synthetic" } }),
-          "application/json",
-          "viberacing_session=opaque-session; viberacing_pairing_approval=one; viberacing_pairing_approval=two",
-        ),
-      ),
-    ).resolves.toMatchObject({ status: 401 });
-    expect(service.completePairingApproval).toHaveBeenCalledOnce();
   });
 
   it.each([false, undefined, "true", 1])(
@@ -1311,9 +1127,6 @@ describe("enrollment HTTP boundary", () => {
     expect(response.headers.get("set-cookie")).toContain("viberacing_profile_deletion=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_recovery=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_recovery_codes=");
-    expect(response.headers.get("set-cookie")).toContain("viberacing_source_reactivation=");
-    expect(response.headers.get("set-cookie")).toContain("viberacing_source_unlink=");
-    expect(response.headers.get("set-cookie")).toContain("viberacing_pairing_approval=");
     expect(response.headers.get("set-cookie")).toContain("viberacing_session=");
     expect(service.logout).not.toHaveBeenCalled();
 

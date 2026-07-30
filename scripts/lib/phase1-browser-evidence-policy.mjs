@@ -4,20 +4,27 @@
 export const phase1KeyboardFocusSelectors = Object.freeze([
   ".skip-link",
   ".brand-lockup",
-  '.site-nav a[href="#race"]',
-  '.site-nav a[href="#simulator"]',
   '.site-nav a[href="#leaderboard"]',
+  '.site-nav a[href="#race"]',
   '.site-nav a[href="#profile"]',
+  '.site-nav a[href="#methodology"]',
   '.site-nav a[href="/login"]',
-  '.site-nav a[href="/join"]',
   ".primary-action",
+  ".secondary-action",
+  ".table-region",
+  ".semantic-leaderboard tbody tr:nth-child(1) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(2) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(3) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(4) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(5) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(6) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(7) .profile-driver-link",
+  ".semantic-leaderboard tbody tr:nth-child(8) .profile-driver-link",
   ".race-section .pixel-button",
+  ".race-alternative summary",
   ".race-controls label:nth-of-type(1) select",
   ".race-controls label:nth-of-type(2) select",
   ".race-controls label:nth-of-type(3) select",
-  ".simulator-input",
-  ".simulator-controls label:nth-of-type(2) select",
-  ".table-region",
 ]);
 
 export const phase1WebVitalsBudgets = Object.freeze({
@@ -31,7 +38,7 @@ export const phase1WebVitalsSampleCount = 3;
 export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({
     disabled: false,
-    name: "Vibe Racing — community coding race",
+    name: "Vibe Racing — Vibecode rating and token leaderboard",
     pressed: null,
     role: "RootWebArea",
   }),
@@ -40,15 +47,31 @@ export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "", pressed: null, role: "main" }),
   Object.freeze({
     disabled: false,
-    name: "BUILD FAST. RACE FAIR.",
+    name: "ALL YOUR CODING AGENTS. EVERY ACCOUNT. ONE GITHUB PROFILE.",
     pressed: null,
     role: "heading",
   }),
   Object.freeze({
     disabled: false,
-    name:
-      "Weekly race. Scores are self-reported by participating users. " +
-      "They are not audited or endorsed by OpenAI.",
+    name: "Weekly race. Community · self-reported by connected devices",
+    pressed: null,
+    role: "image",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "neon_otter: Car: Neon Night Arcade",
+    pressed: null,
+    role: "image",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "neon_otter: Car: Classic Grand Prix",
+    pressed: null,
+    role: "image",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "neon_otter: Car: Cyber Rally",
     pressed: null,
     role: "image",
   }),
@@ -58,62 +81,74 @@ export const phase1RequiredAccessibilityNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "MOTION", pressed: null, role: "combobox" }),
   Object.freeze({
     disabled: false,
-    name: "ACTIVE DAYS THIS WEEK",
-    pressed: null,
-    role: "combobox",
-  }),
-  Object.freeze({
-    disabled: false,
-    name: "HYPOTHETICAL TOKENS PER ACTIVE DAY",
-    pressed: null,
-    role: "textbox",
-  }),
-  Object.freeze({
-    disabled: false,
     name:
-      "Community leaderboard: Leaderboard. Scores are self-reported by participating users. " +
-      "They are not audited or endorsed by OpenAI.",
+      "Community · self-reported by connected devices. " +
+      "This measures token usage, not code quality. Tokenizers differ between agents.",
     pressed: null,
     role: "table",
   }),
-  Object.freeze({ disabled: true, name: "UNAVAILABLE", pressed: null, role: "button" }),
   Object.freeze({ disabled: false, name: "", pressed: null, role: "contentinfo" }),
 ]);
 
-const exactInteractiveCounts = Object.freeze({ button: 2, combobox: 4, link: 9, textbox: 1 });
+const exactInteractiveCounts = Object.freeze({ button: 1, combobox: 3, link: 17, textbox: 0 });
 const exactInteractiveNodes = Object.freeze([
   Object.freeze({ disabled: false, name: "PAUSE RACE", pressed: "false", role: "button" }),
-  Object.freeze({ disabled: true, name: "UNAVAILABLE", pressed: null, role: "button" }),
   Object.freeze({ disabled: false, name: "THEME", pressed: null, role: "combobox" }),
   Object.freeze({ disabled: false, name: "LANGUAGE", pressed: null, role: "combobox" }),
   Object.freeze({ disabled: false, name: "MOTION", pressed: null, role: "combobox" }),
-  Object.freeze({
-    disabled: false,
-    name: "ACTIVE DAYS THIS WEEK",
-    pressed: null,
-    role: "combobox",
-  }),
-  Object.freeze({
-    disabled: false,
-    name: "HYPOTHETICAL TOKENS PER ACTIVE DAY",
-    pressed: null,
-    role: "textbox",
-  }),
   Object.freeze({ disabled: false, name: "View standings", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Vibe Racing", pressed: null, role: "link" }),
-  Object.freeze({ disabled: false, name: "Weekly race", pressed: null, role: "link" }),
-  Object.freeze({ disabled: false, name: "Score simulator", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Leaderboard", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "Weekly race", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Profile", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "How ranking works", pressed: null, role: "link" }),
   Object.freeze({ disabled: false, name: "Sign in", pressed: null, role: "link" }),
-  Object.freeze({ disabled: false, name: "Join with invite", pressed: null, role: "link" }),
-  Object.freeze({ disabled: false, name: "VIEW STANDINGS", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "CONTINUE WITH GITHUB", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "HOW RANKING WORKS", pressed: null, role: "link" }),
+  Object.freeze({ disabled: false, name: "View profile: neon_otter", pressed: null, role: "link" }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: syntax_spark",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: demo_driver",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: loop_lantern",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: pixel_pulse",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: stack_rover",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({
+    disabled: false,
+    name: "View profile: cache_comet",
+    pressed: null,
+    role: "link",
+  }),
+  Object.freeze({ disabled: false, name: "View profile: debug_dash", pressed: null, role: "link" }),
 ]);
 const exactStructuralCounts = Object.freeze({
   RootWebArea: 1,
   banner: 1,
   contentinfo: 1,
-  image: 1,
+  image: 4,
   main: 1,
   navigation: 1,
   table: 1,

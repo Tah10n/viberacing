@@ -41,7 +41,12 @@ function run(directory) {
 
 function mutate(directory, path, transform) {
   const absolutePath = resolve(directory, path);
-  writeFileSync(absolutePath, transform(readFileSync(absolutePath, "utf8")));
+  const original = readFileSync(absolutePath, "utf8");
+  const mutated = transform(original);
+  if (mutated === original) {
+    throw new Error(`community checker mutation did not change ${path}`);
+  }
+  writeFileSync(absolutePath, mutated);
 }
 
 const cases = [
@@ -70,36 +75,6 @@ const cases = [
         "MAINTAINERS.md",
         (text) =>
           `${text.replace("Public maintainer registry: not configured.", "Public maintainer registry: configured.")}\n- https://github.com/viberacing-ci-fixture\n`,
-      );
-      mutate(directory, "SECURITY.md", (text) =>
-        text.replace(
-          /^Private vulnerability reporting status:.*$/m,
-          "Private vulnerability reporting status: enabled and verified.",
-        ),
-      );
-    },
-    expectedStatus: 0,
-  },
-  {
-    name: "accepts a coherent public source-only state",
-    mutate(directory) {
-      mutate(directory, "CODE_OF_CONDUCT.md", (text) =>
-        text.replace(
-          /^GitHub public interaction status:.*$/m,
-          "GitHub public interaction status: restricted and verified.",
-        ),
-      );
-      mutate(
-        directory,
-        "MAINTAINERS.md",
-        (text) =>
-          `${text.replace("Public maintainer registry: not configured.", "Public maintainer registry: configured.")}\n- https://github.com/viberacing-ci-fixture\n`,
-      );
-      mutate(directory, "SECURITY.md", (text) =>
-        text.replace(
-          /^Private vulnerability reporting status:.*$/m,
-          "Private vulnerability reporting status: enabled and verified.",
-        ),
       );
     },
     expectedStatus: 0,
@@ -177,6 +152,19 @@ const cases = [
     },
     expectedStatus: 1,
     expectedText: "unresolved owner or policy placeholder",
+  },
+  {
+    name: "rejects a roadmap that restores the engagement-points client",
+    mutate(directory) {
+      mutate(directory, "ROADMAP.md", (text) =>
+        text.replace(
+          "## Stage 6 — Thin multi-agent connector",
+          "## Stage 6 — Engagement-points client",
+        ),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "## Stage 6 — Thin multi-agent connector",
   },
   {
     name: "rejects an issue form without the sensitive-data warning",

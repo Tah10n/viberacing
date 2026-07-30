@@ -1,39 +1,32 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
 
-import { PixelRaceCanvas } from "@/components/pixel-race-canvas";
-import { ScoreSimulator } from "@/components/score-simulator";
-import { carRecipeKey } from "@/lib/car-recipe";
+import { CarRecipePreview } from "@/components/car-recipe-preview";
 import {
-  dayLabels,
-  formatCarChassis,
-  formatDayCount,
+  formatExactTokenTotal,
   formatFreshness,
-  formatScore,
   isLocale,
   translations,
   type Locale,
 } from "@/lib/i18n";
-import type { PublicRaceParticipant, SyntheticRacePayload } from "@/lib/race-types";
-import type { PublicCommunityRaceMetric } from "@/lib/public-community-race";
+import { toRaceVisualParticipants } from "@/lib/race-visual";
+import type { PublicHomePayload, PublicLeaderboardParticipant } from "@/lib/race-types";
 import { isRaceThemeId, raceThemeIds, type RaceThemeId } from "@/lib/theme";
+import type { PublicProfileSummaryV1 } from "@viberacing/contracts";
+
+const LazyPixelRaceCanvas = lazy(
+  async () =>
+    await import("@/components/pixel-race-canvas").then((module) => ({
+      default: module.PixelRaceCanvas,
+    })),
+);
 
 type MotionPreference = "system" | "on" | "off";
-type ScoreSource = "community" | "fallback" | "synthetic";
-
-type ScoreState =
-  | Readonly<{
-      metric: PublicCommunityRaceMetric;
-      participants: readonly PublicRaceParticipant[];
-      source: "community";
-    }>
-  | Readonly<{ source: Exclude<ScoreSource, "community"> }>;
 
 interface RaceExperienceProps {
   readonly accountSessionAvailable?: boolean;
-  readonly communitySeasonStart?: string;
-  readonly payload: SyntheticRacePayload;
+  readonly payload: PublicHomePayload;
   readonly profileHandle?: string | undefined;
 }
 
@@ -47,9 +40,41 @@ function isMotionPreference(value: unknown): value is MotionPreference {
   return value === "system" || value === "on" || value === "off";
 }
 
+function RaceLoading({ label }: Readonly<{ label: string }>) {
+  return (
+    <div className="race-loading" role="status">
+      <span aria-hidden="true">▰ ▰ ▰</span>
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function profileFromParticipant(
+  participant: PublicLeaderboardParticipant,
+  payload: PublicHomePayload,
+): PublicProfileSummaryV1 {
+  return {
+    carRecipe: participant.carRecipe ?? null,
+    freshnessDays: participant.freshnessDays,
+    handle: participant.handle,
+    participantCount: payload.leaderboard.participantCount,
+    rankPosition: participant.rankPosition,
+    schemaVersion: 1,
+    season: {
+      seasonEnd: payload.leaderboard.seasonEnd,
+      seasonStart: payload.leaderboard.seasonStart,
+      seasonState: payload.leaderboard.seasonState,
+    },
+    trustTier: "community",
+    weeklyTokenTotal: participant.weeklyTokenTotal,
+    ...(participant.providerBreakdown === undefined
+      ? {}
+      : { providerBreakdown: participant.providerBreakdown }),
+  };
+}
+
 export function RaceExperience({
   accountSessionAvailable = false,
-  communitySeasonStart,
   payload,
   profileHandle,
 }: RaceExperienceProps) {
@@ -58,9 +83,11 @@ export function RaceExperience({
   const [motionPreference, setMotionPreference] = useState<MotionPreference>("system");
   const [systemReducedMotion, setSystemReducedMotion] = useState(false);
   const [racePaused, setRacePaused] = useState(false);
+  const [raceReady, setRaceReady] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [scoreState, setScoreState] = useState<ScoreState>({ source: "synthetic" });
-  const [selectedProfileHandle, setSelectedProfileHandle] = useState(profileHandle);
+  const [selectedProfileHandle, setSelectedProfileHandle] = useState(
+    profileHandle ?? payload.leaderboard.participants[0]?.handle,
+  );
   const controlGroupId = useId();
   const translation = translations[locale];
 
@@ -109,57 +136,45 @@ export function RaceExperience({
   }, [locale, motionPreference, settingsLoaded, theme]);
 
   useEffect(() => {
-    if (communitySeasonStart === undefined) {
-      return undefined;
-    }
-    const controller = new AbortController();
-    void import("@/lib/public-community-race")
-      .then(({ loadPreferredPublicCommunityRace }) =>
-        loadPreferredPublicCommunityRace(communitySeasonStart, controller.signal),
-      )
-      .then((result) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setScoreState(
-          result === undefined
-            ? { source: "fallback" }
-            : { metric: result.metric, participants: result.participants, source: "community" },
-        );
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setScoreState({ source: "fallback" });
-        }
-      });
+    const timeout = window.setTimeout(() => {
+      setRaceReady(true);
+    }, 0);
     return () => {
-      controller.abort();
+      window.clearTimeout(timeout);
     };
-  }, [communitySeasonStart]);
+  }, []);
 
   useEffect(() => {
-    setSelectedProfileHandle(profileHandle);
-  }, [profileHandle]);
+    setSelectedProfileHandle(profileHandle ?? payload.leaderboard.participants[0]?.handle);
+  }, [payload.leaderboard.participants, profileHandle]);
 
   const motionEnabled =
     motionPreference === "on" || (motionPreference === "system" && !systemReducedMotion);
   const canvasAnimated = motionEnabled && !racePaused;
-  const participants =
-    scoreState.source === "community" ? scoreState.participants : payload.participants;
-  const tokenRanking = scoreState.source === "community" && scoreState.metric === "tokens";
-  const metricLabel = tokenRanking ? translation.weeklyTokens : translation.score;
-  const metricUnit = tokenRanking ? translation.tokens : translation.points;
-  const selectedCommunityParticipant =
-    scoreState.source === "community"
-      ? selectedProfileHandle === undefined
-        ? scoreState.participants[0]
-        : scoreState.participants.find(
-            (participant) => participant.handle === selectedProfileHandle,
-          )
-      : undefined;
+  const participants = payload.leaderboard.participants;
+  const raceParticipants = toRaceVisualParticipants(participants);
+  const selectedParticipant = participants.find(
+    (participant) => participant.handle === selectedProfileHandle,
+  );
+  const selectedProfile =
+    selectedProfileHandle === profileHandle &&
+    payload.profileState === "ready" &&
+    payload.profile !== null
+      ? payload.profile
+      : selectedParticipant === undefined
+        ? null
+        : profileFromParticipant(selectedParticipant, payload);
+  const selectedProfileState =
+    selectedProfile !== null
+      ? "ready"
+      : selectedProfileHandle === undefined
+        ? "none"
+        : selectedProfileHandle === profileHandle
+          ? payload.profileState
+          : "not-found";
   const rankCounts = new Map<number, number>();
   for (const participant of participants) {
-    rankCounts.set(participant.rank, (rankCounts.get(participant.rank) ?? 0) + 1);
+    rankCounts.set(participant.rankPosition, (rankCounts.get(participant.rankPosition) ?? 0) + 1);
   }
   const themeLabels: Record<RaceThemeId, string> = {
     "classic-grand-prix": translation.themeClassic,
@@ -171,21 +186,16 @@ export function RaceExperience({
     on: translation.motionOn,
     system: translation.motionSystem,
   };
-  const days = dayLabels(locale);
-  const scoreSourceLabels: Record<ScoreSource, string> = {
-    community: tokenRanking ? translation.weeklyTokens : translation.communityDataBadge,
-    fallback: translation.fallbackBadge,
-    synthetic: translation.demoBadge,
-  };
-  const weekLabel =
-    scoreState.source === "community" ? translation.communityWeek : translation.currentWeek;
+  const sourceLabel =
+    payload.source === "community" ? translation.communityDataBadge : translation.fallbackBadge;
+  const seasonLabel = `${payload.leaderboard.seasonStart} — ${payload.leaderboard.seasonEnd}`;
 
   return (
     <div
       className="race-app"
       data-motion={motionEnabled ? "on" : "off"}
-      data-score-source={scoreState.source === "community" ? "community" : "synthetic"}
-      data-score-metric={tokenRanking ? "tokens" : "score"}
+      data-ranking-metric="provider_reported_tokens_v1"
+      data-snapshot-source={payload.source}
       data-theme={theme}
     >
       <a className="skip-link" href="#leaderboard">
@@ -199,21 +209,16 @@ export function RaceExperience({
           </span>
           <span>{translation.brand}</span>
         </a>
-        <span aria-live="polite" className="demo-badge">
-          {scoreSourceLabels[scoreState.source]}
-        </span>
+        <span className="demo-badge">{sourceLabel}</span>
         <nav aria-label={translation.primaryNavigation} className="site-nav">
-          <a href="#race">{translation.liveRace}</a>
-          {tokenRanking ? null : <a href="#simulator">{translation.simulator}</a>}
           <a href="#leaderboard">{translation.leaderboard}</a>
+          <a href="#race">{translation.liveRace}</a>
           <a href="#profile">{translation.profile}</a>
+          <a href="#methodology">{translation.howRankingWorks}</a>
           {accountSessionAvailable ? (
             <a href="/account">{translation.account}</a>
           ) : (
-            <>
-              <a href="/login">{translation.signIn}</a>
-              <a href="/join">{translation.joinRace}</a>
-            </>
+            <a href="/login">{translation.signIn}</a>
           )}
         </nav>
       </header>
@@ -221,28 +226,126 @@ export function RaceExperience({
       <main id="top">
         <section aria-labelledby="hero-title" className="hero-section">
           <div className="hero-copy">
-            <p className="eyebrow">{weekLabel}</p>
+            <p className="eyebrow">{translation.communityDetail}</p>
             <h1 id="hero-title">{translation.heroTitle}</h1>
             <p className="hero-lede">{translation.heroCopy}</p>
+            <p className="metric-disclaimer">{translation.tokenQualityDisclaimer}</p>
             <div className="hero-actions">
-              <a className="primary-action" href="#leaderboard">
-                {translation.viewLeaderboard}
+              <a className="primary-action" href="/join">
+                {translation.continueWithGithub}
               </a>
-              <span>{tokenRanking ? translation.weeklyTokens : translation.noRawTokens}</span>
+              <a className="secondary-action" href="#methodology">
+                {translation.howRankingWorks}
+              </a>
             </div>
           </div>
           <aside aria-label={translation.communityNotice} className="trust-banner">
-            <strong>{translation.communityNotice}</strong>
-            <p>{translation.communityDetail}</p>
+            <strong>{translation.communityDetail}</strong>
+            <p>{translation.tokenQualityDisclaimer}</p>
             <p>{translation.noGlobalClaim}</p>
           </aside>
+        </section>
+
+        <section
+          aria-labelledby="leaderboard-heading"
+          className="leaderboard-section"
+          id="leaderboard"
+          tabIndex={-1}
+        >
+          <div className="section-heading-row">
+            <div>
+              <p className="eyebrow">{translation.communityDetail}</p>
+              <h2 id="leaderboard-heading">{translation.leaderboard}</h2>
+              <p className="section-copy">
+                {seasonLabel} · {translation.tokenQualityDisclaimer}
+              </p>
+            </div>
+            <span className="snapshot-badge">{sourceLabel}</span>
+          </div>
+          <div className="table-region" tabIndex={0}>
+            <table className="semantic-leaderboard">
+              <caption className="sr-only">
+                {`${translation.communityDetail}. ${translation.tokenQualityDisclaimer}`}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">{translation.rank}</th>
+                  <th scope="col">{translation.coder}</th>
+                  <th scope="col">{translation.weeklyTokens}</th>
+                  <th scope="col">{translation.change}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participants.map((participant) => {
+                  const sharedRank = (rankCounts.get(participant.rankPosition) ?? 0) > 1;
+                  const selected = participant.handle === selectedProfileHandle;
+                  return (
+                    <tr
+                      className={selected ? "current-driver" : undefined}
+                      key={participant.handle}
+                    >
+                      <td>
+                        <span aria-hidden="true">#{participant.rankPosition}</span>
+                        <span className="sr-only">
+                          {participant.rankPosition}. {sharedRank ? translation.sharedRank : ""}
+                        </span>
+                      </td>
+                      <th scope="row">
+                        <a
+                          aria-current={selected ? "true" : undefined}
+                          aria-label={`${translation.viewProfile}: ${participant.handle}`}
+                          className="profile-driver-link"
+                          href={`/?profile=${participant.handle}#profile`}
+                          onClick={(event) => {
+                            if (
+                              event.button !== 0 ||
+                              event.altKey ||
+                              event.ctrlKey ||
+                              event.metaKey ||
+                              event.shiftKey
+                            ) {
+                              return;
+                            }
+                            event.preventDefault();
+                            window.history.replaceState(
+                              window.history.state,
+                              "",
+                              event.currentTarget.href,
+                            );
+                            setSelectedProfileHandle(participant.handle);
+                            document.getElementById("profile")?.scrollIntoView();
+                          }}
+                        >
+                          {participant.handle}
+                        </a>
+                      </th>
+                      <td className="numeric-cell">
+                        {formatExactTokenTotal(participant.weeklyTokenTotal, locale)}{" "}
+                        {translation.tokens}
+                      </td>
+                      <td>
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">{translation.rankMovementUnavailable}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {participants.length === 0 ? (
+                  <tr>
+                    <td colSpan={4}>{translation.noParticipants}</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section aria-labelledby="race-heading" className="race-section" id="race">
           <div className="section-heading-row">
             <div>
-              <p className="eyebrow">{weekLabel}</p>
+              <p className="eyebrow">{translation.communityDetail}</p>
               <h2 id="race-heading">{translation.liveRace}</h2>
+              <p className="section-copy">Top 32 · {translation.raceAlternative}</p>
             </div>
             <button
               aria-pressed={racePaused}
@@ -256,18 +359,34 @@ export function RaceExperience({
             </button>
           </div>
 
-          <div className="race-console">
-            <PixelRaceCanvas
-              animate={canvasAnimated}
-              description={`${translation.liveRace}. ${translation.communityDetail}`}
-              participants={participants}
-              theme={theme}
-            />
+          <details className="race-alternative">
+            <summary>{translation.raceAlternative}</summary>
+            <ol>
+              {participants.slice(0, 5).map((participant) => (
+                <li key={participant.handle}>
+                  <strong>#{participant.rankPosition}</strong> {participant.handle} ·{" "}
+                  {formatExactTokenTotal(participant.weeklyTokenTotal, locale)} {translation.tokens}
+                </li>
+              ))}
+            </ol>
+          </details>
+
+          <div className="race-console" data-race-ready={raceReady}>
+            {raceReady ? (
+              <Suspense fallback={<RaceLoading label={translation.raceLoading} />}>
+                <LazyPixelRaceCanvas
+                  animate={canvasAnimated}
+                  description={`${translation.liveRace}. ${translation.communityDetail}`}
+                  participants={raceParticipants}
+                  theme={theme}
+                />
+              </Suspense>
+            ) : (
+              <RaceLoading label={translation.raceLoading} />
+            )}
             <div aria-labelledby={controlGroupId} className="race-controls">
               <h3 id={controlGroupId}>{translation.privacyByDefault}</h3>
-              <p>
-                {tokenRanking ? translation.tokenMethodologyCopy : translation.exactTokensPrivate}
-              </p>
+              <p>{translation.tokenMethodologyCopy}</p>
               <label>
                 <span>{translation.theme}</span>
                 <select
@@ -323,294 +442,120 @@ export function RaceExperience({
           </p>
         </section>
 
-        {tokenRanking ? null : <ScoreSimulator locale={locale} />}
-
-        <section
-          aria-labelledby="leaderboard-heading"
-          className="leaderboard-section"
-          id="leaderboard"
-          tabIndex={-1}
-        >
-          <div className="section-heading-row">
-            <div>
-              <p className="eyebrow">{translation.communityNotice}</p>
-              <h2 id="leaderboard-heading">{translation.leaderboard}</h2>
-            </div>
-            <span className="score-cap">
-              {tokenRanking ? translation.weeklyTokens : `MAX 7,000 ${translation.points}`}
-            </span>
-          </div>
-          <div className="table-region" tabIndex={0}>
-            <table>
-              <caption className="sr-only">
-                {`${translation.communityNotice}: ${translation.leaderboard}. ${translation.communityDetail}`}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">{translation.rank}</th>
-                  <th scope="col">{translation.driver}</th>
-                  <th scope="col">{translation.car}</th>
-                  <th scope="col">{metricLabel}</th>
-                  <th scope="col">{translation.activeDays}</th>
-                  <th scope="col">{translation.streak}</th>
-                  <th scope="col">{translation.freshness}</th>
-                  <th scope="col">{translation.sourceCount}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {participants.map((participant) => {
-                  const sharedRank = (rankCounts.get(participant.rank) ?? 0) > 1;
-                  const selected =
-                    scoreState.source === "community"
-                      ? participant.id === selectedCommunityParticipant?.id
-                      : participant.id === "demo-driver";
-                  return (
-                    <tr className={selected ? "current-driver" : undefined} key={participant.id}>
-                      <td>
-                        <span aria-hidden="true">#{participant.rank}</span>
-                        <span className="sr-only">
-                          {participant.rank}. {sharedRank ? translation.sharedRank : ""}
-                        </span>
-                      </td>
-                      <th scope="row">
-                        {scoreState.source === "community" ? (
-                          <a
-                            aria-current={selected ? "true" : undefined}
-                            aria-label={`${translation.viewProfile}: ${participant.handle}`}
-                            className="profile-driver-link"
-                            href={`/?profile=${participant.handle}#profile`}
-                            onClick={(event) => {
-                              if (
-                                event.button !== 0 ||
-                                event.altKey ||
-                                event.ctrlKey ||
-                                event.metaKey ||
-                                event.shiftKey
-                              ) {
-                                return;
-                              }
-                              event.preventDefault();
-                              window.history.replaceState(
-                                window.history.state,
-                                "",
-                                event.currentTarget.href,
-                              );
-                              setSelectedProfileHandle(participant.handle);
-                              document.getElementById("profile")?.scrollIntoView();
-                            }}
-                          >
-                            {participant.handle}
-                          </a>
-                        ) : (
-                          participant.handle
-                        )}
-                      </th>
-                      <td>
-                        {scoreState.source === "community" ? (
-                          translation.visualMarker
-                        ) : (
-                          <span className="car-swatch" data-paint={participant.car.palette}>
-                            <span aria-hidden="true">■</span>{" "}
-                            {formatCarChassis(participant.car.chassis, locale)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="numeric-cell">
-                        {formatScore(participant.weeklyScore, locale)} {metricUnit}
-                      </td>
-                      <td>{participant.activeDays}/7</td>
-                      <td>
-                        {participant.streakDays === null
-                          ? translation.streakUnavailable
-                          : formatDayCount(participant.streakDays, locale)}
-                      </td>
-                      <td>{formatFreshness(participant.freshnessDays, locale)}</td>
-                      <td>{participant.sourceCount}</td>
-                    </tr>
-                  );
-                })}
-                {participants.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>{translation.noParticipants}</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
         <section aria-labelledby="profile-heading" className="profile-section" id="profile">
           <div className="section-heading-row">
             <div>
-              <p className="eyebrow">
-                {scoreState.source === "community"
-                  ? translation.communityDataBadge
-                  : translation.demoBadge}
-              </p>
-              <h2 id="profile-heading">
-                {scoreState.source === "community"
-                  ? translation.communityProfile
-                  : translation.demoProfile}
-              </h2>
+              <p className="eyebrow">{translation.communityDetail}</p>
+              <h2 id="profile-heading">{translation.communityProfile}</h2>
             </div>
-            <strong aria-live="polite">
-              {scoreState.source === "community"
-                ? (selectedCommunityParticipant?.handle ?? selectedProfileHandle ?? "—")
-                : payload.profile.handle}
-            </strong>
+            <strong aria-live="polite">{selectedProfileHandle ?? "—"}</strong>
           </div>
 
-          {scoreState.source === "community" && selectedCommunityParticipant === undefined ? (
+          {selectedProfileState !== "ready" || selectedProfile === null ? (
             <div className="profile-grid">
-              <article className="score-panel">
-                <p>
-                  {scoreState.participants.length === 0
-                    ? translation.noParticipants
-                    : translation.profileNotRanked}
+              <article className="ranking-panel">
+                <p role="status">
+                  {selectedProfileState === "unavailable"
+                    ? translation.profileUnavailable
+                    : selectedProfileState === "none"
+                      ? translation.noParticipants
+                      : translation.profileNotFound}
                 </p>
               </article>
             </div>
           ) : (
-            <div className="profile-grid">
-              <article className="score-panel">
-                <h3>{metricLabel}</h3>
-                {selectedCommunityParticipant === undefined ? (
-                  <>
-                    <strong className="large-score">
-                      {formatScore(payload.profile.weeklyScore, locale)} {translation.points}
-                    </strong>
-                    <div className="daily-bars">
-                      {payload.profile.dailyScores.map((score, index) => {
-                        const day = days[index] ?? String(index + 1);
-                        return (
-                          <label key={day}>
-                            <span>{day}</span>
-                            <progress
-                              aria-label={`${day}: ${formatScore(score, locale)} ${translation.points}`}
-                              max={1_000}
-                              value={score}
-                            />
-                            <small>{formatScore(score, locale)}</small>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <strong className="large-score">
-                      {formatScore(selectedCommunityParticipant.weeklyScore, locale)} {metricUnit}
-                    </strong>
-                    <dl className="stat-pair">
-                      <div>
-                        <dt>{translation.rank}</dt>
-                        <dd>#{selectedCommunityParticipant.rank}</dd>
-                      </div>
-                      <div>
-                        <dt>{translation.activeDays}</dt>
-                        <dd>{selectedCommunityParticipant.activeDays}/7</dd>
-                      </div>
-                      <div>
-                        <dt>{translation.streak}</dt>
-                        <dd>
-                          {selectedCommunityParticipant.streakDays === null
-                            ? translation.streakUnavailable
-                            : formatDayCount(selectedCommunityParticipant.streakDays, locale)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>{translation.freshness}</dt>
-                        <dd>
-                          {formatFreshness(selectedCommunityParticipant.freshnessDays, locale)}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p>
-                      {tokenRanking
-                        ? translation.tokenPrivacyCopy
-                        : translation.communityProfilePrivacy}
-                    </p>
-                  </>
-                )}
+            <div className="profile-grid public-profile-grid">
+              <article className="ranking-panel">
+                <h3>{translation.weeklyTokens}</h3>
+                <strong className="large-token-total">
+                  {formatExactTokenTotal(selectedProfile.weeklyTokenTotal, locale)}{" "}
+                  {translation.tokens}
+                </strong>
+                <dl className="stat-pair">
+                  <div>
+                    <dt>{translation.rank}</dt>
+                    <dd>#{selectedProfile.rankPosition}</dd>
+                  </div>
+                  <div>
+                    <dt>{translation.freshness}</dt>
+                    <dd>{formatFreshness(selectedProfile.freshnessDays, locale)}</dd>
+                  </div>
+                  <div>
+                    <dt>{translation.communityNotice}</dt>
+                    <dd>{selectedProfile.trustTier}</dd>
+                  </div>
+                  <div>
+                    <dt>{translation.communityWeek}</dt>
+                    <dd>
+                      <time dateTime={selectedProfile.season.seasonStart}>
+                        {selectedProfile.season.seasonStart}
+                      </time>{" "}
+                      —{" "}
+                      <time dateTime={selectedProfile.season.seasonEnd}>
+                        {selectedProfile.season.seasonEnd}
+                      </time>
+                    </dd>
+                  </div>
+                </dl>
+                <p>{translation.communityProfilePrivacy}</p>
               </article>
 
               <article className="garage-panel">
-                {selectedCommunityParticipant === undefined ? (
-                  <>
-                    <h3>{translation.carProposal}</h3>
-                    <p className="recipe-code">{carRecipeKey(payload.profile.car)}</p>
-                  </>
+                <h3>{translation.car}</h3>
+                {selectedProfile.carRecipe === null ? (
+                  <p>{translation.noApprovedCar}</p>
                 ) : (
-                  <>
-                    <h3>{translation.car}</h3>
-                    <p>
-                      <span
-                        className="car-swatch"
-                        data-paint={selectedCommunityParticipant.car.palette}
-                      >
-                        <span aria-hidden="true">■</span> {translation.visualMarker}
-                      </span>
-                    </p>
-                    <p>{translation.communityCarCopy}</p>
-                  </>
+                  <CarRecipePreview
+                    label={`${selectedProfile.handle}: ${translation.car}`}
+                    locale={locale}
+                    recipe={selectedProfile.carRecipe}
+                  />
                 )}
               </article>
 
-              <article className="source-panel">
-                <h3>{translation.sourceCount}</h3>
-                {selectedCommunityParticipant === undefined ? (
-                  <dl className="stat-pair">
-                    <div>
-                      <dt>{translation.sourceCount}</dt>
-                      <dd>{payload.profile.sourceCount}</dd>
-                    </div>
-                    <div>
-                      <dt>{translation.deviceCount}</dt>
-                      <dd>{payload.profile.deviceCount}</dd>
-                    </div>
+              <article className="provider-panel">
+                <h3>{translation.providerBreakdown}</h3>
+                {selectedProfile.providerBreakdown === undefined ? (
+                  <p>{translation.unavailable}</p>
+                ) : (
+                  <dl className="provider-breakdown">
+                    {selectedProfile.providerBreakdown.map((provider) => (
+                      <div key={provider.provider}>
+                        <dt>{provider.provider}</dt>
+                        <dd>{provider.percentage}%</dd>
+                      </div>
+                    ))}
                   </dl>
-                ) : (
-                  <strong className="large-score">
-                    {selectedCommunityParticipant.sourceCount}
-                  </strong>
                 )}
-                <p>{translation.sourcesAggregated}</p>
-              </article>
-
-              <article className="verified-panel">
-                <h3>{translation.verified}</h3>
-                <p>{translation.verifiedCopy}</p>
-                <button className="pixel-button" disabled type="button">
-                  {translation.unavailable}
-                </button>
               </article>
             </div>
           )}
         </section>
 
-        <section aria-label={translation.dataControl} className="method-grid">
+        <section aria-label={translation.dataControl} className="method-grid" id="methodology">
           <article>
+            <p className="eyebrow">{translation.howRankingWorks}</p>
             <h2>{translation.methodology}</h2>
-            <p>{tokenRanking ? translation.tokenMethodologyCopy : translation.methodologyCopy}</p>
-            <p>{translation.noGlobalClaim}</p>
+            <p>{translation.tokenMethodologyCopy}</p>
+            <p>{translation.tokenQualityDisclaimer}</p>
           </article>
           <article>
+            <p className="eyebrow">{translation.privacyByDefault}</p>
             <h2>{translation.dataControl}</h2>
-            <p>{translation.dataControlCopy}</p>
-            <p>
-              {scoreState.source === "community"
-                ? tokenRanking
-                  ? translation.tokenPrivacyCopy
-                  : translation.communityDataSecurityNote
-                : translation.securityNote}
-            </p>
+            <p>{translation.communityDataSecurityNote}</p>
+            <p>{translation.noGlobalClaim}</p>
+          </article>
+          <article className="verified-panel">
+            <p className="eyebrow">{translation.unavailable}</p>
+            <h2>{translation.verified}</h2>
+            <p>{translation.verifiedCopy}</p>
           </article>
         </section>
       </main>
 
       <footer className="site-footer">
         <strong>{translation.brand}</strong>
-        <span>{tokenRanking ? translation.weeklyTokens : translation.exactTokensPrivate}</span>
+        <span>{translation.communityDetail}</span>
         <span>Apache-2.0 · Open source</span>
       </footer>
     </div>

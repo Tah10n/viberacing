@@ -80,6 +80,29 @@ describe("bounded primitive validation", () => {
     expect(codes(dateTimeSchema, "not-a-time")).toContain("format");
   });
 
+  it("accepts only declared nullable unions and still validates the non-null branch", () => {
+    const nullableDateSchema = {
+      type: ["string", "null"],
+      minLength: 10,
+      maxLength: 10,
+      pattern: "^20[0-9]{2}-[0-9]{2}-[0-9]{2}$",
+      format: "date",
+    } as const satisfies ContractSchema;
+    const nullableIntegerSchema = {
+      type: ["integer", "null"],
+      minimum: 0,
+      maximum: 366,
+    } as const satisfies ContractSchema;
+
+    expect(validateContract(nullableDateSchema, null).ok).toBe(true);
+    expect(validateContract(nullableDateSchema, "2026-07-27").ok).toBe(true);
+    expect(codes(nullableDateSchema, "2026-02-30")).toContain("format");
+    expect(codes(nullableDateSchema, 0)).toContain("type");
+    expect(validateContract(nullableIntegerSchema, null).ok).toBe(true);
+    expect(validateContract(nullableIntegerSchema, 366).ok).toBe(true);
+    expect(codes(nullableIntegerSchema, 367)).toContain("maximum");
+  });
+
   it("enforces bounded ISO-weekday date extensions and rejects malformed extension sets", () => {
     const mondaySchema = {
       type: "string",
@@ -232,7 +255,7 @@ describe("validation resource and exception safety", () => {
     expect(
       validateContract(
         arraySchema,
-        Array.from({ length: 65 }, () => 1),
+        Array.from({ length: 101 }, () => 1),
         {
           maxArrayItems: 0,
         },

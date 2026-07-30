@@ -10,8 +10,6 @@ const validEnvironment = {
   GITHUB_CLIENT_SECRET: "a".repeat(40),
   NODE_ENV: "development",
   SESSION_SECRET: Buffer.alloc(32, 0x31).toString("base64url"),
-  VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "6",
-  VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "600",
   VIBERACING_PUBLIC_ORIGIN: "http://localhost:3000",
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
@@ -38,12 +36,8 @@ describe("enrollment configuration", () => {
     });
     expect(config.cookieKey).toEqual(Buffer.alloc(32, 0x31));
     expect(config.recoveryPepper).toEqual(Buffer.alloc(32, 0x32));
-    expect(config.pairingApprovalAttemptLimit).toBe(6);
-    expect(config.pairingApprovalWindowSeconds).toBe(600);
     expect(Object.keys(config)).not.toContain("cookieKey");
     expect(Object.keys(config)).not.toContain("githubClientSecret");
-    expect(Object.keys(config)).not.toContain("pairingApprovalAttemptLimit");
-    expect(Object.keys(config)).not.toContain("pairingApprovalWindowSeconds");
     expect(Object.keys(config)).not.toContain("recoveryPepper");
     expect(JSON.stringify(config)).toBe('{"redacted":true}');
     expect(Object.isFrozen(config)).toBe(true);
@@ -64,8 +58,6 @@ describe("enrollment configuration", () => {
     ["cookie_key_invalid", { SESSION_SECRET: "replace-me" }],
     ["github_client_id_invalid", { GITHUB_CLIENT_ID: "short" }],
     ["github_client_secret_invalid", { GITHUB_CLIENT_SECRET: "short" }],
-    ["pairing_approval_policy_invalid", { VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "0" }],
-    ["pairing_approval_policy_invalid", { VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "86401" }],
     ["public_origin_invalid", { NODE_ENV: "preview" }],
     ["recovery_argon2_invalid", { VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19455" }],
     ["recovery_argon2_invalid", { VIBERACING_RECOVERY_ARGON2_PARALLELISM: "1" }],

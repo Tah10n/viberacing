@@ -1,51 +1,52 @@
 import { describe, expect, it } from "vitest";
 
-import { getSyntheticRacePayload } from "./race-data";
+import { getSyntheticPublicHomePayload } from "./race-data";
 
-describe("synthetic public race payload", () => {
-  it("contains only scored public fields and no raw token data", () => {
-    const payload = getSyntheticRacePayload();
+describe("synthetic public snapshot fallback", () => {
+  it("uses the final direct-token contract without private or legacy score fields", () => {
+    const payload = getSyntheticPublicHomePayload("2026-07-27");
     const serialized = JSON.stringify(payload);
-    expect(payload.participants).toHaveLength(8);
-    expect(serialized).not.toMatch(/token/i);
-    expect(serialized).not.toMatch(/(?:https?:\/\/|[A-Za-z]:\\|@[^\s]+\.[A-Za-z]{2,})/);
-    for (const participant of payload.participants) {
-      expect(Object.keys(participant).sort()).toEqual([
-        "activeDays",
-        "car",
-        "freshnessDays",
-        "handle",
-        "id",
-        "rank",
-        "sourceCount",
-        "streakDays",
-        "weeklyScore",
-      ]);
-      expect("dailyScores" in participant).toBe(false);
+
+    expect(payload.leaderboard.participants).toHaveLength(8);
+    expect(payload.leaderboard.metricVersion).toBe("provider_reported_tokens_v1");
+    expect(payload.source).toBe("fallback");
+    expect(serialized).not.toMatch(
+      /(?:activeDays|dailyScores|deviceCount|sourceCount|weeklyScore|community_v1)/,
+    );
+    expect(serialized).not.toMatch(/(?:https?:\/\/|[A-Za-z]:\\|@[^\s"]+\.[A-Za-z]{2,})/);
+    for (const participant of payload.leaderboard.participants) {
+      expect(participant.weeklyTokenTotal).toMatch(/^(?:0|[1-9][0-9]{0,59})$/);
+      expect(typeof participant.weeklyTokenTotal).toBe("string");
     }
-    expect(payload.profile.dailyScores).toHaveLength(7);
   });
 
-  it("orders descending scores and represents a shared rank without a token tie-break", () => {
-    const { participants } = getSyntheticRacePayload();
+  it("keeps exact descending totals and shared ranks without Number conversion", () => {
+    const participants = getSyntheticPublicHomePayload("2026-07-27").leaderboard.participants;
     for (let index = 1; index < participants.length; index += 1) {
-      expect(participants[index - 1]?.weeklyScore).toBeGreaterThanOrEqual(
-        participants[index]?.weeklyScore ?? 0,
+      const previous = participants[index - 1];
+      const current = participants[index];
+      expect(previous).toBeDefined();
+      expect(current).toBeDefined();
+      expect(BigInt(previous?.weeklyTokenTotal ?? "0")).toBeGreaterThanOrEqual(
+        BigInt(current?.weeklyTokenTotal ?? "0"),
       );
     }
-    const demo = participants.find((participant) => participant.id === "demo-driver");
-    const loop = participants.find((participant) => participant.id === "loop-lantern");
-    expect(demo?.weeklyScore).toBe(loop?.weeklyScore);
-    expect(demo?.activeDays).toBe(loop?.activeDays);
-    expect(demo?.rank).toBe(loop?.rank);
+    const demo = participants.find((participant) => participant.handle === "demo_driver");
+    const loop = participants.find((participant) => participant.handle === "loop_lantern");
+    expect(demo?.weeklyTokenTotal).toBe(loop?.weeklyTokenTotal);
+    expect(demo?.rankPosition).toBe(loop?.rankPosition);
+    expect(demo?.displayPosition).not.toBe(loop?.displayPosition);
   });
 
-  it("keeps the demo profile internally consistent", () => {
-    const payload = getSyntheticRacePayload();
-    const participant = payload.participants.find((entry) => entry.id === "demo-driver");
-    expect(payload.profile.handle).toBe("demo_driver");
-    expect(payload.profile.weeklyScore).toBe(participant?.weeklyScore);
-    expect(payload.profile.sourceCount).toBe(2);
-    expect(payload.profile.deviceCount).toBe(2);
+  it("materializes only a requested public fallback profile", () => {
+    const found = getSyntheticPublicHomePayload("2026-07-27", "demo_driver");
+    expect(found.profileState).toBe("ready");
+    expect(found.profile?.handle).toBe("demo_driver");
+    expect(found.profile?.weeklyTokenTotal).toBe("690000");
+
+    const missing = getSyntheticPublicHomePayload("2026-07-27", "missing_driver");
+    expect(missing.profileState).toBe("not-found");
+    expect(missing.profile).toBeNull();
+    expect(() => getSyntheticPublicHomePayload("2026-07-28")).toThrow(RangeError);
   });
 });

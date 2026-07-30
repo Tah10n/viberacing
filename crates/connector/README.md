@@ -1,161 +1,128 @@
-# Vibe Racing connector and bounded protocol foundation
+# Vibe Racing connector
 
-This Rust crate contains the fail-closed local Codex App Server initialization boundary and one
-candidate-only account/usage adapter for the exact `0.144.5` schema extract. It also contains a
-bounded one-shot child supervisor behind a reviewed-launch capability with no public constructor, an
-isolated pairing-possession signer, and an exact-body Community sync composer/request signer behind
-inaccessible reviewed capabilities. One runnable `connect` command completes the versioned pairing
-journey with native OS key custody. A second Windows x86_64 development command admits one exact
-Codex candidate, collects, signs, and uploads one bounded sync. It is not a supported, packaged, or
-released connector. A third fixed command signs one explicit enum-only CarRecipe proposal without
-starting Codex or receiving proposal decision authority. A separate local repository Agent Skill can
-reduce a style request to that exact command; it adds no connector method or authority. A fourth
-local-only command removes one exact native credential without inspecting it or implying that the
-registered server device was revoked. A fifth read-only command performs only point-in-time exact
-candidate artifact admission without opening credential storage, starting Codex, reading an account,
-or using the network.
+This crate is the thin, provider-neutral local connector for Vibe Racing. It owns bounded agent
+discovery, privacy-minimized daily token collection, installation and account-scoped keys in the
+operating-system credential store, batch pairing, and signed `UsageSyncV1` submission.
 
-The implemented surface is deliberately narrow:
+It is still an unreleased development connector. A checked manual-main candidate workflow and local
+Windows candidate builder now cover the explicit five-target matrix, portable lifecycle, checksum,
+compatibility manifest, SPDX, and GitHub attestation policy. No hosted matrix result, native
+platform signature, official package, installer, public download, production endpoint, or real-user
+ingestion evidence exists.
 
-- one fixed `initialize` request over newline-terminated JSONL, with request ID `0`;
-- fixed client metadata and no `capabilities` or experimental API opt-in;
-- a 16 KiB whole-frame ceiling and exact one-line framing;
-- closed, duplicate-rejecting validation of the matching stable initialization response;
-- immediate discard of the server's Codex home, platform, and user-agent values;
-- one fixed `initialized` notification only after the response validates;
-- terminal failure for malformed, oversized, unknown, duplicated, or out-of-order server input;
-- after a completed handshake only, fixed `account/read` ID `1` with refresh disabled and fixed
-  `account/usage/read` ID `2` with null parameters;
-- closed exact-version response visitors that confirm ChatGPT mode while discarding email, plan, and
-  nullable summary values; and
-- at most 31 sorted unique daily entries with real `20xx` dates and sync-safe token integers;
-- one fixed `app-server` argument, reviewed working directory, cleared ambient environment,
-  capability-owned allowlist values, and local piped stdio only;
-- three stdout frames of at most 16 KiB each, discard-only stderr capped at 8 KiB, a 10-second
-  response deadline, a 45-second lifetime, and a 500-millisecond graceful-exit window; and
-- exact handshake/account/usage composition that returns daily data only after terminal output is
-  checked and the synthetic child is reaped;
-- exact closed identifier, calendar, timestamp, entry-count, integer, and 8 KiB sync-body bounds;
-- fixed manual seven-field JSON serialization, connector/candidate versions, SHA-256 digest, and
-  repository-owned unpadded base64url encoding; and
-- the exact eight-field LF-separated device-signature message with no trailing separator, checked
-  against one synthetic vector shared with the production Ingest verifier;
-- an unsigned prepared type with no public accessors, clone, diagnostic, or serialization surface;
-- one consumed device-bound key capability, exact device-ID equality, Ed25519 signing of only that
-  prepared message, and an exact body-plus-five-header signed envelope; and
-- key/body/message drop zeroization plus cross-language verification of the synthetic public key and
-  signature, including rejection of a one-byte message mutation;
-- the exact four-field LF-separated pairing-possession message with no trailing separator, binding
-  one canonical version-4 pairing ID, exact 32-byte server challenge, and the public key derived
-  from the consumed pending private-key capability; and
-- a one-use proof exposing only the pairing ID and canonical signature, checked against a second
-  synthetic Rust/Web vector that uses the same public key as the sync vector;
-- one exact `connect --origin <origin> --label <label>` command with HTTPS-only remote origins,
-  explicit loopback HTTP development support, disabled proxies/redirects, platform certificate
-  verification, 1024/2048-byte request/response ceilings, and fixed ten/five-second request/connect
-  deadlines;
-- OS CSPRNG generation of one Ed25519 key plus a non-authoritative 16-byte rate ID, stored in a
-  fixed versioned binary record through Windows Credential Manager, macOS Keychain, or Linux Secret
-  Service with no plaintext or supported-platform mock fallback;
-- prepared/pending/active persistence that saves before authority is displayed, resumes an
-  interrupted poll, retries every two seconds for at most eight local minutes, and saves activation
-  before success output; and
-- output limited to the exact `/connect` URL, human code, generic progress, and success without key,
-  token, challenge, source, or device identifiers;
-- one exact `forget-local --origin <origin> --label <label>` command that derives the same native
-  account, invokes only credential deletion, and treats both deleted and absent entries as success;
-- one fixed identifier-free removal result that explicitly says server device authority was not
-  revoked, with no record load, signer construction, Codex process, HTTP request, or browser access;
-- one `sync --origin <origin> --label <label> [--codex <absolute-path>]` command that requires an
-  active record before bounded candidate discovery or identical explicit-path admission and accepts
-  no separate environment path override;
-- discovery through at most 64 absolute directories from a 65,536-byte `PATH`, only fixed names
-  `codex.exe` and `codex-x86_64-pc-windows-msvc.exe`, 2,048-byte canonical candidate paths, exact
-  regular-file size filtering, canonical deduplication, and at most four distinct hashes;
-- Windows x86_64 admission for the exact `0.144.5` official artifact byte count and SHA-256 digest,
-  with exact-version-only output and a no-write-sharing handle retained through direct launch;
-- one exact `check-codex [--codex <absolute-path>] [--diagnostic-preview]` command that reuses that
-  same bounded selector, releases the admitted handle, and prints only candidate admission plus the
-  explicit unsupported status, with no credential, process, account, persistence, or network access;
-  its opt-in preview adds only fixed version/admission fields, excludes paths, digests, environment
-  values, credentials, account, and usage, and is never saved or sent by the connector;
-- fresh OS-random sync ID and nonce, canonical millisecond UTC, active-record source/device/key
-  binding, and one existing exact composition/signing path;
-- one fixed `/v1/community/usage` `UsageSyncV1` POST with proxies and redirects disabled, platform
-  TLS, only the five device headers, an 8192-byte request, and a closed 1024-byte acknowledgement;
-  and
-- no automatic retry after an ambiguous POST and only generic accepted, duplicate, or review output.
-- one exact `propose-car` command whose seven enum flags and canonical `0..65535` seed serialize to
-  `CarRecipeV1`, with no prompt, free text, profile/source/proposal ID, file, URL, or arbitrary
-  JSON;
-- fresh OS-random nonce and canonical millisecond UTC bound with the active device ID and exact
-  512-byte body digest under a proposal-specific Ed25519 domain separator;
-- one fixed `/v1/connector/cars/proposals` POST through the same proxy-free, redirect-free TLS
-  agent, no retry, a closed generic acknowledgement, and output containing no identifier or recipe
-  data; and
-- drop clearing for every owned proposal body, signature-message, raw-nonce, encoded-nonce, and
-  encoded-signature byte buffer.
+## Reader boundary
 
-`ReviewedCodexLaunch`, `PendingDevicePairingSigningKey`, `ReviewedPairingChallenge`,
-`ReviewedCommunityUsageContext`, and `ReviewedDeviceSigningKey` have no public constructors. The
-private pairing command constructs only its two pending capabilities; the private sync command can
-construct the launch/context/key capabilities only after active-record review and exact artifact
-admission from bounded fixed-name discovery or an explicit path. `check-codex` reuses only that
-selector without constructing any of those capabilities; its explicit preview remains a local
-redacted stdout result and never changes failure status or support state. There is no macOS/Linux
-executable admission, WebSocket transport, generic JSON-RPC or HTTP method, scheduler, installer,
-credential rotation, automatic server-revoke composition, package, or release artifact. Browser
-approval and edge origin proof remain separate server-side boundaries. The checked-in
-[`0.144.5` candidate evidence](../../compat/codex/0.144.5/manifest.json) is development evidence
-only. The [compatibility matrix](../../docs/reference/codex-compatibility.md) remains empty until
-clean-machine platform, privacy, packaging, provenance, and release evidence all pass.
+`AgentUsageReader` exposes only closed metadata, opaque local handles, safe labels, UTC dates, and
+cumulative decimal token totals. Raw provider records stay private to each reader implementation.
+The canonical boundary has no fields for prompts, conversations, code, repositories, paths, email,
+login, access tokens, API keys, plan, price, model, or billing data.
 
-A separate repository harness can build the Windows x86_64 release profile, copy that `0.0.0` binary
-into one bounded temporary directory, exercise only the exact help surface and a missing candidate
-diagnostic, verify digest stability, and remove the copy. The secretless CI definition contains the
-same no-upload smoke. This is portable copy/removal evidence only: it does not install or package
-the connector, open native credentials, contact a Vibe Racing or Codex service, execute Codex, prove
-a hosted run, or create version, signature, checksum, SBOM, provenance, release, or support
-evidence.
+The checked-in Codex reader:
 
-The local command shapes are:
+- admits only the exact Windows x86_64 Codex `0.144.5` candidate artifact;
+- uses fixed local App Server JSONL methods and a cleared, allowlisted process environment;
+- maps one explicit account-scoped candidate to at most 31 sorted UTC-day cumulative totals;
+- discards email, plan, summary, home path, platform, user-agent, and fixture privacy sentinels;
+- has exact parser, process, admission, privacy-egress, and reader fixtures.
+
+Claude Code, opencode, Qwen Code, Cline, and Aider remain recognized without a reader. Recognition
+grants no pairing or sync authority. Codex also remains out of the supported-provider registry: the
+tree has synthetic batch-pairing and sync components, but not one authorized clean-machine
+real-account read, one same-artifact composed connect/approval/credential/first-sync/snapshot
+result, or the required package lifecycle and protected release evidence.
+
+## Batch connection
+
+`connect --origin <https-origin>` performs one bounded batch:
+
+1. creates or loads one installation identity from the native credential store;
+2. runs each enabled built-in reader once and displays only safe candidate metadata and the current
+   UTC-week preview;
+3. creates one separate Ed25519 account key for each of at most 16 candidates;
+4. signs the exact canonical discovery-manifest digest with the installation key;
+5. persists a `starting` state before the pairing-start HTTP request;
+6. opens the returned `/connect?code=...` deep link and always prints the URL and fallback code;
+7. polls with the separate installation possession proof;
+8. persists approved account bindings and deletes skipped candidate keys;
+9. performs one first sync for each activated account before printing the final aggregate.
+
+An ambiguous pairing-start result is never retried automatically. The persisted `starting` state
+blocks discovery and network reuse until its bounded expiry, because the server may have committed
+the first request. Pending pairing is resumable. Active installation state blocks an accidental
+second enrollment.
+
+The start signature binds the canonical manifest digest, a local high-entropy rate identifier,
+canonical millisecond UTC, and a nonce. The manifest binds connector/platform metadata, ordered
+candidates, exact reader/accounting/scope metadata, account public keys, safe preview totals, and
+the installation public key. Pairing approval and provider/account binding remain server-side.
+
+## Local credentials
+
+The connector uses one fixed installation entry and 16 deterministic account slots in Windows
+Credential Manager, macOS Keychain, or Linux Secret Service. Fixed-shape versioned records bind the
+exact origin digest and reject unknown versions, padding drift, invalid state, and cross-origin
+reuse. There is no plaintext private-key fallback and no supported-platform file-store fallback.
+
+Each active account key is independently revocable server-side. Installation possession cannot
+submit usage. An account key cannot approve pairing, manage another account, change provider or
+accounting revision, manage passkeys, or delete a profile.
+
+`forget-local` deletes the exact fixed local inventory without first loading or decoding it. It does
+not revoke server authority. `disconnect` opens the authenticated dashboard revoke flow because
+device revocation is a fresh-passkey action; the connector does not silently weaken that boundary.
+
+## Usage sync
+
+`sync` discovers the enabled readers and submits each active account independently.
+`account sync <1..16>` selects one active local slot. Each request:
+
+- uses a fresh `syncId`, nonce, and canonical millisecond UTC;
+- contains only a server-issued `agentAccountId`, reader version, and bounded UTC-day decimal
+  cumulative totals;
+- is signed by the matching account-scoped key over the exact body digest and request context;
+- sends one proxy-free, redirect-free request to `/v1/usage`;
+- accepts only the closed acknowledgement; and
+- is not automatically retried after an ambiguous POST.
+
+Provider, accounting revision, scope, trust tier, profile, and competitive metric are derived by the
+server from the device-key binding. The sync body cannot set them.
+
+## Other bounded commands
 
 ```text
-viberacing-connector connect --origin <https-origin> --label <device-label>
-viberacing-connector forget-local --origin <https-origin> --label <device-label>
+viberacing-connector connect --origin <https-origin>
+viberacing-connector sync [--codex <absolute-path>]
+viberacing-connector status
+viberacing-connector doctor
+viberacing-connector account list
+viberacing-connector account sync <1..16>
+viberacing-connector disconnect
+viberacing-connector forget-local
 viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]
-viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]
 viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>
 ```
 
-Plain HTTP with `localhost`, `127.0.0.1`, or `::1` is accepted only for explicit local development.
-Running `connect` creates a real local keyring entry even when the server later fails; use one
-connect process at a time. `forget-local` deletes only the exact origin/label entry and is
-idempotent; it neither revokes the registered server device nor erases copied key material, so the
-user must reconcile and revoke that device separately in the authenticated account. `check-codex` is
-an explicit Windows x86_64 candidate diagnostic: it performs the same bounded default discovery or
-explicit-path admission without an origin, credential, child process, account read, persistence, or
-network, and its point-in-time result is never reused. `--diagnostic-preview` prints one closed v1
-preview with only connector/candidate versions, the fixed platform contract, a three-value admission
-class, and the empty support state. It retains a nonzero failed-admission exit, omits all local
-values, and gives the connector no file or sharing capability; inspect the complete stdout preview
-before copying it. `sync` still reads the active native record first, repeats admission, starts only
-the exact admitted artifact, and sends private daily usage once to the explicit origin.
-`propose-car` uses the same active native record but starts no Codex process and can only create a
-private proposal for later browser review. The Agent Skill requires explicit shell-safe origin/label
-values, invokes only `propose-car` once, and is forbidden from invoking local credential removal or
-the diagnostic. No checked-in default server, credential, code, or released binary exists.
+Remote origins require HTTPS. Plain HTTP is allowed only for explicit `localhost`, `127.0.0.1`, or
+`::1` development origins. Browser opening uses fixed platform programs without a shell or inherited
+environment. Status, doctor, account-list, removal, and success output omit key material, poll
+tokens, challenges, and server account/device identifiers.
 
-Run the focused gate from the repository root:
+`check-codex` performs only point-in-time artifact admission: no credential store, child process,
+account read, persistence, or network. Its optional diagnostic preview is closed and redacted.
+`propose-car` starts no agent process and accepts only exact `CarRecipeV1` enums and a bounded seed.
+
+## Verification
+
+From the repository root:
 
 ```text
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 node scripts/check-codex-compatibility.mjs
 pnpm run test:connector:windows-portable
+pnpm run test:connector:release-candidate
 ```
 
-The portable lifecycle command is Windows x86_64-only. The normal root `pnpm run verify` runs the
-bounded Rust and repository development checks. `pnpm run verify:release` adds licenses and the
-other exhaustive policy evidence and, on Windows x86_64, the release-profile smoke. Rust tests
-launch only target-built synthetic fixtures and ephemeral loopback HTTP; they never execute a local
-Codex account, open a real user credential, or upload real usage.
+Tests use synthetic fixtures and ephemeral loopback HTTP only. They do not execute a real user
+account, write a real production credential, upload real usage, or prove a hosted run.

@@ -51,7 +51,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-CONTAIN-06",
-    "Identify which returning login, recovery, logout, visibility, deletion, passkey, device, and source-security actions must remain reachable or receive a protected manual fallback.",
+    "Identify which returning login, recovery, logout, visibility, deletion, passkey, installation, device, and AgentAccount-security actions must remain reachable or receive a protected manual fallback.",
   ],
   [
     "VR-CONTAIN-07",
@@ -59,7 +59,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-CONTAIN-08",
-    "Stop the Jobs scheduler when database integrity, deletion, scoring, finalization, retention, or privileged Jobs authority is in scope.",
+    "Stop the Jobs scheduler when database integrity, deletion, accounting, snapshot refresh, finalization, retention, or privileged Jobs authority is in scope.",
   ],
   [
     "VR-CONTAIN-09",
@@ -67,7 +67,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-CONTAIN-10",
-    "Replace every affected Web worker because enrollment, pairing, source creation, CarRecipe proposals, legacy public ranking, and direct-token ranking resolve their decisions at module evaluation.",
+    "Replace every affected Web worker because public snapshots, pairing, CarRecipe proposals, enrollment, and optional invite policy resolve their decisions at module evaluation.",
   ],
   [
     "VR-CONTAIN-11",
@@ -87,7 +87,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-CONTAIN-15",
-    "Preserve returning login, recovery, logout, profile hide/delete, passkey revoke, device revoke, source pause/unlink, and proposal rejection unless that exact path is compromised.",
+    "Preserve returning login, recovery, logout, profile hide/delete, passkey revoke, installation/device revoke, AgentAccount pause/unlink, and proposal rejection unless that exact path is compromised.",
   ],
   [
     "VR-CONTAIN-16",
@@ -142,10 +142,11 @@ const expectedRootScripts = Object.freeze({
   "check:containment-runbook": "node scripts/check-containment-runbook.mjs",
   "test:config-check": "node scripts/test-config-check.mjs",
   "test:containment-runbook-check": "node scripts/test-containment-runbook-check.mjs",
-  "test:ingest-host:coverage": "pnpm --filter @viberacing/ingest-host run test:coverage",
-  "test:jobs-scheduler:coverage": "pnpm --filter @viberacing/jobs-scheduler run test:coverage",
-  "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",
-  "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
+  "test:ingest-host:coverage": "corepack pnpm --filter @viberacing/ingest-host run test:coverage",
+  "test:jobs-scheduler:coverage":
+    "corepack pnpm --filter @viberacing/jobs-scheduler run test:coverage",
+  "test:migrate:coverage": "corepack pnpm --filter @viberacing/migrate run test:coverage",
+  "test:web:coverage": "corepack pnpm --filter @viberacing/web run test:coverage",
   "verify:release:node": "node scripts/verify.mjs --release --node-only",
 });
 const expectedGateNames = Object.freeze([
@@ -153,34 +154,23 @@ const expectedGateNames = Object.freeze([
   "VIBERACING_JOBS_SCHEDULER_ENABLED",
   "VIBERACING_INGEST_ENABLED",
   "VIBERACING_USAGE_SYNC_ENABLED",
-  "VIBERACING_PUBLIC_RANKING_ENABLED",
-  "VIBERACING_TOKEN_RANKING_ENABLED",
+  "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED",
   "VIBERACING_PAIRING_ENABLED",
-  "VIBERACING_SOURCE_CREATION_ENABLED",
   "VIBERACING_CAR_PROPOSALS_ENABLED",
   "VIBERACING_ENROLLMENT_ENABLED",
+  "VIBERACING_INVITE_GATE_ENABLED",
 ]);
 const trackedFalseGateNames = Object.freeze(expectedGateNames.slice(1));
 const webGateSources = Object.freeze([
   [
-    "VIBERACING_TOKEN_RANKING_ENABLED",
-    "tokenRankingEnabledName",
-    resolve(root, "apps", "web", "lib", "public-token-ranking-config.ts"),
-  ],
-  [
-    "VIBERACING_PUBLIC_RANKING_ENABLED",
-    "publicRankingEnabledName",
-    resolve(root, "apps", "web", "lib", "public-ranking-config.ts"),
+    "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED",
+    "publicSnapshotsEnabledName",
+    resolve(root, "apps", "web", "lib", "public-snapshot-config.ts"),
   ],
   [
     "VIBERACING_PAIRING_ENABLED",
     "pairingEnabledName",
     resolve(root, "apps", "web", "lib", "pairing-config.ts"),
-  ],
-  [
-    "VIBERACING_SOURCE_CREATION_ENABLED",
-    "sourceCreationEnabledName",
-    resolve(root, "apps", "web", "lib", "source-creation-config.ts"),
   ],
   [
     "VIBERACING_CAR_PROPOSALS_ENABLED",
@@ -192,23 +182,28 @@ const webGateSources = Object.freeze([
     "enrollmentEnabledName",
     resolve(root, "apps", "web", "lib", "enrollment-enable-config.ts"),
   ],
+  [
+    "VIBERACING_INVITE_GATE_ENABLED",
+    "inviteGateEnabledName",
+    resolve(root, "apps", "web", "lib", "invite-gate-config.ts"),
+  ],
 ]);
 const webModuleGateBindings = Object.freeze([
   [
-    resolve(root, "apps", "web", "app", "v1", "community", "tokens", "route.ts"),
-    "const tokenRankingConfig = resolvePublicTokenRankingConfig();",
+    resolve(root, "apps", "web", "app", "v1", "leaderboards", "current", "route.ts"),
+    "const publicSnapshotConfig = resolvePublicSnapshotConfig();",
   ],
   [
-    resolve(root, "apps", "web", "app", "v1", "community", "scores", "route.ts"),
-    "const publicRankingConfig = resolvePublicRankingConfig();",
+    resolve(root, "apps", "web", "app", "v1", "leaderboards", "[seasonStart]", "route.ts"),
+    "const publicSnapshotConfig = resolvePublicSnapshotConfig();",
   ],
   [
-    resolve(root, "apps", "web", "app", "v1", "community", "race", "route.ts"),
-    "const publicRankingConfig = resolvePublicRankingConfig();",
+    resolve(root, "apps", "web", "app", "v1", "profiles", "[handle]", "route.ts"),
+    "const publicSnapshotConfig = resolvePublicSnapshotConfig();",
   ],
   [
-    resolve(root, "apps", "web", "app", "v1", "community", "race", "status", "route.ts"),
-    "const publicRankingConfig = resolvePublicRankingConfig();",
+    resolve(root, "apps", "web", "lib", "public-home-snapshot.ts"),
+    "const publicHomeConfig = resolvePublicSnapshotConfig();",
   ],
   [
     resolve(root, "apps", "web", "app", "v1", "connector", "pairing", "start", "route.ts"),
@@ -219,24 +214,8 @@ const webModuleGateBindings = Object.freeze([
     "const pairingConfig = resolvePairingConfig();",
   ],
   [
-    resolve(root, "apps", "web", "app", "auth", "pairing", "options", "route.ts"),
+    resolve(root, "apps", "web", "lib", "batch-pairing-browser-route.ts"),
     "const pairingConfig = resolvePairingConfig();",
-  ],
-  [
-    resolve(root, "apps", "web", "app", "auth", "pairing", "verify", "route.ts"),
-    "const pairingConfig = resolvePairingConfig();",
-  ],
-  [
-    resolve(root, "apps", "web", "app", "connect", "page.tsx"),
-    "const sourceCreationConfig = resolveSourceCreationConfig();",
-  ],
-  [
-    resolve(root, "apps", "web", "app", "auth", "pairing", "options", "route.ts"),
-    "const sourceCreationConfig = resolveSourceCreationConfig();",
-  ],
-  [
-    resolve(root, "apps", "web", "app", "auth", "pairing", "verify", "route.ts"),
-    "const sourceCreationConfig = resolveSourceCreationConfig();",
   ],
   [
     resolve(root, "apps", "web", "app", "account", "page.tsx"),
@@ -278,17 +257,29 @@ const webModuleGateBindings = Object.freeze([
     resolve(root, "apps", "web", "app", "auth", "passkey", "verify", "route.ts"),
     "const enrollmentConfig = resolveEnrollmentEnableConfig();",
   ],
+  [
+    resolve(root, "apps", "web", "app", "join", "page.tsx"),
+    "const inviteGateConfig = resolveInviteGateConfig();",
+  ],
+  [
+    resolve(root, "apps", "web", "app", "auth", "github", "start", "route.ts"),
+    "const inviteGateConfig = resolveInviteGateConfig();",
+  ],
+  [
+    resolve(root, "apps", "web", "app", "auth", "github", "callback", "route.ts"),
+    "const inviteGateConfig = resolveInviteGateConfig();",
+  ],
 ]);
 const requiredStatements = Object.freeze([
   "Every decision admits only the exact string `true`; absence, `false`, alternate case, another type, or unreadable state fails closed.",
-  "The local checker binds six Web decisions to 21 exact module-load points: three legacy public-ranking, one direct-token-ranking, four pairing, three source-creation, four CarRecipe-proposal, and six enrollment modules.",
+  "The local checker binds five Web decisions to 20 exact module-load points: four public-snapshot, three pairing, four CarRecipe-proposal, six enrollment, and three invite-policy bindings.",
   "Editing that file is never an incident action.",
   "It is not a deployed control plane, dynamic kill switch, private reporting channel, monitoring backend, incident exercise, or proof that an external service was contained.",
   "They do not inspect, change, or observe deployed capability state.",
   "changing environment state does not stop an already-running listener.",
   "their startup latches do not revoke authority already held by a running process.",
   "resolve their decisions at module evaluation.",
-  "Preserve returning login, recovery, logout, profile hide/delete, passkey revoke, device revoke, source pause/unlink, and proposal rejection",
+  "Preserve returning login, recovery, logout, profile hide/delete, passkey revoke, installation/device revoke, AgentAccount pause/unlink, and proposal rejection",
   "Do not run raw database, cache, credential-store, key-rotation, or artifact-publication commands from this public runbook.",
 ]);
 

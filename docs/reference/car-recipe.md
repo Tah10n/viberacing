@@ -55,22 +55,22 @@ routes.
 ## Local lifecycle
 
 1. Either a passkey-registered signed-in user submits the nine exact fields from `/account`, or the
-   fixed `propose-car` command submits the same exact object under a fresh source-bound device
+   fixed `propose-car` command submits the same exact object under a fresh AgentAccount-bound device
    signature. The local Agent Skill can reduce existing style intent to that one command, but sends
-   no prompt, conversation, profile ID, source ID, or proposal ID. Both origins and browser approval
-   first require exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` at their module boundaries.
+   no prompt, conversation, profile ID, AgentAccount ID, or proposal ID. Both origins and browser
+   approval first require exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` at their module boundaries.
 2. Web validates the generated contract and derives authority from either the active session or an
-   active device on an active source. It creates the proposal ID and at-most-24-hour expiry.
+   active device on an active AgentAccount. It creates the proposal ID and at-most-24-hour expiry.
 3. PostgreSQL stores at most one private pending proposal per profile behind forced RLS.
 4. The account page reads that proposal through the same session and renders it in Neon Night,
    Classic Grand Prix, and Cyber Rally.
 5. Approval consumes an encrypted session-bound control, atomically replaces the active recipe, and
    deletes the pending row. Rejection deletes only that pending row.
 
-The raw proposal ID and profile ID never enter HTML. A separate `CommunityRacePageV1` may expose
-only the current approved exact recipe for an `active` profile. It contains no proposal identity,
-state, timestamp, private ID, or account authority, and the stable score response remains unchanged.
-An absent recipe uses a repository-owned presentation fallback. Expired proposal rows are unusable
+The raw proposal ID and profile ID never enter HTML. `LeaderboardSnapshotV1` and
+`PublicProfileSummaryV1` may expose only the current approved exact recipe for an active visible
+profile. They contain no proposal identity, state, timestamp, private ID, or account authority. An
+absent recipe uses a repository-owned presentation fallback. Expired proposal rows are unusable
 immediately and eligible for bounded physical cleanup. The default-off local scheduler can invoke
 that exact command through the closed Jobs runner, and the combined synthetic PostgreSQL integration
 exercises it; no deployed cadence is proven.
@@ -92,9 +92,10 @@ meaning; a breaking visual change uses a new recipe version or an explicit revie
 - A recipe changes presentation only. It grants no score, rank, prize, authorization, or valuable
   privilege.
 - Community usage remains self-reported; a valid recipe says nothing about score truth.
-- An active source-bound device may create or replace only its bound profile's pending exact recipe
-  through the dedicated signed route. It cannot read proposal state, approve, reject, activate, or
-  administer the profile; paused, quarantined, unlinked, and revoked authority is denied.
+- An active AgentAccount-bound device may create or replace only its bound profile's pending exact
+  recipe through the dedicated signed route. It cannot read proposal state, approve, reject,
+  activate, or administer the profile; paused, quarantined, unlinked, and revoked authority is
+  denied.
 - The fixed connector command accepts only explicit enum flags and a bounded seed, sends once
   without retry, and returns a generic acknowledgement. The local Agent Skill reduces style intent
   to this exact object, requires shell-safe explicit origin/label values, invokes only that command

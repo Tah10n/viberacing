@@ -149,6 +149,12 @@ const coreChecks = [
     ],
   ],
   [
+    "contract production build",
+    process.execPath,
+    [contractsTscBin, "--project", "tsconfig.build.json"],
+    contractsRoot,
+  ],
+  [
     "workspace unit tests",
     process.execPath,
     [
@@ -257,6 +263,11 @@ const releaseChecks = [
     "Codex compatibility checker behavior",
     process.execPath,
     [resolve(import.meta.dirname, "test-codex-compatibility-check.mjs")],
+  ],
+  [
+    "connector release-candidate evidence behavior",
+    process.execPath,
+    [resolve(import.meta.dirname, "test-connector-release-candidate.mjs")],
   ],
   [
     "contract checker behavior",

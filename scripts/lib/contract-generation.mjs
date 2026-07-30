@@ -7,7 +7,9 @@ const manifestRelativePath = "contracts/v1/manifest.json";
 const schemaFilePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*\.schema\.json$/;
 const policyFilePattern = /^connector-[a-z0-9]+(?:-[a-z0-9]+)*\.json$/;
 const operationKeys =
-  "admissionPolicy,authenticationContract,cacheControl,corsPolicy,implementationStatus,method,operationId,path,problemSchema,problemStatuses,queryPolicy,querySchema,requestBodyPolicy,requestSchema,responseSchema,summary";
+  "admissionPolicy,authenticationContract,cacheControl,corsPolicy,implementationStatus,method,operationId,path,pathPolicy,pathSchema,problemSchema,problemStatuses,queryPolicy,querySchema,requestBodyPolicy,requestSchema,responseSchema,summary";
+const openSnapshotCacheControl = "public, max-age=0, s-maxage=60, stale-while-revalidate=300";
+const finalizedSnapshotCacheControl = "public, max-age=300, s-maxage=31536000, immutable";
 const problemResponseDescriptions = new Map([
   [400, "Invalid request."],
   [401, "Unauthorized."],
@@ -142,6 +144,16 @@ export function readContractSources(root) {
     const schemaReferencePattern = /^[A-Z][A-Za-z0-9]*V1$/;
     const isGet = entry?.method === "get";
     const isPost = entry?.method === "post";
+    const pathNames =
+      typeof entry?.path === "string"
+        ? [...entry.path.matchAll(/\{([a-z][A-Za-z0-9]*)\}/g)].map((match) => match[1])
+        : [];
+    const hasPathContract =
+      pathNames.length > 0 &&
+      schemaReferencePattern.test(entry?.pathSchema ?? "") &&
+      entry?.pathPolicy === "closed";
+    const hasNoPathContract =
+      pathNames.length === 0 && entry?.pathSchema === "none" && entry?.pathPolicy === "none";
     const hasGetQueryContract =
       isGet &&
       schemaReferencePattern.test(entry?.querySchema ?? "") &&
@@ -162,7 +174,11 @@ export function readContractSources(root) {
       (!isGet && !isPost) ||
       typeof entry.path !== "string" ||
       entry.path.length > 128 ||
-      !/^\/v1\/[a-z0-9]+(?:\/[a-z0-9]+)*$/.test(entry.path) ||
+      !/^\/v1\/(?:[a-z0-9]+|\{[a-z][A-Za-z0-9]*\})(?:\/(?:[a-z0-9]+|\{[a-z][A-Za-z0-9]*\}))*$/.test(
+        entry.path,
+      ) ||
+      new Set(pathNames).size !== pathNames.length ||
+      (!hasPathContract && !hasNoPathContract) ||
       typeof entry.operationId !== "string" ||
       entry.operationId.length > 64 ||
       !/^[a-z][A-Za-z0-9]*V1$/.test(entry.operationId) ||
@@ -183,7 +199,7 @@ export function readContractSources(root) {
       !Array.isArray(entry.problemStatuses) ||
       entry.problemStatuses.length === 0 ||
       entry.problemStatuses.length > 16 ||
-      entry.cacheControl !== "no-store" ||
+      !["no-store", "snapshot-by-season-state"].includes(entry.cacheControl) ||
       entry.corsPolicy !== "same-origin"
     ) {
       throw new Error(`contract operation ${String(index + 1)} has unsafe names or shape`);
@@ -215,6 +231,8 @@ export function readContractSources(root) {
 
     const queryRecord =
       entry.querySchema === "none" ? undefined : schemaByTypeName.get(entry.querySchema);
+    const pathRecord =
+      entry.pathSchema === "none" ? undefined : schemaByTypeName.get(entry.pathSchema);
     const requestRecord =
       entry.requestSchema === "none" ? undefined : schemaByTypeName.get(entry.requestSchema);
     const responseRecord = schemaByTypeName.get(entry.responseSchema);
@@ -225,6 +243,15 @@ export function readContractSources(root) {
           queryRecord.schema.properties === null ||
           typeof queryRecord.schema.properties !== "object" ||
           Array.isArray(queryRecord.schema.properties))) ||
+      (pathRecord !== undefined &&
+        (pathRecord.schema?.type !== "object" ||
+          pathRecord.schema.properties === null ||
+          typeof pathRecord.schema.properties !== "object" ||
+          Array.isArray(pathRecord.schema.properties) ||
+          Object.keys(pathRecord.schema.properties).sort().join(",") !==
+            [...pathNames].sort().join(",") ||
+          [...(pathRecord.schema.required ?? [])].sort().join(",") !==
+            [...pathNames].sort().join(","))) ||
       (isPost && requestRecord?.schema?.type !== "object") ||
       responseRecord?.schema?.type !== "object" ||
       problemRecord?.schema?.type !== "object" ||
@@ -239,7 +266,7 @@ export function readContractSources(root) {
     ) {
       throw new Error(`contract operation ${String(index + 1)} references an unknown policy`);
     }
-    return { entry, problemRecord, queryRecord, requestRecord };
+    return { entry, pathRecord, problemRecord, queryRecord, requestRecord };
   });
 
   const digest = createHash("sha256");
@@ -271,6 +298,12 @@ function schemaType(schema) {
   if (Array.isArray(schema.enum)) {
     return schema.enum.map((entry) => literalType(entry)).join(" | ");
   }
+  if (Array.isArray(schema.type)) {
+    const { const: ignoredConst, enum: ignoredEnum, ...base } = schema;
+    void ignoredConst;
+    void ignoredEnum;
+    return schema.type.map((type) => schemaType({ ...base, type })).join(" | ");
+  }
   switch (schema.type) {
     case "array":
       return `readonly (${schemaType(schema.items)})[]`;
@@ -278,6 +311,8 @@ function schemaType(schema) {
       return "boolean";
     case "integer":
       return "number";
+    case "null":
+      return "null";
     case "object": {
       const required = new Set(schema.required ?? []);
       const properties = Object.entries(schema.properties ?? {}).map(
@@ -361,11 +396,19 @@ function schemaReference(typeName) {
   return { $ref: `#/components/schemas/${typeName}` };
 }
 
-function responseHeaders(cacheControl, requestIdSchema) {
+function responseHeaders(cacheControl, requestIdSchema, errorResponse = false) {
+  const noStore = errorResponse || cacheControl === "no-store";
   return {
     "Cache-Control": {
-      description: "The response is not stored by browsers or shared caches.",
-      schema: { type: "string", const: cacheControl },
+      description: noStore
+        ? "The response is not stored by browsers or shared caches."
+        : "The response uses the exact open-season or finalized-snapshot shared-cache policy.",
+      schema: noStore
+        ? { type: "string", const: "no-store" }
+        : {
+            type: "string",
+            enum: [openSnapshotCacheControl, finalizedSnapshotCacheControl],
+          },
     },
     Vary: {
       description: "Representation negotiation varies on the Accept request header.",
@@ -375,29 +418,81 @@ function responseHeaders(cacheControl, requestIdSchema) {
       description: "Server-generated opaque request correlation identifier.",
       schema: openApiSchema(requestIdSchema),
     },
+    ...(noStore
+      ? {}
+      : {
+          ETag: {
+            description: "Quoted SHA-256 digest of the immutable canonical response payload.",
+            schema: {
+              type: "string",
+              minLength: 73,
+              maxLength: 73,
+              pattern: '^"sha256:[a-f0-9]{64}"$',
+            },
+          },
+        }),
   };
 }
 
 function openApiOperation(operation) {
-  const { entry, problemRecord, queryRecord, requestRecord } = operation;
+  const { entry, pathRecord, problemRecord, queryRecord, requestRecord } = operation;
   const requestIdSchema = problemRecord.schema.properties.requestId;
-  const parameters =
-    queryRecord === undefined
-      ? undefined
-      : Object.entries(queryRecord.schema.properties).map(([name, schema]) => ({
+  const pathParameters =
+    pathRecord === undefined
+      ? []
+      : Object.entries(pathRecord.schema.properties).map(([name, schema]) => ({
           name,
-          in: "query",
+          in: "path",
           required: true,
           description: schema.description,
           schema: openApiSchema(schema),
         }));
+  const queryRequired = new Set(queryRecord?.schema.required ?? []);
+  const queryParameters =
+    queryRecord === undefined
+      ? []
+      : Object.entries(queryRecord.schema.properties).map(([name, schema]) => ({
+          name,
+          in: "query",
+          required: queryRequired.has(name),
+          description: schema.description,
+          schema: openApiSchema(schema),
+        }));
+  const conditionalRequestParameters =
+    entry.cacheControl === "snapshot-by-season-state"
+      ? [
+          {
+            name: "Accept",
+            in: "header",
+            required: false,
+            description: "Exact bounded representation negotiation for public JSON snapshots.",
+            schema: {
+              type: "string",
+              enum: ["*/*", "application/json"],
+            },
+          },
+          {
+            name: "If-None-Match",
+            in: "header",
+            required: false,
+            description: "One exact quoted snapshot ETag. Lists and weak validators are rejected.",
+            schema: {
+              type: "string",
+              minLength: 73,
+              maxLength: 73,
+              pattern: '^"sha256:[a-f0-9]{64}"$',
+            },
+          },
+        ]
+      : [];
+  const parameters = [...pathParameters, ...queryParameters, ...conditionalRequestParameters];
   const problemResponses = Object.fromEntries(
     entry.problemStatuses.map((status) => [
       String(status),
       {
         description: problemResponseDescriptions.get(status),
         headers: {
-          ...responseHeaders(entry.cacheControl, requestIdSchema),
+          ...responseHeaders(entry.cacheControl, requestIdSchema, true),
           ...(status === 405
             ? {
                 Allow: {
@@ -420,7 +515,7 @@ function openApiOperation(operation) {
       entry.implementationStatus === "implemented-local"
         ? "Implemented and verified in this repository. Its presence here does not prove deployment."
         : "Contract-only operation. Its presence here does not prove that a route is implemented or deployed.",
-    ...(parameters === undefined ? {} : { parameters }),
+    ...(parameters.length === 0 ? {} : { parameters }),
     ...(requestRecord === undefined
       ? {}
       : {
@@ -437,6 +532,14 @@ function openApiOperation(operation) {
         headers: responseHeaders(entry.cacheControl, requestIdSchema),
         content: { "application/json": { schema: schemaReference(entry.responseSchema) } },
       },
+      ...(entry.cacheControl === "snapshot-by-season-state"
+        ? {
+            304: {
+              description: "The selected snapshot matches If-None-Match.",
+              headers: responseHeaders(entry.cacheControl, requestIdSchema),
+            },
+          }
+        : {}),
       ...problemResponses,
     },
     "x-viberacing-admission-policy": entry.admissionPolicy,
@@ -445,10 +548,15 @@ function openApiOperation(operation) {
         ? "none"
         : `contracts/v1/${entry.authenticationContract}`,
     "x-viberacing-cache-policy": entry.cacheControl,
+    "x-viberacing-cookie-policy":
+      entry.cacheControl === "snapshot-by-season-state" ? "none" : "same-origin-private",
     "x-viberacing-cors-policy": entry.corsPolicy,
     "x-viberacing-query-contract":
       entry.querySchema === "none" ? "none" : schemaReference(entry.querySchema),
     "x-viberacing-query-policy": entry.queryPolicy,
+    "x-viberacing-path-contract":
+      entry.pathSchema === "none" ? "none" : schemaReference(entry.pathSchema),
+    "x-viberacing-path-policy": entry.pathPolicy,
     "x-viberacing-request-body-policy": entry.requestBodyPolicy,
     "x-viberacing-request-contract":
       entry.requestSchema === "none" ? "none" : schemaReference(entry.requestSchema),

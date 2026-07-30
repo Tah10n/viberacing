@@ -6,19 +6,14 @@ import { pathToFileURL } from "node:url";
 const root = resolve(import.meta.dirname, "..");
 const ingestIndexUrl = pathToFileURL(resolve(root, "apps", "ingest", "dist", "index.js"));
 const ingestProtocolUrl = pathToFileURL(resolve(root, "apps", "ingest", "dist", "protocol.js"));
-const ingestVerifierUrl = pathToFileURL(
-  resolve(root, "apps", "ingest", "dist", "community-sync-verifier.js"),
-);
 const edgeWorkerUrl = pathToFileURL(resolve(root, "apps", "edge", "src", "worker.mjs"));
 
 const { createCommunitySyncVerifier } = await import(ingestIndexUrl.href);
-const { codexAccountingRevision, codexProvider } = await import(ingestVerifierUrl.href);
 const {
   communitySyncMediaType,
   communitySyncMethod,
   createDeviceSignatureMessage,
   digestBody,
-  headerNames,
   usageSyncRequestTarget,
 } = await import(ingestProtocolUrl.href);
 const { handleIngestEdgeRequest } = await import(edgeWorkerUrl.href);
@@ -26,13 +21,37 @@ const { handleIngestEdgeRequest } = await import(edgeWorkerUrl.href);
 const nowMilliseconds = Date.parse("2026-07-26T12:34:56.789Z");
 const deviceTimestamp = "2026-07-26T12:34:56.000Z";
 const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
-const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
+const agentAccountId = "acc_BBBBBBBBBBBBBBBBBBBBBB";
 const syncId = "syn_CCCCCCCCCCCCCCCCCCCCCC";
-const deviceKeyId = "11111111-2222-4333-8444-555555555555";
+const deviceKeyId = "key_DDDDDDDDDDDDDDDDDDDDDD";
+const installationId = "ins_EEEEEEEEEEEEEEEEEEEEEE";
+const readerVersion = "codex_app_server_0_144_5_v1";
 const originKeyId = "edge_staging";
 const originKey = Buffer.from(Array.from({ length: 32 }, (_, index) => index + 1));
 const deviceNonce = Buffer.alloc(16, 0x11).toString("base64url");
 const upstreamRequestId = `req_${Buffer.alloc(16, 1).toString("base64url")}`;
+const rateBindingNames = Object.freeze([
+  "VIBERACING_USAGE_BYTE_BUDGET",
+  "VIBERACING_USAGE_DEVICE_BURST",
+  "VIBERACING_USAGE_DEVICE_SUSTAINED",
+  "VIBERACING_USAGE_GLOBAL_BURST",
+  "VIBERACING_USAGE_GLOBAL_SUSTAINED",
+  "VIBERACING_USAGE_IP_BURST",
+  "VIBERACING_USAGE_IP_SUSTAINED",
+]);
+const rateCalls = [];
+const rateEnvironment = Object.fromEntries(
+  rateBindingNames.map((name) => [
+    name,
+    Object.freeze({
+      async limit(input) {
+        rateCalls.push(Object.freeze({ key: input.key, name }));
+        return { success: true };
+      },
+    }),
+  ]),
+);
+
 const keyPair = generateKeyPairSync("ed25519");
 const exportedPublicKey = keyPair.publicKey.export({ format: "der", type: "spki" });
 assert(Buffer.isBuffer(exportedPublicKey));
@@ -40,12 +59,12 @@ const devicePublicKey = Buffer.from(exportedPublicKey.subarray(-32));
 const body = Buffer.from(
   JSON.stringify({
     schemaVersion: 1,
-    sourceId,
+    agentAccountId,
     syncId,
     observedAt: deviceTimestamp,
     clientVersion: "0.0.0",
-    agentVersion: "0.144.5",
-    dailyEntries: [{ reportedDate: "2026-07-26", dailyTokenTotal: 123 }],
+    readerVersion,
+    dailyEntries: [{ usageDate: "2026-07-26", dailyTokenTotal: "123" }],
   }),
   "utf8",
 );
@@ -62,22 +81,22 @@ const signature = sign(
   keyPair.privateKey,
 ).toString("base64url");
 
-const consumedOriginNonces = [];
 const verifier = createCommunitySyncVerifier({
-  consumeOriginNonce(input) {
-    consumedOriginNonces.push(input);
-    return true;
-  },
   now: () => nowMilliseconds,
   originKeys: [{ keyId: originKeyId, secret: Buffer.from(originKey) }],
   readDeviceVerificationMaterial(observedDeviceId) {
     assert.equal(observedDeviceId, deviceId);
     return {
-      accountingRevision: codexAccountingRevision,
+      accountingRevision: 1,
+      agentAccountId,
       deviceKeyId,
-      provider: codexProvider,
+      identityAssurance: "community_local",
+      installationId,
+      maximumBackfillDays: 35,
+      provider: "codex",
       publicKey: Buffer.from(devicePublicKey),
-      sourceId,
+      readerVersion,
+      scopeKind: "agent_account",
     };
   },
 });
@@ -88,6 +107,7 @@ const response = await handleIngestEdgeRequest(
   new Request(`https://sync.example.com${usageSyncRequestTarget}`, {
     body,
     headers: {
+      "cf-connecting-ip": "203.0.113.42",
       "content-type": communitySyncMediaType,
       "idempotency-key": syncId,
       "x-viberacing-device-id": deviceId,
@@ -98,6 +118,7 @@ const response = await handleIngestEdgeRequest(
     method: communitySyncMethod,
   }),
   {
+    ...rateEnvironment,
     VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL: originKey.toString("base64url"),
     VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID: originKeyId,
     VIBERACING_INGEST_ORIGIN_URL: "https://ingest.example.com",
@@ -152,13 +173,31 @@ assert.deepEqual(await response.json(), {
   outcome: "accepted",
   acceptedEntries: 1,
 });
+assert.equal(verified.accountingRevision, 1);
+assert.equal(verified.agentAccountId, agentAccountId);
 assert.equal(verified.deviceId, deviceId);
 assert.equal(verified.deviceKeyId, deviceKeyId);
 assert.equal(verified.idempotencyKey, syncId);
-assert.equal(verified.payload.sourceId, sourceId);
-assert.equal(verified.payload.dailyEntries.length, 1);
-assert.equal(consumedOriginNonces.length, 1);
-assert.equal(consumedOriginNonces[0].keyId, originKeyId);
-assert.equal(consumedOriginNonces[0].expiresAtMilliseconds, nowMilliseconds + 60_000);
+assert.equal(verified.originKeyId, originKeyId);
+assert.equal(verified.originExpiresAtMilliseconds, nowMilliseconds + 60_000);
+assert.match(verified.originNonceDigestHex, /^[a-f0-9]{64}$/);
+assert.equal(verified.payload.agentAccountId, agentAccountId);
+assert.equal(verified.payload.readerVersion, readerVersion);
+assert.deepEqual(verified.payload.dailyEntries, [
+  { usageDate: "2026-07-26", dailyTokenTotal: "123" },
+]);
+assert.equal(verified.provider, "codex");
+assert.equal(verified.scopeKind, "agent_account");
+assert.equal(rateCalls.length, rateBindingNames.length);
+assert.deepEqual(
+  [...new Set(rateCalls.map(({ name }) => name))].sort(),
+  [...rateBindingNames].sort(),
+);
+assert.equal(
+  rateCalls.some(({ key }) => key.includes(deviceId) || key.includes("203.0.113")),
+  false,
+);
 
-console.log("Cloudflare edge proof is accepted by the production Ingest verifier.");
+console.log(
+  "Cloudflare rate/origin proof and final AgentAccount usage body are accepted by the production Ingest verifier.",
+);

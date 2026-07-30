@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveIngestDatabaseConfig } from "./database-config.js";
-import {
-  createIngestDatabasePool,
-  type IngestDatabaseOriginNonce,
-  type IngestDatabaseUsageSubmission,
-} from "./database-pool.js";
+import { createIngestDatabasePool, type IngestDatabaseUsageSubmission } from "./database-pool.js";
 
 const config = resolveIngestDatabaseConfig({
   NODE_ENV: "test",
@@ -17,28 +13,24 @@ const config = resolveIngestDatabaseConfig({
   VIBERACING_INGEST_DATABASE_USER: "viberacing_ingest_login",
 });
 
-const originNonce: IngestDatabaseOriginNonce = {
-  expiresAt: "2026-07-15T12:01:00.000Z",
-  nonceDigest: Buffer.alloc(32, 4),
-  originKeyId: "edge_primary",
-};
-
 const usageSubmission: IngestDatabaseUsageSubmission = {
-  accountingRevision: "codex_daily_usage_buckets_v1",
-  agentVersion: "0.144.5",
+  agentAccountId: "acc_BBBBBBBBBBBBBBBBBBBBBB",
   bodyDigest: Buffer.alloc(32, 5),
   clientVersion: "0.0.0",
-  dailyTokenTotals: [84],
+  dailyTokenTotals: ["9007199254740993"],
   deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
-  deviceKeyId: "00000000-0000-4000-8000-000000000101",
-  nonceDigest: Buffer.alloc(32, 6),
+  deviceKeyId: "key_CCCCCCCCCCCCCCCCCCCCCC",
+  deviceNonceDigest: Buffer.alloc(32, 6),
+  eventId: "evt_DDDDDDDDDDDDDDDDDDDDDD",
+  observationId: "obs_EEEEEEEEEEEEEEEEEEEEEE",
   observedAt: "2026-07-15T12:00:00.000Z",
-  provider: "codex",
-  reportedDates: ["2026-07-14"],
+  originExpiresAt: "2026-07-15T12:01:00.000Z",
+  originKeyId: "edge_primary",
+  originNonceDigest: Buffer.alloc(32, 4),
+  readerVersion: "codex_daily_usage_buckets_v1",
   signature: Buffer.alloc(64, 7),
-  snapshotId: "00000000-0000-4000-8000-000000000102",
-  sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
   syncId: "syn_DDDDDDDDDDDDDDDDDDDDDD",
+  usageDates: ["2026-07-14"],
 };
 
 describe("Ingest database pool", () => {
@@ -65,13 +57,12 @@ describe("Ingest database pool", () => {
     const client = await pool.connect();
 
     await expect(client.verifyRuntimeBoundary()).resolves.toEqual([{ value: 1 }]);
-    await expect(client.consumeOriginNonce(originNonce)).resolves.toEqual([{ value: 1 }]);
     await expect(client.readDeviceVerificationMaterial(usageSubmission.deviceId)).resolves.toEqual([
       { value: 1 },
     ]);
     await expect(client.submitUsageSync(usageSubmission)).resolves.toEqual([{ value: 1 }]);
     expect(client).not.toHaveProperty("query");
-    expect(query).toHaveBeenCalledTimes(4);
+    expect(query).toHaveBeenCalledTimes(3);
     expect(query.mock.calls[0]![0]).toMatchObject({ values: [] });
     const boundaryQuery = query.mock.calls[0]![0].text;
     expect(boundaryQuery).toContain("CURRENT_USER = 'viberacing_ingest'");
@@ -87,69 +78,62 @@ describe("Ingest database pool", () => {
     expect(boundaryQuery).toContain(
       "pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp'",
     );
-    const originQuery = query.mock.calls[1]![0];
-    expect(originQuery.text).toBe(
-      `SELECT
-  viberacing_api.consume_origin_nonce(
-    $1::text,
-    $2::bytea,
-    $3::timestamptz
-  ) AS consumed`,
-    );
-    expect(originQuery.values).toEqual([
-      originNonce.originKeyId,
-      originNonce.nonceDigest,
-      originNonce.expiresAt,
-    ]);
-    expect(originQuery.values[1]).not.toBe(originNonce.nonceDigest);
-    expect(query.mock.calls[2]![0]).toMatchObject({ values: [usageSubmission.deviceId] });
-    expect(query.mock.calls[2]![0].text).toBe(
+    expect(query.mock.calls[1]![0]).toMatchObject({ values: [usageSubmission.deviceId] });
+    expect(query.mock.calls[1]![0].text).toBe(
       `SELECT
   material.device_key_id::text AS device_key_id,
-  material.source_id AS source_id,
+  material.device_id::text AS device_id,
+  material.installation_id::text AS installation_id,
+  material.agent_account_id::text AS agent_account_id,
   material.public_key AS public_key,
-  material.provider AS provider,
-  material.accounting_revision AS accounting_revision
-FROM viberacing_api.read_device_verification_material($1::text) AS material`,
+  material.provider_code::text AS provider_code,
+  material.accounting_revision AS accounting_revision,
+  material.reader_version::text AS reader_version,
+  material.scope_kind::text AS scope_kind,
+  material.maximum_backfill_days AS maximum_backfill_days,
+  material.identity_assurance::text AS identity_assurance
+FROM viberacing_api.read_usage_device_verification_material($1::text) AS material`,
     );
-    const usageQuery = query.mock.calls[3]![0];
+    const usageQuery = query.mock.calls[2]![0];
     expect(usageQuery.text).toContain("viberacing_api.submit_usage_sync(");
     expect(usageQuery.text).not.toContain(";");
     expect(usageQuery.text.match(/\$[0-9]+/g)).toEqual(
-      Array.from({ length: 15 }, (_, index) => `$${String(index + 1)}`),
+      Array.from({ length: 17 }, (_, index) => `$${String(index + 1)}`),
     );
-    expect(usageQuery.text).toContain("$1::uuid");
-    expect(usageQuery.text).toContain("$4::text");
-    expect(usageQuery.text).toContain("$5::text");
-    expect(usageQuery.text).toContain("$6::uuid");
-    expect(usageQuery.text).toContain("$8::timestamptz");
-    expect(usageQuery.text).toContain("$11::bytea");
-    expect(usageQuery.text).toContain("$12::bytea");
+    expect(usageQuery.text).toContain("$1::text");
+    expect(usageQuery.text).toContain("$4::bytea");
+    expect(usageQuery.text).toContain("$5::timestamptz");
+    expect(usageQuery.text).toContain("$10::timestamptz");
     expect(usageQuery.text).toContain("$13::bytea");
-    expect(usageQuery.text).toContain("$14::text[]");
-    expect(usageQuery.text).toContain("$15::bigint[]");
+    expect(usageQuery.text).toContain("$14::bytea");
+    expect(usageQuery.text).toContain("$15::bytea");
+    expect(usageQuery.text).toContain("$16::date[]");
+    expect(usageQuery.text).toContain("$17::text[]");
     expect(usageQuery.values).toEqual([
+      usageSubmission.observationId,
+      usageSubmission.eventId,
+      usageSubmission.originKeyId,
+      usageSubmission.originNonceDigest,
+      usageSubmission.originExpiresAt,
       usageSubmission.deviceKeyId,
       usageSubmission.deviceId,
-      usageSubmission.sourceId,
-      usageSubmission.provider,
-      usageSubmission.accountingRevision,
-      usageSubmission.snapshotId,
+      usageSubmission.agentAccountId,
       usageSubmission.syncId,
       usageSubmission.observedAt,
       usageSubmission.clientVersion,
-      usageSubmission.agentVersion,
+      usageSubmission.readerVersion,
       usageSubmission.bodyDigest,
       usageSubmission.signature,
-      usageSubmission.nonceDigest,
+      usageSubmission.deviceNonceDigest,
       ["2026-07-14"],
-      ["84"],
+      ["9007199254740993"],
     ]);
-    expect(usageQuery.values[10]).not.toBe(usageSubmission.bodyDigest);
-    expect(usageQuery.values[11]).not.toBe(usageSubmission.signature);
-    expect(usageQuery.values[12]).not.toBe(usageSubmission.nonceDigest);
-    expect(usageQuery.values[13]).not.toBe(usageSubmission.reportedDates);
-    expect(usageQuery.values[14]).not.toBe(usageSubmission.dailyTokenTotals);
+    expect(usageQuery.values[3]).not.toBe(usageSubmission.originNonceDigest);
+    expect(usageQuery.values[12]).not.toBe(usageSubmission.bodyDigest);
+    expect(usageQuery.values[13]).not.toBe(usageSubmission.signature);
+    expect(usageQuery.values[14]).not.toBe(usageSubmission.deviceNonceDigest);
+    expect(usageQuery.values[15]).not.toBe(usageSubmission.usageDates);
+    expect(usageQuery.values[16]).not.toBe(usageSubmission.dailyTokenTotals);
 
     client.release();
     client.release(true);

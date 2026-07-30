@@ -1,4 +1,4 @@
-import { createConfiguredCommunityMaintenanceRunner } from "@viberacing/jobs";
+import { createConfiguredJobsMaintenanceRunner } from "@viberacing/jobs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { jobsSchedulerPollIntervalMs } from "./config.js";
@@ -10,7 +10,7 @@ import {
 } from "./scheduler.js";
 
 vi.mock("@viberacing/jobs", () => ({
-  createConfiguredCommunityMaintenanceRunner: vi.fn(),
+  createConfiguredJobsMaintenanceRunner: vi.fn(),
   maximumCleanupBatchSize: 1_000,
   maximumProfileDeletionPurgeBatchSize: 10,
 }));
@@ -429,7 +429,7 @@ describe("startConfiguredJobsScheduler", () => {
     });
 
     expect(reads).toEqual(["VIBERACING_JOBS_SCHEDULER_ENABLED"]);
-    expect(createConfiguredCommunityMaintenanceRunner).not.toHaveBeenCalled();
+    expect(createConfiguredJobsMaintenanceRunner).not.toHaveBeenCalled();
   });
 
   it("composes the reviewed Jobs runner, UTC schedule, and platform timer", async () => {
@@ -440,7 +440,7 @@ describe("startConfiguredJobsScheduler", () => {
       .mockRejectedValueOnce(new Error("private-query-value"))
       .mockResolvedValue(Object.freeze({}));
     const close = vi.fn(async () => undefined);
-    vi.mocked(createConfiguredCommunityMaintenanceRunner).mockReturnValue(
+    vi.mocked(createConfiguredJobsMaintenanceRunner).mockReturnValue(
       Object.freeze({ close, execute }),
     );
     const environment = Object.freeze({ VIBERACING_JOBS_SCHEDULER_ENABLED: "true" });
@@ -448,8 +448,8 @@ describe("startConfiguredJobsScheduler", () => {
     const controller = await startConfiguredJobsScheduler(environment);
     await flush();
 
-    expect(createConfiguredCommunityMaintenanceRunner).toHaveBeenCalledExactlyOnceWith(environment);
-    expect(execute).toHaveBeenCalledTimes(18);
+    expect(createConfiguredJobsMaintenanceRunner).toHaveBeenCalledExactlyOnceWith(environment);
+    expect(execute).toHaveBeenCalledTimes(13);
     await controller.close();
     expect(close).toHaveBeenCalledOnce();
   });

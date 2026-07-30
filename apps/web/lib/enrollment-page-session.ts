@@ -4,10 +4,10 @@ import { headers } from "next/headers";
 
 import { readCookie } from "./enrollment-cookie";
 import type { AccountCarRecipeState } from "./car-proposal-service";
-import type { AccountScore, PasskeyInventoryItem, ProfileVisibility } from "./enrollment-database";
+import type { PasskeyInventoryItem } from "./enrollment-database";
 import type { EnrollmentSession } from "./enrollment-domain";
 import { getEnrollmentRuntime } from "./enrollment-runtime";
-import { enrollmentCookieNames, type AccountSourceDeviceInventoryItem } from "./enrollment-service";
+import { enrollmentCookieNames, type AccountDashboard } from "./enrollment-service";
 
 export async function readEnrollmentPageSession(): Promise<EnrollmentSession | undefined> {
   try {
@@ -23,7 +23,6 @@ export async function readEnrollmentPageSession(): Promise<EnrollmentSession | u
 }
 
 export interface EnrollmentPageConnect {
-  readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly session: EnrollmentSession;
 }
 
@@ -39,27 +38,17 @@ export async function readEnrollmentPageConnect(): Promise<EnrollmentPageConnect
     if (session === undefined) {
       return undefined;
     }
-    let activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
-    if (session.passkeyRegistered) {
-      try {
-        activeDeviceInventory = await service.readActiveDeviceInventory(sessionCookie);
-      } catch {
-        activeDeviceInventory = undefined;
-      }
-    }
-    return Object.freeze({ activeDeviceInventory, session });
+    return Object.freeze({ session });
   } catch {
     return undefined;
   }
 }
 
 export interface EnrollmentPageAccount {
-  readonly activeDeviceInventory: readonly AccountSourceDeviceInventoryItem[] | undefined;
   readonly carRecipeState: AccountCarRecipeState | undefined;
+  readonly dashboard: AccountDashboard | undefined;
   readonly passkeys: readonly PasskeyInventoryItem[] | undefined;
-  readonly score: AccountScore | null | undefined;
   readonly session: EnrollmentSession;
-  readonly visibility: ProfileVisibility | undefined;
 }
 
 export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount | undefined> {
@@ -75,19 +64,16 @@ export async function readEnrollmentPageAccount(): Promise<EnrollmentPageAccount
     if (session === undefined) {
       return undefined;
     }
-    const [activeDeviceInventory, carRecipeState, overview, passkeys] = await Promise.all([
-      service.readActiveDeviceInventory(sessionCookie),
+    const [carRecipeState, dashboard, passkeys] = await Promise.all([
       runtime.carProposalService.read(sessionCookie),
-      service.readAccountOverview(sessionCookie),
+      service.readAccountDashboard(sessionCookie),
       service.readPasskeyInventory(sessionCookie),
     ]);
     return Object.freeze({
-      activeDeviceInventory,
       carRecipeState,
+      dashboard,
       passkeys,
-      score: overview?.score,
       session,
-      visibility: overview?.visibility,
     });
   } catch {
     return undefined;

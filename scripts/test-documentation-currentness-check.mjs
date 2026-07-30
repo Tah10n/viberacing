@@ -14,7 +14,10 @@ function makeFixture(name) {
     "contracts/v1",
     "contracts/generated",
     "database/migrations",
+    "docs/decisions",
     "docs/getting-started",
+    "docs/operations",
+    "docs/security",
     "scripts",
   ]) {
     mkdirSync(resolve(directory, path), { recursive: true });
@@ -22,12 +25,20 @@ function makeFixture(name) {
   for (const path of [
     "README.md",
     "README.ru.md",
+    "ROADMAP.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "MAINTAINERS.md",
+    "SECURITY.md",
     "contracts/v1/manifest.json",
     "contracts/generated/openapi.v1.json",
     "database/README.md",
     "database/migrations/manifest.json",
     "docs/IMPLEMENTATION_STATUS.md",
+    "docs/decisions/README.md",
     "docs/getting-started/LOCAL_DEVELOPMENT.md",
+    "docs/operations/MIGRATION_RUNBOOK.md",
+    "docs/security/THREAT_MODEL.md",
   ]) {
     cpSync(resolve(root, path), resolve(directory, path));
   }
@@ -84,6 +95,16 @@ const cases = [
     expectedText: "OpenAPI path inventory differs",
   },
   {
+    name: "rejects operation implementation-status drift",
+    mutate(directory) {
+      mutateJson(directory, "contracts/v1/manifest.json", (manifest) => {
+        manifest.operations[0].implementationStatus = "implemented-local";
+      });
+    },
+    expectedStatus: 1,
+    expectedText: "OpenAPI path inventory differs",
+  },
+  {
     name: "rejects migration inventory drift",
     mutate(directory) {
       mutateJson(directory, "database/migrations/manifest.json", (manifest) => {
@@ -121,6 +142,98 @@ const cases = [
     },
     expectedStatus: 1,
     expectedText: "must contain one Mermaid thumbnail",
+  },
+  {
+    name: "rejects stale pre-replacement threat-model status",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/security/THREAT_MODEL.md",
+        "The former Codex-specific source/score runtime is absent from the current tree",
+        "The current tree contains older local Codex-specific implementation",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "clean replacement status is stale",
+  },
+  {
+    name: "rejects a stale clean-replacement ADR index",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/decisions/README.md",
+        "Accepted; implemented locally; external pending",
+        "Accepted; clean-slate target; implementation pending",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "ADR index status is stale",
+  },
+  {
+    name: "rejects a roadmap that reopens the completed local review",
+    mutate(directory) {
+      replace(
+        directory,
+        "ROADMAP.md",
+        "Status: local clean-replacement matrix complete; registry-backed advisory refresh and external\n" +
+          "evidence remain pending.",
+        "Status: implementation still pending.",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "final local review status is stale",
+  },
+  {
+    name: "rejects an ADR index that presents historical implementation as current",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/decisions/README.md",
+        "they are not\ncurrent runtime evidence",
+        "they are\ncurrent runtime evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "historical ADR status boundary is stale",
+  },
+  {
+    name: "rejects a false green registry advisory boundary",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/IMPLEMENTATION_STATUS.md",
+        "was not refreshed and is explicitly not counted as\ngreen evidence",
+        "was refreshed and is counted as\ngreen evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "registry advisory evidence boundary is stale",
+  },
+  {
+    name: "rejects stale migration evidence status",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/operations/MIGRATION_RUNBOOK.md",
+        "have landed as\nlocal synthetic evidence",
+        "remain pending as\nlocal synthetic evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "migration evidence status is stale",
+  },
+  {
+    name: "rejects stale publication governance status",
+    mutate(directory) {
+      replace(
+        directory,
+        "GOVERNANCE.md",
+        "maintainer-led public source-only pre-release project",
+        "maintainer-led project in unpublished source-only preparation",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "publication governance status is stale",
   },
 ];
 

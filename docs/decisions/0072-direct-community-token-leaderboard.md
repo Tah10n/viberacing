@@ -1,10 +1,10 @@
 # ADR 0072: Direct Community token leaderboard
 
-- Status: Accepted (local Codex beta implementation; deployment pending)
+- Status: Superseded
 - Date: 2026-07-26
 - Decision owners: Product, Contracts, Web, Jobs, Database, Security, Privacy, and Operations
 - Supersedes: None
-- Superseded by: None
+- Superseded by: ADR 0076
 
 ## Context
 

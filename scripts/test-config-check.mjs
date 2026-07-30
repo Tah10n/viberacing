@@ -4,6 +4,7 @@ import { parseDocument } from "yaml";
 import {
   validateCompose,
   validateDependencyOverrides,
+  validateEdgeWrangler,
   validatePnpmWorkspace,
   validateRootPackage,
   validateWorkspacePackage,
@@ -39,10 +40,9 @@ VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID=edge_local
 VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
 VIBERACING_CAR_PROPOSALS_ENABLED=false
 VIBERACING_ENROLLMENT_ENABLED=false
+VIBERACING_INVITE_GATE_ENABLED=false
 VIBERACING_PAIRING_ENABLED=false
-VIBERACING_PUBLIC_RANKING_ENABLED=false
-VIBERACING_TOKEN_RANKING_ENABLED=false
-VIBERACING_SOURCE_CREATION_ENABLED=false
+VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false
 VIBERACING_WEB_DATABASE_HOST=127.0.0.1
 VIBERACING_WEB_DATABASE_PORT=54329
 VIBERACING_WEB_DATABASE_NAME=viberacing_local
@@ -55,6 +55,43 @@ VIBERACING_RECOVERY_ARGON2_PASSES=replace-with-reviewed-pass-count
 VIBERACING_RECOVERY_PEPPER=replace-with-distinct-32-byte-base64url-value
 VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL=replace-with-random-32-byte-base64url-key
 VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL=replace-with-distinct-random-32-byte-base64url-key`;
+
+const goodEdgeWrangler = parseDocument(
+  readFileSync(new URL("../apps/edge/wrangler.jsonc", import.meta.url), "utf8"),
+  { strict: true, uniqueKeys: true, version: "1.2" },
+).toJS();
+assert.deepEqual(validateEdgeWrangler(goodEdgeWrangler), []);
+for (const mutate of [
+  (value) => {
+    value.workers_dev = true;
+  },
+  (value) => {
+    value.vars.VIBERACING_USAGE_SYNC_ENABLED = "true";
+  },
+  (value) => {
+    value.routes = ["sync.example.com/*"];
+  },
+  (value) => {
+    value.ratelimits.pop();
+  },
+  (value) => {
+    value.ratelimits[0].name = "RENAMED";
+  },
+  (value) => {
+    value.ratelimits[1].namespace_id = value.ratelimits[0].namespace_id;
+  },
+  (value) => {
+    value.ratelimits[2].simple.limit += 1;
+  },
+  (value) => {
+    value.ratelimits[3].simple.period = 30;
+  },
+]) {
+  const candidate = structuredClone(goodEdgeWrangler);
+  mutate(candidate);
+  assert.notDeepEqual(validateEdgeWrangler(candidate), []);
+}
+assert.notDeepEqual(validateEdgeWrangler(null), []);
 
 assert.deepEqual(validateEnvExampleText(goodEnvExample), []);
 assert.match(
@@ -69,8 +106,17 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace(
-      "VIBERACING_TOKEN_RANKING_ENABLED=false",
-      "VIBERACING_TOKEN_RANKING_ENABLED=true",
+      "VIBERACING_INVITE_GATE_ENABLED=false",
+      "VIBERACING_INVITE_GATE_ENABLED=true",
+    ),
+  ).join("\n"),
+  /must retain the reviewed public-safe example value/,
+);
+assert.match(
+  validateEnvExampleText(
+    goodEnvExample.replace(
+      "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false",
+      "VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true",
     ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,
@@ -108,26 +154,8 @@ assert.match(
 assert.match(
   validateEnvExampleText(
     goodEnvExample.replace(
-      "VIBERACING_SOURCE_CREATION_ENABLED=false",
-      "VIBERACING_SOURCE_CREATION_ENABLED=true",
-    ),
-  ).join("\n"),
-  /must retain the reviewed public-safe example value/,
-);
-assert.match(
-  validateEnvExampleText(
-    goodEnvExample.replace(
       "VIBERACING_JOBS_SCHEDULER_ENABLED=false",
       "VIBERACING_JOBS_SCHEDULER_ENABLED=true",
-    ),
-  ).join("\n"),
-  /must retain the reviewed public-safe example value/,
-);
-assert.match(
-  validateEnvExampleText(
-    goodEnvExample.replace(
-      "VIBERACING_PUBLIC_RANKING_ENABLED=false",
-      "VIBERACING_PUBLIC_RANKING_ENABLED=true",
     ),
   ).join("\n"),
   /must retain the reviewed public-safe example value/,
@@ -238,6 +266,83 @@ const goodWorkflow = {
 };
 
 assert.deepEqual(validateWorkflow("good.yml", goodWorkflow), []);
+
+const connectorReleaseCandidateWorkflowPath = ".github/workflows/connector-release-candidate.yml";
+const goodConnectorReleaseCandidateWorkflow = parseDocument(
+  readFileSync(
+    new URL("../.github/workflows/connector-release-candidate.yml", import.meta.url),
+    "utf8",
+  ),
+  { strict: true, uniqueKeys: true, version: "1.2" },
+).toJS();
+assert.deepEqual(
+  validateWorkflow(connectorReleaseCandidateWorkflowPath, goodConnectorReleaseCandidateWorkflow),
+  [],
+);
+for (const [mutate, expected] of [
+  [
+    (workflow) => {
+      workflow.on = { pull_request: {} };
+    },
+    /manual-only/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.if = "github.ref != 'refs/heads/main'";
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.strategy.matrix.include.pop();
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.environment = undefined;
+    },
+    /five-platform matrix/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[5].run =
+        "cargo build --release --target-dir target --package viberacing-connector --bin viberacing-connector";
+    },
+    /Cargo --locked/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[8].uses = "actions/attest@v4";
+    },
+    /pinned GitHub Sigstore provenance/,
+  ],
+  [
+    (workflow) => {
+      workflow.jobs.candidate.steps[10].with.name = "viberacing-connector";
+    },
+    /explicitly unsigned candidate bundles/,
+  ],
+  [
+    (workflow) => {
+      workflow.permissions.contents = "write";
+    },
+    /exact attestation permissions/,
+  ],
+  [
+    (workflow) => {
+      workflow.env = { SIGNING_KEY: "${{ secrets.SIGNING_KEY }}" };
+    },
+    /references secrets/,
+  ],
+]) {
+  const candidate = structuredClone(goodConnectorReleaseCandidateWorkflow);
+  mutate(candidate);
+  assert.match(
+    validateWorkflow(connectorReleaseCandidateWorkflowPath, candidate).join("\n"),
+    expected,
+  );
+}
 
 const requiredNodeSteps = [
   { run: "node scripts/check-public-files.mjs --all" },
@@ -1042,8 +1147,24 @@ assert.deepEqual(
     private: true,
     packageManager: "pnpm@11.7.0",
     devDependencies: { tool: "1.2.3" },
+    scripts: {
+      build: "corepack pnpm --filter @viberacing/tool run build",
+      verify:
+        "corepack pnpm --filter @viberacing/tool run build && corepack pnpm --filter @viberacing/tool run test",
+    },
   }),
   [],
+);
+assert.match(
+  validateRootPackage({
+    private: true,
+    packageManager: "pnpm@11.7.0",
+    scripts: {
+      verify:
+        "corepack pnpm --filter @viberacing/tool run build && pnpm --filter @viberacing/tool run test",
+    },
+  }).join("\n"),
+  /root script verify must invoke pnpm through Corepack/,
 );
 assert.match(
   validateRootPackage({
@@ -1189,4 +1310,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (80 cases).");
+console.log("Configuration checker tests passed (81 cases).");

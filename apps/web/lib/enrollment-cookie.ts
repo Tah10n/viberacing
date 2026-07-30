@@ -15,7 +15,7 @@ const tagBytes = 16;
 const segmentPattern = /^[A-Za-z0-9_-]+$/;
 
 export type EnrollmentCookieKind =
-  "car-proposal" | "login" | "oauth" | "passkey" | "recovery" | "session";
+  "car-proposal" | "login" | "oauth" | "pairing" | "passkey" | "recovery" | "session";
 export type EnrollmentRandomBytes = (size: number) => Uint8Array;
 
 export interface EnrollmentCookieCodec {
@@ -58,6 +58,7 @@ export function createEnrollmentCookieCodec(
     "car-proposal": deriveKey(masterKey, "car-proposal"),
     login: deriveKey(masterKey, "login"),
     oauth: deriveKey(masterKey, "oauth"),
+    pairing: deriveKey(masterKey, "pairing"),
     passkey: deriveKey(masterKey, "passkey"),
     recovery: deriveKey(masterKey, "recovery"),
     session: deriveKey(masterKey, "session"),

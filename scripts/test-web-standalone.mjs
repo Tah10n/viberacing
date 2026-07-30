@@ -160,9 +160,7 @@ try {
     VIBERACING_ENROLLMENT_ENABLED: "false",
     VIBERACING_PAIRING_ENABLED: "false",
     VIBERACING_PUBLIC_ORIGIN: expectedOrigin,
-    VIBERACING_PUBLIC_RANKING_ENABLED: "false",
-    VIBERACING_SOURCE_CREATION_ENABLED: "false",
-    VIBERACING_TOKEN_RANKING_ENABLED: "false",
+    VIBERACING_PUBLIC_SNAPSHOTS_ENABLED: "false",
   };
   for (const key of ["ComSpec", "SystemRoot"]) {
     if (process.env[key] !== undefined) {
@@ -185,6 +183,8 @@ try {
   const homeResponse = await waitForHome(origin, child, processState);
   const html = await homeResponse.text();
   const normalizedHtml = html.toLowerCase();
+  const semanticTableIndex = html.indexOf('class="semantic-leaderboard"');
+  const raceLoadingIndex = html.indexOf('class="race-loading"');
   const canonicalTag = html.match(/<link\b[^>]*\brel="canonical"[^>]*>/u)?.[0];
   const canonicalHref = canonicalTag?.match(/\bhref="(?<href>[^"]+)"/u)?.groups?.href;
   const failedHomeContracts = [
@@ -198,6 +198,12 @@ try {
     [homeResponse.headers.get("content-security-policy") !== null, "content security policy"],
     [html.includes(expectedOrigin), "public origin"],
     [normalizedHtml.includes("vibecode rating"), "search phrase"],
+    [html.includes("All your coding agents. Every account. One GitHub profile."), "exact hero"],
+    [semanticTableIndex >= 0, "semantic leaderboard"],
+    [raceLoadingIndex > semanticTableIndex, "semantic leaderboard before lazy race enhancement"],
+    [!normalizedHtml.includes("<canvas"), "no server-rendered race canvas"],
+    [!normalizedHtml.includes("score simulator"), "removed score simulator"],
+    [!normalizedHtml.includes("weekly score"), "removed score terminology"],
     [canonicalHref === expectedOrigin || canonicalHref === `${expectedOrigin}/`, "root canonical"],
   ]
     .filter(([passedContract]) => !passedContract)
@@ -247,7 +253,11 @@ try {
   await assetResponse.arrayBuffer();
 
   failureStage = "default-off boundary";
-  for (const path of ["/v1/community/race/status", "/v1/community/tokens"]) {
+  for (const path of [
+    "/v1/leaderboards/current?trustTier=community&page=1",
+    "/v1/leaderboards/2026-07-20?trustTier=community&page=1",
+    "/v1/profiles/demo_driver?trustTier=community",
+  ]) {
     const disabledResponse = await fetchBounded(`${origin}${path}`);
     const disabledBody = await disabledResponse.json();
     if (
@@ -257,7 +267,19 @@ try {
       disabledBody?.errorCode !== "temporarily_unavailable" ||
       disabledBody?.retryable !== true
     ) {
-      fail(`default-off public ranking boundary did not fail closed for ${path}`);
+      fail(`default-off public snapshot boundary did not fail closed for ${path}`);
+    }
+  }
+
+  for (const path of [
+    "/v1/community/scores?seasonStart=2026-07-20",
+    "/v1/community/race?seasonStart=2026-07-20",
+    "/v1/community/race/status?seasonStart=2026-07-20",
+    "/v1/community/tokens?seasonStart=2026-07-20",
+  ]) {
+    const removedResponse = await fetchBounded(`${origin}${path}`);
+    if (removedResponse.status !== 404) {
+      fail(`removed legacy public route remained reachable for ${path}`);
     }
   }
 
@@ -305,5 +327,5 @@ if (!passed) {
 }
 
 console.log(
-  "Web standalone smoke passed (search metadata, discovery endpoints, static asset, production headers, two default-off ranking decisions).",
+  "Web standalone smoke passed (exact hero, SSR-first semantic leaderboard, lazy race boundary, search metadata, discovery endpoints, static asset, production headers, three final default-off snapshot routes, and four absent legacy routes).",
 );

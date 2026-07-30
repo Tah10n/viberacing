@@ -32,34 +32,38 @@ import {
   type CommunitySyncApplicationError,
 } from "./community-sync-application.js";
 import {
-  codexAccountingRevision,
-  codexProvider,
   CommunitySyncVerificationError,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
 import { usageSyncRequestTarget } from "./protocol.js";
 
 const submission = Object.freeze({
-  accountingRevision: codexAccountingRevision,
+  accountingRevision: 1,
+  agentAccountId: "acc_BBBBBBBBBBBBBBBBBBBBBB",
   bodyDigestHex: "11".repeat(32),
+  deviceNonceDigestHex: "22".repeat(32),
   deviceId: "dev_AAAAAAAAAAAAAAAAAAAAAA",
-  deviceKeyId: "11111111-2222-4333-8444-555555555555",
+  deviceKeyId: "key_DDDDDDDDDDDDDDDDDDDDDD",
   idempotencyKey: "syn_CCCCCCCCCCCCCCCCCCCCCC",
-  nonceDigestHex: "22".repeat(32),
+  originExpiresAtMilliseconds: Date.UTC(2026, 6, 15, 18, 1),
+  originKeyId: "edge_primary",
+  originNonceDigestHex: "33".repeat(32),
   payload: Object.freeze({
     schemaVersion: 1,
-    sourceId: "src_BBBBBBBBBBBBBBBBBBBBBB",
+    agentAccountId: "acc_BBBBBBBBBBBBBBBBBBBBBB",
     syncId: "syn_CCCCCCCCCCCCCCCCCCCCCC",
     observedAt: "2026-07-15T18:00:00.000Z",
     clientVersion: "1.2.3",
-    agentVersion: "2.3.4",
+    readerVersion: "codex_daily_usage_buckets_v1",
     dailyEntries: Object.freeze([
-      Object.freeze({ reportedDate: "2026-07-15", dailyTokenTotal: 123 }),
+      Object.freeze({ usageDate: "2026-07-15", dailyTokenTotal: "123" }),
     ]),
   }),
-  provider: codexProvider,
+  provider: "codex",
+  readerVersion: "codex_daily_usage_buckets_v1",
   requestTarget: usageSyncRequestTarget,
   signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
+  scopeKind: "agent_account",
 }) satisfies VerifiedCommunitySync;
 
 beforeEach(() => {

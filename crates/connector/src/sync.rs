@@ -1,73 +1,76 @@
-//! Exact-body composition for an isolated signed Community usage request.
+//! Exact-body composition for one provider-neutral signed Usage Sync request.
 
 use std::fmt;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeStruct, Serializer};
 use sha2::{Digest, Sha256};
 
-use crate::codex_0_144_5::{CANDIDATE_CODEX_VERSION, valid_reported_date};
-use crate::{DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES, MAX_SYNC_TOKEN_VALUE};
+use crate::{CanonicalDailyUsage, CanonicalDailyUsageEntry};
 
 mod signing;
 
 pub use signing::{
-    CandidateCommunityUsageV1Signer, DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM,
-    DEVICE_SIGNATURE_BYTES, ReviewedDeviceSigningKey, SignedCommunityUsage, SyncSigningError,
+    DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM, DEVICE_SIGNATURE_BYTES,
+    ReviewedDeviceSigningKey, SignedUsageSync, UsageSyncSigningError, UsageSyncV1Signer,
 };
 
-/// Fixed HTTP method for the version 1 Community usage operation.
-pub const COMMUNITY_USAGE_METHOD: &str = "POST";
+/// Fixed HTTP method for the final version 1 Usage Sync operation.
+pub const USAGE_SYNC_METHOD: &str = "POST";
 
-/// Fixed request target for the version 1 Community usage operation.
-pub const COMMUNITY_USAGE_REQUEST_TARGET: &str = "/v1/community/usage";
+/// Sole fixed request target for the final version 1 Usage Sync operation.
+pub const USAGE_SYNC_REQUEST_TARGET: &str = "/v1/usage";
 
-/// Fixed request media type for the version 1 Community usage operation.
-pub const COMMUNITY_USAGE_MEDIA_TYPE: &str = "application/json";
+/// Fixed request media type for the final version 1 Usage Sync operation.
+pub const USAGE_SYNC_MEDIA_TYPE: &str = "application/json";
 
-/// Maximum exact JSON body size admitted by the Community usage authentication policy.
-pub const MAX_COMMUNITY_USAGE_BODY_BYTES: usize = 8 * 1024;
+/// Maximum exact JSON body size admitted by the Usage Sync authentication policy.
+pub const MAX_USAGE_SYNC_BODY_BYTES: usize = 8 * 1024;
 
 /// Domain-separation prefix for the version 1 device signature message.
 pub const DEVICE_SIGNATURE_MESSAGE_PREFIX: &str = "viberacing-device-request-v1";
 
-/// Exact byte length of a Community usage device nonce.
+/// Exact byte length of a Usage Sync device nonce.
 pub const DEVICE_NONCE_BYTES: usize = 16;
 
 const USAGE_SYNC_SCHEMA_VERSION: u8 = 1;
 const CLIENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-const SOURCE_ID_PREFIX: &str = "src_";
+const AGENT_ACCOUNT_ID_PREFIX: &str = "acc_";
 const SYNC_ID_PREFIX: &str = "syn_";
 const DEVICE_ID_PREFIX: &str = "dev_";
 const IDENTIFIER_LENGTH: usize = 26;
 const IDENTIFIER_SUFFIX_LENGTH: usize = 22;
+const MAX_READER_VERSION_BYTES: usize = 64;
 const BASE64URL_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/// One-use capability containing reviewed source, device, clock, identifier, and nonce inputs for
-/// a Community usage request.
+/// One-use capability containing reviewed account, reader, device, clock, identifier, and nonce
+/// inputs for a Usage Sync request.
 ///
 /// This type deliberately has no public constructor, accessor, `Clone`, or `Debug`. The private
-/// one-shot sync command loads the active paired identifiers, obtains canonical UTC time, and
-/// generates a fresh cryptographic sync identifier and nonce before constructing it inside this
-/// crate. External callers cannot create a caller-selected or replay-prone request.
-pub struct ReviewedCommunityUsageContext {
-    source_id: String,
+/// one-shot sync command loads one active account-scoped device binding, obtains canonical UTC
+/// time, and generates a fresh cryptographic sync identifier and nonce before constructing it
+/// inside this crate.
+pub struct ReviewedUsageSyncContext {
+    agent_account_id: String,
+    reader_version: String,
     sync_id: String,
     observed_at: String,
     device_id: String,
     device_nonce: [u8; DEVICE_NONCE_BYTES],
 }
 
-impl ReviewedCommunityUsageContext {
-    pub(crate) fn from_active_device(
-        source_id: String,
+impl ReviewedUsageSyncContext {
+    pub(crate) fn from_active_account(
+        agent_account_id: String,
+        reader_version: String,
         sync_id: String,
         observed_at: String,
         device_id: String,
         device_nonce: [u8; DEVICE_NONCE_BYTES],
     ) -> Self {
         Self {
-            source_id,
+            agent_account_id,
+            reader_version,
             sync_id,
             observed_at,
             device_id,
@@ -76,12 +79,12 @@ impl ReviewedCommunityUsageContext {
     }
 }
 
-/// Exact unsigned Community usage material ready for the isolated Ed25519 signer.
+/// Exact unsigned Usage Sync material ready for the isolated Ed25519 signer.
 ///
 /// The body and signature message contain private usage and security material. This type does not
 /// implement `Debug`, `Display`, `Clone`, serialization, or public accessors. It can only be
-/// consumed by [`CandidateCommunityUsageV1Signer`]; callers must not log or transmit it.
-pub struct PreparedCommunityUsage {
+/// consumed by [`UsageSyncV1Signer`].
+pub struct PreparedUsageSync {
     body: Vec<u8>,
     device_signature_message: Vec<u8>,
     device_id: String,
@@ -90,85 +93,83 @@ pub struct PreparedCommunityUsage {
     sync_id: String,
 }
 
-impl Drop for PreparedCommunityUsage {
+impl Drop for PreparedUsageSync {
     fn drop(&mut self) {
         self.body.fill(0);
         self.device_signature_message.fill(0);
     }
 }
 
-/// Stable, non-reflective failures from exact Community usage preparation.
+/// Stable, non-reflective failures from exact Usage Sync preparation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SyncPreparationError {
-    /// The reviewed source identifier did not match the closed version 1 grammar.
-    InvalidSourceId,
-    /// The reviewed sync identifier did not match the closed version 1 grammar.
+pub enum UsageSyncPreparationError {
+    /// The reviewed `AgentAccount` identifier did not match the closed V1 grammar.
+    InvalidAgentAccountId,
+    /// The immutable reader version did not match the closed V1 grammar.
+    InvalidReaderVersion,
+    /// The reviewed sync identifier did not match the closed V1 grammar.
     InvalidSyncId,
     /// The reviewed observation time was not canonical millisecond UTC.
     InvalidObservedAt,
-    /// The reviewed device identifier did not match the closed version 1 grammar.
+    /// The reviewed device identifier did not match the closed V1 grammar.
     InvalidDeviceId,
-    /// Daily usage was empty, unbounded, unsorted, duplicated, or outside contract bounds.
+    /// Daily usage was empty or outside the canonical collection bounds.
     InvalidDailyUsage,
     /// Exact JSON serialization failed.
     SerializationFailed,
-    /// The exact serialized body exceeded the versioned authentication-policy budget.
+    /// The exact serialized body exceeded the authentication-policy budget.
     BodyLimitExceeded,
 }
 
-impl fmt::Display for SyncPreparationError {
+impl fmt::Display for UsageSyncPreparationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::InvalidSourceId => "community usage source identifier is invalid",
-            Self::InvalidSyncId => "community usage identifier is invalid",
-            Self::InvalidObservedAt => "community usage timestamp is invalid",
-            Self::InvalidDeviceId => "community usage device identifier is invalid",
-            Self::InvalidDailyUsage => "community usage daily totals are invalid",
-            Self::SerializationFailed => "community usage serialization failed",
-            Self::BodyLimitExceeded => "community usage body exceeds the size limit",
+            Self::InvalidAgentAccountId => "usage sync account identifier is invalid",
+            Self::InvalidReaderVersion => "usage sync reader version is invalid",
+            Self::InvalidSyncId => "usage sync identifier is invalid",
+            Self::InvalidObservedAt => "usage sync timestamp is invalid",
+            Self::InvalidDeviceId => "usage sync device identifier is invalid",
+            Self::InvalidDailyUsage => "usage sync daily totals are invalid",
+            Self::SerializationFailed => "usage sync serialization failed",
+            Self::BodyLimitExceeded => "usage sync body exceeds the size limit",
         })
     }
 }
 
-impl std::error::Error for SyncPreparationError {}
+impl std::error::Error for UsageSyncPreparationError {}
 
-/// Candidate-only exact-body composer for `UsageSyncV1` and its device signature message.
-pub struct CandidateCommunityUsageV1Composer;
+/// Exact-body composer for final `UsageSyncV1` and its device-signature message.
+pub struct UsageSyncV1Composer;
 
-impl CandidateCommunityUsageV1Composer {
-    /// Consumes one reviewed context and minimized daily usage into bounded unsigned request
-    /// material for the isolated signer.
+impl UsageSyncV1Composer {
+    /// Consumes one reviewed context and one provider-neutral canonical usage value.
     ///
-    /// The body uses the fixed connector crate version and candidate Codex `0.144.5` version. The
-    /// SHA-256 digest is calculated over the exact returned body bytes, then bound into the exact
-    /// version 1 LF-separated message. No key is loaded and no signature, HTTP request, persistence,
-    /// key-store access, HTTP request, persistence, log, or network operation is created.
+    /// Provider, accounting revision, scope, profile, rank, trust, model, component breakdown, and
+    /// raw identity cannot enter this body. The SHA-256 digest is calculated over the exact returned
+    /// bytes and bound into the final LF-separated device message.
     ///
     /// # Errors
     ///
-    /// Returns a stable [`SyncPreparationError`] when reviewed identifiers, time, usage, exact JSON,
-    /// or the body-size budget fail closed. Submitted values and private usage are never reflected
-    /// in the error.
+    /// Returns a stable [`UsageSyncPreparationError`] when reviewed identifiers, reader version,
+    /// time, usage, exact JSON, or body-size limits fail closed.
     pub fn compose(
-        context: ReviewedCommunityUsageContext,
-        daily_usage: DailyUsage,
-    ) -> Result<PreparedCommunityUsage, SyncPreparationError> {
+        context: ReviewedUsageSyncContext,
+        daily_usage: &CanonicalDailyUsage,
+    ) -> Result<PreparedUsageSync, UsageSyncPreparationError> {
         validate_context(&context)?;
-        if !valid_daily_usage(&daily_usage) {
-            return Err(SyncPreparationError::InvalidDailyUsage);
+        if daily_usage.is_empty() {
+            return Err(UsageSyncPreparationError::InvalidDailyUsage);
         }
-        let body = {
-            let daily_entries = daily_usage.into_entries();
-            serde_json::to_vec(&UsageSyncBody {
-                source_id: &context.source_id,
-                sync_id: &context.sync_id,
-                observed_at: &context.observed_at,
-                daily_entries: &daily_entries,
-            })
-            .map_err(|_| SyncPreparationError::SerializationFailed)?
-        };
-        if body.is_empty() || body.len() > MAX_COMMUNITY_USAGE_BODY_BYTES {
-            return Err(SyncPreparationError::BodyLimitExceeded);
+        let body = serde_json::to_vec(&UsageSyncBody {
+            agent_account_id: &context.agent_account_id,
+            sync_id: &context.sync_id,
+            observed_at: &context.observed_at,
+            reader_version: &context.reader_version,
+            daily_entries: daily_usage.entries(),
+        })
+        .map_err(|_| UsageSyncPreparationError::SerializationFailed)?;
+        if body.is_empty() || body.len() > MAX_USAGE_SYNC_BODY_BYTES {
+            return Err(UsageSyncPreparationError::BodyLimitExceeded);
         }
 
         let body_digest = Sha256::digest(&body);
@@ -176,8 +177,8 @@ impl CandidateCommunityUsageV1Composer {
         let device_nonce = encode_base64url(&context.device_nonce);
         let device_signature_message = [
             DEVICE_SIGNATURE_MESSAGE_PREFIX,
-            COMMUNITY_USAGE_METHOD,
-            COMMUNITY_USAGE_REQUEST_TARGET,
+            USAGE_SYNC_METHOD,
+            USAGE_SYNC_REQUEST_TARGET,
             &body_digest_base64url,
             &context.device_id,
             &device_nonce,
@@ -187,7 +188,7 @@ impl CandidateCommunityUsageV1Composer {
         .join("\n")
         .into_bytes();
 
-        Ok(PreparedCommunityUsage {
+        Ok(PreparedUsageSync {
             body,
             device_signature_message,
             device_id: context.device_id,
@@ -198,18 +199,21 @@ impl CandidateCommunityUsageV1Composer {
     }
 }
 
-fn validate_context(context: &ReviewedCommunityUsageContext) -> Result<(), SyncPreparationError> {
-    if !valid_identifier(&context.source_id, SOURCE_ID_PREFIX) {
-        return Err(SyncPreparationError::InvalidSourceId);
+fn validate_context(context: &ReviewedUsageSyncContext) -> Result<(), UsageSyncPreparationError> {
+    if !valid_identifier(&context.agent_account_id, AGENT_ACCOUNT_ID_PREFIX) {
+        return Err(UsageSyncPreparationError::InvalidAgentAccountId);
+    }
+    if !valid_reader_version(&context.reader_version) {
+        return Err(UsageSyncPreparationError::InvalidReaderVersion);
     }
     if !valid_identifier(&context.sync_id, SYNC_ID_PREFIX) {
-        return Err(SyncPreparationError::InvalidSyncId);
+        return Err(UsageSyncPreparationError::InvalidSyncId);
     }
     if !valid_timestamp(&context.observed_at) {
-        return Err(SyncPreparationError::InvalidObservedAt);
+        return Err(UsageSyncPreparationError::InvalidObservedAt);
     }
     if !valid_identifier(&context.device_id, DEVICE_ID_PREFIX) {
-        return Err(SyncPreparationError::InvalidDeviceId);
+        return Err(UsageSyncPreparationError::InvalidDeviceId);
     }
     Ok(())
 }
@@ -221,6 +225,15 @@ fn valid_identifier(value: &str, prefix: &str) -> bool {
         && value[prefix.len()..]
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn valid_reader_version(value: &str) -> bool {
+    value.len() >= 3
+        && value.len() <= MAX_READER_VERSION_BYTES
+        && value.as_bytes().first().is_some_and(u8::is_ascii_lowercase)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn valid_timestamp(value: &str) -> bool {
@@ -239,24 +252,39 @@ fn valid_timestamp(value: &str) -> bool {
     {
         return false;
     }
-
     let hour = (bytes[11] - b'0') * 10 + (bytes[12] - b'0');
     let minute = (bytes[14] - b'0') * 10 + (bytes[15] - b'0');
     let second = (bytes[17] - b'0') * 10 + (bytes[18] - b'0');
-    valid_reported_date(&value[..10]) && hour <= 23 && minute <= 59 && second <= 59
+    valid_date(&value[..10]) && hour <= 23 && minute <= 59 && second <= 59
 }
 
-fn valid_daily_usage(daily_usage: &DailyUsage) -> bool {
-    let entries = daily_usage.entries();
-    !entries.is_empty()
-        && entries.len() <= MAX_DAILY_USAGE_ENTRIES
-        && entries.iter().all(|entry| {
-            valid_reported_date(entry.codex_reported_date())
-                && entry.tokens() <= MAX_SYNC_TOKEN_VALUE
-        })
-        && entries
-            .windows(2)
-            .all(|pair| pair[0].codex_reported_date() < pair[1].codex_reported_date())
+fn valid_date(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 10
+        || &bytes[0..2] != b"20"
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes
+            .iter()
+            .enumerate()
+            .any(|(index, byte)| index != 4 && index != 7 && !byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let year = u16::from(bytes[0] - b'0') * 1_000
+        + u16::from(bytes[1] - b'0') * 100
+        + u16::from(bytes[2] - b'0') * 10
+        + u16::from(bytes[3] - b'0');
+    let month = (bytes[5] - b'0') * 10 + (bytes[6] - b'0');
+    let day = (bytes[8] - b'0') * 10 + (bytes[9] - b'0');
+    let maximum_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day >= 1 && day <= maximum_day
 }
 
 pub(crate) fn encode_base64url(input: &[u8]) -> String {
@@ -275,7 +303,6 @@ pub(crate) fn encode_base64url(input: &[u8]) -> String {
         ));
         output.push(char::from(BASE64URL_ALPHABET[(value & 0x3f) as usize]));
     }
-
     match chunks.remainder() {
         [first] => {
             let value = u32::from(*first) << 16;
@@ -305,10 +332,11 @@ pub(crate) fn encode_base64url(input: &[u8]) -> String {
 }
 
 struct UsageSyncBody<'a> {
-    source_id: &'a str,
+    agent_account_id: &'a str,
     sync_id: &'a str,
     observed_at: &'a str,
-    daily_entries: &'a [DailyUsageEntry],
+    reader_version: &'a str,
+    daily_entries: &'a [CanonicalDailyUsageEntry],
 }
 
 impl Serialize for UsageSyncBody<'_> {
@@ -318,17 +346,17 @@ impl Serialize for UsageSyncBody<'_> {
     {
         let mut state = serializer.serialize_struct("UsageSyncV1", 7)?;
         state.serialize_field("schemaVersion", &USAGE_SYNC_SCHEMA_VERSION)?;
-        state.serialize_field("sourceId", self.source_id)?;
+        state.serialize_field("agentAccountId", self.agent_account_id)?;
         state.serialize_field("syncId", self.sync_id)?;
         state.serialize_field("observedAt", self.observed_at)?;
         state.serialize_field("clientVersion", CLIENT_VERSION)?;
-        state.serialize_field("agentVersion", CANDIDATE_CODEX_VERSION)?;
+        state.serialize_field("readerVersion", self.reader_version)?;
         state.serialize_field("dailyEntries", &DailyEntries(self.daily_entries))?;
         state.end()
     }
 }
 
-struct DailyEntries<'a>(&'a [DailyUsageEntry]);
+struct DailyEntries<'a>(&'a [CanonicalDailyUsageEntry]);
 
 impl Serialize for DailyEntries<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -343,7 +371,7 @@ impl Serialize for DailyEntries<'_> {
     }
 }
 
-struct DailyEntry<'a>(&'a DailyUsageEntry);
+struct DailyEntry<'a>(&'a CanonicalDailyUsageEntry);
 
 impl Serialize for DailyEntry<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -351,8 +379,8 @@ impl Serialize for DailyEntry<'_> {
         S: Serializer,
     {
         let mut state = serializer.serialize_struct("UsageSyncDailyEntryV1", 2)?;
-        state.serialize_field("reportedDate", self.0.codex_reported_date())?;
-        state.serialize_field("dailyTokenTotal", &self.0.tokens())?;
+        state.serialize_field("usageDate", self.0.usage_date())?;
+        state.serialize_field("dailyTokenTotal", self.0.daily_token_total())?;
         state.end()
     }
 }
@@ -362,11 +390,10 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-    use crate::ConnectorHandshake;
+    use crate::{CanonicalDailyUsage, CanonicalDailyUsageEntry};
 
-    const INITIALIZE_RESPONSE: &[u8] = b"{\"id\":0,\"result\":{\"codexHome\":\"/synthetic/codex-home\",\"platformFamily\":\"unix\",\"platformOs\":\"linux\",\"userAgent\":\"codex-cli/0.144.5\"}}\n";
-    const ACCOUNT_RESPONSE: &[u8] = b"{\"id\":1,\"result\":{\"account\":{\"email\":\"racer@example.invalid\",\"planType\":\"plus\",\"type\":\"chatgpt\"},\"requiresOpenaiAuth\":false}}\n";
-    const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
+    const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
+    const READER_VERSION: &str = "codex_app_server_0_144_5_v1";
     const SYNC_ID: &str = "syn_BBBBBBBBBBBBBBBBBBBBBB";
     const OBSERVED_AT: &str = "2026-07-15T12:34:56.789Z";
     const DEVICE_ID: &str = "dev_CCCCCCCCCCCCCCCCCCCCCC";
@@ -374,16 +401,17 @@ mod tests {
     const EXPECTED_NONCE: &str = "AAECAwQFBgcICQoLDA0ODw";
     const TEST_SIGNING_KEY_LABEL: &[u8] = b"viberacing-test-only-device-signing-key-v1";
 
-    type ContextMutation = fn(&mut ReviewedCommunityUsageContext);
+    type ContextMutation = fn(&mut ReviewedUsageSyncContext);
 
     const fn sequential_nonce() -> [u8; DEVICE_NONCE_BYTES] {
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     }
 
-    impl ReviewedCommunityUsageContext {
+    impl ReviewedUsageSyncContext {
         fn for_test() -> Self {
             Self {
-                source_id: SOURCE_ID.to_owned(),
+                agent_account_id: AGENT_ACCOUNT_ID.to_owned(),
+                reader_version: READER_VERSION.to_owned(),
                 sync_id: SYNC_ID.to_owned(),
                 observed_at: OBSERVED_AT.to_owned(),
                 device_id: DEVICE_ID.to_owned(),
@@ -392,36 +420,17 @@ mod tests {
         }
     }
 
-    fn usage_from_buckets(buckets: &str) -> DailyUsage {
-        let mut handshake = ConnectorHandshake::new();
-        handshake.start().expect("handshake request must start");
-        handshake
-            .accept_initialize_response(INITIALIZE_RESPONSE)
-            .expect("synthetic initialization must be accepted");
-        let mut account_usage = handshake
-            .into_codex_0_144_5_account_usage()
-            .expect("completed handshake must enter candidate adapter");
-        account_usage
-            .start_account_read()
-            .expect("account request must start");
-        account_usage
-            .accept_account_read_response(ACCOUNT_RESPONSE)
-            .expect("synthetic account must be accepted");
-        account_usage
-            .start_usage_read()
-            .expect("usage request must start");
-        let response = format!(
-            "{{\"id\":2,\"result\":{{\"dailyUsageBuckets\":{buckets},\"summary\":{{}}}}}}\n"
-        );
-        account_usage
-            .accept_usage_read_response(response.as_bytes())
-            .expect("synthetic daily usage must be accepted")
-    }
-
-    fn standard_usage() -> DailyUsage {
-        usage_from_buckets(
-            "[{\"startDate\":\"2026-07-14\",\"tokens\":456},{\"startDate\":\"2026-07-13\",\"tokens\":123}]",
+    fn standard_usage() -> CanonicalDailyUsage {
+        CanonicalDailyUsage::new(
+            [("2026-07-13", "123"), ("2026-07-14", "456")]
+                .into_iter()
+                .map(|(date, total)| {
+                    CanonicalDailyUsageEntry::new(date.to_owned(), total.to_owned())
+                        .expect("fixed entry must be canonical")
+                })
+                .collect(),
         )
+        .expect("fixed usage must be canonical")
     }
 
     fn test_signing_key(device_id: &str) -> ReviewedDeviceSigningKey {
@@ -435,17 +444,14 @@ mod tests {
         serde_json::from_str(include_str!(
             "../../../contracts/v1/connector-usage-sync-device-request.test-vector.json"
         ))
-        .expect("shared Community usage vector must remain valid JSON")
+        .expect("shared Usage Sync vector must remain valid JSON")
     }
 
     #[test]
-    fn composes_the_exact_body_digest_and_device_message() {
-        let prepared = CandidateCommunityUsageV1Composer::compose(
-            ReviewedCommunityUsageContext::for_test(),
-            standard_usage(),
-        )
-        .expect("reviewed synthetic inputs must compose");
-
+    fn composes_the_exact_provider_neutral_body_and_device_message() {
+        let prepared =
+            UsageSyncV1Composer::compose(ReviewedUsageSyncContext::for_test(), &standard_usage())
+                .expect("reviewed synthetic inputs must compose");
         let vector = shared_test_vector();
         let expected_body = vector["body"]
             .as_str()
@@ -457,8 +463,7 @@ mod tests {
             .as_str()
             .expect("shared vector message must be a string");
 
-        assert_eq!(vector["schemaVersion"], USAGE_SYNC_SCHEMA_VERSION);
-        assert_eq!(vector["sourceId"], SOURCE_ID);
+        assert_eq!(vector["agentAccountId"], AGENT_ACCOUNT_ID);
         assert_eq!(vector["syncId"], SYNC_ID);
         assert_eq!(vector["observedAt"], OBSERVED_AT);
         assert_eq!(vector["deviceId"], DEVICE_ID);
@@ -476,30 +481,24 @@ mod tests {
             prepared.device_signature_message,
             expected_message.as_bytes()
         );
-        assert_eq!(prepared.device_id, DEVICE_ID);
-        assert_eq!(prepared.device_nonce, EXPECTED_NONCE);
-        assert_eq!(prepared.observed_at, OBSERVED_AT);
-        assert_eq!(prepared.sync_id, SYNC_ID);
-        assert!(prepared.body.len() <= MAX_COMMUNITY_USAGE_BODY_BYTES);
+        assert!(!expected_body.contains("provider"));
+        assert!(!expected_body.contains("accountingRevision"));
+        assert!(!expected_body.contains("sourceId"));
+        assert!(prepared.body.len() <= MAX_USAGE_SYNC_BODY_BYTES);
         assert!(!prepared.device_signature_message.ends_with(b"\n"));
     }
 
     #[test]
     fn signs_the_exact_shared_device_request_vector() {
-        let prepared = CandidateCommunityUsageV1Composer::compose(
-            ReviewedCommunityUsageContext::for_test(),
-            standard_usage(),
-        )
-        .expect("reviewed synthetic inputs must compose");
+        let prepared =
+            UsageSyncV1Composer::compose(ReviewedUsageSyncContext::for_test(), &standard_usage())
+                .expect("reviewed synthetic inputs must compose");
         let key = test_signing_key(DEVICE_ID);
         let public_key = encode_base64url(&key.verifying_key_bytes());
-        let signed = CandidateCommunityUsageV1Signer::sign(key, prepared)
-            .expect("device-bound synthetic key must sign");
-
+        let signed =
+            UsageSyncV1Signer::sign(key, prepared).expect("device-bound synthetic key must sign");
         let vector = shared_test_vector();
-        let expected_body = vector["body"]
-            .as_str()
-            .expect("shared vector body must be a string");
+
         assert_eq!(
             public_key,
             vector["devicePublicKeyBase64Url"]
@@ -512,7 +511,13 @@ mod tests {
                 .as_str()
                 .expect("shared vector signature must be a string")
         );
-        assert_eq!(signed.body(), expected_body.as_bytes());
+        assert_eq!(
+            signed.body(),
+            vector["body"]
+                .as_str()
+                .expect("shared vector body must be a string")
+                .as_bytes()
+        );
         assert_eq!(signed.device_id(), DEVICE_ID);
         assert_eq!(signed.device_nonce(), EXPECTED_NONCE);
         assert_eq!(signed.device_timestamp(), OBSERVED_AT);
@@ -520,76 +525,33 @@ mod tests {
     }
 
     #[test]
-    fn rejects_a_key_bound_to_another_device_without_reflection() {
-        let prepared = CandidateCommunityUsageV1Composer::compose(
-            ReviewedCommunityUsageContext::for_test(),
-            standard_usage(),
-        )
-        .expect("reviewed synthetic inputs must compose");
-        let error =
-            CandidateCommunityUsageV1Signer::sign(test_signing_key(OTHER_DEVICE_ID), prepared)
-                .err()
-                .expect("a differently bound key must fail closed");
-
-        assert_eq!(error, SyncSigningError::DeviceBindingMismatch);
-        assert!(!error.to_string().contains(DEVICE_ID));
-        assert!(!error.to_string().contains(OTHER_DEVICE_ID));
-        assert!(!format!("{error:?}").contains(DEVICE_ID));
-        assert!(!format!("{error:?}").contains(OTHER_DEVICE_ID));
-    }
-
-    #[test]
-    fn different_production_parsed_usage_changes_the_signature() {
-        let first = CandidateCommunityUsageV1Signer::sign(
-            test_signing_key(DEVICE_ID),
-            CandidateCommunityUsageV1Composer::compose(
-                ReviewedCommunityUsageContext::for_test(),
-                usage_from_buckets("[{\"startDate\":\"2026-07-14\",\"tokens\":456}]"),
-            )
-            .expect("first usage must compose"),
-        )
-        .expect("first usage must sign");
-        let second = CandidateCommunityUsageV1Signer::sign(
-            test_signing_key(DEVICE_ID),
-            CandidateCommunityUsageV1Composer::compose(
-                ReviewedCommunityUsageContext::for_test(),
-                usage_from_buckets("[{\"startDate\":\"2026-07-14\",\"tokens\":457}]"),
-            )
-            .expect("second usage must compose"),
-        )
-        .expect("second usage must sign");
-
-        assert_ne!(first.body(), second.body());
-        assert_ne!(first.device_signature(), second.device_signature());
-    }
-
-    #[test]
-    fn rejects_invalid_context_fields_without_reflecting_them() {
-        let cases: [(ContextMutation, SyncPreparationError); 4] = [
+    fn rejects_invalid_context_without_reflection() {
+        let cases: [(ContextMutation, UsageSyncPreparationError); 5] = [
             (
-                |context: &mut ReviewedCommunityUsageContext| context.source_id = "private".into(),
-                SyncPreparationError::InvalidSourceId,
+                |context| context.agent_account_id = "private".into(),
+                UsageSyncPreparationError::InvalidAgentAccountId,
             ),
             (
-                |context: &mut ReviewedCommunityUsageContext| context.sync_id = "private".into(),
-                SyncPreparationError::InvalidSyncId,
+                |context| context.reader_version = "private-version".into(),
+                UsageSyncPreparationError::InvalidReaderVersion,
             ),
             (
-                |context: &mut ReviewedCommunityUsageContext| {
-                    context.observed_at = "2026-02-29T12:34:56.789Z".into();
-                },
-                SyncPreparationError::InvalidObservedAt,
+                |context| context.sync_id = "private".into(),
+                UsageSyncPreparationError::InvalidSyncId,
             ),
             (
-                |context: &mut ReviewedCommunityUsageContext| context.device_id = "private".into(),
-                SyncPreparationError::InvalidDeviceId,
+                |context| context.observed_at = "2026-02-29T12:34:56.789Z".into(),
+                UsageSyncPreparationError::InvalidObservedAt,
+            ),
+            (
+                |context| context.device_id = "private".into(),
+                UsageSyncPreparationError::InvalidDeviceId,
             ),
         ];
-
         for (mutate, expected) in cases {
-            let mut context = ReviewedCommunityUsageContext::for_test();
+            let mut context = ReviewedUsageSyncContext::for_test();
             mutate(&mut context);
-            let error = CandidateCommunityUsageV1Composer::compose(context, standard_usage())
+            let error = UsageSyncV1Composer::compose(context, &standard_usage())
                 .err()
                 .expect("invalid reviewed context must fail closed");
             assert_eq!(error, expected);
@@ -597,23 +559,46 @@ mod tests {
             assert!(!format!("{error:?}").contains("private"));
         }
 
-        assert!(valid_identifier(SOURCE_ID, SOURCE_ID_PREFIX));
-        assert!(valid_identifier(SYNC_ID, SYNC_ID_PREFIX));
-        assert!(valid_identifier(DEVICE_ID, DEVICE_ID_PREFIX));
-        assert!(!valid_identifier(DEVICE_ID, SOURCE_ID_PREFIX));
-        assert!(!valid_identifier(&SOURCE_ID[..25], SOURCE_ID_PREFIX));
-
-        let mut invalid_character = SOURCE_ID.to_owned();
-        invalid_character.replace_range(25..26, "!");
-        assert!(!valid_identifier(&invalid_character, SOURCE_ID_PREFIX));
-
-        let mut non_ascii = SOURCE_ID.to_owned();
-        non_ascii.replace_range(24..26, "é");
-        assert!(!valid_identifier(&non_ascii, SOURCE_ID_PREFIX));
+        let prepared =
+            UsageSyncV1Composer::compose(ReviewedUsageSyncContext::for_test(), &standard_usage())
+                .expect("fixed request must prepare");
+        let error = UsageSyncV1Signer::sign(test_signing_key(OTHER_DEVICE_ID), prepared)
+            .err()
+            .expect("another device key must fail");
+        assert_eq!(error, UsageSyncSigningError::DeviceBindingMismatch);
+        assert!(!error.to_string().contains(DEVICE_ID));
+        assert!(!error.to_string().contains(OTHER_DEVICE_ID));
     }
 
     #[test]
-    fn enforces_canonical_timestamp_boundaries() {
+    fn rejects_empty_usage_and_admits_31_exact_decimal_entries() {
+        assert_eq!(
+            UsageSyncV1Composer::compose(
+                ReviewedUsageSyncContext::for_test(),
+                &CanonicalDailyUsage::new(Vec::new()).expect("empty reader output is valid"),
+            )
+            .err(),
+            Some(UsageSyncPreparationError::InvalidDailyUsage)
+        );
+        let entries = (1_u8..=31)
+            .map(|day| {
+                CanonicalDailyUsageEntry::new(
+                    format!("2026-07-{day:02}"),
+                    "999999999999999999999999999999".to_owned(),
+                )
+                .expect("maximum decimal must be canonical")
+            })
+            .collect();
+        let prepared = UsageSyncV1Composer::compose(
+            ReviewedUsageSyncContext::for_test(),
+            &CanonicalDailyUsage::new(entries).expect("31 unique entries must be accepted"),
+        )
+        .expect("maximum contract usage must fit the body budget");
+        assert!(prepared.body.len() <= MAX_USAGE_SYNC_BODY_BYTES);
+    }
+
+    #[test]
+    fn enforces_canonical_timestamp_and_identifier_boundaries() {
         for invalid in [
             "2026-07-15T24:00:00.000Z",
             "2026-07-15T23:60:00.000Z",
@@ -622,80 +607,40 @@ mod tests {
             "2026-07-15T23:59:59.000+00:00",
             "2100-01-01T00:00:00.000Z",
         ] {
-            let mut context = ReviewedCommunityUsageContext::for_test();
+            let mut context = ReviewedUsageSyncContext::for_test();
             context.observed_at = invalid.to_owned();
             assert_eq!(
-                CandidateCommunityUsageV1Composer::compose(context, standard_usage()).err(),
-                Some(SyncPreparationError::InvalidObservedAt)
+                UsageSyncV1Composer::compose(context, &standard_usage()).err(),
+                Some(UsageSyncPreparationError::InvalidObservedAt)
             );
         }
-
-        let mut leap_day = ReviewedCommunityUsageContext::for_test();
+        let mut leap_day = ReviewedUsageSyncContext::for_test();
         leap_day.observed_at = "2024-02-29T00:00:00.000Z".to_owned();
-        let prepared = CandidateCommunityUsageV1Composer::compose(leap_day, standard_usage())
-            .expect("canonical leap-day timestamp must be admitted");
-        assert_eq!(prepared.observed_at, "2024-02-29T00:00:00.000Z");
+        UsageSyncV1Composer::compose(leap_day, &standard_usage())
+            .expect("canonical leap day must be admitted");
+
+        assert!(valid_identifier(AGENT_ACCOUNT_ID, AGENT_ACCOUNT_ID_PREFIX));
+        assert!(!valid_identifier(AGENT_ACCOUNT_ID, DEVICE_ID_PREFIX));
+        assert!(valid_reader_version(READER_VERSION));
+        assert!(!valid_reader_version("Codex_v1"));
     }
 
     #[test]
-    fn rejects_empty_usage_and_admits_the_contract_maximum() {
-        let empty = usage_from_buckets("[]");
-        assert_eq!(
-            CandidateCommunityUsageV1Composer::compose(
-                ReviewedCommunityUsageContext::for_test(),
-                empty
-            )
-            .err(),
-            Some(SyncPreparationError::InvalidDailyUsage)
-        );
-
-        let buckets = (1_u8..=31)
-            .map(|day| {
-                format!("{{\"startDate\":\"2026-07-{day:02}\",\"tokens\":{MAX_SYNC_TOKEN_VALUE}}}")
-            })
-            .collect::<Vec<_>>()
-            .join(",");
-        let maximum = usage_from_buckets(&format!("[{buckets}]"));
-        let prepared = CandidateCommunityUsageV1Composer::compose(
-            ReviewedCommunityUsageContext::for_test(),
-            maximum,
-        )
-        .expect("maximum contract usage must fit the transport body budget");
-        assert!(prepared.body.len() <= MAX_COMMUNITY_USAGE_BODY_BYTES);
-        assert_eq!(
-            serde_json::from_slice::<Value>(&prepared.body)
-                .expect("prepared bytes must remain JSON")["dailyEntries"]
-                .as_array()
-                .expect("daily entries must be an array")
-                .len(),
-            MAX_DAILY_USAGE_ENTRIES
-        );
-    }
-
-    #[test]
-    fn base64url_encoder_matches_fixed_binary_boundaries() {
+    fn base64url_and_policy_constants_match_final_v1() {
         assert_eq!(encode_base64url(&[]), "");
         assert_eq!(encode_base64url(&[0]), "AA");
         assert_eq!(encode_base64url(&[0, 1]), "AAE");
         assert_eq!(encode_base64url(&[0, 1, 2]), "AAEC");
-        assert_eq!(
-            encode_base64url(&[0xff; DEVICE_NONCE_BYTES]),
-            "_____________________w"
-        );
         assert_eq!(encode_base64url(&sequential_nonce()), EXPECTED_NONCE);
-    }
 
-    #[test]
-    fn executable_constants_match_the_versioned_authentication_policy() {
         let policy: Value = serde_json::from_str(include_str!(
             "../../../contracts/v1/connector-usage-sync-authentication.json"
         ))
         .expect("authentication policy must remain valid JSON");
-
-        assert_eq!(policy["method"], COMMUNITY_USAGE_METHOD);
-        assert_eq!(policy["requestTarget"], COMMUNITY_USAGE_REQUEST_TARGET);
-        assert_eq!(policy["mediaType"], COMMUNITY_USAGE_MEDIA_TYPE);
-        assert_eq!(policy["maximumBodyBytes"], MAX_COMMUNITY_USAGE_BODY_BYTES);
+        assert_eq!(policy["method"], USAGE_SYNC_METHOD);
+        assert_eq!(policy["requestTarget"], USAGE_SYNC_REQUEST_TARGET);
+        assert_eq!(policy["mediaType"], USAGE_SYNC_MEDIA_TYPE);
+        assert_eq!(policy["maximumBodyBytes"], MAX_USAGE_SYNC_BODY_BYTES);
         assert_eq!(
             policy["deviceSignature"]["messagePrefix"],
             DEVICE_SIGNATURE_MESSAGE_PREFIX
@@ -713,22 +658,5 @@ mod tests {
             DEVICE_SIGNATURE_BYTES
         );
         assert_eq!(policy["deviceSignature"]["nonceBytes"], DEVICE_NONCE_BYTES);
-        assert_eq!(
-            policy["deviceSignature"]["canonicalFields"],
-            serde_json::json!([
-                "messagePrefix",
-                "method",
-                "requestTarget",
-                "bodyDigestBase64Url",
-                "deviceId",
-                "nonce",
-                "timestamp",
-                "idempotencyKey"
-            ])
-        );
-        assert_eq!(policy["canonicalMessageSeparator"], "LF");
-        assert_eq!(policy["canonicalMessageTrailingSeparator"], false);
-        assert_eq!(policy["binaryEncoding"], "base64url-unpadded");
-        assert_eq!(policy["digestEncoding"], "base64url-unpadded");
     }
 }

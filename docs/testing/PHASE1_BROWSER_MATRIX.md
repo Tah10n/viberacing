@@ -5,7 +5,9 @@
 This document records local evidence for the synthetic Phase 1 frontend. The original responsive,
 contrast, interaction, and header observations were collected on 2026-07-14 in a Chromium-based
 in-app browser whose exact version was not exposed. On 2026-07-18 the production build was also
-captured through Chrome 150.0.7871.129 on `win32-x64` by the repository-owned CDP harness.
+captured through Chrome 150.0.7871.129 on `win32-x64` by the repository-owned CDP harness. On
+2026-07-29 the agent-neutral direct-token public UX replaced that baseline and passed the same
+repository-owned harness through Chrome 150.0.7871.187 on `win32-x64`.
 
 The capture uses a new temporary browser profile, disables extensions, sync, proxy use, and
 background services, permits the page to request only its exact loopback origin, selects the closed
@@ -60,7 +62,7 @@ requires the browser's exact reported product and local platform to equal the co
 re-renders all 18 states, decodes each stored/rendered PNG inside the isolated browser, and permits
 zero changed pixel channels. It then runs the keyboard, accessibility-tree, forced-colors, and local
 lab-performance audits described below. It writes no baseline file. A local run with the recorded
-Chrome 150.0.7871.129 `win32-x64` pair passed all comparisons and browser audits on 2026-07-18. This
+Chrome 150.0.7871.187 `win32-x64` pair passed all comparisons and browser audits on 2026-07-29. This
 pins observable product/platform behavior, not the provenance or digest of the operator-supplied
 executable.
 
@@ -109,19 +111,21 @@ and `aria-pressed` states. The paused Russian control changed from `Остано
 
 The no-write gate resets the exact synthetic English Classic Grand Prix page at 1280 by 720 and
 dispatches real `Tab`, `Shift+Tab`, `Enter`, and `Space` key events through CDP. The closed forward
-order contains the skip link, brand, six primary-navigation links, hero action, pause button, three
-race selects, the simulator textbox and active-day select, and the keyboard-scrollable table region.
-Every target was in the viewport with its focus outline visible. Reverse traversal returned from the
-table to the simulator active-day select. The skip link became visible and transferred both the
-fragment and programmatic focus to the non-sequential leaderboard section. Space changed the pause
-control's `aria-pressed` state from `false` to `true` and back to `false`.
+order contains the skip link, brand, five primary-navigation links, two hero actions, the
+keyboard-scrollable table region, eight profile links, the pause button, the semantic race
+alternative summary, and three race selects. Every target was in the viewport with its focus outline
+visible. Reverse traversal returned from the motion select to the language select. The skip link
+became visible and transferred both the fragment and programmatic focus to the non-sequential
+leaderboard section. Space changed the pause control's `aria-pressed` state from `false` to `true`
+and back to `false`.
 
 The same run reads Chromium's full accessibility tree rather than inferring semantics from DOM
 attributes alone. It requires exactly one banner, primary navigation, main, and content-info
-landmark; nine named links; two named buttons including the disabled unavailable control; four named
-comboboxes; one named simulator textbox; the named race image; the leaderboard table's full trust
-caption; and the hero heading. The exact link/button/combobox/textbox inventory and duplicate
-counts, an unnamed reviewed control, or an unreviewed input role fail closed.
+landmark; 17 named links; one named button; three named comboboxes; no textbox; the named lazy race
+image plus three approved-car images; the leaderboard table's full trust caption; and the exact hero
+heading. The exact link/button/combobox/textbox inventory and duplicate counts, an unnamed reviewed
+control, or an unreviewed input role fail closed. The audit waits for the lazy race's semantic image
+alternative before reading the tree; the SSR leaderboard remains available before that enhancement.
 
 With `(forced-colors: active)` emulated, all 16 keyboard targets retained visible focus in the same
 order, the document retained its horizontal bounds, and every match across twelve reviewed
@@ -144,8 +148,8 @@ percentile.
 
 | State          | Maximum LCP | Maximum CLS | Maximum controlled interaction |
 | -------------- | ----------: | ----------: | -----------------------------: |
-| Animation on   |    168.0 ms |       0.000 |                        16.0 ms |
-| Reduced motion |    116.0 ms |       0.000 |                        40.0 ms |
+| Animation on   |    996.0 ms |       0.000 |                        32.0 ms |
+| Reduced motion |    696.0 ms |       0.000 |                        24.0 ms |
 
 The closed local regression ceilings are 2,500 milliseconds LCP, 0.1 CLS, and 200 milliseconds for
 the controlled interaction. These are test ceilings, not published beta SLOs. The browser process,
@@ -197,10 +201,10 @@ standalone output, or a budget overrun. The current artifact is:
 | Metric                        | Observed |  Budget |
 | ----------------------------- | -------: | ------: |
 | Initial assets                |        8 |      10 |
-| Initial raw bytes             |  618,890 | 700,000 |
-| Initial gzip bytes            |  186,218 | 215,000 |
-| Application client gzip bytes |   10,246 |  10,500 |
-| Stylesheet gzip bytes         |    4,533 |   5,000 |
+| Initial raw bytes             |  616,049 | 700,000 |
+| Initial gzip bytes            |  185,286 | 215,000 |
+| Application client gzip bytes |    9,111 |  10,500 |
+| Stylesheet gzip bytes         |    4,690 |   5,000 |
 
 Nine black-box fixture cases cover a valid artifact, missing/traversing/oversized assets, source-map
 leakage, missing standalone output, total/application budget overruns, and font-boundary drift.

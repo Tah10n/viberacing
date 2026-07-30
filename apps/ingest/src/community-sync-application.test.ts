@@ -15,11 +15,8 @@ import {
   type CommunitySyncSubmissionResult,
 } from "./community-sync-database.js";
 import {
-  codexAccountingRevision,
-  codexProvider,
   CommunitySyncVerificationError,
   createCommunitySyncVerifier,
-  type OriginNonceConsumption,
   type VerifiedCommunitySync,
 } from "./community-sync-verifier.js";
 import type { IngestDatabaseClient, IngestDatabasePool } from "./database-pool.js";
@@ -38,9 +35,13 @@ const requestId = "req_AAAAAAAAAAAAAAAAAAAAAA";
 const nowMilliseconds = Date.UTC(2026, 6, 15, 18);
 const observedAt = "2026-07-15T18:00:00.000Z";
 const deviceId = "dev_AAAAAAAAAAAAAAAAAAAAAA";
-const sourceId = "src_BBBBBBBBBBBBBBBBBBBBBB";
+const agentAccountId = "acc_BBBBBBBBBBBBBBBBBBBBBB";
 const syncId = "syn_CCCCCCCCCCCCCCCCCCCCCC";
-const deviceKeyId = "11111111-2222-4333-8444-555555555555";
+const deviceKeyId = "key_DDDDDDDDDDDDDDDDDDDDDD";
+const installationId = "ins_EEEEEEEEEEEEEEEEEEEEEE";
+const accountingRevision = 1;
+const provider = "codex";
+const readerVersion = "codex_daily_usage_buckets_v1";
 const originKeyId = "edge_primary";
 const originSecret = Buffer.alloc(32, 0x33);
 const originNonce = Buffer.alloc(16, 0x22).toString("base64url");
@@ -82,16 +83,16 @@ function mockRandomBytes(source: EntropySource): void {
 function validPayload(entryCount = 2): VerifiedCommunitySync["payload"] {
   return Object.freeze({
     schemaVersion: 1,
-    sourceId,
+    agentAccountId,
     syncId,
     observedAt,
     clientVersion: "1.2.3",
-    agentVersion: "2.3.4",
+    readerVersion,
     dailyEntries: Object.freeze(
       Array.from({ length: entryCount }, (_, index) =>
         Object.freeze({
-          reportedDate: `2026-07-${String(14 + index).padStart(2, "0")}`,
-          dailyTokenTotal: 123 + index,
+          usageDate: `2026-07-${String(14 + index).padStart(2, "0")}`,
+          dailyTokenTotal: String(123 + index),
         }),
       ),
     ),
@@ -100,16 +101,22 @@ function validPayload(entryCount = 2): VerifiedCommunitySync["payload"] {
 
 function validVerifiedSubmission(entryCount = 2): VerifiedCommunitySync {
   return Object.freeze({
-    accountingRevision: codexAccountingRevision,
+    accountingRevision,
+    agentAccountId,
     bodyDigestHex: "11".repeat(32),
+    deviceNonceDigestHex: "22".repeat(32),
     deviceId,
     deviceKeyId,
     idempotencyKey: syncId,
-    nonceDigestHex: "22".repeat(32),
+    originExpiresAtMilliseconds: nowMilliseconds + 60_000,
+    originKeyId,
+    originNonceDigestHex: "33".repeat(32),
     payload: validPayload(entryCount),
-    provider: codexProvider,
+    provider,
+    readerVersion,
     requestTarget: usageSyncRequestTarget,
     signatureBase64Url: Buffer.alloc(64, 0x44).toString("base64url"),
+    scopeKind: "agent_account",
   });
 }
 
@@ -288,6 +295,29 @@ describe("Community sync application", () => {
         ok: true,
         status: 200,
       });
+    },
+  );
+
+  it.each(["update_connector", "reconnect_account", "contact_support", "retry_later"] as const)(
+    "returns the closed coarse recovery action %s",
+    async (recoveryAction) => {
+      const harness = createHarness({
+        submit: () =>
+          Promise.resolve({
+            acceptedEntries: 0,
+            outcome: "quarantined",
+            recoveryAction,
+          }),
+      });
+
+      const decision = await harness.application.execute({});
+
+      expect(decision).toMatchObject({
+        body: { acceptedEntries: 0, outcome: "quarantined", recoveryAction },
+        ok: true,
+        status: 200,
+      });
+      expect(validateUsageSyncResultV1(decision.body)).toMatchObject({ ok: true });
     },
   );
 
@@ -485,7 +515,7 @@ describe("Community sync application", () => {
     ["non-object", 1],
     ["decorated", { acceptedEntries: 2, outcome: "accepted", privateReason: "hidden" }],
     ["fractional count", { acceptedEntries: 1.5, outcome: "accepted" }],
-    ["accepted mismatch", { acceptedEntries: 1, outcome: "accepted" }],
+    ["accepted overflow", { acceptedEntries: 3, outcome: "accepted" }],
     ["duplicate count", { acceptedEntries: 2, outcome: "duplicate" }],
     ["quarantined count", { acceptedEntries: 2, outcome: "quarantined" }],
     ["unknown outcome", { acceptedEntries: 0, outcome: "private" }],
@@ -665,23 +695,27 @@ describe("Community sync application", () => {
     const verifyRuntimeBoundary = vi.fn(() =>
       Promise.resolve([{ login_scope_ok: true, role_ok: true, search_path_ok: true }]),
     );
-    const consumeOriginNonce = vi.fn(() => Promise.resolve([{ consumed: true }]));
     const readDeviceVerificationMaterial = vi.fn(() =>
       Promise.resolve([
         {
-          accounting_revision: codexAccountingRevision,
+          accounting_revision: accountingRevision,
+          agent_account_id: agentAccountId,
+          device_id: deviceId,
           device_key_id: deviceKeyId,
-          provider: codexProvider,
+          identity_assurance: "community_local",
+          installation_id: installationId,
+          maximum_backfill_days: 31,
+          provider_code: provider,
           public_key: Buffer.from(devicePublicKey),
-          source_id: sourceId,
+          reader_version: readerVersion,
+          scope_kind: "agent_account",
         },
       ]),
     );
     const submitUsageSync = vi.fn(() =>
-      Promise.resolve([{ accepted_entries: 2, outcome: "accepted" }]),
+      Promise.resolve([{ accepted_entries: 2, outcome: "accepted", recovery_action: null }]),
     );
     const client: IngestDatabaseClient = {
-      consumeOriginNonce,
       readDeviceVerificationMaterial,
       release,
       submitUsageSync,
@@ -690,12 +724,10 @@ describe("Community sync application", () => {
     const close = vi.fn(() => Promise.resolve());
     const connect = vi.fn(() => Promise.resolve(client));
     const pool: IngestDatabasePool = { close, connect };
-    const database = createCommunitySyncDatabase(
-      pool,
-      () => "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    const database = createCommunitySyncDatabase(pool, (prefix) =>
+      prefix === "obs" ? "obs_FFFFFFFFFFFFFFFFFFFFFF" : "evt_GGGGGGGGGGGGGGGGGGGGGG",
     );
     const verifier = createCommunitySyncVerifier({
-      consumeOriginNonce: (input: OriginNonceConsumption) => database.consumeOriginNonce(input),
       now: () => nowMilliseconds,
       originKeys: [{ keyId: originKeyId, secret: Buffer.from(originSecret) }],
       readDeviceVerificationMaterial: (candidateDeviceId: string) =>
@@ -714,21 +746,25 @@ describe("Community sync application", () => {
       ok: true,
       status: 200,
     });
-    expect(connect).toHaveBeenCalledTimes(3);
-    expect(verifyRuntimeBoundary).toHaveBeenCalledTimes(3);
-    expect(consumeOriginNonce).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(verifyRuntimeBoundary).toHaveBeenCalledTimes(2);
     expect(readDeviceVerificationMaterial).toHaveBeenCalledWith(deviceId);
     expect(submitUsageSync).toHaveBeenCalledTimes(1);
-    expect(consumeOriginNonce.mock.invocationCallOrder[0]).toBeLessThan(
-      readDeviceVerificationMaterial.mock.invocationCallOrder[0]!,
-    );
     expect(readDeviceVerificationMaterial.mock.invocationCallOrder[0]).toBeLessThan(
       submitUsageSync.mock.invocationCallOrder[0]!,
     );
-    expect(release).toHaveBeenCalledTimes(3);
+    expect(submitUsageSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentAccountId,
+        eventId: "evt_GGGGGGGGGGGGGGGGGGGGGG",
+        observationId: "obs_FFFFFFFFFFFFFFFFFFFFFF",
+        originKeyId,
+        readerVersion,
+      }),
+    );
+    expect(release).toHaveBeenCalledTimes(2);
     expect(release).toHaveBeenNthCalledWith(1, false);
     expect(release).toHaveBeenNthCalledWith(2, false);
-    expect(release).toHaveBeenNthCalledWith(3, false);
   });
 
   it("constructs and closes the configured production composition without opening a connection", async () => {

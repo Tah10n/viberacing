@@ -42,7 +42,7 @@ export class JobsDatabaseConfigurationError extends Error {
 
 export interface JobsDatabaseConfig {
   readonly allowExitOnIdle: true;
-  readonly application_name: "viberacing-jobs-community-maintenance";
+  readonly application_name: "viberacing-jobs-maintenance";
   readonly client_encoding: "UTF8";
   readonly connectionTimeoutMillis: typeof jobsDatabaseConnectionTimeoutMs;
   readonly database: string;
@@ -153,7 +153,7 @@ function buildConfig(environment: Environment): JobsDatabaseConfig {
 
   const config: JobsDatabaseConfig = {
     allowExitOnIdle: true,
-    application_name: "viberacing-jobs-community-maintenance",
+    application_name: "viberacing-jobs-maintenance",
     client_encoding: "UTF8",
     connectionTimeoutMillis: jobsDatabaseConnectionTimeoutMs,
     database,

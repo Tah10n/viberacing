@@ -70,7 +70,16 @@ const contentRequirements = new Map([
   ["GOVERNANCE.md", ["# Governance", "## Decision process", "## Security decisions"]],
   ["MAINTAINERS.md", ["# Maintainers", "Public maintainer registry:", "## Publication gate"]],
   ["RELEASE.md", ["# Release policy", "## Required release evidence", "## Rollback"]],
-  ["ROADMAP.md", ["# Roadmap", "## Phase 0", "## Phase 1"]],
+  [
+    "ROADMAP.md",
+    [
+      "# Roadmap",
+      "## Stage 1 — Clean database bootstrap",
+      "## Stage 3 — Atomic usage accounting",
+      "## Stage 6 — Thin multi-agent connector",
+      "## Stage 9 — Final evidence and review",
+    ],
+  ],
   ["SECURITY.md", ["# Security policy", "Private vulnerability reporting status:"]],
   ["SUPPORT.md", ["# Support", "## Security reports", "## Unsupported requests"]],
   ["THIRD_PARTY_NOTICES.md", ["# Third-party notices", "## Direct development tools"]],

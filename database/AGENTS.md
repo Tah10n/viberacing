@@ -1,87 +1,88 @@
 # Database guidance
 
-Read the root `AGENTS.md`, `database/README.md`, ADRs 0002–0004, the security invariants, abuse
-cases, privacy data map, `docs/operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md`, and
-`docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing this subtree.
+Read the root guidance, `database/README.md`, ADR 0076, security invariants, threat/abuse model,
+privacy map, and applicable migration/restore/deletion runbook before editing this directory.
 
-## Hard boundaries
+## Boundary
 
-- Treat migration SQL, manifests, fixtures, output, and commit history as immediately public.
-- Use deterministic synthetic fixtures only. Never paste a production row, identifier, credential,
-  hash, hostname, incident detail, query output, local path, or private anti-abuse threshold.
-- Never store GitHub tokens, account email, prompts, conversations, repository data, Codex
-  credentials, API keys, arbitrary files, or free-form diagnostic payloads.
-- Runtime roles remain `NOLOGIN`, non-owner, non-members of other database roles, and unable to use
-  private tables directly. Add one narrowly owned API procedure per reviewed capability.
-- Every `SECURITY DEFINER` function pins `search_path` to `pg_catalog, pg_temp`, fully qualifies
-  application objects, revokes `PUBLIC` execution, validates all caller-controlled input, and has
-  forbidden-capability tests.
-- Keep schema ownership and deployment migration authority out of runtime services.
-- Pending device keys have no authority. Activation must bind the exact immutable key record to one
-  source and one public device ID in the same transaction.
-- Revoked-device retention cleanup must delete only an aged, minimized activated pairing and its
-  exact aged revoked key together. Preserve approval, challenge, nonce, or raw-snapshot references
-  explicitly; never rely on configured cascades to widen retention cleanup.
-- Hiding a profile changes public visibility only. Its possessed session must retain private active
-  device inventory and immediate owned-device revoke; do not reactivate public visibility as a
-  workaround for a lifecycle action.
-- A private profile-score read must derive the profile from the exact active or hidden session, be
-  executable only by Web, and return only existing derived season/daily score fields. A hidden
-  profile returns no score rows; never expose raw usage, source/device/profile IDs, or timestamps.
-- Source pause and passkey-protected reactivation must remain available to a possessed session while
-  its profile is hidden without changing that visibility. Reactivation is limited to `paused`, uses
-  one fresh consumed source-bound challenge, and must never lift `quarantined`.
-- Terminal source unlink must likewise remain available while hidden only after its distinct fresh
-  source-bound passkey challenge. It revokes every active source device and must not change profile
-  visibility.
-- Pairing creates only opaque user-declared sources. Preserve the public ceilings of 32 lifetime
-  sources and 64 active plus unexpired approved device authorities per profile; lower deployable
-  anti-abuse thresholds remain private configuration and must not enter fixtures or documentation.
-- Anonymous pairing transport admission must keep its fixed 130-row global/bucket matrix, global-
-  then-bucket lock order, saturating counts, and Web-only function. Never persist a client ID or
-  digest or replace fixed buckets with attacker-created rows.
-- Pairing rate-window retention reset must preserve all 130 rows, accept no caller-selected scope,
-  wait the maximum one-hour admission duration, use the same operation/global/bucket lock order, and
-  remain Jobs-only. It may scrub only aggregate timestamps/counts to the exact epoch/zero state.
-- Finalized source/day cleanup must remain Jobs-only, wait at least 30 days after terminal
-  finalization, preserve the UTC-day public freshness projection, verify live plus deleted inventory
-  before every row, and lock scoring, Ingest retention, then profile purge in stable name order.
-  Never make open, missing-projection, recent, or integrity-drifted state eligible.
-- Do not weaken forced RLS, state constraints, digest/length checks, or role denials to simplify
-  application code.
+The database is a clean seven-revision empty-database bootstrap. There is no production or
+compatibility population. Do not recreate removed pre-release tables, procedures, routes, wrappers,
+dual writes, cutovers, or backfills.
 
-## Migration rules
+After any revision is intentionally used in a shared environment, it is immutable. Repair is a new
+reviewed forward revision.
 
-- Once a migration has reached a shared or released environment, do not edit it. Add the next
-  contiguous revision and use expand-and-contract changes.
-- Keep one transaction, bounded lock/statement time, advisory serialization, explicit owner role,
-  and exact migration-ledger insert.
-- Update `manifest.json` only after reviewing the complete SQL diff. The checksum records review; it
-  is not a substitute for review.
-- Avoid extensions, dynamic file inclusion, `COPY PROGRAM`, `ALTER SYSTEM`, cluster role mutation,
-  implicit `search_path`, and direct runtime table/sequence grants.
-- Add indexes for bounded cleanup and hot authorization paths, but verify concurrency and query
-  behavior in PostgreSQL rather than inferring it from SQL text.
+## Roles and private state
 
-## Required verification
+- `viberacing_owner` is the sole schema/table/function owner.
+- Runtime groups are `NOLOGIN` and receive no private table or sequence privileges.
+- All private tables enable and force RLS with owner-only policies.
+- Runtime capability exists only through reviewed, parameterized `SECURITY DEFINER` functions with
+  fixed `pg_catalog, pg_temp` search paths.
+- Deployment logins are external, distinct, `NOINHERIT`, non-owner, and members of exactly one
+  group.
+- Probe login identity, memberships, search path, capability, and verified TLS before role
+  assumption; reset before reuse.
+
+Never widen grants or disable RLS to make an integration pass.
+
+## Identity and authority
+
+- Use immutable positive numeric GitHub ID as the profile identity key.
+- Preserve OAuth convergence and handle immutability/uniqueness rules.
+- Database challenges consume already verified application proofs; SQL does not perform WebAuthn.
+- Session, passkey, recovery, pairing, device, and critical-action authority remain purpose-bound,
+  single-use, and time-bounded.
+- Profile deletion lock-down must revoke sessions, recovery, installations, AgentAccounts, devices,
+  and pending authority before returning.
+
+## AgentAccount and accounting
+
+- AgentAccount is the counted domain. Installation/device multiplicity cannot multiply usage.
+- Provider, immutable account key, accounting revision, scope, and trust tier are server-owned.
+- Labels are private metadata and never identity.
+- Batch pairing is all-or-nothing under one exact ordered passkey decision.
+- Device authority is AgentAccount-scoped and independently revocable.
+- Token strings parse directly to `numeric(30,0)`; never introduce floating point.
+- PostgreSQL clock owns UTC date/backfill/season rules.
+- Consume durable origin replay before device lookup and idempotency.
+- Any rejected request must roll back nonce, idempotency, observation, account/day, ranking event,
+  and dirty-season state together.
+- Cumulative device/account/day replacement must not double count multiple devices.
+
+## Ranking and public projection
+
+- Only `provider_reported_tokens_v1` is competitive.
+- Rank is descending exact weekly total; equal totals share rank.
+- Provider/account/device/install/model/price/streak/CarRecipe/display order cannot affect rank.
+- Build complete immutable pages/profile summaries before atomically publishing a pointer.
+- Preserve last-good publication on refresh failure.
+- Finalized snapshots are immutable.
+- Public functions read snapshots only and expose no raw usage, private IDs/labels, exact receipt
+  times, or internal state.
+
+## Retention, deletion, and restore
+
+- Jobs functions take no arbitrary SQL/date/account/batch authority beyond their reviewed bounded
+  contracts.
+- Keep deletion purge bounded and block it while public snapshot safety is unresolved.
+- Preserve the completed terminal deletion UUID for 30 days, then remove only through the reviewed
+  cleanup capability.
+- Backup/restore changes must preserve ledger/digests, provider defaults, RLS/grants, revoked
+  authority, deletion terminal state, and finalized snapshots.
+- Current-snapshot restore evidence is not stale-backup replay, production backup, or RPO/RTO proof.
+
+## Verification
+
+Update `database/migrations/manifest.json` after an intentional revision edit, then run:
 
 ```text
 pnpm run check:database
-pnpm run verify
+pnpm run test:database-check
+pnpm run test:database:integration
+pnpm run test:migrate:postgres-integration
 ```
 
-Run `pnpm run test:database-check` only when changing the checker, and run the restore/deletion
-runbook checks only when editing those documents. SQL, role, lock, or migration changes additionally
-require `pnpm run test:database:integration`; documentation-only edits do not. The full
-`pnpm run verify:release` gate is reserved for release or broad cross-cutting work.
-
-The integration runner uses only the isolated `postgres-test` Compose profile. Do not point it at a
-shared database or change it to reuse the normal local volume. Its current-snapshot drill may drop
-and restore only that uniquely named disposable database; both archives must remain inside its
-ephemeral container, and cluster roles remain an explicit bootstrap prerequisite. Do not present
-this as stale-backup deletion replay or deployment restore evidence. Before committing, run the
-exact staged public-data scan and manually inspect every staged SQL/manifest line.
-
-Document new columns in the privacy map and `database/README.md`, new authority in the capability
-matrix and threat model, and any durable design change in an ADR. Do not claim an application flow
-is implemented merely because its storage table exists.
+Add or update runbook/checker tests when migration, restore, retention, or deletion behavior
+changes. PostgreSQL tests must cover positive and negative state, roles/grants, concurrency, exact
+stored values, no-partial-mutation failure, and cleanup. Use synthetic data only.

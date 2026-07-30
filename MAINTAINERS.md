@@ -33,7 +33,8 @@ and have been tested.
 
 ## Publication gate
 
-Before the source is pushed to a public repository:
+The initial source-only publication is complete. Before first populating a replacement public
+repository, and before relying on any later public revision as reviewed evidence:
 
 Follow the repository-owned
 [first GitHub publication runbook](docs/getting-started/GITHUB_FIRST_PUBLICATION.md). It configures

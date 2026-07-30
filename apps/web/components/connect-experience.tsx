@@ -6,23 +6,25 @@ import { useEffect, useState } from "react";
 import { connectTranslations } from "@/lib/connect-i18n";
 import type { Locale } from "@/lib/i18n";
 
-import { PairingApprovalForm, type PairingExistingSourceChoice } from "./passkey-setup";
+import { BatchPairingApprovalForm } from "./batch-pairing-approval-form";
 
 interface ConnectExperienceProps {
-  readonly existingSources?: readonly PairingExistingSourceChoice[];
+  readonly initialCode?: string;
   readonly initialLocale: Locale;
   readonly signedIn: boolean;
-  readonly sourceCreationEnabled: boolean;
 }
 
 export function ConnectExperience({
-  existingSources,
+  initialCode,
   initialLocale,
   signedIn,
-  sourceCreationEnabled,
 }: ConnectExperienceProps) {
   const [locale, setLocale] = useState(initialLocale);
   const copy = connectTranslations[locale];
+  const loginHref =
+    initialCode === undefined
+      ? "/login"
+      : `/login?returnTo=${encodeURIComponent(`/connect?code=${initialCode}`)}`;
 
   useEffect(() => {
     try {
@@ -76,16 +78,15 @@ export function ConnectExperience({
           {copy.noRelease}
         </p>
         {signedIn ? (
-          <PairingApprovalForm
-            {...(existingSources === undefined ? {} : { existingSources })}
+          <BatchPairingApprovalForm
+            {...(initialCode === undefined ? {} : { initialCode })}
             locale={locale}
-            sourceCreationEnabled={sourceCreationEnabled}
           />
         ) : (
           <section aria-labelledby="pairing-sign-in-title" className="account-security">
             <h2 id="pairing-sign-in-title">{copy.signIn}</h2>
             <p>{copy.signedOut}</p>
-            <Link href="/login">{copy.signIn}</Link>
+            <Link href={loginHref}>{copy.signIn}</Link>
           </section>
         )}
         <nav aria-label={copy.backToRace} className="connect-links">

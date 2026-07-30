@@ -145,22 +145,6 @@ export function passkeyRevokeContextDigest(
     .digest();
 }
 
-export function pairingApprovalContextDigest(
-  sessionId: string,
-  pairingId: string,
-  sourceChoice: "existing" | "new",
-  sourceId: string,
-  rpId: string,
-  origin: string,
-): Buffer {
-  return createHash("sha256")
-    .update(
-      `viberacing-pairing-approval-v2\n${sessionId}\n${pairingId}\n${sourceChoice}\n${sourceId}\n${rpId}\n${origin}`,
-      "utf8",
-    )
-    .digest();
-}
-
 export function profileDeletionContextDigest(
   sessionId: string,
   profileId: string,
@@ -205,28 +189,21 @@ export function recoveryPasskeyContextDigest(
     .digest();
 }
 
-export function sourceReactivationContextDigest(
+export type AccountTargetActionPurpose =
+  "account_reactivate" | "account_unlink" | "device_revoke" | "installation_revoke";
+
+export function accountTargetActionContextDigest(
   sessionId: string,
-  sourceId: string,
+  purpose: AccountTargetActionPurpose,
+  targetId: string,
   rpId: string,
   origin: string,
 ): Buffer {
   return createHash("sha256")
     .update(
-      `viberacing-source-reactivation-v1\n${sessionId}\n${sourceId}\n${rpId}\n${origin}`,
+      `viberacing-account-target-action-v1\n${sessionId}\n${purpose}\n${targetId}\n${rpId}\n${origin}`,
       "utf8",
     )
-    .digest();
-}
-
-export function sourceUnlinkContextDigest(
-  sessionId: string,
-  sourceId: string,
-  rpId: string,
-  origin: string,
-): Buffer {
-  return createHash("sha256")
-    .update(`viberacing-source-unlink-v1\n${sessionId}\n${sourceId}\n${rpId}\n${origin}`, "utf8")
     .digest();
 }
 

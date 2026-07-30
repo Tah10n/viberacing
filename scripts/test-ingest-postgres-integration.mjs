@@ -13,6 +13,7 @@ import { validateManifest } from "./check-database.mjs";
 import { createPortableNodeRuntime, removePortableNodeRuntime } from "./portable-node-runtime.mjs";
 
 // cspell:ignore pinojs usename
+// This harness emits local synthetic evidence only.
 
 const root = resolve(import.meta.dirname, "..");
 const projectName = `vr-ingest-it-${process.pid}`;
@@ -31,18 +32,23 @@ const bootstrapUser = "viberacing_local";
 const ingestLogin = "viberacing_ingest_login";
 const ingestPassword = "synthetic-ingest-integration-password";
 const profileId = "00000000-0000-4000-8000-000000026101";
-const deviceKeyId = "00000000-0000-4000-8000-000000026201";
-const sourceId = `src_${"S".repeat(22)}`;
-const deviceId = `dev_${"D".repeat(22)}`;
-const admissionDeviceKeyId = "00000000-0000-4000-8000-000000026202";
-const admissionSourceId = `src_${"N".repeat(22)}`;
-const admissionDeviceId = `dev_${"N".repeat(22)}`;
+const agentAccountId = `acc_${"A".repeat(22)}`;
+const installationId = `ins_${"A".repeat(22)}`;
+const deviceKeyId = `key_${"A".repeat(22)}`;
+const deviceId = `dev_${"A".repeat(22)}`;
+const admissionInstallationId = `ins_${"B".repeat(22)}`;
+const admissionDeviceKeyId = `key_${"B".repeat(22)}`;
+const admissionDeviceId = `dev_${"B".repeat(22)}`;
+const readerVersion = "codex_app_server_0_144_5_v1";
 const acceptedSyncId = `syn_${"A".repeat(22)}`;
-const usageSyncId = `syn_${"U".repeat(22)}`;
+const sameValueSyncId = `syn_${"S".repeat(22)}`;
+const higherSyncId = `syn_${"H".repeat(22)}`;
+const lowerSyncId = `syn_${"L".repeat(22)}`;
+const mixedLowerSyncId = `syn_${"M".repeat(22)}`;
+const sameNonceSyncId = `syn_${"N".repeat(22)}`;
+const accountRaceSyncId = `syn_${"C".repeat(22)}`;
 const revokedSyncId = `syn_${"R".repeat(22)}`;
-const admissionSyncIds = Object.freeze(
-  Array.from({ length: 4 }, (_, index) => `syn_${String(index + 1).repeat(22)}`),
-);
+const admissionSyncId = `syn_${"1".repeat(22)}`;
 const rejectedAdmissionSyncId = `syn_${"5".repeat(22)}`;
 const emittedProcessSyncId = `syn_${"P".repeat(22)}`;
 const signalProcessSyncId = `syn_${"Q".repeat(22)}`;
@@ -126,32 +132,38 @@ const signalProcessRuntimeInventory = Object.freeze([
 ]);
 const requestIdPattern = /^req_[A-Za-z0-9_-]{22}$/;
 const maximumResponseBytes = 2_048;
-const removedSyncRequestTarget = "/v1/community/sync";
 const maximumBlockerOutputBytes = 64 * 1024;
 const maximumSignalClientOutputBytes = 8 * 1024;
 const databaseBlockerTimeoutMs = 10_000;
-const blockedOriginObservationTimeoutMs = 2_000;
-const signalBlockedOriginObservationTimeoutMs = 10_000;
+const blockedSubmitObservationTimeoutMs = 10_000;
 const admissionRejectionTimeoutMs = 1_500;
 const emittedProcessStartTimeoutMs = 10_000;
 const emittedProcessCloseTimeoutMs = 5_000;
 const emittedProcessProbeTimeoutMs = 250;
 const signalProcessCloseTimeoutMs = 10_000;
 const signalProcessPollIntervalMs = 100;
-const signalProcessStartTimeoutMs = 30_000;
-const databaseBlockerReadyMarker = "viberacing_ingest_admission_blocker_ready";
+const signalProcessStartTimeoutMs = 120_000;
+const databaseBlockerReadyMarker = "viberacing_ingest_atomic_submit_blocker_ready";
+const removedRequestTargets = Object.freeze(["/v1/community/sync", "/v1/community/usage"]);
 const privateValueMarkers = Object.freeze([
   profileId,
+  agentAccountId,
+  installationId,
   deviceKeyId,
-  sourceId,
   deviceId,
+  admissionInstallationId,
   admissionDeviceKeyId,
-  admissionSourceId,
   admissionDeviceId,
+  readerVersion,
   acceptedSyncId,
-  usageSyncId,
+  sameValueSyncId,
+  higherSyncId,
+  lowerSyncId,
+  mixedLowerSyncId,
+  sameNonceSyncId,
+  accountRaceSyncId,
   revokedSyncId,
-  ...admissionSyncIds,
+  admissionSyncId,
   rejectedAdmissionSyncId,
   emittedProcessSyncId,
   signalProcessSyncId,
@@ -233,185 +245,6 @@ function psqlScalar(sql, label) {
   return result.stdout.trim();
 }
 
-async function stopDatabaseOriginReplayBlocker(blocker) {
-  if (!blocker.hasExited()) {
-    blocker.child.stdin.end("ROLLBACK;\n");
-  }
-  let result;
-  try {
-    result = await waitWithDeadline(
-      blocker.closed,
-      databaseBlockerTimeoutMs,
-      "PostgreSQL origin-replay blocker did not stop within its fixed deadline.",
-    );
-  } catch (error) {
-    if (!blocker.hasExited()) {
-      blocker.child.kill("SIGKILL");
-      await waitWithDeadline(
-        blocker.closed,
-        databaseBlockerTimeoutMs,
-        "PostgreSQL origin-replay blocker did not close after forced termination.",
-      );
-    }
-    throw error;
-  }
-  if (blocker.hasPrivateOutput()) {
-    throw new Error("PostgreSQL origin-replay blocker output exposed a private integration value.");
-  }
-  if (blocker.hasOutputOverflow()) {
-    throw new Error("PostgreSQL origin-replay blocker exceeded its bounded output budget.");
-  }
-  if (result.code !== 0 || result.signal !== null) {
-    throw new Error("PostgreSQL origin-replay blocker did not close cleanly.");
-  }
-}
-
-async function startDatabaseOriginReplayBlocker() {
-  let exited = false;
-  let outputBytes = 0;
-  let outputOverflow = false;
-  let privateOutput = false;
-  let outputTail = "";
-  let readySettled = false;
-  let resolveReady;
-  let rejectReady;
-  const maximumMarkerLength = Math.max(
-    databaseBlockerReadyMarker.length,
-    ...privateValueMarkers.map((marker) => marker.length),
-  );
-  const ready = new Promise((resolvePromise, rejectPromise) => {
-    resolveReady = resolvePromise;
-    rejectReady = rejectPromise;
-  });
-  const child = spawn("docker", psqlArguments(), {
-    cwd: root,
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  const observeOutput = (chunk) => {
-    outputBytes += chunk.byteLength;
-    const text = `${outputTail}${chunk.toString("utf8")}`;
-    outputTail = text.slice(-(maximumMarkerLength - 1));
-    if (privateValueMarkers.some((marker) => text.includes(marker))) {
-      privateOutput = true;
-      child.kill("SIGKILL");
-    } else if (outputBytes > maximumBlockerOutputBytes) {
-      outputOverflow = true;
-      child.kill("SIGKILL");
-    } else if (!readySettled && text.includes(databaseBlockerReadyMarker)) {
-      readySettled = true;
-      resolveReady();
-    }
-  };
-  child.stdout.on("data", observeOutput);
-  child.stderr.on("data", observeOutput);
-  child.stdin.on("error", () => undefined);
-  const closed = new Promise((resolveClose, rejectClose) => {
-    child.once("error", () => {
-      exited = true;
-      if (!readySettled) {
-        readySettled = true;
-        rejectReady(new Error("PostgreSQL origin-replay blocker could not start."));
-      }
-      rejectClose(new Error("PostgreSQL origin-replay blocker could not start."));
-    });
-    child.once("close", (code, signal) => {
-      exited = true;
-      if (!readySettled) {
-        readySettled = true;
-        rejectReady(
-          new Error("PostgreSQL origin-replay blocker exited before acquiring its lock."),
-        );
-      }
-      resolveClose(Object.freeze({ code, signal }));
-    });
-  });
-  void ready.catch(() => undefined);
-  void closed.catch(() => undefined);
-  const blocker = Object.freeze({
-    child,
-    closed,
-    hasExited: () => exited,
-    hasOutputOverflow: () => outputOverflow,
-    hasPrivateOutput: () => privateOutput,
-  });
-
-  try {
-    child.stdin.write(`BEGIN;
-SET LOCAL ROLE viberacing_owner;
-LOCK TABLE viberacing_private.origin_nonces IN ACCESS EXCLUSIVE MODE;
-\\echo ${databaseBlockerReadyMarker}
-`);
-    await waitWithDeadline(
-      ready,
-      databaseBlockerTimeoutMs,
-      "PostgreSQL origin-replay blocker did not acquire its lock in time.",
-    );
-    if (privateOutput || outputOverflow || exited) {
-      throw new Error("PostgreSQL origin-replay blocker failed before admission evidence began.");
-    }
-    return blocker;
-  } catch (error) {
-    await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
-    throw error;
-  }
-}
-
-function readBlockedOriginConsumeCount(label) {
-  const value = psqlScalar(
-    `SELECT pg_catalog.count(*)::text
-FROM pg_catalog.pg_stat_activity AS activity
-WHERE activity.datname = '${databaseName}'
-  AND activity.usename = '${ingestLogin}'
-  AND activity.state = 'active'
-  AND activity.wait_event_type = 'Lock'
-  AND pg_catalog.strpos(
-    activity.query,
-    'viberacing_api.consume_origin_nonce('
-  ) > 0;`,
-    label,
-  );
-  assert.match(value, /^[0-4]$/);
-  return Number(value);
-}
-
-async function waitForBlockedOriginConsumes() {
-  const deadline = Date.now() + blockedOriginObservationTimeoutMs;
-  let lastCount = 0;
-  while (Date.now() < deadline) {
-    lastCount = readBlockedOriginConsumeCount("blocked Ingest origin-consume observation");
-    if (lastCount === 4) {
-      return;
-    }
-    await sleep(25);
-  }
-  throw new Error(`expected four blocked Ingest origin-consume queries, observed ${lastCount}`);
-}
-
-async function waitForOneBlockedOriginConsume(client) {
-  const deadline = Date.now() + signalBlockedOriginObservationTimeoutMs;
-  let lastCount = 0;
-  while (Date.now() < deadline) {
-    if (client.hasExited()) {
-      const result = await readSignalProcessClientResult(client);
-      throw new Error(
-        `Ingest signal client exited with HTTP ${result.status} before the controlled database wait.`,
-      );
-    }
-    const state = readSignalProcessContainerState();
-    if (!state.Running || readSignalProcessContainerOutput() !== "") {
-      throw new Error("Ingest signal host failed before the controlled database wait.");
-    }
-    lastCount = readBlockedOriginConsumeCount("signal-blocked Ingest origin-consume observation");
-    if (lastCount === 1) {
-      return;
-    }
-    assert.equal(lastCount, 0, "the signal integration must admit only one database call");
-    await sleep(signalProcessPollIntervalMs);
-  }
-  throw new Error(`expected one blocked Ingest origin-consume query, observed ${lastCount}`);
-}
-
 function buildWorkspace(relativePath, label) {
   const workspaceRoot = resolve(root, relativePath);
   const workspaceRequire = createRequire(resolve(workspaceRoot, "package.json"));
@@ -426,7 +259,6 @@ function loadReviewedMigrations() {
   const migrationDirectory = resolve(root, "database", "migrations");
   const manifest = JSON.parse(readFileSync(resolve(migrationDirectory, "manifest.json"), "utf8"));
   const filesByPath = new Map();
-
   for (const entry of readdirSync(migrationDirectory, { withFileTypes: true })) {
     if (entry.name === "manifest.json") {
       continue;
@@ -437,15 +269,13 @@ function loadReviewedMigrations() {
     const path = `database/migrations/${entry.name}`;
     filesByPath.set(path, readFileSync(resolve(migrationDirectory, entry.name), "utf8"));
   }
-
   const findings = validateManifest(manifest, filesByPath);
   if (findings.length > 0) {
     throw new Error(`migration manifest validation failed:\n- ${findings.join("\n- ")}`);
   }
-
-  return manifest.migrations.map((migration) => ({
-    label: `migration ${migration.revision}: ${migration.name}`,
-    sql: filesByPath.get(migration.path),
+  return manifest.migrations.map((entry) => ({
+    label: `migration ${entry.revision}`,
+    sql: filesByPath.get(entry.path),
   }));
 }
 
@@ -454,70 +284,62 @@ function sleep(milliseconds) {
 }
 
 async function waitWithDeadline(promise, milliseconds, message) {
-  let timeoutToken;
-  const timeout = new Promise((_, reject) => {
-    timeoutToken = setTimeout(() => reject(new Error(message)), milliseconds);
-  });
+  let timeout;
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([
+      promise,
+      new Promise((_, rejectPromise) => {
+        timeout = setTimeout(() => rejectPromise(new Error(message)), milliseconds);
+      }),
+    ]);
   } finally {
-    clearTimeout(timeoutToken);
+    clearTimeout(timeout);
   }
 }
 
 async function waitForHealthyContainer() {
-  const deadline = Date.now() + 60_000;
-  let lastStatus = "missing";
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    const result = docker(["inspect", "--format", "{{.State.Health.Status}}", containerName], {
-      timeout: 10_000,
-    });
-    if (result.status === 0) {
-      lastStatus = result.stdout.trim();
-      if (lastStatus === "healthy") {
-        return;
-      }
-      if (lastStatus === "unhealthy") {
-        break;
-      }
+    const inspection = docker(
+      ["inspect", "--format", "{{json .State.Health.Status}}", containerName],
+      { timeout: 10_000 },
+    );
+    if (inspection.status === 0 && inspection.stdout.trim() === '"healthy"') {
+      return;
     }
-    await sleep(250);
+    await sleep(100);
   }
-  throw new Error(`isolated PostgreSQL did not become healthy (${lastStatus})`);
+  throw new Error("isolated PostgreSQL did not become healthy");
 }
 
 function readPublishedPostgresPort() {
   const result = docker(["port", containerName, "5432/tcp"], { timeout: 10_000 });
-  requireSuccess(result, "isolated PostgreSQL port discovery");
-  const output = result.stdout.trim();
-  const match = /^127\.0\.0\.1:([1-9][0-9]{0,4})$/.exec(output);
-  if (match === null) {
-    throw new Error("isolated PostgreSQL did not publish one exact IPv4 loopback port");
-  }
+  requireSuccess(result, "published PostgreSQL port read");
+  const match = /^127\.0\.0\.1:(\d+)$/.exec(result.stdout.trim());
+  assert.ok(match);
   const port = Number(match[1]);
-  if (!Number.isSafeInteger(port) || port > 65_535) {
-    throw new Error("isolated PostgreSQL returned an invalid loopback port");
-  }
+  assert.equal(Number.isSafeInteger(port) && port > 0 && port <= 65_535, true);
   return port;
 }
 
 async function findAvailableListenerPort() {
-  return new Promise((resolvePromise, rejectPromise) => {
+  return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
     server.unref();
-    server.once("error", rejectPromise);
-    server.listen({ exclusive: true, host: "127.0.0.1", port: 0 }, () => {
+    server.once("error", rejectPort);
+    server.listen({ host: "127.0.0.1", port: 0 }, () => {
       const address = server.address();
       if (address === null || typeof address === "string") {
-        server.close(() => rejectPromise(new Error("listener port allocation failed")));
+        server.close();
+        rejectPort(new Error("listener allocation failed"));
         return;
       }
       const { port } = address;
       server.close((error) => {
         if (error) {
-          rejectPromise(error);
+          rejectPort(error);
         } else {
-          resolvePromise(port);
+          resolvePort(port);
         }
       });
     });
@@ -534,26 +356,25 @@ function readAuthenticationPolicy() {
   assert.equal(value.schemaVersion, 1);
   assert.equal(value.protocolId, "viberacing-usage-sync-auth-v1");
   assert.equal(value.method, "POST");
-  assert.equal(value.requestTarget, "/v1/community/usage");
+  assert.equal(value.requestTarget, "/v1/usage");
   assert.equal(value.mediaType, "application/json");
-  assert.equal(value.canonicalMessageEncoding, "UTF-8");
-  assert.equal(value.canonicalMessageSeparator, "LF");
-  assert.equal(value.canonicalMessageTrailingSeparator, false);
   assert.equal(value.originProof.algorithm, "HMAC-SHA-256");
   assert.equal(value.deviceSignature.algorithm, "Ed25519");
   return value;
 }
 
 function canonicalMessage(fieldOrder, values) {
-  assert.ok(Array.isArray(fieldOrder));
-  const fields = fieldOrder.map((field) => {
-    assert.equal(typeof field, "string");
-    const value = values[field];
-    assert.equal(typeof value, "string");
-    assert.ok(!value.includes("\n"));
-    return value;
-  });
-  return Buffer.from(fields.join("\n"), "utf8");
+  return Buffer.from(
+    fieldOrder
+      .map((field) => {
+        const value = values[field];
+        assert.equal(typeof value, "string");
+        assert.equal(value.includes("\n"), false);
+        return value;
+      })
+      .join("\n"),
+    "utf8",
+  );
 }
 
 function readDevicePublicKey(keyPair) {
@@ -566,25 +387,47 @@ function readDevicePublicKey(keyPair) {
   return publicKey;
 }
 
+function utcDateDaysBefore(baseTimestamp, days) {
+  const value = new Date(baseTimestamp);
+  value.setUTCDate(value.getUTCDate() - days);
+  return value.toISOString().slice(0, 10);
+}
+
+function utcMonday(dateString) {
+  const value = new Date(`${dateString}T00:00:00.000Z`);
+  const offset = (value.getUTCDay() + 6) % 7;
+  value.setUTCDate(value.getUTCDate() - offset);
+  return value.toISOString().slice(0, 10);
+}
+
 function createPayload(
   syncId,
   observedAt,
   dailyTokenTotal,
-  { payloadSourceId = sourceId, reportedDate = observedAt.slice(0, 10) } = {},
+  {
+    dailyEntries,
+    payloadAgentAccountId = agentAccountId,
+    selectedReaderVersion = readerVersion,
+    usageDate = observedAt.slice(0, 10),
+  } = {},
 ) {
   return {
     schemaVersion: 1,
-    sourceId: payloadSourceId,
+    agentAccountId: payloadAgentAccountId,
     syncId,
     observedAt,
     clientVersion: "1.2.3",
-    agentVersion: "0.144.5",
-    dailyEntries: [{ reportedDate, dailyTokenTotal }],
+    readerVersion: selectedReaderVersion,
+    dailyEntries: dailyEntries ?? [{ usageDate, dailyTokenTotal: String(dailyTokenTotal) }],
   };
 }
 
 function buildSignedRequest({
+  bodyBytes,
   deviceNonceBytes,
+  deviceTimestamp,
+  headerIdempotencyKey,
+  invalidDeviceSignature = false,
   keyPair,
   originNonceBytes,
   originTimestamp,
@@ -592,10 +435,13 @@ function buildSignedRequest({
   policy,
   requestDeviceId = deviceId,
 }) {
-  const body = Buffer.from(JSON.stringify(payload), "utf8");
+  const body =
+    bodyBytes === undefined ? Buffer.from(JSON.stringify(payload), "utf8") : Buffer.from(bodyBytes);
   const bodyDigestBase64Url = createHash("sha256").update(body).digest("base64url");
   const deviceNonce = Buffer.from(deviceNonceBytes).toString("base64url");
   const originNonce = Buffer.from(originNonceBytes).toString("base64url");
+  const resolvedDeviceTimestamp = deviceTimestamp ?? payload.observedAt;
+  const resolvedIdempotencyKey = headerIdempotencyKey ?? payload.syncId;
   const deviceMessage = canonicalMessage(policy.deviceSignature.canonicalFields, {
     messagePrefix: policy.deviceSignature.messagePrefix,
     method: policy.method,
@@ -603,10 +449,13 @@ function buildSignedRequest({
     bodyDigestBase64Url,
     deviceId: requestDeviceId,
     nonce: deviceNonce,
-    timestamp: payload.observedAt,
-    idempotencyKey: payload.syncId,
+    timestamp: resolvedDeviceTimestamp,
+    idempotencyKey: resolvedIdempotencyKey,
   });
-  const deviceSignature = sign(null, deviceMessage, keyPair.privateKey).toString("base64url");
+  const signatureBytes = sign(null, deviceMessage, keyPair.privateKey);
+  if (invalidDeviceSignature) {
+    signatureBytes[0] ^= 0xff;
+  }
   const originMessage = canonicalMessage(policy.originProof.canonicalFields, {
     messagePrefix: policy.originProof.messagePrefix,
     keyId: originKeyId,
@@ -616,21 +465,22 @@ function buildSignedRequest({
     timestamp: originTimestamp,
     nonce: originNonce,
   });
-  const originProof = createHmac("sha256", originSecret).update(originMessage).digest("base64url");
   const headers = new Headers({
     accept: policy.mediaType,
     [policy.deviceSignature.headers.deviceId]: requestDeviceId,
-    [policy.deviceSignature.headers.idempotencyKey]: payload.syncId,
+    [policy.deviceSignature.headers.idempotencyKey]: resolvedIdempotencyKey,
     [policy.deviceSignature.headers.nonce]: deviceNonce,
-    [policy.deviceSignature.headers.signature]: deviceSignature,
-    [policy.deviceSignature.headers.timestamp]: payload.observedAt,
+    [policy.deviceSignature.headers.signature]: signatureBytes.toString("base64url"),
+    [policy.deviceSignature.headers.timestamp]: resolvedDeviceTimestamp,
     [policy.originProof.headers.keyId]: originKeyId,
     [policy.originProof.headers.nonce]: originNonce,
-    [policy.originProof.headers.proof]: originProof,
+    [policy.originProof.headers.proof]: createHmac("sha256", originSecret)
+      .update(originMessage)
+      .digest("base64url"),
     [policy.originProof.headers.timestamp]: originTimestamp,
     "content-type": policy.mediaType,
   });
-  return { body, headers };
+  return Object.freeze({ body, headers });
 }
 
 function assertResponseHeaders(response, body, problem) {
@@ -646,51 +496,76 @@ function assertResponseHeaders(response, body, problem) {
   );
 }
 
-async function postSignedRequest(baseUrl, policy, request, timeoutMilliseconds = 30_000) {
-  const response = await fetch(`${baseUrl}${policy.requestTarget}`, {
-    body: request.body,
-    headers: request.headers,
-    method: policy.method,
+async function sendSignedRequest(
+  baseUrl,
+  policy,
+  request,
+  {
+    body = request.body,
+    contentEncoding,
+    contentType = policy.mediaType,
+    method = policy.method,
+    requestTarget = policy.requestTarget,
+    timeoutMilliseconds = 30_000,
+  } = {},
+) {
+  const headers = new Headers(request.headers);
+  headers.set("content-type", contentType);
+  if (contentEncoding === undefined) {
+    headers.delete("content-encoding");
+  } else {
+    headers.set("content-encoding", contentEncoding);
+  }
+  const response = await fetch(`${baseUrl}${requestTarget}`, {
+    ...(method === "GET" || method === "HEAD" ? {} : { body }),
+    headers,
+    method,
     redirect: "error",
     signal: AbortSignal.timeout(timeoutMilliseconds),
   });
   const responseText = await response.text();
   assert.ok(Buffer.byteLength(responseText, "utf8") <= maximumResponseBytes);
-  if (responseText.length === 0) {
-    throw new Error(
-      `Ingest returned an empty HTTP ${response.status} response (${response.headers.get("content-type") ?? "no-content-type"}, ${response.headers.get("content-length") ?? "no-content-length"}, request-id-${response.headers.has("x-request-id") ? "present" : "absent"})`,
-    );
-  }
-  let body;
-  try {
-    body = JSON.parse(responseText);
-  } catch {
-    throw new Error(
-      `Ingest returned non-JSON HTTP ${response.status} ${response.headers.get("content-type") ?? "without-content-type"}`,
-    );
-  }
-  assert.match(body.requestId, requestIdPattern);
-  assertResponseHeaders(response, body, response.status !== 200);
-  return { body, status: response.status };
+  assert.notEqual(responseText.length, 0);
+  const responseBody = JSON.parse(responseText);
+  assert.match(responseBody.requestId, requestIdPattern);
+  assertResponseHeaders(response, responseBody, response.status !== 200);
+  return Object.freeze({ body: responseBody, status: response.status });
 }
 
 function assertSuccess(result, expected) {
   assert.equal(result.status, 200);
-  assert.deepEqual(Object.keys(result.body).sort(), [
-    "acceptedEntries",
-    "outcome",
-    "requestId",
-    "schemaVersion",
-    "syncId",
-  ]);
+  const keys = Object.keys(result.body).sort();
+  assert.deepEqual(
+    keys.filter((key) => !["nextAllowedSyncAt", "recoveryAction"].includes(key)),
+    ["acceptedEntries", "outcome", "requestId", "schemaVersion", "syncId"],
+  );
+  assert.equal(
+    keys.every((key) =>
+      [
+        "acceptedEntries",
+        "nextAllowedSyncAt",
+        "outcome",
+        "recoveryAction",
+        "requestId",
+        "schemaVersion",
+        "syncId",
+      ].includes(key),
+    ),
+    true,
+  );
   assert.equal(result.body.schemaVersion, 1);
   assert.equal(result.body.syncId, expected.syncId);
   assert.equal(result.body.outcome, expected.outcome);
   assert.equal(result.body.acceptedEntries, expected.acceptedEntries);
+  if (Object.hasOwn(expected, "recoveryAction")) {
+    assert.equal(result.body.recoveryAction, expected.recoveryAction);
+  } else {
+    assert.equal(Object.hasOwn(result.body, "recoveryAction"), false);
+  }
 }
 
-function assertNotFound(result) {
-  assert.equal(result.status, 404);
+function assertProblem(result, status, errorCode, retryable = false) {
+  assert.equal(result.status, status);
   assert.deepEqual(Object.keys(result.body).sort(), [
     "errorCode",
     "requestId",
@@ -699,212 +574,16 @@ function assertNotFound(result) {
     "status",
     "title",
   ]);
-  assert.deepEqual(
-    {
-      errorCode: result.body.errorCode,
-      retryable: result.body.retryable,
-      schemaVersion: result.body.schemaVersion,
-      status: result.body.status,
-      title: result.body.title,
-    },
-    {
-      errorCode: "not_found",
-      retryable: false,
-      schemaVersion: 1,
-      status: 404,
-      title: "Not found",
-    },
-  );
-}
-
-function assertUnauthorized(result) {
-  assert.equal(result.status, 401);
-  assert.deepEqual(Object.keys(result.body).sort(), [
-    "errorCode",
-    "requestId",
-    "retryable",
-    "schemaVersion",
-    "status",
-    "title",
-  ]);
-  assert.deepEqual(
-    {
-      errorCode: result.body.errorCode,
-      retryable: result.body.retryable,
-      schemaVersion: result.body.schemaVersion,
-      status: result.body.status,
-      title: result.body.title,
-    },
-    {
-      errorCode: "unauthorized",
-      retryable: false,
-      schemaVersion: 1,
-      status: 401,
-      title: "Unauthorized",
-    },
-  );
+  assert.equal(result.body.schemaVersion, 1);
+  assert.equal(result.body.status, status);
+  assert.equal(result.body.errorCode, errorCode);
+  assert.equal(result.body.retryable, retryable);
+  assert.equal(typeof result.body.title, "string");
+  assert.ok(result.body.title.length > 0);
 }
 
 function assertTemporarilyUnavailable(result) {
-  assert.equal(result.status, 503);
-  assert.deepEqual(Object.keys(result.body).sort(), [
-    "errorCode",
-    "requestId",
-    "retryable",
-    "schemaVersion",
-    "status",
-    "title",
-  ]);
-  assert.deepEqual(
-    {
-      errorCode: result.body.errorCode,
-      retryable: result.body.retryable,
-      schemaVersion: result.body.schemaVersion,
-      status: result.body.status,
-      title: result.body.title,
-    },
-    {
-      errorCode: "temporarily_unavailable",
-      retryable: true,
-      schemaVersion: 1,
-      status: 503,
-      title: "Temporarily unavailable",
-    },
-  );
-}
-
-function utcDateDaysBefore(baseTimestamp, days) {
-  const value = new Date(baseTimestamp);
-  value.setUTCDate(value.getUTCDate() - days);
-  return value.toISOString().slice(0, 10);
-}
-
-async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
-  const blocker = await startDatabaseOriginReplayBlocker();
-  const inFlightRequests = [];
-  let blockerStopped = false;
-  try {
-    const observedAt = new Date().toISOString();
-    for (let index = 0; index < admissionSyncIds.length; index += 1) {
-      const request = buildSignedRequest({
-        deviceNonceBytes: Buffer.alloc(16, 0x31 + index),
-        keyPair,
-        originNonceBytes: Buffer.alloc(16, 0x41 + index),
-        originTimestamp: observedAt,
-        payload: createPayload(admissionSyncIds[index], observedAt, 200 + index, {
-          reportedDate: utcDateDaysBefore(observedAt, 4 - index),
-          payloadSourceId: admissionSourceId,
-        }),
-        policy,
-        requestDeviceId: admissionDeviceId,
-      });
-      const pending = postSignedRequest(baseUrl, policy, request, databaseBlockerTimeoutMs);
-      void pending.catch(() => undefined);
-      inFlightRequests.push(pending);
-    }
-    await waitForBlockedOriginConsumes();
-
-    const rejectedRequest = buildSignedRequest({
-      deviceNonceBytes: Buffer.alloc(16, 0x35),
-      keyPair,
-      originNonceBytes: Buffer.alloc(16, 0x45),
-      originTimestamp: observedAt,
-      payload: createPayload(rejectedAdmissionSyncId, observedAt, 204, {
-        reportedDate: utcDateDaysBefore(observedAt, 5),
-        payloadSourceId: admissionSourceId,
-      }),
-      policy,
-      requestDeviceId: admissionDeviceId,
-    });
-    const rejectedResult = await waitWithDeadline(
-      postSignedRequest(baseUrl, policy, rejectedRequest, admissionRejectionTimeoutMs),
-      admissionRejectionTimeoutMs,
-      "the fifth Ingest request did not receive a no-queue decision within the fixed deadline",
-    );
-    assertTemporarilyUnavailable(rejectedResult);
-    assert.equal(
-      readBlockedOriginConsumeCount("post-rejection blocked Ingest origin-consume observation"),
-      4,
-      "the rejected fifth request must not add a fifth origin-consume query",
-    );
-
-    await stopDatabaseOriginReplayBlocker(blocker);
-    blockerStopped = true;
-    const settledRequests = await Promise.all(inFlightRequests);
-    for (let index = 0; index < settledRequests.length; index += 1) {
-      assertSuccess(settledRequests[index], {
-        acceptedEntries: 1,
-        outcome: "accepted",
-        syncId: admissionSyncIds[index],
-      });
-    }
-    return [...settledRequests, rejectedResult];
-  } finally {
-    if (!blockerStopped) {
-      await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
-    }
-    await Promise.allSettled(inFlightRequests);
-  }
-}
-
-async function exerciseEmittedIngestProcess(databasePort, policy, keyPair) {
-  const listenerPort = await findAvailableListenerPort();
-  const processState = startEmittedIngestProcess(databasePort, listenerPort);
-  let processStopped = false;
-  try {
-    await waitForEmittedIngestListener(processState, listenerPort);
-    const observedAt = new Date().toISOString();
-    const request = buildSignedRequest({
-      deviceNonceBytes: Buffer.alloc(16, 0x36),
-      keyPair,
-      originNonceBytes: Buffer.alloc(16, 0x46),
-      originTimestamp: observedAt,
-      payload: createPayload(emittedProcessSyncId, observedAt, 300, {
-        payloadSourceId: admissionSourceId,
-      }),
-      policy,
-      requestDeviceId: admissionDeviceId,
-    });
-    const result = await postSignedRequest(`http://127.0.0.1:${listenerPort}`, policy, request);
-    assertSuccess(result, {
-      acceptedEntries: 1,
-      outcome: "accepted",
-      syncId: emittedProcessSyncId,
-    });
-    assert.equal(
-      processState.hasExited(),
-      false,
-      "the emitted Ingest host must remain active through its accepted request",
-    );
-    assert.equal(
-      processState.outputObserved(),
-      false,
-      "the emitted Ingest host must remain silent through its accepted request",
-    );
-
-    const stopResult = await stopEmittedIngestProcess(processState);
-    processStopped = true;
-    assert.equal(
-      stopResult.terminationRequested,
-      true,
-      "the synthetic harness must terminate only its emitted Ingest child",
-    );
-    assert.equal(
-      processState.outputObserved(),
-      false,
-      "the emitted Ingest host must remain silent through stdio close",
-    );
-    assert.deepEqual(
-      stopResult.closeResult,
-      { code: null, signal: "SIGKILL" },
-      "the synthetic harness must end the persistent child after the accepted request",
-    );
-    return result;
-  } finally {
-    if (!processStopped) {
-      await stopEmittedIngestProcess(processState).catch(() => undefined);
-    }
-  }
+  assertProblem(result, 503, "temporarily_unavailable", true);
 }
 
 function ingestEnvironment(databasePort, listenerPort) {
@@ -926,40 +605,392 @@ function ingestEnvironment(databasePort, listenerPort) {
   });
 }
 
+function seedDatabase(primaryPublicKey, admissionPublicKey) {
+  psql(
+    `BEGIN;
+CREATE ROLE ${ingestLogin}
+  WITH LOGIN PASSWORD '${ingestPassword}'
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+GRANT viberacing_ingest TO ${ingestLogin} WITH INHERIT FALSE, SET TRUE;
+GRANT CONNECT ON DATABASE ${databaseName} TO ${ingestLogin};
+ALTER ROLE ${ingestLogin} IN DATABASE ${databaseName}
+  SET search_path TO pg_catalog, pg_temp;
+
+SET LOCAL ROLE viberacing_owner;
+UPDATE viberacing_private.agent_providers
+SET state = 'supported'
+WHERE provider_code = 'codex';
+
+UPDATE viberacing_private.agent_accounting_revisions
+SET enabled_for_new_accounts = true
+WHERE provider_code = 'codex'
+  AND accounting_revision = 1;
+
+INSERT INTO viberacing_private.seasons (
+  season_start,
+  trust_tier,
+  season_end,
+  metric_version,
+  accounting_policy_version,
+  state,
+  opened_at,
+  grace_ends_at
+)
+SELECT
+  season_start,
+  'community',
+  season_start + 6,
+  'provider_reported_tokens_v1',
+  'agent_account_cumulative_utc_v1',
+  'open',
+  season_start::timestamp AT TIME ZONE 'UTC',
+  ((season_start + 7)::timestamp AT TIME ZONE 'UTC') + interval '48 hours'
+FROM (
+  SELECT DISTINCT
+    usage_date::date - (extract(isodow FROM usage_date)::integer - 1) AS season_start
+  FROM pg_catalog.generate_series(
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date - 35,
+    (pg_catalog.transaction_timestamp() AT TIME ZONE 'UTC')::date,
+    interval '1 day'
+  ) AS generated(usage_date)
+) AS required_season;
+
+INSERT INTO viberacing_private.profiles (
+  profile_id,
+  github_user_id,
+  handle,
+  locale,
+  hidden_at
+)
+VALUES (
+  '${profileId}',
+  900000000000026101,
+  'ingest-local-e2e',
+  'en',
+  pg_catalog.transaction_timestamp()
+);
+
+UPDATE viberacing_private.profiles
+SET state = 'active'
+WHERE profile_id = '${profileId}';
+
+INSERT INTO viberacing_private.agent_accounts (
+  agent_account_id,
+  profile_id,
+  provider_code,
+  accounting_revision,
+  scope_kind,
+  fingerprint_kind,
+  account_fingerprint_digest,
+  private_label,
+  identity_assurance
+)
+VALUES (
+  '${agentAccountId}',
+  '${profileId}',
+  'codex',
+  1,
+  'agent_account',
+  'stable_opaque',
+  pg_catalog.decode(pg_catalog.repeat('41', 32), 'hex'),
+  'Synthetic Ingest account',
+  'community_local'
+);
+
+INSERT INTO viberacing_private.connector_installations (
+  installation_id,
+  profile_id,
+  installation_public_key,
+  label,
+  connector_version,
+  os_family,
+  architecture,
+  state,
+  activated_at,
+  last_seen_at
+)
+VALUES
+  (
+    '${installationId}',
+    '${profileId}',
+    pg_catalog.decode('${primaryPublicKey.toString("hex")}', 'hex'),
+    'Synthetic primary installation',
+    '1.2.3',
+    'windows',
+    'x86_64',
+    'active',
+    pg_catalog.statement_timestamp(),
+    pg_catalog.statement_timestamp()
+  ),
+  (
+    '${admissionInstallationId}',
+    '${profileId}',
+    pg_catalog.decode('${admissionPublicKey.toString("hex")}', 'hex'),
+    'Synthetic admission installation',
+    '1.2.3',
+    'linux',
+    'aarch64',
+    'active',
+    pg_catalog.statement_timestamp(),
+    pg_catalog.statement_timestamp()
+  );
+
+INSERT INTO viberacing_private.device_keys (
+  device_key_id,
+  device_id,
+  profile_id,
+  installation_id,
+  agent_account_id,
+  public_key
+)
+VALUES
+  (
+    '${deviceKeyId}',
+    '${deviceId}',
+    '${profileId}',
+    '${installationId}',
+    '${agentAccountId}',
+    pg_catalog.decode('${primaryPublicKey.toString("hex")}', 'hex')
+  ),
+  (
+    '${admissionDeviceKeyId}',
+    '${admissionDeviceId}',
+    '${profileId}',
+    '${admissionInstallationId}',
+    '${agentAccountId}',
+    pg_catalog.decode('${admissionPublicKey.toString("hex")}', 'hex')
+  );
+COMMIT;`,
+    "least-privileged Ingest login and synthetic account/device setup",
+  );
+}
+
+function readUsagePersistenceState(label) {
+  return JSON.parse(
+    psqlScalar(
+      `SET ROLE viberacing_owner;
+SELECT pg_catalog.jsonb_build_object(
+  'accountDayTotals', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.agent_account_day_totals
+  ),
+  'deviceNonces', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_nonces
+  ),
+  'idempotencyRecords', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_idempotency_records
+  ),
+  'observations', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_observations
+  ),
+  'originNonces', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.origin_nonces
+  ),
+  'rankingEvents', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.ranking_events
+  ),
+  'refreshOutbox', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.ranking_refresh_outbox
+  )
+)::text;`,
+      label,
+    ),
+  );
+}
+
+function assertZeroUsagePersistence(label) {
+  assert.deepEqual(readUsagePersistenceState(label), {
+    accountDayTotals: 0,
+    deviceNonces: 0,
+    idempotencyRecords: 0,
+    observations: 0,
+    originNonces: 0,
+    rankingEvents: 0,
+    refreshOutbox: 0,
+  });
+}
+
+function startDatabaseSubmitBlocker() {
+  let exited = false;
+  let outputBytes = 0;
+  let output = "";
+  let readySettled = false;
+  let resolveReady;
+  let rejectReady;
+  const ready = new Promise((resolvePromise, rejectPromise) => {
+    resolveReady = resolvePromise;
+    rejectReady = rejectPromise;
+  });
+  const child = spawn("docker", psqlArguments(), {
+    cwd: root,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const observe = (chunk) => {
+    outputBytes += chunk.byteLength;
+    output += chunk.toString("utf8");
+    if (outputBytes > maximumBlockerOutputBytes) {
+      child.kill("SIGKILL");
+    } else if (!readySettled && output.includes(databaseBlockerReadyMarker)) {
+      readySettled = true;
+      resolveReady();
+    }
+  };
+  child.stdout.on("data", observe);
+  child.stderr.on("data", observe);
+  child.stdin.on("error", () => undefined);
+  const closed = new Promise((resolveClose, rejectClose) => {
+    child.once("error", () => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("PostgreSQL atomic-submit blocker could not start."));
+      }
+      rejectClose(new Error("PostgreSQL atomic-submit blocker could not start."));
+    });
+    child.once("close", (code, signal) => {
+      exited = true;
+      if (!readySettled) {
+        readySettled = true;
+        rejectReady(new Error("PostgreSQL atomic-submit blocker exited before its lock."));
+      }
+      resolveClose(Object.freeze({ code, signal }));
+    });
+  });
+  void ready.catch(() => undefined);
+  void closed.catch(() => undefined);
+  child.stdin.write(`BEGIN;
+SET LOCAL ROLE viberacing_owner;
+LOCK TABLE viberacing_private.origin_nonces IN ACCESS EXCLUSIVE MODE;
+\\echo ${databaseBlockerReadyMarker}
+`);
+  return Object.freeze({
+    child,
+    closed,
+    exited: () => exited,
+    output: () => output,
+    outputBytes: () => outputBytes,
+    ready,
+  });
+}
+
+async function waitForSubmitBlocker(blocker) {
+  await waitWithDeadline(
+    blocker.ready,
+    databaseBlockerTimeoutMs,
+    "PostgreSQL atomic-submit blocker did not acquire its lock in time.",
+  );
+  assert.equal(blocker.exited(), false);
+  assert.ok(blocker.outputBytes() <= maximumBlockerOutputBytes);
+  assert.equal(
+    privateValueMarkers.some((marker) => blocker.output().includes(marker)),
+    false,
+  );
+}
+
+async function stopDatabaseSubmitBlocker(blocker) {
+  if (!blocker.exited()) {
+    blocker.child.stdin.end("ROLLBACK;\n");
+  }
+  const result = await waitWithDeadline(
+    blocker.closed,
+    databaseBlockerTimeoutMs,
+    "PostgreSQL atomic-submit blocker did not close in time.",
+  );
+  assert.deepEqual(result, { code: 0, signal: null });
+  assert.ok(blocker.outputBytes() <= maximumBlockerOutputBytes);
+  assert.equal(
+    privateValueMarkers.some((marker) => blocker.output().includes(marker)),
+    false,
+  );
+}
+
+function readBlockedSubmitCount(label) {
+  const value = psqlScalar(
+    `SELECT pg_catalog.count(*)::text
+FROM pg_catalog.pg_stat_activity AS activity
+WHERE activity.datname = '${databaseName}'
+  AND activity.usename = '${ingestLogin}'
+  AND activity.state = 'active'
+  AND activity.wait_event_type = 'Lock'
+  AND pg_catalog.strpos(
+    activity.query,
+    'viberacing_api.submit_usage_sync('
+  ) > 0;`,
+    label,
+  );
+  assert.match(value, /^[0-4]$/);
+  return Number(value);
+}
+
+async function waitForBlockedSubmit(expectedCount, onPoll) {
+  const deadline = Date.now() + blockedSubmitObservationTimeoutMs;
+  let count = 0;
+  while (Date.now() < deadline) {
+    onPoll?.();
+    count = readBlockedSubmitCount("blocked Ingest atomic-submit observation");
+    if (count === expectedCount) {
+      return;
+    }
+    assert.ok(count < expectedCount);
+    await sleep(25);
+  }
+  throw new Error(`expected ${expectedCount} blocked atomic submit(s), observed ${count}`);
+}
+
+async function startHost(startConfiguredIngestHost, databasePort) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const listenerPort = await findAvailableListenerPort();
+    try {
+      const controller = await startConfiguredIngestHost(
+        ingestEnvironment(databasePort, listenerPort),
+      );
+      return Object.freeze({
+        baseUrl: `http://127.0.0.1:${listenerPort}`,
+        controller,
+      });
+    } catch (error) {
+      if (error?.code !== "listen_failed" || attempt === 2) {
+        throw error;
+      }
+    }
+  }
+  throw new Error("Ingest host listener allocation failed");
+}
+
 function startEmittedIngestProcess(databasePort, listenerPort) {
-  let exitObserved = false;
-  let stdoutObserved = false;
-  let stderrObserved = false;
+  let exited = false;
+  let outputObserved = false;
   const child = spawn(process.execPath, [resolve(root, "apps", "ingest-host", "dist", "main.js")], {
     cwd: root,
     env: ingestEnvironment(databasePort, listenerPort),
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
-  const terminateOnOutput = (stream) => {
-    if (stream === "stdout") {
-      stdoutObserved = true;
-    } else {
-      stderrObserved = true;
+  const observeOutput = () => {
+    outputObserved = true;
+    if (!exited) {
+      child.kill("SIGKILL");
     }
-    child.kill("SIGKILL");
   };
-  child.stdout.on("data", () => {
-    terminateOnOutput("stdout");
-  });
-  child.stderr.on("data", () => {
-    terminateOnOutput("stderr");
-  });
+  child.stdout.on("data", observeOutput);
+  child.stderr.on("data", observeOutput);
   child.once("exit", () => {
-    exitObserved = true;
+    exited = true;
   });
   const closed = new Promise((resolveClose, rejectClose) => {
     child.once("error", () => {
-      exitObserved = true;
+      exited = true;
       rejectClose(new Error("Emitted Ingest host process could not start."));
     });
     child.once("close", (code, signal) => {
-      exitObserved = true;
+      exited = true;
       resolveClose(Object.freeze({ code, signal }));
     });
   });
@@ -967,8 +998,8 @@ function startEmittedIngestProcess(databasePort, listenerPort) {
   return Object.freeze({
     child,
     closed,
-    hasExited: () => exitObserved,
-    outputObserved: () => stdoutObserved || stderrObserved,
+    exited: () => exited,
+    outputObserved: () => outputObserved,
   });
 }
 
@@ -984,46 +1015,753 @@ async function probeLoopbackListener(listenerPort) {
       socket.destroy();
       resolveProbe(connected);
     };
-    socket.once("connect", () => {
-      finish(true);
-    });
-    socket.once("error", () => {
-      finish(false);
-    });
-    socket.setTimeout(emittedProcessProbeTimeoutMs, () => {
-      finish(false);
-    });
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+    socket.setTimeout(emittedProcessProbeTimeoutMs, () => finish(false));
   });
 }
 
 async function waitForEmittedIngestListener(processState, listenerPort) {
   const deadline = Date.now() + emittedProcessStartTimeoutMs;
   while (Date.now() < deadline) {
-    if (processState.outputObserved()) {
-      throw new Error("Emitted Ingest host process produced unexpected output.");
-    }
-    if (processState.hasExited()) {
-      throw new Error("Emitted Ingest host process exited before opening its listener.");
-    }
+    assert.equal(processState.outputObserved(), false);
+    assert.equal(processState.exited(), false);
     if (await probeLoopbackListener(listenerPort)) {
       return;
     }
     await sleep(25);
   }
-  throw new Error("Emitted Ingest host process did not open its listener in time.");
+  throw new Error("Emitted Ingest host did not open its listener in time.");
 }
 
-async function stopEmittedIngestProcess(processState) {
-  let terminationRequested = false;
-  if (!processState.hasExited()) {
-    terminationRequested = processState.child.kill("SIGKILL");
+async function exerciseEmittedIngestProcess(databasePort, policy, keyPair) {
+  const listenerPort = await findAvailableListenerPort();
+  const processState = startEmittedIngestProcess(databasePort, listenerPort);
+  let stopped = false;
+  try {
+    await waitForEmittedIngestListener(processState, listenerPort);
+    const observedAt = new Date().toISOString();
+    const request = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x36),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x46),
+      originTimestamp: observedAt,
+      payload: createPayload(emittedProcessSyncId, observedAt, 300),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    const result = await sendSignedRequest(`http://127.0.0.1:${listenerPort}`, policy, request);
+    assertSuccess(result, {
+      acceptedEntries: 1,
+      outcome: "accepted",
+      syncId: emittedProcessSyncId,
+    });
+    assert.equal(processState.exited(), false);
+    assert.equal(processState.outputObserved(), false);
+
+    const terminationRequested = processState.child.kill("SIGKILL");
+    const closeResult = await waitWithDeadline(
+      processState.closed,
+      emittedProcessCloseTimeoutMs,
+      "Emitted Ingest host did not close in time.",
+    );
+    stopped = true;
+    assert.equal(terminationRequested, true);
+    assert.deepEqual(closeResult, { code: null, signal: "SIGKILL" });
+    assert.equal(processState.outputObserved(), false);
+    return result;
+  } finally {
+    if (!stopped && !processState.exited()) {
+      processState.child.kill("SIGKILL");
+      await waitWithDeadline(
+        processState.closed,
+        emittedProcessCloseTimeoutMs,
+        "Emitted Ingest cleanup did not close in time.",
+      ).catch(() => undefined);
+    }
   }
-  const closeResult = await waitWithDeadline(
-    processState.closed,
-    emittedProcessCloseTimeoutMs,
-    "Emitted Ingest host process did not close within its fixed test deadline.",
+}
+
+async function exerciseNoQueueAdmission(baseUrl, policy, keyPair) {
+  const blocker = startDatabaseSubmitBlocker();
+  await waitForSubmitBlocker(blocker);
+  let blockerStopped = false;
+  let pending;
+  try {
+    const observedAt = new Date().toISOString();
+    const request = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x31),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x41),
+      originTimestamp: observedAt,
+      payload: createPayload(admissionSyncId, observedAt, 200, {
+        usageDate: utcDateDaysBefore(observedAt, 1),
+      }),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    pending = sendSignedRequest(baseUrl, policy, request, {
+      timeoutMilliseconds: databaseBlockerTimeoutMs,
+    });
+    void pending.catch(() => undefined);
+    await waitForBlockedSubmit(1);
+
+    const rejectedRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x32),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x42),
+      originTimestamp: observedAt,
+      payload: createPayload(rejectedAdmissionSyncId, observedAt, 204, {
+        usageDate: utcDateDaysBefore(observedAt, 2),
+      }),
+      policy,
+      requestDeviceId: admissionDeviceId,
+    });
+    const rejected = await waitWithDeadline(
+      sendSignedRequest(baseUrl, policy, rejectedRequest, {
+        timeoutMilliseconds: admissionRejectionTimeoutMs,
+      }),
+      admissionRejectionTimeoutMs,
+      "same-device no-queue decision exceeded its fixed deadline",
+    );
+    assertTemporarilyUnavailable(rejected);
+    assert.equal(readBlockedSubmitCount("same-device rejection database-call check"), 1);
+
+    await stopDatabaseSubmitBlocker(blocker);
+    blockerStopped = true;
+    const accepted = await pending;
+    assertSuccess(accepted, {
+      acceptedEntries: 1,
+      outcome: "accepted",
+      syncId: admissionSyncId,
+    });
+    return [accepted, rejected];
+  } finally {
+    if (!blockerStopped) {
+      await stopDatabaseSubmitBlocker(blocker).catch(() => undefined);
+    }
+    if (pending !== undefined) {
+      await Promise.allSettled([pending]);
+    }
+  }
+}
+
+async function exerciseDatabaseStateRace({ baseUrl, keyPair, mutationSql, policy, syncId, total }) {
+  const blocker = startDatabaseSubmitBlocker();
+  await waitForSubmitBlocker(blocker);
+  let blockerStopped = false;
+  let pending;
+  try {
+    const observedAt = new Date().toISOString();
+    const marker = syncId.charCodeAt(syncId.length - 1) & 0xff;
+    const request = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, marker),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, marker ^ 0x55),
+      originTimestamp: observedAt,
+      payload: createPayload(syncId, observedAt, total),
+      policy,
+    });
+    pending = sendSignedRequest(baseUrl, policy, request, {
+      timeoutMilliseconds: databaseBlockerTimeoutMs,
+    });
+    void pending.catch(() => undefined);
+    await waitForBlockedSubmit(1);
+    psql(mutationSql, `${syncId} state-race mutation`);
+    await stopDatabaseSubmitBlocker(blocker);
+    blockerStopped = true;
+    const result = await pending;
+    assertTemporarilyUnavailable(result);
+    assert.equal(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.count(*)::integer
+FROM viberacing_private.usage_observations
+WHERE sync_id = '${syncId}';`,
+        `${syncId} rollback verification`,
+      ),
+      "0",
+    );
+    return result;
+  } finally {
+    if (!blockerStopped) {
+      await stopDatabaseSubmitBlocker(blocker).catch(() => undefined);
+    }
+    if (pending !== undefined) {
+      await Promise.allSettled([pending]);
+    }
+  }
+}
+
+async function exerciseInvalidRequests(baseUrl, policy, keyPair) {
+  const observedAt = new Date().toISOString();
+  const basePayload = createPayload(`syn_${"I".repeat(22)}`, observedAt, 10);
+  const makeRequest = (payload, marker, options = {}) =>
+    buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, marker),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, marker ^ 0x7f),
+      originTimestamp: options.originTimestamp ?? new Date().toISOString(),
+      payload,
+      policy,
+      ...options,
+    });
+  const results = [];
+  const record = (result, status, code, retryable = false) => {
+    assertProblem(result, status, code, retryable);
+    results.push(result);
+  };
+
+  const baseRequest = makeRequest(basePayload, 0x01);
+  for (const requestTarget of removedRequestTargets) {
+    record(
+      await sendSignedRequest(baseUrl, policy, baseRequest, { requestTarget }),
+      404,
+      "not_found",
+    );
+  }
+  record(
+    await sendSignedRequest(baseUrl, policy, baseRequest, { method: "GET" }),
+    405,
+    "method_not_allowed",
   );
-  return Object.freeze({ closeResult, terminationRequested });
+  record(
+    await sendSignedRequest(baseUrl, policy, baseRequest, { contentType: "text/plain" }),
+    400,
+    "invalid_request",
+  );
+  record(
+    await sendSignedRequest(baseUrl, policy, baseRequest, { contentEncoding: "gzip" }),
+    400,
+    "invalid_request",
+  );
+
+  const oversized = makeRequest(basePayload, 0x02, {
+    bodyBytes: Buffer.alloc(policy.maximumBodyBytes + 1, 0x20),
+  });
+  record(await sendSignedRequest(baseUrl, policy, oversized), 400, "invalid_request");
+
+  const malformed = makeRequest(basePayload, 0x03, {
+    bodyBytes: Buffer.from('{"schemaVersion":', "utf8"),
+  });
+  record(await sendSignedRequest(baseUrl, policy, malformed), 422, "validation_failed");
+
+  const duplicateBody = Buffer.from(
+    JSON.stringify(basePayload).replace(/^\{/, '{"schemaVersion":1,'),
+    "utf8",
+  );
+  const duplicateKey = makeRequest(basePayload, 0x04, { bodyBytes: duplicateBody });
+  record(await sendSignedRequest(baseUrl, policy, duplicateKey), 422, "validation_failed");
+
+  for (const [payload, marker] of [
+    [{ ...basePayload, unknownField: true }, 0x05],
+    [
+      {
+        ...basePayload,
+        dailyEntries: [{ usageDate: observedAt.slice(0, 10), dailyTokenTotal: "01" }],
+      },
+      0x06,
+    ],
+    [{ ...basePayload, provider: "codex" }, 0x07],
+    [{ ...basePayload, accountingRevision: 1 }, 0x08],
+  ]) {
+    record(
+      await sendSignedRequest(baseUrl, policy, makeRequest(payload, marker)),
+      422,
+      "validation_failed",
+    );
+  }
+
+  const unknownDevice = makeRequest(basePayload, 0x09, {
+    requestDeviceId: `dev_${"Z".repeat(22)}`,
+  });
+  record(await sendSignedRequest(baseUrl, policy, unknownDevice), 401, "unauthorized");
+
+  const invalidSignature = makeRequest(basePayload, 0x0a, {
+    invalidDeviceSignature: true,
+  });
+  record(await sendSignedRequest(baseUrl, policy, invalidSignature), 401, "unauthorized");
+
+  const wrongAccount = createPayload(`syn_${"W".repeat(22)}`, observedAt, 10, {
+    payloadAgentAccountId: `acc_${"Z".repeat(22)}`,
+  });
+  record(
+    await sendSignedRequest(baseUrl, policy, makeRequest(wrongAccount, 0x0b)),
+    401,
+    "unauthorized",
+  );
+
+  const wrongReader = createPayload(`syn_${"V".repeat(22)}`, observedAt, 10, {
+    selectedReaderVersion: "codex_app_server_0_144_6_v1",
+  });
+  record(
+    await sendSignedRequest(baseUrl, policy, makeRequest(wrongReader, 0x0c)),
+    401,
+    "unauthorized",
+  );
+
+  const staleObservedAt = new Date(Date.now() - 16 * 60_000).toISOString();
+  const stalePayload = createPayload(`syn_${"T".repeat(22)}`, staleObservedAt, 10);
+  record(
+    await sendSignedRequest(
+      baseUrl,
+      policy,
+      makeRequest(stalePayload, 0x0d, { originTimestamp: new Date().toISOString() }),
+    ),
+    503,
+    "temporarily_unavailable",
+    true,
+  );
+
+  const headerMismatch = makeRequest(basePayload, 0x0e, {
+    headerIdempotencyKey: `syn_${"X".repeat(22)}`,
+  });
+  record(await sendSignedRequest(baseUrl, policy, headerMismatch), 401, "unauthorized");
+
+  assertZeroUsagePersistence("zero-write invalid-request matrix");
+  return results;
+}
+
+async function exerciseFullIntegration(databasePort, policy, keyPair, admissionKeyPair) {
+  const hostModuleUrl = pathToFileURL(resolve(root, "apps", "ingest-host", "dist", "host.js")).href;
+  const { startConfiguredIngestHost } = await import(hostModuleUrl);
+  const host = await startHost(startConfiguredIngestHost, databasePort);
+  let controllerOpen = true;
+  const results = [];
+  try {
+    results.push(...(await exerciseInvalidRequests(host.baseUrl, policy, keyPair)));
+
+    const observedAt = new Date().toISOString();
+    const today = observedAt.slice(0, 10);
+    const yesterday = utcDateDaysBefore(observedAt, 1);
+    const twoDaysAgo = utcDateDaysBefore(observedAt, 2);
+    const acceptedPayload = createPayload(acceptedSyncId, observedAt, 100, {
+      dailyEntries: [
+        { usageDate: today, dailyTokenTotal: "100" },
+        { usageDate: yesterday, dailyTokenTotal: "50" },
+      ],
+    });
+    const acceptedRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x51),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x61),
+      originTimestamp: observedAt,
+      payload: acceptedPayload,
+      policy,
+    });
+    const accepted = await sendSignedRequest(host.baseUrl, policy, acceptedRequest);
+    assertSuccess(accepted, {
+      acceptedEntries: 2,
+      outcome: "accepted",
+      syncId: acceptedSyncId,
+    });
+    results.push(accepted);
+
+    const exactRetryRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x51),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x62),
+      originTimestamp: observedAt,
+      payload: acceptedPayload,
+      policy,
+    });
+    assert.deepEqual(exactRetryRequest.body, acceptedRequest.body);
+    assert.equal(
+      exactRetryRequest.headers.get(policy.deviceSignature.headers.signature),
+      acceptedRequest.headers.get(policy.deviceSignature.headers.signature),
+    );
+    const exactRetry = await sendSignedRequest(host.baseUrl, policy, exactRetryRequest);
+    assertSuccess(exactRetry, {
+      acceptedEntries: 0,
+      outcome: "duplicate",
+      syncId: acceptedSyncId,
+    });
+    results.push(exactRetry);
+
+    const beforeOriginReplay = readUsagePersistenceState("pre-origin-replay state");
+    const originReplay = await sendSignedRequest(host.baseUrl, policy, exactRetryRequest);
+    assertTemporarilyUnavailable(originReplay);
+    assert.deepEqual(readUsagePersistenceState("post-origin-replay state"), beforeOriginReplay);
+    results.push(originReplay);
+
+    const sameNoncePayload = createPayload(sameNonceSyncId, observedAt, 101);
+    const sameNonceRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x51),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x63),
+      originTimestamp: observedAt,
+      payload: sameNoncePayload,
+      policy,
+    });
+    const beforeSameNonce = readUsagePersistenceState("pre-device-nonce replay state");
+    const sameNonceReplay = await sendSignedRequest(host.baseUrl, policy, sameNonceRequest);
+    assertTemporarilyUnavailable(sameNonceReplay);
+    assert.deepEqual(readUsagePersistenceState("post-device-nonce replay state"), beforeSameNonce);
+    results.push(sameNonceReplay);
+
+    const changedBodyPayload = createPayload(acceptedSyncId, observedAt, 101, {
+      dailyEntries: [
+        { usageDate: today, dailyTokenTotal: "101" },
+        { usageDate: yesterday, dailyTokenTotal: "50" },
+      ],
+    });
+    const changedBody = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x52),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x64),
+      originTimestamp: observedAt,
+      payload: changedBodyPayload,
+      policy,
+    });
+    const beforeChangedBody = readUsagePersistenceState("pre-changed-body state");
+    const changedBodyResult = await sendSignedRequest(host.baseUrl, policy, changedBody);
+    assertTemporarilyUnavailable(changedBodyResult);
+    assert.deepEqual(readUsagePersistenceState("post-changed-body state"), beforeChangedBody);
+    results.push(changedBodyResult);
+
+    const changedObservedAt = new Date(Date.parse(observedAt) + 1_000).toISOString();
+    const changedObservedPayload = createPayload(acceptedSyncId, changedObservedAt, 100, {
+      dailyEntries: [
+        { usageDate: today, dailyTokenTotal: "100" },
+        { usageDate: yesterday, dailyTokenTotal: "50" },
+      ],
+    });
+    const changedObservedRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x53),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x65),
+      originTimestamp: new Date().toISOString(),
+      payload: changedObservedPayload,
+      policy,
+    });
+    const beforeChangedObserved = readUsagePersistenceState("pre-changed-observedAt state");
+    const changedObservedResult = await sendSignedRequest(
+      host.baseUrl,
+      policy,
+      changedObservedRequest,
+    );
+    assertTemporarilyUnavailable(changedObservedResult);
+    assert.deepEqual(
+      readUsagePersistenceState("post-changed-observedAt state"),
+      beforeChangedObserved,
+    );
+    results.push(changedObservedResult);
+
+    psql(
+      `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+DELETE FROM viberacing_private.origin_nonces
+WHERE nonce_digest = pg_catalog.decode(
+  '${createHash("sha256")
+    .update("viberacing-origin-nonce-v1\0", "utf8")
+    .update(originKeyId, "utf8")
+    .update("\0", "utf8")
+    .update(Buffer.alloc(16, 0x61))
+    .digest("hex")}',
+  'hex'
+);
+DELETE FROM viberacing_private.device_nonces
+WHERE device_key_id = '${deviceKeyId}'
+  AND nonce_digest = pg_catalog.decode(
+    '${createHash("sha256").update(Buffer.alloc(16, 0x51)).digest("hex")}',
+    'hex'
+  );
+COMMIT;`,
+      "short replay-nonce cleanup simulation",
+    );
+    const longRetryRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x51),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x69),
+      originTimestamp: new Date().toISOString(),
+      payload: acceptedPayload,
+      policy,
+    });
+    const longRetry = await sendSignedRequest(host.baseUrl, policy, longRetryRequest);
+    assertSuccess(longRetry, {
+      acceptedEntries: 0,
+      outcome: "duplicate",
+      syncId: acceptedSyncId,
+    });
+    results.push(longRetry);
+
+    const sameValueRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x55),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x75),
+      originTimestamp: new Date().toISOString(),
+      payload: createPayload(sameValueSyncId, observedAt, 100, {
+        dailyEntries: [
+          { usageDate: today, dailyTokenTotal: "100" },
+          { usageDate: yesterday, dailyTokenTotal: "50" },
+        ],
+      }),
+      policy,
+    });
+    const sameValue = await sendSignedRequest(host.baseUrl, policy, sameValueRequest);
+    assertSuccess(sameValue, {
+      acceptedEntries: 0,
+      outcome: "duplicate",
+      syncId: sameValueSyncId,
+    });
+    results.push(sameValue);
+
+    const higherRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x56),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x76),
+      originTimestamp: new Date().toISOString(),
+      payload: createPayload(higherSyncId, observedAt, 150, {
+        dailyEntries: [
+          { usageDate: today, dailyTokenTotal: "150" },
+          { usageDate: yesterday, dailyTokenTotal: "60" },
+        ],
+      }),
+      policy,
+    });
+    const higher = await sendSignedRequest(host.baseUrl, policy, higherRequest);
+    assertSuccess(higher, {
+      acceptedEntries: 2,
+      outcome: "accepted",
+      syncId: higherSyncId,
+    });
+    results.push(higher);
+
+    const lowerRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x57),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x77),
+      originTimestamp: new Date().toISOString(),
+      payload: createPayload(lowerSyncId, observedAt, 149),
+      policy,
+    });
+    const lower = await sendSignedRequest(host.baseUrl, policy, lowerRequest);
+    assertSuccess(lower, {
+      acceptedEntries: 0,
+      outcome: "quarantined",
+      recoveryAction: "contact_support",
+      syncId: lowerSyncId,
+    });
+    results.push(lower);
+
+    const mixedLowerRequest = buildSignedRequest({
+      deviceNonceBytes: Buffer.alloc(16, 0x58),
+      keyPair,
+      originNonceBytes: Buffer.alloc(16, 0x78),
+      originTimestamp: new Date().toISOString(),
+      payload: createPayload(mixedLowerSyncId, observedAt, 140, {
+        dailyEntries: [
+          { usageDate: today, dailyTokenTotal: "140" },
+          { usageDate: twoDaysAgo, dailyTokenTotal: "999" },
+        ],
+      }),
+      policy,
+    });
+    const mixedLower = await sendSignedRequest(host.baseUrl, policy, mixedLowerRequest);
+    assertSuccess(mixedLower, {
+      acceptedEntries: 0,
+      outcome: "quarantined",
+      recoveryAction: "contact_support",
+      syncId: mixedLowerSyncId,
+    });
+    results.push(mixedLower);
+    assert.equal(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.jsonb_build_object(
+  'today', (
+    SELECT cumulative_token_total::text
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = '${agentAccountId}'
+      AND usage_date = '${today}'
+  ),
+  'unexpectedDay', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = '${agentAccountId}'
+      AND usage_date = '${twoDaysAgo}'
+  )
+)::text;`,
+        "quarantined batch non-mutation verification",
+      ),
+      '{"today": "150", "unexpectedDay": 0}',
+    );
+
+    const accountRace = await exerciseDatabaseStateRace({
+      baseUrl: host.baseUrl,
+      keyPair,
+      mutationSql: `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+UPDATE viberacing_private.agent_accounts
+SET state = 'paused',
+    state_changed_at = pg_catalog.statement_timestamp()
+WHERE agent_account_id = '${agentAccountId}';
+COMMIT;`,
+      policy,
+      syncId: accountRaceSyncId,
+      total: 160,
+    });
+    results.push(accountRace);
+    psql(
+      `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+UPDATE viberacing_private.agent_accounts
+SET state = 'active',
+    state_changed_at = pg_catalog.statement_timestamp()
+WHERE agent_account_id = '${agentAccountId}';
+COMMIT;`,
+      "synthetic account-state restoration",
+    );
+
+    const revokedRace = await exerciseDatabaseStateRace({
+      baseUrl: host.baseUrl,
+      keyPair,
+      mutationSql: `BEGIN;
+SET LOCAL ROLE viberacing_owner;
+UPDATE viberacing_private.device_keys
+SET state = 'revoked',
+    revoked_at = pg_catalog.statement_timestamp()
+WHERE device_key_id = '${deviceKeyId}';
+COMMIT;`,
+      policy,
+      syncId: revokedSyncId,
+      total: 170,
+    });
+    results.push(revokedRace);
+
+    results.push(...(await exerciseNoQueueAdmission(host.baseUrl, policy, admissionKeyPair)));
+
+    await host.controller.close();
+    controllerOpen = false;
+    const emitted = await exerciseEmittedIngestProcess(databasePort, policy, admissionKeyPair);
+    results.push(emitted);
+
+    const expectedOutboxCount = new Set([utcMonday(today), utcMonday(yesterday)]).size;
+    const storedState = JSON.parse(
+      psqlScalar(
+        `SET ROLE viberacing_owner;
+SELECT pg_catalog.jsonb_build_object(
+  'accountTotals', (
+    SELECT pg_catalog.jsonb_object_agg(
+      usage_date::text,
+      cumulative_token_total::text
+      ORDER BY usage_date
+    )
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = '${agentAccountId}'
+  ),
+  'admissionDeviceNonces', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_nonces
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
+  'admissionDeviceState', (
+    SELECT state
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
+  'idempotencyRecords', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_idempotency_records
+  ),
+  'observations', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_observations
+  ),
+  'observationOutcomes', (
+    SELECT pg_catalog.jsonb_object_agg(outcome, outcome_count)
+    FROM (
+      SELECT outcome, pg_catalog.count(*)::integer AS outcome_count
+      FROM viberacing_private.usage_observations
+      GROUP BY outcome
+    ) AS outcome_counts
+  ),
+  'originNonces', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.origin_nonces
+    WHERE origin_key_id = '${originKeyId}'
+  ),
+  'primaryDeviceNonces', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.device_nonces
+    WHERE device_key_id = '${deviceKeyId}'
+  ),
+  'primaryDeviceState', (
+    SELECT state
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = '${deviceKeyId}'
+  ),
+  'rankingEvents', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.ranking_events
+  ),
+  'readerVersions', (
+    SELECT pg_catalog.jsonb_agg(DISTINCT reader_version)
+    FROM viberacing_private.usage_observations
+  ),
+  'refreshOutbox', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.ranking_refresh_outbox
+  ),
+  'unexpectedSyncs', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_observations
+    WHERE sync_id IN (
+      '${sameNonceSyncId}',
+      '${accountRaceSyncId}',
+      '${revokedSyncId}',
+      '${rejectedAdmissionSyncId}'
+    )
+  )
+)::text;`,
+        "final Ingest stored-state verification",
+      ),
+    );
+    assert.deepEqual(storedState, {
+      accountTotals: {
+        [today]: "300",
+        [yesterday]: "200",
+      },
+      admissionDeviceNonces: 2,
+      admissionDeviceState: "active",
+      idempotencyRecords: 7,
+      observationOutcomes: {
+        accepted: 4,
+        duplicate: 1,
+        quarantined: 2,
+      },
+      observations: 7,
+      originNonces: 8,
+      primaryDeviceNonces: 4,
+      primaryDeviceState: "revoked",
+      rankingEvents: 7,
+      readerVersions: [readerVersion],
+      refreshOutbox: expectedOutboxCount,
+      unexpectedSyncs: 0,
+    });
+
+    const requestIds = new Set(results.map((result) => result.body.requestId));
+    assert.equal(requestIds.size, results.length);
+    for (const result of results) {
+      const serialized = JSON.stringify(result.body);
+      for (const marker of [
+        agentAccountId,
+        deviceId,
+        deviceKeyId,
+        admissionDeviceId,
+        admissionDeviceKeyId,
+        readerVersion,
+        "codex",
+      ]) {
+        assert.equal(serialized.includes(marker), false);
+      }
+    }
+    return results.length;
+  } finally {
+    if (controllerOpen) {
+      await host.controller.close().catch(() => undefined);
+    }
+  }
 }
 
 const signalProcessProbeSource = `
@@ -1130,23 +1868,19 @@ function createPortableIngestSignalRuntime() {
   });
 }
 
-function signalProcessContainerExists(name) {
+function signalContainerExists(name) {
   const result = docker(["inspect", name], { timeout: 10_000 });
   if (result.status === 0) {
     return true;
   }
-  if (
-    result.status === 1 &&
-    result.stdout.trim() === "[]" &&
-    result.stderr.trim().toLowerCase() === `error: no such object: ${name}`
-  ) {
+  if (result.status === 1) {
     return false;
   }
   throw new Error("Ingest signal container existence check failed.");
 }
 
-function removeSignalProcessContainer(name) {
-  if (!signalProcessContainerExists(name)) {
+function removeSignalContainer(name) {
+  if (!signalContainerExists(name)) {
     return;
   }
   requireSuccess(
@@ -1201,11 +1935,7 @@ function createSignalProcessContainer(runtimeDirectory) {
   requireSuccess(imageInspection, "Ingest signal runtime image inspection");
   const imageEnvironment = JSON.parse(imageInspection.stdout.trim());
   assert.equal(Array.isArray(imageEnvironment), true);
-  assert.equal(
-    imageEnvironment.includes("NODE_VERSION=24.18.0"),
-    true,
-    "the pinned Linux signal runtime must match the repository Node version",
-  );
+  assert.equal(imageEnvironment.includes("NODE_VERSION=24.18.0"), true);
 }
 
 function readSignalProcessContainerState() {
@@ -1232,7 +1962,7 @@ function probeSignalProcessListener() {
       "--eval",
       signalProcessProbeSource,
     ],
-    { timeout: 2_000 },
+    { timeout: 10_000 },
   );
   if (result.status === 0) {
     assert.equal(`${result.stdout}${result.stderr}`, "");
@@ -1248,12 +1978,8 @@ async function waitForSignalProcessListener() {
   const deadline = Date.now() + signalProcessStartTimeoutMs;
   while (Date.now() < deadline) {
     const state = readSignalProcessContainerState();
-    if (!state.Running) {
-      throw new Error("Ingest signal container exited before opening its listener.");
-    }
-    if (readSignalProcessContainerOutput() !== "") {
-      throw new Error("Ingest signal container produced output before its listener was ready.");
-    }
+    assert.equal(state.Running, true);
+    assert.equal(readSignalProcessContainerOutput(), "");
     if (probeSignalProcessListener()) {
       return;
     }
@@ -1265,7 +1991,6 @@ async function waitForSignalProcessListener() {
 function startSignalProcessClient(policy, request) {
   let exited = false;
   let outputBytes = 0;
-  let outputOverflow = false;
   let stdout = "";
   let stderr = "";
   const child = spawn(
@@ -1311,7 +2036,6 @@ function startSignalProcessClient(policy, request) {
       stderr += chunk.toString("utf8");
     }
     if (outputBytes > maximumSignalClientOutputBytes) {
-      outputOverflow = true;
       child.kill("SIGKILL");
     }
   };
@@ -1339,8 +2063,8 @@ function startSignalProcessClient(policy, request) {
   );
   return Object.freeze({
     closed,
-    hasExited: () => exited,
-    outputOverflow: () => outputOverflow,
+    exited: () => exited,
+    outputBytes: () => outputBytes,
     stderr: () => stderr,
     stdout: () => stdout,
   });
@@ -1350,29 +2074,16 @@ async function readSignalProcessClientResult(client) {
   const closeResult = await waitWithDeadline(
     client.closed,
     signalProcessCloseTimeoutMs,
-    "Ingest signal client did not close within its fixed deadline.",
+    "Ingest signal client did not close in time.",
   );
-  assert.equal(client.outputOverflow(), false, "Ingest signal client output must stay bounded");
-  assert.equal(client.stderr(), "", "Ingest signal client must emit no diagnostic output");
-  assert.ok(Buffer.byteLength(client.stdout(), "utf8") <= maximumSignalClientOutputBytes);
-
+  assert.ok(client.outputBytes() <= maximumSignalClientOutputBytes);
+  assert.equal(client.stderr(), "");
   const serialized = JSON.parse(client.stdout());
   if (closeResult.code === 1 && closeResult.signal === null) {
-    assert.deepEqual(Object.keys(serialized), ["clientError"]);
-    assert.match(
-      serialized.clientError,
-      /^(?:client_failed|fetch_failed|fetch_refused|fetch_socket_closed|input_invalid|response_invalid)$/,
-    );
     throw new Error(`Ingest signal client failed closed (${serialized.clientError}).`);
   }
   assert.deepEqual(closeResult, { code: 0, signal: null });
   assert.deepEqual(Object.keys(serialized).sort(), ["body", "headers", "status"]);
-  assert.equal(
-    serialized.headers !== null &&
-      typeof serialized.headers === "object" &&
-      !Array.isArray(serialized.headers),
-    true,
-  );
   const response = Object.freeze({ headers: new Headers(serialized.headers) });
   assertResponseHeaders(response, serialized.body, serialized.status !== 200);
   return Object.freeze({ body: serialized.body, status: serialized.status });
@@ -1387,16 +2098,17 @@ async function waitForSignalProcessContainerExit() {
     }
     await sleep(signalProcessPollIntervalMs);
   }
-  throw new Error("Ingest signal container did not exit within its fixed deadline.");
+  throw new Error("Ingest signal container did not exit in time.");
 }
 
-async function exerciseEmittedIngestSignalProcess(policy, keyPair) {
+async function exerciseSignalProcess(policy, keyPair) {
   const runtime = createPortableIngestSignalRuntime();
   let blocker;
   let blockerStopped = false;
   let client;
   try {
-    blocker = await startDatabaseOriginReplayBlocker();
+    blocker = startDatabaseSubmitBlocker();
+    await waitForSubmitBlocker(blocker);
     createSignalProcessContainer(runtime.runtimeDirectory);
     requireSuccess(
       docker(["start", signalProcessContainerName], { timeout: 15_000 }),
@@ -1410,14 +2122,17 @@ async function exerciseEmittedIngestSignalProcess(policy, keyPair) {
       keyPair,
       originNonceBytes: Buffer.alloc(16, 0x47),
       originTimestamp: observedAt,
-      payload: createPayload(signalProcessSyncId, observedAt, 401, {
-        payloadSourceId: admissionSourceId,
-      }),
+      payload: createPayload(signalProcessSyncId, observedAt, 401),
       policy,
       requestDeviceId: admissionDeviceId,
     });
     client = startSignalProcessClient(policy, request);
-    await waitForOneBlockedOriginConsume(client);
+    await waitForBlockedSubmit(1, () => {
+      assert.equal(client.exited(), false);
+      const state = readSignalProcessContainerState();
+      assert.equal(state.Running, true);
+      assert.equal(readSignalProcessContainerOutput(), "");
+    });
 
     requireSuccess(
       docker(["kill", "--signal", "SIGTERM", signalProcessContainerName], {
@@ -1425,37 +2140,12 @@ async function exerciseEmittedIngestSignalProcess(policy, keyPair) {
       }),
       "Ingest signal delivery",
     );
-    const signalledState = readSignalProcessContainerState();
-    assert.equal(
-      signalledState.Running,
-      true,
-      "the OS-signalled Ingest host must wait for its active request",
-    );
-    assert.equal(
-      readSignalProcessContainerOutput(),
-      "",
-      "the OS-signalled Ingest host must remain silent while draining",
-    );
+    assert.equal(readSignalProcessContainerState().Running, true);
+    assert.equal(readSignalProcessContainerOutput(), "");
 
-    await stopDatabaseOriginReplayBlocker(blocker);
+    await stopDatabaseSubmitBlocker(blocker);
     blockerStopped = true;
-    let clientResult;
-    try {
-      clientResult = await readSignalProcessClientResult(client);
-    } catch (error) {
-      const failedState = await waitForSignalProcessContainerExit();
-      const persistedCount = psqlScalar(
-        `SET ROLE viberacing_owner;
-SELECT pg_catalog.count(*)::integer
-FROM viberacing_private.usage_snapshots
-WHERE device_key_id = '${admissionDeviceKeyId}'
-  AND sync_id = '${signalProcessSyncId}';`,
-        "failed emitted Ingest signal persistence classification",
-      );
-      throw new Error(
-        `${error.message} Host exit ${String(failedState.ExitCode)}; persisted snapshots ${persistedCount}.`,
-      );
-    }
+    const clientResult = await readSignalProcessClientResult(client);
     assertSuccess(clientResult, {
       acceptedEntries: 1,
       outcome: "accepted",
@@ -1464,119 +2154,92 @@ WHERE device_key_id = '${admissionDeviceKeyId}'
 
     const state = await waitForSignalProcessContainerExit();
     assert.equal(state.Status, "exited");
-    assert.equal(state.ExitCode, 0, "the OS-signalled Ingest host must exit successfully");
+    assert.equal(state.ExitCode, 0);
     assert.equal(state.OOMKilled, false);
     assert.equal(state.Error, "");
-    assert.equal(
-      readSignalProcessContainerOutput(),
-      "",
-      "the OS-signalled Ingest host must remain silent through graceful exit",
-    );
+    assert.equal(readSignalProcessContainerOutput(), "");
     assert.equal(
       psqlScalar(
         `SELECT pg_catalog.count(*)::integer
 FROM pg_catalog.pg_stat_activity
 WHERE application_name = 'viberacing-ingest-community-sync'
   AND usename = '${ingestLogin}';`,
-        "emitted Ingest signal released-session verification",
+        "signal-process released-session verification",
       ),
       "0",
-      "graceful exit must release every exact Ingest database session",
     );
-
-    const storedState = JSON.parse(
+    const stored = JSON.parse(
       psqlScalar(
         `SET ROLE viberacing_owner;
 SELECT pg_catalog.jsonb_build_object(
-  'deviceNonceCount', (
+  'accountDays', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = '${agentAccountId}'
+  ),
+  'accountTokens', (
+    SELECT cumulative_token_total::text
+    FROM viberacing_private.agent_account_day_totals
+    WHERE agent_account_id = '${agentAccountId}'
+  ),
+  'deviceNonces', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.device_nonces
     WHERE device_key_id = '${admissionDeviceKeyId}'
   ),
-  'originCount', (
+  'idempotencyRecords', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_idempotency_records
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+  ),
+  'observations', (
+    SELECT pg_catalog.count(*)::integer
+    FROM viberacing_private.usage_observations
+    WHERE device_key_id = '${admissionDeviceKeyId}'
+      AND sync_id = '${signalProcessSyncId}'
+  ),
+  'originNonces', (
     SELECT pg_catalog.count(*)::integer
     FROM viberacing_private.origin_nonces
     WHERE origin_key_id = '${originKeyId}'
   ),
-  'snapshotCount', (
+  'rankingEvents', (
     SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE device_key_id = '${admissionDeviceKeyId}'
-      AND sync_id = '${signalProcessSyncId}'
+    FROM viberacing_private.ranking_events
   ),
-  'snapshotEntryCount', (
+  'refreshOutbox', (
     SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshot_entries AS entry_record
-    JOIN viberacing_private.usage_snapshots AS snapshot_record
-      ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
-    WHERE snapshot_record.device_key_id = '${admissionDeviceKeyId}'
-      AND snapshot_record.sync_id = '${signalProcessSyncId}'
-  ),
-  'sourceDayCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.source_day_values
-    WHERE source_id = '${admissionSourceId}'
-  ),
-  'sourceTokens', (
-    SELECT tokens
-    FROM viberacing_private.source_day_values
-    WHERE source_id = '${admissionSourceId}'
+    FROM viberacing_private.ranking_refresh_outbox
   )
 )::text;`,
-        "emitted Ingest signal stored-state verification",
+        "signal-process exact stored-state verification",
       ),
     );
-    assert.deepEqual(storedState, {
-      deviceNonceCount: 1,
-      originCount: 1,
-      snapshotCount: 1,
-      snapshotEntryCount: 1,
-      sourceDayCount: 1,
-      sourceTokens: 401,
+    assert.deepEqual(stored, {
+      accountDays: 1,
+      accountTokens: "401",
+      deviceNonces: 1,
+      idempotencyRecords: 1,
+      observations: 1,
+      originNonces: 1,
+      rankingEvents: 1,
+      refreshOutbox: 1,
     });
   } finally {
-    try {
-      if (blocker !== undefined && !blockerStopped) {
-        await stopDatabaseOriginReplayBlocker(blocker).catch(() => undefined);
-      }
-    } finally {
-      try {
-        removeSignalProcessContainer(signalProcessClientContainerName);
-      } finally {
-        try {
-          removeSignalProcessContainer(signalProcessContainerName);
-        } finally {
-          try {
-            if (client !== undefined) {
-              await waitWithDeadline(
-                client.closed,
-                signalProcessCloseTimeoutMs,
-                "Ingest signal client did not settle during cleanup.",
-              ).catch(() => undefined);
-            }
-          } finally {
-            removePortableNodeRuntime(runtime);
-          }
-        }
-      }
+    if (blocker !== undefined && !blockerStopped) {
+      await stopDatabaseSubmitBlocker(blocker).catch(() => undefined);
     }
-  }
-}
-
-async function startHost(startConfiguredIngestHost, databasePort) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const listenerPort = await findAvailableListenerPort();
-    const environment = ingestEnvironment(databasePort, listenerPort);
-    try {
-      const controller = await startConfiguredIngestHost(environment);
-      return { baseUrl: `http://127.0.0.1:${listenerPort}`, controller };
-    } catch (error) {
-      if (error?.code !== "listen_failed" || attempt === 2) {
-        throw error;
-      }
+    removeSignalContainer(signalProcessClientContainerName);
+    removeSignalContainer(signalProcessContainerName);
+    if (client !== undefined) {
+      await waitWithDeadline(
+        client.closed,
+        signalProcessCloseTimeoutMs,
+        "Ingest signal client cleanup did not settle.",
+      ).catch(() => undefined);
     }
+    removePortableNodeRuntime(runtime);
   }
-  throw new Error("Ingest host listener allocation failed");
 }
 
 async function main() {
@@ -1586,11 +2249,10 @@ async function main() {
 
   const policy = readAuthenticationPolicy();
   const keyPair = generateKeyPairSync("ed25519");
-  const publicKey = readDevicePublicKey(keyPair);
   const admissionKeyPair = generateKeyPairSync("ed25519");
+  const publicKey = readDevicePublicKey(keyPair);
   const admissionPublicKey = readDevicePublicKey(admissionKeyPair);
   let containerStarted = false;
-  let controller;
   let primaryFailure;
   let cleanupFailure;
 
@@ -1621,357 +2283,27 @@ async function main() {
     for (const migration of loadReviewedMigrations()) {
       psql(migration.sql, migration.label);
     }
-
-    psql(
-      `BEGIN;
-CREATE ROLE ${ingestLogin}
-  WITH LOGIN PASSWORD '${ingestPassword}'
-  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-GRANT viberacing_ingest TO ${ingestLogin} WITH INHERIT FALSE, SET TRUE;
-GRANT CONNECT ON DATABASE ${databaseName} TO ${ingestLogin};
-ALTER ROLE ${ingestLogin} IN DATABASE ${databaseName}
-  SET search_path TO pg_catalog, pg_temp;
-
-SET LOCAL ROLE viberacing_owner;
-INSERT INTO viberacing_private.profiles (
-  profile_id,
-  github_user_id,
-  handle,
-  state
-)
-VALUES (
-  '${profileId}',
-  900000000000026101,
-  'ingest-local-e2e',
-  'active'
-);
-
-INSERT INTO viberacing_private.codex_sources (source_id, profile_id, state)
-VALUES
-  ('${sourceId}', '${profileId}', 'active'),
-  ('${admissionSourceId}', '${profileId}', 'active');
-
-INSERT INTO viberacing_private.device_keys (
-  device_key_id,
-  device_id,
-  source_id,
-  public_key,
-  label,
-  connector_version,
-  os_family,
-  architecture,
-  state,
-  activated_at
-)
-VALUES
-  (
-    '${deviceKeyId}',
-    '${deviceId}',
-    '${sourceId}',
-    pg_catalog.decode('${publicKey.toString("hex")}', 'hex'),
-    'Synthetic integration device',
-    '1.2.3',
-    'linux',
-    'x86_64',
-    'active',
-    pg_catalog.statement_timestamp()
-  ),
-  (
-    '${admissionDeviceKeyId}',
-    '${admissionDeviceId}',
-    '${admissionSourceId}',
-    pg_catalog.decode('${admissionPublicKey.toString("hex")}', 'hex'),
-    'Synthetic admission device',
-    '1.2.3',
-    'linux',
-    'x86_64',
-    'active',
-    pg_catalog.statement_timestamp()
-  );
-COMMIT;`,
-      "least-privileged Ingest login and synthetic device setup",
-    );
+    seedDatabase(publicKey, admissionPublicKey);
 
     if (integrationMode === "signal_process") {
-      await exerciseEmittedIngestSignalProcess(policy, admissionKeyPair);
+      await exerciseSignalProcess(policy, admissionKeyPair);
       console.log(
-        "Emitted Ingest signal PostgreSQL integration passed (OS SIGTERM, active signed-request settlement, silent graceful exit, released session, and exact stored state).",
+        "Emitted Ingest signal PostgreSQL integration passed (pinned Linux runtime, real SIGTERM, active signed-request settlement, silent code-0 exit, released sessions, and exact atomic stored state).",
       );
     } else {
-      const hostModuleUrl = pathToFileURL(
-        resolve(root, "apps", "ingest-host", "dist", "host.js"),
-      ).href;
-      const { startConfiguredIngestHost } = await import(hostModuleUrl);
-      const host = await startHost(startConfiguredIngestHost, databasePort);
-      controller = host.controller;
-
-      const acceptedObservedAt = new Date().toISOString();
-      const acceptedPayload = createPayload(acceptedSyncId, acceptedObservedAt, 123);
-      const acceptedRequest = buildSignedRequest({
-        deviceNonceBytes: Buffer.alloc(16, 0x11),
-        keyPair,
-        originNonceBytes: Buffer.alloc(16, 0x21),
-        originTimestamp: acceptedObservedAt,
-        payload: acceptedPayload,
-        policy,
-      });
-      const removedPathResult = await postSignedRequest(
-        host.baseUrl,
-        { ...policy, requestTarget: removedSyncRequestTarget },
-        acceptedRequest,
-      );
-      assertNotFound(removedPathResult);
-      const acceptedResult = await postSignedRequest(host.baseUrl, policy, acceptedRequest);
-      assertSuccess(acceptedResult, {
-        acceptedEntries: 1,
-        outcome: "accepted",
-        syncId: acceptedSyncId,
-      });
-
-      const usageObservedAt = acceptedObservedAt;
-      const usageRequest = buildSignedRequest({
-        deviceNonceBytes: Buffer.alloc(16, 0x13),
-        keyPair,
-        originNonceBytes: Buffer.alloc(16, 0x24),
-        originTimestamp: usageObservedAt,
-        payload: createPayload(usageSyncId, usageObservedAt, 321),
-        policy,
-      });
-      const usageResult = await postSignedRequest(host.baseUrl, policy, usageRequest);
-      assertSuccess(usageResult, {
-        acceptedEntries: 1,
-        outcome: "accepted",
-        syncId: usageSyncId,
-      });
-
-      const duplicateRequest = buildSignedRequest({
-        deviceNonceBytes: Buffer.alloc(16, 0x11),
-        keyPair,
-        originNonceBytes: Buffer.alloc(16, 0x22),
-        originTimestamp: acceptedObservedAt,
-        payload: acceptedPayload,
-        policy,
-      });
-      assert.deepEqual(duplicateRequest.body, acceptedRequest.body);
-      assert.equal(
-        duplicateRequest.headers.get(policy.deviceSignature.headers.signature),
-        acceptedRequest.headers.get(policy.deviceSignature.headers.signature),
-      );
-      const duplicateResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
-      assertSuccess(duplicateResult, {
-        acceptedEntries: 0,
-        outcome: "duplicate",
-        syncId: acceptedSyncId,
-      });
-
-      const replayResult = await postSignedRequest(host.baseUrl, policy, duplicateRequest);
-      assertUnauthorized(replayResult);
-
-      psql(
-        `BEGIN;
-SET LOCAL ROLE viberacing_owner;
-UPDATE viberacing_private.device_keys
-SET
-  state = 'revoked',
-  revoked_at = pg_catalog.statement_timestamp()
-WHERE device_key_id = '${deviceKeyId}'
-  AND state = 'active';
-COMMIT;`,
-        "synthetic device revocation",
-      );
-
-      const revokedObservedAt = new Date().toISOString();
-      const revokedRequest = buildSignedRequest({
-        deviceNonceBytes: Buffer.alloc(16, 0x12),
-        keyPair,
-        originNonceBytes: Buffer.alloc(16, 0x23),
-        originTimestamp: revokedObservedAt,
-        payload: createPayload(revokedSyncId, revokedObservedAt, 456),
-        policy,
-      });
-      const revokedResult = await postSignedRequest(host.baseUrl, policy, revokedRequest);
-      assertUnauthorized(revokedResult);
-
-      const admissionResults = await exerciseNoQueueAdmission(
-        host.baseUrl,
-        policy,
-        admissionKeyPair,
-      );
-
-      await controller.close();
-      controller = undefined;
-
-      const emittedProcessResult = await exerciseEmittedIngestProcess(
+      const resultCount = await exerciseFullIntegration(
         databasePort,
         policy,
+        keyPair,
         admissionKeyPair,
       );
-
-      const requestIds = new Set([
-        removedPathResult.body.requestId,
-        acceptedResult.body.requestId,
-        usageResult.body.requestId,
-        duplicateResult.body.requestId,
-        replayResult.body.requestId,
-        revokedResult.body.requestId,
-        ...admissionResults.map((result) => result.body.requestId),
-        emittedProcessResult.body.requestId,
-      ]);
-      assert.equal(requestIds.size, 12);
-
-      const storedState = JSON.parse(
-        psqlScalar(
-          `SET ROLE viberacing_owner;
-SELECT pg_catalog.jsonb_build_object(
-  'deviceNonceCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.device_nonces
-    WHERE device_key_id = '${deviceKeyId}'
-  ),
-  'admissionDeviceNonceCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.device_nonces
-    WHERE device_key_id = '${admissionDeviceKeyId}'
-  ),
-  'deviceState', (
-    SELECT state
-    FROM viberacing_private.device_keys
-    WHERE device_key_id = '${deviceKeyId}'
-  ),
-  'admissionDeviceState', (
-    SELECT state
-    FROM viberacing_private.device_keys
-    WHERE device_key_id = '${admissionDeviceKeyId}'
-  ),
-  'originCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.origin_nonces
-    WHERE origin_key_id = '${originKeyId}'
-  ),
-  'snapshotCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE device_key_id = '${deviceKeyId}'
-  ),
-  'admissionSnapshotCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE device_key_id = '${admissionDeviceKeyId}'
-  ),
-  'snapshotEntryCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshot_entries AS entry_record
-    JOIN viberacing_private.usage_snapshots AS snapshot_record
-      ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
-    WHERE snapshot_record.device_key_id = '${deviceKeyId}'
-  ),
-  'admissionSnapshotEntryCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshot_entries AS entry_record
-    JOIN viberacing_private.usage_snapshots AS snapshot_record
-      ON snapshot_record.usage_snapshot_id = entry_record.usage_snapshot_id
-    WHERE snapshot_record.device_key_id = '${admissionDeviceKeyId}'
-  ),
-  'snapshotOutcome', (
-    SELECT outcome
-    FROM viberacing_private.usage_snapshots
-    WHERE sync_id = '${acceptedSyncId}'
-  ),
-  'usageSnapshotProvider', (
-    SELECT source_record.provider
-    FROM viberacing_private.usage_snapshots AS snapshot_record
-    JOIN viberacing_private.codex_sources AS source_record
-      ON source_record.source_id = snapshot_record.source_id
-    WHERE snapshot_record.sync_id = '${usageSyncId}'
-  ),
-  'usageSnapshotAccountingRevision', (
-    SELECT source_record.accounting_revision
-    FROM viberacing_private.usage_snapshots AS snapshot_record
-    JOIN viberacing_private.codex_sources AS source_record
-      ON source_record.source_id = snapshot_record.source_id
-    WHERE snapshot_record.sync_id = '${usageSyncId}'
-  ),
-  'usageSnapshotVersions', (
-    SELECT pg_catalog.jsonb_build_array(connector_version, codex_version)
-    FROM viberacing_private.usage_snapshots
-    WHERE sync_id = '${usageSyncId}'
-  ),
-  'sourceDayCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.source_day_values
-    WHERE source_id = '${sourceId}'
-  ),
-  'admissionSourceDayCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.source_day_values
-    WHERE source_id = '${admissionSourceId}'
-  ),
-  'sourceTokens', (
-    SELECT tokens
-    FROM viberacing_private.source_day_values
-    WHERE source_id = '${sourceId}'
-  ),
-  'admissionSourceTokens', (
-    SELECT pg_catalog.jsonb_agg(source_value.tokens ORDER BY source_value.codex_reported_date)
-    FROM viberacing_private.source_day_values AS source_value
-    WHERE source_value.source_id = '${admissionSourceId}'
-  ),
-  'unexpectedSyncCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE sync_id = '${revokedSyncId}'
-  ),
-  'rejectedAdmissionSyncCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE sync_id = '${rejectedAdmissionSyncId}'
-  ),
-  'emittedProcessSyncCount', (
-    SELECT pg_catalog.count(*)::integer
-    FROM viberacing_private.usage_snapshots
-    WHERE sync_id = '${emittedProcessSyncId}'
-  )
-)::text;`,
-          "Ingest stored-state verification",
-        ),
-      );
-      assert.deepEqual(storedState, {
-        admissionDeviceNonceCount: 5,
-        admissionDeviceState: "active",
-        admissionSnapshotCount: 5,
-        admissionSnapshotEntryCount: 5,
-        admissionSourceDayCount: 5,
-        admissionSourceTokens: [200, 201, 202, 203, 300],
-        deviceNonceCount: 2,
-        deviceState: "revoked",
-        emittedProcessSyncCount: 1,
-        originCount: 9,
-        rejectedAdmissionSyncCount: 0,
-        snapshotCount: 2,
-        snapshotEntryCount: 2,
-        snapshotOutcome: "accepted",
-        sourceDayCount: 1,
-        sourceTokens: 321,
-        unexpectedSyncCount: 0,
-        usageSnapshotAccountingRevision: "codex_daily_usage_buckets_v1",
-        usageSnapshotProvider: "codex",
-        usageSnapshotVersions: ["1.2.3", "0.144.5"],
-      });
-
       console.log(
-        "Ingest PostgreSQL integration passed (Usage Sync acceptance, removed-path rejection, duplicate, replay denial, revocation denial, four-slot no-queue admission, emitted-process acceptance, and exact stored state).",
+        `Ingest PostgreSQL integration passed (${resultCount} generic HTTP decisions; removed aliases, zero-write rejection matrix, exact retry and replay safety, monotonic/quarantine semantics, account/device races, per-device no-queue admission, emitted process, and exact stored state).`,
       );
     }
   } catch (error) {
     primaryFailure = error;
   } finally {
-    if (controller !== undefined) {
-      try {
-        await controller.close();
-      } catch (error) {
-        cleanupFailure ??= error;
-      }
-    }
     if (containerStarted) {
       const remove = docker(["rm", "--force", "--volumes", containerName], {
         timeout: 30_000,

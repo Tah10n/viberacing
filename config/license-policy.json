@@ -51,6 +51,20 @@
     },
     {
       "kind": "github-action",
+      "identifier": "actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Protected connector candidate provenance and SPDX attestations"
+    },
+    {
+      "kind": "github-action",
+      "identifier": "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Seven-day upload of the unsigned connector candidate bundle"
+    },
+    {
+      "kind": "github-action",
       "identifier": "cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0",
       "declaredLicense": "Apache-2.0",
       "redistributed": false,

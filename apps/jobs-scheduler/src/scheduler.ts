@@ -1,6 +1,6 @@
 import {
-  createConfiguredCommunityMaintenanceRunner,
-  type ConfiguredCommunityMaintenanceRunner,
+  createConfiguredJobsMaintenanceRunner,
+  type ConfiguredJobsMaintenanceRunner,
 } from "@viberacing/jobs";
 
 import { resolveJobsSchedulerConfig, type JobsSchedulerConfig } from "./config.js";
@@ -17,7 +17,7 @@ const dependencyKeys = new Set([
 ]);
 const runnerKeys = new Set(["close", "execute"]);
 const scheduleKeys = new Set(["due"]);
-const maximumDueJobs = 18;
+const maximumDueJobs = 13;
 
 export const jobsSchedulerShutdownDeadlineMs = 35_000;
 
@@ -339,8 +339,8 @@ export async function startConfiguredJobsScheduler(
       clearInterval: (token: unknown) => {
         clearInterval(token as NodeJS.Timeout);
       },
-      createRunner: (): ConfiguredCommunityMaintenanceRunner =>
-        createConfiguredCommunityMaintenanceRunner(environment),
+      createRunner: (): ConfiguredJobsMaintenanceRunner =>
+        createConfiguredJobsMaintenanceRunner(environment),
       createSchedule: (): MaintenanceSchedule => createMaintenanceSchedule(),
       now: Date.now,
       setInterval: (handler: () => void, milliseconds: number) =>

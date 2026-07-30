@@ -1,60 +1,58 @@
 import {
   maximumCleanupBatchSize,
   maximumProfileDeletionPurgeBatchSize,
-  type CommunityMaintenanceJob,
+  type JobsMaintenanceJob,
 } from "@viberacing/jobs";
 
-const fiveMinutesMs = 5 * 60 * 1_000;
-const oneHourMs = 60 * 60 * 1_000;
-const oneDayMs = 24 * oneHourMs;
-const minimumSeasonStartMs = Date.UTC(1999, 11, 27);
+const oneMinuteMs = 60 * 1_000;
+const fiveMinutesMs = 5 * oneMinuteMs;
+const oneHourMs = 60 * oneMinuteMs;
 const minimumClockMs = Date.UTC(2000, 0, 3);
 const maximumClockExclusiveMs = Date.UTC(2100, 0, 4);
 
-// This catalog is ordered, not merely enumerated. Approval provenance must be redacted before
-// expired sessions and aged passkeys/devices can become eligible for physical deletion.
-const hourlyJobs: readonly CommunityMaintenanceJob[] = Object.freeze([
-  Object.freeze({ kind: "finalize_community_season_backlog" }),
-  Object.freeze({
-    batchSize: maximumProfileDeletionPurgeBatchSize,
-    kind: "purge_profile_deletions",
-  }),
-  Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_auth_state" }),
-  Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_ingest_state" }),
-  Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_pairing_state" }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_expired_car_recipe_proposals",
-  }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "redact_aged_pairing_approval_provenance",
-  }),
-  Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_sessions" }),
-  Object.freeze({ batchSize: maximumCleanupBatchSize, kind: "cleanup_expired_invites" }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_abandoned_enrollments",
-  }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_finalized_source_day_values",
-  }),
-  Object.freeze({
-    batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_terminal_deletion_jobs",
-  }),
+// This is an execution order, not only an inventory. Refresh runs before purge so a hidden or
+// deletion-pending profile leaves the current public snapshot first. Audit expiry precedes usage
+// history expiry, pairing expiry precedes auth/authority cleanup, and terminal deletion evidence is
+// retained after the primary purge.
+export const hourlyJobs: readonly JobsMaintenanceJob[] = Object.freeze([
+  Object.freeze({ kind: "ensure_current_season" }),
+  Object.freeze({ kind: "refresh_dirty_leaderboard" }),
+  Object.freeze({ kind: "finalize_due_season" }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
     kind: "cleanup_expired_audit_events",
   }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_aged_revoked_passkeys",
+    kind: "cleanup_expired_usage_nonces",
   }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_aged_revoked_devices",
+    kind: "cleanup_expired_usage_history",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "cleanup_expired_pairing_state",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "cleanup_expired_auth_state",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "cleanup_aged_revoked_authority",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "cleanup_snapshot_history",
+  }),
+  Object.freeze({
+    batchSize: maximumProfileDeletionPurgeBatchSize,
+    kind: "purge_profile_deletions",
+  }),
+  Object.freeze({
+    batchSize: maximumCleanupBatchSize,
+    kind: "cleanup_terminal_deletion_jobs",
   }),
   Object.freeze({ kind: "reset_expired_pairing_request_windows" }),
 ]);
@@ -72,7 +70,7 @@ export class MaintenanceScheduleError extends Error {
 }
 
 export interface MaintenanceSchedule {
-  due(nowEpochMs: unknown): readonly CommunityMaintenanceJob[];
+  due(nowEpochMs: unknown): readonly JobsMaintenanceJob[];
 }
 
 function fail(): never {
@@ -91,65 +89,39 @@ function readClock(value: unknown): number {
   return value;
 }
 
-function utcMonday(nowEpochMs: number): number {
-  const now = new Date(nowEpochMs);
-  const daysSinceMonday = (now.getUTCDay() + 6) % 7;
-  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday);
-}
-
-function dateLabel(epochMs: number): string {
-  return new Date(epochMs).toISOString().slice(0, 10);
-}
-
 export function createMaintenanceSchedule(): MaintenanceSchedule {
   let previousClockMs: number | undefined;
+  let previousMinuteSlot: number | undefined;
   let previousFiveMinuteSlot: number | undefined;
   let previousHourSlot: number | undefined;
-  let previousFinalizationDay: string | undefined;
 
   return Object.freeze({
-    due(rawNowEpochMs: unknown): readonly CommunityMaintenanceJob[] {
+    due(rawNowEpochMs: unknown): readonly JobsMaintenanceJob[] {
       const nowEpochMs = readClock(rawNowEpochMs);
       if (previousClockMs !== undefined && nowEpochMs < previousClockMs) {
         fail();
       }
       previousClockMs = nowEpochMs;
 
-      const jobs: CommunityMaintenanceJob[] = [];
-      const currentMondayMs = utcMonday(nowEpochMs);
-      const finalizationDay = dateLabel(nowEpochMs);
-      const latestDueSeasonMs =
-        currentMondayMs - (nowEpochMs >= currentMondayMs + 2 * oneDayMs ? 7 : 14) * oneDayMs;
-      if (
-        latestDueSeasonMs >= minimumSeasonStartMs &&
-        previousFinalizationDay !== finalizationDay
-      ) {
-        previousFinalizationDay = finalizationDay;
-        jobs.push(
-          Object.freeze({
-            kind: "finalize_community_season",
-            seasonStart: dateLabel(latestDueSeasonMs),
-          }),
-        );
-      }
-
-      const fiveMinuteSlot = Math.floor(nowEpochMs / fiveMinutesMs);
-      if (previousFiveMinuteSlot !== fiveMinuteSlot) {
-        previousFiveMinuteSlot = fiveMinuteSlot;
-        jobs.push(
-          Object.freeze({
-            kind: "refresh_community_season",
-            seasonStart: dateLabel(currentMondayMs),
-          }),
-        );
-      }
-
       const hourSlot = Math.floor(nowEpochMs / oneHourMs);
+      const minuteSlot = Math.floor(nowEpochMs / oneMinuteMs);
+      const fiveMinuteSlot = Math.floor(nowEpochMs / fiveMinutesMs);
       if (previousHourSlot !== hourSlot) {
         previousHourSlot = hourSlot;
-        jobs.push(...hourlyJobs);
+        previousMinuteSlot = minuteSlot;
+        previousFiveMinuteSlot = fiveMinuteSlot;
+        return hourlyJobs;
       }
 
+      const jobs: JobsMaintenanceJob[] = [];
+      if (previousMinuteSlot !== minuteSlot) {
+        previousMinuteSlot = minuteSlot;
+        jobs.push(Object.freeze({ kind: "refresh_dirty_leaderboard" }));
+      }
+      if (previousFiveMinuteSlot !== fiveMinuteSlot) {
+        previousFiveMinuteSlot = fiveMinuteSlot;
+        jobs.push(Object.freeze({ kind: "finalize_due_season" }));
+      }
       return Object.freeze(jobs);
     },
   });

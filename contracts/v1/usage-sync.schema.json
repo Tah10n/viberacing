@@ -2,16 +2,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.viberacing.example/v1/usage-sync.schema.json",
   "title": "UsageSyncV1",
-  "description": "Bounded provider-neutral Community usage submitted by one source-bound device. Provider attribution, accounting revision, ranking, and trust fields are server-owned and intentionally absent.",
+  "description": "Bounded provider-neutral Community usage submitted by one AgentAccount-bound device. Provider attribution, accounting revision, ranking, and trust fields are server-owned and intentionally absent.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "sourceId",
+    "agentAccountId",
     "syncId",
     "observedAt",
     "clientVersion",
-    "agentVersion",
+    "readerVersion",
     "dailyEntries"
   ],
   "properties": {
@@ -21,11 +21,11 @@
       "minimum": 1,
       "maximum": 1
     },
-    "sourceId": {
+    "agentAccountId": {
       "type": "string",
       "minLength": 26,
       "maxLength": 26,
-      "pattern": "^src_[A-Za-z0-9_-]{22}$"
+      "pattern": "^acc_[A-Za-z0-9_-]{22}$"
     },
     "syncId": {
       "type": "string",
@@ -46,23 +46,23 @@
       "maxLength": 64,
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
     },
-    "agentVersion": {
+    "readerVersion": {
       "type": "string",
-      "minLength": 5,
+      "minLength": 3,
       "maxLength": 64,
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+      "pattern": "^[a-z][a-z0-9_]{2,63}$"
     },
     "dailyEntries": {
       "type": "array",
       "minItems": 1,
       "maxItems": 31,
-      "x-viberacing-uniqueBy": "reportedDate",
+      "x-viberacing-uniqueBy": "usageDate",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["reportedDate", "dailyTokenTotal"],
+        "required": ["usageDate", "dailyTokenTotal"],
         "properties": {
-          "reportedDate": {
+          "usageDate": {
             "type": "string",
             "minLength": 10,
             "maxLength": 10,
@@ -70,9 +70,10 @@
             "format": "date"
           },
           "dailyTokenTotal": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30,
+            "pattern": "^(?:0|[1-9][0-9]{0,29})$"
           }
         }
       }

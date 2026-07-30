@@ -17,7 +17,7 @@ describe("frontend lint policy", () => {
         'const legacy = require("sharp");',
         "void [sharp, lazy, legacy];",
       ].join("\n"),
-      { filePath: resolve(import.meta.dirname, "lib", "scoring.ts") },
+      { filePath: resolve(import.meta.dirname, "lib", "public-season.ts") },
     );
 
     const restrictions = result?.messages.filter(
@@ -38,7 +38,7 @@ describe("frontend lint policy", () => {
         'const legacy = require("@noble/ed25519");',
         "void [verifyAsync, lazy, legacy];",
       ].join("\n"),
-      { filePath: resolve(import.meta.dirname, "lib", "scoring.ts") },
+      { filePath: resolve(import.meta.dirname, "lib", "public-season.ts") },
     );
 
     const restrictedImports = result?.messages.filter(
@@ -64,7 +64,9 @@ describe("frontend lint policy", () => {
       "void [Pool, lazy, legacy];",
     ].join("\n");
     const results = await Promise.all([
-      eslint.lintText(source, { filePath: resolve(import.meta.dirname, "lib", "scoring.ts") }),
+      eslint.lintText(source, {
+        filePath: resolve(import.meta.dirname, "lib", "public-season.ts"),
+      }),
       eslint.lintText(source, {
         filePath: resolve(import.meta.dirname, "components", "race-experience.tsx"),
       }),
@@ -99,7 +101,7 @@ describe("frontend lint policy", () => {
       ].join("\n");
     const [serverResult, browserResult] = await Promise.all([
       eslint.lintText(source("@simplewebauthn/server"), {
-        filePath: resolve(import.meta.dirname, "lib", "scoring.ts"),
+        filePath: resolve(import.meta.dirname, "lib", "public-season.ts"),
       }),
       eslint.lintText(source("@simplewebauthn/browser"), {
         filePath: resolve(import.meta.dirname, "components", "race-experience.tsx"),
@@ -110,7 +112,8 @@ describe("frontend lint policy", () => {
       const restrictedImports = result?.messages.filter(
         ({ message, ruleId }) =>
           ruleId === "no-restricted-imports" &&
-          (message.includes("Only passkey-registration") || message.includes("Only passkey-setup")),
+          (message.includes("Only passkey-registration") ||
+            message.includes("Only browser-webauthn")),
       );
       const restrictedSyntax = result?.messages.filter(
         ({ message, ruleId }) => ruleId === "no-restricted-syntax" && message.includes("WebAuthn"),

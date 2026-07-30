@@ -209,9 +209,12 @@ packages. The historical ed25519-dalek keypair-oracle advisory affects pre-2.0 v
 affect 3.0.0; the historical SHA-2 0.9.7 miscomputation advisory is patched from 0.9.8 and does not
 affect 0.11.0. This is point-in-time evidence, not a permanent safety claim. Every dependency must
 be removed with its capability or re-reviewed on update, feature change, TLS/crypto-provider change,
-or supported-platform change. Automated RustSec/cargo-deny release enforcement, cross-platform
-binary and credential-store testing, SBOM generation, notice bundling, and binary audit remain
-required before connector distribution.
+or supported-platform change. The checked candidate builder now derives a path-free SPDX 2.3
+inventory from exact offline `cargo metadata --locked`, binds it to the Cargo lock digest and one
+versioned compatibility manifest, and mutation-tests checksums, privacy, release labeling, and
+reader-version drift. Hosted cross-platform binary and credential-store results, native platform
+signing, notice bundling, automated RustSec/cargo-deny enforcement, and binary audit remain required
+before connector distribution.
 
 The pull-request Node job performs the public-file scan first, installs the frozen npm graph without
 lifecycle scripts, and runs the bounded development gate. The `main` or manually dispatched Node job
@@ -240,6 +243,16 @@ permissions, no secrets, no writable cache, and bounded job timeouts.
 
 An action update is reviewed by comparing the old and new commits in the action's canonical
 repository. A version comment is informative; the SHA is authoritative.
+
+The manual `main`-only connector-candidate workflow uses
+`actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26` (`v4.1.0`) for GitHub Sigstore build
+provenance and SPDX attestations and
+`actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f` (`v7.0.0`) for a seven-day
+`UNSIGNED-CANDIDATE-*` bundle. The exact permissions, protected Environment name, five runner
+labels, step order, subjects, retention, and unsigned naming are policy- and mutation-checked. These
+first-party actions add a trusted hosted capability and require renewed source, release, permission,
+license, and workflow review on update. Their declaration and local policy pass are not a hosted
+attestation or native platform signature.
 
 The protected service workflow uses
 `cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0` (`v4.0.0`) only after its

@@ -17,9 +17,10 @@ import { createEnrollmentService } from "./enrollment-service";
 import type { RegisteredPasskey } from "./passkey-registration";
 import type { RecoveryCodeVerifier } from "./recovery-code";
 import type {
+  EnrollmentDatabaseAccountTargetChallenge,
+  EnrollmentDatabaseAccountTargetCompletion,
+  EnrollmentDatabaseAgentAccountPause,
   EnrollmentDatabaseLoginCompletion,
-  EnrollmentDatabaseAccountOverviewRequest,
-  EnrollmentDatabaseDeviceRevocation,
   EnrollmentDatabasePasskeyAddition,
   EnrollmentDatabasePasskeyAddChallenge,
   EnrollmentDatabasePasskeyChallenge,
@@ -31,26 +32,21 @@ import type {
   EnrollmentDatabaseProfileDeletionChallenge,
   EnrollmentDatabaseProfileVisibilityRequest,
   EnrollmentDatabaseProfileVisibilityUpdate,
+  EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
   EnrollmentDatabaseRecoveryCodeChallenge,
   EnrollmentDatabaseRecoveryCodeReplacement,
   EnrollmentDatabaseRecoveryCompletion,
   EnrollmentDatabaseRecoveryStart,
-  EnrollmentDatabaseSourcePause,
-  EnrollmentDatabaseSourceReactivation,
-  EnrollmentDatabaseSourceReactivationChallenge,
-  EnrollmentDatabaseSourceUnlink,
-  EnrollmentDatabaseSourceUnlinkChallenge,
-  EnrollmentDatabaseSourceDeviceInventoryRequest,
 } from "./pairing-database-pool";
 
 const now = new Date("2026-07-16T10:00:00.000Z");
+const profileHandle = "pixel_driver";
+const activeProfileId = "00000000-0000-4000-8000-000000000501";
 const config = resolveEnrollmentConfig({
   GITHUB_CLIENT_ID: "Ov23abcdefghijklmno",
   GITHUB_CLIENT_SECRET: "a".repeat(40),
   NODE_ENV: "test",
   SESSION_SECRET: Buffer.alloc(32, 0x31).toString("base64url"),
-  VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT: "6",
-  VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS: "600",
   VIBERACING_PUBLIC_ORIGIN: "https://race.example.com",
   VIBERACING_RECOVERY_ARGON2_MEMORY_KIB: "19456",
   VIBERACING_RECOVERY_ARGON2_PARALLELISM: "2",
@@ -61,28 +57,9 @@ const config = resolveEnrollmentConfig({
   WEBAUTHN_RP_ID: "race.example.com",
 });
 const join: JoinRequest = Object.freeze({
-  handle: "pixel_driver",
   inviteDigest: Buffer.alloc(32, 0x41).toString("base64url"),
-  inviteId: "00000000-0000-4000-8000-000000000501",
+  inviteId: activeProfileId,
   locale: "en",
-  motionPreference: "system",
-  streakVisible: false,
-  theme: "neon-night",
-});
-
-const derivePairingCode = vi.fn((code: unknown) => {
-  const primary = Buffer.alloc(32, 0x45);
-  const secondary = Buffer.alloc(32, 0x46);
-  const digests = Object.freeze([primary, secondary] as const);
-  return Object.freeze({
-    clear(): void {
-      primary.fill(0);
-      secondary.fill(0);
-    },
-    codeAccepted: code === "7K9M-P2QR-W4XY",
-    digests,
-    secondaryActive: false,
-  });
 });
 
 function createFixture() {
@@ -93,24 +70,12 @@ function createFixture() {
   let loginCredentialLookup: Buffer | undefined;
   let inventorySessionDigest: Buffer | undefined;
   let inventorySessionDigestInput: Uint8Array | undefined;
-  let activeDeviceInventoryRead: EnrollmentDatabaseSourceDeviceInventoryRequest | undefined;
-  let activeDeviceInventoryDigestInput: Uint8Array | undefined;
-  let accountOverviewRead: EnrollmentDatabaseAccountOverviewRequest | undefined;
-  let accountOverviewDigestInput: Uint8Array | undefined;
-  let deviceRevocationWrite: EnrollmentDatabaseDeviceRevocation | undefined;
-  let deviceRevocationDigestInput: Uint8Array | undefined;
-  let sourcePauseWrite: EnrollmentDatabaseSourcePause | undefined;
-  let sourceReactivationChallengeWrite: EnrollmentDatabaseSourceReactivationChallenge | undefined;
-  let sourceReactivationWrite: EnrollmentDatabaseSourceReactivation | undefined;
-  let sourceUnlinkChallengeWrite: EnrollmentDatabaseSourceUnlinkChallenge | undefined;
-  let sourceUnlinkWrite: EnrollmentDatabaseSourceUnlink | undefined;
   let addChallengeWrite: EnrollmentDatabasePasskeyAddChallenge | undefined;
   let additionWrite: EnrollmentDatabasePasskeyAddition | undefined;
   let revokeChallengeWrite: EnrollmentDatabasePasskeyRevokeChallenge | undefined;
   let revocationWrite: EnrollmentDatabasePasskeyRevocation | undefined;
   let deletionChallengeWrite: EnrollmentDatabaseProfileDeletionChallenge | undefined;
   let deletionWrite: EnrollmentDatabaseProfileDeletion | undefined;
-  let deletionProfileRefDigestInput: Uint8Array | undefined;
   let recoveryChallengeWrite: EnrollmentDatabaseRecoveryCodeChallenge | undefined;
   let recoveryReplacementWrite: EnrollmentDatabaseRecoveryCodeReplacement | undefined;
   let recoveryCompletionWrite: EnrollmentDatabaseRecoveryCompletion | undefined;
@@ -119,15 +84,42 @@ function createFixture() {
   let visibilityReadDigestInput: Uint8Array | undefined;
   let visibilityWrite: EnrollmentDatabaseProfileVisibilityUpdate | undefined;
   let visibilityWriteDigestInput: Uint8Array | undefined;
+  let providerBreakdownWrite: EnrollmentDatabaseProviderBreakdownVisibilityUpdate | undefined;
+  let accountTargetChallengeWrite: EnrollmentDatabaseAccountTargetChallenge | undefined;
+  const accountTargetCompletionWrites: EnrollmentDatabaseAccountTargetCompletion[] = [];
+  let agentAccountPauseWrite: EnrollmentDatabaseAgentAccountPause | undefined;
   let verifiedLoginCredential: Buffer | undefined;
+  const captureAccountTargetCompletion = (
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): void => {
+    accountTargetCompletionWrites.push({
+      ...input,
+      contextDigest: Buffer.from(input.contextDigest),
+      sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+    });
+  };
   const database: EnrollmentDatabase = {
     approveCarRecipe: vi.fn(() => Promise.resolve(true)),
-    completePairingApproval: vi.fn(() => Promise.resolve(true)),
+    completeAgentAccountReactivation: vi.fn((input: EnrollmentDatabaseAccountTargetCompletion) => {
+      captureAccountTargetCompletion(input);
+      return Promise.resolve(true);
+    }),
+    completeAgentAccountUnlink: vi.fn((input: EnrollmentDatabaseAccountTargetCompletion) => {
+      captureAccountTargetCompletion(input);
+      return Promise.resolve(true);
+    }),
+    completeDeviceKeyRevocation: vi.fn((input: EnrollmentDatabaseAccountTargetCompletion) => {
+      captureAccountTargetCompletion(input);
+      return Promise.resolve(true);
+    }),
+    completeInstallationRevocation: vi.fn((input: EnrollmentDatabaseAccountTargetCompletion) => {
+      captureAccountTargetCompletion(input);
+      return Promise.resolve(true);
+    }),
     completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
     completePasskeyAddition: vi.fn((input: EnrollmentDatabasePasskeyAddition) => {
       additionWrite = {
         ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
         cosePublicKey: Buffer.from(input.cosePublicKey),
         credentialId: Buffer.from(input.credentialId),
@@ -140,7 +132,7 @@ function createFixture() {
       return Promise.resolve({
         handle: "pixel_driver",
         locale: "en" as const,
-        profileId: join.inviteId,
+        profileId: activeProfileId,
       });
     }),
     completeRecoveryRegistration: vi.fn((input: EnrollmentDatabaseRecoveryCompletion) => {
@@ -156,25 +148,21 @@ function createFixture() {
       return Promise.resolve({
         handle: "pixel_driver",
         locale: "en" as const,
-        profileId: join.inviteId,
+        profileId: activeProfileId,
       });
     }),
     completePasskeyRevocation: vi.fn((input: EnrollmentDatabasePasskeyRevocation) => {
       revocationWrite = {
         ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
     }),
     completeProfileDeletion: vi.fn((input: EnrollmentDatabaseProfileDeletion) => {
-      deletionProfileRefDigestInput = input.profileRefDigest;
       deletionWrite = {
         ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
-        profileRefDigest: Buffer.from(input.profileRefDigest),
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
@@ -182,29 +170,10 @@ function createFixture() {
     completeRecoveryCodeReplacement: vi.fn((input: EnrollmentDatabaseRecoveryCodeReplacement) => {
       recoveryReplacementWrite = {
         ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
         recoveryCodeIds: [...input.recoveryCodeIds],
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
         verifierPhcs: [...input.verifierPhcs],
-      };
-      return Promise.resolve(true);
-    }),
-    completeSourceReactivation: vi.fn((input: EnrollmentDatabaseSourceReactivation) => {
-      sourceReactivationWrite = {
-        ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
-        contextDigest: Buffer.from(input.contextDigest),
-        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
-      };
-      return Promise.resolve(true);
-    }),
-    completeSourceUnlink: vi.fn((input: EnrollmentDatabaseSourceUnlink) => {
-      sourceUnlinkWrite = {
-        ...input,
-        challengeDigest: Buffer.from(input.challengeDigest),
-        contextDigest: Buffer.from(input.contextDigest),
-        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
     }),
@@ -217,7 +186,6 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
-    createPairingApprovalChallenge: vi.fn(() => Promise.resolve(true)),
     createPasskeyChallenge: vi.fn((input: EnrollmentDatabasePasskeyChallenge) => {
       challengeSessionDigest = Buffer.from(input.sessionVerifierDigest);
       challengeSessionDigestInput = input.sessionVerifierDigest;
@@ -241,8 +209,8 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
-    createRecoveryCodeChallenge: vi.fn((input: EnrollmentDatabaseRecoveryCodeChallenge) => {
-      recoveryChallengeWrite = {
+    createAccountTargetChallenge: vi.fn((input: EnrollmentDatabaseAccountTargetChallenge) => {
+      accountTargetChallengeWrite = {
         ...input,
         challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
@@ -250,19 +218,8 @@ function createFixture() {
       };
       return Promise.resolve(true);
     }),
-    createSourceReactivationChallenge: vi.fn(
-      (input: EnrollmentDatabaseSourceReactivationChallenge) => {
-        sourceReactivationChallengeWrite = {
-          ...input,
-          challengeDigest: Buffer.from(input.challengeDigest),
-          contextDigest: Buffer.from(input.contextDigest),
-          sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
-        };
-        return Promise.resolve(true);
-      },
-    ),
-    createSourceUnlinkChallenge: vi.fn((input: EnrollmentDatabaseSourceUnlinkChallenge) => {
-      sourceUnlinkChallengeWrite = {
+    createRecoveryCodeChallenge: vi.fn((input: EnrollmentDatabaseRecoveryCodeChallenge) => {
+      recoveryChallengeWrite = {
         ...input,
         challengeDigest: Buffer.from(input.challengeDigest),
         contextDigest: Buffer.from(input.contextDigest),
@@ -273,44 +230,23 @@ function createFixture() {
     enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) => {
       enrollmentWrite = {
         ...input,
-        inviteVerifierDigest: Buffer.from(input.inviteVerifierDigest),
+        ...(input.inviteVerifierDigest === undefined
+          ? {}
+          : { inviteVerifierDigest: Buffer.from(input.inviteVerifierDigest) }),
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
-      return Promise.resolve(true);
+      return Promise.resolve({
+        created: true,
+        handle: input.handle,
+        locale: input.locale,
+        profileId: input.profileId,
+        profileState: "enrolling" as const,
+        sessionCreated: true,
+      });
     }),
     proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
-    readAccountOverview: vi.fn((input: EnrollmentDatabaseAccountOverviewRequest) => {
-      accountOverviewDigestInput = input.sessionVerifierDigest;
-      accountOverviewRead = {
-        ...input,
-        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
-      };
-      return Promise.resolve({ score: null, visibility: "public" as const });
-    }),
+    readAgentAccountDashboard: vi.fn(() => Promise.resolve({ accounts: [], installations: [] })),
     readCarRecipeState: vi.fn(() => Promise.resolve({ active: null, proposal: null })),
-    readActiveDeviceInventory: vi.fn((input: EnrollmentDatabaseSourceDeviceInventoryRequest) => {
-      activeDeviceInventoryDigestInput = input.sessionVerifierDigest;
-      activeDeviceInventoryRead = {
-        ...input,
-        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
-      };
-      return Promise.resolve([
-        {
-          devices: [
-            {
-              activatedOn: "2026-07-14",
-              architecture: "x86_64" as const,
-              connectorVersion: "1.2.3",
-              deviceId: `dev_${"A".repeat(22)}`,
-              label: "Studio PC",
-              osFamily: "windows" as const,
-            },
-          ],
-          sourceId: `src_${"B".repeat(22)}`,
-          state: "active" as const,
-        },
-      ]);
-    }),
     readPasskeyInventory: vi.fn((input: EnrollmentDatabasePasskeyInventoryRequest) => {
       inventorySessionDigest = Buffer.from(input.sessionVerifierDigest);
       inventorySessionDigestInput = input.sessionVerifierDigest;
@@ -331,7 +267,6 @@ function createFixture() {
         },
       ]);
     }),
-    readPairingApproval: vi.fn(() => Promise.resolve(undefined)),
     readPasskeyLoginMaterial: vi.fn((credentialId: Uint8Array) => {
       loginCredentialLookup = Buffer.from(credentialId);
       return Promise.resolve({
@@ -351,22 +286,27 @@ function createFixture() {
       };
       return Promise.resolve("public" as const);
     }),
-    pauseSource: vi.fn((input: EnrollmentDatabaseSourcePause) => {
-      sourcePauseWrite = {
+    readPrivateDashboardRanking: vi.fn(() =>
+      Promise.resolve({
+        participantCount: 10,
+        providerBreakdownVisible: false,
+        publicVisibility: "public" as const,
+        rankPosition: 2,
+        seasonEnd: "2026-07-19",
+        seasonStart: "2026-07-13",
+        seasonState: "open" as const,
+        snapshotGeneratedAt: "2026-07-16T10:00Z",
+        weeklyTokenTotal: "2800",
+      }),
+    ),
+    pauseAgentAccount: vi.fn((input: EnrollmentDatabaseAgentAccountPause) => {
+      agentAccountPauseWrite = {
         ...input,
         sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
       };
       return Promise.resolve(true);
     }),
     rejectCarRecipe: vi.fn(() => Promise.resolve(true)),
-    revokeDevice: vi.fn((input: EnrollmentDatabaseDeviceRevocation) => {
-      deviceRevocationDigestInput = input.sessionVerifierDigest;
-      deviceRevocationWrite = {
-        ...input,
-        sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
-      };
-      return Promise.resolve(true);
-    }),
     revokeSession: vi.fn(() => Promise.resolve(true)),
     setProfileVisibility: vi.fn((input: EnrollmentDatabaseProfileVisibilityUpdate) => {
       visibilityWriteDigestInput = input.sessionVerifierDigest;
@@ -376,6 +316,15 @@ function createFixture() {
       };
       return Promise.resolve(input.publiclyVisible ? ("public" as const) : ("hidden" as const));
     }),
+    setProviderBreakdownVisibility: vi.fn(
+      (input: EnrollmentDatabaseProviderBreakdownVisibilityUpdate) => {
+        providerBreakdownWrite = {
+          ...input,
+          sessionVerifierDigest: Buffer.from(input.sessionVerifierDigest),
+        };
+        return Promise.resolve(input.providerBreakdownVisible);
+      },
+    ),
     startRecovery: vi.fn((input: EnrollmentDatabaseRecoveryStart) => {
       recoveryStartWrite = {
         ...input,
@@ -462,9 +411,7 @@ function createFixture() {
     createLoginOptions,
     createOptions,
     createRecoveryOptions,
-    createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
     database,
-    derivePairingCode,
     exchangeGithub,
     generateRecoveryCodes,
     now: () => now,
@@ -475,10 +422,9 @@ function createFixture() {
     verifyRecoveryCode,
   });
   return {
-    accountOverviewDigestInput: () => accountOverviewDigestInput,
-    accountOverviewRead: () => accountOverviewRead,
-    activeDeviceInventoryDigestInput: () => activeDeviceInventoryDigestInput,
-    activeDeviceInventoryRead: () => activeDeviceInventoryRead,
+    accountTargetChallengeWrite: () => accountTargetChallengeWrite,
+    accountTargetCompletionWrites,
+    agentAccountPauseWrite: () => agentAccountPauseWrite,
     addChallengeWrite: () => addChallengeWrite,
     additionWrite: () => additionWrite,
     authenticationChallenge,
@@ -490,10 +436,7 @@ function createFixture() {
     createLoginOptions,
     database,
     deletionChallengeWrite: () => deletionChallengeWrite,
-    deletionProfileRefDigestInput: () => deletionProfileRefDigestInput,
     deletionWrite: () => deletionWrite,
-    deviceRevocationDigestInput: () => deviceRevocationDigestInput,
-    deviceRevocationWrite: () => deviceRevocationWrite,
     enrollmentWrite: () => enrollmentWrite,
     exchangeGithub,
     loginCredentialLookup: () => loginCredentialLookup,
@@ -506,15 +449,11 @@ function createFixture() {
     recoveryCodeRecords,
     recoveryReplacementWrite: () => recoveryReplacementWrite,
     recoveryStartWrite: () => recoveryStartWrite,
+    providerBreakdownWrite: () => providerBreakdownWrite,
     revokeChallengeWrite: () => revokeChallengeWrite,
     registrationChallenge,
     revocationWrite: () => revocationWrite,
     service,
-    sourcePauseWrite: () => sourcePauseWrite,
-    sourceReactivationChallengeWrite: () => sourceReactivationChallengeWrite,
-    sourceReactivationWrite: () => sourceReactivationWrite,
-    sourceUnlinkChallengeWrite: () => sourceUnlinkChallengeWrite,
-    sourceUnlinkWrite: () => sourceUnlinkWrite,
     verifyPasskey,
     verifyLogin,
     verifyRecoveryCode,
@@ -549,21 +488,27 @@ describe("enrollment service", () => {
       start?.oauthCookie ?? "",
       new AbortController().signal,
       true,
+      true,
     );
     expect(callback).toBeDefined();
+    expect(callback?.outcome).toBe("continue");
+    if (callback?.outcome !== "continue") {
+      throw new Error("Expected enrollment continuation.");
+    }
     expect(exchangeGithub).toHaveBeenCalledOnce();
-    const enrollingSession = service.readSession(callback?.sessionCookie);
+    const enrollingSession = service.readSession(callback.sessionCookie);
     expect(enrollingSession).toMatchObject({
       expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
-      handle: "pixel_driver",
+      handle: "pending_0000000000004000",
       locale: "en",
       passkeyRegistered: false,
     });
     expect(database.enrollProfile).toHaveBeenCalledWith(
       expect.objectContaining({
         githubUserId: 123_456,
-        handle: "pixel_driver",
+        handle: "pending_0000000000004000",
         inviteId: join.inviteId,
+        inviteRequired: true,
         profileId: "00000000-0000-4000-8000-000000000502",
       }),
     );
@@ -574,7 +519,11 @@ describe("enrollment service", () => {
         .digest(),
     );
 
-    const passkeyStart = await service.beginPasskey(callback?.sessionCookie ?? "", true);
+    const passkeyStart = await service.beginPasskey(
+      callback.sessionCookie,
+      { handle: profileHandle },
+      true,
+    );
     expect(passkeyStart?.options.challenge).toHaveLength(43);
     expect(database.createPasskeyChallenge).toHaveBeenCalledOnce();
     expect(challengeSessionDigest()).toEqual(
@@ -584,20 +533,20 @@ describe("enrollment service", () => {
     );
     expect(challengeSessionDigestInput()).toEqual(Buffer.alloc(32));
     const completion = await service.completePasskey(
-      callback?.sessionCookie ?? "",
+      callback.sessionCookie,
       passkeyStart?.passkeyCookie ?? "",
-      { label: "Primary passkey", response: { id: "synthetic" } },
+      { response: { id: "synthetic" } },
       true,
     );
     expect(completion).toBeDefined();
     expect(verifyPasskey).toHaveBeenCalledOnce();
     expect(database.completeInitialPasskey).toHaveBeenCalledWith(
       expect.objectContaining({
-        challengeId: "00000000-0000-4000-8000-000000000505",
-        passkeyId: "00000000-0000-4000-8000-000000000506",
-        rotatedSessionId: "00000000-0000-4000-8000-000000000508",
+        challengeId: "00000000-0000-4000-8000-000000000504",
+        handle: profileHandle,
+        passkeyId: "00000000-0000-4000-8000-000000000505",
+        rotatedSessionId: "00000000-0000-4000-8000-000000000506",
         rotatedSessionExpiresAt: new Date(now.valueOf() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        rotationAuditEventId: "00000000-0000-4000-8000-000000000509",
         sessionId: "00000000-0000-4000-8000-000000000503",
         signCount: 3,
       }),
@@ -606,12 +555,12 @@ describe("enrollment service", () => {
     expect(activeSession).toMatchObject({
       expiresAt: Math.floor(now.valueOf() / 1000) + 30 * 24 * 60 * 60,
       passkeyRegistered: true,
-      sessionId: "00000000-0000-4000-8000-000000000508",
+      sessionId: "00000000-0000-4000-8000-000000000506",
     });
     expect(activeSession?.sessionVerifier).not.toBe(enrollingSession?.sessionVerifier);
     await expect(service.logout(completion?.sessionCookie)).resolves.toBe(true);
     expect(database.revokeSession).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: "00000000-0000-4000-8000-000000000508" }),
+      expect.objectContaining({ sessionId: "00000000-0000-4000-8000-000000000506" }),
     );
   });
 
@@ -649,9 +598,12 @@ describe("enrollment service", () => {
           inaccessible,
           inaccessible as unknown as AbortSignal,
           enrollmentEnabled,
+          enrollmentEnabled,
         ),
       ).resolves.toBeUndefined();
-      await expect(service.beginPasskey(inaccessible, enrollmentEnabled)).resolves.toBeUndefined();
+      await expect(
+        service.beginPasskey(inaccessible, hostileBody, enrollmentEnabled),
+      ).resolves.toBeUndefined();
       await expect(
         service.completePasskey(inaccessible, inaccessible, hostileBody, enrollmentEnabled),
       ).resolves.toBeUndefined();
@@ -723,326 +675,13 @@ describe("enrollment service", () => {
     });
   });
 
-  it("reviews one pending device before a fresh passkey atomically approves it", async () => {
-    derivePairingCode.mockClear();
-    const { authenticationChallenge, cookieCodec, database, service, verifyLogin } =
-      createFixture();
-    const verifier = Buffer.alloc(32, 0x47);
-    const sessionId = "00000000-0000-4000-8000-000000000512";
-    const pairingId = "00000000-0000-4000-8000-000000001001";
-    const sessionCookie = cookieCodec.seal("session", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
-      locale: join.locale,
-      passkeyRegistered: true,
-      profileId: join.inviteId,
-      sessionId,
-      sessionVerifier: verifier.toString("base64url"),
-      version: 1,
-    });
-    const publicKey = Buffer.alloc(32, 0x64);
-    const expectedFingerprint = `SHA256:${createHash("sha256").update(publicKey).digest("base64url")}`;
-    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
-      architecture: "x86_64",
-      candidateIndex: 1,
-      connectorVersion: "1.2.3",
-      deviceLabel: "Studio PC",
-      expiresAt: "2026-07-16T10:09:00.000Z",
-      osFamily: "windows",
-      pairingId,
-      publicKey,
-    });
-
-    const start = await service.beginPairingApproval(
-      sessionCookie,
-      {
-        sourceChoice: "new",
-        userCode: "7K9M-P2QR-W4XY",
-      },
-      true,
-    );
-    expect(start).toMatchObject({
-      options: { challenge: authenticationChallenge },
-      pairing: {
-        architecture: "x86_64",
-        connectorVersion: "1.2.3",
-        deviceLabel: "Studio PC",
-        osFamily: "windows",
-        publicKeyFingerprint: expectedFingerprint,
-      },
-    });
-    expect(database.readPairingApproval).toHaveBeenCalledWith(
-      expect.objectContaining({
-        attemptLimit: config.pairingApprovalAttemptLimit,
-        secondaryActive: false,
-        sessionId,
-        windowSeconds: config.pairingApprovalWindowSeconds,
-      }),
-    );
-    expect(database.createPairingApprovalChallenge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        challengeId: "00000000-0000-4000-8000-000000000502",
-        pairingId,
-        sessionId,
-        sourceChoice: "new",
-      }),
-    );
-    const approvalChallengeInput = vi.mocked(database.createPairingApprovalChallenge).mock
-      .calls[0]?.[0];
-    expect(approvalChallengeInput?.sourceId).toMatch(/^src_[A-Za-z0-9_-]{22}$/);
-    const sealedChallenge = cookieCodec.open("passkey", start?.pairingApprovalCookie ?? "");
-    expect(sealedChallenge).toMatchObject({
-      challenge: authenticationChallenge,
-      challengeId: "00000000-0000-4000-8000-000000000502",
-      pairingId,
-      sourceChoice: "new",
-      version: 1,
-    });
-    const sealedSourceId = (sealedChallenge as Record<string, unknown>).sourceId;
-    expect(sealedSourceId).toMatch(/^src_[A-Za-z0-9_-]{22}$/);
-    expect(sealedChallenge).not.toHaveProperty("sessionId");
-    expect(start?.pairingApprovalCookie).not.toContain("7K9M-P2QR-W4XY");
-    expect(publicKey).toEqual(Buffer.alloc(32));
-
-    const credentialId = Buffer.alloc(32, 0x74);
-    const response = {
-      id: credentialId.toString("base64url"),
-      rawId: credentialId.toString("base64url"),
-      response: {},
-      type: "public-key",
-    };
-    await expect(
-      service.completePairingApproval(
-        sessionCookie,
-        start?.pairingApprovalCookie ?? "",
-        { response },
-        true,
-      ),
-    ).resolves.toBe(true);
-    expect(verifyLogin).toHaveBeenCalledWith(
-      response,
-      authenticationChallenge,
-      config.webauthnOrigin,
-      config.webauthnRpId,
-      expect.any(Object),
-    );
-    expect(database.completePairingApproval).toHaveBeenCalledWith(
-      expect.objectContaining({
-        auditEventId: "00000000-0000-4000-8000-000000000503",
-        challengeId: "00000000-0000-4000-8000-000000000502",
-        observedSignCount: 4,
-        pairingId,
-        sessionId,
-        verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
-      }),
-    );
-
-    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
-      architecture: "x86_64",
-      candidateIndex: 1,
-      connectorVersion: "1.2.3",
-      deviceLabel: "Studio PC",
-      expiresAt: "2026-07-16T10:09:00.000Z",
-      osFamily: "windows",
-      pairingId,
-      publicKey: Buffer.alloc(32, 0x65),
-    });
-    await expect(
-      service.beginPairingApproval(
-        sessionCookie,
-        {
-          sourceChoice: "new",
-          userCode: "not-a-code",
-        },
-        true,
-      ),
-    ).resolves.toBeUndefined();
-    expect(database.readPairingApproval).toHaveBeenCalledTimes(2);
-    expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
-  });
-
-  it("requires literal source enablement for both new-source approval steps", async () => {
-    derivePairingCode.mockClear();
-    const { cookieCodec, database, service, verifyLogin } = createFixture();
-    const sessionId = "00000000-0000-4000-8000-000000000512";
-    const sessionCookie = cookieCodec.seal("session", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
-      locale: join.locale,
-      passkeyRegistered: true,
-      profileId: join.inviteId,
-      sessionId,
-      sessionVerifier: Buffer.alloc(32, 0x47).toString("base64url"),
-      version: 1,
-    });
-    const request = Object.freeze({
-      sourceChoice: "new" as const,
-      userCode: "7K9M-P2QR-W4XY",
-    });
-
-    for (const sourceCreationEnabled of [false, undefined, "true", 1]) {
-      await expect(
-        service.beginPairingApproval(sessionCookie, request, sourceCreationEnabled),
-      ).resolves.toBeUndefined();
-    }
-    expect(derivePairingCode).not.toHaveBeenCalled();
-    expect(database.readPairingApproval).not.toHaveBeenCalled();
-    expect(database.createPairingApprovalChallenge).not.toHaveBeenCalled();
-
-    vi.mocked(database.readPairingApproval).mockResolvedValueOnce({
-      architecture: "x86_64",
-      candidateIndex: 1,
-      connectorVersion: "1.2.3",
-      deviceLabel: "Studio PC",
-      expiresAt: "2026-07-16T10:09:00.000Z",
-      osFamily: "windows",
-      pairingId: "00000000-0000-4000-8000-000000001001",
-      publicKey: Buffer.alloc(32, 0x64),
-    });
-    const started = await service.beginPairingApproval(sessionCookie, request, true);
-    expect(started).toBeDefined();
-
-    const hostileBody = new Proxy(
-      {},
-      {
-        getPrototypeOf() {
-          throw new Error("authentication-body-must-not-run");
-        },
-      },
-    );
-    for (const sourceCreationEnabled of [false, undefined, "true", 1]) {
-      await expect(
-        service.completePairingApproval(
-          sessionCookie,
-          started?.pairingApprovalCookie ?? "",
-          hostileBody,
-          sourceCreationEnabled,
-        ),
-      ).resolves.toBe(false);
-    }
-    expect(database.readPasskeyLoginMaterial).not.toHaveBeenCalled();
-    expect(verifyLogin).not.toHaveBeenCalled();
-    expect(database.completePairingApproval).not.toHaveBeenCalled();
-  });
-
-  it("binds an existing active source through only its session-bound opaque control", async () => {
-    derivePairingCode.mockClear();
-    const { authenticationChallenge, cookieCodec, database, service } = createFixture();
-    const sessionId = "00000000-0000-4000-8000-000000000512";
-    const sourceId = `src_${"B".repeat(22)}`;
-    const sessionCookie = cookieCodec.seal("session", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
-      locale: join.locale,
-      passkeyRegistered: true,
-      profileId: join.inviteId,
-      sessionId,
-      sessionVerifier: Buffer.alloc(32, 0x47).toString("base64url"),
-      version: 1,
-    });
-    const sourceControl = cookieCodec.seal("passkey", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
-      sessionId,
-      sourceId,
-      version: 1,
-    });
-    const otherSessionSourceControl = cookieCodec.seal("passkey", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 15 * 60,
-      sessionId: "00000000-0000-4000-8000-000000000513",
-      sourceId,
-      version: 1,
-    });
-    const material = {
-      architecture: "x86_64" as const,
-      candidateIndex: 1 as const,
-      connectorVersion: "1.2.3",
-      deviceLabel: "Laptop",
-      expiresAt: "2026-07-16T10:09:00.000Z",
-      osFamily: "windows" as const,
-      pairingId: "00000000-0000-4000-8000-000000001001",
-      publicKey: Buffer.alloc(32, 0x66),
-    };
-    vi.mocked(database.readPairingApproval)
-      .mockResolvedValueOnce(material)
-      .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x67) })
-      .mockResolvedValueOnce({ ...material, publicKey: Buffer.alloc(32, 0x68) });
-
-    const start = await service.beginPairingApproval(
-      sessionCookie,
-      {
-        sourceChoice: "existing",
-        sourceControl,
-        userCode: "7K9M-P2QR-W4XY",
-      },
-      false,
-    );
-    expect(start?.options.challenge).toBe(authenticationChallenge);
-    expect(database.createPairingApprovalChallenge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        pairingId: material.pairingId,
-        sessionId,
-        sourceChoice: "existing",
-        sourceId,
-      }),
-    );
-    expect(cookieCodec.open("passkey", start?.pairingApprovalCookie ?? "")).toMatchObject({
-      pairingId: material.pairingId,
-      sourceChoice: "existing",
-      sourceId,
-    });
-    expect(start?.pairingApprovalCookie).not.toContain(sourceId);
-
-    const credentialId = Buffer.alloc(32, 0x74);
-    await expect(
-      service.completePairingApproval(
-        sessionCookie,
-        start?.pairingApprovalCookie ?? "",
-        {
-          response: {
-            id: credentialId.toString("base64url"),
-            rawId: credentialId.toString("base64url"),
-            response: {},
-            type: "public-key",
-          },
-        },
-        false,
-      ),
-    ).resolves.toBe(true);
-    expect(database.completePairingApproval).toHaveBeenCalledOnce();
-
-    await expect(
-      service.beginPairingApproval(
-        sessionCookie,
-        {
-          sourceChoice: "existing",
-          sourceControl: otherSessionSourceControl,
-          userCode: "7K9M-P2QR-W4XY",
-        },
-        false,
-      ),
-    ).resolves.toBeUndefined();
-    await expect(
-      service.beginPairingApproval(
-        sessionCookie,
-        {
-          sourceChoice: "existing",
-          sourceControl: `${sourceControl}tampered`,
-          userCode: "7K9M-P2QR-W4XY",
-        },
-        false,
-      ),
-    ).resolves.toBeUndefined();
-    expect(database.readPairingApproval).toHaveBeenCalledTimes(3);
-    expect(database.createPairingApprovalChallenge).toHaveBeenCalledOnce();
-  });
-
   it("reads only the exact active session's bounded passkey inventory", async () => {
     const { cookieCodec, database, inventorySessionDigest, inventorySessionDigestInput, service } =
       createFixture();
     const verifier = Buffer.alloc(32, 0x45);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1072,77 +711,21 @@ describe("enrollment service", () => {
     expect(database.readPasskeyInventory).toHaveBeenCalledOnce();
   });
 
-  it("reads active devices and immediately revokes only one exact owned device", async () => {
+  it("builds one private dashboard and binds every account action to an opaque session control", async () => {
     const {
-      activeDeviceInventoryDigestInput,
-      activeDeviceInventoryRead,
-      cookieCodec,
-      database,
-      deviceRevocationDigestInput,
-      deviceRevocationWrite,
-      service,
-    } = createFixture();
-    const verifier = Buffer.alloc(32, 0x49);
-    const sessionId = "00000000-0000-4000-8000-000000000514";
-    const sessionCookie = cookieCodec.seal("session", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
-      locale: join.locale,
-      passkeyRegistered: true,
-      profileId: join.inviteId,
-      sessionId,
-      sessionVerifier: verifier.toString("base64url"),
-      version: 1,
-    });
-    const deviceId = `dev_${"A".repeat(22)}`;
-
-    await expect(service.readActiveDeviceInventory(sessionCookie)).resolves.toEqual([
-      expect.objectContaining({
-        devices: [expect.objectContaining({ deviceId, label: "Studio PC" })],
-        state: "active",
-      }),
-    ]);
-    expect(activeDeviceInventoryRead()).toMatchObject({
-      sessionId,
-      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
-    });
-    expect(activeDeviceInventoryDigestInput()).toEqual(Buffer.alloc(32));
-
-    await expect(service.revokeDevice(sessionCookie, "invalid")).resolves.toBe(false);
-    expect(database.revokeDevice).not.toHaveBeenCalled();
-    await expect(service.revokeDevice(sessionCookie, deviceId)).resolves.toBe(true);
-    expect(deviceRevocationWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000502",
-      deviceId,
-      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
-      sessionId,
-      sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
-    });
-    expect(deviceRevocationDigestInput()).toEqual(Buffer.alloc(32));
-
-    await expect(service.readActiveDeviceInventory("invalid")).resolves.toBeUndefined();
-    await expect(service.revokeDevice("invalid", deviceId)).resolves.toBe(false);
-    expect(database.readActiveDeviceInventory).toHaveBeenCalledOnce();
-    expect(database.revokeDevice).toHaveBeenCalledOnce();
-  });
-
-  it("binds source pause and fresh-passkey reactivation to an opaque session control", async () => {
-    const {
+      accountTargetChallengeWrite,
+      accountTargetCompletionWrites,
+      agentAccountPauseWrite,
       cookieCodec,
       database,
       service,
-      sourcePauseWrite,
-      sourceReactivationChallengeWrite,
-      sourceReactivationWrite,
-      sourceUnlinkChallengeWrite,
-      sourceUnlinkWrite,
       verifyLogin,
     } = createFixture();
-    const verifier = Buffer.alloc(32, 0x4a);
-    const sessionId = "00000000-0000-4000-8000-000000000515";
+    const verifier = Buffer.alloc(32, 0x4b);
+    const sessionId = "00000000-0000-4000-8000-000000000517";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1150,36 +733,97 @@ describe("enrollment service", () => {
       sessionVerifier: verifier.toString("base64url"),
       version: 1,
     });
-    const inventory = await service.readActiveDeviceInventory(sessionCookie);
-    const sourceControl = inventory?.[0]?.sourceControl;
-    expect(sourceControl).toBeDefined();
-    expect(sourceControl).not.toContain("src_");
-    expect(Object.keys(inventory?.[0] ?? {})).toEqual(["devices", "sourceControl", "state"]);
+    const agentAccountId = `acc_${"A".repeat(22)}`;
+    const installationId = `ins_${"B".repeat(22)}`;
+    const deviceId = `dev_${"C".repeat(22)}`;
+    vi.mocked(database.readAgentAccountDashboard).mockResolvedValueOnce({
+      accounts: [
+        {
+          accountingRevision: 1,
+          agentAccountId,
+          devices: [{ deviceId, installationId, state: "active" }],
+          expectedReaderVersion: "codex_daily_usage_v1",
+          identityAssurance: "community_local",
+          lastSuccessfulSyncDate: "2026-07-16",
+          observedReaderVersion: "codex_daily_usage_v1",
+          privateLabel: "Personal account",
+          provider: "codex",
+          quarantineReason: null,
+          state: "paused",
+          status: "paused",
+          todayTokenTotal: "9007199254740993",
+          weeklyTokenTotal: "999999999999999999999999999999999999999999999999999999999999",
+        },
+      ],
+      installations: [
+        {
+          accounts: [
+            {
+              agentAccountId,
+              deviceId,
+              deviceState: "active",
+              privateLabel: "Personal account",
+            },
+          ],
+          architecture: "x86_64",
+          connectedDate: "2026-07-14",
+          connectorVersion: "1.2.3",
+          installationId,
+          label: "Studio PC",
+          lastSeenDate: "2026-07-16",
+          osFamily: "windows",
+          state: "active",
+        },
+      ],
+    });
 
-    await expect(service.pauseSource(sessionCookie, "invalid")).resolves.toBe(false);
-    await expect(service.pauseSource(sessionCookie, sourceControl ?? "")).resolves.toBe(true);
-    expect(sourcePauseWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000502",
+    const dashboard = await service.readAccountDashboard(sessionCookie);
+    expect(dashboard).toMatchObject({
+      accounts: [
+        {
+          connectedDeviceCount: 1,
+          privateLabel: "Personal account",
+          status: "paused",
+          todayTokenTotal: "9007199254740993",
+        },
+      ],
+      installations: [
+        {
+          accounts: [{ deviceState: "active", privateLabel: "Personal account" }],
+          label: "Studio PC",
+        },
+      ],
+      ranking: { weeklyTokenTotal: "2800" },
+    });
+    expect(JSON.stringify(dashboard)).not.toContain(agentAccountId);
+    expect(JSON.stringify(dashboard)).not.toContain(installationId);
+    expect(JSON.stringify(dashboard)).not.toContain(deviceId);
+    const accountControl = dashboard?.accounts[0]?.control ?? "";
+    const installationControl = dashboard?.installations[0]?.control ?? "";
+    const deviceControl = dashboard?.installations[0]?.accounts[0]?.deviceControl ?? "";
+    expect(cookieCodec.open("passkey", accountControl)).toMatchObject({
+      sessionId,
+      targetId: agentAccountId,
+      targetKind: "agent_account",
+    });
+    expect(cookieCodec.open("passkey", installationControl)).toMatchObject({
+      sessionId,
+      targetId: installationId,
+      targetKind: "installation",
+    });
+    expect(cookieCodec.open("passkey", deviceControl)).toMatchObject({
+      sessionId,
+      targetId: deviceId,
+      targetKind: "device",
+    });
+
+    await expect(service.pauseAgentAccount(sessionCookie, "invalid")).resolves.toBe(false);
+    await expect(service.pauseAgentAccount(sessionCookie, accountControl)).resolves.toBe(true);
+    expect(agentAccountPauseWrite()).toEqual({
+      agentAccountId,
       sessionId,
       sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
-      sourceId: `src_${"B".repeat(22)}`,
     });
-
-    const start = await service.beginSourceReactivation(sessionCookie, { sourceControl });
-    expect(start?.options.challenge).toHaveLength(43);
-    expect(sourceReactivationChallengeWrite()).toMatchObject({
-      challengeId: "00000000-0000-4000-8000-000000000503",
-      sessionId,
-      sourceId: `src_${"B".repeat(22)}`,
-    });
-    expect(sourceReactivationChallengeWrite()?.contextDigest).toEqual(
-      createHash("sha256")
-        .update(
-          `viberacing-source-reactivation-v1\n${sessionId}\nsrc_${"B".repeat(22)}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
-          "utf8",
-        )
-        .digest(),
-    );
 
     const credentialId = Buffer.alloc(32, 0x74);
     const response = {
@@ -1188,89 +832,110 @@ describe("enrollment service", () => {
       response: {},
       type: "public-key",
     };
-    await expect(
-      service.completeSourceReactivation(sessionCookie, start?.sourceReactivationCookie ?? "", {
-        response,
-      }),
-    ).resolves.toBe(true);
-    expect(verifyLogin).toHaveBeenCalledOnce();
-    expect(sourceReactivationWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000504",
-      challengeId: "00000000-0000-4000-8000-000000000503",
-      observedSignCount: 4,
-      sessionId,
-      sourceId: `src_${"B".repeat(22)}`,
-      verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
-    });
-
-    const unlinkStart = await service.beginSourceUnlink(sessionCookie, { sourceControl });
-    expect(unlinkStart?.options.challenge).toHaveLength(43);
-    expect(sourceUnlinkChallengeWrite()).toMatchObject({
-      challengeId: "00000000-0000-4000-8000-000000000505",
-      sessionId,
-      sourceId: `src_${"B".repeat(22)}`,
-    });
-    expect(sourceUnlinkChallengeWrite()?.contextDigest).toEqual(
-      createHash("sha256")
-        .update(
-          `viberacing-source-unlink-v1\n${sessionId}\nsrc_${"B".repeat(22)}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
-          "utf8",
-        )
-        .digest(),
+    const actions = [
+      {
+        control: accountControl,
+        databaseMethod: database.completeAgentAccountReactivation,
+        purpose: "account_reactivate" as const,
+        targetId: agentAccountId,
+      },
+      {
+        control: accountControl,
+        databaseMethod: database.completeAgentAccountUnlink,
+        purpose: "account_unlink" as const,
+        targetId: agentAccountId,
+      },
+      {
+        control: deviceControl,
+        databaseMethod: database.completeDeviceKeyRevocation,
+        purpose: "device_revoke" as const,
+        targetId: deviceId,
+      },
+      {
+        control: installationControl,
+        databaseMethod: database.completeInstallationRevocation,
+        purpose: "installation_revoke" as const,
+        targetId: installationId,
+      },
+    ];
+    for (const action of actions) {
+      const start = await service.beginAccountTargetAction(
+        sessionCookie,
+        { targetControl: action.control },
+        action.purpose,
+      );
+      expect(start?.options.challenge).toHaveLength(43);
+      expect(accountTargetChallengeWrite()).toMatchObject({
+        purpose: action.purpose,
+        sessionId,
+      });
+      expect(accountTargetChallengeWrite()?.contextDigest).toEqual(
+        createHash("sha256")
+          .update(
+            `viberacing-account-target-action-v1\n${sessionId}\n${action.purpose}\n${action.targetId}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+            "utf8",
+          )
+          .digest(),
+      );
+      await expect(
+        service.completeAccountTargetAction(
+          sessionCookie,
+          start?.actionCookie ?? "",
+          { response },
+          action.purpose,
+        ),
+      ).resolves.toBe(true);
+      expect(action.databaseMethod).toHaveBeenCalledOnce();
+    }
+    expect(verifyLogin).toHaveBeenCalledTimes(4);
+    expect(accountTargetCompletionWrites).toHaveLength(4);
+    expect(accountTargetCompletionWrites.map(({ targetId }) => targetId)).toEqual(
+      actions.map(({ targetId }) => targetId),
     );
-    await expect(
-      service.completeSourceUnlink(sessionCookie, unlinkStart?.sourceUnlinkCookie ?? "", {
-        response,
-      }),
-    ).resolves.toBe(true);
-    expect(sourceUnlinkWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000506",
-      challengeId: "00000000-0000-4000-8000-000000000505",
+    expect(accountTargetCompletionWrites[0]).toMatchObject({
       observedSignCount: 4,
       sessionId,
-      sourceId: `src_${"B".repeat(22)}`,
       verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
     });
 
-    vi.mocked(database.completeSourceReactivation).mockResolvedValueOnce(false);
     await expect(
-      service.completeSourceReactivation(sessionCookie, start?.sourceReactivationCookie ?? "", {
-        response,
-      }),
-    ).resolves.toBe(false);
+      service.beginAccountTargetAction(
+        sessionCookie,
+        { targetControl: accountControl },
+        "device_revoke",
+      ),
+    ).resolves.toBeUndefined();
     await expect(
-      service.beginSourceReactivation(sessionCookie, {
-        extra: true,
-        sourceControl,
-      }),
+      service.beginAccountTargetAction(
+        sessionCookie,
+        { extra: true, targetControl: accountControl },
+        "account_unlink",
+      ),
     ).resolves.toBeUndefined();
     const otherSessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
-      sessionId: "00000000-0000-4000-8000-000000000516",
+      sessionId: "00000000-0000-4000-8000-000000000518",
       sessionVerifier: verifier.toString("base64url"),
       version: 1,
     });
     await expect(
-      service.beginSourceReactivation(otherSessionCookie, { sourceControl }),
+      service.beginAccountTargetAction(
+        otherSessionCookie,
+        { targetControl: accountControl },
+        "account_unlink",
+      ),
     ).resolves.toBeUndefined();
-    await expect(
-      service.beginSourceUnlink(otherSessionCookie, { sourceControl }),
-    ).resolves.toBeUndefined();
-    await expect(service.pauseSource(otherSessionCookie, sourceControl ?? "")).resolves.toBe(false);
-    expect(database.pauseSource).toHaveBeenCalledOnce();
-    expect(database.createSourceReactivationChallenge).toHaveBeenCalledOnce();
-    expect(database.createSourceUnlinkChallenge).toHaveBeenCalledOnce();
-    expect(database.completeSourceUnlink).toHaveBeenCalledOnce();
   });
 
   it("reads and changes only the possessed session's public profile visibility", async () => {
     const {
       cookieCodec,
       database,
+      providerBreakdownWrite,
       service,
       visibilityRead,
       visibilityReadDigestInput,
@@ -1280,7 +945,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x47);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1304,40 +969,17 @@ describe("enrollment service", () => {
     });
     expect(visibilityWriteDigestInput()).toEqual(Buffer.alloc(32));
 
-    await expect(service.readProfileVisibility("invalid")).resolves.toBeUndefined();
-    await expect(service.setProfileVisibility("invalid", true)).resolves.toBeUndefined();
-    expect(database.readProfileVisibility).toHaveBeenCalledOnce();
-    expect(database.setProfileVisibility).toHaveBeenCalledOnce();
-  });
-
-  it("reads the possessed account's current Community week without retaining the verifier", async () => {
-    const { accountOverviewDigestInput, accountOverviewRead, cookieCodec, database, service } =
-      createFixture();
-    const verifier = Buffer.alloc(32, 0x48);
-    const sessionCookie = cookieCodec.seal("session", {
-      expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
-      locale: join.locale,
-      passkeyRegistered: true,
-      profileId: join.inviteId,
-      sessionId: "00000000-0000-4000-8000-000000000513",
-      sessionVerifier: verifier.toString("base64url"),
-      version: 1,
-    });
-
-    await expect(service.readAccountOverview(sessionCookie)).resolves.toEqual({
-      score: null,
-      visibility: "public",
-    });
-    expect(accountOverviewRead()).toEqual({
-      seasonStart: "2026-07-13",
+    await expect(service.setProviderBreakdownVisibility(sessionCookie, true)).resolves.toBe(true);
+    expect(providerBreakdownWrite()).toEqual({
+      providerBreakdownVisible: true,
       sessionId: "00000000-0000-4000-8000-000000000513",
       sessionVerifierDigest: createHash("sha256").update(verifier).digest(),
     });
-    expect(accountOverviewDigestInput()).toEqual(Buffer.alloc(32));
-
-    await expect(service.readAccountOverview("invalid")).resolves.toBeUndefined();
-    expect(database.readAccountOverview).toHaveBeenCalledOnce();
+    await expect(service.readProfileVisibility("invalid")).resolves.toBeUndefined();
+    await expect(service.setProfileVisibility("invalid", true)).resolves.toBeUndefined();
+    await expect(service.setProviderBreakdownVisibility("invalid", true)).resolves.toBeUndefined();
+    expect(database.readProfileVisibility).toHaveBeenCalledOnce();
+    expect(database.setProfileVisibility).toHaveBeenCalledOnce();
   });
 
   it("freshly authorizes and atomically adds one backup passkey", async () => {
@@ -1355,7 +997,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x46);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1400,7 +1042,6 @@ describe("enrollment service", () => {
       config.webauthnRpId,
     );
     expect(additionWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000504",
       challengeId: "00000000-0000-4000-8000-000000000502",
       label: "Backup passkey",
       observedSignCount: 4,
@@ -1431,7 +1072,7 @@ describe("enrollment service", () => {
     const verifier = Buffer.alloc(32, 0x46);
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1446,7 +1087,6 @@ describe("enrollment service", () => {
     expect(revokeChallengeWrite()).toMatchObject({
       challengeId: "00000000-0000-4000-8000-000000000502",
       sessionId: "00000000-0000-4000-8000-000000000520",
-      targetPasskeyId,
     });
 
     const credentialId = Buffer.alloc(32, 0x74);
@@ -1461,7 +1101,6 @@ describe("enrollment service", () => {
     ).resolves.toBe(true);
     expect(verifyLogin).toHaveBeenCalledOnce();
     expect(revocationWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000503",
       challengeId: "00000000-0000-4000-8000-000000000502",
       observedSignCount: 4,
       sessionId: "00000000-0000-4000-8000-000000000520",
@@ -1500,7 +1139,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000520";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1519,7 +1158,7 @@ describe("enrollment service", () => {
     expect(recoveryChallengeWrite()?.contextDigest).toEqual(
       createHash("sha256")
         .update(
-          `viberacing-recovery-code-rotation-v1\n${sessionId}\n${join.inviteId}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          `viberacing-recovery-code-rotation-v1\n${sessionId}\n${activeProfileId}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
           "utf8",
         )
         .digest(),
@@ -1546,13 +1185,11 @@ describe("enrollment service", () => {
     expect(verifyLogin).toHaveBeenCalledOnce();
     expect(generateRecoveryCodes).toHaveBeenCalledOnce();
     expect(recoveryReplacementWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000504",
       backupState: true,
       batchId: "00000000-0000-4000-8000-000000000503",
       challengeId: "00000000-0000-4000-8000-000000000502",
       observedSignCount: 4,
       recoveryCodeIds: recoveryCodeRecords.map(({ codeId }) => codeId),
-      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
       sessionId,
       verifierPhcs: recoveryCodeRecords.map(({ verifierPhc }) => verifierPhc),
       verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
@@ -1621,11 +1258,9 @@ describe("enrollment service", () => {
       Buffer.from(recoveryCode?.plaintext.split("_").at(-1) ?? "", "base64url"),
     );
     expect(recoveryStartWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000503",
       authorityId: "00000000-0000-4000-8000-000000000502",
       expiresAt: "2026-07-16T10:05:00.000Z",
       recoveryCodeId: recoveryCode?.codeId,
-      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
     });
     expect(recoveryStartWrite()?.contextDigest).toEqual(
       createHash("sha256")
@@ -1658,22 +1293,20 @@ describe("enrollment service", () => {
       config.webauthnRpId,
     );
     expect(recoveryCompletionWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000506",
       authorityId: "00000000-0000-4000-8000-000000000502",
       backupEligible: true,
       backupState: false,
       label: "Replacement passkey",
-      passkeyId: "00000000-0000-4000-8000-000000000504",
-      requestId: "req_AAAAAAAAAAAAAAAAAAAAAA",
+      passkeyId: "00000000-0000-4000-8000-000000000503",
       sessionExpiresAt: "2026-08-15T10:00:00.000Z",
-      sessionId: "00000000-0000-4000-8000-000000000505",
+      sessionId: "00000000-0000-4000-8000-000000000504",
       signCount: 3,
     });
     expect(service.readSession(completed?.sessionCookie)).toMatchObject({
-      handle: join.handle,
+      handle: profileHandle,
       passkeyRegistered: true,
       profileId: join.inviteId,
-      sessionId: "00000000-0000-4000-8000-000000000505",
+      sessionId: "00000000-0000-4000-8000-000000000504",
     });
   });
 
@@ -1726,7 +1359,6 @@ describe("enrollment service", () => {
       cookieCodec,
       database,
       deletionChallengeWrite,
-      deletionProfileRefDigestInput,
       deletionWrite,
       authenticationChallenge,
       service,
@@ -1736,7 +1368,7 @@ describe("enrollment service", () => {
     const sessionId = "00000000-0000-4000-8000-000000000520";
     const sessionCookie = cookieCodec.seal("session", {
       expiresAt: Math.floor(now.valueOf() / 1000) + 3600,
-      handle: join.handle,
+      handle: profileHandle,
       locale: join.locale,
       passkeyRegistered: true,
       profileId: join.inviteId,
@@ -1748,7 +1380,7 @@ describe("enrollment service", () => {
     await expect(
       service.beginProfileDeletion(sessionCookie, { handle: "other_driver" }),
     ).resolves.toBeUndefined();
-    const start = await service.beginProfileDeletion(sessionCookie, { handle: join.handle });
+    const start = await service.beginProfileDeletion(sessionCookie, { handle: profileHandle });
     expect(start?.options.challenge).toBe(authenticationChallenge);
     expect(database.createProfileDeletionChallenge).toHaveBeenCalledOnce();
     expect(deletionChallengeWrite()).toMatchObject({
@@ -1759,7 +1391,7 @@ describe("enrollment service", () => {
     expect(deletionChallengeWrite()?.contextDigest).toEqual(
       createHash("sha256")
         .update(
-          `viberacing-profile-deletion-v1\n${sessionId}\n${join.inviteId}\n${join.handle}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
+          `viberacing-profile-deletion-v1\n${sessionId}\n${activeProfileId}\n${profileHandle}\n${config.webauthnRpId}\n${config.webauthnOrigin}`,
           "utf8",
         )
         .digest(),
@@ -1779,16 +1411,12 @@ describe("enrollment service", () => {
     ).resolves.toBe(true);
     expect(verifyLogin).toHaveBeenCalledOnce();
     expect(deletionWrite()).toMatchObject({
-      auditEventId: "00000000-0000-4000-8000-000000000504",
       challengeId: "00000000-0000-4000-8000-000000000502",
-      deletionJobId: "00000000-0000-4000-8000-000000000503",
       observedSignCount: 4,
-      profileRefDigest: Buffer.alloc(32, 0x22),
       sessionId,
-      typedHandle: join.handle,
+      typedHandle: profileHandle,
       verifiedPasskeyId: "00000000-0000-4000-8000-000000000511",
     });
-    expect(deletionProfileRefDigestInput()).toEqual(Buffer.alloc(32));
 
     vi.mocked(database.completeProfileDeletion).mockResolvedValueOnce(false);
     await expect(
@@ -1830,9 +1458,7 @@ describe("enrollment service", () => {
           throw new Error("cookie unavailable");
         },
       },
-      createRequestId: () => "req_AAAAAAAAAAAAAAAAAAAAAA",
       database: fixture.database,
-      derivePairingCode,
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 0x31),
       randomUuid: () => uuids.shift() ?? "invalid",
@@ -1848,13 +1474,12 @@ describe("enrollment service", () => {
     expect(fixture.database.completePasskeyLogin).toHaveBeenCalledOnce();
     expect(fixture.database.revokeSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        auditEventId: "00000000-0000-4000-8000-000000000522",
         sessionId: "00000000-0000-4000-8000-000000000520",
       }),
     );
   });
 
-  it("fails closed for mismatched state, invalid cookies, repeated registration, and unsafe labels", async () => {
+  it("fails closed for mismatched state, invalid cookies, repeated registration, and legacy labels", async () => {
     const { database, exchangeGithub, service, verifyPasskey } = createFixture();
     const start = service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
@@ -1869,10 +1494,13 @@ describe("enrollment service", () => {
         start?.oauthCookie ?? "",
         new AbortController().signal,
         true,
+        true,
       ),
     ).resolves.toBeUndefined();
     expect(exchangeGithub).not.toHaveBeenCalled();
-    await expect(service.beginPasskey("invalid", true)).resolves.toBeUndefined();
+    await expect(
+      service.beginPasskey("invalid", { handle: profileHandle }, true),
+    ).resolves.toBeUndefined();
     await expect(service.completePasskey("invalid", "invalid", {}, true)).resolves.toBeUndefined();
     await expect(service.logout("invalid")).resolves.toBe(true);
     expect(database.enrollProfile).not.toHaveBeenCalled();
@@ -1883,11 +1511,23 @@ describe("enrollment service", () => {
       start?.oauthCookie ?? "",
       new AbortController().signal,
       true,
+      true,
     );
-    const passkey = await service.beginPasskey(callback?.sessionCookie ?? "", true);
+    expect(callback?.outcome).toBe("continue");
+    if (callback?.outcome !== "continue") {
+      throw new Error("Expected enrollment continuation.");
+    }
+    await expect(
+      service.beginPasskey(callback.sessionCookie, { handle: "pending_forbidden" }, true),
+    ).resolves.toBeUndefined();
+    const passkey = await service.beginPasskey(
+      callback.sessionCookie,
+      { handle: profileHandle },
+      true,
+    );
     await expect(
       service.completePasskey(
-        callback?.sessionCookie ?? "",
+        callback.sessionCookie,
         passkey?.passkeyCookie ?? "",
         {
           label: "unsafe\nlabel",
@@ -1899,19 +1539,16 @@ describe("enrollment service", () => {
     expect(verifyPasskey).not.toHaveBeenCalled();
 
     const completed = await service.completePasskey(
-      callback?.sessionCookie ?? "",
+      callback.sessionCookie,
       passkey?.passkeyCookie ?? "",
-      { label: "Primary passkey", response: {} },
+      { response: {} },
       true,
     );
     await expect(
       service.completePasskey(
         completed?.sessionCookie ?? "",
         passkey?.passkeyCookie ?? "",
-        {
-          label: "Primary passkey",
-          response: {},
-        },
+        { response: {} },
         true,
       ),
     ).resolves.toBeUndefined();
@@ -1920,7 +1557,7 @@ describe("enrollment service", () => {
 
   it("contains unavailable dependencies and invalid clocks", async () => {
     const fixture = createFixture();
-    vi.mocked(fixture.database.enrollProfile).mockResolvedValue(false);
+    vi.mocked(fixture.database.enrollProfile).mockRejectedValue(new Error("database unavailable"));
     const start = fixture.service.beginGithub(join, true);
     const state = new URL(start?.redirectUrl ?? "invalid:").searchParams.get("state") ?? "";
     await expect(
@@ -1930,6 +1567,7 @@ describe("enrollment service", () => {
         start?.oauthCookie ?? "",
         new AbortController().signal,
         true,
+        true,
       ),
     ).resolves.toBeUndefined();
 
@@ -1937,7 +1575,6 @@ describe("enrollment service", () => {
       config,
       cookieCodec: createEnrollmentCookieCodec(config.cookieKey),
       database: fixture.database,
-      derivePairingCode,
       now: () => new Date(Number.NaN),
     });
     expect(invalidClockService.beginGithub(join, true)).toBeUndefined();
@@ -1947,53 +1584,70 @@ describe("enrollment service", () => {
   it("seals continuation cookies before consuming an invite or passkey challenge", async () => {
     const database: EnrollmentDatabase = {
       approveCarRecipe: vi.fn(() => Promise.resolve(true)),
-      completePairingApproval: vi.fn(() => Promise.resolve(true)),
+      completeAgentAccountReactivation: vi.fn(() => Promise.resolve(true)),
+      completeAgentAccountUnlink: vi.fn(() => Promise.resolve(true)),
+      completeDeviceKeyRevocation: vi.fn(() => Promise.resolve(true)),
+      completeInstallationRevocation: vi.fn(() => Promise.resolve(true)),
       completeInitialPasskey: vi.fn(() => Promise.resolve(true)),
       completePasskeyAddition: vi.fn(() => Promise.resolve(true)),
       completePasskeyLogin: vi.fn(() =>
         Promise.resolve({
           handle: "pixel_driver",
           locale: "en" as const,
-          profileId: join.inviteId,
+          profileId: activeProfileId,
         }),
       ),
       completeRecoveryRegistration: vi.fn(() =>
         Promise.resolve({
           handle: "pixel_driver",
           locale: "en" as const,
-          profileId: join.inviteId,
+          profileId: activeProfileId,
         }),
       ),
       completePasskeyRevocation: vi.fn(() => Promise.resolve(true)),
       completeProfileDeletion: vi.fn(() => Promise.resolve(true)),
       completeRecoveryCodeReplacement: vi.fn(() => Promise.resolve(true)),
-      completeSourceReactivation: vi.fn(() => Promise.resolve(true)),
-      completeSourceUnlink: vi.fn(() => Promise.resolve(true)),
       createPasskeyAddChallenge: vi.fn(() => Promise.resolve(true)),
-      createPairingApprovalChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyChallenge: vi.fn(() => Promise.resolve(true)),
       createPasskeyRevokeChallenge: vi.fn(() => Promise.resolve(true)),
       createProfileDeletionChallenge: vi.fn(() => Promise.resolve(true)),
+      createAccountTargetChallenge: vi.fn(() => Promise.resolve(true)),
       createRecoveryCodeChallenge: vi.fn(() => Promise.resolve(true)),
-      createSourceReactivationChallenge: vi.fn(() => Promise.resolve(true)),
-      createSourceUnlinkChallenge: vi.fn(() => Promise.resolve(true)),
-      enrollProfile: vi.fn(() => Promise.resolve(true)),
-      pauseSource: vi.fn(() => Promise.resolve(true)),
-      proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
-      readAccountOverview: vi.fn(() =>
-        Promise.resolve({ score: null, visibility: "public" as const }),
+      enrollProfile: vi.fn((input: EnrollmentDatabaseProfile) =>
+        Promise.resolve({
+          created: true,
+          handle: input.handle,
+          locale: input.locale,
+          profileId: input.profileId,
+          profileState: "enrolling" as const,
+          sessionCreated: true,
+        }),
       ),
+      pauseAgentAccount: vi.fn(() => Promise.resolve(true)),
+      proposeCarRecipe: vi.fn(() => Promise.resolve(true)),
+      readAgentAccountDashboard: vi.fn(() => Promise.resolve({ accounts: [], installations: [] })),
       readCarRecipeState: vi.fn(() => Promise.resolve({ active: null, proposal: null })),
-      readActiveDeviceInventory: vi.fn(() => Promise.resolve([])),
       readPasskeyInventory: vi.fn(() => Promise.resolve([])),
-      readPairingApproval: vi.fn(() => Promise.resolve(undefined)),
       readPasskeyLoginMaterial: vi.fn(() => Promise.resolve(undefined)),
       readRecoveryCodeVerificationMaterial: vi.fn(() => Promise.resolve(undefined)),
       readProfileVisibility: vi.fn(() => Promise.resolve("public" as const)),
+      readPrivateDashboardRanking: vi.fn(() =>
+        Promise.resolve({
+          participantCount: 0,
+          providerBreakdownVisible: false,
+          publicVisibility: "public" as const,
+          rankPosition: null,
+          seasonEnd: "2026-07-19",
+          seasonStart: "2026-07-13",
+          seasonState: "open" as const,
+          snapshotGeneratedAt: "2026-07-16T10:00Z",
+          weeklyTokenTotal: "0",
+        }),
+      ),
       rejectCarRecipe: vi.fn(() => Promise.resolve(true)),
-      revokeDevice: vi.fn(() => Promise.resolve(true)),
       revokeSession: vi.fn(() => Promise.resolve(true)),
       setProfileVisibility: vi.fn(() => Promise.resolve("hidden" as const)),
+      setProviderBreakdownVisibility: vi.fn(() => Promise.resolve(false)),
       startRecovery: vi.fn(() => Promise.resolve(true)),
     };
     const seconds = Math.floor(now.valueOf() / 1000);
@@ -2013,7 +1667,6 @@ describe("enrollment service", () => {
         },
       },
       database,
-      derivePairingCode,
       exchangeGithub: () => Promise.resolve(123),
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 5),
@@ -2025,6 +1678,7 @@ describe("enrollment service", () => {
         state,
         "opaque",
         new AbortController().signal,
+        true,
         true,
       ),
     ).resolves.toBeUndefined();
@@ -2056,6 +1710,7 @@ describe("enrollment service", () => {
                 challenge: Buffer.alloc(32, 7).toString("base64url"),
                 challengeId: "00000000-0000-4000-8000-000000000505",
                 expiresAt: seconds + 300,
+                handle: profileHandle,
                 version: 1,
               },
         seal: () => {
@@ -2063,7 +1718,6 @@ describe("enrollment service", () => {
         },
       },
       database,
-      derivePairingCode,
       now: () => now,
       randomBytes: (size) => Buffer.alloc(size, 10),
       randomUuid: () => passkeyUuids.shift() ?? "invalid",
@@ -2076,18 +1730,12 @@ describe("enrollment service", () => {
           signCount: 0,
         }),
     });
-    await expect(passkeyService.beginPasskey("session", true)).resolves.toBeUndefined();
+    await expect(
+      passkeyService.beginPasskey("session", { handle: profileHandle }, true),
+    ).resolves.toBeUndefined();
     expect(database.createPasskeyChallenge).not.toHaveBeenCalled();
     await expect(
-      passkeyService.completePasskey(
-        "session",
-        "passkey",
-        {
-          label: "Primary passkey",
-          response: {},
-        },
-        true,
-      ),
+      passkeyService.completePasskey("session", "passkey", { response: {} }, true),
     ).resolves.toBeUndefined();
     expect(database.completeInitialPasskey).not.toHaveBeenCalled();
   });

@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.viberacing.example/v1/connector-pairing-poll-result.schema.json",
   "title": "ConnectorPairingPollResultV1",
-  "description": "Generic pending response or the single activated source/device binding available to the polling connector.",
+  "description": "Generic pending state or bounded candidate-to-account activation material. It contains no profile, GitHub, fingerprint, passkey, private-label, or reusable server credential.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "requestId", "deviceBindings"],
+  "required": ["schemaVersion", "requestId", "pairingState", "candidateActivations"],
   "properties": {
     "schemaVersion": {
       "type": "integer",
@@ -19,26 +19,77 @@
       "maxLength": 26,
       "pattern": "^req_[A-Za-z0-9_-]{22}$"
     },
-    "deviceBindings": {
+    "pairingState": {
+      "type": "string",
+      "enum": ["activated", "approved", "expired", "pending"],
+      "minLength": 7,
+      "maxLength": 9
+    },
+    "candidateActivations": {
       "type": "array",
       "minItems": 0,
-      "maxItems": 1,
+      "maxItems": 16,
+      "x-viberacing-uniqueBy": "candidateId",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sourceId", "deviceId"],
+        "x-viberacing-optionalProperties": ["agentAccountId", "deviceId", "serverBindingMaterial"],
+        "required": ["candidateId", "activationState", "nextAction"],
         "properties": {
-          "sourceId": {
+          "candidateId": {
+            "type": "string",
+            "minLength": 27,
+            "maxLength": 27,
+            "pattern": "^cand_[A-Za-z0-9_-]{22}$"
+          },
+          "activationState": {
+            "type": "string",
+            "enum": ["active", "pending", "skipped"],
+            "minLength": 6,
+            "maxLength": 7
+          },
+          "agentAccountId": {
             "type": "string",
             "minLength": 26,
             "maxLength": 26,
-            "pattern": "^src_[A-Za-z0-9_-]{22}$"
+            "pattern": "^acc_[A-Za-z0-9_-]{22}$"
           },
           "deviceId": {
             "type": "string",
             "minLength": 26,
             "maxLength": 26,
             "pattern": "^dev_[A-Za-z0-9_-]{22}$"
+          },
+          "serverBindingMaterial": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["deviceKeyId", "usageEndpoint", "signatureProtocol"],
+            "properties": {
+              "deviceKeyId": {
+                "type": "string",
+                "minLength": 26,
+                "maxLength": 26,
+                "pattern": "^key_[A-Za-z0-9_-]{22}$"
+              },
+              "usageEndpoint": {
+                "type": "string",
+                "const": "/v1/usage",
+                "minLength": 9,
+                "maxLength": 9
+              },
+              "signatureProtocol": {
+                "type": "string",
+                "const": "viberacing-usage-sync-auth-v1",
+                "minLength": 29,
+                "maxLength": 29
+              }
+            }
+          },
+          "nextAction": {
+            "type": "string",
+            "enum": ["none", "reconnect_account", "sync", "update_connector", "wait"],
+            "minLength": 4,
+            "maxLength": 17
           }
         }
       }

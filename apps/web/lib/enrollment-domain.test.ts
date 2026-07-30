@@ -5,50 +5,42 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseJoinRequest,
+  readAccountTargetActionChallenge,
   readEnrollmentSession,
+  readInitialPasskeyChallenge,
   readPasskeyAddChallenge,
   readPasskeyChallenge,
-  readPairingApprovalChallenge,
   readPasskeyRevokeChallenge,
   readPendingEnrollment,
   readProfileDeletionChallenge,
   readRecoveryAuthorityChallenge,
-  readSourceActionChallenge,
 } from "./enrollment-domain";
 
 const secret = Buffer.alloc(32, 0x42);
 const inviteCode = "vri_00000000-0000-4000-8000-000000000101_" + secret.toString("base64url");
-const validForm = new URLSearchParams({
-  handle: "pixel_driver",
-  inviteCode,
-  locale: "ru",
-  motionPreference: "system",
-  streakVisible: "false",
-  theme: "neon-night",
-}).toString();
+const invitedForm = new URLSearchParams({ inviteCode, locale: "ru" }).toString();
+const openForm = new URLSearchParams({ locale: "en" }).toString();
 
 describe("enrollment domain", () => {
-  it("minimizes a canonical invite form to its digest and public preferences", () => {
-    expect(parseJoinRequest(validForm)).toEqual({
-      handle: "pixel_driver",
+  it("accepts the minimal open form and minimizes an enabled invite to its digest", () => {
+    expect(parseJoinRequest(openForm, false)).toEqual({ locale: "en" });
+    expect(parseJoinRequest(invitedForm, true)).toEqual({
       inviteDigest: createHash("sha256").update(secret).digest("base64url"),
       inviteId: "00000000-0000-4000-8000-000000000101",
       locale: "ru",
-      motionPreference: "system",
-      streakVisible: false,
-      theme: "neon-night",
     });
+    expect(parseJoinRequest(invitedForm, false)).toBeUndefined();
+    expect(parseJoinRequest(openForm, true)).toBeUndefined();
   });
 
   it.each([
     "",
-    validForm + "&extra=true",
-    validForm + "&handle=duplicate",
-    validForm.replace("pixel_driver", "UPPERCASE"),
-    validForm.replace(encodeURIComponent(inviteCode), "bad"),
-    "x".repeat(1025),
+    invitedForm + "&extra=true",
+    invitedForm + "&inviteCode=duplicate",
+    invitedForm.replace(encodeURIComponent(inviteCode), "bad"),
+    "x".repeat(257),
   ])("rejects malformed or open join form %s", (body) => {
-    expect(parseJoinRequest(body)).toBeUndefined();
+    expect(parseJoinRequest(body, true)).toBeUndefined();
   });
 
   it("accepts only closed, unexpired encrypted payload shapes", () => {
@@ -57,14 +49,10 @@ describe("enrollment domain", () => {
     const pending = {
       codeVerifier: Buffer.alloc(32, 1).toString("base64url"),
       expiresAt: now + 600,
-      handle: "pixel_driver",
       inviteDigest: digest,
       inviteId: "00000000-0000-4000-8000-000000000101",
       locale: "en",
-      motionPreference: "off",
       state: Buffer.alloc(32, 2).toString("base64url"),
-      streakVisible: true,
-      theme: "cyber-rally",
       version: 1,
     } as const;
     const session = {
@@ -83,6 +71,10 @@ describe("enrollment domain", () => {
       expiresAt: now + 300,
       version: 1,
     } as const;
+    const initialPasskeyChallenge = {
+      ...challenge,
+      handle: "pixel_driver",
+    } as const;
     const revokeChallenge = {
       ...challenge,
       targetPasskeyId: "00000000-0000-4000-8000-000000000105",
@@ -91,14 +83,10 @@ describe("enrollment domain", () => {
       ...challenge,
       handle: "pixel_driver",
     } as const;
-    const sourceReactivationChallenge = {
+    const accountTargetChallenge = {
       ...challenge,
-      sourceId: `src_${"A".repeat(22)}`,
-    } as const;
-    const pairingApprovalChallenge = {
-      ...sourceReactivationChallenge,
-      pairingId: "00000000-0000-4000-8000-000000000107",
-      sourceChoice: "new",
+      purpose: "account_unlink",
+      targetId: `acc_${"B".repeat(22)}`,
     } as const;
     const addChallenge = {
       authenticationChallenge: challenge.challenge,
@@ -120,16 +108,16 @@ describe("enrollment domain", () => {
     expect(readPendingEnrollment(pending, now)).toEqual(pending);
     expect(readEnrollmentSession(session, now)).toEqual(session);
     expect(readPasskeyChallenge(challenge, now)).toEqual(challenge);
+    expect(readInitialPasskeyChallenge(initialPasskeyChallenge, now)).toEqual(
+      initialPasskeyChallenge,
+    );
     expect(readPasskeyAddChallenge(addChallenge, now)).toEqual(addChallenge);
     expect(readPasskeyRevokeChallenge(revokeChallenge, now)).toEqual(revokeChallenge);
     expect(readProfileDeletionChallenge(profileDeletionChallenge, now)).toEqual(
       profileDeletionChallenge,
     );
-    expect(readSourceActionChallenge(sourceReactivationChallenge, now)).toEqual(
-      sourceReactivationChallenge,
-    );
-    expect(readPairingApprovalChallenge(pairingApprovalChallenge, now)).toEqual(
-      pairingApprovalChallenge,
+    expect(readAccountTargetActionChallenge(accountTargetChallenge, now)).toEqual(
+      accountTargetChallenge,
     );
     expect(readRecoveryAuthorityChallenge(recoveryAuthority, now)).toEqual(recoveryAuthority);
     expect(readPendingEnrollment({ ...pending, extra: true }, now)).toBeUndefined();
@@ -138,8 +126,13 @@ describe("enrollment domain", () => {
     expect(readPasskeyChallenge(revokeChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(addChallenge, now)).toBeUndefined();
     expect(readPasskeyChallenge(profileDeletionChallenge, now)).toBeUndefined();
-    expect(readPasskeyChallenge(sourceReactivationChallenge, now)).toBeUndefined();
-    expect(readSourceActionChallenge(pairingApprovalChallenge, now)).toBeUndefined();
+    expect(readInitialPasskeyChallenge(challenge, now)).toBeUndefined();
+    expect(
+      readInitialPasskeyChallenge(
+        { ...initialPasskeyChallenge, handle: "pending_1234567890abcdef" },
+        now,
+      ),
+    ).toBeUndefined();
     expect(readPasskeyAddChallenge(challenge, now)).toBeUndefined();
     expect(
       readPasskeyAddChallenge(
@@ -162,23 +155,21 @@ describe("enrollment domain", () => {
     expect(
       readProfileDeletionChallenge({ ...profileDeletionChallenge, extra: true }, now),
     ).toBeUndefined();
-    expect(readSourceActionChallenge(challenge, now)).toBeUndefined();
-    expect(readSourceActionChallenge(revokeChallenge, now)).toBeUndefined();
+    expect(readAccountTargetActionChallenge(challenge, now)).toBeUndefined();
     expect(
-      readSourceActionChallenge({ ...sourceReactivationChallenge, sourceId: "bad" }, now),
+      readAccountTargetActionChallenge(
+        { ...accountTargetChallenge, purpose: "device_revoke", targetId: `dev_${"C".repeat(22)}` },
+        now,
+      ),
+    ).toMatchObject({ purpose: "device_revoke", targetId: `dev_${"C".repeat(22)}` });
+    expect(
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, targetId: "bad" }, now),
     ).toBeUndefined();
     expect(
-      readSourceActionChallenge({ ...sourceReactivationChallenge, extra: true }, now),
-    ).toBeUndefined();
-    expect(readPairingApprovalChallenge(sourceReactivationChallenge, now)).toBeUndefined();
-    expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, pairingId: "bad" }, now),
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, purpose: "unknown" }, now),
     ).toBeUndefined();
     expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceChoice: "other" }, now),
-    ).toBeUndefined();
-    expect(
-      readPairingApprovalChallenge({ ...pairingApprovalChallenge, sourceId: "bad" }, now),
+      readAccountTargetActionChallenge({ ...accountTargetChallenge, extra: true }, now),
     ).toBeUndefined();
     expect(readRecoveryAuthorityChallenge(challenge, now)).toBeUndefined();
     expect(

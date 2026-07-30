@@ -42,7 +42,7 @@ describe("Jobs database configuration", () => {
 
     expect(config).toMatchObject({
       allowExitOnIdle: true,
-      application_name: "viberacing-jobs-community-maintenance",
+      application_name: "viberacing-jobs-maintenance",
       client_encoding: "UTF8",
       connectionTimeoutMillis: 2_000,
       database: "viberacing_local",

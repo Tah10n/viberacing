@@ -1,27 +1,21 @@
+import type { LeaderboardSnapshotV1, PublicProfileSummaryV1 } from "@viberacing/contracts";
+
 import type { CarRecipe } from "./car-recipe";
 
-export interface PublicRaceParticipant {
-  readonly activeDays: number;
-  readonly car: CarRecipe;
-  readonly freshnessDays: number | null;
-  readonly handle: string;
-  readonly id: string;
-  readonly rank: number;
-  readonly sourceCount: number;
-  readonly streakDays: number | null;
-  readonly weeklyScore: number;
+export type PublicLeaderboardParticipant = LeaderboardSnapshotV1["participants"][number];
+
+export type PublicProfileState = "none" | "not-found" | "ready" | "unavailable";
+
+export interface PublicHomePayload {
+  readonly leaderboard: LeaderboardSnapshotV1;
+  readonly profile: PublicProfileSummaryV1 | null;
+  readonly profileState: PublicProfileState;
+  readonly source: "community" | "fallback";
 }
 
-export interface DemoProfile {
+export interface RaceVisualParticipant {
   readonly car: CarRecipe;
-  readonly dailyScores: readonly number[];
-  readonly deviceCount: number;
+  readonly displayPosition: number;
   readonly handle: string;
-  readonly sourceCount: number;
-  readonly weeklyScore: number;
-}
-
-export interface SyntheticRacePayload {
-  readonly participants: readonly PublicRaceParticipant[];
-  readonly profile: DemoProfile;
+  readonly rankPosition: number;
 }

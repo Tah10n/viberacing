@@ -9,7 +9,6 @@ use std::str;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use ed25519_dalek::SECRET_KEY_LENGTH;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use ureq::Agent;
@@ -19,51 +18,39 @@ use ureq::tls::{RootCerts, TlsConfig};
 use crate::admission::{ADMITTED_CODEX_VERSION, AdmissionError, admit_candidate_selection};
 use crate::car_proposal::CarRecipeSelection;
 use crate::pairing::{
-    CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PendingDevicePairingSigningKey,
-    ReviewedPairingChallenge, valid_pairing_id,
+    DiscoveryCandidateV1, DiscoveryManifestV1, PairingPollV1Signer, PairingStartV1Signer,
+    PendingInstallationSigningKey, PreparedPairingStart, ReviewedPairingPollChallenge,
+    valid_pairing_id,
 };
 use crate::sync::encode_base64url;
 
 mod car_proposal_command;
+mod credentials;
+mod discovery;
 mod sync_command;
+
+use self::credentials::{
+    AccountCredential, AccountState, CredentialStore, InstallationRecord, InstallationState,
+    MAX_ACCOUNT_SLOTS, OsCredentialStore, SlotState,
+};
+use self::discovery::{DiscoveredAccount, collect_supported_accounts};
 
 const START_PATH: &str = "/v1/connector/pairing/start";
 const POLL_PATH: &str = "/v1/connector/pairing/poll";
 const CONNECT_PATH: &str = "/connect";
 const JSON_MEDIA_TYPE: &str = "application/json";
-const CLIENT_ID_HEADER: &str = "x-viberacing-client-id";
 const REQUEST_ID_HEADER: &str = "x-request-id";
-const KEYRING_SERVICE: &str = "viberacing.connector.pairing.v1";
-const KEYRING_ACCOUNT_PREFIX: &str = "device-";
-const ACCOUNT_DOMAIN: &[u8] = b"viberacing-connector-keyring-account-v1\0";
 const ORIGIN_DOMAIN: &[u8] = b"viberacing-connector-origin-v1\0";
-const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin> --label <device-label>\n  viberacing-connector forget-local --origin <https-origin> --label <device-label>\n  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n  viberacing-connector sync --origin <https-origin> --label <device-label> [--codex <absolute-path>]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
+const USAGE: &str = "Usage:\n  viberacing-connector connect --origin <https-origin>\n  viberacing-connector sync [--codex <absolute-path>]\n  viberacing-connector status\n  viberacing-connector doctor\n  viberacing-connector account list\n  viberacing-connector account sync <1..16>\n  viberacing-connector disconnect\n  viberacing-connector forget-local\n  viberacing-connector check-codex [--codex <absolute-path>] [--diagnostic-preview]\n  viberacing-connector propose-car --origin <https-origin> --label <device-label> --chassis <formula|rally|roadster> --nose <classic|scoop|wedge> --cockpit <canopy|open|rally> --wing <high|low|none> --wheels <all-terrain|slick|street> --palette <magenta|mint|redline|sunburst|turbo-blue> --trail <grid|none|spark> --seed <0..65535>";
 const MAX_ORIGIN_BYTES: usize = 512;
 const MAX_LABEL_CHARACTERS: usize = 64;
-const MAX_REQUEST_BYTES: usize = 1024;
-const MAX_RESPONSE_BYTES: u64 = 2048;
+const MAX_REQUEST_BYTES: usize = 32 * 1024;
+const MAX_RESPONSE_BYTES: u64 = 16 * 1024;
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_secs(2);
 const PAIRING_LIFETIME_SECONDS: u64 = 8 * 60;
 const MAX_POLL_ATTEMPTS: usize = 240;
-
-const RECORD_MAGIC: &[u8; 8] = b"VBRPAIR1";
-const RECORD_VERSION: u8 = 1;
-const MAGIC_RANGE: std::ops::Range<usize> = 0..8;
-const VERSION_INDEX: usize = 8;
-const STATE_INDEX: usize = 9;
-const ORIGIN_RANGE: std::ops::Range<usize> = 10..42;
-const CLIENT_ID_RANGE: std::ops::Range<usize> = 42..58;
-const SECRET_KEY_RANGE: std::ops::Range<usize> = 58..90;
-const PAIRING_ID_RANGE: std::ops::Range<usize> = 90..126;
-const POLL_TOKEN_RANGE: std::ops::Range<usize> = 126..158;
-const CHALLENGE_RANGE: std::ops::Range<usize> = 158..190;
-const USER_CODE_RANGE: std::ops::Range<usize> = 190..204;
-const DEADLINE_RANGE: std::ops::Range<usize> = 204..212;
-const SOURCE_ID_RANGE: std::ops::Range<usize> = 212..238;
-const DEVICE_ID_RANGE: std::ops::Range<usize> = 238..264;
-const RECORD_BYTES: usize = 264;
 
 /// Stable, non-reflective failures from the bounded connector command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,7 +75,19 @@ pub enum ConnectorCliError {
     InvalidServiceResponse,
     /// The short-lived pairing transaction expired before approval completed.
     PairingExpired,
-    /// No active source-bound credential exists for the requested origin and label.
+    /// A pairing-start request may have committed, so automatic replay is blocked until expiry.
+    PairingStartUncertain,
+    /// The native store is already bound to a different exact service origin.
+    DifferentConfiguredOrigin,
+    /// This installation already has at least one active account binding.
+    AlreadyConnected,
+    /// No built-in reader produced an eligible account candidate.
+    NoAccounts,
+    /// The requested local account selector is absent or inactive.
+    InvalidAccountSelector,
+    /// A discovered local account cannot be mapped uniquely to one active account credential.
+    AccountMappingUnavailable,
+    /// No active account-bound credential exists for the requested origin and label.
     NotConnected,
     /// No discovered or explicitly selected Codex artifact passed exact admission.
     CodexNotAdmitted,
@@ -127,6 +126,18 @@ impl fmt::Display for ConnectorCliError {
             Self::ServiceUnavailable => "the pairing service is temporarily unavailable",
             Self::InvalidServiceResponse => "the pairing service response is invalid",
             Self::PairingExpired => "the pairing request expired; run connect again",
+            Self::PairingStartUncertain => {
+                "pairing start has an uncertain outcome; wait for expiry before trying again"
+            }
+            Self::DifferentConfiguredOrigin => {
+                "this installation is already configured for a different origin"
+            }
+            Self::AlreadyConnected => "this installation is already connected",
+            Self::NoAccounts => "no eligible agent account was discovered",
+            Self::InvalidAccountSelector => "the account selector is invalid",
+            Self::AccountMappingUnavailable => {
+                "the discovered agent account cannot be mapped safely; reconnect it"
+            }
             Self::NotConnected => "this device is not connected; run connect first",
             Self::CodexNotAdmitted => "no exact Codex executable was admitted",
             Self::CodexUnavailable => "Codex usage is temporarily unavailable",
@@ -146,14 +157,15 @@ impl std::error::Error for ConnectorCliError {}
 
 /// Runs a bounded connector CLI command using process arguments and standard output.
 ///
-/// `connect` creates or resumes one device credential. `sync` admits one exact Codex candidate,
-/// collects only bounded daily usage, signs it with that active credential, and submits it once.
+/// `connect` creates or resumes one installation and bounded account credentials. `sync` admits
+/// one exact Codex candidate, collects only bounded daily usage, signs one request per active
+/// account credential, and submits each request once.
 /// `check-codex` performs only the same point-in-time candidate artifact admission, without opening
 /// credential storage, starting Codex, reading an account, persisting data, or using the network.
 /// Its explicit diagnostic preview contains only fixed version/admission state and remains local
 /// standard output for review before the user chooses whether to share it.
 /// `propose-car` signs and submits one exact enum-only `CarRecipe` with the same active credential.
-/// `forget-local` removes only the exact local origin/label credential and performs no server call.
+/// `forget-local` removes only the fixed native-store entries and performs no server call.
 ///
 /// # Errors
 ///
@@ -163,26 +175,9 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
     match parse_command(std::env::args_os().skip(1))? {
         ParsedCommand::Help => writeln!(io::stdout().lock(), "{USAGE}")
             .map_err(|_| ConnectorCliError::OutputUnavailable),
-        ParsedCommand::Connect { label, origin } => {
-            let origin = Origin::parse(&origin)?;
-            validate_label(&label)?;
-            let (os_family, architecture) = platform()?;
-            let mut store = OsCredentialStore::new(&origin, &label)?;
-            let mut transport = HttpPairingTransport::new(&origin);
-            run_connect(
-                &origin,
-                &label,
-                os_family,
-                architecture,
-                &mut store,
-                &mut transport,
-                &mut io::stdout().lock(),
-            )
-        }
-        ParsedCommand::ForgetLocal { label, origin } => {
-            let origin = Origin::parse(&origin)?;
-            validate_label(&label)?;
-            let mut store = OsCredentialStore::new(&origin, &label)?;
+        ParsedCommand::Connect { origin } => run_connect_cli(&origin),
+        ParsedCommand::ForgetLocal => {
+            let mut store = OsCredentialStore::new()?;
             run_forget_local(&mut store, &mut io::stdout().lock())
         }
         ParsedCommand::CheckCodex {
@@ -193,58 +188,114 @@ pub fn run_connector_cli() -> Result<(), ConnectorCliError> {
             diagnostic_preview,
             &mut io::stdout().lock(),
         ),
-        ParsedCommand::Sync {
-            codex_path,
-            label,
-            origin,
-        } => {
-            let origin = Origin::parse(&origin)?;
-            validate_label(&label)?;
-            let mut store = OsCredentialStore::new(&origin, &label)?;
-            sync_command::run_sync(
-                &origin,
-                codex_path.as_deref(),
-                &mut store,
-                &mut io::stdout().lock(),
-            )
+        ParsedCommand::Sync { codex_path } => run_sync_cli(codex_path.as_deref()),
+        ParsedCommand::Status => {
+            let mut store = OsCredentialStore::new()?;
+            run_status(&mut store, &mut io::stdout().lock())
         }
+        ParsedCommand::Doctor => {
+            let mut store = OsCredentialStore::new()?;
+            run_doctor(&mut store, &mut io::stdout().lock())
+        }
+        ParsedCommand::AccountList => {
+            let mut store = OsCredentialStore::new()?;
+            run_account_list(&mut store, &mut io::stdout().lock())
+        }
+        ParsedCommand::AccountSync { selector } => run_account_sync_cli(selector),
+        ParsedCommand::Disconnect => run_disconnect_cli(),
         ParsedCommand::ProposeCar {
             label,
             origin,
             recipe,
-        } => {
-            let origin = Origin::parse(&origin)?;
-            validate_label(&label)?;
-            let mut store = OsCredentialStore::new(&origin, &label)?;
-            car_proposal_command::run_car_proposal(
-                &origin,
-                recipe,
-                &mut store,
-                &mut io::stdout().lock(),
-            )
-        }
+        } => run_propose_car_cli(&origin, &label, recipe),
     }
+}
+
+fn run_connect_cli(origin: &str) -> Result<(), ConnectorCliError> {
+    let origin = Origin::parse(origin)?;
+    let (os_family, architecture) = platform()?;
+    let mut store = OsCredentialStore::new()?;
+    let mut transport = HttpPairingTransport::new(&origin);
+    let mut discover = || collect_supported_accounts(None);
+    let mut browser = open_default_browser;
+    let mut output = io::stdout().lock();
+    let completion = {
+        let mut runtime = ConnectRuntime {
+            store: &mut store,
+            transport: &mut transport,
+            discover: &mut discover,
+            open_browser: &mut browser,
+            output: &mut output,
+        };
+        run_connect(&origin, os_family, architecture, &mut runtime)?
+    };
+    sync_command::run_first_sync(&origin, &mut store, &completion, &mut output)?;
+    let provider_count = completion
+        .active_slots
+        .iter()
+        .filter_map(|slot| completion.discovered_accounts.get(*slot))
+        .map(|account| account.provider)
+        .collect::<std::collections::BTreeSet<_>>()
+        .len();
+    writeln!(
+        output,
+        "Connected {} account(s) across {provider_count} provider(s); current UTC week total: {} tokens.\nDashboard: {}/account",
+        completion.active_slots.len(),
+        completion.current_week_token_total,
+        origin.value
+    )
+    .map_err(|_| ConnectorCliError::OutputUnavailable)
+}
+
+fn run_sync_cli(codex_path: Option<&Path>) -> Result<(), ConnectorCliError> {
+    let mut store = OsCredentialStore::new()?;
+    let origin = load_configured_origin(&mut store)?;
+    sync_command::run_sync(&origin, codex_path, &mut store, &mut io::stdout().lock())
+}
+
+fn run_account_sync_cli(selector: usize) -> Result<(), ConnectorCliError> {
+    let mut store = OsCredentialStore::new()?;
+    let origin = load_configured_origin(&mut store)?;
+    sync_command::run_sync_slot(&origin, selector - 1, &mut store, &mut io::stdout().lock())
+}
+
+fn run_disconnect_cli() -> Result<(), ConnectorCliError> {
+    let mut store = OsCredentialStore::new()?;
+    let mut browser = open_default_browser;
+    run_disconnect(&mut store, &mut browser, &mut io::stdout().lock())
+}
+
+fn run_propose_car_cli(
+    origin: &str,
+    label: &str,
+    recipe: CarRecipeSelection,
+) -> Result<(), ConnectorCliError> {
+    let origin = Origin::parse(origin)?;
+    validate_label(label)?;
+    let mut store = OsCredentialStore::new()?;
+    car_proposal_command::run_car_proposal(&origin, recipe, &mut store, &mut io::stdout().lock())
 }
 
 enum ParsedCommand {
     Help,
     Connect {
-        label: String,
         origin: String,
     },
-    ForgetLocal {
-        label: String,
-        origin: String,
-    },
+    ForgetLocal,
     CheckCodex {
         codex_path: Option<PathBuf>,
         diagnostic_preview: bool,
     },
     Sync {
         codex_path: Option<PathBuf>,
-        label: String,
-        origin: String,
     },
+    Status,
+    Doctor,
+    AccountList,
+    AccountSync {
+        selector: usize,
+    },
+    Disconnect,
     ProposeCar {
         label: String,
         origin: String,
@@ -298,8 +349,8 @@ fn parse_command(
     arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<ParsedCommand, ConnectorCliError> {
     let arguments = collect_cli_arguments(arguments)?;
-    if arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"] {
-        return Ok(ParsedCommand::Help);
+    if let Some(command) = parse_fixed_command(&arguments) {
+        return command;
     }
     let command = arguments
         .first()
@@ -308,13 +359,56 @@ fn parse_command(
     if !is_bounded_command(command) {
         return Err(ConnectorCliError::InvalidArguments);
     }
+    parse_parameterized_command(command, &arguments[1..])
+}
 
+fn parse_fixed_command(arguments: &[String]) -> Option<Result<ParsedCommand, ConnectorCliError>> {
+    if arguments == ["--help"] || arguments == ["-h"] {
+        return Some(Ok(ParsedCommand::Help));
+    }
+    if arguments == ["status"] {
+        return Some(Ok(ParsedCommand::Status));
+    }
+    if arguments == ["doctor"] {
+        return Some(Ok(ParsedCommand::Doctor));
+    }
+    if arguments == ["disconnect"] {
+        return Some(Ok(ParsedCommand::Disconnect));
+    }
+    if arguments == ["forget-local"] {
+        return Some(Ok(ParsedCommand::ForgetLocal));
+    }
+    if arguments == ["account", "list"] {
+        return Some(Ok(ParsedCommand::AccountList));
+    }
+    if arguments.first().is_some_and(|value| value == "account") {
+        let selector = (arguments.len() == 3 && arguments[1] == "sync")
+            .then(|| arguments[2].parse::<usize>().ok())
+            .flatten()
+            .filter(|value| (1..=MAX_ACCOUNT_SLOTS).contains(value))
+            .filter(|value| value.to_string() == arguments[2]);
+        return Some(
+            selector
+                .map(|selector| ParsedCommand::AccountSync { selector })
+                .ok_or(ConnectorCliError::InvalidArguments),
+        );
+    }
+    if arguments == ["sync"] {
+        return Some(Ok(ParsedCommand::Sync { codex_path: None }));
+    }
+    None
+}
+
+fn parse_parameterized_command(
+    command: &str,
+    arguments: &[String],
+) -> Result<ParsedCommand, ConnectorCliError> {
     let mut origin = None;
     let mut label = None;
     let mut codex_path = None;
     let mut diagnostic_preview = false;
     let mut pending_recipe = PendingCarRecipeSelection::default();
-    let mut index = 1;
+    let mut index = 0;
     while index < arguments.len() {
         let flag = arguments
             .get(index)
@@ -328,8 +422,12 @@ fn parse_command(
             .get(index + 1)
             .ok_or(ConnectorCliError::InvalidArguments)?;
         match flag.as_str() {
-            "--origin" if origin.is_none() => origin = Some(value.clone()),
-            "--label" if label.is_none() => label = Some(value.clone()),
+            "--origin" if matches!(command, "connect" | "propose-car") && origin.is_none() => {
+                origin = Some(value.clone());
+            }
+            "--label" if command == "propose-car" && label.is_none() => {
+                label = Some(value.clone());
+            }
             "--codex"
                 if matches!(command, "check-codex" | "sync")
                     && codex_path.is_none()
@@ -372,21 +470,12 @@ fn parse_command(
     }
 
     match (command, origin, label, codex_path) {
-        ("connect", Some(origin), Some(label), None) => {
-            Ok(ParsedCommand::Connect { label, origin })
-        }
-        ("forget-local", Some(origin), Some(label), None) => {
-            Ok(ParsedCommand::ForgetLocal { label, origin })
-        }
+        ("connect", Some(origin), None, None) => Ok(ParsedCommand::Connect { origin }),
         ("check-codex", None, None, codex_path) => Ok(ParsedCommand::CheckCodex {
             codex_path,
             diagnostic_preview,
         }),
-        ("sync", Some(origin), Some(label), codex_path) => Ok(ParsedCommand::Sync {
-            codex_path,
-            label,
-            origin,
-        }),
+        ("sync", None, None, codex_path) => Ok(ParsedCommand::Sync { codex_path }),
         ("propose-car", Some(origin), Some(label), None) => {
             let recipe = pending_recipe.finish()?;
             Ok(ParsedCommand::ProposeCar {
@@ -412,7 +501,15 @@ fn collect_cli_arguments(
 fn is_bounded_command(command: &str) -> bool {
     matches!(
         command,
-        "connect" | "forget-local" | "check-codex" | "sync" | "propose-car"
+        "account"
+            | "connect"
+            | "disconnect"
+            | "doctor"
+            | "forget-local"
+            | "check-codex"
+            | "status"
+            | "sync"
+            | "propose-car"
     )
 }
 
@@ -504,207 +601,6 @@ fn platform() -> Result<(&'static str, &'static str), ConnectorCliError> {
     Ok((os_family, architecture))
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u8)]
-enum RecordState {
-    Prepared = 1,
-    Pending = 2,
-    Active = 3,
-}
-
-struct CredentialRecord {
-    state: RecordState,
-    origin_digest: [u8; 32],
-    client_id: [u8; 16],
-    secret_key: [u8; SECRET_KEY_LENGTH],
-    pairing_id: [u8; 36],
-    poll_token: [u8; 32],
-    challenge: [u8; PAIRING_CHALLENGE_BYTES],
-    user_code: [u8; 14],
-    deadline: u64,
-    source_id: [u8; 26],
-    device_id: [u8; 26],
-}
-
-impl CredentialRecord {
-    fn new(origin_digest: [u8; 32]) -> Result<Self, ConnectorCliError> {
-        let mut client_id = [0_u8; 16];
-        let mut secret_key = [0_u8; SECRET_KEY_LENGTH];
-        getrandom::fill(&mut client_id).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
-        getrandom::fill(&mut secret_key).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
-        if all_zero(&client_id) || all_zero(&secret_key) {
-            client_id.fill(0);
-            secret_key.fill(0);
-            return Err(ConnectorCliError::EntropyUnavailable);
-        }
-        Ok(Self {
-            state: RecordState::Prepared,
-            origin_digest,
-            client_id,
-            secret_key,
-            pairing_id: [0; 36],
-            poll_token: [0; 32],
-            challenge: [0; PAIRING_CHALLENGE_BYTES],
-            user_code: [0; 14],
-            deadline: 0,
-            source_id: [0; 26],
-            device_id: [0; 26],
-        })
-    }
-
-    fn make_prepared(&mut self) {
-        self.state = RecordState::Prepared;
-        self.pairing_id.fill(0);
-        self.poll_token.fill(0);
-        self.challenge.fill(0);
-        self.user_code.fill(0);
-        self.deadline = 0;
-        self.source_id.fill(0);
-        self.device_id.fill(0);
-    }
-
-    fn make_pending(
-        &mut self,
-        response: &StartResponse,
-        deadline: u64,
-    ) -> Result<(), ConnectorCliError> {
-        self.pairing_id = exact_text(&response.pairing_id)?;
-        self.poll_token = decode_base64url(&response.poll_token)
-            .ok_or(ConnectorCliError::InvalidServiceResponse)?;
-        self.challenge = decode_base64url(&response.pairing_challenge_base64_url)
-            .ok_or(ConnectorCliError::InvalidServiceResponse)?;
-        self.user_code = exact_text(&response.user_code)?;
-        self.deadline = deadline;
-        self.source_id.fill(0);
-        self.device_id.fill(0);
-        self.state = RecordState::Pending;
-        Ok(())
-    }
-
-    fn make_active(&mut self, source_id: &str, device_id: &str) -> Result<(), ConnectorCliError> {
-        self.source_id = exact_text(source_id)?;
-        self.device_id = exact_text(device_id)?;
-        self.pairing_id.fill(0);
-        self.poll_token.fill(0);
-        self.challenge.fill(0);
-        self.user_code.fill(0);
-        self.deadline = 0;
-        self.state = RecordState::Active;
-        Ok(())
-    }
-
-    fn pairing_id(&self) -> Result<&str, ConnectorCliError> {
-        str::from_utf8(&self.pairing_id).map_err(|_| ConnectorCliError::SecureStorageInvalid)
-    }
-
-    fn user_code(&self) -> Result<&str, ConnectorCliError> {
-        str::from_utf8(&self.user_code).map_err(|_| ConnectorCliError::SecureStorageInvalid)
-    }
-
-    fn encode(&self) -> [u8; RECORD_BYTES] {
-        let mut output = [0_u8; RECORD_BYTES];
-        output[MAGIC_RANGE].copy_from_slice(RECORD_MAGIC);
-        output[VERSION_INDEX] = RECORD_VERSION;
-        output[STATE_INDEX] = self.state as u8;
-        output[ORIGIN_RANGE].copy_from_slice(&self.origin_digest);
-        output[CLIENT_ID_RANGE].copy_from_slice(&self.client_id);
-        output[SECRET_KEY_RANGE].copy_from_slice(&self.secret_key);
-        output[PAIRING_ID_RANGE].copy_from_slice(&self.pairing_id);
-        output[POLL_TOKEN_RANGE].copy_from_slice(&self.poll_token);
-        output[CHALLENGE_RANGE].copy_from_slice(&self.challenge);
-        output[USER_CODE_RANGE].copy_from_slice(&self.user_code);
-        output[DEADLINE_RANGE].copy_from_slice(&self.deadline.to_le_bytes());
-        output[SOURCE_ID_RANGE].copy_from_slice(&self.source_id);
-        output[DEVICE_ID_RANGE].copy_from_slice(&self.device_id);
-        output
-    }
-
-    fn decode(bytes: &[u8], expected_origin: &[u8; 32]) -> Result<Self, ConnectorCliError> {
-        if bytes.len() != RECORD_BYTES
-            || bytes[MAGIC_RANGE] != *RECORD_MAGIC
-            || bytes[VERSION_INDEX] != RECORD_VERSION
-        {
-            return Err(ConnectorCliError::SecureStorageInvalid);
-        }
-        let state = match bytes[STATE_INDEX] {
-            1 => RecordState::Prepared,
-            2 => RecordState::Pending,
-            3 => RecordState::Active,
-            _ => return Err(ConnectorCliError::SecureStorageInvalid),
-        };
-        let mut record = Self {
-            state,
-            origin_digest: copy_range(bytes, ORIGIN_RANGE),
-            client_id: copy_range(bytes, CLIENT_ID_RANGE),
-            secret_key: copy_range(bytes, SECRET_KEY_RANGE),
-            pairing_id: copy_range(bytes, PAIRING_ID_RANGE),
-            poll_token: copy_range(bytes, POLL_TOKEN_RANGE),
-            challenge: copy_range(bytes, CHALLENGE_RANGE),
-            user_code: copy_range(bytes, USER_CODE_RANGE),
-            deadline: u64::from_le_bytes(copy_range(bytes, DEADLINE_RANGE)),
-            source_id: copy_range(bytes, SOURCE_ID_RANGE),
-            device_id: copy_range(bytes, DEVICE_ID_RANGE),
-        };
-        if !record.valid(expected_origin) {
-            record.clear();
-            return Err(ConnectorCliError::SecureStorageInvalid);
-        }
-        Ok(record)
-    }
-
-    fn valid(&self, expected_origin: &[u8; 32]) -> bool {
-        if &self.origin_digest != expected_origin
-            || all_zero(&self.client_id)
-            || all_zero(&self.secret_key)
-        {
-            return false;
-        }
-        let pending_fields_clear = all_zero(&self.pairing_id)
-            && all_zero(&self.poll_token)
-            && all_zero(&self.challenge)
-            && all_zero(&self.user_code)
-            && self.deadline == 0;
-        let binding_fields_clear = all_zero(&self.source_id) && all_zero(&self.device_id);
-        match self.state {
-            RecordState::Prepared => pending_fields_clear && binding_fields_clear,
-            RecordState::Pending => {
-                binding_fields_clear
-                    && self.deadline > 0
-                    && str::from_utf8(&self.pairing_id).is_ok_and(valid_pairing_id)
-                    && str::from_utf8(&self.user_code).is_ok_and(valid_user_code)
-                    && !all_zero(&self.poll_token)
-                    && !all_zero(&self.challenge)
-            }
-            RecordState::Active => {
-                pending_fields_clear
-                    && str::from_utf8(&self.source_id)
-                        .is_ok_and(|value| valid_public_id(value, "src_"))
-                    && str::from_utf8(&self.device_id)
-                        .is_ok_and(|value| valid_public_id(value, "dev_"))
-            }
-        }
-    }
-
-    fn clear(&mut self) {
-        self.origin_digest.fill(0);
-        self.client_id.fill(0);
-        self.secret_key.fill(0);
-        self.pairing_id.fill(0);
-        self.poll_token.fill(0);
-        self.challenge.fill(0);
-        self.user_code.fill(0);
-        self.deadline = 0;
-        self.source_id.fill(0);
-        self.device_id.fill(0);
-    }
-}
-
-impl Drop for CredentialRecord {
-    fn drop(&mut self) {
-        self.clear();
-    }
-}
-
 fn copy_range<const N: usize>(input: &[u8], range: std::ops::Range<usize>) -> [u8; N] {
     let mut output = [0_u8; N];
     output.copy_from_slice(&input[range]);
@@ -722,80 +618,11 @@ fn all_zero(value: &[u8]) -> bool {
     value.iter().all(|byte| *byte == 0)
 }
 
-trait CredentialStore {
-    fn load(
-        &mut self,
-        expected_origin: &[u8; 32],
-    ) -> Result<Option<CredentialRecord>, ConnectorCliError>;
-    fn save(&mut self, record: &CredentialRecord) -> Result<(), ConnectorCliError>;
-    fn delete(&mut self) -> Result<(), ConnectorCliError>;
-}
-
-struct OsCredentialStore {
-    entry: keyring::Entry,
-}
-
-impl OsCredentialStore {
-    fn new(origin: &Origin, label: &str) -> Result<Self, ConnectorCliError> {
-        let account = credential_account(origin, label);
-        let entry = keyring::Entry::new(KEYRING_SERVICE, &account)
-            .map_err(|_| ConnectorCliError::SecureStorageUnavailable)?;
-        Ok(Self { entry })
-    }
-}
-
-impl CredentialStore for OsCredentialStore {
-    fn load(
-        &mut self,
-        expected_origin: &[u8; 32],
-    ) -> Result<Option<CredentialRecord>, ConnectorCliError> {
-        let mut bytes = match self.entry.get_secret() {
-            Ok(bytes) => bytes,
-            Err(keyring::Error::NoEntry) => return Ok(None),
-            Err(_) => return Err(ConnectorCliError::SecureStorageUnavailable),
-        };
-        let result = CredentialRecord::decode(&bytes, expected_origin).map(Some);
-        bytes.fill(0);
-        result
-    }
-
-    fn save(&mut self, record: &CredentialRecord) -> Result<(), ConnectorCliError> {
-        let mut encoded = record.encode();
-        let result = self
-            .entry
-            .set_secret(&encoded)
-            .map_err(|_| ConnectorCliError::SecureStorageUnavailable);
-        encoded.fill(0);
-        result
-    }
-
-    fn delete(&mut self) -> Result<(), ConnectorCliError> {
-        map_credential_delete_result(&self.entry.delete_credential())
-    }
-}
-
 fn map_credential_delete_result(result: &keyring::Result<()>) -> Result<(), ConnectorCliError> {
     match result {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err(ConnectorCliError::SecureStorageUnavailable),
     }
-}
-
-fn credential_account(origin: &Origin, label: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(ACCOUNT_DOMAIN);
-    hasher.update(origin.value.as_bytes());
-    hasher.update([0]);
-    hasher.update(label.as_bytes());
-    let mut digest = hasher.finalize();
-    let mut account = String::with_capacity(KEYRING_ACCOUNT_PREFIX.len() + digest.len() * 2);
-    account.push_str(KEYRING_ACCOUNT_PREFIX);
-    for byte in &digest {
-        use fmt::Write as _;
-        write!(account, "{byte:02x}").expect("writing to a String cannot fail");
-    }
-    digest.fill(0);
-    account
 }
 
 fn digest_origin(origin: &Origin) -> [u8; 32] {
@@ -805,17 +632,6 @@ fn digest_origin(origin: &Origin) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct StartRequest<'a> {
-    schema_version: u8,
-    device_public_key_base64_url: &'a str,
-    device_label: &'a str,
-    connector_version: &'static str,
-    os_family: &'static str,
-    architecture: &'static str,
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct StartResponse {
@@ -823,8 +639,9 @@ struct StartResponse {
     request_id: String,
     pairing_id: String,
     poll_token: String,
-    pairing_challenge_base64_url: String,
+    pairing_challenge: String,
     user_code: String,
+    approval_url: String,
     expires_at: String,
 }
 
@@ -832,8 +649,18 @@ struct StartResponse {
 #[serde(rename_all = "camelCase")]
 struct PollRequest<'a> {
     schema_version: u8,
+    pairing_id: &'a str,
     poll_token: &'a str,
     possession_signature: &'a str,
+}
+
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum PairingState {
+    Activated,
+    Approved,
+    Expired,
+    Pending,
 }
 
 #[derive(Deserialize)]
@@ -841,14 +668,45 @@ struct PollRequest<'a> {
 struct PollResponse {
     schema_version: u8,
     request_id: String,
-    device_bindings: Vec<DeviceBinding>,
+    pairing_state: PairingState,
+    candidate_activations: Vec<CandidateActivation>,
 }
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct DeviceBinding {
-    source_id: String,
-    device_id: String,
+struct CandidateActivation {
+    candidate_id: String,
+    activation_state: ActivationState,
+    agent_account_id: Option<String>,
+    device_id: Option<String>,
+    server_binding_material: Option<ServerBindingMaterial>,
+    next_action: NextAction,
+}
+
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum ActivationState {
+    Active,
+    Pending,
+    Skipped,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ServerBindingMaterial {
+    device_key_id: String,
+    usage_endpoint: String,
+    signature_protocol: String,
+}
+
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum NextAction {
+    None,
+    ReconnectAccount,
+    Sync,
+    UpdateConnector,
+    Wait,
 }
 
 enum StartTransportOutcome {
@@ -858,7 +716,7 @@ enum StartTransportOutcome {
 
 enum PollTransportOutcome {
     Pending,
-    Activated(DeviceBinding),
+    Activated(Vec<CandidateActivation>),
     Expired,
     Retryable,
 }
@@ -872,14 +730,9 @@ enum TransportError {
 trait PairingTransport {
     fn start(
         &mut self,
-        client_id: &str,
-        request: &StartRequest<'_>,
+        request: &PreparedPairingStart,
     ) -> Result<StartTransportOutcome, TransportError>;
-    fn poll(
-        &mut self,
-        client_id: &str,
-        request: &PollRequest<'_>,
-    ) -> Result<PollTransportOutcome, TransportError>;
+    fn poll(&mut self, request: &PollRequest<'_>) -> Result<PollTransportOutcome, TransportError>;
 }
 
 struct HttpPairingTransport {
@@ -909,7 +762,6 @@ impl HttpPairingTransport {
     fn post(
         &self,
         path: &str,
-        client_id: &str,
         request: &impl Serialize,
         expired_on_bad_request: bool,
     ) -> Result<HttpOutcome, TransportError> {
@@ -923,7 +775,6 @@ impl HttpPairingTransport {
             .post(format!("{}{path}", self.origin))
             .content_type(JSON_MEDIA_TYPE)
             .header("accept", JSON_MEDIA_TYPE)
-            .header(CLIENT_ID_HEADER, client_id)
             .send(body.as_slice());
         body.fill(0);
         let mut response = response.map_err(|error| map_transport_error(&error))?;
@@ -979,14 +830,15 @@ fn new_http_agent() -> Agent {
 impl PairingTransport for HttpPairingTransport {
     fn start(
         &mut self,
-        client_id: &str,
-        request: &StartRequest<'_>,
+        request: &PreparedPairingStart,
     ) -> Result<StartTransportOutcome, TransportError> {
-        match self.post(START_PATH, client_id, request, false)? {
+        match self.post(START_PATH, request, false)? {
             HttpOutcome::Success(success) => {
                 let response: StartResponse = serde_json::from_slice(&success.body)
                     .map_err(|_| TransportError::InvalidResponse)?;
-                if !valid_start_response(&response) || response.request_id != success.request_id {
+                if !valid_start_response(&response, &self.origin)
+                    || response.request_id != success.request_id
+                {
                     return Err(TransportError::InvalidResponse);
                 }
                 Ok(StartTransportOutcome::Created(response))
@@ -996,21 +848,22 @@ impl PairingTransport for HttpPairingTransport {
         }
     }
 
-    fn poll(
-        &mut self,
-        client_id: &str,
-        request: &PollRequest<'_>,
-    ) -> Result<PollTransportOutcome, TransportError> {
-        match self.post(POLL_PATH, client_id, request, true)? {
+    fn poll(&mut self, request: &PollRequest<'_>) -> Result<PollTransportOutcome, TransportError> {
+        match self.post(POLL_PATH, request, true)? {
             HttpOutcome::Success(success) => {
                 let response: PollResponse = serde_json::from_slice(&success.body)
                     .map_err(|_| TransportError::InvalidResponse)?;
                 if !valid_poll_response(&response) || response.request_id != success.request_id {
                     return Err(TransportError::InvalidResponse);
                 }
-                match response.device_bindings.into_iter().next() {
-                    Some(binding) => Ok(PollTransportOutcome::Activated(binding)),
-                    None => Ok(PollTransportOutcome::Pending),
+                match response.pairing_state {
+                    PairingState::Activated => Ok(PollTransportOutcome::Activated(
+                        response.candidate_activations,
+                    )),
+                    PairingState::Approved | PairingState::Pending => {
+                        Ok(PollTransportOutcome::Pending)
+                    }
+                    PairingState::Expired => Ok(PollTransportOutcome::Expired),
                 }
             }
             HttpOutcome::Retryable => Ok(PollTransportOutcome::Retryable),
@@ -1038,29 +891,85 @@ fn valid_json_content_type(value: Option<&ureq::http::HeaderValue>) -> bool {
         })
 }
 
-fn valid_start_response(response: &StartResponse) -> bool {
+fn valid_start_response(response: &StartResponse, origin: &str) -> bool {
     response.schema_version == 1
         && valid_public_id(&response.request_id, "req_")
         && valid_pairing_id(&response.pairing_id)
         && decode_base64url::<32>(&response.poll_token).is_some_and(|value| !all_zero(&value))
-        && decode_base64url::<32>(&response.pairing_challenge_base64_url)
+        && decode_base64url::<32>(&response.pairing_challenge)
             .is_some_and(|value| !all_zero(&value))
         && valid_user_code(&response.user_code)
+        && response.approval_url == format!("{origin}{CONNECT_PATH}?code={}", response.user_code)
         && valid_utc_millisecond_timestamp(&response.expires_at)
 }
 
 fn valid_poll_response(response: &PollResponse) -> bool {
+    let array_shape = match response.pairing_state {
+        PairingState::Activated => {
+            !response.candidate_activations.is_empty()
+                && response.candidate_activations.len() <= MAX_ACCOUNT_SLOTS
+        }
+        PairingState::Approved | PairingState::Expired | PairingState::Pending => {
+            response.candidate_activations.is_empty()
+        }
+    };
     response.schema_version == 1
         && valid_public_id(&response.request_id, "req_")
-        && response.device_bindings.len() <= 1
-        && response.device_bindings.iter().all(|binding| {
-            valid_public_id(&binding.source_id, "src_")
-                && valid_public_id(&binding.device_id, "dev_")
-        })
+        && array_shape
+        && response
+            .candidate_activations
+            .iter()
+            .enumerate()
+            .all(|(index, activation)| {
+                valid_prefixed_id(&activation.candidate_id, "cand_", 27)
+                    && response.candidate_activations[..index]
+                        .iter()
+                        .all(|seen| seen.candidate_id != activation.candidate_id)
+                    && valid_candidate_activation(activation)
+            })
+}
+
+fn valid_candidate_activation(activation: &CandidateActivation) -> bool {
+    match activation.activation_state {
+        ActivationState::Active => {
+            activation
+                .agent_account_id
+                .as_deref()
+                .is_some_and(|value| valid_public_id(value, "acc_"))
+                && activation
+                    .device_id
+                    .as_deref()
+                    .is_some_and(|value| valid_public_id(value, "dev_"))
+                && activation
+                    .server_binding_material
+                    .as_ref()
+                    .is_some_and(|binding| {
+                        valid_public_id(&binding.device_key_id, "key_")
+                            && binding.usage_endpoint == "/v1/usage"
+                            && binding.signature_protocol == "viberacing-usage-sync-auth-v1"
+                    })
+                && activation.next_action == NextAction::Sync
+        }
+        ActivationState::Skipped => {
+            activation.agent_account_id.is_none()
+                && activation.device_id.is_none()
+                && activation.server_binding_material.is_none()
+                && activation.next_action == NextAction::None
+        }
+        ActivationState::Pending => false,
+    }
 }
 
 fn valid_public_id(value: &str, prefix: &str) -> bool {
     value.len() == 26
+        && value.starts_with(prefix)
+        && value[prefix.len()..]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
+fn valid_prefixed_id(value: &str, prefix: &str, expected_length: usize) -> bool {
+    value.len() == expected_length
         && value.starts_with(prefix)
         && value[prefix.len()..]
             .bytes()
@@ -1163,78 +1072,132 @@ fn base64url_value(byte: u8) -> Option<u8> {
     }
 }
 
+struct ConnectCompletion {
+    discovered_accounts: Vec<DiscoveredAccount>,
+    active_slots: Vec<usize>,
+    current_week_token_total: String,
+}
+
+struct ConnectRuntime<'a> {
+    store: &'a mut dyn CredentialStore,
+    transport: &'a mut dyn PairingTransport,
+    discover: &'a mut dyn FnMut() -> Result<Vec<DiscoveredAccount>, ConnectorCliError>,
+    open_browser: &'a mut dyn FnMut(&str) -> bool,
+    output: &'a mut dyn Write,
+}
+
 fn run_connect(
     origin: &Origin,
-    label: &str,
     os_family: &'static str,
     architecture: &'static str,
-    store: &mut dyn CredentialStore,
-    transport: &mut dyn PairingTransport,
-    output: &mut dyn Write,
-) -> Result<(), ConnectorCliError> {
-    let origin_digest = digest_origin(origin);
-    let mut record = if let Some(record) = store.load(&origin_digest)? {
+    runtime: &mut ConnectRuntime<'_>,
+) -> Result<ConnectCompletion, ConnectorCliError> {
+    let mut installation = if let Some(record) = runtime.store.load_installation()? {
+        if record.origin()?.value != origin.value {
+            return Err(ConnectorCliError::DifferentConfiguredOrigin);
+        }
         record
     } else {
-        let record = CredentialRecord::new(origin_digest)?;
-        store.save(&record)?;
+        let record = InstallationRecord::new(origin)?;
+        runtime.store.save_installation(&record)?;
         record
     };
 
-    if record.state == RecordState::Active {
-        return write_line(output, "This device is already connected.");
+    if installation.state == InstallationState::Active {
+        return Err(ConnectorCliError::AlreadyConnected);
     }
-    if record.state == RecordState::Pending && now_epoch_seconds()? >= record.deadline {
-        record.make_prepared();
-        store.save(&record)?;
+    if matches!(
+        installation.state,
+        InstallationState::Starting | InstallationState::Pending
+    ) && now_epoch_seconds()? >= installation.deadline
+    {
+        clear_pending_accounts(&installation, runtime.store)?;
+        installation.reset_expired();
+        runtime.store.save_installation(&installation)?;
     }
-    if record.state == RecordState::Prepared {
+    if installation.state == InstallationState::Starting {
+        return Err(ConnectorCliError::PairingStartUncertain);
+    }
+
+    let mut discovered_accounts = Vec::new();
+    if installation.state == InstallationState::Prepared {
+        discovered_accounts = (runtime.discover)()?;
+        if discovered_accounts.is_empty() || discovered_accounts.len() > MAX_ACCOUNT_SLOTS {
+            return Err(ConnectorCliError::NoAccounts);
+        }
+        write_discovery_preview(&discovered_accounts, runtime.output)?;
         start_pairing(
-            label,
+            origin,
             os_family,
             architecture,
-            &mut record,
-            store,
-            transport,
+            &mut installation,
+            &discovered_accounts,
+            runtime.store,
+            runtime.transport,
         )?;
     }
 
-    writeln!(
-        output,
-        "Open {}{CONNECT_PATH} and enter code {}.",
+    let approval_url = format!(
+        "{}{CONNECT_PATH}?code={}",
         origin.value,
-        record.user_code()?
+        installation.user_code()?
+    );
+    writeln!(
+        runtime.output,
+        "Approve this installation in your browser:\n{approval_url}\nFallback code: {}",
+        installation.user_code()?
     )
     .map_err(|_| ConnectorCliError::OutputUnavailable)?;
-    write_line(output, "Waiting for approval...")?;
+    let _ = (runtime.open_browser)(&approval_url);
+    write_line(runtime.output, "Waiting for one batch approval...")?;
 
-    let pairing_id = record.pairing_id()?.to_owned();
-    let key = PendingDevicePairingSigningKey::from_secret_key(record.secret_key);
-    let context = ReviewedPairingChallenge::from_reviewed_response(&pairing_id, record.challenge);
-    let proof = CandidatePairingPossessionV1Signer::sign(key, context)
+    let active_slots = poll_for_activation(&mut installation, runtime)?;
+
+    if discovered_accounts.is_empty() && !active_slots.is_empty() {
+        discovered_accounts = (runtime.discover)()?;
+    }
+    let (week_start, week_end) = current_utc_week_dates(SystemTime::now())?;
+    let current_week_token_total =
+        sum_discovered_usage(&discovered_accounts, &week_start, &week_end)?;
+    Ok(ConnectCompletion {
+        discovered_accounts,
+        active_slots,
+        current_week_token_total,
+    })
+}
+
+fn poll_for_activation(
+    installation: &mut InstallationRecord,
+    runtime: &mut ConnectRuntime<'_>,
+) -> Result<Vec<usize>, ConnectorCliError> {
+    let pairing_id = installation.pairing_id()?.to_owned();
+    let key = PendingInstallationSigningKey::from_secret_key(installation.secret_key);
+    let context =
+        ReviewedPairingPollChallenge::from_reviewed_response(&pairing_id, installation.challenge);
+    let proof = PairingPollV1Signer::sign(key, context)
         .map_err(|_| ConnectorCliError::SecureStorageInvalid)?;
-    let poll_token = encode_base64url(&record.poll_token);
-    let client_id = encode_base64url(&record.client_id);
+    let poll_token = encode_base64url(&installation.poll_token);
     let request = PollRequest {
         schema_version: 1,
+        pairing_id: &pairing_id,
         poll_token: &poll_token,
         possession_signature: proof.signature(),
     };
-
     for attempt in 0..MAX_POLL_ATTEMPTS {
-        if now_epoch_seconds()? >= record.deadline {
-            return expire_pairing(&mut record, store);
+        if now_epoch_seconds()? >= installation.deadline {
+            return expire_pairing(installation, runtime.store);
         }
-        match transport
-            .poll(&client_id, &request)
+        match runtime
+            .transport
+            .poll(&request)
             .map_err(map_cli_transport_error)?
         {
-            PollTransportOutcome::Activated(binding) => {
-                record.make_active(&binding.source_id, &binding.device_id)?;
-                store.save(&record)?;
-                return write_line(output, "Device connected.");
+            PollTransportOutcome::Activated(activations) => {
+                return apply_activations(installation, activations, runtime.store);
             }
-            PollTransportOutcome::Expired => return expire_pairing(&mut record, store),
+            PollTransportOutcome::Expired => {
+                return expire_pairing(installation, runtime.store);
+            }
             PollTransportOutcome::Pending | PollTransportOutcome::Retryable => {
                 if attempt + 1 < MAX_POLL_ATTEMPTS {
                     thread::sleep(POLL_INTERVAL);
@@ -1242,49 +1205,405 @@ fn run_connect(
             }
         }
     }
-    expire_pairing(&mut record, store)
+    expire_pairing(installation, runtime.store)
 }
 
 fn start_pairing(
-    label: &str,
+    origin: &Origin,
     os_family: &'static str,
     architecture: &'static str,
-    record: &mut CredentialRecord,
+    installation: &mut InstallationRecord,
+    discovered_accounts: &[DiscoveredAccount],
     store: &mut dyn CredentialStore,
     transport: &mut dyn PairingTransport,
 ) -> Result<(), ConnectorCliError> {
-    let key = PendingDevicePairingSigningKey::from_secret_key(record.secret_key);
-    let public_key = encode_base64url(&key.verifying_key_bytes());
-    let client_id = encode_base64url(&record.client_id);
-    let request = StartRequest {
-        schema_version: 1,
-        device_public_key_base64_url: &public_key,
-        device_label: label,
-        connector_version: env!("CARGO_PKG_VERSION"),
+    let prepared = prepare_pairing_start(
         os_family,
         architecture,
+        installation,
+        discovered_accounts,
+        store,
+    )?;
+    let uncertain_deadline = now_epoch_seconds()?
+        .checked_add(10 * 60)
+        .ok_or(ConnectorCliError::ServiceUnavailable)?;
+    installation.make_starting(
+        uncertain_deadline,
+        prepared.manifest_digest,
+        &prepared.candidate_ids,
+    )?;
+    store.save_installation(installation)?;
+
+    let response = match transport.start(&prepared.request) {
+        Ok(StartTransportOutcome::Created(response)) => response,
+        Ok(StartTransportOutcome::Retryable) | Err(_) => {
+            return Err(ConnectorCliError::PairingStartUncertain);
+        }
     };
-    let response = match transport
-        .start(&client_id, &request)
-        .map_err(map_cli_transport_error)?
+    persist_pending_start(origin, installation, store, &prepared, &response)
+}
+
+struct PairingStartMaterial {
+    request: PreparedPairingStart,
+    candidate_ids: Vec<String>,
+    manifest_digest: [u8; 32],
+}
+
+fn prepare_pairing_start(
+    os_family: &'static str,
+    architecture: &'static str,
+    installation: &InstallationRecord,
+    discovered_accounts: &[DiscoveredAccount],
+    store: &mut dyn CredentialStore,
+) -> Result<PairingStartMaterial, ConnectorCliError> {
+    for slot in 0..MAX_ACCOUNT_SLOTS {
+        store.delete_account(slot)?;
+    }
+    let (candidates, candidate_ids) =
+        prepare_discovery_candidates(installation, discovered_accounts, store)?;
+    let key = PendingInstallationSigningKey::from_secret_key(installation.secret_key);
+    let installation_public_key = encode_base64url(&key.verifying_key_bytes());
+    let manifest =
+        DiscoveryManifestV1::new(installation_public_key, os_family, architecture, candidates)
+            .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
+    let client_id = encode_base64url(&installation.client_rate_id);
+    let signed_at = sync_command::format_utc_milliseconds(SystemTime::now())?;
+    let mut nonce = [0_u8; 16];
+    getrandom::fill(&mut nonce).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
+    let request = PairingStartV1Signer::sign(key, manifest, client_id.clone(), signed_at, nonce)
+        .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
+    Ok(PairingStartMaterial {
+        manifest_digest: *request.manifest_digest(),
+        request,
+        candidate_ids,
+    })
+}
+
+fn prepare_discovery_candidates(
+    installation: &InstallationRecord,
+    discovered_accounts: &[DiscoveredAccount],
+    store: &mut dyn CredentialStore,
+) -> Result<(Vec<DiscoveryCandidateV1>, Vec<String>), ConnectorCliError> {
+    let (week_start, week_end) = current_utc_week_dates(SystemTime::now())?;
+    let mut candidates = Vec::with_capacity(discovered_accounts.len());
+    let mut candidate_ids = Vec::with_capacity(discovered_accounts.len());
+    for (slot, account) in discovered_accounts.iter().enumerate() {
+        let candidate_id = fresh_identifier("cand_")?;
+        let prepared = prepare_discovery_candidate(
+            installation.origin_digest,
+            account,
+            candidate_id.clone(),
+            &week_start,
+            &week_end,
+        );
+        let (record, candidate) = match prepared {
+            Ok(value) => value,
+            Err(error) => {
+                clear_created_accounts(store, slot)?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = store.save_account(slot, &record) {
+            clear_created_accounts(store, slot + 1)?;
+            return Err(error);
+        }
+        candidate_ids.push(candidate_id);
+        candidates.push(candidate);
+    }
+    Ok((candidates, candidate_ids))
+}
+
+fn prepare_discovery_candidate(
+    origin_digest: [u8; 32],
+    account: &DiscoveredAccount,
+    candidate_id: String,
+    week_start: &str,
+    week_end: &str,
+) -> Result<(AccountCredential, DiscoveryCandidateV1), ConnectorCliError> {
+    let mut account_secret = [0_u8; 32];
+    getrandom::fill(&mut account_secret).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
+    if all_zero(&account_secret) {
+        account_secret.fill(0);
+        return Err(ConnectorCliError::EntropyUnavailable);
+    }
+    let sync_public_key = {
+        let key = ed25519_dalek::SigningKey::from_bytes(&account_secret);
+        encode_base64url(&key.verifying_key().to_bytes())
+    };
+    let record =
+        AccountCredential::new_pending(origin_digest, &candidate_id, account, account_secret)?;
+    let candidate = DiscoveryCandidateV1::new(
+        candidate_id,
+        account.provider,
+        account.reader_version,
+        account.accounting_revision,
+        account.scope_kind,
+        account.fingerprint_kind,
+        account.account_fingerprint_digest.clone(),
+        account.safe_display_label.clone(),
+        sync_public_key,
+        account.total_for_dates(week_start, week_end)?,
+        account.last_usage_date(),
+        account.status,
+    )
+    .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
+    Ok((record, candidate))
+}
+
+fn persist_pending_start(
+    origin: &Origin,
+    installation: &mut InstallationRecord,
+    store: &mut dyn CredentialStore,
+    prepared: &PairingStartMaterial,
+    response: &StartResponse,
+) -> Result<(), ConnectorCliError> {
+    if response.approval_url
+        != format!("{}{CONNECT_PATH}?code={}", origin.value, response.user_code)
     {
-        StartTransportOutcome::Created(response) => response,
-        StartTransportOutcome::Retryable => return Err(ConnectorCliError::ServiceUnavailable),
-    };
+        return Err(ConnectorCliError::InvalidServiceResponse);
+    }
     let deadline = now_epoch_seconds()?
         .checked_add(PAIRING_LIFETIME_SECONDS)
         .ok_or(ConnectorCliError::ServiceUnavailable)?;
-    record.make_pending(&response, deadline)?;
-    store.save(record)
+    let poll_token =
+        decode_base64url(&response.poll_token).ok_or(ConnectorCliError::InvalidServiceResponse)?;
+    let challenge = decode_base64url(&response.pairing_challenge)
+        .ok_or(ConnectorCliError::InvalidServiceResponse)?;
+    installation.make_pending(
+        &response.pairing_id,
+        poll_token,
+        challenge,
+        &response.user_code,
+        deadline,
+        prepared.manifest_digest,
+        &prepared.candidate_ids,
+    )?;
+    store.save_installation(installation)
 }
 
-fn expire_pairing(
-    record: &mut CredentialRecord,
+fn apply_activations(
+    installation: &mut InstallationRecord,
+    activations: Vec<CandidateActivation>,
+    store: &mut dyn CredentialStore,
+) -> Result<Vec<usize>, ConnectorCliError> {
+    let pending_slots = installation
+        .populated_slots()
+        .filter(|slot| installation.slot_state(*slot) == Some(SlotState::Pending))
+        .collect::<Vec<_>>();
+    if activations.len() != pending_slots.len() {
+        return Err(ConnectorCliError::InvalidServiceResponse);
+    }
+    let mut active_slots = Vec::new();
+    let mut skipped_slots = Vec::new();
+    for activation in activations {
+        let slot = pending_slots
+            .iter()
+            .copied()
+            .find(|slot| {
+                installation
+                    .candidate_id(*slot)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|value| value == activation.candidate_id)
+            })
+            .ok_or(ConnectorCliError::InvalidServiceResponse)?;
+        if active_slots.contains(&slot) || skipped_slots.contains(&slot) {
+            return Err(ConnectorCliError::InvalidServiceResponse);
+        }
+        match activation.activation_state {
+            ActivationState::Active => {
+                let mut account = store
+                    .load_account(slot, &installation.origin_digest)?
+                    .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+                if account.candidate_id()? != activation.candidate_id {
+                    return Err(ConnectorCliError::SecureStorageInvalid);
+                }
+                let binding = activation
+                    .server_binding_material
+                    .as_ref()
+                    .ok_or(ConnectorCliError::InvalidServiceResponse)?;
+                account.make_active(
+                    activation
+                        .agent_account_id
+                        .as_deref()
+                        .ok_or(ConnectorCliError::InvalidServiceResponse)?,
+                    activation
+                        .device_id
+                        .as_deref()
+                        .ok_or(ConnectorCliError::InvalidServiceResponse)?,
+                    &binding.device_key_id,
+                )?;
+                store.save_account(slot, &account)?;
+                active_slots.push(slot);
+            }
+            ActivationState::Skipped => {
+                store.delete_account(slot)?;
+                skipped_slots.push(slot);
+            }
+            ActivationState::Pending => {
+                return Err(ConnectorCliError::InvalidServiceResponse);
+            }
+        }
+    }
+    installation.finish_activation(&active_slots, &skipped_slots)?;
+    store.save_installation(installation)?;
+    Ok(active_slots)
+}
+
+fn clear_created_accounts(
+    store: &mut dyn CredentialStore,
+    count: usize,
+) -> Result<(), ConnectorCliError> {
+    let mut failed = false;
+    for slot in 0..count.min(MAX_ACCOUNT_SLOTS) {
+        if store.delete_account(slot).is_err() {
+            failed = true;
+        }
+    }
+    if failed {
+        Err(ConnectorCliError::SecureStorageUnavailable)
+    } else {
+        Ok(())
+    }
+}
+
+fn clear_pending_accounts(
+    installation: &InstallationRecord,
     store: &mut dyn CredentialStore,
 ) -> Result<(), ConnectorCliError> {
-    record.make_prepared();
-    store.save(record)?;
+    let slots = installation.populated_slots().collect::<Vec<_>>();
+    let mut failed = false;
+    for slot in slots {
+        if store.delete_account(slot).is_err() {
+            failed = true;
+        }
+    }
+    if failed {
+        Err(ConnectorCliError::SecureStorageUnavailable)
+    } else {
+        Ok(())
+    }
+}
+
+fn expire_pairing<T>(
+    installation: &mut InstallationRecord,
+    store: &mut dyn CredentialStore,
+) -> Result<T, ConnectorCliError> {
+    clear_pending_accounts(installation, store)?;
+    installation.reset_expired();
+    store.save_installation(installation)?;
     Err(ConnectorCliError::PairingExpired)
+}
+
+fn write_discovery_preview(
+    accounts: &[DiscoveredAccount],
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let (week_start, week_end) = current_utc_week_dates(SystemTime::now())?;
+    write_line(output, "Detected accounts:")?;
+    for account in accounts {
+        let provider = match account.provider {
+            crate::reader::AgentProvider::Codex => "Codex",
+        };
+        writeln!(
+            output,
+            "  {provider} — {} — {} tokens this week",
+            account.safe_display_label,
+            account.total_for_dates(&week_start, &week_end)?
+        )
+        .map_err(|_| ConnectorCliError::OutputUnavailable)?;
+    }
+    write_line(
+        output,
+        "Only UTC dates and aggregate token totals will be sent. Prompts, code, repositories, paths, and credentials remain local.",
+    )
+}
+
+fn sum_discovered_usage(
+    accounts: &[DiscoveredAccount],
+    first_date: &str,
+    last_date: &str,
+) -> Result<String, ConnectorCliError> {
+    let mut total = 0_u128;
+    for account in accounts {
+        total = total
+            .checked_add(
+                account
+                    .total_for_dates(first_date, last_date)?
+                    .parse::<u128>()
+                    .map_err(|_| ConnectorCliError::CodexUnavailable)?,
+            )
+            .ok_or(ConnectorCliError::CodexUnavailable)?;
+    }
+    Ok(total.to_string())
+}
+
+fn current_utc_week_dates(time: SystemTime) -> Result<(String, String), ConnectorCliError> {
+    let seconds = time
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?
+        .as_secs();
+    let days = i64::try_from(seconds / 86_400)
+        .map_err(|_| ConnectorCliError::SyncPreparationUnavailable)?;
+    let monday = days - (days + 3).rem_euclid(7);
+    Ok((format_utc_date(monday)?, format_utc_date(monday + 6)?))
+}
+
+fn format_utc_date(days_since_unix_epoch: i64) -> Result<String, ConnectorCliError> {
+    let shifted = days_since_unix_epoch + 719_468;
+    let era = shifted.div_euclid(146_097);
+    let day_of_era = shifted - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    if !(2000..=2099).contains(&year) {
+        return Err(ConnectorCliError::SyncPreparationUnavailable);
+    }
+    Ok(format!("{year:04}-{month:02}-{day:02}"))
+}
+
+fn fresh_identifier(prefix: &str) -> Result<String, ConnectorCliError> {
+    let mut random = [0_u8; 16];
+    getrandom::fill(&mut random).map_err(|_| ConnectorCliError::EntropyUnavailable)?;
+    if all_zero(&random) {
+        random.fill(0);
+        return Err(ConnectorCliError::EntropyUnavailable);
+    }
+    let identifier = format!("{prefix}{}", encode_base64url(&random));
+    random.fill(0);
+    Ok(identifier)
+}
+
+fn open_default_browser(url: &str) -> bool {
+    use std::process::{Command, Stdio};
+
+    let mut command = if cfg!(target_os = "windows") {
+        let mut command = Command::new("rundll32.exe");
+        command.arg("url.dll,FileProtocolHandler").arg(url);
+        command
+    } else if cfg!(target_os = "macos") {
+        let mut command = Command::new("/usr/bin/open");
+        command.arg(url);
+        command
+    } else if cfg!(target_os = "linux") {
+        let mut command = Command::new("/usr/bin/xdg-open");
+        command.arg(url);
+        command
+    } else {
+        return false;
+    };
+    command
+        .env_clear()
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .is_ok()
 }
 
 fn map_cli_transport_error(error: TransportError) -> ConnectorCliError {
@@ -1309,11 +1628,155 @@ fn run_forget_local(
     store: &mut dyn CredentialStore,
     output: &mut dyn Write,
 ) -> Result<(), ConnectorCliError> {
-    store.delete()?;
+    store.delete_all()?;
     write_line(
         output,
-        "No credential remains in this local store. This did not revoke server device authority; review your Vibe Racing account.",
+        "Local credentials were removed. Server device authority was not revoked; revoke the device in the Vibe Racing dashboard to disconnect completely.",
     )
+}
+
+fn load_configured_origin(store: &mut dyn CredentialStore) -> Result<Origin, ConnectorCliError> {
+    store
+        .load_installation()?
+        .ok_or(ConnectorCliError::NotConnected)?
+        .origin()
+}
+
+fn run_status(
+    store: &mut dyn CredentialStore,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let Some(installation) = store.load_installation()? else {
+        return write_line(output, "Connector status: disconnected.");
+    };
+    let state = match installation.state {
+        InstallationState::Prepared => "not_connected",
+        InstallationState::Starting => "pairing_start_uncertain",
+        InstallationState::Pending => "pairing_pending",
+        InstallationState::Active => "connected",
+    };
+    let mut account_count = 0_usize;
+    let mut providers = std::collections::BTreeSet::new();
+    let mut last_sync = 0_u64;
+    for slot in installation.active_slots() {
+        let account = store
+            .load_account(slot, &installation.origin_digest)?
+            .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+        if account.state != AccountState::Active {
+            return Err(ConnectorCliError::SecureStorageInvalid);
+        }
+        account_count += 1;
+        providers.insert(account.provider());
+        last_sync = last_sync.max(account.last_sync_epoch_seconds);
+    }
+    let last_sync = if last_sync == 0 {
+        "never".to_owned()
+    } else {
+        sync_command::format_utc_milliseconds(UNIX_EPOCH + Duration::from_secs(last_sync))?
+    };
+    write!(
+        output,
+        "Connector status: {state}\nActive accounts: {account_count}\nActive providers: {}\nLast successful sync: {last_sync}\n",
+        providers.len()
+    )
+    .map_err(|_| ConnectorCliError::OutputUnavailable)
+}
+
+fn run_doctor(
+    store: &mut dyn CredentialStore,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let (os_family, architecture) = platform()?;
+    let installation_state = match store.load_installation()? {
+        None => "absent",
+        Some(record) => match record.state {
+            InstallationState::Prepared => "prepared",
+            InstallationState::Starting => "pairing_start_uncertain",
+            InstallationState::Pending => "pairing_pending",
+            InstallationState::Active => "active",
+        },
+    };
+    let codex_admission = match admit_candidate_selection(None) {
+        Ok(_) => "admitted_candidate",
+        Err(AdmissionError::UnsupportedPlatform) => "unsupported_platform",
+        Err(
+            AdmissionError::DiscoveryUnavailable
+            | AdmissionError::InvalidPath
+            | AdmissionError::UnsupportedArtifact,
+        ) => "not_admitted",
+    };
+    write!(
+        output,
+        "Connector doctor v1\nPlatform: {os_family}-{architecture}\nNative credential store: available\nInstallation: {installation_state}\nCodex reader: {codex_admission}\nNetwork check: not performed\nSensitive data: not included\n"
+    )
+    .map_err(|_| ConnectorCliError::OutputUnavailable)
+}
+
+fn run_account_list(
+    store: &mut dyn CredentialStore,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let installation = store
+        .load_installation()?
+        .ok_or(ConnectorCliError::NotConnected)?;
+    if installation.state != InstallationState::Active {
+        return Err(ConnectorCliError::NotConnected);
+    }
+    write_line(output, "Connected accounts:")?;
+    let mut count = 0_usize;
+    for slot in installation.active_slots() {
+        let account = store
+            .load_account(slot, &installation.origin_digest)?
+            .ok_or(ConnectorCliError::SecureStorageInvalid)?;
+        if account.state != AccountState::Active {
+            return Err(ConnectorCliError::SecureStorageInvalid);
+        }
+        let provider = match account.provider() {
+            crate::reader::AgentProvider::Codex => "Codex",
+        };
+        let last_sync = if account.last_sync_epoch_seconds == 0 {
+            "never".to_owned()
+        } else {
+            sync_command::format_utc_milliseconds(
+                UNIX_EPOCH + Duration::from_secs(account.last_sync_epoch_seconds),
+            )?
+        };
+        writeln!(
+            output,
+            "  {}. {provider} — {} — connected — reader {} — accounting revision {} — last sync {last_sync}",
+            slot + 1,
+            account.safe_display_label()?,
+            account.reader_version()?,
+            account.accounting_revision,
+        )
+        .map_err(|_| ConnectorCliError::OutputUnavailable)?;
+        count += 1;
+    }
+    if count == 0 {
+        return Err(ConnectorCliError::NotConnected);
+    }
+    Ok(())
+}
+
+fn run_disconnect(
+    store: &mut dyn CredentialStore,
+    open_browser: &mut dyn FnMut(&str) -> bool,
+    output: &mut dyn Write,
+) -> Result<(), ConnectorCliError> {
+    let installation = store
+        .load_installation()?
+        .ok_or(ConnectorCliError::NotConnected)?;
+    if installation.state != InstallationState::Active {
+        return Err(ConnectorCliError::NotConnected);
+    }
+    let dashboard = format!("{}/account#devices", installation.origin()?.value);
+    writeln!(
+        output,
+        "Device revocation requires a fresh passkey in the dashboard. Local credentials remain until revocation is complete.\n{dashboard}"
+    )
+    .map_err(|_| ConnectorCliError::OutputUnavailable)?;
+    let _ = open_browser(&dashboard);
+    Ok(())
 }
 
 fn map_admission_error(error: AdmissionError) -> ConnectorCliError {
@@ -1411,37 +1874,85 @@ mod tests {
     use super::*;
 
     const REQUEST_ID: &str = "req_AAAAAAAAAAAAAAAAAAAAAA";
-    const PAIRING_ID: &str = "00000000-0000-4000-8000-000000001001";
+    const PAIRING_ID: &str = "pair_AAAAAAAAAAAAAAAAAAAAAA";
     const POLL_TOKEN: &str = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
     const CHALLENGE: &str = "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8";
     const USER_CODE: &str = "ABCD-EFGH-JKLM";
-    const SOURCE_ID: &str = "src_AAAAAAAAAAAAAAAAAAAAAA";
+    const CANDIDATE_ID: &str = "cand_AAAAAAAAAAAAAAAAAAAAAA";
+    const AGENT_ACCOUNT_ID: &str = "acc_AAAAAAAAAAAAAAAAAAAAAA";
     const DEVICE_ID: &str = "dev_BBBBBBBBBBBBBBBBBBBBBB";
+    const DEVICE_KEY_ID: &str = "key_CCCCCCCCCCCCCCCCCCCCCC";
 
     struct MemoryStore {
-        bytes: Option<Vec<u8>>,
+        installation: Option<Vec<u8>>,
+        accounts: [Option<Vec<u8>>; MAX_ACCOUNT_SLOTS],
         saves: usize,
     }
 
+    impl MemoryStore {
+        fn empty() -> Self {
+            Self {
+                installation: None,
+                accounts: std::array::from_fn(|_| None),
+                saves: 0,
+            }
+        }
+    }
+
     impl CredentialStore for MemoryStore {
-        fn load(
-            &mut self,
-            expected_origin: &[u8; 32],
-        ) -> Result<Option<CredentialRecord>, ConnectorCliError> {
-            self.bytes
+        fn load_installation(&mut self) -> Result<Option<InstallationRecord>, ConnectorCliError> {
+            self.installation
                 .as_deref()
-                .map(|bytes| CredentialRecord::decode(bytes, expected_origin))
+                .map(InstallationRecord::decode)
                 .transpose()
         }
 
-        fn save(&mut self, record: &CredentialRecord) -> Result<(), ConnectorCliError> {
-            self.bytes = Some(record.encode().to_vec());
+        fn save_installation(
+            &mut self,
+            record: &InstallationRecord,
+        ) -> Result<(), ConnectorCliError> {
+            self.installation = Some(record.encode().to_vec());
             self.saves += 1;
             Ok(())
         }
 
-        fn delete(&mut self) -> Result<(), ConnectorCliError> {
-            self.bytes = None;
+        fn load_account(
+            &mut self,
+            slot: usize,
+            expected_origin: &[u8; 32],
+        ) -> Result<Option<AccountCredential>, ConnectorCliError> {
+            self.accounts
+                .get(slot)
+                .ok_or(ConnectorCliError::SecureStorageInvalid)?
+                .as_deref()
+                .map(|bytes| AccountCredential::decode(bytes, expected_origin))
+                .transpose()
+        }
+
+        fn save_account(
+            &mut self,
+            slot: usize,
+            record: &AccountCredential,
+        ) -> Result<(), ConnectorCliError> {
+            *self
+                .accounts
+                .get_mut(slot)
+                .ok_or(ConnectorCliError::SecureStorageInvalid)? = Some(record.encode().to_vec());
+            self.saves += 1;
+            Ok(())
+        }
+
+        fn delete_account(&mut self, slot: usize) -> Result<(), ConnectorCliError> {
+            *self
+                .accounts
+                .get_mut(slot)
+                .ok_or(ConnectorCliError::SecureStorageInvalid)? = None;
+            Ok(())
+        }
+
+        fn delete_all(&mut self) -> Result<(), ConnectorCliError> {
+            self.installation = None;
+            self.accounts.fill_with(|| None);
             Ok(())
         }
     }
@@ -1449,36 +1960,141 @@ mod tests {
     struct ImmediateTransport {
         starts: usize,
         polls: usize,
+        candidate_id: Option<String>,
     }
 
     impl PairingTransport for ImmediateTransport {
         fn start(
             &mut self,
-            client_id: &str,
-            request: &StartRequest<'_>,
+            request: &PreparedPairingStart,
         ) -> Result<StartTransportOutcome, TransportError> {
             self.starts += 1;
-            assert_eq!(client_id.len(), 22);
-            assert_eq!(request.schema_version, 1);
-            assert_eq!(request.device_public_key_base64_url.len(), 43);
-            assert_eq!(request.device_label, "Desktop");
+            let request = serde_json::to_value(request).unwrap();
+            assert_eq!(request["schemaVersion"], 1);
+            assert_eq!(
+                request["discoveryManifest"]["candidates"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                1
+            );
+            self.candidate_id = request["discoveryManifest"]["candidates"][0]["candidateId"]
+                .as_str()
+                .map(str::to_owned);
+            assert!(
+                self.candidate_id
+                    .as_deref()
+                    .is_some_and(|value| valid_prefixed_id(value, "cand_", 27))
+            );
+            assert_eq!(
+                request["installationPossessionProof"]["signature"]
+                    .as_str()
+                    .unwrap()
+                    .len(),
+                86
+            );
             Ok(StartTransportOutcome::Created(start_response()))
         }
 
         fn poll(
             &mut self,
-            client_id: &str,
             request: &PollRequest<'_>,
         ) -> Result<PollTransportOutcome, TransportError> {
             self.polls += 1;
-            assert_eq!(client_id.len(), 22);
             assert_eq!(request.schema_version, 1);
+            assert_eq!(request.pairing_id, PAIRING_ID);
             assert_eq!(request.poll_token, POLL_TOKEN);
             assert_eq!(request.possession_signature.len(), 86);
-            Ok(PollTransportOutcome::Activated(DeviceBinding {
-                source_id: SOURCE_ID.to_owned(),
-                device_id: DEVICE_ID.to_owned(),
-            }))
+            Ok(PollTransportOutcome::Activated(vec![CandidateActivation {
+                candidate_id: self
+                    .candidate_id
+                    .clone()
+                    .expect("start must capture one candidate"),
+                activation_state: ActivationState::Active,
+                agent_account_id: Some(AGENT_ACCOUNT_ID.to_owned()),
+                device_id: Some(DEVICE_ID.to_owned()),
+                server_binding_material: Some(ServerBindingMaterial {
+                    device_key_id: DEVICE_KEY_ID.to_owned(),
+                    usage_endpoint: "/v1/usage".to_owned(),
+                    signature_protocol: "viberacing-usage-sync-auth-v1".to_owned(),
+                }),
+                next_action: NextAction::Sync,
+            }]))
+        }
+    }
+
+    struct UncertainStartTransport {
+        starts: usize,
+    }
+
+    impl PairingTransport for UncertainStartTransport {
+        fn start(
+            &mut self,
+            _request: &PreparedPairingStart,
+        ) -> Result<StartTransportOutcome, TransportError> {
+            self.starts += 1;
+            Ok(StartTransportOutcome::Retryable)
+        }
+
+        fn poll(
+            &mut self,
+            _request: &PollRequest<'_>,
+        ) -> Result<PollTransportOutcome, TransportError> {
+            panic!("an uncertain start must never be polled")
+        }
+    }
+
+    struct BatchTransport {
+        candidate_ids: Vec<String>,
+    }
+
+    impl PairingTransport for BatchTransport {
+        fn start(
+            &mut self,
+            request: &PreparedPairingStart,
+        ) -> Result<StartTransportOutcome, TransportError> {
+            let request = serde_json::to_value(request).expect("start request must serialize");
+            self.candidate_ids = request["discoveryManifest"]["candidates"]
+                .as_array()
+                .expect("candidate manifest must be an array")
+                .iter()
+                .map(|candidate| {
+                    candidate["candidateId"]
+                        .as_str()
+                        .expect("candidate ID must be a string")
+                        .to_owned()
+                })
+                .collect();
+            assert_eq!(self.candidate_ids.len(), 2);
+            Ok(StartTransportOutcome::Created(start_response()))
+        }
+
+        fn poll(
+            &mut self,
+            _request: &PollRequest<'_>,
+        ) -> Result<PollTransportOutcome, TransportError> {
+            Ok(PollTransportOutcome::Activated(vec![
+                CandidateActivation {
+                    candidate_id: self.candidate_ids[0].clone(),
+                    activation_state: ActivationState::Active,
+                    agent_account_id: Some(AGENT_ACCOUNT_ID.to_owned()),
+                    device_id: Some(DEVICE_ID.to_owned()),
+                    server_binding_material: Some(ServerBindingMaterial {
+                        device_key_id: DEVICE_KEY_ID.to_owned(),
+                        usage_endpoint: "/v1/usage".to_owned(),
+                        signature_protocol: "viberacing-usage-sync-auth-v1".to_owned(),
+                    }),
+                    next_action: NextAction::Sync,
+                },
+                CandidateActivation {
+                    candidate_id: self.candidate_ids[1].clone(),
+                    activation_state: ActivationState::Skipped,
+                    agent_account_id: None,
+                    device_id: None,
+                    server_binding_material: None,
+                    next_action: NextAction::None,
+                },
+            ]))
         }
     }
 
@@ -1488,8 +2104,9 @@ mod tests {
             request_id: REQUEST_ID.to_owned(),
             pairing_id: PAIRING_ID.to_owned(),
             poll_token: POLL_TOKEN.to_owned(),
-            pairing_challenge_base64_url: CHALLENGE.to_owned(),
+            pairing_challenge: CHALLENGE.to_owned(),
             user_code: USER_CODE.to_owned(),
+            approval_url: format!("https://race.example/connect?code={USER_CODE}"),
             expires_at: "2030-01-02T03:04:05.006Z".to_owned(),
         }
     }
@@ -1498,12 +2115,31 @@ mod tests {
         Origin::parse("https://race.example").expect("synthetic HTTPS origin must validate")
     }
 
+    fn discovered_account() -> DiscoveredAccount {
+        DiscoveredAccount {
+            provider: crate::reader::AgentProvider::Codex,
+            reader_version: "codex_app_server_0_144_5_v1",
+            accounting_revision: 1,
+            scope_kind: crate::reader::AccountingScope::AgentAccount,
+            fingerprint_kind: crate::reader::FingerprintKind::Unavailable,
+            account_fingerprint_digest: None,
+            safe_display_label: "Codex account".to_owned(),
+            status: crate::reader::ReaderStatus::Ready,
+            daily_usage: crate::reader::CanonicalDailyUsage::new(vec![
+                crate::reader::CanonicalDailyUsageEntry::new(
+                    current_utc_week_dates(SystemTime::now()).unwrap().0,
+                    "579".to_owned(),
+                )
+                .unwrap(),
+            ])
+            .unwrap(),
+        }
+    }
+
     #[test]
-    fn parses_existing_bounded_commands() {
+    fn parses_the_final_bounded_command_surface() {
         let command = parse_command([
             "connect".into(),
-            "--label".into(),
-            "Desktop".into(),
             "--origin".into(),
             "https://race.example".into(),
         ])
@@ -1513,10 +2149,6 @@ mod tests {
             "sync".into(),
             "--codex".into(),
             "C:\\synthetic\\codex.exe".into(),
-            "--label".into(),
-            "Desktop".into(),
-            "--origin".into(),
-            "https://race.example".into(),
         ])
         .expect("exact sync arguments must parse");
         assert!(matches!(command, ParsedCommand::Sync { .. }));
@@ -1545,18 +2177,54 @@ mod tests {
         ])
         .expect("exact proposal arguments must parse");
         assert!(matches!(command, ParsedCommand::ProposeCar { .. }));
+    }
+
+    #[test]
+    fn parses_fixed_account_and_lifecycle_commands() {
         assert!(matches!(
             parse_command([
                 "connect".into(),
                 "--origin".into(),
                 "https://race.example".into()
             ]),
-            Err(ConnectorCliError::InvalidArguments)
+            Ok(ParsedCommand::Connect { .. })
         ));
         assert!(matches!(
             parse_command(["sync".into()]),
-            Err(ConnectorCliError::InvalidArguments)
+            Ok(ParsedCommand::Sync { codex_path: None })
         ));
+        assert!(matches!(
+            parse_command(["status".into()]),
+            Ok(ParsedCommand::Status)
+        ));
+        assert!(matches!(
+            parse_command(["doctor".into()]),
+            Ok(ParsedCommand::Doctor)
+        ));
+        assert!(matches!(
+            parse_command(["account".into(), "list".into()]),
+            Ok(ParsedCommand::AccountList)
+        ));
+        assert!(matches!(
+            parse_command(["account".into(), "sync".into(), "16".into()]),
+            Ok(ParsedCommand::AccountSync { selector: 16 })
+        ));
+        assert!(matches!(
+            parse_command(["disconnect".into()]),
+            Ok(ParsedCommand::Disconnect)
+        ));
+        assert!(matches!(
+            parse_command(["forget-local".into()]),
+            Ok(ParsedCommand::ForgetLocal)
+        ));
+        assert!(matches!(
+            parse_command(["--help".into()]),
+            Ok(ParsedCommand::Help)
+        ));
+    }
+
+    #[test]
+    fn rejects_noncanonical_or_mixed_command_arguments() {
         assert!(matches!(
             parse_command([
                 "propose-car".into(),
@@ -1595,22 +2263,12 @@ mod tests {
             ]),
             Err(ConnectorCliError::InvalidArguments)
         ));
-        assert!(matches!(
-            parse_command(["--help".into()]),
-            Ok(ParsedCommand::Help)
-        ));
     }
 
     #[test]
     fn parses_sync_with_bounded_discovery_and_explicit_fallback() {
-        let command = parse_command([
-            "sync".into(),
-            "--label".into(),
-            "Desktop".into(),
-            "--origin".into(),
-            "https://race.example".into(),
-        ])
-        .expect("exact discovery sync arguments must parse");
+        let command =
+            parse_command(["sync".into()]).expect("exact discovery sync arguments must parse");
         assert!(matches!(
             command,
             ParsedCommand::Sync {
@@ -1623,10 +2281,6 @@ mod tests {
             "sync".into(),
             "--codex".into(),
             "C:\\synthetic\\codex.exe".into(),
-            "--label".into(),
-            "Desktop".into(),
-            "--origin".into(),
-            "https://race.example".into(),
         ])
         .expect("exact explicit-path sync arguments must parse");
         assert!(matches!(
@@ -1868,15 +2522,9 @@ review-before-sharing: required\n"
 
     #[test]
     fn parses_only_the_bounded_forget_local_command() {
-        let command = parse_command([
-            "forget-local".into(),
-            "--origin".into(),
-            "https://race.example".into(),
-            "--label".into(),
-            "Desktop".into(),
-        ])
-        .expect("exact local-forget arguments must parse");
-        assert!(matches!(command, ParsedCommand::ForgetLocal { .. }));
+        let command = parse_command(["forget-local".into()])
+            .expect("exact local-forget arguments must parse");
+        assert!(matches!(command, ParsedCommand::ForgetLocal));
 
         for arguments in [
             vec![
@@ -1928,18 +2576,38 @@ review-before-sharing: required\n"
     }
 
     impl CredentialStore for DeleteOnlyStore {
-        fn load(
-            &mut self,
-            _expected_origin: &[u8; 32],
-        ) -> Result<Option<CredentialRecord>, ConnectorCliError> {
+        fn load_installation(&mut self) -> Result<Option<InstallationRecord>, ConnectorCliError> {
             unreachable!("local credential removal must not load key material")
         }
 
-        fn save(&mut self, _record: &CredentialRecord) -> Result<(), ConnectorCliError> {
+        fn save_installation(
+            &mut self,
+            _record: &InstallationRecord,
+        ) -> Result<(), ConnectorCliError> {
             unreachable!("local credential removal must not write key material")
         }
 
-        fn delete(&mut self) -> Result<(), ConnectorCliError> {
+        fn load_account(
+            &mut self,
+            _slot: usize,
+            _expected_origin: &[u8; 32],
+        ) -> Result<Option<AccountCredential>, ConnectorCliError> {
+            unreachable!("local credential removal must not load key material")
+        }
+
+        fn save_account(
+            &mut self,
+            _slot: usize,
+            _record: &AccountCredential,
+        ) -> Result<(), ConnectorCliError> {
+            unreachable!("local credential removal must not write key material")
+        }
+
+        fn delete_account(&mut self, _slot: usize) -> Result<(), ConnectorCliError> {
+            unreachable!("local credential removal uses only the fixed all-entry deletion")
+        }
+
+        fn delete_all(&mut self) -> Result<(), ConnectorCliError> {
             self.deletes += 1;
             if self.fail {
                 Err(ConnectorCliError::SecureStorageUnavailable)
@@ -1961,7 +2629,7 @@ review-before-sharing: required\n"
         assert_eq!(store.deletes, 1);
         assert_eq!(
             String::from_utf8(output).expect("output must be UTF-8"),
-            "No credential remains in this local store. This did not revoke server device authority; review your Vibe Racing account.\n"
+            "Local credentials were removed. Server device authority was not revoked; revoke the device in the Vibe Racing dashboard to disconnect completely.\n"
         );
 
         let mut unavailable = DeleteOnlyStore {
@@ -2035,134 +2703,311 @@ review-before-sharing: required\n"
     }
 
     #[test]
-    fn credential_record_round_trips_and_rejects_foreign_or_corrupt_bytes() {
+    fn installation_record_binds_the_exact_origin_and_starts_empty() {
         let origin = test_origin();
-        let digest = digest_origin(&origin);
-        let mut record = CredentialRecord::new(digest).expect("test entropy must be available");
-        record
-            .make_pending(&start_response(), u64::MAX)
-            .expect("valid response must enter pending state");
-        let mut encoded = record.encode();
-        let decoded = CredentialRecord::decode(&encoded, &digest)
-            .expect("closed credential record must round trip");
-        assert_eq!(decoded.state, RecordState::Pending);
-        assert_eq!(
-            decoded.user_code().expect("stored code must be UTF-8"),
-            USER_CODE
-        );
-        let foreign = digest_origin(&Origin::parse("https://other.example").expect("valid origin"));
-        assert_eq!(
-            CredentialRecord::decode(&encoded, &foreign).err(),
-            Some(ConnectorCliError::SecureStorageInvalid)
-        );
-        encoded[STATE_INDEX] = 9;
-        assert_eq!(
-            CredentialRecord::decode(&encoded, &digest).err(),
-            Some(ConnectorCliError::SecureStorageInvalid)
-        );
-        encoded.fill(0);
+        let record = InstallationRecord::new(&origin).expect("test entropy must be available");
+        assert_eq!(record.origin().unwrap().value, origin.value);
+        assert_eq!(record.state, InstallationState::Prepared);
+        assert_eq!(record.populated_slots().count(), 0);
     }
 
     #[test]
     fn validates_closed_start_and_poll_responses() {
-        assert!(valid_start_response(&start_response()));
+        assert!(valid_start_response(
+            &start_response(),
+            "https://race.example"
+        ));
         let pending = PollResponse {
             schema_version: 1,
             request_id: REQUEST_ID.to_owned(),
-            device_bindings: Vec::new(),
+            pairing_state: PairingState::Pending,
+            candidate_activations: Vec::new(),
         };
         assert!(valid_poll_response(&pending));
         let activated = PollResponse {
             schema_version: 1,
             request_id: REQUEST_ID.to_owned(),
-            device_bindings: vec![DeviceBinding {
-                source_id: SOURCE_ID.to_owned(),
-                device_id: DEVICE_ID.to_owned(),
+            pairing_state: PairingState::Activated,
+            candidate_activations: vec![CandidateActivation {
+                candidate_id: CANDIDATE_ID.to_owned(),
+                activation_state: ActivationState::Active,
+                agent_account_id: Some(AGENT_ACCOUNT_ID.to_owned()),
+                device_id: Some(DEVICE_ID.to_owned()),
+                server_binding_material: Some(ServerBindingMaterial {
+                    device_key_id: DEVICE_KEY_ID.to_owned(),
+                    usage_endpoint: "/v1/usage".to_owned(),
+                    signature_protocol: "viberacing-usage-sync-auth-v1".to_owned(),
+                }),
+                next_action: NextAction::Sync,
             }],
         };
         assert!(valid_poll_response(&activated));
         let mut invalid = start_response();
         invalid.expires_at = "2030-02-30T03:04:05.006Z".to_owned();
-        assert!(!valid_start_response(&invalid));
+        assert!(!valid_start_response(&invalid, "https://race.example"));
+    }
+
+    #[test]
+    fn pairing_transport_budgets_and_rate_identifier_location_match_the_contract() {
+        let policy: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../contracts/v1/connector-pairing-transport.json"
+        ))
+        .expect("pairing transport policy must be valid JSON");
+        assert_eq!(
+            policy["requestBodyBytes"].as_u64(),
+            Some(MAX_REQUEST_BYTES as u64)
+        );
+        assert_eq!(
+            policy["responseBodyBytes"].as_u64(),
+            Some(MAX_RESPONSE_BYTES)
+        );
+        assert_eq!(
+            policy["clientRateIdentifierLocation"].as_str(),
+            Some("request-body")
+        );
     }
 
     #[test]
     fn creates_persists_and_activates_one_device_without_exposing_bindings() {
         let origin = test_origin();
-        let mut store = MemoryStore {
-            bytes: None,
-            saves: 0,
-        };
+        let mut store = MemoryStore::empty();
         let mut transport = ImmediateTransport {
             starts: 0,
             polls: 0,
+            candidate_id: None,
+        };
+        let mut discover = || Ok(vec![discovered_account()]);
+        let mut opened = Vec::new();
+        let mut browser = |url: &str| {
+            opened.push(url.to_owned());
+            true
         };
         let mut output = Vec::new();
-        run_connect(
-            &origin,
-            "Desktop",
-            "windows",
-            "x86_64",
-            &mut store,
-            &mut transport,
-            &mut output,
-        )
-        .expect("immediate synthetic approval must connect");
+        let completion = {
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut discover,
+                open_browser: &mut browser,
+                output: &mut output,
+            };
+            run_connect(&origin, "windows", "x86_64", &mut runtime)
+                .expect("immediate synthetic approval must connect")
+        };
+        assert_eq!(completion.active_slots, vec![0]);
+        assert_eq!(completion.current_week_token_total, "579");
         assert_eq!(transport.starts, 1);
         assert_eq!(transport.polls, 1);
-        assert_eq!(store.saves, 3);
+        assert!(store.saves >= 6);
+        assert_eq!(
+            opened,
+            vec![format!("https://race.example/connect?code={USER_CODE}")]
+        );
         let text = String::from_utf8(output).expect("connector output must be UTF-8");
-        assert!(text.contains("https://race.example/connect"));
+        assert!(text.contains("Detected accounts:"));
+        assert!(text.contains("Only UTC dates and aggregate token totals"));
+        assert!(text.contains("https://race.example/connect?code="));
         assert!(text.contains(USER_CODE));
-        assert!(text.contains("Device connected."));
-        assert!(!text.contains(SOURCE_ID));
+        assert!(!text.contains(AGENT_ACCOUNT_ID));
         assert!(!text.contains(DEVICE_ID));
         assert!(!text.contains(POLL_TOKEN));
-        let stored = CredentialRecord::decode(
-            store
-                .bytes
-                .as_deref()
-                .expect("active record must be stored"),
-            &digest_origin(&origin),
-        )
-        .expect("active record must remain valid");
-        assert_eq!(stored.state, RecordState::Active);
+        let stored = store
+            .load_installation()
+            .unwrap()
+            .expect("active installation must be stored");
+        assert_eq!(stored.state, InstallationState::Active);
+        let account = store
+            .load_account(0, &digest_origin(&origin))
+            .unwrap()
+            .expect("active account credential must be stored");
+        assert_eq!(account.state, AccountState::Active);
     }
 
     #[test]
-    fn active_device_returns_without_network_calls() {
+    fn active_installation_refuses_a_second_pairing_without_discovery_or_network() {
         let origin = test_origin();
-        let digest = digest_origin(&origin);
-        let mut record = CredentialRecord::new(digest).expect("test entropy must be available");
-        record
-            .make_active(SOURCE_ID, DEVICE_ID)
-            .expect("synthetic binding must validate");
-        let mut store = MemoryStore {
-            bytes: Some(record.encode().to_vec()),
-            saves: 0,
-        };
+        let mut store = MemoryStore::empty();
         let mut transport = ImmediateTransport {
             starts: 0,
             polls: 0,
+            candidate_id: None,
         };
+        let mut discover = || Ok(vec![discovered_account()]);
+        let mut browser = |_url: &str| true;
         let mut output = Vec::new();
-        run_connect(
-            &origin,
-            "Desktop",
-            "windows",
-            "x86_64",
-            &mut store,
-            &mut transport,
-            &mut output,
-        )
-        .expect("active device must return cleanly");
-        assert_eq!(transport.starts, 0);
-        assert_eq!(transport.polls, 0);
-        assert_eq!(store.saves, 0);
+        {
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut discover,
+                open_browser: &mut browser,
+                output: &mut output,
+            };
+            run_connect(&origin, "windows", "x86_64", &mut runtime)
+                .expect("first pairing must activate");
+        }
+        let saves = store.saves;
+        let mut no_discovery = || -> Result<Vec<DiscoveredAccount>, ConnectorCliError> {
+            panic!("active installation must not rediscover")
+        };
+        let mut retry_output = Vec::new();
+        {
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut no_discovery,
+                open_browser: &mut browser,
+                output: &mut retry_output,
+            };
+            assert_eq!(
+                run_connect(&origin, "windows", "x86_64", &mut runtime).err(),
+                Some(ConnectorCliError::AlreadyConnected)
+            );
+        }
+        assert_eq!(transport.starts, 1);
+        assert_eq!(transport.polls, 1);
+        assert_eq!(store.saves, saves);
+    }
+
+    #[test]
+    fn uncertain_pairing_start_is_persisted_and_never_retried_automatically() {
+        let origin = test_origin();
+        let mut store = MemoryStore::empty();
+        let mut transport = UncertainStartTransport { starts: 0 };
+        let mut discovery_calls = 0;
+        let mut discover = || {
+            discovery_calls += 1;
+            Ok(vec![discovered_account()])
+        };
+        let mut browser = |_url: &str| true;
+        let mut output = Vec::new();
+        {
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut discover,
+                open_browser: &mut browser,
+                output: &mut output,
+            };
+            assert_eq!(
+                run_connect(&origin, "windows", "x86_64", &mut runtime).err(),
+                Some(ConnectorCliError::PairingStartUncertain)
+            );
+        }
+        let stored = store
+            .load_installation()
+            .expect("starting record must decode")
+            .expect("starting record must persist");
+        assert_eq!(stored.state, InstallationState::Starting);
+        assert_eq!(transport.starts, 1);
+        assert_eq!(discovery_calls, 1);
+
+        let mut forbidden_discovery = || -> Result<Vec<DiscoveredAccount>, ConnectorCliError> {
+            panic!("uncertain pairing must not rediscover")
+        };
+        let mut retry_output = Vec::new();
+        let mut runtime = ConnectRuntime {
+            store: &mut store,
+            transport: &mut transport,
+            discover: &mut forbidden_discovery,
+            open_browser: &mut browser,
+            output: &mut retry_output,
+        };
         assert_eq!(
-            String::from_utf8(output).expect("output must be UTF-8"),
-            "This device is already connected.\n"
+            run_connect(&origin, "windows", "x86_64", &mut runtime).err(),
+            Some(ConnectorCliError::PairingStartUncertain)
         );
+        assert_eq!(transport.starts, 1);
+    }
+
+    #[test]
+    fn one_batch_activation_keeps_approved_key_and_deletes_skipped_key() {
+        let origin = test_origin();
+        let mut store = MemoryStore::empty();
+        let mut transport = BatchTransport {
+            candidate_ids: Vec::new(),
+        };
+        let mut second = discovered_account();
+        second.safe_display_label = "Codex account 2".to_owned();
+        let mut discovered = Some(vec![discovered_account(), second]);
+        let mut discover = || discovered.take().ok_or(ConnectorCliError::CodexUnavailable);
+        let mut browser = |_url: &str| true;
+        let mut output = Vec::new();
+        let completion = {
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut discover,
+                open_browser: &mut browser,
+                output: &mut output,
+            };
+            run_connect(&origin, "windows", "x86_64", &mut runtime)
+                .expect("one approval must settle the whole batch")
+        };
+        assert_eq!(completion.active_slots, vec![0]);
+        assert_eq!(completion.current_week_token_total, "1158");
+        let digest = digest_origin(&origin);
+        assert!(
+            store
+                .load_account(0, &digest)
+                .expect("approved account must decode")
+                .is_some()
+        );
+        assert!(
+            store
+                .load_account(1, &digest)
+                .expect("skipped slot lookup must succeed")
+                .is_none()
+        );
+        let installation = store
+            .load_installation()
+            .expect("installation must decode")
+            .expect("installation must remain");
+        assert_eq!(installation.state, InstallationState::Active);
+        assert_eq!(installation.active_slots().collect::<Vec<_>>(), vec![0]);
+    }
+
+    #[test]
+    fn status_account_list_and_forget_output_omit_server_and_key_material() {
+        let origin = test_origin();
+        let mut store = MemoryStore::empty();
+        let mut transport = ImmediateTransport {
+            starts: 0,
+            polls: 0,
+            candidate_id: None,
+        };
+        let mut discover = || Ok(vec![discovered_account()]);
+        let mut browser = |_url: &str| true;
+        {
+            let mut output = Vec::new();
+            let mut runtime = ConnectRuntime {
+                store: &mut store,
+                transport: &mut transport,
+                discover: &mut discover,
+                open_browser: &mut browser,
+                output: &mut output,
+            };
+            run_connect(&origin, "windows", "x86_64", &mut runtime)
+                .expect("fixture installation must activate");
+        }
+        let mut output = Vec::new();
+        run_status(&mut store, &mut output).expect("status must render");
+        run_account_list(&mut store, &mut output).expect("account list must render");
+        run_forget_local(&mut store, &mut output).expect("forget must render");
+        let text = String::from_utf8(output).expect("local output must be UTF-8");
+        for private_value in [
+            AGENT_ACCOUNT_ID,
+            DEVICE_ID,
+            DEVICE_KEY_ID,
+            POLL_TOKEN,
+            CHALLENGE,
+        ] {
+            assert!(!text.contains(private_value));
+        }
+        assert!(text.contains("Active accounts: 1"));
+        assert!(text.contains("Codex — Codex account"));
+        assert!(store.installation.is_none());
+        assert!(store.accounts.iter().all(Option::is_none));
     }
 
     #[test]

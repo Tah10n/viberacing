@@ -15,8 +15,6 @@ import {
   type CommunitySyncSubmissionResult,
 } from "./community-sync-database.js";
 import {
-  codexAccountingRevision,
-  codexProvider,
   CommunitySyncVerificationError,
   type CommunitySyncVerificationErrorCode,
   type VerifiedCommunitySync,
@@ -30,26 +28,33 @@ const syncIdPattern = /^syn_[A-Za-z0-9_-]{22}$/;
 const dependencyKeys = new Set(["submit", "verify"]);
 const verifiedSubmissionKeys = new Set([
   "accountingRevision",
+  "agentAccountId",
   "bodyDigestHex",
+  "deviceNonceDigestHex",
   "deviceId",
   "deviceKeyId",
   "idempotencyKey",
-  "nonceDigestHex",
+  "originExpiresAtMilliseconds",
+  "originKeyId",
+  "originNonceDigestHex",
   "payload",
   "provider",
+  "readerVersion",
   "requestTarget",
   "signatureBase64Url",
+  "scopeKind",
 ]);
 const usagePayloadKeys = new Set([
-  "agentVersion",
+  "agentAccountId",
   "clientVersion",
   "dailyEntries",
   "observedAt",
+  "readerVersion",
   "schemaVersion",
-  "sourceId",
   "syncId",
 ]);
-const submissionResultKeys = new Set(["acceptedEntries", "outcome"]);
+const requiredSubmissionResultKeys = new Set(["acceptedEntries", "outcome"]);
+const optionalSubmissionResultKeys = new Set(["recoveryAction"]);
 
 export type CommunitySyncApplicationProblemKind = Extract<
   ProblemDetailsV1["errorCode"],
@@ -272,13 +277,9 @@ function readVerifiedSummary(value: unknown): VerifiedSummary | undefined {
     ) {
       return undefined;
     }
-    const accountingRevision = ownDataValue(value, "accountingRevision");
-    const provider = ownDataValue(value, "provider");
     const requestTarget = ownDataValue(value, "requestTarget");
     const payload = ownDataValue(value, "payload");
     if (
-      accountingRevision !== codexAccountingRevision ||
-      provider !== codexProvider ||
       requestTarget !== usageSyncRequestTarget ||
       !isPlainRecord(payload) ||
       !Object.isFrozen(payload) ||
@@ -306,21 +307,42 @@ function readSubmissionResult(
   expectedEntries: number,
 ): CommunitySyncSubmissionResult | undefined {
   try {
-    if (!isPlainRecord(value) || !hasExactKeys(value, submissionResultKeys)) {
+    if (!isPlainRecord(value)) {
+      return undefined;
+    }
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.some(
+        (key) =>
+          typeof key !== "string" ||
+          (!requiredSubmissionResultKeys.has(key) && !optionalSubmissionResultKeys.has(key)),
+      ) ||
+      [...requiredSubmissionResultKeys].some((key) => !keys.includes(key))
+    ) {
       return undefined;
     }
     const acceptedEntries = ownDataValue(value, "acceptedEntries");
     const outcome = ownDataValue(value, "outcome");
+    const recoveryAction = ownDataValue(value, "recoveryAction");
     if (
       typeof acceptedEntries !== "number" ||
       !Number.isSafeInteger(acceptedEntries) ||
-      (outcome === "accepted" && acceptedEntries !== expectedEntries) ||
+      (outcome === "accepted" && (acceptedEntries < 1 || acceptedEntries > expectedEntries)) ||
       ((outcome === "duplicate" || outcome === "quarantined") && acceptedEntries !== 0) ||
-      (outcome !== "accepted" && outcome !== "duplicate" && outcome !== "quarantined")
+      (outcome !== "accepted" && outcome !== "duplicate" && outcome !== "quarantined") ||
+      (recoveryAction !== undefined &&
+        recoveryAction !== "update_connector" &&
+        recoveryAction !== "reconnect_account" &&
+        recoveryAction !== "contact_support" &&
+        recoveryAction !== "retry_later")
     ) {
       return undefined;
     }
-    return Object.freeze({ acceptedEntries, outcome });
+    return Object.freeze(
+      recoveryAction === undefined
+        ? { acceptedEntries, outcome }
+        : { acceptedEntries, outcome, recoveryAction },
+    );
   } catch {
     return undefined;
   }
@@ -331,13 +353,14 @@ function createSuccessDecision(
   syncId: string,
   result: CommunitySyncSubmissionResult,
 ): CommunitySyncApplicationDecision {
-  const values = {
+  const values: UsageSyncResultV1 = {
     schemaVersion: 1,
     requestId,
     syncId,
     outcome: result.outcome,
     acceptedEntries: result.acceptedEntries,
-  } as const satisfies UsageSyncResultV1;
+    ...(result.recoveryAction === undefined ? {} : { recoveryAction: result.recoveryAction }),
+  };
   const body = Object.freeze(
     Object.assign(Object.create(null) as object, values),
   ) as UsageSyncResultV1;
@@ -423,7 +446,6 @@ export async function createConfiguredCommunitySyncApplication(
   try {
     const verifier = createConfiguredCommunitySyncVerifier(
       {
-        consumeOriginNonce: database.consumeOriginNonce.bind(database),
         now,
         readDeviceVerificationMaterial: database.readDeviceVerificationMaterial.bind(database),
       },

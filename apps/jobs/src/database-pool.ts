@@ -37,110 +37,94 @@ const runtimeBoundaryQuery = `SELECT
         AND pg_catalog.pg_has_role(SESSION_USER, granted_role.oid, 'MEMBER')
     )
   ) AS login_scope_ok,
-  pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok`;
+  pg_catalog.current_setting('search_path') = 'pg_catalog,pg_temp' AS search_path_ok,
+  pg_catalog.current_setting('default_transaction_read_only') = 'off' AS read_write_ok`;
 
-const agedRevokedPasskeyCleanupQuery = `SELECT
-  cleanup.deleted_passkeys AS deleted_passkeys
-FROM viberacing_api.cleanup_aged_revoked_passkeys($1::integer) AS cleanup`;
+const ensureCurrentSeasonQuery = `SELECT
+  viberacing_api.ensure_current_community_season()::text AS season_start`;
 
-const agedRevokedDeviceCleanupQuery = `SELECT
-  cleanup.deleted_pairings AS deleted_pairings,
-  cleanup.deleted_device_keys AS deleted_device_keys
-FROM viberacing_api.cleanup_aged_revoked_devices($1::integer) AS cleanup`;
+const refreshDirtyLeaderboardQuery = `SELECT
+  refresh.outcome,
+  refresh.season_start::text AS season_start,
+  refresh.snapshot_id
+FROM viberacing_api.refresh_next_dirty_community_season() AS refresh`;
 
-const abandonedEnrollmentCleanupQuery = `SELECT
-  cleanup.deleted_enrollments AS deleted_enrollments
-FROM viberacing_api.cleanup_abandoned_enrollments($1::integer) AS cleanup`;
-
-const finalizedSourceDayCleanupQuery = `SELECT
-  cleanup.deleted_source_day_values AS deleted_source_day_values
-FROM viberacing_api.cleanup_finalized_source_day_values($1::integer) AS cleanup`;
-
-const pairingRequestWindowResetQuery = `SELECT
-  reset.reset_windows AS reset_windows
-FROM viberacing_api.reset_expired_pairing_request_windows() AS reset`;
-
-const cleanupQuery = `SELECT
-  cleanup.deleted_origin_nonces AS deleted_origin_nonces,
-  cleanup.deleted_nonces AS deleted_nonces,
-  cleanup.deleted_snapshots AS deleted_snapshots
-FROM viberacing_api.cleanup_expired_ingest_state($1::integer) AS cleanup`;
-
-const authCleanupQuery = `SELECT
-  cleanup.deleted_challenges AS deleted_challenges,
-  cleanup.deleted_recovery_authorities AS deleted_recovery_authorities,
-  cleanup.deleted_used_recovery_codes AS deleted_used_recovery_codes
-FROM viberacing_api.cleanup_expired_auth_state($1::integer) AS cleanup`;
-
-const auditCleanupQuery = `SELECT
-  cleanup.deleted_audit_events AS deleted_audit_events
-FROM viberacing_api.cleanup_expired_audit_events($1::integer) AS cleanup`;
-
-const carRecipeProposalCleanupQuery = `SELECT
-  cleanup.deleted_proposals AS deleted_proposals
-FROM viberacing_api.cleanup_expired_car_recipe_proposals($1::integer) AS cleanup`;
-
-const inviteCleanupQuery = `SELECT
-  cleanup.deleted_invites AS deleted_invites
-FROM viberacing_api.cleanup_expired_invites($1::integer) AS cleanup`;
+const finalizeDueSeasonQuery = `SELECT
+  finalization.outcome,
+  finalization.season_start::text AS season_start,
+  finalization.snapshot_id
+FROM viberacing_api.finalize_next_due_community_season() AS finalization`;
 
 const pairingCleanupQuery = `SELECT
-  cleanup.deleted_pairings AS deleted_pairings,
-  cleanup.deleted_pending_keys AS deleted_pending_keys
+  cleanup.deleted_pairings,
+  cleanup.deleted_accounts,
+  cleanup.deleted_installations
 FROM viberacing_api.cleanup_expired_pairing_state($1::integer) AS cleanup`;
 
-const pairingApprovalProvenanceRedactionQuery = `SELECT
-  cleanup.redacted_pairings AS redacted_pairings
-FROM viberacing_api.redact_aged_pairing_approval_provenance($1::integer) AS cleanup`;
+const usageNonceCleanupQuery = `SELECT
+  cleanup.deleted_origin_nonces,
+  cleanup.deleted_device_nonces
+FROM viberacing_api.cleanup_expired_usage_nonces($1::integer) AS cleanup`;
 
-const sessionCleanupQuery = `SELECT
-  cleanup.deleted_sessions AS deleted_sessions
-FROM viberacing_api.cleanup_expired_sessions($1::integer) AS cleanup`;
+const usageHistoryCleanupQuery = `SELECT
+  cleanup.redacted_day_totals,
+  cleanup.deleted_idempotency_records,
+  cleanup.deleted_observations
+FROM viberacing_api.cleanup_expired_usage_history($1::integer) AS cleanup`;
 
-const terminalDeletionJobCleanupQuery = `SELECT
-  cleanup.deleted_deletion_jobs AS deleted_deletion_jobs
-FROM viberacing_api.cleanup_terminal_deletion_jobs($1::integer) AS cleanup`;
+const authCleanupQuery = `SELECT
+  cleanup.deleted_challenges,
+  cleanup.deleted_sessions,
+  cleanup.deleted_invites,
+  cleanup.deleted_recovery_codes
+FROM viberacing_api.cleanup_expired_auth_state($1::integer) AS cleanup`;
+
+const authorityCleanupQuery = `SELECT
+  cleanup.redacted_pairings,
+  cleanup.deleted_passkeys,
+  cleanup.deleted_device_keys,
+  cleanup.deleted_installations
+FROM viberacing_api.cleanup_aged_revoked_authority($1::integer) AS cleanup`;
+
+const snapshotCleanupQuery = `SELECT
+  cleanup.deleted_snapshots
+FROM viberacing_api.cleanup_snapshot_history($1::integer) AS cleanup`;
+
+const auditEventCleanupQuery = `SELECT
+  cleanup.deleted_ranking_events,
+  cleanup.deleted_admin_audit_events
+FROM viberacing_api.cleanup_expired_audit_events($1::integer) AS cleanup`;
 
 const profileDeletionPurgeQuery = `SELECT
-  purge.purged_profiles AS purged_profiles
+  purge.purged_profiles
 FROM viberacing_api.purge_profile_deletions($1::integer) AS purge`;
 
-const refreshQuery = `SELECT
-  refresh.profile_count AS profile_count
-FROM viberacing_api.refresh_community_season($1::date) AS refresh`;
+const terminalDeletionJobCleanupQuery = `SELECT
+  cleanup.deleted_deletion_jobs
+FROM viberacing_api.cleanup_terminal_deletion_jobs($1::integer) AS cleanup`;
 
-const finalizationQuery = `SELECT
-  finalization.profile_count AS profile_count
-FROM viberacing_api.finalize_community_season($1::date) AS finalization`;
-
-const backlogFinalizationQuery = `SELECT
-  finalization.finalized_season_count AS finalized_season_count,
-  finalization.profile_count AS profile_count
-FROM viberacing_api.finalize_community_season_backlog() AS finalization`;
+const pairingRequestWindowResetQuery = `SELECT
+  reset.reset_windows
+FROM viberacing_api.reset_expired_pairing_request_windows() AS reset`;
 
 export type JobsDatabasePoolSignal = "idle_client_error";
 export type JobsDatabasePoolSignalSink = (signal: JobsDatabasePoolSignal) => Promise<void> | void;
 
 export interface JobsDatabaseClient {
-  cleanupAbandonedEnrollments(batchSize: number): Promise<unknown>;
-  cleanupFinalizedSourceDayValues(batchSize: number): Promise<unknown>;
-  cleanupAgedRevokedDevices(batchSize: number): Promise<unknown>;
-  cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown>;
+  cleanupAgedRevokedAuthority(batchSize: number): Promise<unknown>;
   cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
-  cleanupExpiredAuditEvents(batchSize: number): Promise<unknown>;
-  cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown>;
-  cleanupExpiredInvites(batchSize: number): Promise<unknown>;
-  cleanupExpiredIngestState(batchSize: number): Promise<unknown>;
   cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
-  cleanupExpiredSessions(batchSize: number): Promise<unknown>;
+  cleanupExpiredAuditEvents(batchSize: number): Promise<unknown>;
+  cleanupExpiredUsageHistory(batchSize: number): Promise<unknown>;
+  cleanupExpiredUsageNonces(batchSize: number): Promise<unknown>;
+  cleanupSnapshotHistory(batchSize: number): Promise<unknown>;
   cleanupTerminalDeletionJobs(batchSize: number): Promise<unknown>;
-  finalizeCommunitySeasonBacklog(): Promise<unknown>;
-  finalizeCommunitySeason(seasonStart: string): Promise<unknown>;
+  ensureCurrentSeason(): Promise<unknown>;
+  finalizeDueSeason(): Promise<unknown>;
   purgeProfileDeletions(batchSize: number): Promise<unknown>;
-  redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown>;
+  refreshDirtyLeaderboard(): Promise<unknown>;
   release(destroy?: boolean): void;
   resetExpiredPairingRequestWindows(): Promise<unknown>;
-  refreshCommunitySeason(seasonStart: string): Promise<unknown>;
   verifyRuntimeBoundary(): Promise<unknown>;
 }
 
@@ -162,6 +146,7 @@ interface NodePostgresClient {
 
 type NodePostgresPoolFactory = (config: JobsDatabaseConfig) => NodePostgresPool;
 
+/* v8 ignore next -- exercised with the real driver by the PostgreSQL integration gate. */
 function defaultPoolFactory(config: JobsDatabaseConfig): NodePostgresPool {
   return new Pool(config);
 }
@@ -187,62 +172,47 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
   }
 
   return Object.freeze({
-    cleanupAbandonedEnrollments(batchSize: number): Promise<unknown> {
-      return fixedQuery(abandonedEnrollmentCleanupQuery, [batchSize]);
-    },
-    cleanupFinalizedSourceDayValues(batchSize: number): Promise<unknown> {
-      return fixedQuery(finalizedSourceDayCleanupQuery, [batchSize]);
-    },
-    cleanupAgedRevokedDevices(batchSize: number): Promise<unknown> {
-      return fixedQuery(agedRevokedDeviceCleanupQuery, [batchSize]);
-    },
-    cleanupAgedRevokedPasskeys(batchSize: number): Promise<unknown> {
-      return fixedQuery(agedRevokedPasskeyCleanupQuery, [batchSize]);
+    cleanupAgedRevokedAuthority(batchSize: number): Promise<unknown> {
+      return fixedQuery(authorityCleanupQuery, [batchSize]);
     },
     cleanupExpiredAuthState(batchSize: number): Promise<unknown> {
       return fixedQuery(authCleanupQuery, [batchSize]);
     },
-    cleanupExpiredAuditEvents(batchSize: number): Promise<unknown> {
-      return fixedQuery(auditCleanupQuery, [batchSize]);
-    },
-    cleanupExpiredCarRecipeProposals(batchSize: number): Promise<unknown> {
-      return fixedQuery(carRecipeProposalCleanupQuery, [batchSize]);
-    },
-    cleanupExpiredInvites(batchSize: number): Promise<unknown> {
-      return fixedQuery(inviteCleanupQuery, [batchSize]);
-    },
-    cleanupExpiredIngestState(batchSize: number): Promise<unknown> {
-      return fixedQuery(cleanupQuery, [batchSize]);
-    },
     cleanupExpiredPairingState(batchSize: number): Promise<unknown> {
       return fixedQuery(pairingCleanupQuery, [batchSize]);
     },
-    cleanupExpiredSessions(batchSize: number): Promise<unknown> {
-      return fixedQuery(sessionCleanupQuery, [batchSize]);
+    cleanupExpiredAuditEvents(batchSize: number): Promise<unknown> {
+      return fixedQuery(auditEventCleanupQuery, [batchSize]);
+    },
+    cleanupExpiredUsageHistory(batchSize: number): Promise<unknown> {
+      return fixedQuery(usageHistoryCleanupQuery, [batchSize]);
+    },
+    cleanupExpiredUsageNonces(batchSize: number): Promise<unknown> {
+      return fixedQuery(usageNonceCleanupQuery, [batchSize]);
+    },
+    cleanupSnapshotHistory(batchSize: number): Promise<unknown> {
+      return fixedQuery(snapshotCleanupQuery, [batchSize]);
     },
     cleanupTerminalDeletionJobs(batchSize: number): Promise<unknown> {
       return fixedQuery(terminalDeletionJobCleanupQuery, [batchSize]);
     },
-    finalizeCommunitySeasonBacklog(): Promise<unknown> {
-      return fixedQuery(backlogFinalizationQuery);
+    ensureCurrentSeason(): Promise<unknown> {
+      return fixedQuery(ensureCurrentSeasonQuery);
     },
-    finalizeCommunitySeason(seasonStart: string): Promise<unknown> {
-      return fixedQuery(finalizationQuery, [seasonStart]);
+    finalizeDueSeason(): Promise<unknown> {
+      return fixedQuery(finalizeDueSeasonQuery);
     },
     purgeProfileDeletions(batchSize: number): Promise<unknown> {
       return fixedQuery(profileDeletionPurgeQuery, [batchSize]);
     },
-    redactAgedPairingApprovalProvenance(batchSize: number): Promise<unknown> {
-      return fixedQuery(pairingApprovalProvenanceRedactionQuery, [batchSize]);
+    refreshDirtyLeaderboard(): Promise<unknown> {
+      return fixedQuery(refreshDirtyLeaderboardQuery);
     },
     release(destroy = false): void {
       client.release(destroy);
     },
     resetExpiredPairingRequestWindows(): Promise<unknown> {
       return fixedQuery(pairingRequestWindowResetQuery);
-    },
-    refreshCommunitySeason(seasonStart: string): Promise<unknown> {
-      return fixedQuery(refreshQuery, [seasonStart]);
     },
     verifyRuntimeBoundary(): Promise<unknown> {
       return fixedQuery(runtimeBoundaryQuery);

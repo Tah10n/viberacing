@@ -1,13 +1,13 @@
 import "server-only";
 
 import {
-  PublicScoreDatabaseConfigurationError,
-  resolvePublicScoreDatabaseConfig,
-  type PublicScoreDatabaseConfig,
-  type PublicScoreDatabaseConfigurationErrorCode,
-} from "./public-score-database-config";
+  PublicSnapshotDatabaseConfigurationError,
+  resolvePublicSnapshotDatabaseConfig,
+  type PublicSnapshotDatabaseConfig,
+  type PublicSnapshotDatabaseConfigurationErrorCode,
+} from "./public-snapshot-database-config";
 
-export type PairingDatabaseConfigurationErrorCode = PublicScoreDatabaseConfigurationErrorCode;
+export type PairingDatabaseConfigurationErrorCode = PublicSnapshotDatabaseConfigurationErrorCode;
 
 export class PairingDatabaseConfigurationError extends Error {
   readonly code: PairingDatabaseConfigurationErrorCode;
@@ -20,7 +20,7 @@ export class PairingDatabaseConfigurationError extends Error {
 }
 
 export type PairingDatabaseConfig = Readonly<
-  Omit<PublicScoreDatabaseConfig, "application_name" | "options"> & {
+  Omit<PublicSnapshotDatabaseConfig, "application_name" | "options"> & {
     readonly application_name: "viberacing-web-pairing";
     readonly options: "-c role=viberacing_web -c search_path=pg_catalog,pg_temp -c default_transaction_read_only=off";
   }
@@ -32,7 +32,7 @@ function fail(code: PairingDatabaseConfigurationErrorCode): never {
   throw new PairingDatabaseConfigurationError(code);
 }
 
-function buildConfig(base: PublicScoreDatabaseConfig): PairingDatabaseConfig {
+function buildConfig(base: PublicSnapshotDatabaseConfig): PairingDatabaseConfig {
   const config: PairingDatabaseConfig = {
     allowExitOnIdle: base.allowExitOnIdle,
     application_name: "viberacing-web-pairing",
@@ -77,12 +77,12 @@ export function resolvePairingDatabaseConfig(
   environment: Environment = process.env,
 ): PairingDatabaseConfig {
   try {
-    return buildConfig(resolvePublicScoreDatabaseConfig(environment));
+    return buildConfig(resolvePublicSnapshotDatabaseConfig(environment));
   } catch (error) {
     if (error instanceof PairingDatabaseConfigurationError) {
       throw error;
     }
-    if (error instanceof PublicScoreDatabaseConfigurationError) {
+    if (error instanceof PublicSnapshotDatabaseConfigurationError) {
       fail(error.code);
     }
     fail("environment_unreadable");

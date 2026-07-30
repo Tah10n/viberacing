@@ -14,14 +14,21 @@ interface LoginPageProps {
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
 }
 
+function loginReturnTo(value: string | string[] | undefined): string {
+  return typeof value === "string" &&
+    /^\/connect\?code=[A-HJ-NP-Z2-9]{4}(?:-[A-HJ-NP-Z2-9]{4}){2}$/.test(value)
+    ? value
+    : "/account";
+}
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const session = await readEnrollmentPageSession();
+  const [session, parameters] = await Promise.all([readEnrollmentPageSession(), searchParams]);
+  const returnTo = loginReturnTo(parameters.returnTo);
   if (session?.passkeyRegistered) {
-    redirect("/account");
+    redirect(returnTo);
   }
   if (session !== undefined) {
     redirect("/join/passkey");
   }
-  const error = (await searchParams).error === "unavailable";
-  return <PasskeyLogin initialError={error} />;
+  return <PasskeyLogin initialError={parameters.error === "unavailable"} returnTo={returnTo} />;
 }

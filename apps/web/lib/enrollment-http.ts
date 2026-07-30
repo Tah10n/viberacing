@@ -4,7 +4,7 @@ import { Buffer } from "node:buffer";
 
 import type { EnrollmentAdmission } from "./enrollment-admission";
 import { clearEnrollmentCookie, readCookie, serializeEnrollmentCookie } from "./enrollment-cookie";
-import { parseJoinRequest } from "./enrollment-domain";
+import { parseJoinRequest, type AccountTargetActionPurpose } from "./enrollment-domain";
 import type { EnrollmentRuntime } from "./enrollment-runtime";
 import { enrollmentCookieNames } from "./enrollment-service";
 import { createPublicProblemResponse, createPublicRequestId } from "./public-http-problem";
@@ -27,7 +27,6 @@ const carRecipeFormKeys = new Set([
 const enrollmentCookiePaths = Object.freeze({
   login: "/auth/login",
   oauth: "/auth/github/callback",
-  pairingApproval: "/auth/pairing",
   passkey: "/auth/passkey",
   passkeyAdd: "/auth/passkeys/add",
   passkeyRevoke: "/auth/passkeys/revoke",
@@ -35,21 +34,46 @@ const enrollmentCookiePaths = Object.freeze({
   recovery: "/auth/recovery",
   recoveryCodes: "/auth/recovery-codes",
   session: "/",
-  sourceReactivation: "/auth/sources/reactivate",
-  sourceUnlink: "/auth/sources/unlink",
+  accountReactivation: "/auth/accounts/reactivate",
+  accountUnlink: "/auth/accounts/unlink",
+  deviceRevocation: "/auth/devices/revoke",
+  installationRevocation: "/auth/installations/revoke",
+});
+
+const accountTargetRoutes = Object.freeze({
+  account_reactivate: Object.freeze({
+    cookieName: enrollmentCookieNames.accountReactivation,
+    cookiePath: enrollmentCookiePaths.accountReactivation,
+    routePath: "/auth/accounts/reactivate",
+  }),
+  account_unlink: Object.freeze({
+    cookieName: enrollmentCookieNames.accountUnlink,
+    cookiePath: enrollmentCookiePaths.accountUnlink,
+    routePath: "/auth/accounts/unlink",
+  }),
+  device_revoke: Object.freeze({
+    cookieName: enrollmentCookieNames.deviceRevocation,
+    cookiePath: enrollmentCookiePaths.deviceRevocation,
+    routePath: "/auth/devices/revoke",
+  }),
+  installation_revoke: Object.freeze({
+    cookieName: enrollmentCookieNames.installationRevocation,
+    cookiePath: enrollmentCookiePaths.installationRevocation,
+    routePath: "/auth/installations/revoke",
+  }),
 });
 
 export interface EnrollmentHttp {
+  accountPause(request: Request): Promise<Response>;
+  accountTargetOptions(request: Request, purpose: AccountTargetActionPurpose): Promise<Response>;
+  accountTargetVerify(request: Request, purpose: AccountTargetActionPurpose): Promise<Response>;
   callback(request: Request): Promise<Response>;
   carRecipeApprove(request: Request): Promise<Response>;
   carRecipePropose(request: Request): Promise<Response>;
   carRecipeReject(request: Request): Promise<Response>;
-  deviceRevoke(request: Request): Promise<Response>;
   loginOptions(request: Request): Promise<Response>;
   loginVerify(request: Request): Promise<Response>;
   logout(request: Request): Promise<Response>;
-  pairingApprovalOptions(request: Request): Promise<Response>;
-  pairingApprovalVerify(request: Request): Promise<Response>;
   passkeyOptions(request: Request): Promise<Response>;
   passkeyAddOptions(request: Request): Promise<Response>;
   passkeyAddVerify(request: Request): Promise<Response>;
@@ -58,16 +82,12 @@ export interface EnrollmentHttp {
   passkeyVerify(request: Request): Promise<Response>;
   profileDeletionOptions(request: Request): Promise<Response>;
   profileDeletionVerify(request: Request): Promise<Response>;
+  profileProviderBreakdownVisibility(request: Request): Promise<Response>;
   profileVisibility(request: Request): Promise<Response>;
   recoveryOptions(request: Request): Promise<Response>;
   recoveryVerify(request: Request): Promise<Response>;
   recoveryCodeOptions(request: Request): Promise<Response>;
   recoveryCodeVerify(request: Request): Promise<Response>;
-  sourcePause(request: Request): Promise<Response>;
-  sourceReactivationOptions(request: Request): Promise<Response>;
-  sourceReactivationVerify(request: Request): Promise<Response>;
-  sourceUnlinkOptions(request: Request): Promise<Response>;
-  sourceUnlinkVerify(request: Request): Promise<Response>;
   start(request: Request): Promise<Response>;
 }
 
@@ -76,8 +96,7 @@ interface EnrollmentHttpDependencies {
   readonly carProposalsEnabled?: unknown;
   readonly enrollmentEnabled?: unknown;
   readonly getRuntime: () => EnrollmentRuntime;
-  readonly pairingEnabled?: unknown;
-  readonly sourceCreationEnabled?: unknown;
+  readonly inviteGateEnabled?: unknown;
 }
 
 function problem(kind: "invalid_request" | "temporarily_unavailable" | "unauthorized"): Response {
@@ -135,26 +154,24 @@ function readProfileVisibilityForm(value: string): boolean | undefined {
   return visibility === "public" ? true : visibility === "hidden" ? false : undefined;
 }
 
-function readDeviceRevokeForm(value: string): string | undefined {
+function readProviderBreakdownVisibilityForm(value: string): boolean | undefined {
   const parameters = new URLSearchParams(value);
   const keys = [...parameters.keys()];
-  if (keys.length !== 1 || keys[0] !== "deviceId") {
+  if (keys.length !== 1 || keys[0] !== "providerBreakdown") {
     return undefined;
   }
-  const deviceId = parameters.get("deviceId");
-  return deviceId !== null && /^dev_[A-Za-z0-9_-]{22}$/.test(deviceId) ? deviceId : undefined;
+  const visibility = parameters.get("providerBreakdown");
+  return visibility === "shown" ? true : visibility === "hidden" ? false : undefined;
 }
 
-function readSourcePauseForm(value: string): string | undefined {
+function readTargetControlForm(value: string): string | undefined {
   const parameters = new URLSearchParams(value);
   const keys = [...parameters.keys()];
-  if (keys.length !== 1 || keys[0] !== "sourceControl") {
+  if (keys.length !== 1 || keys[0] !== "targetControl") {
     return undefined;
   }
-  const sourceControl = parameters.get("sourceControl");
-  return sourceControl !== null && sourceControl.length >= 1 && sourceControl.length <= 512
-    ? sourceControl
-    : undefined;
+  const control = parameters.get("targetControl");
+  return control !== null && control.length >= 1 && control.length <= 512 ? control : undefined;
 }
 
 function readCarRecipeForm(value: string): Readonly<Record<string, unknown>> | undefined {
@@ -307,6 +324,135 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
     }
   }
 
+  async function accountTargetOptions(
+    request: Request,
+    purpose: AccountTargetActionPurpose,
+  ): Promise<Response> {
+    const currentRuntime = runtime();
+    if (currentRuntime === undefined) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
+    const route = accountTargetRoutes[purpose];
+    if (
+      !exactOrigin(request, currentRuntime, `${route.routePath}/options`) ||
+      !contentType(request, jsonContentTypePattern)
+    ) {
+      discardBody(request);
+      return problem("invalid_request");
+    }
+    const lease = dependencies.admission.tryAcquire();
+    if (lease === undefined) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
+    try {
+      const body = await boundedBody(request, 768);
+      if (body === undefined) {
+        return problem("invalid_request");
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body) as unknown;
+      } catch {
+        return problem("invalid_request");
+      }
+      const sessionCookie = readCookie(
+        request.headers.get("cookie"),
+        enrollmentCookieNames.session,
+      );
+      if (sessionCookie === undefined) {
+        return problem("unauthorized");
+      }
+      const decision = await currentRuntime.service.beginAccountTargetAction(
+        sessionCookie,
+        parsed,
+        purpose,
+      );
+      if (decision === undefined) {
+        return problem("unauthorized");
+      }
+      return new Response(JSON.stringify(decision.options), {
+        headers: noStoreHeaders({
+          "content-type": "application/json; charset=utf-8",
+          "set-cookie": serializeEnrollmentCookie(
+            route.cookieName,
+            decision.actionCookie,
+            300,
+            currentRuntime.config.secureCookies,
+            route.cookiePath,
+          ),
+        }),
+        status: 200,
+      });
+    } finally {
+      lease.release();
+    }
+  }
+
+  async function accountTargetVerify(
+    request: Request,
+    purpose: AccountTargetActionPurpose,
+  ): Promise<Response> {
+    const currentRuntime = runtime();
+    if (currentRuntime === undefined) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
+    const route = accountTargetRoutes[purpose];
+    if (
+      !exactOrigin(request, currentRuntime, `${route.routePath}/verify`) ||
+      !contentType(request, jsonContentTypePattern)
+    ) {
+      discardBody(request);
+      return problem("invalid_request");
+    }
+    const lease = dependencies.admission.tryAcquire();
+    if (lease === undefined) {
+      discardBody(request);
+      return problem("temporarily_unavailable");
+    }
+    try {
+      const body = await boundedBody(request, 16_384);
+      if (body === undefined) {
+        return problem("invalid_request");
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body) as unknown;
+      } catch {
+        return problem("invalid_request");
+      }
+      const cookieHeader = request.headers.get("cookie");
+      const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
+      const actionCookie = readCookie(cookieHeader, route.cookieName);
+      if (sessionCookie === undefined || actionCookie === undefined) {
+        return problem("unauthorized");
+      }
+      const completed = await currentRuntime.service.completeAccountTargetAction(
+        sessionCookie,
+        actionCookie,
+        parsed,
+        purpose,
+      );
+      if (!completed) {
+        return problem("unauthorized");
+      }
+      return new Response(null, {
+        headers: noStoreHeaders({
+          "set-cookie": clearEnrollmentCookie(
+            route.cookieName,
+            currentRuntime.config.secureCookies,
+            route.cookiePath,
+          ),
+        }),
+        status: 204,
+      });
+    } finally {
+      lease.release();
+    }
+  }
+
   async function carRecipeDecision(
     request: Request,
     action: "approve" | "reject",
@@ -369,6 +515,48 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
   }
 
   return Object.freeze({
+    async accountPause(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/accounts/pause") ||
+        !contentType(request, formContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 768);
+        const targetControl = body === undefined ? undefined : readTargetControlForm(body);
+        if (targetControl === undefined) {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+        }
+        const paused = await currentRuntime.service.pauseAgentAccount(sessionCookie, targetControl);
+        return redirect(
+          currentRuntime.config.publicOrigin,
+          paused ? "/account" : "/account?error=unavailable",
+        );
+      } finally {
+        lease.release();
+      }
+    },
+    accountTargetOptions,
+    accountTargetVerify,
     async callback(request: Request): Promise<Response> {
       if (dependencies.enrollmentEnabled !== true) {
         discardBody(request);
@@ -412,11 +600,15 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           oauthCookie,
           AbortSignal.timeout(10_000),
           dependencies.enrollmentEnabled,
+          dependencies.inviteGateEnabled,
         );
         if (decision === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=unavailable", [
             clearOauth,
           ]);
+        }
+        if (decision.outcome === "existing_profile") {
+          return redirect(currentRuntime.config.publicOrigin, "/login", [clearOauth]);
         }
         return redirect(currentRuntime.config.publicOrigin, "/join/passkey", [
           clearOauth,
@@ -490,46 +682,6 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
     },
     carRecipeReject(request: Request): Promise<Response> {
       return carRecipeDecision(request, "reject");
-    },
-    async deviceRevoke(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/devices/revoke") ||
-        !contentType(request, formContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 64);
-        const deviceId = body === undefined ? undefined : readDeviceRevokeForm(body);
-        if (deviceId === undefined) {
-          return problem("invalid_request");
-        }
-        const sessionCookie = readCookie(
-          request.headers.get("cookie"),
-          enrollmentCookieNames.session,
-        );
-        if (sessionCookie === undefined) {
-          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
-        }
-        const revoked = await currentRuntime.service.revokeDevice(sessionCookie, deviceId);
-        return redirect(
-          currentRuntime.config.publicOrigin,
-          revoked ? "/account" : "/account?error=unavailable",
-        );
-      } finally {
-        lease.release();
-      }
     },
     async loginOptions(request: Request): Promise<Response> {
       const currentRuntime = runtime();
@@ -631,139 +783,6 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           ),
         );
         return new Response(null, { headers, status: 204 });
-      } finally {
-        lease.release();
-      }
-    },
-    async pairingApprovalOptions(request: Request): Promise<Response> {
-      if (dependencies.pairingEnabled !== true) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/pairing/options") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 1024);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const sessionCookie = readCookie(
-          request.headers.get("cookie"),
-          enrollmentCookieNames.session,
-        );
-        if (sessionCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const decision = await currentRuntime.service.beginPairingApproval(
-          sessionCookie,
-          parsed,
-          dependencies.sourceCreationEnabled,
-        );
-        if (decision === undefined) {
-          return problem("unauthorized");
-        }
-        return new Response(
-          JSON.stringify({ options: decision.options, pairing: decision.pairing }),
-          {
-            headers: noStoreHeaders({
-              "content-type": "application/json; charset=utf-8",
-              "set-cookie": serializeEnrollmentCookie(
-                enrollmentCookieNames.pairingApproval,
-                decision.pairingApprovalCookie,
-                300,
-                currentRuntime.config.secureCookies,
-                enrollmentCookiePaths.pairingApproval,
-              ),
-            }),
-            status: 200,
-          },
-        );
-      } finally {
-        lease.release();
-      }
-    },
-    async pairingApprovalVerify(request: Request): Promise<Response> {
-      if (dependencies.pairingEnabled !== true) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/pairing/verify") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 16_384);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const cookieHeader = request.headers.get("cookie");
-        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
-        const pairingApprovalCookie = readCookie(
-          cookieHeader,
-          enrollmentCookieNames.pairingApproval,
-        );
-        if (sessionCookie === undefined || pairingApprovalCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const approved = await currentRuntime.service.completePairingApproval(
-          sessionCookie,
-          pairingApprovalCookie,
-          parsed,
-          dependencies.sourceCreationEnabled,
-        );
-        if (!approved) {
-          return problem("unauthorized");
-        }
-        return new Response(null, {
-          headers: noStoreHeaders({
-            "set-cookie": clearEnrollmentCookie(
-              enrollmentCookieNames.pairingApproval,
-              currentRuntime.config.secureCookies,
-              enrollmentCookiePaths.pairingApproval,
-            ),
-          }),
-          status: 204,
-        });
       } finally {
         lease.release();
       }
@@ -1384,14 +1403,24 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
             enrollmentCookiePaths.recoveryCodes,
           ),
           clearEnrollmentCookie(
-            enrollmentCookieNames.sourceReactivation,
+            enrollmentCookieNames.accountReactivation,
             currentRuntime.config.secureCookies,
-            enrollmentCookiePaths.sourceReactivation,
+            enrollmentCookiePaths.accountReactivation,
           ),
           clearEnrollmentCookie(
-            enrollmentCookieNames.sourceUnlink,
+            enrollmentCookieNames.accountUnlink,
             currentRuntime.config.secureCookies,
-            enrollmentCookiePaths.sourceUnlink,
+            enrollmentCookiePaths.accountUnlink,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.deviceRevocation,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.deviceRevocation,
+          ),
+          clearEnrollmentCookie(
+            enrollmentCookieNames.installationRevocation,
+            currentRuntime.config.secureCookies,
+            enrollmentCookiePaths.installationRevocation,
           ),
           clearEnrollmentCookie(enrollmentCookieNames.session, currentRuntime.config.secureCookies),
         ];
@@ -1399,280 +1428,6 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           headers.append("set-cookie", cookie);
         }
         return new Response(null, { headers, status: 204 });
-      } finally {
-        lease.release();
-      }
-    },
-    async sourcePause(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/sources/pause") ||
-        !contentType(request, formContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 768);
-        const sourceControl = body === undefined ? undefined : readSourcePauseForm(body);
-        if (sourceControl === undefined) {
-          return problem("invalid_request");
-        }
-        const sessionCookie = readCookie(
-          request.headers.get("cookie"),
-          enrollmentCookieNames.session,
-        );
-        if (sessionCookie === undefined) {
-          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
-        }
-        const paused = await currentRuntime.service.pauseSource(sessionCookie, sourceControl);
-        return redirect(
-          currentRuntime.config.publicOrigin,
-          paused ? "/account" : "/account?error=unavailable",
-        );
-      } finally {
-        lease.release();
-      }
-    },
-    async sourceReactivationOptions(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/sources/reactivate/options") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 768);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const sessionCookie = readCookie(
-          request.headers.get("cookie"),
-          enrollmentCookieNames.session,
-        );
-        if (sessionCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const decision = await currentRuntime.service.beginSourceReactivation(
-          sessionCookie,
-          parsed,
-        );
-        if (decision === undefined) {
-          return problem("unauthorized");
-        }
-        return new Response(JSON.stringify(decision.options), {
-          headers: noStoreHeaders({
-            "content-type": "application/json; charset=utf-8",
-            "set-cookie": serializeEnrollmentCookie(
-              enrollmentCookieNames.sourceReactivation,
-              decision.sourceReactivationCookie,
-              300,
-              currentRuntime.config.secureCookies,
-              enrollmentCookiePaths.sourceReactivation,
-            ),
-          }),
-          status: 200,
-        });
-      } finally {
-        lease.release();
-      }
-    },
-    async sourceReactivationVerify(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/sources/reactivate/verify") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 16_384);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const cookieHeader = request.headers.get("cookie");
-        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
-        const sourceReactivationCookie = readCookie(
-          cookieHeader,
-          enrollmentCookieNames.sourceReactivation,
-        );
-        if (sessionCookie === undefined || sourceReactivationCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const reactivated = await currentRuntime.service.completeSourceReactivation(
-          sessionCookie,
-          sourceReactivationCookie,
-          parsed,
-        );
-        if (!reactivated) {
-          return problem("unauthorized");
-        }
-        return new Response(null, {
-          headers: noStoreHeaders({
-            "set-cookie": clearEnrollmentCookie(
-              enrollmentCookieNames.sourceReactivation,
-              currentRuntime.config.secureCookies,
-              enrollmentCookiePaths.sourceReactivation,
-            ),
-          }),
-          status: 204,
-        });
-      } finally {
-        lease.release();
-      }
-    },
-    async sourceUnlinkOptions(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/sources/unlink/options") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 768);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const sessionCookie = readCookie(
-          request.headers.get("cookie"),
-          enrollmentCookieNames.session,
-        );
-        if (sessionCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const decision = await currentRuntime.service.beginSourceUnlink(sessionCookie, parsed);
-        if (decision === undefined) {
-          return problem("unauthorized");
-        }
-        return new Response(JSON.stringify(decision.options), {
-          headers: noStoreHeaders({
-            "content-type": "application/json; charset=utf-8",
-            "set-cookie": serializeEnrollmentCookie(
-              enrollmentCookieNames.sourceUnlink,
-              decision.sourceUnlinkCookie,
-              300,
-              currentRuntime.config.secureCookies,
-              enrollmentCookiePaths.sourceUnlink,
-            ),
-          }),
-          status: 200,
-        });
-      } finally {
-        lease.release();
-      }
-    },
-    async sourceUnlinkVerify(request: Request): Promise<Response> {
-      const currentRuntime = runtime();
-      if (currentRuntime === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      if (
-        !exactOrigin(request, currentRuntime, "/auth/sources/unlink/verify") ||
-        !contentType(request, jsonContentTypePattern)
-      ) {
-        discardBody(request);
-        return problem("invalid_request");
-      }
-      const lease = dependencies.admission.tryAcquire();
-      if (lease === undefined) {
-        discardBody(request);
-        return problem("temporarily_unavailable");
-      }
-      try {
-        const body = await boundedBody(request, 16_384);
-        if (body === undefined) {
-          return problem("invalid_request");
-        }
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(body) as unknown;
-        } catch {
-          return problem("invalid_request");
-        }
-        const cookieHeader = request.headers.get("cookie");
-        const sessionCookie = readCookie(cookieHeader, enrollmentCookieNames.session);
-        const sourceUnlinkCookie = readCookie(cookieHeader, enrollmentCookieNames.sourceUnlink);
-        if (sessionCookie === undefined || sourceUnlinkCookie === undefined) {
-          return problem("unauthorized");
-        }
-        const unlinked = await currentRuntime.service.completeSourceUnlink(
-          sessionCookie,
-          sourceUnlinkCookie,
-          parsed,
-        );
-        if (!unlinked) {
-          return problem("unauthorized");
-        }
-        return new Response(null, {
-          headers: noStoreHeaders({
-            "set-cookie": clearEnrollmentCookie(
-              enrollmentCookieNames.sourceUnlink,
-              currentRuntime.config.secureCookies,
-              enrollmentCookiePaths.sourceUnlink,
-            ),
-          }),
-          status: 204,
-        });
       } finally {
         lease.release();
       }
@@ -1702,11 +1457,6 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookieNames.oauth,
           currentRuntime.config.secureCookies,
           enrollmentCookiePaths.oauth,
-        ),
-        clearEnrollmentCookie(
-          enrollmentCookieNames.pairingApproval,
-          currentRuntime.config.secureCookies,
-          enrollmentCookiePaths.pairingApproval,
         ),
         clearEnrollmentCookie(
           enrollmentCookieNames.passkey,
@@ -1739,14 +1489,24 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
           enrollmentCookiePaths.recoveryCodes,
         ),
         clearEnrollmentCookie(
-          enrollmentCookieNames.sourceReactivation,
+          enrollmentCookieNames.accountReactivation,
           currentRuntime.config.secureCookies,
-          enrollmentCookiePaths.sourceReactivation,
+          enrollmentCookiePaths.accountReactivation,
         ),
         clearEnrollmentCookie(
-          enrollmentCookieNames.sourceUnlink,
+          enrollmentCookieNames.accountUnlink,
           currentRuntime.config.secureCookies,
-          enrollmentCookiePaths.sourceUnlink,
+          enrollmentCookiePaths.accountUnlink,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.deviceRevocation,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.deviceRevocation,
+        ),
+        clearEnrollmentCookie(
+          enrollmentCookieNames.installationRevocation,
+          currentRuntime.config.secureCookies,
+          enrollmentCookiePaths.installationRevocation,
         ),
         clearEnrollmentCookie(enrollmentCookieNames.session, currentRuntime.config.secureCookies),
       ];
@@ -1799,7 +1559,14 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         return problem("temporarily_unavailable");
       }
       try {
-        if ((await boundedBody(request, 2)) !== "{}") {
+        const body = await boundedBody(request, 64);
+        if (body === undefined) {
+          return problem("invalid_request");
+        }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body) as unknown;
+        } catch {
           return problem("invalid_request");
         }
         const sessionCookie = readCookie(
@@ -1811,6 +1578,7 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         }
         const decision = await currentRuntime.service.beginPasskey(
           sessionCookie,
+          parsed,
           dependencies.enrollmentEnabled,
         );
         if (decision === undefined) {
@@ -1913,6 +1681,49 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
         lease.release();
       }
     },
+    async profileProviderBreakdownVisibility(request: Request): Promise<Response> {
+      const currentRuntime = runtime();
+      if (currentRuntime === undefined) {
+        discardBody(request);
+        return problem("temporarily_unavailable");
+      }
+      if (
+        !exactOrigin(request, currentRuntime, "/auth/profile/provider-breakdown") ||
+        !contentType(request, formContentTypePattern)
+      ) {
+        discardBody(request);
+        return problem("invalid_request");
+      }
+      const lease = dependencies.admission.tryAcquire();
+      if (lease === undefined) {
+        discardBody(request);
+        return redirect(currentRuntime.config.publicOrigin, "/account?error=unavailable");
+      }
+      try {
+        const body = await boundedBody(request, 48);
+        const visible = body === undefined ? undefined : readProviderBreakdownVisibilityForm(body);
+        if (visible === undefined) {
+          return problem("invalid_request");
+        }
+        const sessionCookie = readCookie(
+          request.headers.get("cookie"),
+          enrollmentCookieNames.session,
+        );
+        if (sessionCookie === undefined) {
+          return redirect(currentRuntime.config.publicOrigin, "/login?error=unavailable");
+        }
+        const updated = await currentRuntime.service.setProviderBreakdownVisibility(
+          sessionCookie,
+          visible,
+        );
+        return redirect(
+          currentRuntime.config.publicOrigin,
+          updated === visible ? "/account" : "/account?error=unavailable",
+        );
+      } finally {
+        lease.release();
+      }
+    },
     async profileVisibility(request: Request): Promise<Response> {
       const currentRuntime = runtime();
       if (currentRuntime === undefined) {
@@ -1980,7 +1791,8 @@ export function createEnrollmentHttp(dependencies: EnrollmentHttpDependencies): 
       }
       try {
         const body = await boundedBody(request, 1024);
-        const join = body === undefined ? undefined : parseJoinRequest(body);
+        const join =
+          body === undefined ? undefined : parseJoinRequest(body, dependencies.inviteGateEnabled);
         if (join === undefined) {
           return redirect(currentRuntime.config.publicOrigin, "/join?error=invalid");
         }

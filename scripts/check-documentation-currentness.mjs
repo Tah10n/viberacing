@@ -94,6 +94,16 @@ const policyCount = Array.isArray(contractManifest?.policies)
 const operationCount = Array.isArray(contractManifest?.operations)
   ? contractManifest.operations.length
   : undefined;
+const implementedLocalOperationCount = Array.isArray(contractManifest?.operations)
+  ? contractManifest.operations.filter(
+      (operation) => operation?.implementationStatus === "implemented-local",
+    ).length
+  : undefined;
+const contractOnlyOperationCount = Array.isArray(contractManifest?.operations)
+  ? contractManifest.operations.filter(
+      (operation) => operation?.implementationStatus === "contract-only",
+    ).length
+  : undefined;
 const migrationCount = Array.isArray(migrationManifest?.migrations)
   ? migrationManifest.migrations.length
   : undefined;
@@ -106,6 +116,8 @@ if (
   schemaCount === undefined ||
   policyCount === undefined ||
   operationCount === undefined ||
+  implementedLocalOperationCount === undefined ||
+  contractOnlyOperationCount === undefined ||
   migrationCount === undefined ||
   pathCount === undefined
 ) {
@@ -114,14 +126,24 @@ if (
 
 const readme = read("README.md");
 const russianReadme = read("README.ru.md");
+const roadmap = read("ROADMAP.md");
 const databaseReadme = read("database/README.md");
 const implementationStatus = read("docs/IMPLEMENTATION_STATUS.md");
 const localDevelopment = read("docs/getting-started/LOCAL_DEVELOPMENT.md");
+const threatModel = read("docs/security/THREAT_MODEL.md");
+const decisionIndex = read("docs/decisions/README.md");
+const migrationRunbook = read("docs/operations/MIGRATION_RUNBOOK.md");
+const securityPolicy = read("SECURITY.md");
+const contributing = read("CONTRIBUTING.md");
+const governance = read("GOVERNANCE.md");
+const maintainers = read("MAINTAINERS.md");
 
 if (
   schemaCount !== undefined &&
   policyCount !== undefined &&
   operationCount !== undefined &&
+  implementedLocalOperationCount !== undefined &&
+  contractOnlyOperationCount !== undefined &&
   pathCount !== undefined &&
   migrationCount !== undefined
 ) {
@@ -158,7 +180,7 @@ if (
   requireNormalized(
     "docs/getting-started/LOCAL_DEVELOPMENT.md",
     localDevelopment,
-    `OpenAPI document contains ${pathCount} paths marked \`implemented-local\``,
+    `OpenAPI document contains ${pathCount} paths: ${implementedLocalOperationCount} marked \`implemented-local\` and ${contractOnlyOperationCount} marked \`contract-only\``,
     "OpenAPI path inventory differs from the generated document",
   );
 }
@@ -176,6 +198,67 @@ requireCompactOnboarding("README.ru.md", russianReadme, {
   quickStartHeading: "## Быстрый запуск",
 });
 
+requireNormalized(
+  "docs/security/THREAT_MODEL.md",
+  threatModel,
+  "The former Codex-specific source/score runtime is absent from the current tree",
+  "clean replacement status is stale",
+);
+requireNormalized(
+  "ROADMAP.md",
+  roadmap,
+  "Status: local clean-replacement matrix complete; registry-backed advisory refresh and external evidence remain pending.",
+  "final local review status is stale",
+);
+requireNormalized(
+  "docs/decisions/README.md",
+  decisionIndex,
+  "Accepted; implemented locally; external pending",
+  "ADR index status is stale",
+);
+requireNormalized(
+  "docs/decisions/README.md",
+  decisionIndex,
+  "Rows before ADR 0076 preserve historical decision status and implementation notes; they are not current runtime evidence.",
+  "historical ADR status boundary is stale",
+);
+requireNormalized(
+  "docs/operations/MIGRATION_RUNBOOK.md",
+  migrationRunbook,
+  "The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as local synthetic evidence.",
+  "migration evidence status is stale",
+);
+requireNormalized(
+  "docs/IMPLEMENTATION_STATUS.md",
+  implementationStatus,
+  "The registry-backed `pnpm audit` advisory lookup was not refreshed and is explicitly not counted as green evidence.",
+  "registry advisory evidence boundary is stale",
+);
+requireNormalized(
+  "SECURITY.md",
+  securityPolicy,
+  "local pre-release runtime components but no deployed runtime product",
+  "runtime evidence boundary is stale",
+);
+requireNormalized(
+  "CONTRIBUTING.md",
+  contributing,
+  "The initial public source push has completed.",
+  "source-publication status is stale",
+);
+requireNormalized(
+  "GOVERNANCE.md",
+  governance,
+  "maintainer-led public source-only pre-release project",
+  "publication governance status is stale",
+);
+requireNormalized(
+  "MAINTAINERS.md",
+  maintainers,
+  "The initial source-only publication is complete.",
+  "maintainer publication status is stale",
+);
+
 if (findings.length > 0) {
   console.error(`Documentation currentness check failed with ${findings.length} finding(s):`);
   for (const finding of findings) {
@@ -185,5 +268,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Documentation currentness check passed (${schemaCount} schemas, ${policyCount} policies, ${operationCount} operations, ${pathCount} paths, ${migrationCount} migrations, README ${lineCount(readme)}/${lineCount(russianReadme)} EN/RU lines).`,
+  `Documentation currentness check passed (${schemaCount} schemas, ${policyCount} policies, ${operationCount} operations: ${implementedLocalOperationCount} implemented-local and ${contractOnlyOperationCount} contract-only; ${pathCount} paths, ${migrationCount} migrations, README ${lineCount(readme)}/${lineCount(russianReadme)} EN/RU lines).`,
 );

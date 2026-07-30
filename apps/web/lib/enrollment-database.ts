@@ -7,20 +7,18 @@ import { validateCarRecipeV1, type CarRecipeV1 } from "@viberacing/contracts";
 import { resolvePairingDatabaseConfig } from "./pairing-database-config";
 import {
   createPairingDatabasePool,
-  type EnrollmentDatabaseAccountOverviewRequest,
+  type EnrollmentDatabaseAccountTargetChallenge,
+  type EnrollmentDatabaseAccountTargetCompletion,
+  type EnrollmentDatabaseAgentAccountPause,
   type EnrollmentDatabaseCarRecipeDecision,
   type EnrollmentDatabaseCarRecipeProposal,
   type EnrollmentDatabaseClient,
-  type EnrollmentDatabaseDeviceRevocation,
   type EnrollmentDatabaseInitialPasskey,
   type EnrollmentDatabaseLoginCompletion,
   type EnrollmentDatabasePasskeyAddition,
   type EnrollmentDatabasePasskeyAddChallenge,
   type EnrollmentDatabasePasskeyChallenge,
   type EnrollmentDatabasePasskeyInventoryRequest,
-  type EnrollmentDatabasePairingApproval,
-  type EnrollmentDatabasePairingApprovalChallenge,
-  type EnrollmentDatabasePairingApprovalRead,
   type EnrollmentDatabasePasskeyRevocation,
   type EnrollmentDatabasePasskeyRevokeChallenge,
   type EnrollmentDatabasePool,
@@ -29,17 +27,12 @@ import {
   type EnrollmentDatabaseProfileDeletionChallenge,
   type EnrollmentDatabaseProfileVisibilityRequest,
   type EnrollmentDatabaseProfileVisibilityUpdate,
+  type EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
   type EnrollmentDatabaseRecoveryCodeChallenge,
   type EnrollmentDatabaseRecoveryCodeReplacement,
   type EnrollmentDatabaseRecoveryCompletion,
   type EnrollmentDatabaseRecoveryStart,
   type EnrollmentDatabaseSessionRevocation,
-  type EnrollmentDatabaseSourcePause,
-  type EnrollmentDatabaseSourceReactivation,
-  type EnrollmentDatabaseSourceReactivationChallenge,
-  type EnrollmentDatabaseSourceUnlink,
-  type EnrollmentDatabaseSourceUnlinkChallenge,
-  type EnrollmentDatabaseSourceDeviceInventoryRequest,
   type PairingDatabasePoolSignalSink,
 } from "./pairing-database-pool";
 import { enrollmentPatterns } from "./enrollment-domain";
@@ -54,16 +47,6 @@ const loginMaterialColumns = new Set([
 ]);
 const loginProfileColumns = new Set(["handle", "locale", "profile_id"]);
 const recoveryMaterialColumns = new Set(["recovery_code_id", "verifier_phc"]);
-const pairingApprovalColumns = new Set([
-  "architecture",
-  "candidate_index",
-  "connector_version",
-  "device_label",
-  "expires_at",
-  "os_family",
-  "pairing_id",
-  "public_key",
-]);
 const passkeyInventoryColumns = new Set([
   "created_on",
   "current_authenticator",
@@ -71,27 +54,41 @@ const passkeyInventoryColumns = new Set([
   "passkey_id",
   "state",
 ]);
-const activeDeviceInventoryColumns = new Set([
-  "activated_on",
+const privateDashboardRankingColumns = new Set([
+  "participant_count",
+  "provider_breakdown_visible",
+  "public_visibility",
+  "rank_position",
+  "season_end",
+  "season_start",
+  "season_state",
+  "snapshot_generated_at",
+  "weekly_token_total",
+]);
+const agentAccountDashboardColumns = new Set([
+  "account_state",
+  "accounting_revision",
+  "agent_account_id",
   "architecture",
+  "connected_date",
   "connector_version",
   "device_id",
-  "device_label",
   "device_state",
+  "expected_reader_version",
+  "identity_assurance",
+  "installation_id",
+  "installation_label",
+  "installation_state",
+  "last_seen_date",
+  "last_successful_sync_date",
+  "observed_reader_version",
   "os_family",
-  "source_id",
-  "source_state",
-]);
-const accountOverviewColumns = new Set([
-  "active_days",
-  "daily_score",
-  "score_date",
-  "season_end",
-  "season_finalized",
-  "season_start",
-  "source_count",
-  "visibility",
-  "weekly_score",
+  "private_label",
+  "provider_code",
+  "quarantine_reason",
+  "status_code",
+  "today_token_total",
+  "weekly_token_total",
 ]);
 const carRecipeStateColumns = new Set([
   "active_chassis",
@@ -115,21 +112,15 @@ const carRecipeStateColumns = new Set([
   "proposal_wheels",
   "proposal_wing",
 ]);
-const accountScoreColumns = [
-  "active_days",
-  "daily_score",
-  "score_date",
-  "season_end",
-  "season_finalized",
-  "season_start",
-  "source_count",
-  "weekly_score",
-] as const;
 const canonicalDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const canonicalTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
-const sourceIdPattern = /^src_[A-Za-z0-9_-]{22}$/;
+const canonicalMinutePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/;
+const agentAccountIdPattern = /^acc_[A-Za-z0-9_-]{22}$/;
+const installationIdPattern = /^ins_[A-Za-z0-9_-]{22}$/;
 const deviceIdPattern = /^dev_[A-Za-z0-9_-]{22}$/;
 const connectorVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const readerVersionPattern = /^[a-z][a-z0-9_]{2,63}$/;
+const exactTokenTotalPattern = /^(?:0|[1-9][0-9]{0,59})$/;
 const unsafeLabelPattern = /[\p{Cc}\p{Cf}\p{Cs}]/u;
 const recoveryPhcPattern =
   /^\$argon2id\$v=19\$m=[1-9][0-9]{0,5},t=[1-9][0-9]?,p=[1-9][0-9]?\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/;
@@ -154,7 +145,14 @@ export class EnrollmentDatabaseError extends Error {
 
 export interface EnrollmentDatabase {
   approveCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean>;
-  completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean>;
+  completeAgentAccountReactivation(
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): Promise<boolean>;
+  completeAgentAccountUnlink(input: EnrollmentDatabaseAccountTargetCompletion): Promise<boolean>;
+  completeDeviceKeyRevocation(input: EnrollmentDatabaseAccountTargetCompletion): Promise<boolean>;
+  completeInstallationRevocation(
+    input: EnrollmentDatabaseAccountTargetCompletion,
+  ): Promise<boolean>;
   completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean>;
   completePasskeyAddition(input: EnrollmentDatabasePasskeyAddition): Promise<boolean>;
   completePasskeyLogin(input: EnrollmentDatabaseLoginCompletion): Promise<PasskeyLoginProfile>;
@@ -166,67 +164,127 @@ export interface EnrollmentDatabase {
   completeRecoveryCodeReplacement(
     input: EnrollmentDatabaseRecoveryCodeReplacement,
   ): Promise<boolean>;
-  completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean>;
-  completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean>;
   createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean>;
-  createPairingApprovalChallenge(
-    input: EnrollmentDatabasePairingApprovalChallenge,
-  ): Promise<boolean>;
   createPasskeyChallenge(input: EnrollmentDatabasePasskeyChallenge): Promise<boolean>;
   createPasskeyRevokeChallenge(input: EnrollmentDatabasePasskeyRevokeChallenge): Promise<boolean>;
   createProfileDeletionChallenge(
     input: EnrollmentDatabaseProfileDeletionChallenge,
   ): Promise<boolean>;
+  createAccountTargetChallenge(input: EnrollmentDatabaseAccountTargetChallenge): Promise<boolean>;
   createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<boolean>;
-  createSourceReactivationChallenge(
-    input: EnrollmentDatabaseSourceReactivationChallenge,
-  ): Promise<boolean>;
-  createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean>;
-  enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean>;
-  pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean>;
+  enrollProfile(input: EnrollmentDatabaseProfile): Promise<GithubProfileOpen>;
+  pauseAgentAccount(input: EnrollmentDatabaseAgentAccountPause): Promise<boolean>;
   proposeCarRecipe(input: EnrollmentDatabaseCarRecipeProposal): Promise<boolean>;
-  readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview>;
+  readAgentAccountDashboard(
+    input: EnrollmentDatabaseProfileVisibilityRequest,
+  ): Promise<AgentAccountDashboardInventory>;
   readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<CarRecipeState>;
-  readActiveDeviceInventory(
-    input: EnrollmentDatabaseSourceDeviceInventoryRequest,
-  ): Promise<readonly SourceDeviceInventoryItem[]>;
   readPasskeyInventory(
     input: EnrollmentDatabasePasskeyInventoryRequest,
   ): Promise<readonly PasskeyInventoryItem[]>;
   readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined>;
-  readPairingApproval(
-    input: EnrollmentDatabasePairingApprovalRead,
-  ): Promise<PairingApprovalMaterial | undefined>;
+  readPrivateDashboardRanking(
+    input: EnrollmentDatabaseProfileVisibilityRequest,
+  ): Promise<PrivateDashboardRanking>;
   readRecoveryCodeVerificationMaterial(
     recoveryCodeId: string,
   ): Promise<RecoveryCodeVerificationMaterial | undefined>;
   readProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityRequest,
   ): Promise<ProfileVisibility>;
-  revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<boolean>;
   rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean>;
   revokeSession(input: EnrollmentDatabaseSessionRevocation): Promise<boolean>;
   setProfileVisibility(
     input: EnrollmentDatabaseProfileVisibilityUpdate,
   ): Promise<ProfileVisibility>;
+  setProviderBreakdownVisibility(
+    input: EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
+  ): Promise<boolean>;
   startRecovery(input: EnrollmentDatabaseRecoveryStart): Promise<boolean>;
 }
 
 export type ProfileVisibility = "hidden" | "public";
 
-export interface AccountScore {
-  readonly activeDays: number;
-  readonly dailyScores: readonly number[];
+export type AgentProviderCode =
+  "aider" | "claude_code" | "cline" | "codex" | "opencode" | "qwen_code";
+
+export type AgentAccountStatus =
+  | "connected"
+  | "needs_login"
+  | "paused"
+  | "quarantined"
+  | "reader_outdated"
+  | "removed"
+  | "syncing"
+  | "unsupported_agent_version";
+
+export type AgentAccountQuarantineReason =
+  | "account_state"
+  | "accounting_revision_mismatch"
+  | "anomaly_review"
+  | "date_out_of_range"
+  | "decrease"
+  | "numeric_out_of_range"
+  | "overlap_detected"
+  | "season_closed";
+
+export interface PrivateDashboardRanking {
+  readonly participantCount: number | null;
+  readonly providerBreakdownVisible: boolean;
+  readonly publicVisibility: ProfileVisibility;
+  readonly rankPosition: number | null;
   readonly seasonEnd: string;
-  readonly seasonFinalized: boolean;
   readonly seasonStart: string;
-  readonly sourceCount: number;
-  readonly weeklyScore: number;
+  readonly seasonState: "finalized" | "grace" | "open" | "pending";
+  readonly snapshotGeneratedAt: string | null;
+  readonly weeklyTokenTotal: string | null;
 }
 
-export interface AccountOverview {
-  readonly score: AccountScore | null;
-  readonly visibility: ProfileVisibility;
+export interface AgentAccountDashboardDevice {
+  readonly deviceId: string;
+  readonly installationId: string;
+  readonly state: "active" | "revoked";
+}
+
+export interface AgentAccountDashboardAccount {
+  readonly accountingRevision: number;
+  readonly agentAccountId: string;
+  readonly devices: readonly AgentAccountDashboardDevice[];
+  readonly expectedReaderVersion: string;
+  readonly identityAssurance: "community_local" | "provider_verified";
+  readonly lastSuccessfulSyncDate: string | null;
+  readonly observedReaderVersion: string | null;
+  readonly privateLabel: string;
+  readonly provider: AgentProviderCode;
+  readonly quarantineReason: AgentAccountQuarantineReason | null;
+  readonly state: "active" | "paused" | "quarantined" | "unlinked";
+  readonly status: AgentAccountStatus;
+  readonly todayTokenTotal: string;
+  readonly weeklyTokenTotal: string;
+}
+
+export interface AgentAccountDashboardInstallationAccount {
+  readonly agentAccountId: string;
+  readonly deviceId: string;
+  readonly deviceState: "active" | "revoked";
+  readonly privateLabel: string;
+}
+
+export interface AgentAccountDashboardInstallation {
+  readonly accounts: readonly AgentAccountDashboardInstallationAccount[];
+  readonly architecture: "aarch64" | "x86_64";
+  readonly connectedDate: string;
+  readonly connectorVersion: string;
+  readonly installationId: string;
+  readonly label: string;
+  readonly lastSeenDate: string | null;
+  readonly osFamily: "linux" | "macos" | "windows";
+  readonly state: "active" | "revoked";
+}
+
+export interface AgentAccountDashboardInventory {
+  readonly accounts: readonly AgentAccountDashboardAccount[];
+  readonly installations: readonly AgentAccountDashboardInstallation[];
 }
 
 export interface CarRecipeProposalState {
@@ -254,15 +312,13 @@ export interface PasskeyLoginProfile {
   readonly profileId: string;
 }
 
-export interface PairingApprovalMaterial {
-  readonly architecture: "aarch64" | "x86_64";
-  readonly candidateIndex: 1 | 2;
-  readonly connectorVersion: string;
-  readonly deviceLabel: string;
-  readonly expiresAt: string;
-  readonly osFamily: "linux" | "macos" | "windows";
-  readonly pairingId: string;
-  readonly publicKey: Buffer;
+export interface GithubProfileOpen {
+  readonly created: boolean;
+  readonly handle: string;
+  readonly locale: "en" | "ru";
+  readonly profileId: string;
+  readonly profileState: "active" | "enrolling";
+  readonly sessionCreated: boolean;
 }
 
 export interface RecoveryCodeVerificationMaterial {
@@ -276,23 +332,6 @@ export interface PasskeyInventoryItem {
   readonly label: string;
   readonly passkeyId: string;
   readonly state: "active" | "revoked";
-}
-
-export type SourceState = "active" | "paused" | "quarantined" | "unlinked";
-
-export interface ActiveDeviceInventoryItem {
-  readonly activatedOn: string;
-  readonly architecture: "aarch64" | "x86_64";
-  readonly connectorVersion: string;
-  readonly deviceId: string;
-  readonly label: string;
-  readonly osFamily: "linux" | "macos" | "windows";
-}
-
-export interface SourceDeviceInventoryItem {
-  readonly devices: readonly ActiveDeviceInventoryItem[];
-  readonly sourceId: string;
-  readonly state: SourceState;
 }
 
 export interface ConfiguredEnrollmentDatabase extends EnrollmentDatabase {
@@ -319,6 +358,47 @@ function exactBooleanRow(value: unknown, key: string): boolean {
   return row[key];
 }
 
+function exactGithubProfileOpen(value: unknown): GithubProfileOpen {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
+    fail("result_invalid");
+  }
+  const row = value[0];
+  const expected = new Set([
+    "created",
+    "handle",
+    "locale",
+    "profile_id",
+    "profile_state",
+    "session_created",
+  ]);
+  const keys = Object.keys(row);
+  if (
+    keys.length !== expected.size ||
+    keys.some((key) => !expected.has(key)) ||
+    typeof row.created !== "boolean" ||
+    typeof row.handle !== "string" ||
+    !enrollmentPatterns.handle.test(row.handle) ||
+    (row.locale !== "en" && row.locale !== "ru") ||
+    typeof row.profile_id !== "string" ||
+    !enrollmentPatterns.uuidV4.test(row.profile_id) ||
+    (row.profile_state !== "active" && row.profile_state !== "enrolling") ||
+    typeof row.session_created !== "boolean" ||
+    (row.profile_state === "active" && (row.created || row.session_created)) ||
+    (row.profile_state === "enrolling" && !row.session_created) ||
+    (row.created && !row.handle.startsWith("pending_"))
+  ) {
+    fail("result_invalid");
+  }
+  return Object.freeze({
+    created: row.created,
+    handle: row.handle,
+    locale: row.locale,
+    profileId: row.profile_id,
+    profileState: row.profile_state,
+    sessionCreated: row.session_created,
+  });
+}
+
 function exactProfileVisibility(value: unknown): ProfileVisibility {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("result_invalid");
@@ -341,87 +421,360 @@ function boundedInteger(value: unknown, minimum: number, maximum: number): value
   );
 }
 
+function decimalGreaterThan(left: string, right: string): boolean {
+  return left.length > right.length || (left.length === right.length && left > right);
+}
+
 function dateAfter(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
 
-function exactAccountOverview(value: unknown, expectedSeasonStart: string): AccountOverview {
-  if (!Array.isArray(value) || (value.length !== 1 && value.length !== 7)) {
+function validPrivateLabel(value: unknown): value is string {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const length = Array.from(value).length;
+  return (
+    length >= 1 &&
+    length <= 64 &&
+    value.length <= 128 &&
+    value === value.trim() &&
+    value === value.normalize("NFC") &&
+    !unsafeLabelPattern.test(value)
+  );
+}
+
+function exactPrivateDashboardRanking(value: unknown): PrivateDashboardRanking {
+  if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("result_invalid");
   }
-  const rows = value.map((row: unknown) => {
-    if (!isRecord(row)) {
-      fail("result_invalid");
-    }
-    const keys = Object.keys(row);
-    if (
-      keys.length !== accountOverviewColumns.size ||
-      keys.some((key) => !accountOverviewColumns.has(key)) ||
-      (row.visibility !== "hidden" && row.visibility !== "public")
-    ) {
-      fail("result_invalid");
-    }
-    return row;
-  });
-  const first = rows[0];
-  if (first === undefined) {
-    fail("result_invalid");
-  }
-  const visibility = first.visibility as ProfileVisibility;
-  const nullScore = accountScoreColumns.every((column) => first[column] === null);
-  if (nullScore) {
-    if (rows.length !== 1) {
-      fail("result_invalid");
-    }
-    return Object.freeze({ score: null, visibility });
-  }
+  const row = value[0];
+  const keys = Object.keys(row);
   if (
-    rows.length !== 7 ||
-    visibility !== "public" ||
-    !canonicalDate(first.season_start) ||
-    first.season_start !== expectedSeasonStart ||
-    !canonicalDate(first.season_end) ||
-    first.season_end !== dateAfter(first.season_start, 6) ||
-    typeof first.season_finalized !== "boolean" ||
-    !boundedInteger(first.weekly_score, 0, 7000) ||
-    !boundedInteger(first.active_days, 0, 7) ||
-    !boundedInteger(first.source_count, 0, 32)
+    keys.length !== privateDashboardRankingColumns.size ||
+    keys.some((key) => !privateDashboardRankingColumns.has(key)) ||
+    !canonicalDate(row.season_start) ||
+    new Date(`${row.season_start}T00:00:00.000Z`).getUTCDay() !== 1 ||
+    !canonicalDate(row.season_end) ||
+    row.season_end !== dateAfter(row.season_start, 6) ||
+    (row.season_state !== "pending" &&
+      row.season_state !== "open" &&
+      row.season_state !== "grace" &&
+      row.season_state !== "finalized") ||
+    (row.public_visibility !== "hidden" && row.public_visibility !== "public") ||
+    typeof row.provider_breakdown_visible !== "boolean"
   ) {
     fail("result_invalid");
   }
-  const dailyScores: number[] = [];
-  for (const [index, row] of rows.entries()) {
+  if (row.season_state === "pending") {
     if (
-      row.visibility !== visibility ||
-      row.season_start !== first.season_start ||
-      row.season_end !== first.season_end ||
-      row.season_finalized !== first.season_finalized ||
-      row.weekly_score !== first.weekly_score ||
-      row.active_days !== first.active_days ||
-      row.source_count !== first.source_count ||
-      row.score_date !== dateAfter(first.season_start, index) ||
-      !boundedInteger(row.daily_score, 0, 1000)
+      row.weekly_token_total !== null ||
+      row.rank_position !== null ||
+      row.participant_count !== null ||
+      row.snapshot_generated_at !== null
     ) {
       fail("result_invalid");
     }
-    dailyScores.push(row.daily_score);
+    return Object.freeze({
+      participantCount: null,
+      providerBreakdownVisible: row.provider_breakdown_visible,
+      publicVisibility: row.public_visibility,
+      rankPosition: null,
+      seasonEnd: row.season_end,
+      seasonStart: row.season_start,
+      seasonState: row.season_state,
+      snapshotGeneratedAt: null,
+      weeklyTokenTotal: null,
+    });
   }
-  if (dailyScores.reduce((total, score) => total + score, 0) !== first.weekly_score) {
+  if (
+    typeof row.weekly_token_total !== "string" ||
+    !exactTokenTotalPattern.test(row.weekly_token_total) ||
+    !boundedInteger(row.participant_count, 0, 1_000_000) ||
+    typeof row.snapshot_generated_at !== "string" ||
+    !canonicalMinutePattern.test(row.snapshot_generated_at) ||
+    (row.rank_position !== null &&
+      (typeof row.rank_position !== "string" ||
+        !/^[1-9][0-9]{0,6}$/.test(row.rank_position) ||
+        Number(row.rank_position) > row.participant_count))
+  ) {
     fail("result_invalid");
   }
+  const rankPosition = row.rank_position === null ? null : Number(row.rank_position);
   return Object.freeze({
-    score: Object.freeze({
-      activeDays: first.active_days,
-      dailyScores: Object.freeze(dailyScores),
-      seasonEnd: first.season_end,
-      seasonFinalized: first.season_finalized,
-      seasonStart: first.season_start,
-      sourceCount: first.source_count,
-      weeklyScore: first.weekly_score,
+    participantCount: row.participant_count,
+    providerBreakdownVisible: row.provider_breakdown_visible,
+    publicVisibility: row.public_visibility,
+    rankPosition,
+    seasonEnd: row.season_end,
+    seasonStart: row.season_start,
+    seasonState: row.season_state,
+    snapshotGeneratedAt: row.snapshot_generated_at,
+    weeklyTokenTotal: row.weekly_token_total,
+  });
+}
+
+function agentProvider(value: unknown): AgentProviderCode | undefined {
+  return value === "aider" ||
+    value === "claude_code" ||
+    value === "cline" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "qwen_code"
+    ? value
+    : undefined;
+}
+
+function accountStatus(value: unknown): AgentAccountStatus | undefined {
+  return value === "connected" ||
+    value === "needs_login" ||
+    value === "paused" ||
+    value === "quarantined" ||
+    value === "reader_outdated" ||
+    value === "removed" ||
+    value === "syncing" ||
+    value === "unsupported_agent_version"
+    ? value
+    : undefined;
+}
+
+function quarantineReason(value: unknown): AgentAccountQuarantineReason | null | undefined {
+  return value === null ||
+    value === "account_state" ||
+    value === "accounting_revision_mismatch" ||
+    value === "anomaly_review" ||
+    value === "date_out_of_range" ||
+    value === "decrease" ||
+    value === "numeric_out_of_range" ||
+    value === "overlap_detected" ||
+    value === "season_closed"
+    ? value
+    : undefined;
+}
+
+function exactAgentAccountDashboard(value: unknown): AgentAccountDashboardInventory {
+  if (!Array.isArray(value) || value.length > 128) {
+    fail("result_invalid");
+  }
+  type MutableAccount = Omit<AgentAccountDashboardAccount, "devices"> & {
+    devices: AgentAccountDashboardDevice[];
+  };
+  type MutableInstallation = Omit<AgentAccountDashboardInstallation, "accounts"> & {
+    accounts: AgentAccountDashboardInstallationAccount[];
+  };
+  const accountMap = new Map<string, MutableAccount>();
+  const installationMap = new Map<string, MutableInstallation>();
+  const deviceIds = new Set<string>();
+  let previousSortKey: string | undefined;
+  for (const candidate of value as unknown[]) {
+    if (!isRecord(candidate)) {
+      fail("result_invalid");
+    }
+    const row = candidate;
+    const keys = Object.keys(row);
+    const provider = agentProvider(row.provider_code);
+    const status = accountStatus(row.status_code);
+    const reason = quarantineReason(row.quarantine_reason);
+    if (
+      keys.length !== agentAccountDashboardColumns.size ||
+      keys.some((key) => !agentAccountDashboardColumns.has(key)) ||
+      typeof row.agent_account_id !== "string" ||
+      !agentAccountIdPattern.test(row.agent_account_id) ||
+      provider === undefined ||
+      !validPrivateLabel(row.private_label) ||
+      (row.identity_assurance !== "community_local" &&
+        row.identity_assurance !== "provider_verified") ||
+      !boundedInteger(row.accounting_revision, 1, 2_147_483_647) ||
+      typeof row.expected_reader_version !== "string" ||
+      !readerVersionPattern.test(row.expected_reader_version) ||
+      (row.observed_reader_version !== null &&
+        (typeof row.observed_reader_version !== "string" ||
+          !readerVersionPattern.test(row.observed_reader_version))) ||
+      (row.account_state !== "active" &&
+        row.account_state !== "paused" &&
+        row.account_state !== "quarantined" &&
+        row.account_state !== "unlinked") ||
+      status === undefined ||
+      reason === undefined ||
+      typeof row.weekly_token_total !== "string" ||
+      !exactTokenTotalPattern.test(row.weekly_token_total) ||
+      typeof row.today_token_total !== "string" ||
+      !exactTokenTotalPattern.test(row.today_token_total) ||
+      decimalGreaterThan(row.today_token_total, row.weekly_token_total) ||
+      (row.last_successful_sync_date !== null && !canonicalDate(row.last_successful_sync_date)) ||
+      (row.account_state === "unlinked" && status !== "removed") ||
+      (row.account_state === "paused" && status !== "paused") ||
+      (row.account_state === "quarantined" && (status !== "quarantined" || reason === null)) ||
+      (row.account_state !== "quarantined" && reason !== null) ||
+      (row.account_state === "active" &&
+        status !== "connected" &&
+        status !== "needs_login" &&
+        status !== "reader_outdated" &&
+        status !== "syncing" &&
+        status !== "unsupported_agent_version")
+    ) {
+      fail("result_invalid");
+    }
+    const installationMissing = row.installation_id === null;
+    if (
+      installationMissing !==
+        [
+          row.installation_label,
+          row.connector_version,
+          row.os_family,
+          row.architecture,
+          row.installation_state,
+          row.connected_date,
+          row.last_seen_date,
+          row.device_id,
+          row.device_state,
+        ].every((entry) => entry === null) ||
+      (!installationMissing &&
+        (typeof row.installation_id !== "string" ||
+          !installationIdPattern.test(row.installation_id) ||
+          !validPrivateLabel(row.installation_label) ||
+          typeof row.connector_version !== "string" ||
+          !connectorVersionPattern.test(row.connector_version) ||
+          (row.os_family !== "linux" && row.os_family !== "macos" && row.os_family !== "windows") ||
+          (row.architecture !== "aarch64" && row.architecture !== "x86_64") ||
+          (row.installation_state !== "active" && row.installation_state !== "revoked") ||
+          !canonicalDate(row.connected_date) ||
+          (row.last_seen_date !== null &&
+            (!canonicalDate(row.last_seen_date) || row.last_seen_date < row.connected_date)) ||
+          typeof row.device_id !== "string" ||
+          !deviceIdPattern.test(row.device_id) ||
+          (row.device_state !== "active" && row.device_state !== "revoked")))
+    ) {
+      fail("result_invalid");
+    }
+    const installationId = typeof row.installation_id === "string" ? row.installation_id : "";
+    const deviceId = typeof row.device_id === "string" ? row.device_id : "";
+    const sortKey = `${provider}\n${row.agent_account_id}\n${installationId}\n${deviceId}`;
+    if (previousSortKey !== undefined && sortKey <= previousSortKey) {
+      fail("result_invalid");
+    }
+    previousSortKey = sortKey;
+
+    const existingAccount = accountMap.get(row.agent_account_id);
+    if (existingAccount === undefined) {
+      accountMap.set(row.agent_account_id, {
+        accountingRevision: row.accounting_revision,
+        agentAccountId: row.agent_account_id,
+        devices: [],
+        expectedReaderVersion: row.expected_reader_version,
+        identityAssurance: row.identity_assurance,
+        lastSuccessfulSyncDate: row.last_successful_sync_date,
+        observedReaderVersion: row.observed_reader_version,
+        privateLabel: row.private_label,
+        provider,
+        quarantineReason: reason,
+        state: row.account_state,
+        status,
+        todayTokenTotal: row.today_token_total,
+        weeklyTokenTotal: row.weekly_token_total,
+      });
+    } else if (
+      existingAccount.accountingRevision !== row.accounting_revision ||
+      existingAccount.expectedReaderVersion !== row.expected_reader_version ||
+      existingAccount.identityAssurance !== row.identity_assurance ||
+      existingAccount.lastSuccessfulSyncDate !== row.last_successful_sync_date ||
+      existingAccount.observedReaderVersion !== row.observed_reader_version ||
+      existingAccount.privateLabel !== row.private_label ||
+      existingAccount.provider !== provider ||
+      existingAccount.quarantineReason !== reason ||
+      existingAccount.state !== row.account_state ||
+      existingAccount.status !== status ||
+      existingAccount.todayTokenTotal !== row.today_token_total ||
+      existingAccount.weeklyTokenTotal !== row.weekly_token_total
+    ) {
+      fail("result_invalid");
+    }
+    if (!installationMissing) {
+      const installationId = row.installation_id as string;
+      const deviceId = row.device_id as string;
+      const deviceState = row.device_state as "active" | "revoked";
+      if (deviceIds.has(deviceId)) {
+        fail("result_invalid");
+      }
+      deviceIds.add(deviceId);
+      accountMap
+        .get(row.agent_account_id)
+        ?.devices.push(Object.freeze({ deviceId, installationId, state: deviceState }));
+      const existingInstallation = installationMap.get(installationId);
+      if (existingInstallation === undefined) {
+        installationMap.set(installationId, {
+          accounts: [],
+          architecture: row.architecture as "aarch64" | "x86_64",
+          connectedDate: row.connected_date as string,
+          connectorVersion: row.connector_version as string,
+          installationId,
+          label: row.installation_label as string,
+          lastSeenDate: row.last_seen_date as string | null,
+          osFamily: row.os_family as "linux" | "macos" | "windows",
+          state: row.installation_state as "active" | "revoked",
+        });
+      } else if (
+        existingInstallation.architecture !== row.architecture ||
+        existingInstallation.connectedDate !== row.connected_date ||
+        existingInstallation.connectorVersion !== row.connector_version ||
+        existingInstallation.label !== row.installation_label ||
+        existingInstallation.lastSeenDate !== row.last_seen_date ||
+        existingInstallation.osFamily !== row.os_family ||
+        existingInstallation.state !== row.installation_state
+      ) {
+        fail("result_invalid");
+      }
+      installationMap.get(installationId)?.accounts.push(
+        Object.freeze({
+          agentAccountId: row.agent_account_id,
+          deviceId,
+          deviceState,
+          privateLabel: row.private_label,
+        }),
+      );
+    }
+  }
+  if (accountMap.size > 32 || installationMap.size > 32 || deviceIds.size > 64) {
+    fail("result_invalid");
+  }
+  for (const account of accountMap.values()) {
+    const hasActiveDevice = account.devices.some(
+      (device) =>
+        device.state === "active" && installationMap.get(device.installationId)?.state === "active",
+    );
+    if (
+      (account.status === "connected" &&
+        (!hasActiveDevice ||
+          account.observedReaderVersion === null ||
+          account.observedReaderVersion !== account.expectedReaderVersion)) ||
+      (account.status === "needs_login" && hasActiveDevice) ||
+      (account.status === "syncing" &&
+        (!hasActiveDevice || account.observedReaderVersion !== null)) ||
+      (account.status === "reader_outdated" &&
+        (!hasActiveDevice ||
+          account.observedReaderVersion === null ||
+          account.observedReaderVersion === account.expectedReaderVersion))
+    ) {
+      fail("result_invalid");
+    }
+  }
+  const accounts = [...accountMap.values()].map((account) =>
+    Object.freeze({
+      ...account,
+      devices: Object.freeze(account.devices),
     }),
-    visibility,
+  );
+  const installations = [...installationMap.values()].map((installation) =>
+    Object.freeze({
+      ...installation,
+      accounts: Object.freeze(installation.accounts),
+    }),
+  );
+  return Object.freeze({
+    accounts: Object.freeze(accounts),
+    installations: Object.freeze(installations),
   });
 }
 
@@ -566,72 +919,6 @@ function exactLoginMaterial(value: unknown): PasskeyLoginMaterial | undefined {
   }
 }
 
-function exactPairingApprovalMaterial(value: unknown): PairingApprovalMaterial | undefined {
-  let publicKey: Buffer | undefined;
-  try {
-    if (!Array.isArray(value) || value.length > 1) {
-      fail("result_invalid");
-    }
-    if (value.length === 0) {
-      return undefined;
-    }
-    const row: unknown = value[0];
-    if (!isRecord(row)) {
-      fail("result_invalid");
-    }
-    const keys = Object.keys(row);
-    publicKey = copyBoundedBytes(row.public_key, 32, 32);
-    const labelLength =
-      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
-    const expiresAt = typeof row.expires_at === "string" ? new Date(row.expires_at) : undefined;
-    if (
-      keys.length !== pairingApprovalColumns.size ||
-      keys.some((key) => !pairingApprovalColumns.has(key)) ||
-      (row.candidate_index !== 1 && row.candidate_index !== 2) ||
-      typeof row.pairing_id !== "string" ||
-      !enrollmentPatterns.uuidV4.test(row.pairing_id) ||
-      typeof row.device_label !== "string" ||
-      row.device_label.length < 1 ||
-      row.device_label.length > 128 ||
-      labelLength < 1 ||
-      labelLength > 64 ||
-      row.device_label !== row.device_label.trim() ||
-      row.device_label !== row.device_label.normalize("NFC") ||
-      unsafeLabelPattern.test(row.device_label) ||
-      typeof row.connector_version !== "string" ||
-      row.connector_version.length > 64 ||
-      !connectorVersionPattern.test(row.connector_version) ||
-      (row.os_family !== "linux" && row.os_family !== "macos" && row.os_family !== "windows") ||
-      (row.architecture !== "aarch64" && row.architecture !== "x86_64") ||
-      typeof row.expires_at !== "string" ||
-      !canonicalTimestampPattern.test(row.expires_at) ||
-      expiresAt === undefined ||
-      !Number.isFinite(expiresAt.valueOf()) ||
-      expiresAt.toISOString() !== row.expires_at ||
-      publicKey === undefined ||
-      publicKey.every((byte) => byte === 0)
-    ) {
-      fail("result_invalid");
-    }
-    return Object.freeze({
-      architecture: row.architecture,
-      candidateIndex: row.candidate_index,
-      connectorVersion: row.connector_version,
-      deviceLabel: row.device_label,
-      expiresAt: row.expires_at,
-      osFamily: row.os_family,
-      pairingId: row.pairing_id,
-      publicKey,
-    });
-  } catch (error) {
-    publicKey?.fill(0);
-    if (error instanceof EnrollmentDatabaseError) {
-      throw error;
-    }
-    fail("result_invalid");
-  }
-}
-
 function exactLoginProfile(value: unknown): PasskeyLoginProfile {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("result_invalid");
@@ -746,124 +1033,6 @@ function exactPasskeyInventory(value: unknown): readonly PasskeyInventoryItem[] 
   return Object.freeze(result);
 }
 
-function exactActiveDeviceInventory(value: unknown): readonly SourceDeviceInventoryItem[] {
-  if (!Array.isArray(value) || value.length > 95) {
-    fail("result_invalid");
-  }
-  const deviceIds = new Set<string>();
-  const sources: {
-    devices: ActiveDeviceInventoryItem[];
-    sourceId: string;
-    state: SourceState;
-  }[] = [];
-  let currentSource:
-    | {
-        devices: ActiveDeviceInventoryItem[];
-        sourceId: string;
-        state: SourceState;
-      }
-    | undefined;
-  let currentSourceHasEmptyMarker = false;
-  for (const row of value as unknown[]) {
-    if (!isRecord(row)) {
-      fail("result_invalid");
-    }
-    const keys = Object.keys(row);
-    if (
-      keys.length !== activeDeviceInventoryColumns.size ||
-      keys.some((key) => !activeDeviceInventoryColumns.has(key)) ||
-      typeof row.source_id !== "string" ||
-      !sourceIdPattern.test(row.source_id) ||
-      (row.source_state !== "active" &&
-        row.source_state !== "paused" &&
-        row.source_state !== "quarantined" &&
-        row.source_state !== "unlinked")
-    ) {
-      fail("result_invalid");
-    }
-    if (currentSource?.sourceId !== row.source_id) {
-      if (currentSource !== undefined && row.source_id <= currentSource.sourceId) {
-        fail("result_invalid");
-      }
-      currentSource = {
-        devices: [],
-        sourceId: row.source_id,
-        state: row.source_state,
-      };
-      currentSourceHasEmptyMarker = false;
-      sources.push(currentSource);
-      if (sources.length > 32) {
-        fail("result_invalid");
-      }
-    } else if (currentSource.state !== row.source_state) {
-      fail("result_invalid");
-    }
-    if (row.device_id === null) {
-      if (
-        currentSourceHasEmptyMarker ||
-        currentSource.devices.length !== 0 ||
-        row.device_label !== null ||
-        row.connector_version !== null ||
-        row.os_family !== null ||
-        row.architecture !== null ||
-        row.device_state !== null ||
-        row.activated_on !== null
-      ) {
-        fail("result_invalid");
-      }
-      currentSourceHasEmptyMarker = true;
-      continue;
-    }
-    const labelLength =
-      typeof row.device_label === "string" ? Array.from(row.device_label).length : 0;
-    if (
-      currentSourceHasEmptyMarker ||
-      typeof row.device_id !== "string" ||
-      !deviceIdPattern.test(row.device_id) ||
-      deviceIds.has(row.device_id) ||
-      typeof row.device_label !== "string" ||
-      labelLength < 1 ||
-      labelLength > 64 ||
-      row.device_label !== row.device_label.trim() ||
-      row.device_label !== row.device_label.normalize("NFC") ||
-      unsafeLabelPattern.test(row.device_label) ||
-      typeof row.connector_version !== "string" ||
-      row.connector_version.length < 5 ||
-      row.connector_version.length > 64 ||
-      !connectorVersionPattern.test(row.connector_version) ||
-      (row.os_family !== "linux" && row.os_family !== "macos" && row.os_family !== "windows") ||
-      (row.architecture !== "aarch64" && row.architecture !== "x86_64") ||
-      row.device_state !== "active" ||
-      !canonicalDate(row.activated_on)
-    ) {
-      fail("result_invalid");
-    }
-    deviceIds.add(row.device_id);
-    if (deviceIds.size > 64) {
-      fail("result_invalid");
-    }
-    currentSource.devices.push(
-      Object.freeze({
-        activatedOn: row.activated_on,
-        architecture: row.architecture,
-        connectorVersion: row.connector_version,
-        deviceId: row.device_id,
-        label: row.device_label,
-        osFamily: row.os_family,
-      }),
-    );
-  }
-  return Object.freeze(
-    sources.map((source) =>
-      Object.freeze({
-        devices: Object.freeze(source.devices),
-        sourceId: source.sourceId,
-        state: source.state,
-      }),
-    ),
-  );
-}
-
 function verifyRuntimeBoundary(value: unknown): void {
   if (!Array.isArray(value) || value.length !== 1 || !isRecord(value[0])) {
     fail("runtime_boundary_mismatch");
@@ -920,10 +1089,34 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "approved"),
       );
     },
-    completePairingApproval(input: EnrollmentDatabasePairingApproval): Promise<boolean> {
+    completeAgentAccountReactivation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<boolean> {
       return execute(
-        (client) => client.completePairingApproval(input),
-        (value) => exactBooleanRow(value, "approved"),
+        (client) => client.completeAgentAccountReactivation(input),
+        (value) => exactBooleanRow(value, "completed"),
+      );
+    },
+    completeAgentAccountUnlink(input: EnrollmentDatabaseAccountTargetCompletion): Promise<boolean> {
+      return execute(
+        (client) => client.completeAgentAccountUnlink(input),
+        (value) => exactBooleanRow(value, "completed"),
+      );
+    },
+    completeDeviceKeyRevocation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.completeDeviceKeyRevocation(input),
+        (value) => exactBooleanRow(value, "completed"),
+      );
+    },
+    completeInstallationRevocation(
+      input: EnrollmentDatabaseAccountTargetCompletion,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.completeInstallationRevocation(input),
+        (value) => exactBooleanRow(value, "completed"),
       );
     },
     completeInitialPasskey(input: EnrollmentDatabaseInitialPasskey): Promise<boolean> {
@@ -966,29 +1159,9 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "replaced"),
       );
     },
-    completeSourceReactivation(input: EnrollmentDatabaseSourceReactivation): Promise<boolean> {
-      return execute(
-        (client) => client.completeSourceReactivation(input),
-        (value) => exactBooleanRow(value, "reactivated"),
-      );
-    },
-    completeSourceUnlink(input: EnrollmentDatabaseSourceUnlink): Promise<boolean> {
-      return execute(
-        (client) => client.completeSourceUnlink(input),
-        (value) => exactBooleanRow(value, "unlinked"),
-      );
-    },
     createPasskeyAddChallenge(input: EnrollmentDatabasePasskeyAddChallenge): Promise<boolean> {
       return execute(
         (client) => client.createPasskeyAddChallenge(input),
-        (value) => exactBooleanRow(value, "created"),
-      );
-    },
-    createPairingApprovalChallenge(
-      input: EnrollmentDatabasePairingApprovalChallenge,
-    ): Promise<boolean> {
-      return execute(
-        (client) => client.createPairingApprovalChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },
@@ -1014,35 +1187,26 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "created"),
       );
     },
+    createAccountTargetChallenge(
+      input: EnrollmentDatabaseAccountTargetChallenge,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.createAccountTargetChallenge(input),
+        (value) => exactBooleanRow(value, "created"),
+      );
+    },
     createRecoveryCodeChallenge(input: EnrollmentDatabaseRecoveryCodeChallenge): Promise<boolean> {
       return execute(
         (client) => client.createRecoveryCodeChallenge(input),
         (value) => exactBooleanRow(value, "created"),
       );
     },
-    createSourceReactivationChallenge(
-      input: EnrollmentDatabaseSourceReactivationChallenge,
-    ): Promise<boolean> {
-      return execute(
-        (client) => client.createSourceReactivationChallenge(input),
-        (value) => exactBooleanRow(value, "created"),
-      );
+    enrollProfile(input: EnrollmentDatabaseProfile): Promise<GithubProfileOpen> {
+      return execute((client) => client.enrollProfile(input), exactGithubProfileOpen);
     },
-    createSourceUnlinkChallenge(input: EnrollmentDatabaseSourceUnlinkChallenge): Promise<boolean> {
+    pauseAgentAccount(input: EnrollmentDatabaseAgentAccountPause): Promise<boolean> {
       return execute(
-        (client) => client.createSourceUnlinkChallenge(input),
-        (value) => exactBooleanRow(value, "created"),
-      );
-    },
-    enrollProfile(input: EnrollmentDatabaseProfile): Promise<boolean> {
-      return execute(
-        (client) => client.enrollProfile(input),
-        (value) => exactBooleanRow(value, "enrolled"),
-      );
-    },
-    pauseSource(input: EnrollmentDatabaseSourcePause): Promise<boolean> {
-      return execute(
-        (client) => client.pauseSource(input),
+        (client) => client.pauseAgentAccount(input),
         (value) => exactBooleanRow(value, "paused"),
       );
     },
@@ -1052,35 +1216,32 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
         (value) => exactBooleanRow(value, "proposed"),
       );
     },
-    readAccountOverview(input: EnrollmentDatabaseAccountOverviewRequest): Promise<AccountOverview> {
+    readAgentAccountDashboard(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
+    ): Promise<AgentAccountDashboardInventory> {
       return execute(
-        (client) => client.readAccountOverview(input),
-        (value) => exactAccountOverview(value, input.seasonStart),
+        (client) => client.readAgentAccountDashboard(input),
+        exactAgentAccountDashboard,
       );
     },
     readCarRecipeState(input: EnrollmentDatabaseProfileVisibilityRequest): Promise<CarRecipeState> {
       return execute((client) => client.readCarRecipeState(input), exactCarRecipeState);
-    },
-    readActiveDeviceInventory(
-      input: EnrollmentDatabaseSourceDeviceInventoryRequest,
-    ): Promise<readonly SourceDeviceInventoryItem[]> {
-      return execute(
-        (client) => client.readActiveDeviceInventory(input),
-        exactActiveDeviceInventory,
-      );
     },
     readPasskeyInventory(
       input: EnrollmentDatabasePasskeyInventoryRequest,
     ): Promise<readonly PasskeyInventoryItem[]> {
       return execute((client) => client.readPasskeyInventory(input), exactPasskeyInventory);
     },
+    readPrivateDashboardRanking(
+      input: EnrollmentDatabaseProfileVisibilityRequest,
+    ): Promise<PrivateDashboardRanking> {
+      return execute(
+        (client) => client.readPrivateDashboardRanking(input),
+        exactPrivateDashboardRanking,
+      );
+    },
     readPasskeyLoginMaterial(credentialId: Uint8Array): Promise<PasskeyLoginMaterial | undefined> {
       return execute((client) => client.readPasskeyLoginMaterial(credentialId), exactLoginMaterial);
-    },
-    readPairingApproval(
-      input: EnrollmentDatabasePairingApprovalRead,
-    ): Promise<PairingApprovalMaterial | undefined> {
-      return execute((client) => client.readPairingApproval(input), exactPairingApprovalMaterial);
     },
     readRecoveryCodeVerificationMaterial(
       recoveryCodeId: string,
@@ -1094,12 +1255,6 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
       input: EnrollmentDatabaseProfileVisibilityRequest,
     ): Promise<ProfileVisibility> {
       return execute((client) => client.readProfileVisibility(input), exactProfileVisibility);
-    },
-    revokeDevice(input: EnrollmentDatabaseDeviceRevocation): Promise<boolean> {
-      return execute(
-        (client) => client.revokeDevice(input),
-        (value) => exactBooleanRow(value, "revoked"),
-      );
     },
     rejectCarRecipe(input: EnrollmentDatabaseCarRecipeDecision): Promise<boolean> {
       return execute(
@@ -1124,6 +1279,20 @@ export function createEnrollmentDatabase(pool: EnrollmentDatabasePool): Enrollme
             fail("result_invalid");
           }
           return visibility;
+        },
+      );
+    },
+    setProviderBreakdownVisibility(
+      input: EnrollmentDatabaseProviderBreakdownVisibilityUpdate,
+    ): Promise<boolean> {
+      return execute(
+        (client) => client.setProviderBreakdownVisibility(input),
+        (value) => {
+          const visible = exactBooleanRow(value, "provider_breakdown_visible");
+          if (visible !== input.providerBreakdownVisible) {
+            fail("result_invalid");
+          }
+          return visible;
         },
       );
     },

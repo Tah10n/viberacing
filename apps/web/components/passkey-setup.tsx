@@ -9,17 +9,12 @@ import {
   startRegistration,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
-} from "@simplewebauthn/browser";
-
-import { connectTranslations } from "@/lib/connect-i18n";
+} from "@/lib/browser-webauthn";
 import type { Locale } from "@/lib/i18n";
 import { joinTranslations } from "@/lib/join-i18n";
 
 const recoveryCodePattern =
   /^vrr1_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/;
-const pairingFingerprintPattern = /^SHA256:[A-Za-z0-9_-]{43}$/;
-const pairingVersionPattern =
-  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function readRecoveryCodesResponse(value: unknown): readonly string[] | undefined {
   if (
@@ -49,93 +44,17 @@ function readRecoveryCodesResponse(value: unknown): readonly string[] | undefine
   return Object.freeze([...recoveryCodes]) as readonly string[];
 }
 
-interface PairingReview {
-  readonly options: PublicKeyCredentialRequestOptionsJSON;
-  readonly pairing: Readonly<{
-    architecture: "aarch64" | "x86_64";
-    connectorVersion: string;
-    deviceLabel: string;
-    expiresAt: string;
-    osFamily: "linux" | "macos" | "windows";
-    publicKeyFingerprint: string;
-  }>;
-}
-
-export interface PairingExistingSourceChoice {
-  readonly deviceLabels: readonly string[];
-  readonly sourceControl: string;
-  readonly sourceNumber: number;
-}
-
-type PairingReviewTarget =
-  Readonly<{ kind: "new" }> | Readonly<{ kind: "existing"; sourceNumber: number }>;
-
-interface PairingReviewState {
-  readonly review: PairingReview;
-  readonly target: PairingReviewTarget;
-}
-
-function plainRecord(value: unknown): value is Record<string, unknown> {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) === Object.prototype
-  );
-}
-
-function readPairingReview(value: unknown): PairingReview | undefined {
-  if (!plainRecord(value) || Object.keys(value).length !== 2) {
-    return undefined;
-  }
-  const options = value.options;
-  const pairing = value.pairing;
-  if (
-    !plainRecord(options) ||
-    typeof options.challenge !== "string" ||
-    !/^[A-Za-z0-9_-]{43}$/.test(options.challenge) ||
-    !plainRecord(pairing) ||
-    Object.keys(pairing).length !== 6 ||
-    typeof pairing.deviceLabel !== "string" ||
-    pairing.deviceLabel.length < 1 ||
-    pairing.deviceLabel.length > 128 ||
-    pairing.deviceLabel !== pairing.deviceLabel.trim() ||
-    pairing.deviceLabel !== pairing.deviceLabel.normalize("NFC") ||
-    Array.from(pairing.deviceLabel).length > 64 ||
-    typeof pairing.connectorVersion !== "string" ||
-    !pairingVersionPattern.test(pairing.connectorVersion) ||
-    (pairing.osFamily !== "linux" &&
-      pairing.osFamily !== "macos" &&
-      pairing.osFamily !== "windows") ||
-    (pairing.architecture !== "aarch64" && pairing.architecture !== "x86_64") ||
-    typeof pairing.expiresAt !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(pairing.expiresAt) ||
-    !Number.isFinite(new Date(pairing.expiresAt).valueOf()) ||
-    typeof pairing.publicKeyFingerprint !== "string" ||
-    !pairingFingerprintPattern.test(pairing.publicKeyFingerprint)
-  ) {
-    return undefined;
-  }
-  return Object.freeze({
-    options: options as unknown as PublicKeyCredentialRequestOptionsJSON,
-    pairing: Object.freeze({
-      architecture: pairing.architecture,
-      connectorVersion: pairing.connectorVersion,
-      deviceLabel: pairing.deviceLabel,
-      expiresAt: pairing.expiresAt,
-      osFamily: pairing.osFamily,
-      publicKeyFingerprint: pairing.publicKeyFingerprint,
-    }),
-  });
-}
-
 interface PasskeySetupProps {
   readonly enrollmentEnabled?: boolean;
-  readonly handle: string;
+  readonly initialHandle?: string;
   readonly locale: Locale;
 }
 
-export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: PasskeySetupProps) {
+export function PasskeySetup({
+  enrollmentEnabled = false,
+  initialHandle = "",
+  locale,
+}: PasskeySetupProps) {
   const copy = joinTranslations[locale];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -152,13 +71,17 @@ export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: Pass
     setBusy(true);
     setError(undefined);
     const form = new FormData(event.currentTarget);
-    const label = form.get("label");
+    const handle = form.get("handle");
     try {
-      if (typeof label !== "string") {
-        throw new Error("invalid label");
+      if (
+        typeof handle !== "string" ||
+        !/^[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]$/.test(handle) ||
+        handle.startsWith("pending_")
+      ) {
+        throw new Error("invalid handle");
       }
       const optionsResponse = await fetch("/auth/passkey/options", {
-        body: "{}",
+        body: JSON.stringify({ handle }),
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json", "content-type": "application/json" },
@@ -171,7 +94,7 @@ export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: Pass
       const options = (await optionsResponse.json()) as PublicKeyCredentialCreationOptionsJSON;
       const response = await startRegistration({ optionsJSON: options });
       const verification = await fetch("/auth/passkey/verify", {
-        body: JSON.stringify({ label, response }),
+        body: JSON.stringify({ response }),
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json", "content-type": "application/json" },
@@ -181,7 +104,7 @@ export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: Pass
       if (verification.status !== 204) {
         throw new Error("verification failed");
       }
-      window.location.assign("/account");
+      window.location.assign("/connect");
     } catch {
       setError(copy.genericError);
       setBusy(false);
@@ -194,21 +117,26 @@ export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: Pass
         <Link className="auth-brand" href="/">
           <span aria-hidden="true">▰</span> {copy.brand}
         </Link>
-        <p className="eyebrow">@{handle}</p>
+        {initialHandle === "" ? null : <p className="eyebrow">@{initialHandle}</p>}
         <h1 id="passkey-title">{copy.passkeyTitle}</h1>
         <p>{copy.passkeyCopy}</p>
         {enrollmentEnabled ? (
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             <label>
-              <span>{copy.passkeyLabel}</span>
+              <span>{copy.handleLabel}</span>
               <input
-                defaultValue={copy.primaryPasskey}
-                maxLength={64}
-                minLength={1}
-                name="label"
+                autoComplete="nickname"
+                defaultValue={initialHandle}
+                maxLength={24}
+                minLength={3}
+                name="handle"
+                pattern="[a-z0-9][a-z0-9_-]{1,22}[a-z0-9]"
                 required
+                spellCheck={false}
               />
+              <small>{copy.handleHint}</small>
             </label>
+            <p className="auth-status">{copy.primaryPasskey}</p>
             <button className="primary-action" disabled={busy} type="submit">
               {busy ? copy.creatingPasskey : copy.createPasskey}
             </button>
@@ -229,9 +157,10 @@ export function PasskeySetup({ enrollmentEnabled = false, handle, locale }: Pass
 
 interface PasskeyLoginProps {
   readonly initialError?: boolean;
+  readonly returnTo?: string;
 }
 
-export function PasskeyLogin({ initialError = false }: PasskeyLoginProps) {
+export function PasskeyLogin({ initialError = false, returnTo = "/account" }: PasskeyLoginProps) {
   const [locale, setLocale] = useState<Locale>("en");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<"generic" | "unsupported" | undefined>(
@@ -295,7 +224,7 @@ export function PasskeyLogin({ initialError = false }: PasskeyLoginProps) {
       if (verification.status !== 204) {
         throw new Error("verification failed");
       }
-      window.location.assign("/account");
+      window.location.assign(returnTo);
     } catch {
       setError("generic");
       setBusy(false);
@@ -748,27 +677,60 @@ export function RecoveryCodeRotation({ locale }: RecoveryCodeRotationProps) {
   );
 }
 
-interface SourcePasskeyActionButtonProps {
-  readonly action: "reactivate" | "unlink";
+type AccountTargetAction = "reactivate" | "unlink" | "revoke-device" | "revoke-installation";
+
+interface AccountTargetPasskeyActionButtonProps {
+  readonly action: AccountTargetAction;
   readonly label: string;
   readonly locale: Locale;
-  readonly sourceControl: string;
+  readonly targetControl: string;
 }
 
-function SourcePasskeyActionButton({
+function AccountTargetPasskeyActionButton({
   action,
   label,
   locale,
-  sourceControl,
-}: SourcePasskeyActionButtonProps) {
+  targetControl,
+}: AccountTargetPasskeyActionButtonProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   const copy = joinTranslations[locale];
-  const unlink = action === "unlink";
-  const optionsPath = unlink ? "/auth/sources/unlink/options" : "/auth/sources/reactivate/options";
-  const verifyPath = unlink ? "/auth/sources/unlink/verify" : "/auth/sources/reactivate/verify";
-  const actionLabel = unlink ? copy.unlinkSource : copy.reactivateSource;
-  const busyLabel = unlink ? copy.unlinkingSource : copy.reactivatingSource;
+  const actionConfig: Record<
+    AccountTargetAction,
+    Readonly<{
+      actionLabel: string;
+      busyLabel: string;
+      optionsPath: string;
+      verifyPath: string;
+    }>
+  > = {
+    reactivate: {
+      actionLabel: copy.reactivateAccount,
+      busyLabel: copy.reactivatingAccount,
+      optionsPath: "/auth/accounts/reactivate/options",
+      verifyPath: "/auth/accounts/reactivate/verify",
+    },
+    unlink: {
+      actionLabel: copy.unlinkAccount,
+      busyLabel: copy.unlinkingAccount,
+      optionsPath: "/auth/accounts/unlink/options",
+      verifyPath: "/auth/accounts/unlink/verify",
+    },
+    "revoke-device": {
+      actionLabel: copy.revokeDevice,
+      busyLabel: copy.revokingDevice,
+      optionsPath: "/auth/devices/revoke/options",
+      verifyPath: "/auth/devices/revoke/verify",
+    },
+    "revoke-installation": {
+      actionLabel: copy.revokeInstallation,
+      busyLabel: copy.revokingInstallation,
+      optionsPath: "/auth/installations/revoke/options",
+      verifyPath: "/auth/installations/revoke/verify",
+    },
+  };
+  const config = actionConfig[action];
+  const destructive = action !== "reactivate";
 
   async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -782,8 +744,8 @@ function SourcePasskeyActionButton({
     setBusy(true);
     setError(false);
     try {
-      const optionsResponse = await fetch(optionsPath, {
-        body: JSON.stringify({ sourceControl }),
+      const optionsResponse = await fetch(config.optionsPath, {
+        body: JSON.stringify({ targetControl }),
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json", "content-type": "application/json" },
@@ -795,7 +757,7 @@ function SourcePasskeyActionButton({
       }
       const options = (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON;
       const response = await startAuthentication({ optionsJSON: options });
-      const verification = await fetch(verifyPath, {
+      const verification = await fetch(config.verifyPath, {
         body: JSON.stringify({ response }),
         cache: "no-store",
         credentials: "same-origin",
@@ -816,12 +778,12 @@ function SourcePasskeyActionButton({
   return (
     <form className="passkey-revoke" onSubmit={(event) => void submit(event)}>
       <button
-        aria-label={`${actionLabel}: ${label}`}
-        className={unlink ? "danger-action" : "secondary-action"}
+        aria-label={`${config.actionLabel}: ${label}`}
+        className={destructive ? "danger-action" : "secondary-action"}
         disabled={busy}
         type="submit"
       >
-        {busy ? busyLabel : actionLabel}
+        {busy ? config.busyLabel : config.actionLabel}
       </button>
       <span aria-live="polite" className={error ? "auth-error" : "auth-status"}>
         {error ? copy.genericError : ""}
@@ -830,289 +792,26 @@ function SourcePasskeyActionButton({
   );
 }
 
-interface SourceActionButtonProps {
+interface AccountTargetActionButtonProps {
   readonly label: string;
   readonly locale: Locale;
-  readonly sourceControl: string;
+  readonly targetControl: string;
 }
 
-export function SourceReactivationButton(props: SourceActionButtonProps) {
-  return <SourcePasskeyActionButton action="reactivate" {...props} />;
+export function AccountReactivationButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="reactivate" {...props} />;
 }
 
-export function SourceUnlinkButton(props: SourceActionButtonProps) {
-  return <SourcePasskeyActionButton action="unlink" {...props} />;
+export function AccountUnlinkButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="unlink" {...props} />;
 }
 
-interface PairingApprovalFormProps {
-  readonly existingSources?: readonly PairingExistingSourceChoice[];
-  readonly locale: Locale;
-  readonly sourceCreationEnabled: boolean;
+export function DeviceRevokeButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="revoke-device" {...props} />;
 }
 
-export function PairingApprovalForm({
-  existingSources,
-  locale,
-  sourceCreationEnabled,
-}: PairingApprovalFormProps) {
-  const copy = connectTranslations[locale];
-  const canCreateSource = sourceCreationEnabled;
-  const canChooseSource = canCreateSource || (existingSources?.length ?? 0) > 0;
-  const [approved, setApproved] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<"generic" | "unsupported" | undefined>();
-  const [reviewState, setReviewState] = useState<PairingReviewState>();
-
-  async function findPairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (busy) {
-      return;
-    }
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const enteredCode = form.get("userCode");
-    const selectedTarget = form.get("sourceTarget");
-    formElement.reset();
-    if (typeof enteredCode !== "string" || typeof selectedTarget !== "string") {
-      setError("generic");
-      return;
-    }
-    const userCode = enteredCode.trim().toUpperCase();
-    let requestBody:
-      | Readonly<{ sourceChoice: "new"; userCode: string }>
-      | Readonly<{ sourceChoice: "existing"; sourceControl: string; userCode: string }>;
-    let target: PairingReviewTarget;
-    if (selectedTarget === "new") {
-      if (!canCreateSource) {
-        setError("generic");
-        return;
-      }
-      requestBody = Object.freeze({ sourceChoice: "new", userCode });
-      target = Object.freeze({ kind: "new" });
-    } else {
-      const existingSource = existingSources?.find(
-        (source) => source.sourceControl === selectedTarget,
-      );
-      if (existingSource === undefined) {
-        setError("generic");
-        return;
-      }
-      requestBody = Object.freeze({
-        sourceChoice: "existing",
-        sourceControl: existingSource.sourceControl,
-        userCode,
-      });
-      target = Object.freeze({ kind: "existing", sourceNumber: existingSource.sourceNumber });
-    }
-    setBusy(true);
-    setError(undefined);
-    try {
-      const response = await fetch("/auth/pairing/options", {
-        body: JSON.stringify(requestBody),
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { accept: "application/json", "content-type": "application/json" },
-        method: "POST",
-        redirect: "error",
-      });
-      if (!response.ok) {
-        throw new Error("pairing unavailable");
-      }
-      const parsed = readPairingReview((await response.json()) as unknown);
-      if (parsed === undefined) {
-        throw new Error("pairing response invalid");
-      }
-      setReviewState(Object.freeze({ review: parsed, target }));
-    } catch {
-      setError("generic");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function approvePairing(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    if (busy || reviewState === undefined) {
-      return;
-    }
-    if (!browserSupportsWebAuthn()) {
-      setError("unsupported");
-      return;
-    }
-    setBusy(true);
-    setError(undefined);
-    try {
-      const response = await startAuthentication({ optionsJSON: reviewState.review.options });
-      const verification = await fetch("/auth/pairing/verify", {
-        body: JSON.stringify({ response }),
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { accept: "application/json", "content-type": "application/json" },
-        method: "POST",
-        redirect: "error",
-      });
-      if (verification.status !== 204) {
-        throw new Error("pairing approval failed");
-      }
-      setApproved(true);
-      setReviewState(undefined);
-    } catch {
-      setError("generic");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (approved) {
-    return (
-      <section aria-labelledby="pairing-approved-title" className="account-security">
-        <h2 id="pairing-approved-title">{copy.approvedTitle}</h2>
-        <p className="auth-status" role="status">
-          {copy.approvedCopy}
-        </p>
-        <Link href="/account">{copy.backToAccount}</Link>
-      </section>
-    );
-  }
-
-  if (reviewState === undefined) {
-    return (
-      <form className="auth-form" onSubmit={(event) => void findPairing(event)}>
-        <label>
-          <span>{copy.codeLabel}</span>
-          <input
-            autoCapitalize="characters"
-            autoComplete="off"
-            inputMode="text"
-            maxLength={14}
-            minLength={14}
-            name="userCode"
-            pattern="[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){2}"
-            placeholder="7K9M-P2QR-W4XY"
-            required
-            spellCheck={false}
-            type="text"
-          />
-          <small>{copy.codeHint}</small>
-        </label>
-        <fieldset className="pairing-source-options">
-          <legend>{copy.sourceChoice}</legend>
-          {canCreateSource ? (
-            <label className="pairing-source-option">
-              <input defaultChecked name="sourceTarget" type="radio" value="new" />
-              <span>
-                <strong>{copy.newSource}</strong>
-                <small>{copy.newSourceCopy}</small>
-              </span>
-            </label>
-          ) : (
-            <small className="auth-status">{copy.sourceCreationUnavailable}</small>
-          )}
-          {existingSources?.map((source, sourceIndex) => (
-            <label className="pairing-source-option" key={source.sourceControl}>
-              <input
-                defaultChecked={!canCreateSource && sourceIndex === 0}
-                name="sourceTarget"
-                type="radio"
-                value={source.sourceControl}
-              />
-              <span>
-                <strong>
-                  {copy.existingSource} {source.sourceNumber}
-                </strong>
-                <small>{copy.existingSourceCopy}</small>
-                <small>
-                  {source.deviceLabels.length === 0
-                    ? copy.noSourceDevices
-                    : `${copy.sourceDevices}: ${source.deviceLabels.join(", ")}`}
-                </small>
-              </span>
-            </label>
-          ))}
-          {existingSources === undefined ? (
-            canCreateSource ? (
-              <small className="auth-status">{copy.existingSourcesUnavailable}</small>
-            ) : null
-          ) : existingSources.length === 0 ? (
-            <small className="auth-status">{copy.noExistingSources}</small>
-          ) : null}
-        </fieldset>
-        <button className="primary-action" disabled={busy || !canChooseSource} type="submit">
-          {busy ? copy.searching : copy.submitCode}
-        </button>
-        <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
-          {error === "unsupported" ? copy.unsupported : error === "generic" ? copy.error : ""}
-        </span>
-      </form>
-    );
-  }
-
-  const { review, target } = reviewState;
-
-  const platform =
-    review.pairing.osFamily === "macos"
-      ? "macOS"
-      : review.pairing.osFamily === "windows"
-        ? "Windows"
-        : "Linux";
-
-  return (
-    <section aria-labelledby="pairing-review-title" className="account-security">
-      <h2 id="pairing-review-title">{copy.reviewTitle}</h2>
-      <p>{copy.reviewCopy}</p>
-      <dl className="pairing-details">
-        <div>
-          <dt>{copy.device}</dt>
-          <dd>{review.pairing.deviceLabel}</dd>
-        </div>
-        <div>
-          <dt>{copy.connector}</dt>
-          <dd>{review.pairing.connectorVersion}</dd>
-        </div>
-        <div>
-          <dt>{copy.platform}</dt>
-          <dd>{platform}</dd>
-        </div>
-        <div>
-          <dt>{copy.architecture}</dt>
-          <dd>{review.pairing.architecture}</dd>
-        </div>
-        <div>
-          <dt>{copy.source}</dt>
-          <dd>
-            {target.kind === "new"
-              ? copy.newSource
-              : `${copy.existingSource} ${String(target.sourceNumber)}`}
-          </dd>
-        </div>
-        <div>
-          <dt>{copy.expires}</dt>
-          <dd>
-            <time dateTime={review.pairing.expiresAt}>
-              {new Intl.DateTimeFormat(locale, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              }).format(new Date(review.pairing.expiresAt))}
-            </time>
-          </dd>
-        </div>
-        <div className="pairing-fingerprint">
-          <dt>{copy.fingerprint}</dt>
-          <dd>
-            <code>{review.pairing.publicKeyFingerprint}</code>
-          </dd>
-        </div>
-      </dl>
-      <form className="auth-form" onSubmit={(event) => void approvePairing(event)}>
-        <button className="primary-action" disabled={busy} type="submit">
-          {busy ? copy.approving : copy.approve}
-        </button>
-        <span aria-live="polite" className={error === undefined ? "auth-status" : "auth-error"}>
-          {error === "unsupported" ? copy.unsupported : error === "generic" ? copy.error : ""}
-        </span>
-      </form>
-    </section>
-  );
+export function InstallationRevokeButton(props: AccountTargetActionButtonProps) {
+  return <AccountTargetPasskeyActionButton action="revoke-installation" {...props} />;
 }
 
 interface ProfileDeletionFormProps {

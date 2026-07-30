@@ -3,23 +3,21 @@
 ## Scope and evidence boundary
 
 This is the checked operator prerequisite for containing one or more Vibe Racing capabilities after
-a security, privacy, integrity, or reliability incident. It binds the ten repository-owned
+a security, privacy, integrity, or reliability incident. It binds the nine repository-owned
 default-off decisions to protected triage, process replacement, verification, and recovery of one
 capability at a time. It is not a deployed control plane, dynamic kill switch, private reporting
 channel, monitoring backend, incident exercise, or proof that an external service was contained.
 
-The ten decisions are `VIBERACING_MIGRATIONS_ENABLED`, `VIBERACING_JOBS_SCHEDULER_ENABLED`,
-`VIBERACING_INGEST_ENABLED`, `VIBERACING_USAGE_SYNC_ENABLED`, `VIBERACING_PUBLIC_RANKING_ENABLED`,
-`VIBERACING_TOKEN_RANKING_ENABLED`, `VIBERACING_PAIRING_ENABLED`,
-`VIBERACING_SOURCE_CREATION_ENABLED`, `VIBERACING_CAR_PROPOSALS_ENABLED`, and
-`VIBERACING_ENROLLMENT_ENABLED`. Every decision admits only the exact string `true`; absence,
+The nine decisions are `VIBERACING_MIGRATIONS_ENABLED`, `VIBERACING_JOBS_SCHEDULER_ENABLED`,
+`VIBERACING_INGEST_ENABLED`, `VIBERACING_USAGE_SYNC_ENABLED`, `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED`,
+`VIBERACING_PAIRING_ENABLED`, `VIBERACING_CAR_PROPOSALS_ENABLED`, `VIBERACING_ENROLLMENT_ENABLED`,
+and `VIBERACING_INVITE_GATE_ENABLED`. Every decision admits only the exact string `true`; absence,
 `false`, alternate case, another type, or unreadable state fails closed.
 
-The local checker binds six Web decisions to 21 exact module-load points: three legacy
-public-ranking, one direct-token-ranking, four pairing, three source-creation, four
-CarRecipe-proposal, and six enrollment modules.
+The local checker binds five Web decisions to 20 exact module-load points: four public-snapshot,
+three pairing, four CarRecipe-proposal, six enrollment, and three invite-policy bindings.
 
-The tracked public environment keeps nine runtime decisions false and does not contain migration
+The tracked public environment keeps eight runtime decisions false and does not contain migration
 enablement. Editing that file is never an incident action. A deployment-owned controller must change
 protected environment state, replace or stop the affected processes, manage routing and caches, and
 write only redacted evidence to a protected append-only record.
@@ -50,8 +48,8 @@ verified in the current repository state.
 - [ ] VR-CONTAIN-05: Confirm credential/key revocation, cache invalidation, database isolation, and
       rollback authority are available through separately reviewed protected workflows.
 - [ ] VR-CONTAIN-06: Identify which returning login, recovery, logout, visibility, deletion,
-      passkey, device, and source-security actions must remain reachable or receive a protected
-      manual fallback.
+      passkey, installation, device, and AgentAccount-security actions must remain reachable or
+      receive a protected manual fallback.
 
 Do not delay emergency edge or platform containment merely to run repository tests. If exploitation
 is active, close external routing and revoke compromised authority first through the approved
@@ -82,13 +80,13 @@ monitoring, user notification, production containment, or recovery.
 
 - [ ] VR-CONTAIN-07: Freeze new releases and keep migration enablement absent before changing any
       runtime capability.
-- [ ] VR-CONTAIN-08: Stop the Jobs scheduler when database integrity, deletion, scoring,
-      finalization, retention, or privileged Jobs authority is in scope.
+- [ ] VR-CONTAIN-08: Stop the Jobs scheduler when database integrity, deletion, accounting, snapshot
+      refresh, finalization, retention, or privileged Jobs authority is in scope.
 - [ ] VR-CONTAIN-09: Remove enablement for each affected capability through protected configuration;
       do not patch the application to invert, bypass, or merge independent decisions.
-- [ ] VR-CONTAIN-10: Replace every affected Web worker because enrollment, pairing, source creation,
-      CarRecipe proposals, legacy public ranking, and direct-token ranking resolve their decisions
-      at module evaluation.
+- [ ] VR-CONTAIN-10: Replace every affected Web worker because public snapshots, pairing, CarRecipe
+      proposals, enrollment, and optional invite policy resolve their decisions at module
+      evaluation.
 - [ ] VR-CONTAIN-11: Drain or stop every affected Ingest host before removing its startup
       enablement; changing environment state does not stop an already-running listener.
 - [ ] VR-CONTAIN-12: Stop every affected scheduler or migration process; their startup latches do
@@ -98,12 +96,14 @@ monitoring, user notification, production containment, or recovery.
 - [ ] VR-CONTAIN-14: Rotate or revoke a compromised credential, key, session, device, or artifact
       only through its separately approved workflow and verify that old authority is denied.
 
-Source creation and CarRecipe proposal mutation remain independently containable from pairing.
-Enrollment remains independently containable from returning login and recovery. Legacy public
-ranking and direct-token ranking remain independently containable from each other; closing either is
-not evidence that private data or ingestion is contained. Ingest, Jobs, and migrations require their
-own process and database-session verification. Usage Sync is the sole Community usage-ingest route
-and remains independently containable at both layers. Removing its protected value requires
+Pairing and CarRecipe proposal mutation remain independently containable. Pairing covers both
+new-account creation and provider-matched attachment; there is no separate source-creation gate.
+Enrollment remains independently containable from returning login and recovery, while optional
+invite-only policy is an additional denial gate and never enables enrollment by itself. One public
+snapshot decision covers the home projection and all three final public APIs; closing it is not
+evidence that private dashboard data or ingestion is contained. Ingest, Jobs, and migrations require
+their own process and database-session verification. Usage Sync is the sole Community usage-ingest
+route and remains independently containable at both layers. Removing its protected value requires
 replacing both the Ingest host, which resolves it at startup, and the Edge worker; it does not
 terminate an already-running process or prove that an old artifact is unreachable. The flag is a
 containment control, not a protocol-migration switch.
@@ -111,8 +111,8 @@ containment control, not a protocol-migration switch.
 ## Preserve security and deletion paths
 
 - [ ] VR-CONTAIN-15: Preserve returning login, recovery, logout, profile hide/delete, passkey
-      revoke, device revoke, source pause/unlink, and proposal rejection unless that exact path is
-      compromised.
+      revoke, installation/device revoke, AgentAccount pause/unlink, and proposal rejection unless
+      that exact path is compromised.
 - [ ] VR-CONTAIN-16: When a security or deletion path is compromised, close it narrowly, document a
       protected manual fallback, and prevent the broader Web surface from implying the action
       succeeded.
@@ -146,11 +146,11 @@ closed.
 - [ ] VR-CONTAIN-23: Return immediately to containment on any mismatch; do not widen another
       capability to make the failed one appear healthy.
 
-Recovery must preserve independent decisions. Enabling pairing does not authorize source creation;
-enabling account pages does not authorize enrollment or CarRecipe mutation; enabling public reads
-does not authorize direct-token ranking or Ingest; enabling direct-token ranking does not authorize
-legacy public ranking or Ingest; enabling Ingest does not authorize Usage Sync; enabling Jobs does
-not authorize migrations. A local green build is not a go-live decision.
+Recovery must preserve independent decisions. Enabling pairing does not authorize CarRecipe
+mutation; enabling account pages does not authorize enrollment; enabling invite-only policy does not
+authorize enrollment; enabling public snapshots does not authorize Ingest or private dashboard
+reads; enabling Ingest does not authorize Usage Sync; enabling Jobs does not authorize migrations. A
+local green build is not a go-live decision.
 
 ## Failure and incident handoff
 

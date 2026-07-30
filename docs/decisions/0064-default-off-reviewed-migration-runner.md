@@ -169,7 +169,7 @@ recovery. The local disposable result does not prove any of those properties.
 
 ## References
 
-- [Database migration workflow](../../database/README.md#migration-workflow)
+- [Database migration workflow](../../database/README.md#migration-and-verification-workflow)
 - [Staging migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md)
 - [Cloudflare and database capability isolation](0004-edge-service-and-database-isolation.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

@@ -2,7 +2,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getSyntheticRacePayload } from "@/lib/race-data";
+import { getSyntheticPublicHomePayload } from "@/lib/race-data";
+import type { PublicHomePayload } from "@/lib/race-types";
 
 import { RaceExperience } from "./race-experience";
 
@@ -77,24 +78,20 @@ function installMatchMedia(initialMatches: boolean): MediaController {
 }
 
 function mountExperience(
-  communitySeasonStart?: string,
+  payload: PublicHomePayload = getSyntheticPublicHomePayload("2026-07-27"),
   accountSessionAvailable = false,
   profileHandle?: string,
 ): MountedExperience {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const payload = getSyntheticRacePayload();
   act(() => {
     root.render(
-      communitySeasonStart === undefined
-        ? createElement(RaceExperience, { accountSessionAvailable, payload, profileHandle })
-        : createElement(RaceExperience, {
-            accountSessionAvailable,
-            communitySeasonStart,
-            payload,
-            profileHandle,
-          }),
+      createElement(RaceExperience, {
+        accountSessionAvailable,
+        payload,
+        profileHandle,
+      }),
     );
   });
   return { container, root };
@@ -107,25 +104,6 @@ function changeSelect(select: HTMLSelectElement, value: string): void {
   });
 }
 
-async function settleCommunityRequest(
-  container: HTMLElement,
-  expectedSource: "community" | "fallback" = "community",
-): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    const settled =
-      expectedSource === "community"
-        ? container.querySelector<HTMLElement>(".race-app")?.dataset.scoreSource === "community"
-        : container.querySelector(".demo-badge")?.textContent === "Synthetic fallback";
-    if (settled) {
-      return;
-    }
-  }
-  throw new Error("Community request did not settle");
-}
-
 beforeEach(() => {
   localStorage.clear();
   window.history.replaceState(null, "", "/");
@@ -133,27 +111,30 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
 
 describe("RaceExperience interactions", () => {
-  it("replaces enrollment links with the localized account entry for a local session", () => {
+  it("keeps account navigation and localizes the honest public copy", () => {
     installMatchMedia(false);
     const mounted = mountExperience(undefined, true);
     const navigation = mounted.container.querySelector(".site-nav");
-    expect(navigation?.querySelector<HTMLAnchorElement>('a[href="#simulator"]')?.textContent).toBe(
-      "Score simulator",
-    );
+
     expect(navigation?.querySelector<HTMLAnchorElement>('a[href="/account"]')?.textContent).toBe(
       "Account",
     );
     expect(navigation?.querySelector('a[href="/login"]')).toBeNull();
-    expect(navigation?.querySelector('a[href="/join"]')).toBeNull();
+    expect(navigation?.querySelector('a[href="#simulator"]')).toBeNull();
 
     const localeSelect = mounted.container.querySelectorAll<HTMLSelectElement>("select")[1];
     expect(localeSelect).toBeDefined();
     changeSelect(localeSelect!, "ru");
+    expect(mounted.container.querySelector("h1")?.textContent).toContain("Все ваши coding agents");
+    expect(mounted.container.querySelector(".metric-disclaimer")?.textContent).toContain(
+      "не качества кода",
+    );
     expect(navigation?.querySelector<HTMLAnchorElement>('a[href="/account"]')?.textContent).toBe(
       "Аккаунт",
     );
@@ -163,317 +144,95 @@ describe("RaceExperience interactions", () => {
     });
   });
 
-  it("replaces the preview standings with a validated same-origin Community page", async () => {
+  it("renders and selects exact token totals without a browser request or Number coercion", () => {
     installMatchMedia(false);
-    const fetchScore = vi.fn(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            participants: [
-              {
-                activeDays: 6,
-                displayPosition: 1,
-                freshnessDays: 0,
-                handle: "visible_driver",
-                rankPosition: 1,
-                scoreVersion: "community_v1",
-                seasonEnd: "2026-07-19",
-                seasonFinalized: false,
-                seasonStart: "2026-07-13",
-                sourceCount: 2,
-                streakDays: 12,
-                weeklyScore: 6123,
-              },
-              {
-                activeDays: 4,
-                carRecipe: {
-                  schemaVersion: 1,
-                  chassis: "rally",
-                  nose: "scoop",
-                  cockpit: "rally",
-                  wing: "low",
-                  wheels: "all-terrain",
-                  palette: "redline",
-                  trail: "grid",
-                  seed: 202,
-                },
-                displayPosition: 2,
-                freshnessDays: 1,
-                handle: "second_driver",
-                rankPosition: 2,
-                scoreVersion: "community_v1",
-                seasonEnd: "2026-07-19",
-                seasonFinalized: false,
-                seasonStart: "2026-07-13",
-                sourceCount: 1,
-                weeklyScore: 4096,
-              },
-            ],
-            schemaVersion: 1,
-            selfReported: true,
-            trustTier: "community",
-          }),
-          { headers: { "content-type": "application/json; charset=utf-8" } },
-        ),
-      ),
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const base = getSyntheticPublicHomePayload("2026-07-27");
+    const first = base.leaderboard.participants[0];
+    expect(first).toBeDefined();
+    const exactTotal = "123456789012345678901234567890123456789012345678901234567890";
+    const payload: PublicHomePayload = {
+      ...base,
+      leaderboard: {
+        ...base.leaderboard,
+        participants: [
+          { ...first!, weeklyTokenTotal: exactTotal },
+          ...base.leaderboard.participants.slice(1),
+        ],
+      },
+      source: "community",
+    };
+    const mounted = mountExperience(payload, false, "loop_lantern");
+
+    expect(mounted.container.querySelector(".race-app")?.getAttribute("data-snapshot-source")).toBe(
+      "community",
     );
-    vi.stubGlobal("fetch", fetchScore);
+    expect(mounted.container.textContent).toContain(
+      "123,456,789,012,345,678,901,234,567,890,123,456,789,012,345,678,901,234,567,890 tokens",
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    const mounted = mountExperience("2026-07-13", false, "second_driver");
-    await settleCommunityRequest(mounted.container);
-
-    const app = mounted.container.querySelector<HTMLElement>(".race-app");
-    expect(app?.dataset.scoreSource).toBe("community");
-    expect(mounted.container.textContent).toContain("Community standings");
-    expect(mounted.container.textContent).toContain("visible_driver");
-    expect(mounted.container.textContent).toContain("Visual marker");
-    expect(mounted.container.textContent).not.toContain("neon_otter");
-    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(2);
-    const profile = mounted.container.querySelector<HTMLElement>("#profile");
-    expect(profile?.textContent).toContain("Community profile");
-    expect(profile?.textContent).toContain("second_driver");
-    expect(profile?.textContent).toContain("4,096 pts");
-    expect(profile?.textContent).toContain("#2");
-    expect(profile?.textContent).toContain("1 day");
-    expect(profile?.querySelector(".daily-bars")).toBeNull();
-    expect(profile?.querySelector('.car-swatch[data-paint="redline"]')).not.toBeNull();
-
-    const secondProfile = Array.from(
-      mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
-    ).find((link) => link.textContent === "second_driver");
-    expect(secondProfile).toBeDefined();
-    expect(secondProfile?.getAttribute("aria-current")).toBe("true");
-    expect(secondProfile?.getAttribute("href")).toBe("/?profile=second_driver#profile");
-
-    const firstProfile = Array.from(
-      mounted.container.querySelectorAll<HTMLAnchorElement>(".profile-driver-link"),
-    ).find((link) => link.textContent === "visible_driver");
-    const scrollIntoView = vi.spyOn(Element.prototype, "scrollIntoView");
+    const firstLink = mounted.container.querySelector<HTMLAnchorElement>(
+      'a[href="/?profile=neon_otter#profile"]',
+    );
+    expect(firstLink).not.toBeNull();
     act(() => {
-      firstProfile?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      firstLink?.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          button: 0,
+          cancelable: true,
+        }),
+      );
     });
-    expect(firstProfile?.getAttribute("aria-current")).toBe("true");
-    expect(profile?.textContent).toContain("visible_driver");
-    expect(profile?.textContent).toContain("today");
-    expect(profile?.textContent).toContain("12d");
     expect(window.location.pathname + window.location.search + window.location.hash).toBe(
-      "/?profile=visible_driver#profile",
+      "/?profile=neon_otter#profile",
     );
-    expect(scrollIntoView).toHaveBeenCalled();
-    expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/race/status?seasonStart=2026-07-13",
-      expect.objectContaining({ credentials: "omit", method: "GET" }),
+    expect(mounted.container.querySelector("#profile")?.textContent).toContain("neon_otter");
+    expect(mounted.container.querySelector("#profile")?.textContent).toContain(
+      "123,456,789,012,345,678,901,234,567,890,123,456,789,012,345,678,901,234,567,890",
     );
-
-    act(() => {
-      mounted.root.unmount();
-    });
-
-    const missing = mountExperience("2026-07-13", false, "missing_driver");
-    await settleCommunityRequest(missing.container);
-    const missingProfile = missing.container.querySelector<HTMLElement>("#profile");
-    expect(missingProfile?.textContent).toContain("missing_driver");
-    expect(missingProfile?.textContent).toContain("not in the current top 32");
-    expect(missing.container.querySelector('[aria-current="true"]')).toBeNull();
-
-    act(() => {
-      missing.root.unmount();
-    });
-
-    const defaultProfile = mountExperience("2026-07-13");
-    await settleCommunityRequest(defaultProfile.container);
-    expect(defaultProfile.container.querySelector("#profile")?.textContent).toContain(
-      "visible_driver",
-    );
-    expect(
-      defaultProfile.container.querySelector<HTMLAnchorElement>('[aria-current="true"]')
-        ?.textContent,
-    ).toBe("visible_driver");
-
-    act(() => {
-      defaultProfile.root.unmount();
-    });
-  });
-
-  it("renders the direct-token leaderboard first without score normalization UI", async () => {
-    installMatchMedia(false);
-    const fetchScore = vi.fn(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            participants: [
-              {
-                activeDays: 6,
-                displayPosition: 1,
-                freshnessDays: 0,
-                handle: "token_driver",
-                metricVersion: "community_tokens_v1",
-                rankPosition: 1,
-                seasonEnd: "2026-08-02",
-                seasonFinalized: false,
-                seasonStart: "2026-07-27",
-                sourceCount: 1,
-                streakDays: 6,
-                weeklyTokenTotal: 12_345_678,
-              },
-            ],
-            schemaVersion: 1,
-            selfReported: true,
-            trustTier: "community",
-          }),
-          { headers: { "content-type": "application/json; charset=utf-8" } },
-        ),
-      ),
-    );
-    vi.stubGlobal("fetch", fetchScore);
-
-    const mounted = mountExperience("2026-07-27");
-    await settleCommunityRequest(mounted.container);
-
-    const app = mounted.container.querySelector<HTMLElement>(".race-app");
-    expect(app?.dataset.scoreMetric).toBe("tokens");
-    expect(mounted.container.textContent).toContain("Community leaderboard");
-    expect(mounted.container.textContent).toContain("Weekly tokens");
-    expect(mounted.container.textContent).toContain("12,345,678 tokens");
-    expect(mounted.container.textContent).toContain("exact accepted weekly total");
-    expect(mounted.container.textContent).toContain("Tokenizers differ");
-    expect(mounted.container.textContent).toContain("not a compute or cost comparison");
-    expect(mounted.container.querySelector("#simulator")).toBeNull();
-    expect(mounted.container.querySelector('a[href="#simulator"]')).toBeNull();
-    expect(fetchScore).toHaveBeenCalledOnce();
-    expect(fetchScore).toHaveBeenCalledWith(
-      "/v1/community/tokens?seasonStart=2026-07-27",
-      expect.objectContaining({ credentials: "omit", method: "GET" }),
-    );
-
-    const localeSelect = mounted.container.querySelectorAll<HTMLSelectElement>("select")[1];
-    expect(localeSelect).toBeDefined();
-    changeSelect(localeSelect!, "ru");
-    expect(mounted.container.textContent).toContain("Токены за неделю");
-    expect(mounted.container.textContent).toContain("12 345 678 токенов");
-    expect(mounted.container.textContent).toContain("Токенизаторы отличаются");
-    expect(mounted.container.textContent).toContain("не сравнение вычислений или стоимости");
 
     act(() => {
       mounted.root.unmount();
     });
   });
 
-  it("labels and preserves the synthetic fallback when Community standings are unavailable", async () => {
-    installMatchMedia(false);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(new Response(null, { status: 503 }))),
-    );
-
-    const mounted = mountExperience("2026-07-13");
-    await settleCommunityRequest(mounted.container, "fallback");
-
-    expect(mounted.container.textContent).toContain("Synthetic fallback");
-    expect(mounted.container.textContent).toContain("neon_otter");
-    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(8);
-
-    act(() => {
-      mounted.root.unmount();
-    });
-  });
-
-  it("renders an explicit empty state for a valid Community week without participants", async () => {
-    installMatchMedia(false);
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              participants: [],
-              schemaVersion: 1,
-              selfReported: true,
-              trustTier: "community",
-            }),
-            { headers: { "content-type": "application/json; charset=utf-8" } },
-          ),
-        ),
-      ),
-    );
-
-    const mounted = mountExperience("2026-07-13");
-    await settleCommunityRequest(mounted.container);
-
-    expect(mounted.container.textContent).toContain("No Community participants yet.");
-    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(1);
-    expect(mounted.container.querySelector("#profile")?.textContent).not.toContain("demo_driver");
-
-    act(() => {
-      mounted.root.unmount();
-    });
-  });
-
-  it("loads, applies, and persists only non-personal device preferences", () => {
-    localStorage.setItem("viberacing.locale", "ru");
-    localStorage.setItem("viberacing.theme", "cyber-rally");
-    localStorage.setItem("viberacing.motion", "off");
-    const media = installMatchMedia(false);
+  it("honors reduced motion, pause, theme, and delayed race enhancement", () => {
+    vi.useFakeTimers();
+    const media = installMatchMedia(true);
     const mounted = mountExperience();
     const app = mounted.container.querySelector<HTMLElement>(".race-app");
-    expect(document.documentElement.lang).toBe("ru");
-    expect(app?.dataset.theme).toBe("cyber-rally");
+
     expect(app?.dataset.motion).toBe("off");
-    expect(mounted.container.textContent).toContain("Синтетическое превью");
-    expect(mounted.container.querySelector("#simulator-heading")?.textContent).toBe(
-      "Симулятор баллов",
+    expect(mounted.container.querySelector(".race-loading")).not.toBeNull();
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    expect(mounted.container.querySelector(".race-console")?.getAttribute("data-race-ready")).toBe(
+      "true",
     );
 
     const selects = mounted.container.querySelectorAll<HTMLSelectElement>("select");
-    expect(selects).toHaveLength(4);
     changeSelect(selects[0]!, "classic-grand-prix");
-    changeSelect(selects[1]!, "en");
-    changeSelect(selects[2]!, "system");
-    expect(document.documentElement.lang).toBe("en");
+    changeSelect(selects[2]!, "on");
     expect(app?.dataset.theme).toBe("classic-grand-prix");
     expect(app?.dataset.motion).toBe("on");
-    expect(localStorage.getItem("viberacing.locale")).toBe("en");
-    expect(localStorage.getItem("viberacing.theme")).toBe("classic-grand-prix");
-    expect(localStorage.getItem("viberacing.motion")).toBe("system");
 
-    act(() => {
-      media.setMatches(true);
-    });
-    expect(app?.dataset.motion).toBe("off");
-
-    const pauseButton = Array.from(mounted.container.querySelectorAll("button")).find(
-      (button) => button.getAttribute("aria-pressed") === "false",
+    const pauseButton = mounted.container.querySelector<HTMLButtonElement>(
+      ".race-section .pixel-button",
     );
-    expect(pauseButton).toBeDefined();
     act(() => {
-      pauseButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      pauseButton?.click();
     });
     expect(pauseButton?.getAttribute("aria-pressed")).toBe("true");
 
     act(() => {
-      mounted.root.unmount();
+      media.setMatches(false);
     });
-  });
-
-  it("rejects invalid stored values and remains usable when storage is unavailable", () => {
-    installMatchMedia(true);
-    const getItem = vi.spyOn(Storage.prototype, "getItem");
-    getItem.mockImplementation(() => {
-      throw new DOMException("blocked", "SecurityError");
-    });
-    const setItem = vi.spyOn(Storage.prototype, "setItem");
-    setItem.mockImplementation(() => {
-      throw new DOMException("blocked", "SecurityError");
-    });
-
-    const mounted = mountExperience();
-    const app = mounted.container.querySelector<HTMLElement>(".race-app");
-    expect(document.documentElement.lang).toBe("en");
-    expect(app?.dataset.theme).toBe("neon-night");
-    expect(app?.dataset.motion).toBe("off");
-    expect(mounted.container.querySelectorAll("tbody tr")).toHaveLength(8);
-    expect(getItem).toHaveBeenCalled();
-    expect(setItem).toHaveBeenCalled();
+    expect(localStorage.getItem("viberacing.theme")).toBe("classic-grand-prix");
+    expect(localStorage.getItem("viberacing.motion")).toBe("on");
 
     act(() => {
       mounted.root.unmount();

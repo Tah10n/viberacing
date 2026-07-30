@@ -1,10 +1,10 @@
-//! One-use device signing for an already prepared Community usage request.
+//! One-use device signing for an already prepared Usage Sync request.
 
 use std::fmt;
 
 use ed25519_dalek::{Signer, SigningKey};
 
-use super::{PreparedCommunityUsage, encode_base64url};
+use super::{PreparedUsageSync, encode_base64url};
 
 /// Device-signature algorithm fixed by the version 1 authentication policy.
 pub const DEVICE_SIGNATURE_ALGORITHM: &str = "Ed25519";
@@ -15,13 +15,10 @@ pub const DEVICE_PUBLIC_KEY_BYTES: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
 /// Exact byte length of a version 1 Ed25519 signature.
 pub const DEVICE_SIGNATURE_BYTES: usize = ed25519_dalek::SIGNATURE_LENGTH;
 
-/// One-use capability containing a reviewed device signing key from a source-bound pairing.
+/// One-use capability containing one account-scoped device signing key.
 ///
 /// This type deliberately has no public constructor, accessor, `Clone`, `Debug`, or serialization.
-/// The private one-shot sync command loads an active paired key and its exact device identifier from
-/// the native credential record, then constructs this capability without exposing private key
-/// bytes. The capability is consumed by [`CandidateCommunityUsageV1Signer`], and the upstream
-/// signing key is zeroized when it is dropped.
+/// The private sync command constructs it only after loading an exact active native credential.
 pub struct ReviewedDeviceSigningKey {
     device_id: String,
     signing_key: SigningKey,
@@ -55,12 +52,11 @@ impl ReviewedDeviceSigningKey {
     }
 }
 
-/// Exact signed Community usage body and device-authentication header values.
+/// Exact signed Usage Sync body and device-authentication header values.
 ///
 /// The body contains private usage material. This type does not implement `Debug`, `Display`,
-/// `Clone`, or serialization. Its read-only accessors exist solely for the bounded one-shot HTTP
-/// transport.
-pub struct SignedCommunityUsage {
+/// `Clone`, or serialization. Its accessors exist solely for the bounded one-shot HTTP transport.
+pub struct SignedUsageSync {
     body: Vec<u8>,
     device_id: String,
     device_nonce: String,
@@ -69,7 +65,7 @@ pub struct SignedCommunityUsage {
     idempotency_key: String,
 }
 
-impl SignedCommunityUsage {
+impl SignedUsageSync {
     /// Returns the exact signed JSON request body.
     #[must_use]
     pub fn body(&self) -> &[u8] {
@@ -107,47 +103,47 @@ impl SignedCommunityUsage {
     }
 }
 
-impl Drop for SignedCommunityUsage {
+impl Drop for SignedUsageSync {
     fn drop(&mut self) {
         self.body.fill(0);
     }
 }
 
-/// Stable, non-reflective failures from device signing.
+/// Stable, non-reflective failures from account-scoped device signing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SyncSigningError {
+pub enum UsageSyncSigningError {
     /// The loaded key capability was not bound to the prepared request's device identifier.
     DeviceBindingMismatch,
 }
 
-impl fmt::Display for SyncSigningError {
+impl fmt::Display for UsageSyncSigningError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("community usage signing key is not bound to the request device")
+        formatter.write_str("usage sync signing key is not bound to the request device")
     }
 }
 
-impl std::error::Error for SyncSigningError {}
+impl std::error::Error for UsageSyncSigningError {}
 
-/// Candidate-only signer for an exact prepared version 1 Community usage request.
-pub struct CandidateCommunityUsageV1Signer;
+/// One-use signer for an exact prepared final version 1 Usage Sync request.
+pub struct UsageSyncV1Signer;
 
-impl CandidateCommunityUsageV1Signer {
+impl UsageSyncV1Signer {
     /// Consumes one device-bound key capability and one exact prepared request.
     ///
     /// Only the prepared LF-separated device message is signed. The returned body is the same
     /// allocation whose digest was included in that message, and every returned header value is
-    /// moved from the same prepared request. The signing key is consumed and zeroized on drop.
+    /// moved from the same prepared request.
     ///
     /// # Errors
     ///
-    /// Returns [`SyncSigningError::DeviceBindingMismatch`] when the reviewed key capability is not
-    /// bound to the exact prepared device identifier. Neither identifier is reflected.
+    /// Returns [`UsageSyncSigningError::DeviceBindingMismatch`] when the reviewed key capability is
+    /// not bound to the exact prepared device identifier. Neither identifier is reflected.
     pub fn sign(
         key_capability: ReviewedDeviceSigningKey,
-        mut prepared: PreparedCommunityUsage,
-    ) -> Result<SignedCommunityUsage, SyncSigningError> {
+        mut prepared: PreparedUsageSync,
+    ) -> Result<SignedUsageSync, UsageSyncSigningError> {
         if key_capability.device_id != prepared.device_id {
-            return Err(SyncSigningError::DeviceBindingMismatch);
+            return Err(UsageSyncSigningError::DeviceBindingMismatch);
         }
 
         let ReviewedDeviceSigningKey {
@@ -156,7 +152,7 @@ impl CandidateCommunityUsageV1Signer {
         } = key_capability;
         let signature = signing_key.sign(&prepared.device_signature_message);
 
-        Ok(SignedCommunityUsage {
+        Ok(SignedUsageSync {
             body: std::mem::take(&mut prepared.body),
             device_id: std::mem::take(&mut prepared.device_id),
             device_nonce: std::mem::take(&mut prepared.device_nonce),

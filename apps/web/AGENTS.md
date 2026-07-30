@@ -1,241 +1,125 @@
-# Web workspace agent guidance
+# Web workspace guidance
 
-Read the root `AGENTS.md`, this directory's `README.md`, and the current implementation status
-before editing. The root security, privacy, documentation, dependency, and staged-review rules all
-apply.
+Read the root `AGENTS.md`, `apps/web/README.md`, accepted ADRs, security invariants, threat/abuse
+models, privacy map, and implementation ledger before changing this workspace.
+
+## Scope
+
+`apps/web` owns:
+
+- the database-free synthetic public experience;
+- three public snapshot GET routes and their narrow PostgreSQL adapter;
+- enrollment, login, passkeys, recovery, and private account applications;
+- batch connector pairing transport/browser approval;
+- CarRecipe browser and device proposal boundaries; and
+- Web-specific accessibility, configuration, admission, and process evidence.
+
+It does not own Edge/Ingest usage submission, Jobs scheduling, migrations, provider readers,
+production credentials, deployment, or a generic database API.
 
 ## Non-negotiable boundaries
 
-- `lib/race-data.ts` is synthetic test/demo input only. Never paste exports, logs, account data, or
-  workstation-derived values into it.
-- Client-facing `SyntheticRacePayload` contains scores and presentation fields, not raw tokens or
-  source/account identifiers. Keep raw activity on the server side of the page boundary.
-- Community results are self-reported. Keep the disclaimer visible and Verified mode unreachable.
-- `CarRecipe` remains a closed enum with fixed repository-owned output. Do not add arbitrary text,
-  markup, styles, colors, files, SVG, or URLs.
-- CarRecipe proposal identity and expiry are server-owned. Preserve generated validation before
-  persistence, exact possessed-session profile derivation, one pending proposal, the maximum 24-hour
-  logical expiry, purpose-separated encrypted decision control, raw proposal/profile ID omission
-  from HTML, explicit approve/reject, and atomic activation. Device credentials cannot administer a
-  recipe. They may only create or replace the pending exact recipe through the dedicated body-bound
-  signed route after active source/device revalidation and nonce consumption; they cannot read,
-  approve, reject, or activate it. Physical expired-row cleanup is a separate bounded Jobs
-  capability. The public race projection may expose only the exact current active recipe for an
-  `active` profile. The separate status projection may add only complete-UTC-day freshness and the
-  preference-gated derived streak; keep exact receipt time, daily scores, preferences, proposal
-  identity, state, and timestamps private and both older contracts unchanged. The repository Agent
-  Skill is only a local reducer into the same fixed device command and creates no Web route or
-  authority. Combined synthetic scheduler/PostgreSQL cleanup evidence exists; do not claim a
-  deployed cleanup cadence, additional agent service ingress, production login, or deployment until
-  separate evidence exists.
-- Keep browser proposal create/approve and device proposal POST behind exact
-  `VIBERACING_CAR_PROPOSALS_ENABLED=true`, independently resolved at the account page and three
-  mutation modules. Every alternate or unreadable value must fail before request parsing,
-  runtime/service construction, admission, proof, or database work. The shared browser service must
-  repeat literal-true enforcement before recipe/control/session work. Preserve active and private
-  pending reads plus exact session-bound rejection while disabled; do not conflate this control with
-  public ranking, cleanup, pairing, source creation, or Ingest, and do not claim dynamic/deployed
-  disablement.
-- Keep invite/OAuth/initial-passkey enrollment behind exact `VIBERACING_ENROLLMENT_ENABLED=true`,
-  independently resolved by `/join`, `/join/passkey`, and the four GitHub start/callback plus
-  initial-passkey options/verification modules. Every alternate or unreadable value must omit both
-  EN/RU forms and fail before request parsing, runtime/admission, OAuth/WebAuthn, or database work.
-  All four enrollment service methods must repeat literal-true enforcement before reading their
-  inputs. Preserve active-session redirects, returning login, restricted recovery, logout, and
-  account security actions; do not conflate the enable resolver with protected enrollment runtime
-  configuration or claim dynamic/deployed disablement or cleanup.
-- Browser persistence is limited to locale, theme, and motion. Do not add trackers, analytics,
-  fingerprinting, or account state to local storage.
-- Preserve per-navigation nonce CSP and repository-root build isolation. Do not add a CSP origin,
-  remote asset, or capability merely to silence a failure.
-- Keep compose `DATABASE_*` owner credentials out of Web code. The public-score adapter uses only
-  `VIBERACING_WEB_DATABASE_*`, strict TLS/config parsing, a dedicated bounded pool, and an effective
-  Web-role/login-capability probe before every query. Do not bypass the store with generic SQL or
-  wire it outside the four exact `/v1/community/scores`, `/v1/community/race`,
-  `/v1/community/race/status`, and `/v1/community/tokens` boundaries.
-- Keep `auto_explain` and plan-log access confined to the opt-in disposable Web PostgreSQL harness.
-  Only its synthetic owner may provision database-scoped, parameter-disabled capture for the narrow
-  synthetic login; product Web code must not load it, alter settings, consume plans, or create a
-  query log. Preserve the byte/plan/depth/node budgets, complete private-marker scan, eight exact
-  adapter/projection oracle classes, and container-bound deletion. Do not claim the small fixed
-  fixture is representative load, latency, capacity, production statistics, monitoring, or
-  deployment.
-- Keep all three public ranking GETs behind exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` resolved
-  once per route-module evaluation. Every alternate or unreadable state must return the existing
-  generic 503 before URL/query/header parsing, admission acquisition, or store construction; keep
-  the tracked example false. Do not add a truthy/default-on parser, per-request environment read,
-  alternate enable source, or claim dynamic/deployed route and cache denial.
-- Keep the direct-token GET independently behind exact `VIBERACING_TOKEN_RANKING_ENABLED=true`
-  resolved once per route-module evaluation. Every alternate or unreadable state must return the
-  same generic 503 before URL/query/header parsing, admission acquisition, or store construction;
-  keep the tracked example false. Do not let this decision enable or disable the three compatible
-  score routes.
-- Keep connector pairing start/poll and signed-in approval options/verification behind exact
-  `VIBERACING_PAIRING_ENABLED=true` resolved once per route-module evaluation. Disabled POST may
-  cancel its body but must return the existing generic 503 before request parsing, runtime/service
-  construction, admission acquisition, protected configuration, or database work; connector non-POST
-  methods remain 405 and the tracked example remains false. Do not treat this as a dynamic/deployed
-  switch or as the separate source-creation control.
-- Keep new-source selection and completion behind exact `VIBERACING_SOURCE_CREATION_ENABLED=true`,
-  independently resolved once by `/connect` and both browser approval modules. Every alternate or
-  unreadable value must omit the new-source UI, keep active existing-source pairing available, and
-  fail closed in the production service both before new-source challenge work and before
-  passkey/database completion. Preserve exact source choice in the purpose-separated encrypted
-  approval challenge and its context digest. Do not add a truthy or per-request parser, expose raw
-  source IDs, conflate this control with pairing, or claim dynamic or deployed disablement.
-- Pairing reuses that environment-owned Web/Auth login only through its separate read-write pool.
-  Preserve the exact role/login/search-path/read-write probe, two fixed verifier candidates,
-  protected primary/secondary HMAC capability, strict proof-before-activation sequence, server-owned
-  IDs, four-call admission, 250-millisecond settlement floor, and generic decision. Do not import
-  `pg` outside the two reviewed pool wrappers or expose a generic query/activation surface.
-- Enrollment may reuse the same read-write pool only through `enrollment-database.ts`. Preserve the
-  exact invite grammar and immediate digest reduction, OAuth state/PKCE/no-extra-scope contract,
-  purpose-separated encrypted HttpOnly cookies, exact same-origin bounded POST bodies, fixed
-  enrollment/challenge/passkey/session calls, atomic pending-to-passkey session rotation, and
-  generic failures. Returning login must keep options profile-free and database-state-free, derive
-  identity only from an exact active credential after application verification, and atomically
-  create/consume its challenge with the passkey-provenance session. Keep server WebAuthn imports in
-  `passkey-registration.ts` and browser WebAuthn imports in `passkey-setup.tsx` only.
-- Account passkey inventory must remain session-derived and server-rendered. Preserve the 32-row
-  cap, exact closed mapper, one current active authenticator, rounded creation date, and omission of
-  credential IDs, public keys, sign counters, exact activity timestamps, and profile IDs from HTML.
-- Profile visibility must remain an exact-session, same-origin server action over the closed
-  `public`/`hidden` mapper. Hiding removes the profile from public reads but does not pause existing
-  source sync; publishing makes it eligible for public reads again. Preserve idempotency, generic
-  failures, no browser persistence, and the fixed Web/Auth database capability.
-- The private account score view must remain server-rendered and session-derived. Read only the
-  selected current Monday's seven 0–1000 derived daily scores plus bounded weekly score, active-day
-  count, contributing-source count, season dates/state, and visibility. Hidden profiles expose no
-  score. Never add raw usage, source/device/profile IDs, a browser fetch/cache, or an extra account
-  database checkout for this view.
-- Active-device inventory must remain session-derived, server-rendered, and usable while the profile
-  is hidden. Project only the at-most-64 active credentials with bounded label/platform/version and
-  day-rounded activation; omit source IDs, internal key/profile IDs, public keys, and exact times
-  from HTML. The exact opaque device ID may enter only its authenticated hidden revoke form. Device
-  revoke remains an immediate, terminal, same-origin owned-device action with a generic result and
-  bounded audit reference.
-- Source controls must remain session-derived and usable while the profile is hidden. Raw source IDs
-  must not enter HTML or form data; expose only an exact-shape encrypted control token bound to the
-  active session for at most 15 minutes. Keep sources visible even when they have no active device.
-  Pause is immediate. Reactivation is allowed only from `paused` after a fresh required-UV assertion
-  bound to the session, source, RP ID, and origin, followed by one atomic consume-and-reactivate
-  statement. Unlink requires a distinct fresh assertion context and one atomic consume-and-unlink
-  statement; it is terminal and revokes every active source device. None of these actions may
-  publish a hidden profile, and reactivation must not lift quarantine.
-- Passkey revocation must target only an owned non-current active key from that inventory. Bind one
-  fresh required-UV assertion to the exact active session, target, RP, origin, and five-minute
-  challenge, then consume and revoke atomically. The opaque target ID may enter only the
-  authenticated revoke control/request; never expose credential IDs or key material.
-- Passkey addition must validate and seal the label before WebAuthn, use independent required-UV
-  assertion and registration challenges, bind both to the active session/profile/RP/origin, and
-  consume-plus-add atomically under the existing retained-record cap. Profile UUID may enter only
-  the authenticated registration options required by the user's authenticator.
-- Recovery-code rotation must require the exact active session and one fresh required-UV assertion
-  bound to that session/profile/RP/origin. Generate exactly ten independent selector/secret codes,
-  derive their Argon2id PHCs sequentially under the protected recovery-only pepper, and atomically
-  consume the challenge while replacing the batch. Return plaintext only after commit in one
-  no-store response, keep it out of logs and browser persistence, and keep rotation separate from
-  anonymous recovery.
-- Recovery sign-in may look up only one exact opaque selector and PHC, and malformed, unknown, used,
-  wrong-secret, and dependency-failure attempts must remain generic. Preserve bounded Argon2id under
-  the separate protected pepper, the configured response floor, four-call no-queue admission, the
-  purpose-separated five-minute recovery cookie, exact RP/origin/challenge/context verification, and
-  atomic replacement-passkey/session completion. A code must never create a session directly;
-  activated source devices remain separate explicitly revocable authority. Do not publish private
-  timing or attempt thresholds, add browser persistence, or claim the local controls are an edge
-  policy, cleanup, notification, live authenticator/database proof, or deployment evidence.
-- Profile deletion must require the exact active session, exact typed handle, and a fresh
-  required-UV assertion bound to that session, profile, handle, RP, origin, and five-minute
-  challenge. Consume the challenge and invoke the existing atomic hide/revoke/unlink/enqueue
-  capability in one statement, clear all browser auth cookies only after success, and keep every
-  failure generic. Do not claim that queueing itself invokes the separate Jobs purge command, clears
-  a future public cache, or proves tombstone/backup/restore replay. Read
-  `docs/operations/PROFILE_DELETION_FAILURE_RUNBOOK.md` before changing or diagnosing this boundary;
-  a confirmed request lock-down must not be undone during purge recovery.
-- Generate public request IDs only through the opaque server-only factory. Do not reuse inbound
-  correlation headers, reflect internal errors, bypass `ProblemDetailsV1`, or add route-specific
-  CORS/auth/retry semantics to the common problem-response boundary.
-- The score route must continue to reject duplicate/unknown query parameters, validate
-  `CommunityScoreQueryV1`, negotiate `Accept`, acquire bounded admission before database work, keep
-  it until that work settles, and preserve ADR 0013's no-store/same-origin response matrix.
-- Keep pairing possession in the server-only pure verifier. It may accept only the exact approved
-  material tuple and versioned message, use strict Ed25519 semantics, and return no reflected
-  detail. The activation application may call activation only through the closed ADR 0027
-  composition.
-- Pairing start may accept only ADR 0028's closed public-key/label/version/OS/architecture request.
-  Server code owns all IDs, token, challenge, code, digests, and expiry; poll and human-code HMAC
-  keys remain separate protected capabilities. Only the closed start adapter may invoke the fixed
-  start procedure.
-- Keep `/connect` approval split into review and explicit confirmation. Every admitted code lookup
-  must count against the exact possessed session in PostgreSQL, probe fixed primary/optional
-  secondary candidates, return only bounded metadata plus the full public-key fingerprint, and start
-  no WebAuthn ceremony until the user confirms. Bind the fresh assertion to the session, pairing,
-  exact new or active existing source choice, RP, and origin; consume and approve in one fixed
-  statement. Existing-source selection must use the encrypted session-bound source control and keep
-  the raw source ID out of HTML. Keep the raw code/key out of cookies, logs, cache, and persistence,
-  and keep errors generic.
-- Keep pairing start/poll on the two exact versioned POST routes. Validate framing, client ID, and
-  generated contracts before constructing the shared four-call service; retain one global plus one
-  fixed client-bucket PostgreSQL admission per request, generic problems, bounded bodies/deadlines,
-  no-store, and no CORS. Never store the raw client ID or digest or call it authentication. Do not
-  describe the local identity slices as production-ready recovery, deployed authentication,
-  live-user evidence, or deployed device activation.
+- Keep the synthetic home usable without protected configuration or a database. Mark synthetic
+  fallback explicitly.
+- Public routes may read only immutable published snapshots. Never aggregate raw observations or
+  account/day totals on a request.
+- Preserve exact decimal strings and `bigint`; never convert token totals through JavaScript
+  `Number`.
+- Rank depends only on exact weekly total. Equal totals share rank; stable display position is not a
+  tie breaker.
+- Never expose raw usage, AgentAccount/device/installation IDs, account keys, private labels, exact
+  receipt times, OAuth/access tokens, WebAuthn material, recovery codes, database details, or
+  internal errors in a public response.
+- Preserve same-origin policy, closed paths/queries/bodies, bounded deadlines, four-call no-queue
+  admission, and generic problem serialization.
+- Construct protected configuration and pools only after the relevant exact capability decision.
+  Disabled modules must perform no parsing, admission, secret access, or database work.
 
-## Commands
+## Capability decisions
 
-Run from the repository root:
+- Public snapshot GET modules: exact `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true`.
+- Invite/OAuth/initial-passkey modules: exact `VIBERACING_ENROLLMENT_ENABLED=true`.
+- Optional invite policy: exact `VIBERACING_INVITE_GATE_ENABLED=true`.
+- Pairing start/poll, `/connect`, review, options, and verify modules: exact
+  `VIBERACING_PAIRING_ENABLED=true`.
+- Browser proposal creation/approval and connector proposal ingress: exact
+  `VIBERACING_CAR_PROPOSALS_ENABLED=true`.
+
+There is no source-creation decision or source-era compatibility path. Returning login, recovery,
+required deletion lock-down, and exact rejection must remain available according to their separate
+authority rather than being accidentally coupled to enrollment or mutation gates.
+
+Each decision is resolved once per module evaluation. Accept only the own exact string property;
+missing, inherited, accessor, non-string, alternate case, whitespace, or read failure closes it.
+
+## Identity and authority
+
+- Key profiles only by immutable positive GitHub numeric ID. Handle/email/display name are mutable
+  metadata, never identity or ownership.
+- OAuth state/PKCE and WebAuthn challenges remain purpose-separated and single-use.
+- OAuth tokens are discarded after identity resolution and grant no usage-sync authority.
+- A normal session appears only after initial passkey registration or replacement-passkey recovery
+  completion.
+- Restricted recovery authority lasts at most five minutes and cannot perform normal account work.
+- Critical actions consume a fresh action-bound passkey assertion with exact target/digest binding.
+- Derive owned resources from the session. Do not accept caller-selected profile IDs.
+- Profile deletion immediately hides the profile and revokes every browser/connector authority class
+  before returning the pending state.
+
+## AgentAccount and pairing
+
+- AgentAccount is the counted domain. Installation and device multiplicity must not duplicate usage.
+- Seal provider, account key, reader, accounting revision, scope, and trust on the candidate
+  manifest and revalidate them in PostgreSQL.
+- Private labels never establish account identity.
+- Batch review must show every candidate and allow only create, owned-same-provider attach, or skip.
+- One fresh passkey settles the exact ordered decision batch atomically; no partial approval.
+- Polling must prove possession of each pending account key.
+- Keep fallback-code and poll verifiers distinct, bounded, rotation-aware, and non-reflective.
+- Preserve global plus bucketed PostgreSQL admission for anonymous start/poll.
+- A device key acts only for its bound AgentAccount and cannot mutate profile/security/other-device
+  state.
+
+## Database adapter
+
+- Use only the narrow `viberacing_web` role through reviewed procedures.
+- Never grant or query private tables directly from runtime code.
+- Enforce loopback-only cleartext in development/test; otherwise require verified TLS to a DNS
+  hostname.
+- Probe login identity and TLS before role assumption.
+- Use bounded pools and deadlines; reset role/session state before reuse and on every error path.
+- Do not log protected configuration, SQL, identifiers, parameters, cookies, assertions, public
+  keys, or raw database errors.
+
+## Frontend and accessibility
+
+- Preserve semantic headings, landmarks, table/list relationships, labels, live-region discipline,
+  keyboard-visible focus, forced-colors, and reduced-motion behavior.
+- Treat the pixel race as optional decoration. Meaningful leaderboard information must remain in
+  accessible HTML before the canvas loads or when it fails.
+- Keep EN/RU copy aligned, including Community/unverified and tokenizer-difference disclosure.
+- Do not add remote fonts, analytics, trackers, uncontrolled image hosts, or client persistence of
+  protected/account data.
+
+## Verification
+
+For any Web change, run the focused lint, typecheck, and tests. Add production build, PostgreSQL
+integration, standalone-process, visual, or root release gates in proportion to the surface changed:
 
 ```text
 pnpm run lint:web
 pnpm run typecheck:web
-pnpm run test:web
-pnpm run verify
+pnpm run test:web:coverage
+pnpm run build:web
+pnpm run test:web:postgres-integration
+pnpm run test:web:standalone
 ```
 
-Add coverage/build and `check:web-build` when Web behavior or emitted assets change. Run the query
-plan/PostgreSQL gates only when their adapter or database boundary changes. Run visual-baseline
-checks only for a visible UI change: `pnpm run check:phase1-visual-baselines` is offline, and the
-root `verify:phase1-visual-baselines` command with an explicit loopback origin and reviewed browser
-path is the browser gate. It uses a temporary profile, requires the committed exact browser
-product/platform, compares decoded pixels without writing, and audits the canonical keyboard order,
-skip-target focus, accessibility tree, forced-colors state, and closed animation-on/reduced-motion
-lab performance samples. It still relies on an operator-reviewed executable and does not replace
-native screen-reader, cross-browser, field Core Web Vitals, or staging SLO evidence. Regeneration
-uses the root `capture:phase1-visual-baselines` command only against the same explicit loopback
-production build; it does not replace manual image review or cross-browser release evidence.
+Tests must exercise production modules, negative/failure paths, disabled-before-work behavior, and
+resource cleanup. Use synthetic identities, keys, usage, and screenshots only. Do not turn a local
+green gate into a claim about OAuth, authenticators, hosted TLS, provider data, capacity, or
+deployment.
 
-The PostgreSQL integration command is an opt-in Docker-backed synthetic gate, not part of root
-`verify`. It builds and starts the emitted standalone Next production boundary only on loopback,
-bundles the reviewed `pg` driver, creates one ephemeral self-signed DNS certificate plus disposable
-narrow and deliberately widened Web logins, checks all four public score/race/status/token
-contracts, TLS 1.2/1.3, full private-table non-mutation, and eight plan oracles, and proves the
-four-request no-queue boundary with a controlled database lock plus a rejected fifth request. It
-removes every ephemeral key, process/container/network/storage resource. It does not prove a
-deployment certificate/login, external TLS/edge path, cache, edge policy, monitoring, load/capacity,
-real-user data, or deployment.
-
-Use `pnpm run verify:release` only for release/publication preparation or broad cross-cutting work.
-Focused commands plus the root development gate do not replace the staged public-data scan and
-manual diff review.
-
-## Implementation conventions
-
-- Keep strict TypeScript and typed lint rules green; do not use broad casts to bypass an input
-  boundary.
-- Update `lib/i18n.ts` with EN/RU key parity for every user-visible string.
-- Prefer semantic HTML as the authoritative experience. Canvas is enhancement and must retain a
-  useful accessible description and reduced-motion behavior.
-- Keep scoring/ranking deterministic, bounded, and covered at caps, invalid inputs, and ties.
-- Keep the public score simulator explicitly hypothetical and local-only. Accept one canonical
-  non-negative safe integer plus one to seven active days, call the production scoring functions,
-  and retain input only in component memory. Do not add a form name/action, fetch, logging,
-  persistence, account/race prefill, raw-token display outside the control, or standing mutation.
-- Exercise actual state changes and production code paths in tests. Do not lower coverage thresholds
-  or disable axe rules except for jsdom's documented inability to measure visual contrast; browser
-  evidence must cover that gap.
-- Keep Next.js entrypoints thin. Add product logic to testable modules with explicit input/output
-  types.
-
-Before committing, review generated `.next`, coverage, screenshots, and local fixtures to ensure
-none are tracked. Stage only intended files, run `pnpm run check:public:staged`, and manually
-inspect `git diff --cached`.
+Update `apps/web/README.md`, public contracts, privacy/security docs, ADRs, and
+`docs/IMPLEMENTATION_STATUS.md` whenever the externally visible surface or evidence boundary
+changes.

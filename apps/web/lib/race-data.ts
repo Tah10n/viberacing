@@ -1,216 +1,101 @@
 import "server-only";
 
-import type { CarRecipe } from "./car-recipe";
-import type { DemoProfile, PublicRaceParticipant, SyntheticRacePayload } from "./race-types";
-import { rankWeeklyScores } from "./scoring";
+import type { LeaderboardSnapshotV1, PublicProfileSummaryV1 } from "@viberacing/contracts";
 
-interface SyntheticFixture {
-  readonly car: CarRecipe;
-  readonly dailyTokens: readonly number[];
-  readonly deviceCount: number;
-  readonly freshnessDays: number;
-  readonly handle: string;
-  readonly id: string;
-  readonly sourceCount: number;
-  readonly streakDays: number | null;
+import { fallbackCarRecipes } from "./race-visual";
+import type { PublicHomePayload, PublicLeaderboardParticipant } from "./race-types";
+import { isCommunitySeasonStart } from "./public-season";
+
+const fixtureRows = [
+  ["neon_otter", "1081000", 1, 1, 0],
+  ["syntax_spark", "939000", 2, 2, 0],
+  ["demo_driver", "690000", 3, 3, 0],
+  ["loop_lantern", "690000", 3, 4, 1],
+  ["pixel_pulse", "552000", 5, 5, 0],
+  ["stack_rover", "409000", 6, 6, 2],
+  ["cache_comet", "307000", 7, 7, 1],
+  ["debug_dash", "220000", 8, 8, 3],
+] as const;
+
+function seasonEnd(seasonStart: string): string {
+  const date = new Date(`${seasonStart}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 6);
+  return date.toISOString().slice(0, 10);
 }
 
-const fixtures: readonly SyntheticFixture[] = [
-  {
-    id: "neon-otter",
-    handle: "neon_otter",
-    dailyTokens: [128_000, 141_000, 116_000, 154_000, 133_000, 161_000, 148_000],
-    sourceCount: 3,
-    deviceCount: 2,
-    freshnessDays: 0,
-    streakDays: 13,
-    car: {
-      schemaVersion: 1,
-      chassis: "formula",
-      nose: "wedge",
-      cockpit: "canopy",
-      wing: "high",
-      wheels: "slick",
-      palette: "magenta",
-      trail: "spark",
-      seed: 101,
-    },
-  },
-  {
-    id: "syntax-spark",
-    handle: "syntax_spark",
-    dailyTokens: [105_000, 119_000, 97_000, 131_000, 122_000, 138_000, 127_000],
-    sourceCount: 2,
-    deviceCount: 1,
-    freshnessDays: 0,
-    streakDays: 8,
-    car: {
-      schemaVersion: 1,
-      chassis: "roadster",
-      nose: "classic",
-      cockpit: "open",
-      wing: "low",
-      wheels: "street",
-      palette: "sunburst",
-      trail: "grid",
-      seed: 202,
-    },
-  },
-  {
-    id: "demo-driver",
-    handle: "demo_driver",
-    dailyTokens: [92_000, 111_000, 104_000, 0, 126_000, 139_000, 118_000],
-    sourceCount: 2,
-    deviceCount: 2,
-    freshnessDays: 0,
-    streakDays: 3,
-    car: {
-      schemaVersion: 1,
-      chassis: "rally",
-      nose: "scoop",
-      cockpit: "rally",
-      wing: "high",
-      wheels: "all-terrain",
-      palette: "turbo-blue",
-      trail: "spark",
-      seed: 303,
-    },
-  },
-  {
-    id: "loop-lantern",
-    handle: "loop_lantern",
-    dailyTokens: [92_000, 111_000, 104_000, 0, 126_000, 139_000, 118_000],
-    sourceCount: 1,
-    deviceCount: 1,
-    freshnessDays: 1,
-    streakDays: null,
-    car: {
-      schemaVersion: 1,
-      chassis: "roadster",
-      nose: "wedge",
-      cockpit: "canopy",
-      wing: "none",
-      wheels: "street",
-      palette: "mint",
-      trail: "none",
-      seed: 404,
-    },
-  },
-  {
-    id: "pixel-pulse",
-    handle: "pixel_pulse",
-    dailyTokens: [73_000, 89_000, 0, 95_000, 101_000, 84_000, 110_000],
-    sourceCount: 3,
-    deviceCount: 2,
-    freshnessDays: 0,
-    streakDays: 4,
-    car: {
-      schemaVersion: 1,
-      chassis: "formula",
-      nose: "scoop",
-      cockpit: "open",
-      wing: "low",
-      wheels: "slick",
-      palette: "redline",
-      trail: "grid",
-      seed: 505,
-    },
-  },
-  {
-    id: "stack-rover",
-    handle: "stack_rover",
-    dailyTokens: [65_000, 78_000, 82_000, 0, 0, 96_000, 88_000],
-    sourceCount: 1,
-    deviceCount: 1,
-    freshnessDays: 2,
-    streakDays: null,
-    car: {
-      schemaVersion: 1,
-      chassis: "rally",
-      nose: "classic",
-      cockpit: "rally",
-      wing: "high",
-      wheels: "all-terrain",
-      palette: "sunburst",
-      trail: "spark",
-      seed: 606,
-    },
-  },
-  {
-    id: "cache-comet",
-    handle: "cache_comet",
-    dailyTokens: [48_000, 0, 57_000, 61_000, 0, 72_000, 69_000],
-    sourceCount: 2,
-    deviceCount: 1,
-    freshnessDays: 1,
-    streakDays: 2,
-    car: {
-      schemaVersion: 1,
-      chassis: "roadster",
-      nose: "classic",
-      cockpit: "open",
-      wing: "none",
-      wheels: "street",
-      palette: "magenta",
-      trail: "none",
-      seed: 707,
-    },
-  },
-  {
-    id: "debug-dash",
-    handle: "debug_dash",
-    dailyTokens: [31_000, 44_000, 0, 38_000, 52_000, 0, 55_000],
-    sourceCount: 1,
-    deviceCount: 1,
-    freshnessDays: 3,
-    streakDays: null,
-    car: {
-      schemaVersion: 1,
-      chassis: "formula",
-      nose: "wedge",
-      cockpit: "canopy",
-      wing: "low",
-      wheels: "slick",
-      palette: "mint",
-      trail: "grid",
-      seed: 808,
-    },
-  },
-];
+function syntheticParticipants(): readonly PublicLeaderboardParticipant[] {
+  return Object.freeze(
+    fixtureRows.map(
+      ([handle, weeklyTokenTotal, rankPosition, displayPosition, freshnessDays], index) =>
+        Object.freeze({
+          carRecipe: fallbackCarRecipes[index % fallbackCarRecipes.length] ?? fallbackCarRecipes[0],
+          displayPosition,
+          freshnessDays,
+          handle,
+          rankPosition,
+          weeklyTokenTotal,
+        }),
+    ),
+  );
+}
 
-export function getSyntheticRacePayload(): SyntheticRacePayload {
-  const scores = rankWeeklyScores(fixtures);
-  const fixturesById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
-  const participants: PublicRaceParticipant[] = scores.map((score) => {
-    const fixture = fixturesById.get(score.id);
-    if (!fixture) {
-      throw new Error("synthetic fixture and score identifiers diverged");
-    }
-    return {
-      id: fixture.id,
-      handle: fixture.handle,
-      car: fixture.car,
-      sourceCount: fixture.sourceCount,
-      freshnessDays: fixture.freshnessDays,
-      streakDays: fixture.streakDays,
-      weeklyScore: score.weeklyScore,
-      activeDays: score.activeDays,
-      rank: score.rank,
-    };
+function profileFromParticipant(
+  participant: PublicLeaderboardParticipant,
+  leaderboard: LeaderboardSnapshotV1,
+): PublicProfileSummaryV1 {
+  return Object.freeze({
+    carRecipe: participant.carRecipe ?? null,
+    freshnessDays: participant.freshnessDays,
+    handle: participant.handle,
+    participantCount: leaderboard.participantCount,
+    rankPosition: participant.rankPosition,
+    schemaVersion: 1,
+    season: Object.freeze({
+      seasonEnd: leaderboard.seasonEnd,
+      seasonStart: leaderboard.seasonStart,
+      seasonState: leaderboard.seasonState,
+    }),
+    trustTier: "community",
+    weeklyTokenTotal: participant.weeklyTokenTotal,
   });
-  const demo = participants.find((participant) => participant.id === "demo-driver");
-  const demoScore = scores.find((score) => score.id === "demo-driver");
-  const demoFixture = fixturesById.get("demo-driver");
-  if (!demo || !demoScore || !demoFixture) {
-    throw new Error("synthetic demo profile is missing");
+}
+
+export function getSyntheticPublicHomePayload(
+  seasonStart: string,
+  requestedProfileHandle?: string,
+): PublicHomePayload {
+  if (!isCommunitySeasonStart(seasonStart)) {
+    throw new RangeError("synthetic season must be one canonical UTC Monday");
   }
-  const profile: DemoProfile = {
-    handle: demo.handle,
-    car: demo.car,
-    dailyScores: demoScore.dailyScores,
-    weeklyScore: demo.weeklyScore,
-    sourceCount: demo.sourceCount,
-    deviceCount: demoFixture.deviceCount,
-  };
-  return { participants, profile };
+  const participants = syntheticParticipants();
+  const leaderboard: LeaderboardSnapshotV1 = Object.freeze({
+    generatedAt: `${seasonStart}T12:00:00.000000Z`,
+    metricVersion: "provider_reported_tokens_v1",
+    nextPage: null,
+    page: 1,
+    pageSize: 100,
+    participantCount: participants.length,
+    participants,
+    schemaVersion: 1,
+    seasonEnd: seasonEnd(seasonStart),
+    seasonStart,
+    seasonState: "open",
+    snapshotRevision: 1,
+    trustTier: "community",
+  });
+  if (requestedProfileHandle === undefined) {
+    return Object.freeze({
+      leaderboard,
+      profile: null,
+      profileState: "none",
+      source: "fallback",
+    });
+  }
+  const participant = participants.find((candidate) => candidate.handle === requestedProfileHandle);
+  return Object.freeze({
+    leaderboard,
+    profile: participant === undefined ? null : profileFromParticipant(participant, leaderboard),
+    profileState: participant === undefined ? "not-found" : "ready",
+    source: "fallback",
+  });
 }

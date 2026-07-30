@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/leaderboard-season-path.schema.json",
+  "title": "LeaderboardSeasonPathV1",
+  "description": "One canonical UTC Monday season path parameter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["seasonStart"],
+  "properties": {
+    "seasonStart": {
+      "description": "Inclusive UTC Monday season start.",
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 10,
+      "pattern": "^(?:1999-12-27|20[0-9]{2}-[0-9]{2}-[0-9]{2})$",
+      "format": "date",
+      "x-viberacing-dateMinimum": "1999-12-27",
+      "x-viberacing-dateMaximum": "2099-12-28",
+      "x-viberacing-isoWeekday": 1
+    }
+  }
+}

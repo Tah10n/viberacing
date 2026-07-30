@@ -81,6 +81,13 @@
       "sha256": "b656928cc27c53190566e3f60f2f5e8e998e9f4c6273e5a5f4201a460d7115c5"
     },
     {
+      "path": "fixtures/account-privacy-sentinels.jsonl",
+      "kind": "account-privacy-sentinels",
+      "expected": "accept-and-discard-prohibited-values",
+      "bytes": 258,
+      "sha256": "8db2639cd2207ed651aa9dc98160023a71a892205e5642fbd708aa5d98b0d860"
+    },
+    {
       "path": "fixtures/account-null-email.jsonl",
       "kind": "account-nullable",
       "expected": "accept",
@@ -147,8 +154,8 @@
     "unsafe-integer"
   ],
   "supportBlockers": [
-    "The Windows Codex digest is admitted locally and a no-upload connector copy/removal smoke is declared, but its hosted result, package, signature, SBOM, provenance, and protected release pipeline remain absent.",
+    "A protected five-target candidate workflow, local Windows bundle, checksum, SPDX, and attestation policy now exist, but no hosted matrix result or native platform signature exists.",
     "The one-shot sync path is Windows x86_64 development evidence only; macOS/Linux executable admission and clean-machine account/privacy execution results remain absent.",
-    "No deployed edge/Ingest/database path, real-user end-to-end result, packaged connector, real install/upgrade/uninstall lifecycle, credential rotation or automated server-revoke composition, scheduler, or connector release exists."
+    "No official package, public download, real-user result, native signed install lifecycle, update channel, credential rotation automation, or connector release exists."
   ]
 }

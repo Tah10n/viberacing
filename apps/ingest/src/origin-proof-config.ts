@@ -14,7 +14,7 @@ const environmentKeys = {
   secondaryKeyId: "VIBERACING_INGEST_ORIGIN_SECONDARY_KEY_ID",
   secondaryKeyValue: "VIBERACING_INGEST_ORIGIN_SECONDARY_KEY_BASE64URL",
 } as const;
-const dependencyKeys = new Set(["consumeOriginNonce", "now", "readDeviceVerificationMaterial"]);
+const dependencyKeys = new Set(["now", "readDeviceVerificationMaterial"]);
 
 export type OriginProofConfigurationErrorCode =
   | "duplicate_key_id"
@@ -37,10 +37,7 @@ export class OriginProofConfigurationError extends Error {
 }
 
 export type ConfiguredCommunitySyncVerifierDependencies = Readonly<
-  Pick<
-    CommunitySyncVerifierOptions,
-    "consumeOriginNonce" | "now" | "readDeviceVerificationMaterial"
-  >
+  Pick<CommunitySyncVerifierOptions, "now" | "readDeviceVerificationMaterial">
 >;
 
 type Environment = Readonly<Record<string, unknown>>;
@@ -88,19 +85,12 @@ function readDependencies(value: unknown): ConfiguredCommunitySyncVerifierDepend
         return [key, descriptor.value as unknown];
       }),
     );
-    const consumeOriginNonce = values.consumeOriginNonce;
     const now = values.now;
     const readDeviceVerificationMaterial = values.readDeviceVerificationMaterial;
-    if (
-      typeof consumeOriginNonce !== "function" ||
-      typeof now !== "function" ||
-      typeof readDeviceVerificationMaterial !== "function"
-    ) {
+    if (typeof now !== "function" || typeof readDeviceVerificationMaterial !== "function") {
       dependencyFail();
     }
     return Object.freeze({
-      consumeOriginNonce:
-        consumeOriginNonce as ConfiguredCommunitySyncVerifierDependencies["consumeOriginNonce"],
       now: now as ConfiguredCommunitySyncVerifierDependencies["now"],
       readDeviceVerificationMaterial:
         readDeviceVerificationMaterial as ConfiguredCommunitySyncVerifierDependencies["readDeviceVerificationMaterial"],
@@ -187,7 +177,6 @@ export function createConfiguredCommunitySyncVerifier(
   const originKeys = readOriginKeys(environment);
   try {
     return createCommunitySyncVerifier({
-      consumeOriginNonce: validatedDependencies.consumeOriginNonce,
       now: validatedDependencies.now,
       originKeys: originKeys.map(({ key, keyId }) => ({ keyId, secret: key })),
       readDeviceVerificationMaterial: validatedDependencies.readDeviceVerificationMaterial,

@@ -27,7 +27,6 @@ const session: EnrollmentSession = Object.freeze({
 });
 
 describe("connect page session", () => {
-  const readActiveDeviceInventory = vi.fn();
   const readSession = vi.fn();
 
   beforeEach(() => {
@@ -35,49 +34,25 @@ describe("connect page session", () => {
       new Headers({ cookie: `${enrollmentCookieNames.session}=opaque-session` }),
     );
     dependencies.getEnrollmentRuntime.mockReturnValue({
-      service: { readActiveDeviceInventory, readSession },
+      service: { readSession },
     });
     readSession.mockReturnValue(session);
   });
 
-  it("reads the exact passkey session inventory for existing-source choices", async () => {
-    const inventory = Object.freeze([
-      Object.freeze({
-        devices: Object.freeze([]),
-        sourceControl: "opaque-source-control",
-        state: "active" as const,
-      }),
-    ]);
-    readActiveDeviceInventory.mockResolvedValue(inventory);
-
-    await expect(readEnrollmentPageConnect()).resolves.toEqual({
-      activeDeviceInventory: inventory,
-      session,
-    });
+  it("returns only the exact passkey session for batch pairing", async () => {
+    await expect(readEnrollmentPageConnect()).resolves.toEqual({ session });
     expect(readSession).toHaveBeenCalledWith("opaque-session");
-    expect(readActiveDeviceInventory).toHaveBeenCalledWith("opaque-session");
   });
 
-  it("keeps the valid session when existing-source inventory is unavailable", async () => {
-    readActiveDeviceInventory.mockRejectedValue(new Error("synthetic dependency failure"));
-
-    await expect(readEnrollmentPageConnect()).resolves.toEqual({
-      activeDeviceInventory: undefined,
-      session,
-    });
-  });
-
-  it("does not read inventory without a valid session", async () => {
+  it("fails closed without a valid session", async () => {
     readSession.mockReturnValue(undefined);
 
     await expect(readEnrollmentPageConnect()).resolves.toBeUndefined();
-    expect(readActiveDeviceInventory).not.toHaveBeenCalled();
   });
 });
 
 describe("account page session", () => {
-  const readAccountOverview = vi.fn();
-  const readActiveDeviceInventory = vi.fn();
+  const readAccountDashboard = vi.fn();
   const readCarRecipeState = vi.fn();
   const readPasskeyInventory = vi.fn();
   const readSession = vi.fn();
@@ -89,16 +64,30 @@ describe("account page session", () => {
     dependencies.getEnrollmentRuntime.mockReturnValue({
       carProposalService: { read: readCarRecipeState },
       service: {
-        readAccountOverview,
-        readActiveDeviceInventory,
+        readAccountDashboard,
         readPasskeyInventory,
         readSession,
       },
     });
     readSession.mockReturnValue(session);
-    readActiveDeviceInventory.mockResolvedValue(Object.freeze([]));
     readPasskeyInventory.mockResolvedValue(Object.freeze([]));
-    readAccountOverview.mockResolvedValue({ score: null, visibility: "public" });
+    readAccountDashboard.mockResolvedValue(
+      Object.freeze({
+        accounts: Object.freeze([]),
+        installations: Object.freeze([]),
+        ranking: Object.freeze({
+          participantCount: 0,
+          providerBreakdownVisible: false,
+          publicVisibility: "public",
+          rankPosition: null,
+          seasonEnd: "2026-07-19",
+          seasonStart: "2026-07-13",
+          seasonState: "open",
+          snapshotGeneratedAt: "2026-07-16T10:00Z",
+          weeklyTokenTotal: "0",
+        }),
+      }),
+    );
     readCarRecipeState.mockResolvedValue(
       Object.freeze({
         active: null,
@@ -120,7 +109,7 @@ describe("account page session", () => {
     );
   });
 
-  it("composes the session-owned CarRecipe state with the existing account inventory", async () => {
+  it("composes the session-owned CarRecipe state with the private dashboard", async () => {
     const result = await readEnrollmentPageAccount();
 
     expect(result).toMatchObject({
@@ -131,12 +120,19 @@ describe("account page session", () => {
           recipe: { schemaVersion: 1, chassis: "rally", seed: 42 },
         },
       },
+      dashboard: {
+        accounts: [],
+        installations: [],
+        ranking: {
+          publicVisibility: "public",
+          weeklyTokenTotal: "0",
+        },
+      },
       passkeys: [],
-      score: null,
       session,
-      visibility: "public",
     });
     expect(readCarRecipeState).toHaveBeenCalledWith("opaque-session");
+    expect(readAccountDashboard).toHaveBeenCalledWith("opaque-session");
     expect(Object.isFrozen(result)).toBe(true);
   });
 

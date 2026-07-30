@@ -2,6 +2,16 @@
 
 ## Scope and evidence boundary
 
+**Clean-slate transition hold.**
+[ADR 0076](../decisions/0076-clean-agent-account-provider-reported-token-ranking.md) supersedes the
+unreleased 43-revision catalog. No production database or user population exists, so that catalog is
+design evidence only and must not be promoted, backfilled, wrapped, or followed by revision 0044.
+The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as
+local synthetic evidence. They do not authorize staging execution. This runbook remains closed until
+the protected prerequisites, exact change record, target, owners, and go/no-go decision below are
+satisfied. A former old-schema integration result is historical baseline evidence, not permission to
+preserve the old ledger.
+
 This is the checked operator contract for applying the repository-owned PostgreSQL migration catalog
 to an isolated staging environment. Migration files are authored, reviewed, hashed, and committed
 before execution. Starting Web, Ingest, Jobs, or the local site does not apply migrations. Only the
@@ -42,8 +52,8 @@ runbook.
       is exactly one.
 - [ ] VR-MIG-04: Prove a current backup can restore into an isolated target and record its expiry
       privately.
-- [ ] VR-MIG-05: Verify the deployed and candidate services both accept the expand-and-contract
-      schema state.
+- [ ] VR-MIG-05: Verify the candidate service matrix targets the exact clean-bootstrap schema and
+      starts with every capability closed.
 - [ ] VR-MIG-06: Verify the narrow login, owner membership, DNS name, trust material, and TLS policy
       privately.
 - [ ] VR-MIG-07: Confirm protected monitoring and an append-only operator record are available
@@ -102,13 +112,12 @@ multi-controller rollout.
       exactly.
 - [ ] VR-MIG-14: Verify owner, forced-RLS, runtime-role, TLS, connection, and advisory-lock
       invariants.
-- [ ] VR-MIG-15: Run the approved candidate and deployed-service smoke matrix before restoring
-      traffic state.
+- [ ] VR-MIG-15: Run the approved candidate-service smoke matrix before opening any traffic.
 
 Verification uses deployment-owned read-only oracles and redacted aggregate results. It must not
 print SQL bodies, database errors, identifiers, stored rows, credentials, certificate material, or
-configuration. A process success sentence without the ledger, role, service-compatibility, and
-resource-cleanup checks is incomplete evidence.
+configuration. A process success sentence without the ledger, role, candidate-service compatibility,
+and resource-cleanup checks is incomplete evidence.
 
 ## Forward recovery
 
@@ -149,7 +158,10 @@ owner and deadline.
 
 ## Prohibited actions
 
-- Do not edit, reorder, remove, or replace an applied migration or its manifest digest.
+- After an intentional environment has been created from the final clean catalog, do not edit,
+  reorder, remove, or replace an applied migration or its manifest digest. The one pre-release
+  clean-slate replacement happens before such an environment exists and is verified by rebuilding
+  only empty disposable databases.
 - Do not add a down migration, generic destructive rollback, ledger rewrite, or manual schema
   repair.
 - Do not run the migration catalog through a runtime service, interactive owner session, or

@@ -1,15 +1,11 @@
-//! Fail-closed protocol primitives for the local Codex App Server stdio boundary.
+//! Fail-closed provider-neutral connector and local reader boundaries.
 //!
-//! This crate implements the stable initialization exchange, a candidate-only account/usage
-//! adapter for one exact schema extract, a bounded one-shot child supervisor, an exact-body
-//! pairing-possession signer, Community usage composer, and isolated one-use request signer. It also
-//! exposes bounded `connect`, `check-codex`, `sync`, local-credential removal, and proposal-only
-//! commands. The candidate-only Windows diagnostic performs only exact artifact admission, while
-//! its optional preview emits only fixed redacted version/admission/support state and no file or
-//! network output. The sync path separately re-admits either one explicit executable or one exact
-//! executable found through bounded discovery before uploading the closed signed usage request
-//! once. It does not
-//! expose a generic JSON-RPC or HTTP client or claim compatibility with any Codex release.
+//! The crate implements a closed built-in reader registry, privacy-minimized canonical account and
+//! daily-usage types, the stable Codex initialization exchange, one exact-version adapter and
+//! reader, a bounded one-shot child supervisor, pairing-poll possession signing, final
+//! provider-neutral Usage Sync composition/signing, and bounded local commands. It exposes no
+//! generic plugin, parser, JSON-RPC method, process launcher, or HTTP client and claims no released
+//! connector or deployed service.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -21,33 +17,45 @@ use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 mod admission;
 mod car_proposal;
 mod codex_0_144_5;
+mod codex_reader;
 mod connect;
 mod pairing;
 mod process;
+mod reader;
 mod sync;
 
 pub use codex_0_144_5::{
     CandidateCodex01445AccountUsage, DailyUsage, DailyUsageEntry, MAX_DAILY_USAGE_ENTRIES,
     MAX_SYNC_TOKEN_VALUE,
 };
+pub use codex_reader::{
+    CODEX_APP_SERVER_0_144_5_ACCOUNTING_REVISION, CODEX_APP_SERVER_0_144_5_READER_VERSION,
+    CodexAppServer01445Reader,
+};
 pub use connect::{ConnectorCliError, run_connector_cli};
 pub use pairing::{
-    CandidatePairingPossessionV1Signer, PAIRING_CHALLENGE_BYTES, PAIRING_POSSESSION_MESSAGE_PREFIX,
-    PairingPossessionProof, PairingPossessionSigningError, PendingDevicePairingSigningKey,
-    ReviewedPairingChallenge,
+    MAX_DISCOVERY_CANDIDATES, PAIRING_CHALLENGE_BYTES, PAIRING_POLL_POSSESSION_MESSAGE_PREFIX,
+    PAIRING_START_POSSESSION_MESSAGE_PREFIX, PairingPollPossessionProof, PairingPollSigningError,
+    PairingPollV1Signer, PairingStartSigningError, PendingInstallationSigningKey,
+    ReviewedPairingPollChallenge,
 };
 pub use process::{
     APP_SERVER_EXIT_GRACE, APP_SERVER_LIFETIME, APP_SERVER_RESPONSE_TIMEOUT,
     CandidateCodex01445Collector, CollectionError, MAX_APP_SERVER_STDERR_BYTES,
     MAX_APP_SERVER_STDOUT_FRAMES, ReviewedCodexLaunch,
 };
+pub use reader::{
+    AccountingScope, AgentProvider, AgentUsageReader, BUILT_IN_PROVIDER_REGISTRY,
+    CanonicalAccountCandidate, CanonicalDailyUsage, CanonicalDailyUsageEntry, FingerprintKind,
+    MAX_CANONICAL_DAILY_USAGE_ENTRIES, ProviderRegistryEntry, ProviderState, ReaderAccountHandle,
+    ReaderDiagnostic, ReaderError, ReaderStatus, UtcUsageWindow, validate_reader_metadata,
+};
 pub use sync::{
-    COMMUNITY_USAGE_MEDIA_TYPE, COMMUNITY_USAGE_METHOD, COMMUNITY_USAGE_REQUEST_TARGET,
-    CandidateCommunityUsageV1Composer, CandidateCommunityUsageV1Signer, DEVICE_NONCE_BYTES,
-    DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM, DEVICE_SIGNATURE_BYTES,
-    DEVICE_SIGNATURE_MESSAGE_PREFIX, MAX_COMMUNITY_USAGE_BODY_BYTES, PreparedCommunityUsage,
-    ReviewedCommunityUsageContext, ReviewedDeviceSigningKey, SignedCommunityUsage,
-    SyncPreparationError, SyncSigningError,
+    DEVICE_NONCE_BYTES, DEVICE_PUBLIC_KEY_BYTES, DEVICE_SIGNATURE_ALGORITHM,
+    DEVICE_SIGNATURE_BYTES, DEVICE_SIGNATURE_MESSAGE_PREFIX, MAX_USAGE_SYNC_BODY_BYTES,
+    PreparedUsageSync, ReviewedDeviceSigningKey, ReviewedUsageSyncContext, SignedUsageSync,
+    USAGE_SYNC_MEDIA_TYPE, USAGE_SYNC_METHOD, USAGE_SYNC_REQUEST_TARGET, UsageSyncPreparationError,
+    UsageSyncSigningError, UsageSyncV1Composer, UsageSyncV1Signer,
 };
 
 /// Maximum accepted App Server JSONL frame size, including its final line-feed byte.

@@ -186,7 +186,7 @@ describe("canonical Community usage sync protocol", () => {
         "viberacing-origin-proof-v1",
         "edge_primary",
         "POST",
-        "/v1/community/usage",
+        "/v1/usage",
         "digest",
         "2026-07-15T18:00:00.000Z",
         "nonce",
@@ -207,7 +207,7 @@ describe("canonical Community usage sync protocol", () => {
       [
         "viberacing-device-request-v1",
         "POST",
-        "/v1/community/usage",
+        "/v1/usage",
         "digest",
         "dev_AAAAAAAAAAAAAAAAAAAAAA",
         "nonce",
@@ -237,7 +237,7 @@ describe("canonical Community usage sync protocol", () => {
       deviceSignatureMessage: string;
       observedAt: string;
       schemaVersion: number;
-      sourceId: string;
+      agentAccountId: string;
       syncId: string;
     }>;
     const body = Buffer.from(vector.body, "utf8");
@@ -260,7 +260,9 @@ describe("canonical Community usage sync protocol", () => {
         timestamp: vector.observedAt,
       }).toString("utf8"),
     ).toBe(vector.deviceSignatureMessage);
-    expect((parsedBody as Readonly<{ sourceId?: unknown }>).sourceId).toBe(vector.sourceId);
+    expect((parsedBody as Readonly<{ agentAccountId?: unknown }>).agentAccountId).toBe(
+      vector.agentAccountId,
+    );
 
     const publicKey = decodeCanonicalBase64Url(
       vector.devicePublicKeyBase64Url,

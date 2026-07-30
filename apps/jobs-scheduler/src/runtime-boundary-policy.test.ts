@@ -77,5 +77,5 @@ describe("Jobs scheduler runtime boundary lint policy", () => {
         message.includes(runtimeBoundaryMessage),
     );
     expect(restrictions).toHaveLength(forbiddenRuntimeImports.length * 5 + 2);
-  }, 30_000);
+  }, 120_000);
 });

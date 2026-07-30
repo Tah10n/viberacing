@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.viberacing.example/v1/connector-pairing-approval.schema.json",
+  "title": "ConnectorPairingApprovalV1",
+  "description": "Session-internal ordered batch decision. A separate fresh passkey assertion binds the authenticated session, this complete object, the installation key, expiry, RP ID, and origin before any account is activated.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "pairingId", "manifestDigest", "decisions"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "pairingId": {
+      "type": "string",
+      "minLength": 27,
+      "maxLength": 27,
+      "pattern": "^pair_[A-Za-z0-9_-]{22}$"
+    },
+    "manifestDigest": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "x-viberacing-uniqueBy": "candidateId",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "x-viberacing-optionalProperties": ["targetAgentAccountControl", "privateLabel"],
+        "required": ["candidateId", "action"],
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "minLength": 27,
+            "maxLength": 27,
+            "pattern": "^cand_[A-Za-z0-9_-]{22}$"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["attach_existing", "create", "skip"],
+            "minLength": 4,
+            "maxLength": 15
+          },
+          "targetAgentAccountControl": {
+            "type": "string",
+            "minLength": 27,
+            "maxLength": 27,
+            "pattern": "^ctl_[A-Za-z0-9_-]{23}$"
+          },
+          "privateLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -21,116 +21,68 @@ const forbiddenMutationNodes = new Set([
   "ModifyTable",
   "Update",
 ]);
-const forbiddenSequentialRelations = new Set([
-  "codex_sources",
-  "finalized_season_profile_freshness",
-  "profile_car_recipes",
-  "season_daily_scores",
-  "season_entries",
-  "seasons",
-  "source_day_values",
+const forbiddenSequentialRelations = new Set(["leaderboard_snapshot_profiles"]);
+const boundedDimensionSequentialRelations = new Set([
+  "leaderboard_published_snapshots",
+  "leaderboard_snapshots",
+]);
+const maximumDimensionSequentialRows = 8;
+const boundedPayloadSequentialRelations = new Set(["leaderboard_snapshot_pages"]);
+const maximumPayloadSequentialRows = 512;
+const boundedSequentialIndexAlternatives = new Map([
+  ["leaderboard_snapshot_pages_pkey", "leaderboard_snapshot_pages"],
 ]);
 
 const evidenceDefinitions = Object.freeze([
   Object.freeze({
-    label: "score adapter",
+    label: "current leaderboard adapter",
     matches: (queryText) =>
       queryText.includes(
-        "FROM viberacing_api.list_public_community_scores($1::date, $2::integer) AS score",
+        "FROM viberacing_api.read_current_leaderboard_page($1::integer) AS snapshot",
       ),
     requiredIndexGroups: Object.freeze([]),
     requiredNodeTypes: Object.freeze(["Function Scan"]),
   }),
   Object.freeze({
-    label: "race adapter",
+    label: "historical leaderboard adapter",
     matches: (queryText) =>
-      queryText.includes(
-        "FROM viberacing_api.list_public_community_race($1::date, $2::integer) AS race",
-      ),
-    requiredIndexGroups: Object.freeze([]),
-    requiredNodeTypes: Object.freeze(["Function Scan"]),
-  }),
-  Object.freeze({
-    label: "status adapter",
-    matches: (queryText) =>
-      queryText.includes(
-        "FROM viberacing_api.list_public_community_race_status($1::date, $2::integer) AS status",
-      ),
-    requiredIndexGroups: Object.freeze([]),
-    requiredNodeTypes: Object.freeze(["Function Scan"]),
-  }),
-  Object.freeze({
-    label: "token adapter",
-    matches: (queryText) =>
-      queryText.includes("FROM viberacing_api.list_public_community_token_race_status(") &&
+      queryText.includes("FROM viberacing_api.read_season_leaderboard_page(") &&
       queryText.includes("$1::date"),
     requiredIndexGroups: Object.freeze([]),
     requiredNodeTypes: Object.freeze(["Function Scan"]),
   }),
   Object.freeze({
-    label: "score projection",
+    label: "current profile adapter",
     matches: (queryText) =>
-      queryText.includes("WITH visible_entries AS MATERIALIZED") &&
-      queryText.includes("viberacing_private.season_entries") &&
-      queryText.includes("score_version = 'community_v1'"),
-    requiredIndexGroups: Object.freeze([
-      Object.freeze(["season_entries_profile_history_idx", "season_entries_pkey"]),
-      Object.freeze(["seasons_pkey"]),
-    ]),
+      queryText.includes("FROM viberacing_api.read_current_public_profile($1::text) AS snapshot"),
+    requiredIndexGroups: Object.freeze([]),
+    requiredNodeTypes: Object.freeze(["Function Scan"]),
+  }),
+  Object.freeze({
+    label: "current leaderboard snapshot lookup",
+    matches: (queryText) =>
+      queryText.includes("FROM viberacing_private.leaderboard_published_snapshots AS published") &&
+      queryText.includes("page.page_kind = 'leaderboard_page'") &&
+      queryText.includes("pg_catalog.transaction_timestamp()"),
+    requiredIndexGroups: Object.freeze([Object.freeze(["leaderboard_snapshot_pages_pkey"])]),
     requiredNodeTypes: Object.freeze(["Limit"]),
   }),
   Object.freeze({
-    label: "race projection",
+    label: "historical leaderboard snapshot lookup",
     matches: (queryText) =>
-      queryText.includes(
-        "FROM viberacing_api.list_public_community_scores(p_season_start, p_limit) AS score_record",
-      ) && queryText.includes("viberacing_private.profile_car_recipes"),
-    requiredIndexGroups: Object.freeze([Object.freeze(["profile_car_recipes_pkey"])]),
-    requiredNodeTypes: Object.freeze(["Function Scan"]),
+      queryText.includes("FROM viberacing_private.leaderboard_published_snapshots AS published") &&
+      queryText.includes("published.season_start = p_season_start") &&
+      queryText.includes("page.page_kind = 'leaderboard_page'"),
+    requiredIndexGroups: Object.freeze([Object.freeze(["leaderboard_snapshot_pages_pkey"])]),
+    requiredNodeTypes: Object.freeze(["Limit"]),
   }),
   Object.freeze({
-    label: "status projection",
+    label: "current profile snapshot lookup",
     matches: (queryText) =>
-      queryText.includes(
-        "FROM viberacing_api.list_public_community_race(p_season_start, p_limit) AS race_record",
-      ) &&
-      queryText.includes("viberacing_private.finalized_season_profile_freshness") &&
-      queryText.includes("viberacing_private.source_day_values") &&
-      queryText.includes("viberacing_private.season_daily_scores"),
-    requiredIndexGroups: Object.freeze([
-      Object.freeze(["finalized_season_profile_freshness_primary_key"]),
-      Object.freeze(["source_day_values_date_idx"]),
-      Object.freeze([
-        "codex_sources_profile_source_unique",
-        "codex_sources_profile_state_idx",
-        "codex_sources_pkey",
-      ]),
-      Object.freeze(["season_daily_scores_positive_profile_date_idx"]),
-    ]),
-    requiredNodeTypes: Object.freeze(["Function Scan"]),
-  }),
-  Object.freeze({
-    label: "token projection",
-    matches: (queryText) =>
-      queryText.includes("WITH visible_entries AS MATERIALIZED") &&
-      queryText.includes("score_version = 'community_tokens_v1'") &&
-      queryText.includes("viberacing_private.profile_car_recipes") &&
-      queryText.includes("viberacing_private.finalized_season_profile_freshness") &&
-      queryText.includes("viberacing_private.source_day_values") &&
-      queryText.includes("viberacing_private.season_daily_scores"),
-    requiredIndexGroups: Object.freeze([
-      Object.freeze(["season_entries_profile_history_idx", "season_entries_pkey"]),
-      Object.freeze(["seasons_pkey"]),
-      Object.freeze(["profile_car_recipes_pkey"]),
-      Object.freeze(["finalized_season_profile_freshness_primary_key"]),
-      Object.freeze(["source_day_values_date_idx"]),
-      Object.freeze([
-        "codex_sources_profile_source_unique",
-        "codex_sources_profile_state_idx",
-        "codex_sources_pkey",
-      ]),
-      Object.freeze(["season_daily_scores_positive_profile_date_idx"]),
-    ]),
+      queryText.includes("FROM viberacing_private.leaderboard_published_snapshots AS published") &&
+      queryText.includes("viberacing_private.leaderboard_snapshot_profiles AS profile") &&
+      queryText.includes("profile.handle = p_handle"),
+    requiredIndexGroups: Object.freeze([Object.freeze(["leaderboard_snapshot_profiles_pkey"])]),
     requiredNodeTypes: Object.freeze(["Limit"]),
   }),
 ]);
@@ -274,11 +226,12 @@ function assertBoundedReadPlan(entry, definition) {
   const nodes = collectPlanNodes(entry.Plan, definition.label);
   const root = nodes[0];
   assert.equal(Number.isSafeInteger(root["Actual Rows"]), true, `${definition.label} row count`);
-  assert.ok(root["Actual Rows"] >= 0 && root["Actual Rows"] <= 32, `${definition.label} row cap`);
+  assert.ok(root["Actual Rows"] >= 0 && root["Actual Rows"] <= 1, `${definition.label} row cap`);
   assert.equal(root["Actual Loops"], 1, `${definition.label} must execute once`);
 
   const executedNodeTypes = new Set();
   const executedIndexNames = new Set();
+  const executedBoundedSequentialRelations = new Set();
   for (const node of nodes) {
     const nodeType = node["Node Type"];
     if (typeof node["Actual Loops"] === "number" && node["Actual Loops"] > 0) {
@@ -298,6 +251,31 @@ function assertBoundedReadPlan(entry, definition) {
         false,
         `${definition.label} sequentially scanned a bounded-index relation`,
       );
+      if (boundedDimensionSequentialRelations.has(node["Relation Name"])) {
+        const removedRows = node["Rows Removed by Filter"] ?? 0;
+        assert.equal(
+          Number.isSafeInteger(node["Actual Rows"]) &&
+            node["Actual Rows"] >= 0 &&
+            Number.isSafeInteger(removedRows) &&
+            removedRows >= 0 &&
+            node["Actual Rows"] + removedRows <= maximumDimensionSequentialRows,
+          true,
+          `${definition.label} exceeded the small-dimension sequential row cap`,
+        );
+      }
+      if (boundedPayloadSequentialRelations.has(node["Relation Name"])) {
+        const removedRows = node["Rows Removed by Filter"] ?? 0;
+        assert.equal(
+          Number.isSafeInteger(node["Actual Rows"]) &&
+            node["Actual Rows"] >= 0 &&
+            Number.isSafeInteger(removedRows) &&
+            removedRows >= 0 &&
+            node["Actual Rows"] + removedRows <= maximumPayloadSequentialRows,
+          true,
+          `${definition.label} exceeded the small-payload sequential row cap`,
+        );
+        executedBoundedSequentialRelations.add(node["Relation Name"]);
+      }
     }
     for (const key of writeOrTemporaryBlockKeys) {
       assert.equal(node[key], 0, `${definition.label} reported ${key}`);
@@ -311,16 +289,10 @@ function assertBoundedReadPlan(entry, definition) {
       `${definition.label} omitted executed ${requiredNodeType} evidence`,
     );
   }
-  for (const alternatives of definition.requiredIndexGroups) {
-    assert.equal(
-      alternatives.some((indexName) => executedIndexNames.has(indexName)),
-      true,
-      `${definition.label} omitted an executed reviewed index: ${alternatives.join(" or ")}; observed ${[...executedIndexNames].sort().join(", ") || "none"}`,
-    );
-  }
+  return Object.freeze({ executedBoundedSequentialRelations, executedIndexNames });
 }
 
-export function assertPublicCommunityPlanEvidence(plans) {
+export function assertPublicSnapshotPlanEvidence(plans) {
   assert.equal(Array.isArray(plans), true, "public query-plan evidence must be an array");
   assert.equal(
     Object.getPrototypeOf(plans),
@@ -344,8 +316,29 @@ export function assertPublicCommunityPlanEvidence(plans) {
         typeof candidate["Query Text"] === "string" && definition.matches(candidate["Query Text"]),
     );
     assert.ok(matchingEntries.length > 0, `${definition.label} plan evidence was not emitted`);
+    const observedIndexes = new Set();
+    const observedBoundedSequentialRelations = new Set();
     for (const entry of matchingEntries) {
-      assertBoundedReadPlan(entry, definition);
+      const access = assertBoundedReadPlan(entry, definition);
+      for (const indexName of access.executedIndexNames) {
+        observedIndexes.add(indexName);
+      }
+      for (const relationName of access.executedBoundedSequentialRelations) {
+        observedBoundedSequentialRelations.add(relationName);
+      }
+    }
+    for (const alternatives of definition.requiredIndexGroups) {
+      assert.equal(
+        alternatives.some(
+          (indexName) =>
+            observedIndexes.has(indexName) ||
+            observedBoundedSequentialRelations.has(
+              boundedSequentialIndexAlternatives.get(indexName),
+            ),
+        ),
+        true,
+        `${definition.label} omitted an executed reviewed index or bounded scan: ${alternatives.join(" or ")}; observed indexes ${[...observedIndexes].sort().join(", ") || "none"}; bounded scans ${[...observedBoundedSequentialRelations].sort().join(", ") || "none"}`,
+      );
     }
   }
 

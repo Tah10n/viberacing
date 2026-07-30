@@ -18,7 +18,7 @@ const enablementSourcePath = join(temporaryRoot, "apps", "migrate", "src", "enab
 
 const validRootPackage = Object.freeze({
   scripts: {
-    "build:migrate": "pnpm --filter @viberacing/migrate run build",
+    "build:migrate": "corepack pnpm --filter @viberacing/migrate run build",
     "check:database": "node scripts/check-database.mjs",
     "check:migrate-entrypoint": "node scripts/check-migrate-entrypoint.mjs",
     "check:migration-runbook": "node scripts/check-migration-runbook.mjs",
@@ -105,6 +105,17 @@ try {
   restoreValidFixture();
   writeFileSync(
     runbookPath,
+    runbookSource.replace(
+      /candidate service matrix targets the exact clean-bootstrap\s+schema and\s+starts with every capability closed/u,
+      "deployed and candidate services both accept the expand-and-contract schema state",
+    ),
+    "utf8",
+  );
+  expectFailure("stale upgrade control", "control text drifted");
+
+  restoreValidFixture();
+  writeFileSync(
+    runbookPath,
     runbookSource.replace("pnpm run check:database", "pnpm run check:db"),
     "utf8",
   );
@@ -153,7 +164,7 @@ try {
   writeFileSync(runbookPath, Buffer.from([0xff]));
   expectFailure("invalid UTF-8", "canonical UTF-8 text without NUL bytes");
 
-  console.log("Migration runbook checker regressions passed (13 unsafe/drift variants).");
+  console.log("Migration runbook checker regressions passed (14 unsafe/drift variants).");
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }

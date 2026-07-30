@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "viberacing-device-pairing-possession-v1",
+  "manifest": {
+    "schemaVersion": 1,
+    "installationPublicKey": "H_GuFnR4pY5HQXu-kLlymIs7ghkXdMQS3QtWupCgXfc",
+    "connectorVersion": "0.0.0",
+    "osFamily": "windows",
+    "architecture": "x86_64",
+    "candidates": [
+      {
+        "candidateId": "cand_AAAAAAAAAAAAAAAAAAAAAA",
+        "provider": "codex",
+        "readerVersion": "codex_app_server_0_144_5_v1",
+        "accountingRevision": 1,
+        "scopeKind": "agent_account",
+        "fingerprintKind": "unavailable",
+        "safeDisplayLabel": "Codex account",
+        "syncPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "preview": {
+          "currentWeekTokenTotal": "579",
+          "lastUsageDate": "2026-07-14",
+          "status": "ready"
+        }
+      }
+    ]
+  },
+  "canonicalManifest": "{\"schemaVersion\":1,\"installationPublicKey\":\"H_GuFnR4pY5HQXu-kLlymIs7ghkXdMQS3QtWupCgXfc\",\"connectorVersion\":\"0.0.0\",\"osFamily\":\"windows\",\"architecture\":\"x86_64\",\"candidates\":[{\"candidateId\":\"cand_AAAAAAAAAAAAAAAAAAAAAA\",\"provider\":\"codex\",\"readerVersion\":\"codex_app_server_0_144_5_v1\",\"accountingRevision\":1,\"scopeKind\":\"agent_account\",\"fingerprintKind\":\"unavailable\",\"safeDisplayLabel\":\"Codex account\",\"syncPublicKey\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"preview\":{\"currentWeekTokenTotal\":\"579\",\"lastUsageDate\":\"2026-07-14\",\"status\":\"ready\"}}]}",
+  "manifestDigest": "40d2e5b078a554901d184098f3be471f9d82d8b4fdfff765b45733b336f2dcf8",
+  "clientRateIdentifier": "AQEBAQEBAQEBAQEBAQEBAQ",
+  "signedAt": "2026-07-28T12:34:56.789Z",
+  "nonce": "AgICAgICAgICAgICAgICAg",
+  "possessionMessage": "viberacing-pairing-start-possession-v1\n40d2e5b078a554901d184098f3be471f9d82d8b4fdfff765b45733b336f2dcf8\nAQEBAQEBAQEBAQEBAQEBAQ\n2026-07-28T12:34:56.789Z\nAgICAgICAgICAgICAgICAg",
+  "possessionSignature": "SezOhO_ojlCIQRr8EcnkWd28PwdXtAHiSXGHRi431kvjl0RAOrjXNy--Jidz2JkuLLMhAmHMtwm6LjsOwuPFDA"
+}

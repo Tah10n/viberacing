@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AccountDashboard } from "@/lib/enrollment-service";
 import { joinTranslations } from "@/lib/join-i18n";
 
 import { AccountExperience } from "./account-experience";
@@ -36,6 +37,153 @@ function mount(node: React.ReactNode): Mounted {
   return { container, root };
 }
 
+function changeInput(input: HTMLInputElement, value: string): void {
+  act(() => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    const setter = descriptor === undefined ? undefined : Reflect.get(descriptor, "set");
+    if (typeof setter !== "function") {
+      throw new Error("input value setter is unavailable");
+    }
+    Reflect.apply(setter, input, [value]);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function batchPairingReviewFixture() {
+  const accountControl = `ctl_${"D".repeat(23)}`;
+  return {
+    accountControl,
+    response: {
+      approval: {
+        manifestDigest: "1".repeat(64),
+        pairingId: `pair_${"A".repeat(22)}`,
+        schemaVersion: 1,
+      },
+      pairing: {
+        architecture: "x86_64",
+        candidates: [
+          {
+            candidateId: `cand_${"A".repeat(22)}`,
+            fingerprintKind: "stable_opaque",
+            preview: {
+              currentWeekTokenTotal: "9".repeat(60),
+              lastUsageDate: "2026-07-28",
+              status: "ready",
+            },
+            provider: "codex",
+            safeDisplayLabel: "Codex personal",
+            suggestedAgentAccountControl: accountControl,
+          },
+          {
+            candidateId: `cand_${"B".repeat(22)}`,
+            fingerprintKind: "unavailable",
+            preview: {
+              currentWeekTokenTotal: "400",
+              lastUsageDate: "2026-07-27",
+              status: "ready",
+            },
+            provider: "codex",
+            safeDisplayLabel: "Codex work",
+          },
+          {
+            candidateId: `cand_${"C".repeat(22)}`,
+            fingerprintKind: "unavailable",
+            preview: {
+              currentWeekTokenTotal: "0",
+              lastUsageDate: null,
+              status: "unavailable",
+            },
+            provider: "codex",
+            safeDisplayLabel: "Codex lab",
+          },
+        ],
+        connectorVersion: "0.0.0",
+        existingAccounts: [
+          {
+            accountControl,
+            privateLabel: "Personal account",
+            provider: "codex",
+            state: "active",
+          },
+        ],
+        expiresAt: "2026-07-28T12:09:00.000Z",
+        installationLabel: "Studio PC",
+        osFamily: "windows",
+        publicKeyFingerprint: `SHA256:${Buffer.alloc(32, 0x32).toString("base64url")}`,
+      },
+    },
+  } as const;
+}
+
+function accountDashboardFixture(
+  overrides: Readonly<{
+    accountState?: "active" | "paused" | "quarantined" | "unlinked";
+    accountStatus?: "connected" | "paused" | "quarantined" | "removed" | "syncing";
+    publicVisibility?: "hidden" | "public";
+  }> = {},
+): AccountDashboard {
+  const state = overrides.accountState ?? "active";
+  const status =
+    overrides.accountStatus ??
+    (state === "active"
+      ? "connected"
+      : state === "paused"
+        ? "paused"
+        : state === "quarantined"
+          ? "quarantined"
+          : "removed");
+  return {
+    accounts: [
+      {
+        accountingRevision: 1,
+        connectedDeviceCount: state === "active" ? 1 : 0,
+        control: "opaque-account-control",
+        expectedReaderVersion: "1.0.0",
+        identityAssurance: "community_local",
+        lastSuccessfulSyncDate: "2026-07-28",
+        observedReaderVersion: "1.0.0",
+        privateLabel: "Personal account",
+        provider: "codex",
+        quarantineReason: state === "quarantined" ? "anomaly_review" : null,
+        state,
+        status,
+        todayTokenTotal: "700",
+        weeklyTokenTotal: "2800",
+      },
+    ],
+    installations: [
+      {
+        accounts: [
+          {
+            deviceControl: state === "active" ? "opaque-device-control" : null,
+            deviceState: state === "active" ? "active" : "revoked",
+            privateLabel: "Personal account",
+          },
+        ],
+        architecture: "x86_64",
+        connectedDate: "2026-07-14",
+        connectorVersion: "1.2.3",
+        control: "opaque-installation-control",
+        label: "Studio PC",
+        lastSeenDate: "2026-07-28",
+        osFamily: "windows",
+        state: "active",
+      },
+    ],
+    ranking: {
+      participantCount: 10,
+      providerBreakdownVisible: false,
+      publicVisibility: overrides.publicVisibility ?? "public",
+      rankPosition: 2,
+      seasonEnd: "2026-08-02",
+      seasonStart: "2026-07-27",
+      seasonState: "open",
+      snapshotGeneratedAt: "2026-07-29T09:42Z",
+      weeklyTokenTotal: "2800",
+    },
+  };
+}
+
 afterEach(() => {
   document.body.innerHTML = "";
   localStorage.clear();
@@ -46,8 +194,6 @@ describe("enrollment experience", () => {
   it("keeps join copy in EN/RU parity and submits the exact closed field set", async () => {
     expect(Object.keys(joinTranslations.en)).toEqual(Object.keys(joinTranslations.ru));
     localStorage.setItem("viberacing.locale", "ru");
-    localStorage.setItem("viberacing.theme", "cyber-rally");
-    localStorage.setItem("viberacing.motion", "off");
     const mounted = mount(<JoinExperience enrollmentEnabled error="invalid" />);
     await act(async () => {
       await Promise.resolve();
@@ -58,14 +204,16 @@ describe("enrollment experience", () => {
     expect(mounted.container.querySelector('input[name="locale"]')?.getAttribute("value")).toBe(
       "ru",
     );
-    expect(mounted.container.querySelector<HTMLSelectElement>('select[name="theme"]')!.value).toBe(
-      "cyber-rally",
-    );
     expect(
       [...mounted.container.querySelectorAll("form [name]")].map((element) =>
         element.getAttribute("name"),
       ),
-    ).toEqual(["locale", "inviteCode", "handle", "theme", "motionPreference", "streakVisible"]);
+    ).toEqual(["locale"]);
+    expect(renderToStaticMarkup(<JoinExperience enrollmentEnabled inviteGateEnabled />)).toContain(
+      'name="inviteCode"',
+    );
+    expect(mounted.container.querySelector('[name="handle"]')).toBeNull();
+    expect(mounted.container.querySelector('[name="theme"]')).toBeNull();
     expect(mounted.container.querySelector("form")?.getAttribute("action")).toBe(
       "/auth/github/start",
     );
@@ -93,7 +241,7 @@ describe("enrollment experience", () => {
       ["ru", "Регистрация временно недоступна"],
     ] as const) {
       const markup = renderToStaticMarkup(
-        <PasskeySetup enrollmentEnabled={false} handle="pixel_driver" locale={locale} />,
+        <PasskeySetup enrollmentEnabled={false} initialHandle="pixel_driver" locale={locale} />,
       );
       expect(markup).toContain(unavailable);
       expect(markup).not.toContain("<form");
@@ -107,7 +255,9 @@ describe("enrollment experience", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     webauthn.browserSupportsWebAuthn.mockReturnValue(false);
-    const mounted = mount(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />);
+    const mounted = mount(
+      <PasskeySetup enrollmentEnabled initialHandle="pixel_driver" locale="en" />,
+    );
     expect(mounted.container.querySelector("main")?.getAttribute("lang")).toBe("en");
     const form = mounted.container.querySelector("form");
     await act(async () => {
@@ -132,7 +282,9 @@ describe("enrollment experience", () => {
       )
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />);
+    const mounted = mount(
+      <PasskeySetup enrollmentEnabled initialHandle="pixel_driver" locale="en" />,
+    );
     await act(async () => {
       mounted.container
         .querySelector("form")
@@ -144,6 +296,8 @@ describe("enrollment experience", () => {
       "/auth/passkey/options",
       "/auth/passkey/verify",
     ]);
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"handle":"pixel_driver"}');
+    expect(fetchMock.mock.calls[1]?.[1].body).toBe('{"response":{"id":"synthetic"}}');
     expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
@@ -248,29 +402,11 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("shows only bounded passkey and active-device fields on the account page", () => {
+  it("shows only bounded private dashboard fields on the account page", () => {
     const passkeyId = "00000000-0000-4000-8000-000000000511";
-    const deviceId = `dev_${"A".repeat(22)}`;
-    const sourceId = `src_${"B".repeat(22)}`;
-    const sourceControl = "opaque-source-control";
     const markup = renderToStaticMarkup(
       <AccountExperience
-        activeDeviceInventory={[
-          {
-            devices: [
-              {
-                activatedOn: "2026-07-14",
-                architecture: "x86_64",
-                connectorVersion: "1.2.3",
-                deviceId,
-                label: "Studio PC",
-                osFamily: "windows",
-              },
-            ],
-            sourceControl,
-            state: "active",
-          },
-        ]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[
@@ -289,44 +425,31 @@ describe("enrollment experience", () => {
             state: "revoked",
           },
         ]}
-        score={{
-          activeDays: 7,
-          dailyScores: [100, 200, 300, 400, 500, 600, 700],
-          seasonEnd: "2026-07-19",
-          seasonFinalized: false,
-          seasonStart: "2026-07-13",
-          sourceCount: 2,
-          weeklyScore: 2800,
-        }}
-        visibility="public"
       />,
     );
     expect(markup).toContain("Your passkeys");
     expect(markup).toContain("Recovery codes");
-    expect(markup).toContain("Sources and connected devices");
+    expect(markup).toContain("Connected agents and accounts");
     expect(markup).toContain("Studio PC");
-    expect(markup).toContain('action="/auth/devices/revoke"');
-    expect(markup).toContain(`name="deviceId" value="${deviceId}"`);
-    expect(markup).toContain(`name="sourceControl" value="${sourceControl}"`);
-    expect(markup).toContain('action="/auth/sources/pause"');
-    expect(markup).toContain("Unlink source permanently");
-    expect(markup).toContain('dateTime="2026-07-14"');
-    expect(markup).not.toContain(sourceId);
+    expect(markup).toContain('action="/auth/accounts/pause"');
+    expect(markup).toContain("Unlink account permanently");
+    expect(markup).toContain("Revoke installation");
+    expect(markup).toContain("Revoke device");
     expect(markup).not.toContain("vrr1_");
+    expect(markup).not.toContain("Source 1");
+    expect(markup).not.toContain("acc_");
+    expect(markup).not.toContain("dev_");
+    expect(markup).not.toContain("ins_");
     expect(markup).toContain("Public profile");
     expect(markup).toContain("Delete profile");
     expect(markup).toContain('name="handle"');
-    expect(markup).toContain("Eligible scores can appear in the Community race");
+    expect(markup).toContain("Eligible token totals can appear in the Community race");
     expect(markup).toContain('href="/?profile=pixel_driver#profile"');
     expect(markup).toContain("View public profile");
     expect(markup).toContain('action="/auth/profile/visibility"');
     expect(markup).toContain('type="hidden" name="visibility" value="hidden"');
-    expect(markup).toContain("Current-week score");
-    expect(markup).toContain("2,800 pts");
-    expect(markup).toContain('aria-label="Mon: 100 pts"');
-    expect(markup).toContain('aria-label="Sun: 700 pts"');
-    expect(markup.match(/<progress/g)).toHaveLength(7);
-    expect(markup).toContain("Exact token totals and per-source values stay private");
+    expect(markup).toContain("Current ranking");
+    expect(markup).toContain("2,800 tokens");
     expect(markup).not.toContain("raw_tokens");
     expect(markup).toContain("Current session");
     expect(markup).toContain("Revoked");
@@ -338,46 +461,33 @@ describe("enrollment experience", () => {
     const hidden = renderToStaticMarkup(
       <AccountExperience
         actionUnavailable
-        activeDeviceInventory={[
-          {
-            devices: [],
-            sourceControl: "opaque-source-control",
-            state: "paused",
-          },
-          {
-            devices: [],
-            sourceControl: "opaque-unlinked-source-control",
-            state: "unlinked",
-          },
-        ]}
+        dashboard={accountDashboardFixture({
+          accountState: "paused",
+          publicVisibility: "hidden",
+        })}
         handle="pixel_driver"
         locale="ru"
         passkeys={[]}
-        score={null}
-        visibility="hidden"
       />,
     );
     expect(hidden).toContain("Публичный профиль выключен");
-    expect(hidden).toContain("Возобновить источник");
-    expect(hidden.match(/aria-label="Отключить источник навсегда:/g)).toHaveLength(1);
-    expect(hidden).toContain("не осталось активных прав устройства");
+    expect(hidden).toContain("Переподключить аккаунт");
+    expect(hidden).toContain("Отключить аккаунт навсегда");
     expect(hidden).toContain('type="hidden" name="visibility" value="public"');
     expect(hidden).not.toContain("Открыть публичный профиль");
     expect(hidden).toContain("Не удалось изменить аккаунт");
-    expect(hidden).toContain("Для скрытого профиля текущий результат не показывается");
 
     const unavailable = renderToStaticMarkup(
       <AccountExperience
-        activeDeviceInventory={undefined}
+        dashboard={undefined}
         handle="pixel_driver"
         locale="en"
         passkeys={undefined}
-        visibility={undefined}
       />,
     );
     expect(unavailable).toContain("Profile visibility is temporarily unavailable");
-    expect(unavailable).toContain("Current score is temporarily unavailable");
-    expect(unavailable).toContain("Source and device details are temporarily unavailable");
+    expect(unavailable).toContain("Private ranking details are temporarily unavailable");
+    expect(unavailable).toContain("Connected account details are temporarily unavailable");
     expect(unavailable).not.toContain('action="/auth/profile/visibility"');
   });
 
@@ -398,10 +508,9 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
-        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -475,11 +584,10 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="public"
       />,
     );
     const button = [...mounted.container.querySelectorAll("button")].find(
@@ -532,10 +640,9 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
-        visibility="public"
         passkeys={[
           {
             createdOn: "2026-07-15",
@@ -556,7 +663,8 @@ describe("enrollment experience", () => {
     );
     await act(async () => {
       mounted.container
-        .querySelector(".passkey-revoke")
+        .querySelector('button[aria-label^="Revoke passkey"]')
+        ?.closest("form")
         ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
@@ -582,9 +690,9 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("uses only an opaque source control before fresh-passkey reactivation", async () => {
+  it("uses only an opaque account control before fresh-passkey reconnection", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
-    const sourceControl = "opaque-source-control";
+    const targetControl = "opaque-account-control";
     const fetchMock = vi
       .fn<(input: string, init: RequestInit) => Promise<Response>>()
       .mockResolvedValueOnce(
@@ -596,89 +704,88 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[
-          {
-            devices: [],
-            sourceControl,
-            state: "paused",
-          },
-        ]}
+        dashboard={accountDashboardFixture({
+          accountState: "paused",
+          publicVisibility: "hidden",
+        })}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="hidden"
       />,
     );
     await act(async () => {
       mounted.container
-        .querySelector(".passkey-revoke")
-        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      "/auth/sources/reactivate/options",
-      "/auth/sources/reactivate/verify",
-    ]);
-    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
-    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
-    expect(typeof optionsBody).toBe("string");
-    expect(typeof verificationBody).toBe("string");
-    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
-      throw new Error("expected serialized source reactivation request bodies");
-    }
-    expect(JSON.parse(optionsBody)).toEqual({ sourceControl });
-    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
-    expect(optionsBody).not.toContain("src_");
-    expect(mounted.container.textContent).toContain("could not be completed");
-    act(() => {
-      mounted.root.unmount();
-    });
-  });
-
-  it("uses only an opaque source control before permanent fresh-passkey unlink", async () => {
-    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
-    const sourceControl = "opaque-source-control";
-    const fetchMock = vi
-      .fn<(input: string, init: RequestInit) => Promise<Response>>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ challenge: "synthetic" }), {
-          headers: { "content-type": "application/json; charset=utf-8" },
-        }),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 401 }));
-    vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(
-      <AccountExperience
-        activeDeviceInventory={[{ devices: [], sourceControl, state: "quarantined" }]}
-        handle="pixel_driver"
-        locale="en"
-        passkeys={[]}
-        visibility="hidden"
-      />,
-    );
-    await act(async () => {
-      mounted.container
-        .querySelector('button[aria-label^="Unlink source permanently"]')
+        .querySelector('button[aria-label^="Reconnect account"]')
         ?.closest("form")
         ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
-      "/auth/sources/unlink/options",
-      "/auth/sources/unlink/verify",
+      "/auth/accounts/reactivate/options",
+      "/auth/accounts/reactivate/verify",
     ]);
     const optionsBody = fetchMock.mock.calls[0]?.[1].body;
     const verificationBody = fetchMock.mock.calls[1]?.[1].body;
     expect(typeof optionsBody).toBe("string");
     expect(typeof verificationBody).toBe("string");
     if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
-      throw new Error("expected serialized source unlink request bodies");
+      throw new Error("expected serialized account reactivation request bodies");
     }
-    expect(JSON.parse(optionsBody)).toEqual({ sourceControl });
+    expect(JSON.parse(optionsBody)).toEqual({ targetControl });
     expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
-    expect(optionsBody).not.toContain("src_");
+    expect(optionsBody).not.toContain("acc_");
+    expect(mounted.container.textContent).toContain("could not be completed");
+    act(() => {
+      mounted.root.unmount();
+    });
+  });
+
+  it("uses only an opaque account control before permanent fresh-passkey unlink", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const targetControl = "opaque-account-control";
+    const fetchMock = vi
+      .fn<(input: string, init: RequestInit) => Promise<Response>>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ challenge: "synthetic" }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const mounted = mount(
+      <AccountExperience
+        dashboard={accountDashboardFixture({
+          accountState: "quarantined",
+          publicVisibility: "hidden",
+        })}
+        handle="pixel_driver"
+        locale="en"
+        passkeys={[]}
+      />,
+    );
+    await act(async () => {
+      mounted.container
+        .querySelector('button[aria-label^="Unlink account permanently"]')
+        ?.closest("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(webauthn.startAuthentication).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => input)).toEqual([
+      "/auth/accounts/unlink/options",
+      "/auth/accounts/unlink/verify",
+    ]);
+    const optionsBody = fetchMock.mock.calls[0]?.[1].body;
+    const verificationBody = fetchMock.mock.calls[1]?.[1].body;
+    expect(typeof optionsBody).toBe("string");
+    expect(typeof verificationBody).toBe("string");
+    if (typeof optionsBody !== "string" || typeof verificationBody !== "string") {
+      throw new Error("expected serialized account unlink request bodies");
+    }
+    expect(JSON.parse(optionsBody)).toEqual({ targetControl });
+    expect(JSON.parse(verificationBody)).toEqual({ response: { id: "synthetic-login" } });
+    expect(optionsBody).not.toContain("acc_");
     expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
@@ -698,11 +805,10 @@ describe("enrollment experience", () => {
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
       <AccountExperience
-        activeDeviceInventory={[]}
+        dashboard={accountDashboardFixture()}
         handle="pixel_driver"
         locale="en"
         passkeys={[]}
-        visibility="public"
       />,
     );
     const input = mounted.container.querySelector<HTMLInputElement>('input[name="handle"]');
@@ -744,36 +850,31 @@ describe("enrollment experience", () => {
     });
   });
 
-  it("shows exact device evidence before separately requesting pairing approval", async () => {
+  it("reviews a full batch and approves ordered attach, create, and skip decisions once", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
     const challenge = Buffer.alloc(32, 0x31).toString("base64url");
-    const fingerprint = `SHA256:${Buffer.alloc(32, 0x32).toString("base64url")}`;
+    const fixture = batchPairingReviewFixture();
     const fetchMock = vi
       .fn<(input: string, init: RequestInit) => Promise<Response>>()
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            options: { challenge },
-            pairing: {
-              architecture: "x86_64",
-              connectorVersion: "1.2.3",
-              deviceLabel: "Studio PC",
-              expiresAt: "2026-07-16T10:09:00.000Z",
-              osFamily: "windows",
-              publicKeyFingerprint: fingerprint,
-            },
-          }),
-          { headers: { "content-type": "application/json; charset=utf-8" } },
-        ),
+        new Response(JSON.stringify(fixture.response), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ options: { challenge } }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<ConnectExperience initialLocale="en" signedIn sourceCreationEnabled />);
+    const mounted = mount(
+      <ConnectExperience initialCode="7K9M-P2QR-W4XY" initialLocale="en" signedIn />,
+    );
     const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
     if (codeInput === null) {
       throw new Error("expected pairing code input");
     }
-    codeInput.value = "7k9m-p2qr-w4xy";
 
     await act(async () => {
       codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -781,8 +882,27 @@ describe("enrollment experience", () => {
     });
     expect(webauthn.startAuthentication).not.toHaveBeenCalled();
     expect(mounted.container.textContent).toContain("Studio PC");
-    expect(mounted.container.textContent).toContain("1.2.3");
-    expect(mounted.container.textContent).toContain(fingerprint);
+    expect(mounted.container.textContent).toContain("Codex personal");
+    expect(mounted.container.textContent).toContain("Codex work");
+    expect(mounted.container.textContent).toContain("Codex lab");
+    expect(mounted.container.textContent).toContain("9".repeat(60));
+    expect(mounted.container.innerHTML).not.toContain("acc_");
+
+    const selectors = mounted.container.querySelectorAll<HTMLSelectElement>(
+      ".pairing-account-option select",
+    );
+    expect(selectors).toHaveLength(3);
+    expect(selectors[0]?.value).toBe(`attach:${fixture.accountControl}`);
+    expect(selectors[1]?.value).toBe("create");
+    await act(async () => {
+      const skipSelector = selectors[2];
+      if (skipSelector === undefined) {
+        throw new Error("expected the third candidate selector");
+      }
+      skipSelector.value = "skip";
+      skipSelector.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
 
     await act(async () => {
       mounted.container
@@ -794,110 +914,108 @@ describe("enrollment experience", () => {
       optionsJSON: { challenge },
     });
     expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      "/auth/pairing/review",
       "/auth/pairing/options",
       "/auth/pairing/verify",
     ]);
-    expect(fetchMock.mock.calls[0]?.[1].body).toBe(
-      '{"sourceChoice":"new","userCode":"7K9M-P2QR-W4XY"}',
-    );
-    expect(fetchMock.mock.calls[1]?.[1].body).toBe('{"response":{"id":"synthetic-login"}}');
+    expect(fetchMock.mock.calls[0]?.[1].body).toBe('{"userCode":"7K9M-P2QR-W4XY"}');
+    const approvalBody = fetchMock.mock.calls[1]?.[1].body;
+    if (typeof approvalBody !== "string") {
+      throw new Error("Expected a serialized batch approval.");
+    }
+    expect(JSON.parse(approvalBody)).toEqual({
+      ...fixture.response.approval,
+      decisions: [
+        {
+          action: "attach_existing",
+          candidateId: `cand_${"A".repeat(22)}`,
+          targetAgentAccountControl: fixture.accountControl,
+        },
+        {
+          action: "create",
+          candidateId: `cand_${"B".repeat(22)}`,
+          privateLabel: "Codex work",
+        },
+        { action: "skip", candidateId: `cand_${"C".repeat(22)}` },
+      ],
+    });
+    expect(fetchMock.mock.calls[2]?.[1].body).toBe('{"response":{"id":"synthetic-login"}}');
     expect(mounted.container.textContent).toContain("Device approved");
     act(() => {
       mounted.root.unmount();
     });
   });
 
-  it("selects an existing source without exposing its raw identifier", async () => {
-    const challenge = Buffer.alloc(32, 0x33).toString("base64url");
-    const fingerprint = `SHA256:${Buffer.alloc(32, 0x34).toString("base64url")}`;
+  it("contains an invalid private label without starting passkey approval", async () => {
+    webauthn.browserSupportsWebAuthn.mockReturnValue(true);
+    const fixture = batchPairingReviewFixture();
     const fetchMock = vi.fn<(input: string, init: RequestInit) => Promise<Response>>(() =>
       Promise.resolve(
-        new Response(
-          JSON.stringify({
-            options: { challenge },
-            pairing: {
-              architecture: "x86_64",
-              connectorVersion: "1.2.3",
-              deviceLabel: "Laptop",
-              expiresAt: "2026-07-16T10:09:00.000Z",
-              osFamily: "windows",
-              publicKeyFingerprint: fingerprint,
-            },
-          }),
-          { headers: { "content-type": "application/json; charset=utf-8" } },
-        ),
+        new Response(JSON.stringify(fixture.response), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+        }),
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
     const mounted = mount(
-      <ConnectExperience
-        existingSources={[
-          {
-            deviceLabels: ["Studio PC"],
-            sourceControl: "opaque-source-control",
-            sourceNumber: 2,
-          },
-        ]}
-        initialLocale="en"
-        signedIn
-        sourceCreationEnabled={false}
-      />,
-    );
-    const sourceChoice = mounted.container.querySelector<HTMLInputElement>(
-      'input[value="opaque-source-control"]',
+      <ConnectExperience initialCode="7K9M-P2QR-W4XY" initialLocale="en" signedIn />,
     );
     const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
-    if (sourceChoice === null || codeInput === null) {
-      throw new Error("expected existing source and pairing code inputs");
+    if (codeInput === null) {
+      throw new Error("expected pairing code input");
     }
-    expect(sourceChoice.checked).toBe(true);
-    expect(mounted.container.querySelector('input[value="new"]')).toBeNull();
-    expect(mounted.container.textContent).toContain(
-      "Creating a new source is temporarily unavailable",
-    );
-    codeInput.value = "7K9M-P2QR-W4XY";
     await act(async () => {
       codeInput.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(fetchMock.mock.calls[0]?.[1].body).toBe(
-      '{"sourceChoice":"existing","sourceControl":"opaque-source-control","userCode":"7K9M-P2QR-W4XY"}',
+
+    const privateLabel = mounted.container.querySelector<HTMLInputElement>(
+      '.pairing-account-option input[type="text"]',
     );
+    if (privateLabel === null) {
+      throw new Error("expected a private label input");
+    }
+    changeInput(privateLabel, "\u0001");
+    await act(async () => {
+      mounted.container
+        .querySelector(".account-security form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(webauthn.startAuthentication).not.toHaveBeenCalled();
-    expect(mounted.container.textContent).toContain("Existing source 2");
-    expect(mounted.container.innerHTML).not.toContain("src_");
+    expect(mounted.container.textContent).toContain("could not be completed");
     act(() => {
       mounted.root.unmount();
     });
   });
 
-  it("fails closed in EN and RU when neither new nor existing source selection is available", () => {
+  it("requires sign-in in EN and RU before exposing batch pairing controls", () => {
     const english = renderToStaticMarkup(
-      <ConnectExperience initialLocale="en" signedIn sourceCreationEnabled={false} />,
+      <ConnectExperience initialCode="7K9M-P2QR-W4XY" initialLocale="en" signedIn={false} />,
     );
-    const russian = renderToStaticMarkup(
-      <ConnectExperience initialLocale="ru" signedIn sourceCreationEnabled={false} />,
-    );
+    const russian = renderToStaticMarkup(<ConnectExperience initialLocale="ru" signedIn={false} />);
 
-    expect(english).toContain("Creating a new source is temporarily unavailable");
-    expect(russian).toContain("Создание нового источника временно недоступно");
-    expect(english).not.toContain('value="new"');
-    expect(russian).not.toContain('value="new"');
-    expect(english).toContain("disabled");
-    expect(russian).toContain("disabled");
+    expect(english).toContain("Sign in");
+    expect(russian).toContain("Войти");
+    expect(english).toContain('href="/login?returnTo=%2Fconnect%3Fcode%3D7K9M-P2QR-W4XY"');
+    expect(russian).toContain('href="/login"');
+    expect(english).not.toContain('name="userCode"');
+    expect(russian).not.toContain('name="userCode"');
   });
 
   it("rejects malformed pairing review data before invoking WebAuthn", async () => {
     webauthn.browserSupportsWebAuthn.mockReturnValue(true);
     const fetchMock = vi.fn(() =>
       Promise.resolve(
-        new Response(JSON.stringify({ options: { challenge: "bad" }, pairing: {} }), {
+        new Response(JSON.stringify({ approval: {}, pairing: {} }), {
           headers: { "content-type": "application/json; charset=utf-8" },
         }),
       ),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const mounted = mount(<ConnectExperience initialLocale="en" signedIn sourceCreationEnabled />);
+    const mounted = mount(<ConnectExperience initialLocale="en" signedIn />);
     const codeInput = mounted.container.querySelector<HTMLInputElement>('input[name="userCode"]');
     if (codeInput === null) {
       throw new Error("expected pairing code input");
@@ -921,10 +1039,9 @@ describe("enrollment experience", () => {
       renderToStaticMarkup(<JoinExperience enrollmentEnabled />),
       renderToStaticMarkup(
         <AccountExperience
-          activeDeviceInventory={[]}
+          dashboard={accountDashboardFixture()}
           handle="pixel_driver"
           locale="en"
-          visibility="public"
           passkeys={[
             {
               createdOn: "2026-07-15",
@@ -938,21 +1055,10 @@ describe("enrollment experience", () => {
       ),
       renderToStaticMarkup(<PasskeyLogin />),
       renderToStaticMarkup(<RecoveryExperience />),
-      renderToStaticMarkup(<PasskeySetup enrollmentEnabled handle="pixel_driver" locale="en" />),
       renderToStaticMarkup(
-        <ConnectExperience
-          existingSources={[
-            {
-              deviceLabels: ["Studio PC"],
-              sourceControl: "opaque-source-control",
-              sourceNumber: 1,
-            },
-          ]}
-          initialLocale="en"
-          signedIn
-          sourceCreationEnabled
-        />,
+        <PasskeySetup enrollmentEnabled initialHandle="pixel_driver" locale="en" />,
       ),
+      renderToStaticMarkup(<ConnectExperience initialLocale="en" signedIn />),
     ]) {
       document.body.innerHTML = markup;
       const results = await axe.run(document.documentElement, {

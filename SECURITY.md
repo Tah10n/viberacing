@@ -16,8 +16,8 @@ calibration. The [abuse-case catalog](docs/security/ABUSE_CASES.md),
 [privacy data map](docs/security/PRIVACY_DATA_MAP.md), and
 [security invariants](docs/architecture/SECURITY_INVARIANTS.md) are normative companion documents.
 
-The current repository has no runtime product. Planned controls in those documents are release
-gates, not claims that a deployed service exists.
+The current repository has local pre-release runtime components but no deployed runtime product.
+Controls in those documents are release and launch gates, not claims that a deployed service exists.
 
 ## Supported versions
 
@@ -80,15 +80,17 @@ Reports are especially valuable when they affect:
 
 - connector supply chain, signatures, local key storage, or command execution;
 - GitHub OAuth, passkeys, sessions, recovery, pairing, or device authorization;
-- cross-profile or cross-source authorization;
-- origin bypass, request signatures, replay, ingest, scoring, or finalization;
+- cross-profile, cross-AgentAccount, installation, or device authorization;
+- origin bypass, request signatures, replay, atomic ingest, exact accounting, snapshots, or
+  finalization;
 - database privilege separation, deletion, backups, admin, or audit integrity;
 - GitHub Actions, release credentials, deployment, or artifact provenance;
 - disclosure of prompts, repositories, credentials, account data, or private usage information.
 
-Community score fabrication by a computer owner is a documented residual risk, not by itself a
-vulnerability. A bypass that turns Community data into Verified data, privilege, reward, or access
-is a vulnerability.
+Community token fabrication by a computer owner for an AgentAccount they control is a documented
+residual risk, not by itself a vulnerability. Cross-account mutation, double-counting one accounting
+domain, prohibited-data exfiltration, or a bypass that turns Community into Verified, privilege,
+reward, or access is a vulnerability.
 
 ## Research expectations
 

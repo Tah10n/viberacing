@@ -19,7 +19,12 @@ function makeFixture(name) {
 
 function mutate(directory, path, transform) {
   const absolutePath = resolve(directory, path);
-  writeFileSync(absolutePath, transform(readFileSync(absolutePath, "utf8")));
+  const original = readFileSync(absolutePath, "utf8");
+  const mutated = transform(original);
+  if (mutated === original) {
+    throw new Error(`architecture checker mutation did not change ${path}`);
+  }
+  writeFileSync(absolutePath, mutated);
 }
 
 function replaceContract(text, contract, replacement) {
@@ -83,7 +88,7 @@ const cases = [
     name: "rejects duplicate abuse-case identifiers",
     mutate(directory) {
       mutate(directory, "docs/security/ABUSE_CASES.md", (text) =>
-        text.replace("VR-ABUSE-SEASON-RACE", "VR-ABUSE-USAGE-FORGERY"),
+        text.replace("VR-ABUSE-DEVICE-MULTIPLICATION", "VR-ABUSE-USAGE-FORGERY"),
       );
     },
     expectedStatus: 1,
@@ -93,7 +98,10 @@ const cases = [
     name: "rejects an incomplete abuse case",
     mutate(directory) {
       mutate(directory, "docs/security/ABUSE_CASES.md", (text) =>
-        text.replace("- **Recovery:** Pause enrollment", "- **Response:** Pause enrollment"),
+        text.replace(
+          "- **Recovery:** Keep the single committed profile",
+          "- **Response:** Keep the single committed profile",
+        ),
       );
     },
     expectedStatus: 1,
@@ -145,17 +153,17 @@ const cases = [
     name: "rejects regression to a plaintext pairing secret design",
     mutate(directory) {
       mutate(directory, "docs/architecture/DATA_FLOW.md", (text) =>
-        text.replaceAll("keyed poll verifier", "plaintext device secret"),
+        text.replaceAll("keyed poll/code verifiers", "plaintext device secret"),
       );
     },
     expectedStatus: 1,
-    expectedText: "keyed poll verifier",
+    expectedText: "keyed poll/code verifiers",
   },
   {
     name: "rejects a privacy map without a required classification",
     mutate(directory) {
       mutate(directory, "docs/security/PRIVACY_DATA_MAP.md", (text) =>
-        text.replace(/\|\s*Prohibited\s*\|/, "| Forbidden |"),
+        text.replace(/\|\s*Prohibited\s*\|/gu, "| Forbidden |"),
       );
     },
     expectedStatus: 1,
@@ -235,333 +243,299 @@ const cases = [
     expectedText: "contains an unresolved placeholder",
   },
   {
-    name: "rejects a proposed ADR that claims to amend the active trust invariant",
+    name: "rejects demoting the accepted clean replacement ADR",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        text.replace("VR-TRUST-002 would be amended", "VR-TRUST-002 is amended"),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) => text.replace("- Status: Accepted", "- Status: Proposed"),
       );
     },
     expectedStatus: 1,
-    expectedText: "VR-TRUST-002 is amended",
+    expectedText: 'required clean-agent-account contract is missing: "- Status: Accepted"',
   },
   {
     name: "rejects a proposed ADR marker inside the active invariant table",
     mutate(directory) {
-      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+      mutate(
+        directory,
+        "docs/architecture/SECURITY_INVARIANTS.md",
+        (text) => `${text}\n## Proposed invariant amendments\n`,
+      );
+    },
+    expectedStatus: 1,
+    expectedText:
+      'forbidden current-architecture text is present: "## Proposed invariant amendments"',
+  },
+  {
+    name: "rejects stale pre-replacement threat-model status",
+    mutate(directory) {
+      mutate(directory, "docs/security/THREAT_MODEL.md", (text) =>
         text.replace(
-          /\| VR-TRUST-002\s+\| Verified league/,
-          "| VR-TRUST-002   | Amended by ADR 0068. Verified league",
+          "The former Codex-specific source/score runtime is absent from the current tree",
+          "The current tree contains older local Codex-specific implementation",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "Amended by ADR 0068",
+    expectedText:
+      'forbidden current-architecture text is present: "The current tree contains older local Codex-specific implementation"',
   },
   {
-    name: "rejects restoring bootstrap authority for later passkeys",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(
-          text,
-          "register exactly the first passkey",
-          "register first and subsequent passkeys",
-        ),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "register exactly the first passkey",
-  },
-  {
-    name: "rejects removing the bootstrap-free GitHub first-passkey path",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(text, "GitHub first-passkey authority", "GitHub basic session"),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "GitHub first-passkey authority",
-  },
-  {
-    name: "rejects removing monotonic first-passkey completion",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(text, "`first-passkey-complete`", "`passkey-currently-active`"),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "`first-passkey-complete`",
-  },
-  {
-    name: "rejects renewing anonymous ownership through ordinary sync",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(text, "ordinary sync never renews it", "ordinary sync renews it"),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "ordinary sync never renews it",
-  },
-  {
-    name: "rejects automatic reactivation after terminal-grace promotion",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(
-          text,
-          "profile remains hidden and its sources remain paused",
-          "profile and sources resume automatically",
-        ),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "profile remains hidden and its sources remain paused",
-  },
-  {
-    name: "rejects removing bounded system-expiry cleanup",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(
-          text,
-          "separate Jobs-only system-expiry capability",
-          "indefinitely retained anonymous profile",
-        ),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "separate Jobs-only system-expiry capability",
-  },
-  {
-    name: "rejects collapsing independently revocable device keys into one source key",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(
-          text,
-          "multiple independently revocable device keys",
-          "one shared private key for every device",
-        ),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "multiple independently revocable device keys",
-  },
-  {
-    name: "rejects restoring a GitHub prerequisite for anonymous source actions",
+    name: "rejects treating a device as the logical ranking account",
     mutate(directory) {
       mutate(directory, "docs/PROJECT_PLAN.md", (text) =>
-        replaceContract(text, "whether anonymous or GitHub-linked", "only when GitHub-linked"),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "whether anonymous or GitHub-linked",
-  },
-  {
-    name: "rejects rollback or reuse of a consumed external admission proof",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
         replaceContract(
           text,
-          "proof is locally consumed and cannot be rolled back or reused",
-          "proof may be rolled back and reused after failure",
+          "one `AgentAccount` is one logical account",
+          "one device is one logical account",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "proof is locally consumed and cannot be rolled back or reused",
+    expectedText: "one `AgentAccount` is one logical account",
   },
   {
-    name: "rejects invite validation without a unique pre-challenge reservation",
+    name: "rejects restoring a legacy usage route",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
+      mutate(directory, "docs/PROJECT_PLAN.md", (text) =>
+        text.replaceAll("POST /v1/usage", "POST /v1/community/sync"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "POST /v1/usage",
+  },
+  {
+    name: "rejects public live ranking aggregation",
+    mutate(directory) {
+      mutate(directory, "docs/PROJECT_PLAN.md", (text) =>
         replaceContract(
           text,
-          "A unique reservation rule makes concurrent use",
-          "Non-atomic validation lets concurrent use",
+          "Public Web has no live ranking capability",
+          "Public Web performs live ranking aggregation",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "unique reservation rule makes concurrent use",
+    expectedText: "Public Web has no live ranking capability",
   },
   {
-    name: "rejects replacing sequential source requests with a shared envelope",
+    name: "rejects downgrading the replacement to an incremental migration",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(text, "Sequential all-source submit", "Multi-source envelope submit"),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) =>
+          replaceContract(
+            text,
+            "Clean-slate pre-release replacement",
+            "Incremental compatibility migration",
+          ),
       );
     },
     expectedStatus: 1,
-    expectedText: "Sequential all-source submit",
+    expectedText: "Clean-slate pre-release replacement",
   },
   {
-    name: "rejects losing the canonical direct token-total contract",
+    name: "rejects a different ranking metric",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(text, "weeklyTokenTotal", "weeklyScore"),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) => text.replaceAll("provider_reported_tokens_v1", "community_v1"),
       );
     },
     expectedStatus: 1,
-    expectedText: "weeklyTokenTotal",
+    expectedText: "provider_reported_tokens_v1",
   },
   {
-    name: "rejects roadmap drift back to an engagement score",
+    name: "rejects allowing anonymous profiles",
     mutate(directory) {
-      mutate(directory, "ROADMAP.md", (text) =>
-        replaceContract(
-          text,
-          "## Phase 7 — Direct token-total leaderboard (local Codex slice implemented)",
-          "## Phase 7 — Engagement-points leaderboard",
-        ),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) => text.replaceAll("no anonymous profile", "anonymous profiles are allowed"),
       );
     },
     expectedStatus: 1,
-    expectedText: "Phase 7 — Direct token-total leaderboard (local Codex slice implemented)",
+    expectedText: "no anonymous profile",
   },
   {
-    name: "rejects restoring an engagement-shaped token score",
+    name: "rejects splitting atomic usage settlement",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(text, "No logarithm, active-day bonus", "A logarithm and active-day bonus"),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) => text.replaceAll("one database transaction", "separate database transactions"),
       );
     },
     expectedStatus: 1,
-    expectedText: "No logarithm, active-day bonus",
+    expectedText: "one database transaction",
   },
   {
-    name: "rejects double counting nested token details",
+    name: "rejects public aggregation over raw ranking tables",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(
-          text,
-          "nested cache/reasoning/thought breakdown twice",
-          "nested cache/reasoning/thought breakdown again",
-        ),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) =>
+          replaceContract(
+            text,
+            "Public requests never aggregate raw ranking tables",
+            "Public requests aggregate raw ranking tables",
+          ),
       );
     },
     expectedStatus: 1,
-    expectedText: "nested cache/reasoning/thought breakdown twice",
+    expectedText: "Public requests never aggregate raw ranking tables",
   },
   {
-    name: "rejects changing a reader mapping during a season",
+    name: "rejects restoring the legacy public ranking endpoint",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(
-          text,
-          "revision cannot change mid-season",
-          "revision may change mid-season",
-        ),
+      mutate(
+        directory,
+        "docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md",
+        (text) => text.replaceAll("GET /v1/leaderboards/current", "GET /v1/community/tokens"),
       );
     },
     expectedStatus: 1,
-    expectedText: "revision cannot change mid-season",
+    expectedText: "GET /v1/leaderboards/current",
   },
   {
-    name: "rejects provider model or cost weighting",
+    name: "rejects removing the GitHub identity invariant",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(text, "provider/model/cost", "provider-weighted"),
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        text.replace("VR-IDENTITY-001", "VR-IDENTITY-REMOVED"),
       );
     },
     expectedStatus: 1,
-    expectedText: "provider/model/cost",
+    expectedText: "VR-IDENTITY-001",
   },
   {
-    name: "rejects treating MCP compatibility as universal token metering",
+    name: "rejects removing the multi-device deduplication invariant",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(text, "MCP compatibility alone never", "MCP compatibility always"),
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        text.replace("VR-DEDUP-001", "VR-DEDUP-REMOVED"),
       );
     },
     expectedStatus: 1,
-    expectedText: "MCP compatibility alone never",
+    expectedText: "VR-DEDUP-001",
   },
   {
-    name: "rejects a client-writable provider in UsageSyncV1",
+    name: "rejects removing atomic replay and usage settlement",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0068-multi-agent-token-leaderboard-and-mcp.md", (text) =>
-        replaceContract(text, "provider is not client-writable", "provider is client-writable"),
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        text.replace("VR-INGEST-ATOMIC-001", "VR-INGEST-ATOMIC-REMOVED"),
       );
     },
     expectedStatus: 1,
-    expectedText: "provider is not client-writable",
+    expectedText: "VR-INGEST-ATOMIC-001",
   },
   {
-    name: "rejects a blanket MCP-data prohibition that also bans UsageSyncV1",
+    name: "rejects removing snapshot-only public reads",
+    mutate(directory) {
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        text.replace("VR-SNAPSHOT-001", "VR-SNAPSHOT-REMOVED"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "VR-SNAPSHOT-001",
+  },
+  {
+    name: "rejects removing the reader privacy invariant",
+    mutate(directory) {
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        text.replace("VR-PRIVACY-001", "VR-PRIVACY-REMOVED"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "VR-PRIVACY-001",
+  },
+  {
+    name: "rejects losing the multi-device threat",
+    mutate(directory) {
+      mutate(directory, "docs/security/THREAT_MODEL.md", (text) =>
+        replaceContract(text, "Multi-device double counting", "Independent device totals"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "Multi-device double counting",
+  },
+  {
+    name: "rejects losing the partial snapshot threat",
+    mutate(directory) {
+      mutate(directory, "docs/security/THREAT_MODEL.md", (text) =>
+        replaceContract(text, "Snapshot poisoning or partial publication", "Mutable public result"),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "Snapshot poisoning or partial publication",
+  },
+  {
+    name: "rejects removing account-scoped key privacy",
     mutate(directory) {
       mutate(directory, "docs/security/PRIVACY_DATA_MAP.md", (text) =>
         replaceContract(
           text,
-          "arbitrary MCP request/response data outside the exact",
-          "all MCP data including the exact",
+          "Account-scoped device private key",
+          "Installation-wide shared private key",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "arbitrary MCP request/response data outside the exact",
+    expectedText: "Account-scoped device private key",
   },
   {
-    name: "rejects combining backfill seasons into one atomic request",
+    name: "rejects removing exact cumulative token strings",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(text, "single-source/single-season", "single-source multi-season"),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "single-source/single-season",
-  },
-  {
-    name: "rejects a partial daily total after malformed usage input",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
+      mutate(directory, "docs/security/PRIVACY_DATA_MAP.md", (text) =>
         replaceContract(
           text,
-          "No partial daily total or signed request is emitted for that source/day",
-          "Remaining records are submitted as a partial daily total for that source/day",
+          "Canonical cumulative token-total decimal string",
+          "Floating point token total",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "No partial daily total or signed request is emitted for that source/day",
+    expectedText: "Canonical cumulative token-total decimal string",
   },
   {
-    name: "rejects record-level skipping in the reader abuse control",
+    name: "rejects restoring an anonymous bootstrap key",
+    mutate(directory) {
+      mutate(directory, "docs/security/PRIVACY_DATA_MAP.md", (text) =>
+        replaceContract(
+          text,
+          "There is no anonymous identity bootstrap key",
+          "An anonymous identity bootstrap key is retained",
+        ),
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "There is no anonymous identity bootstrap key",
+  },
+  {
+    name: "rejects losing the overlap abuse case",
     mutate(directory) {
       mutate(directory, "docs/security/ABUSE_CASES.md", (text) =>
-        replaceContract(
-          text,
-          "emits no partial daily total or signed request",
-          "skip the record or file and submit the remainder",
-        ),
+        text.replaceAll("VR-ABUSE-ACCOUNT-OVERLAP", "VR-ABUSE-OVERLAP-REMOVED"),
       );
     },
     expectedStatus: 1,
-    expectedText: "skip the record or file",
+    expectedText: "VR-ABUSE-ACCOUNT-OVERLAP",
   },
   {
-    name: "rejects an unsupported hardware non-exportability claim",
-    mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        replaceContract(
-          text,
-          "does not claim hardware-backed non-exportability",
-          "guarantees hardware-backed non-exportability",
-        ),
-      );
-    },
-    expectedStatus: 1,
-    expectedText: "does not claim hardware-backed non-exportability",
-  },
-  {
-    name: "rejects moving the public beta ahead of the thin MVP",
+    name: "rejects roadmap drift back to engagement points",
     mutate(directory) {
       mutate(directory, "ROADMAP.md", (text) =>
         replaceContract(
           text,
-          "## Phase 8 — Thin MVP staging and invite beta",
-          "## Phase 5 — Staging and public beta",
+          "## Stage 6 — Thin multi-agent connector",
+          "## Stage 6 — Engagement-points client",
         ),
       );
     },
     expectedStatus: 1,
-    expectedText: "Phase 8 — Thin MVP staging and invite beta",
+    expectedText: "## Stage 6 — Thin multi-agent connector",
   },
   {
     name: "ignores agent-local Markdown outside a Git worktree",
@@ -617,12 +591,16 @@ const cases = [
   {
     name: "rejects automatic GitHub profile merging on identity collision",
     mutate(directory) {
-      mutate(directory, "docs/decisions/0069-thin-client-and-low-friction-onboarding.md", (text) =>
-        text.replace("never automatically merged", "automatically merged after collision"),
+      mutate(directory, "docs/architecture/SECURITY_INVARIANTS.md", (text) =>
+        replaceContract(
+          text,
+          "One immutable GitHub numeric user ID has at most one profile",
+          "One GitHub identity collision automatically merges profiles",
+        ),
       );
     },
     expectedStatus: 1,
-    expectedText: "never automatically merged",
+    expectedText: "One immutable GitHub numeric user ID has at most one profile",
   },
 ];
 

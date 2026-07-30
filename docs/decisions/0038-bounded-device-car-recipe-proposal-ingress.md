@@ -106,6 +106,6 @@ drop the two functions after callers are removed. Existing pending recipes remai
 - [ADR 0035](0035-bounded-session-car-recipe-proposal.md)
 - [CarRecipe reference](../reference/car-recipe.md)
 - [Authentication policy](../../contracts/v1/connector-car-proposal-authentication.json)
-- [Migration 0028](../../database/migrations/0028_connector_car_proposal_ingress.sql)
+- [Clean-bootstrap CarRecipe revision](../../database/migrations/0007_car_recipes.sql)
 - [ADR 0039](0039-bounded-agent-car-proposal-orchestration.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

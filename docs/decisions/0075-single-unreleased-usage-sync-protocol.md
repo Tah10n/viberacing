@@ -1,10 +1,10 @@
 # ADR 0075: Single unreleased Usage Sync protocol
 
-- Status: Accepted (local implementation; release and deployment pending)
+- Status: Superseded
 - Date: 2026-07-27
 - Decision owners: Contracts, Connector, Edge, Ingest, Database, Security, Privacy, and Operations
 - Supersedes: ADR 0070, ADR 0071, and ADR 0073
-- Superseded by: None
+- Superseded by: ADR 0076
 
 ## Context
 

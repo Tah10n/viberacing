@@ -19,7 +19,6 @@ export type EnrollmentConfigurationErrorCode =
   | "cookie_key_invalid"
   | "github_client_id_invalid"
   | "github_client_secret_invalid"
-  | "pairing_approval_policy_invalid"
   | "public_origin_invalid"
   | "recovery_argon2_invalid"
   | "recovery_pepper_invalid"
@@ -42,8 +41,6 @@ export interface EnrollmentConfig {
   readonly githubCallbackUrl: string;
   readonly githubClientId: string;
   readonly githubClientSecret: string;
-  readonly pairingApprovalAttemptLimit: number;
-  readonly pairingApprovalWindowSeconds: number;
   readonly publicOrigin: string;
   readonly recoveryArgon2: RecoveryArgon2Configuration;
   readonly recoveryPepper: Uint8Array;
@@ -104,17 +101,6 @@ function exactRecoveryTiming(value: string | undefined): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || String(parsed) !== value || parsed < 100 || parsed > 5_000) {
     fail("recovery_timing_invalid");
-  }
-  return parsed;
-}
-
-function exactPairingApprovalPolicyInteger(value: string | undefined, maximum: number): number {
-  if (value === undefined || !/^[1-9][0-9]{0,5}$/.test(value)) {
-    fail("pairing_approval_policy_invalid");
-  }
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || String(parsed) !== value || parsed > maximum) {
-    fail("pairing_approval_policy_invalid");
   }
   return parsed;
 }
@@ -195,14 +181,6 @@ export function resolveEnrollmentConfig(environment: Environment = process.env):
       githubCallbackUrl: new URL("/auth/github/callback", publicUrl).href,
       githubClientId,
       githubClientSecret,
-      pairingApprovalAttemptLimit: exactPairingApprovalPolicyInteger(
-        environment.VIBERACING_PAIRING_APPROVAL_ATTEMPT_LIMIT,
-        1_000,
-      ),
-      pairingApprovalWindowSeconds: exactPairingApprovalPolicyInteger(
-        environment.VIBERACING_PAIRING_APPROVAL_WINDOW_SECONDS,
-        86_400,
-      ),
       publicOrigin: publicUrl.origin,
       recoveryArgon2,
       recoveryPepper,
@@ -215,8 +193,6 @@ export function resolveEnrollmentConfig(environment: Environment = process.env):
     } satisfies EnrollmentConfig;
     Object.defineProperty(config, "cookieKey", { enumerable: false });
     Object.defineProperty(config, "githubClientSecret", { enumerable: false });
-    Object.defineProperty(config, "pairingApprovalAttemptLimit", { enumerable: false });
-    Object.defineProperty(config, "pairingApprovalWindowSeconds", { enumerable: false });
     Object.defineProperty(config, "recoveryPepper", { enumerable: false });
     Object.defineProperty(config, "toJSON", {
       enumerable: false,

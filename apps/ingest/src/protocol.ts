@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export const communitySyncMethod = "POST";
-export const usageSyncRequestTarget = "/v1/community/usage";
+export const usageSyncRequestTarget = "/v1/usage";
 export type CommunitySyncRequestTarget = typeof usageSyncRequestTarget;
 export const communitySyncMediaType = "application/json";
 export const maximumCommunitySyncBodyBytes = 8_192;

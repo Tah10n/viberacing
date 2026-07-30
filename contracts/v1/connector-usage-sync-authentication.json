@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "protocolId": "viberacing-usage-sync-auth-v1",
   "method": "POST",
-  "requestTarget": "/v1/community/usage",
+  "requestTarget": "/v1/usage",
   "mediaType": "application/json",
   "maximumBodyBytes": 8192,
   "maximumRawHeaderPairs": 64,

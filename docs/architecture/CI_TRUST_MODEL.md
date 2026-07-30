@@ -13,6 +13,17 @@ enable the Windows portable smoke. No event receives production, deployment, sig
 application secrets. Checkout does not persist credentials, dependency caches are disabled, every
 job has a timeout, and no job publishes an artifact.
 
+The separate `Connector release candidates` workflow is not pull-request CI. It is manual-only,
+refuses every ref except `main`, attaches the named `connector-release-candidate` Environment, and
+uses only the OIDC and attestation write permissions required by GitHub's Sigstore service. Its
+five-job native matrix builds Windows x86_64, macOS arm64, macOS x86_64, Linux x86_64, and Linux
+arm64 candidates from the exact Cargo lock. Each job performs a bounded portable copy/removal smoke,
+creates SHA-256 checksums, an exact compatibility declaration, and a path-free SPDX 2.3 SBOM, then
+signs build-provenance and SBOM attestations before uploading a seven-day artifact whose name starts
+with `UNSIGNED-CANDIDATE-`. That artifact is not an official release: native platform-signing
+infrastructure, hosted matrix results, a package channel, and independent post-download verification
+are not present in the local tree.
+
 ## Execution flow
 
 ```mermaid
@@ -30,12 +41,18 @@ flowchart LR
   EV --> RT["Pinned Rust toolchain and workspace gate"]
   EV --> DB["Pinned, portless PostgreSQL; synthetic role and invariant gate"]
   MM --> WP["Secretless Windows build; portable copy/remove smoke"]
+  MD["Manual dispatch on main"] --> CE["Protected connector-candidate environment"]
+  CE --> MX["Five native locked builds"]
+  MX --> LC["Portable lifecycle + checksum + compatibility + SPDX"]
+  LC --> AT["GitHub Sigstore provenance and SBOM attestations"]
+  AT --> UC["7-day UNSIGNED-CANDIDATE artifact"]
   CORE --> R["Read-only check result"]
   AU --> R
   RT --> R
   WP --> R
   DB --> R
   R -. "never" .-> DP["Deploy, sign, publish, or release"]
+  UC -. "native signing and promotion absent" .-> OR["Official connector release"]
 ```
 
 Repository scripts do execute attacker-controlled code during a pull-request check. That is expected
@@ -46,7 +63,9 @@ does not make the pull request trusted; review and protected-branch policy remai
 
 - `pull_request_target` is forbidden.
 - Remote actions require a full commit SHA; container actions require an image digest.
-- Top-level and job permissions may be only `read` or `none` in pull-request CI.
+- Top-level and job permissions may be only `read` or `none` in pull-request CI. The one checked
+  connector-candidate workflow has an exact exception for `id-token: write` and
+  `attestations: write`; it has no pull-request trigger or secret reference.
 - Checkout must set `persist-credentials: false`.
 - Checkout must fetch complete history so the reachable-history leak gate cannot pass on a shallow
   snapshot.
@@ -62,6 +81,12 @@ does not make the pull request trusted; review and protected-branch policy remai
   bounded portable copy/removal smoke. Its exact event condition and step order are policy-checked;
   it has no artifact upload, package publication, credential operation, networked connector command,
   signing step, or release environment.
+- The connector-candidate workflow has one exact matrix and one fixed step order. Configuration
+  mutations reject an added trigger, non-main execution, a missing target, mutable action, unlocked
+  build, changed Environment, secret reference, weakened attestation, or upload that loses the
+  `UNSIGNED-CANDIDATE-` label. It uses pinned first-party `actions/attest` and
+  `actions/upload-artifact`; no registry, GitHub Release, package host, self-update channel, native
+  signing key, or production credential is reachable.
 - Phase 1 viewport evidence is checked as committed PNG bytes, dimensions, digests, and metadata
   only by the exhaustive `main` or manual release gate. Pull-request CI does not discover or launch
   a workstation browser, reuse a browser profile, or regenerate visual evidence. The separate
@@ -119,7 +144,16 @@ approval; an old-version or database rollback is outside this workflow.
 
 This checked declaration does not create its GitHub Environment, credentials, Railway project,
 Cloudflare route, or a hosted result. It also does not build, upload, sign, attest, or release the
-connector. Connector artifact provenance remains a separate future release workflow.
+connector.
+
+The separate connector-candidate declaration now covers five explicit native runner targets, locked
+compilation, bounded install/uninstall, checksums, a versioned compatibility manifest, SPDX SBOM,
+and GitHub Sigstore provenance/SBOM attestations. It can upload only short-lived,
+explicitly-unsigned candidate bundles after manual `main` dispatch and Environment approval. The
+tree proves the workflow shape and a local Windows bundle, not a hosted run. It has no native
+Windows/macOS signing identities, notarization, Linux project-signing key, immutable public package
+host, official release upload, update manifest, or hosted clean-machine result, so no connector
+version or platform is declared officially supported.
 
 ## Remote settings required before publication
 
@@ -129,4 +163,6 @@ deployment process must retain required reviewers on the exact `production` Envi
 stable tags, immutable releases, and the exhaustive secretless verification job for the exact
 revision it promotes. Workflow changes need appropriate ownership, secret scanning and push
 protection must be enabled when available, and fork plus release behavior must be tested on the
-actual GitHub repository. These remote controls cannot be proven by files in the local tree.
+actual GitHub repository. The `connector-release-candidate` Environment must likewise require
+reviewers before its first hosted run. These remote controls cannot be proven by files in the local
+tree.

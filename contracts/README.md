@@ -1,174 +1,151 @@
-# Public protocol contracts
+# Public contracts
 
-This directory is the language-neutral source of truth for Vibe Racing wire shapes. The current
-files establish request and response boundaries plus locally implemented public score, race, and
-Usage Sync operations; revision 0007 maps bounded Community usage into a database-only procedure,
-revision 0041 adds server-owned provider attribution and the public Usage Sync wrapper, revision
-0043 makes that wrapper the sole runtime submission capability, revision 0011 provides a
-database-only score projection, and revision 0027 adds a compatible active-recipe race projection. A
-local pure Ingest kernel now authenticates and parses the exact bounded sync request, a separate
-local adapter constrains its PostgreSQL mapping, and a transport-free application boundary composes
-them into validated result/problem decisions. A separate bounded Fastify server factory now
-preserves the exact raw request and serializes only those validated decisions. The candidate Rust
-connector now signs one exact pairing-possession message, then separately composes exact unsigned
-body/device-message material and signs it behind an inaccessible source-bound key capability. A
-server-only Web kernel strictly verifies the pairing proof against the exact approved database
-material. A separate proposal-only Rust/Web path now shares an exact `CarRecipeV1`
-body/device-signature vector and never grants activation authority. One
-[`UsageSyncV1` vector](v1/connector-usage-sync-device-request.test-vector.json) proves the exact
-body, digest, nonce, message, public key, and signature against production Ingest code; another
-vector proves the exact Rust/Web pairing message and signature. Local Web/Auth boundaries now
-compose a generated nine- minute pairing start, protected keyed poll lookup, strict proof, and
-atomic activation through exact versioned routes. Local Rust commands retain the real key in the
-native OS credential store and exercise pairing, one exact candidate sync, and proposal-only
-signing. No released or supported connector, real-account Codex result, deployed endpoint, working
-database credential, edge signer, trusted external TLS/edge route, or composed live flow exists. A
-separate local Ingest host can now bind the reviewed application/server composition under a closed
-loopback or explicitly declared Railway-edge listener contract; that local executable evidence does
-not establish any of those deployment claims. An opt-in synthetic integration now carries
-independently signed requests through the emitted host, a disposable least-privileged Ingest login,
-and the reviewed PostgreSQL procedures. It proves the closed response and persistence contract
-locally, not protected secret delivery, external TLS/edge routing, production credentials, real-user
-input, or capacity.
+`contracts/v1` is the canonical public protocol surface. It contains 18 JSON Schemas, four
+authentication/transport policies, and seven OpenAPI operations. Generated TypeScript and OpenAPI
+artifacts are derived from that manifest and must never be edited by hand.
 
-## Canonical version 1 schemas
+All contracts are unreleased version 1. There is no compatibility population, so removed pre-release
+score, race, status, token-ranking, source-sync, and source-pairing shapes are not aliases or
+migration paths.
 
-- [`CarRecipeV1`](v1/car-recipe.schema.json) is the exact nine-field customization object used by
-  the local deterministic renderer and session-owned proposal boundary. It fixes version 1,
-  project-owned body/part/palette/trail enums, and an integer seed from 0 through 65535. It rejects
-  arbitrary color, text, URL, path, file, markup, drawing command, conversation, and unknown fields.
-  The dedicated device-authenticated proposal POST uses it as a request contract; authenticated
-  browser decision forms remain private application routes.
-- [`connector-car-proposal-authentication.json`](v1/connector-car-proposal-authentication.json)
-  fixes the 512-byte exact-body route, parser/header budgets, fresh 16-byte nonce, canonical time,
-  and domain-separated Ed25519 message. Web verifies it only against an active source-bound device.
-- [`connector-car-proposal-device-request.test-vector.json`](v1/connector-car-proposal-device-request.test-vector.json)
-  fixes one synthetic exact recipe body, digest, nonce, timestamp, public key, message, and
-  signature shared by Rust and Web. It contains no private key or real identifier.
-- [`ConnectorCarProposalResultV1`](v1/connector-car-proposal-result.schema.json) returns only one
-  generic accepted acknowledgement and request ID; it exposes no proposal/profile/source identity.
-- [`CommunityScorePageV1`](v1/community-score-page.schema.json) is a response-only top-32 score
-  page. It fixes the trust tier to `community`, fixes `selfReported` to true, mirrors only the ten
-  reviewed revision 0011 fields, and permits an empty result without private-state disclosure. It
-  contains no profile/source/device ID, raw or daily usage, exact timestamp, car, streak, freshness,
-  profile detail, cursor, or caller-controlled sorting/filtering.
-- [`CommunityRacePageV1`](v1/community-race-page.schema.json) preserves the same trust metadata,
-  page bound, ten score fields, and ordering while allowing exactly one optional canonical
-  `CarRecipeV1` per participant. Its absence means no approved active recipe. Proposal identity,
-  state, timestamps, private IDs, daily/raw usage, and arbitrary content remain forbidden. The
-  stable `CommunityScorePageV1` remains unchanged and rejects this additional field.
-- [`CommunityRaceStatusPageV1`](v1/community-race-status-page.schema.json) is a separate compatible
-  race component. It preserves the race fields, requires one UTC-day-rounded `freshnessDays`, and
-  permits `streakDays` only when the profile has enabled public streak visibility. Exact receipt
-  timestamps, underlying daily scores, preferences, private IDs, and proposal state remain
-  forbidden. Both older page components remain unchanged and reject these status fields.
-- [`CommunityScoreQueryV1`](v1/community-score-query.schema.json) accepts exactly one inclusive
-  Monday `seasonStart` from `1999-12-27` through `2099-12-28`. The Web URL parser rejects duplicate,
-  missing, encoded-name, and unknown parameters before applying the generated value validator.
-- [`UsageSyncV1`](v1/usage-sync.schema.json) is the sole provider-neutral request for exact
-  `POST /v1/community/usage`. It carries only opaque source/sync IDs, canonical observation time,
-  client/agent versions, and one through 31 unique date/daily-total pairs. Provider and accounting
-  revision are deliberately absent and derived from the registered source.
-- [`connector-usage-sync-authentication.json`](v1/connector-usage-sync-authentication.json) retains
-  the sync proof and transport policy and binds both signatures to the Usage Sync path. The Edge and
-  Ingest implementations keep that route absent unless their exact independent
-  `VIBERACING_USAGE_SYNC_ENABLED=true` decision is present. That decision is capability containment,
-  not a migration switch.
-- [`connector-usage-sync-device-request.test-vector.json`](v1/connector-usage-sync-device-request.test-vector.json)
-  fixes the current candidate connector's exact `UsageSyncV1` body, SHA-256 digest, nonce,
-  path-bound device message, public key, and signature for Rust/Ingest verification. It contains no
-  private key or real identifier.
-- [`connector-pairing-authentication.json`](v1/connector-pairing-authentication.json) fixes the
-  domain-separated pairing-possession message over one canonical version-4 transaction ID, exact
-  32-byte server challenge, and exact pending Ed25519 public key. It also records that exact poll
-  possession, browser approval, unexpired pending-key state, and strict signature verification are
-  all required before activation; the local pure verifier implements only the last check.
-- [`ConnectorPairingStartV1`](v1/connector-pairing-start.schema.json) accepts one closed anonymous
-  public-key and bounded device-metadata request. It contains no account, usage, poll secret,
-  source, or device binding.
-- [`ConnectorPairingStartResultV1`](v1/connector-pairing-start-result.schema.json) returns the one-
-  time poll token, possession challenge, short user code, expiry, and server request ID only after
-  the pending transaction is committed.
-- [`ConnectorPairingPollV1`](v1/connector-pairing-poll.schema.json) accepts the short-lived poll
-  token plus the exact Ed25519 possession signature and no caller-selected identity or binding.
-- [`ConnectorPairingPollResultV1`](v1/connector-pairing-poll-result.schema.json) returns either an
-  empty pending array or exactly one activated source/device binding. Generic problem responses
-  cover invalid, expired, rejected, and unavailable states without reflecting private reasons.
-- [`connector-pairing-transport.json`](v1/connector-pairing-transport.json) fixes the two POST
-  paths, body budgets, anonymous client-ID header, four-call local admission, fixed
-  global-and-64-bucket database shaping, no-store policy, and same-origin/no-CORS response boundary.
-- [`connector-pairing-possession.test-vector.json`](v1/connector-pairing-possession.test-vector.json)
-  fixes one synthetic pairing ID/challenge, exact message, public key, and signature shared by the
-  Rust signer and Web verifier. It deliberately reuses the Usage Sync vector's synthetic public key
-  and contains no private key or bearer token.
-- [`UsageSyncResultV1`](v1/usage-sync-result.schema.json) acknowledges accepted, duplicate, or
-  quarantined input without returning a private anomaly reason or derived source attribution. The
-  local Ingest application reconstructs and validates this body only after verification and database
-  settlement.
-- [`ProblemDetailsV1`](v1/problem-details.schema.json) returns a stable error code and request ID,
-  plus one fixed generic title, never a stack trace, SQL detail, secret, request body, or internal
-  hostname. A server-only Web factory now generates an opaque 128-bit request ID, fixes each
-  status/title/retry mapping, validates the complete body, and emits `no-store`
-  `application/problem+json`; its closed vocabulary now includes explicit 405 and 406 handling.
-- [`manifest.json`](v1/manifest.json) defines the reviewed schema generation order, public
-  type/export names, closed authentication-policy inventory, and the locally implemented eight
-  operations: the four Community score/race/status/token GETs, `POST /v1/community/usage`,
-  `POST /v1/connector/cars/proposals`, and the two pairing start/poll POST routes, with
-  method-specific query/body, response, problem, no-queue, authentication, cache, same-origin CORS,
-  and repository-status policies.
+## Inventory
 
-Every object rejects unknown fields. Every string, integer, array, identifier, version, date, and
-timestamp is bounded. Reviewed date-range and ISO-weekday extensions make the score season boundary
-executable instead of relying on prose. The provider-neutral request uses `reportedDate`; only
-`observedAt` uses a canonical UTC timestamp, and server receipt time remains authoritative for
-replay and season deadlines. Duplicate sync dates and duplicate public display positions are
-rejected by the documented `x-viberacing-uniqueBy` extension.
+### Schemas
 
-The token maximum is a numeric serialization safety bound, not an honesty claim. A valid signature
-identifies the registered device, not the truth of self-reported usage. Server-side anomaly and
-fair-use policies remain separate and do not become client-writable fields. Server-derived score and
-trust fields exist only in the response component and never become writable connector input.
+- `AgentProviderV1`
+- `CarRecipeV1`
+- `ConnectorCarProposalResultV1`
+- `ConnectorDiscoveryManifestV1`
+- `ConnectorPairingApprovalV1`
+- `ConnectorPairingPollV1` and `ConnectorPairingPollResultV1`
+- `ConnectorPairingStartV1` and `ConnectorPairingStartResultV1`
+- `LeaderboardQueryV1`
+- `LeaderboardSeasonPathV1`
+- `LeaderboardSnapshotV1`
+- `ProblemDetailsV1`
+- `PublicProfilePathV1`, `PublicProfileQueryV1`, and `PublicProfileSummaryV1`
+- `UsageSyncV1` and `UsageSyncResultV1`
 
-## Derived artifacts
+`AgentProviderV1` is the closed protocol allowlist for providers with a repository-implemented
+reader candidate. Its current `codex` member is not a provider-support declaration: the clean
+database bootstrap keeps Codex `recognized`, leaves its accounting revision disabled for new
+accounts, and admits no provider until the separately reviewed registry, compatibility, and release
+evidence is complete.
 
-`node scripts/generate-contracts.mjs` deterministically creates:
+### Policies
 
-- [`openapi.v1.json`](generated/openapi.v1.json), which documents the eight locally implemented HTTP
-  operations and explicitly states that repository implementation does not prove deployment;
-- [`packages/contracts/src/generated.ts`](../packages/contracts/src/generated.ts), containing
-  readonly TypeScript shapes, embedded schemas, source digest, and validator wrappers.
+- connector CarRecipe proposal authentication;
+- connector pairing possession;
+- connector pairing transport; and
+- connector usage-sync authentication.
 
-`pnpm run check:contracts` regenerates both artifacts in memory and fails on schema, operation, or
-policy-source drift. Do not edit a generated file to make a check pass.
+### OpenAPI operations
 
-## Change rules
+| Method | Path                             | Repository status   | Purpose                                     |
+| ------ | -------------------------------- | ------------------- | ------------------------------------------- |
+| POST   | `/v1/connector/cars/proposals`   | `contract-only`     | Submit one bounded private car proposal     |
+| POST   | `/v1/connector/pairing/poll`     | `contract-only`     | Poll one bounded pairing batch              |
+| POST   | `/v1/connector/pairing/start`    | `contract-only`     | Start one bounded pairing batch             |
+| GET    | `/v1/leaderboards/{seasonStart}` | `implemented-local` | Read an immutable historical snapshot page  |
+| GET    | `/v1/leaderboards/current`       | `implemented-local` | Read the last-good current snapshot page    |
+| GET    | `/v1/profiles/{handle}`          | `implemented-local` | Read a current public profile summary       |
+| POST   | `/v1/usage`                      | `implemented-local` | Submit one AgentAccount cumulative snapshot |
 
-1. Update the canonical schema and manifest operation, never the derived artifact first.
-2. Preserve `additionalProperties: false` and explicit size/value bounds at every nested level.
-3. Map each new field to the privacy data map and identify whether the client is allowed to write
-   it. Server-derived trust, score, identity, moderation, and season fields stay absent from
-   connector requests.
-4. Add positive and negative runtime tests, regenerate, review the complete diff, and run
-   `pnpm run verify`.
-5. Use a new contract version or separately named component for a breaking wire change. Generated
-   consumers reject unknown response fields, so do not silently expand or reinterpret an existing
-   shape.
+`implemented-local` means repository code and synthetic evidence exist. It does not mean the route
+is deployed, enabled, reachable on the Internet, capacity-tested, or backed by production
+credentials. The three connector operations remain contract-only even though transport-free Web
+applications and connector clients exist; there is no composed hosted transport result.
 
-The local Ingest server preserves the exact body bytes and duplicate raw-header evidence, enforces
-socket/parser/header/connection/time/admission bounds, rejects proxy and inbound request-ID trust,
-and serializes only revalidated `no-store` success/problem contracts. The Ingest kernel enforces the
-content type, raw envelope/parser budgets, duplicate object-key rejection, exact-body proofs,
-generated contract, and strict device signature before returning a frozen allowlist. A protected
-local factory supplies only one exact primary and optional secondary origin-key pair to that
-verifier; no real key or deployment binding is present. The local application composer binds the
-persistent replay/device/submission adapter, generates one request ID, and validates the closed
-success/problem decision. ADR 0033's separate local host binds only this server/application
-composition through exact listener modes and bounded process shutdown. Its `railway-edge` value is
-an operator declaration, not proof of a provisioned Ingest login, external TLS, or trusted edge
-route. The local transport bounds one process but does not replace edge rate shaping, direct-origin
-denial, distributed backpressure, capacity testing, monitoring, or database constraints.
-`pnpm run test:ingest:postgres-integration` additionally checks the complete synthetic loopback
-contract against disposable PostgreSQL, including accepted, duplicate, replay, and revoked-device
-decisions plus exact stored state. It also observes four valid requests blocked at the first
-replay-store call, rejects a fifth without a fifth replay call, and validates the four accepted
-responses after release; this is no-queue correctness evidence, not capacity testing.
+## Usage semantics
+
+`UsageSyncV1` carries one exact cumulative account/day observation:
+
+- one opaque AgentAccount ID and one sync ID;
+- observation time, client version, reader version, and 1–31 unique UTC dates;
+- one canonical non-negative decimal token string per date; and
+- no prompts, conversations, code, repository contents, local paths, email, access tokens, API keys,
+  cost, model usage, arbitrary metadata, or uploaded files.
+
+Provider identity and accounting semantics are sealed during pairing. Ingest revalidates them
+against the active account and device rather than accepting provider, revision, scope, trust,
+profile, installation, or device fields in the body. PostgreSQL parses each decimal string directly
+into `numeric(30,0)`; JavaScript never converts it through `Number`.
+
+The request is signed twice:
+
+1. an account-scoped device key signs the canonical body; and
+2. the Edge boundary adds a fresh path/body-bound origin HMAC.
+
+Origin replay is consumed before device lookup or idempotency classification. A valid request then
+atomically records the immutable observation, replaces that device's cumulative account/day value,
+recomputes the exact AgentAccount/day total, appends a hash-chained ranking event, and coalesces the
+affected season into the dirty queue. Duplicate idempotency returns the original acknowledgement;
+conflicting reuse fails closed.
+
+## Pairing semantics
+
+The connector discovers a bounded set of logical candidate accounts. Each candidate binds:
+
+- one closed provider identifier;
+- one immutable provider-native account key;
+- one reader and accounting revision;
+- one competitive scope and trust tier; and
+- the generated installation and account-scoped public key.
+
+The browser shows the complete sealed batch. One fresh passkey assertion approves or rejects the
+whole batch atomically. Provider-native labels remain private and mutable; ownership depends on the
+immutable account key. Fallback-code admission uses a separately protected verifier and does not
+weaken the device possession proof.
+
+## Public snapshot semantics
+
+Public leaderboard and profile responses are read only from immutable published snapshots. Rank is
+derived solely from exact weekly token totals:
+
+- equal totals share rank;
+- pagination does not alter rank;
+- display order uses stable public tie breakers;
+- hidden or deletion-pending profiles are excluded;
+- provider breakdowns add exactly to the profile total; and
+- a failed refresh preserves the previous published pointer.
+
+The current and historical leaderboard operations share `LeaderboardSnapshotV1`. The response
+identifies the ranking scheme and unit explicitly and includes only the public projection. Finalized
+snapshots cannot be changed.
+
+## Authoring rules
+
+1. Change a canonical schema or policy under `contracts/v1`.
+2. Register it in `contracts/v1/manifest.json`.
+3. Preserve closed objects, bounded strings/arrays, explicit integer limits, and exact enums.
+4. Keep authentication and admission policy explicit on every operation.
+5. Regenerate derivatives:
+
+   ```text
+   corepack pnpm run generate:contracts
+   ```
+
+6. Verify drift and runtime behavior:
+
+   ```text
+   corepack pnpm run check:contracts
+   corepack pnpm run lint:contracts
+   corepack pnpm run typecheck:contracts
+   corepack pnpm run test:contracts:coverage
+   ```
+
+Contract changes are security and privacy changes. Read
+[security invariants](../docs/architecture/SECURITY_INVARIANTS.md),
+[compatibility policy](../docs/architecture/COMPATIBILITY_POLICY.md), and the
+[privacy data map](../docs/security/PRIVACY_DATA_MAP.md) first.
+
+## Evidence boundary
+
+Repository checks prove canonical/derived drift control, schema closure, exact route inventory,
+runtime validation, signature fixtures, malformed-input rejection, and compatibility between the
+Edge signer and Ingest verifier. Disposable PostgreSQL integrations additionally prove the atomic
+storage mapping.
+
+They do not prove a supported provider, released connector, clean-machine real-account read,
+deployed Edge or Ingest route, external TLS, secret delivery, representative load, monitoring,
+operational retention, or real-user ingestion.
