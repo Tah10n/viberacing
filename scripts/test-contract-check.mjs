@@ -13,17 +13,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { writeGeneratedArtifacts } from "./lib/contract-generation.mjs";
+import { implementedContractEvidencePaths } from "./lib/contract-evidence.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const checker = resolve(import.meta.dirname, "check-contracts.mjs");
 const temporaryRoot = mkdtempSync(join(tmpdir(), "viberacing-contract-check-"));
-const evidencePaths = [
-  "apps/edge/src/worker.mjs",
-  "apps/ingest/src/protocol.ts",
-  "apps/ingest/src/database-pool.ts",
-  "database/migrations/0004_usage_ingest_replay_and_idempotency.sql",
-  "database/tests/usage_accounting.sql",
-];
 let caseCount = 0;
 
 function jsonPath(root, file) {
@@ -48,7 +42,7 @@ async function makeFixture(name) {
   });
   mkdirSync(resolve(root, "contracts", "generated"), { recursive: true });
   mkdirSync(resolve(root, "packages", "contracts", "src"), { recursive: true });
-  for (const relativePath of evidencePaths) {
+  for (const relativePath of implementedContractEvidencePaths) {
     const destination = resolve(root, relativePath);
     mkdirSync(dirname(destination), { recursive: true });
     cpSync(resolve(repositoryRoot, relativePath), destination);
