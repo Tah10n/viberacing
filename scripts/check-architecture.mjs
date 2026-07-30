@@ -60,9 +60,9 @@ const requiredContent = new Map([
       "## Threat Model, Trust Boundaries, and Assumptions",
       "## Attack Surface, Mitigations, and Attacker Stories",
       "## Severity Calibration (Critical, High, Medium, Low)",
-      "The current tree contains",
+      "The former Codex-specific source/score runtime is absent from the current tree",
       "Implementation status",
-      "security invariants",
+      "SECURITY_INVARIANTS.md",
     ],
   ],
   [
@@ -404,7 +404,11 @@ const forbiddenCurrentArchitectureText = new Map([
   ],
   [
     "docs/security/THREAT_MODEL.md",
-    ["TB-15 | Low-friction enrollment", "anonymous ownership lease"],
+    [
+      "TB-15 | Low-friction enrollment",
+      "anonymous ownership lease",
+      "The current tree contains older local Codex-specific implementation",
+    ],
   ],
   [
     "docs/security/PRIVACY_DATA_MAP.md",

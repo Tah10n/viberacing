@@ -129,6 +129,13 @@ const russianReadme = read("README.ru.md");
 const databaseReadme = read("database/README.md");
 const implementationStatus = read("docs/IMPLEMENTATION_STATUS.md");
 const localDevelopment = read("docs/getting-started/LOCAL_DEVELOPMENT.md");
+const threatModel = read("docs/security/THREAT_MODEL.md");
+const decisionIndex = read("docs/decisions/README.md");
+const migrationRunbook = read("docs/operations/MIGRATION_RUNBOOK.md");
+const securityPolicy = read("SECURITY.md");
+const contributing = read("CONTRIBUTING.md");
+const governance = read("GOVERNANCE.md");
+const maintainers = read("MAINTAINERS.md");
 
 if (
   schemaCount !== undefined &&
@@ -189,6 +196,49 @@ requireCompactOnboarding("README.ru.md", russianReadme, {
   maximumQuickStartLine: 40,
   quickStartHeading: "## Быстрый запуск",
 });
+
+requireNormalized(
+  "docs/security/THREAT_MODEL.md",
+  threatModel,
+  "The former Codex-specific source/score runtime is absent from the current tree",
+  "clean replacement status is stale",
+);
+requireNormalized(
+  "docs/decisions/README.md",
+  decisionIndex,
+  "Accepted; implemented locally; external pending",
+  "ADR index status is stale",
+);
+requireNormalized(
+  "docs/operations/MIGRATION_RUNBOOK.md",
+  migrationRunbook,
+  "The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as local synthetic evidence.",
+  "migration evidence status is stale",
+);
+requireNormalized(
+  "SECURITY.md",
+  securityPolicy,
+  "local pre-release runtime components but no deployed runtime product",
+  "runtime evidence boundary is stale",
+);
+requireNormalized(
+  "CONTRIBUTING.md",
+  contributing,
+  "The initial public source push has completed.",
+  "source-publication status is stale",
+);
+requireNormalized(
+  "GOVERNANCE.md",
+  governance,
+  "maintainer-led public source-only pre-release project",
+  "publication governance status is stale",
+);
+requireNormalized(
+  "MAINTAINERS.md",
+  maintainers,
+  "The initial source-only publication is complete.",
+  "maintainer publication status is stale",
+);
 
 if (findings.length > 0) {
   console.error(`Documentation currentness check failed with ${findings.length} finding(s):`);

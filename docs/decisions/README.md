@@ -84,7 +84,7 @@ what it costs, how it is verified, and how it can be replaced.
 | [0073](0073-candidate-connector-usage-sync-cutover.md)              | Candidate connector UsageSyncV1 cutover                              | Superseded by ADR 0075                                 |
 | [0074](0074-release-driven-protected-service-deployment.md)         | Release-driven protected service deployment                          | Accepted; checked workflow; hosted execution pending   |
 | [0075](0075-single-unreleased-usage-sync-protocol.md)               | Single unreleased Usage Sync protocol                                | Superseded by ADR 0076                                 |
-| [0076](0076-clean-agent-account-provider-reported-token-ranking.md) | Clean AgentAccount provider-reported token ranking                   | Accepted; clean-slate target; implementation pending   |
+| [0076](0076-clean-agent-account-provider-reported-token-ranking.md) | Clean AgentAccount provider-reported token ranking                   | Accepted; implemented locally; external pending        |
 
 ## Lifecycle
 

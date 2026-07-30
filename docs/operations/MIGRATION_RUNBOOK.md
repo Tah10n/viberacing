@@ -6,9 +6,11 @@
 [ADR 0076](../decisions/0076-clean-agent-account-provider-reported-token-ranking.md) supersedes the
 unreleased 43-revision catalog. No production database or user population exists, so that catalog is
 design evidence only and must not be promoted, backfilled, wrapped, or followed by revision 0044.
-Until the clean bootstrap manifest, roles, restore evidence, and migration-runner tests land
-together, this runbook authorizes no staging execution. A local old-schema integration result is
-baseline evidence, not permission to preserve the old ledger.
+The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as
+local synthetic evidence. They do not authorize staging execution. This runbook remains closed until
+the protected prerequisites, exact change record, target, owners, and go/no-go decision below are
+satisfied. A former old-schema integration result is historical baseline evidence, not permission to
+preserve the old ledger.
 
 This is the checked operator contract for applying the repository-owned PostgreSQL migration catalog
 to an isolated staging environment. Migration files are authored, reviewed, hashed, and committed

@@ -268,6 +268,20 @@ const cases = [
       'forbidden current-architecture text is present: "## Proposed invariant amendments"',
   },
   {
+    name: "rejects stale pre-replacement threat-model status",
+    mutate(directory) {
+      mutate(directory, "docs/security/THREAT_MODEL.md", (text) =>
+        text.replace(
+          "The former Codex-specific source/score runtime is absent from the current tree",
+          "The current tree contains older local Codex-specific implementation",
+        ),
+      );
+    },
+    expectedStatus: 1,
+    expectedText:
+      'forbidden current-architecture text is present: "The current tree contains older local Codex-specific implementation"',
+  },
+  {
     name: "rejects treating a device as the logical ranking account",
     mutate(directory) {
       mutate(directory, "docs/PROJECT_PLAN.md", (text) =>

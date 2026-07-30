@@ -14,8 +14,9 @@ from any future server-verified provider integration. Tokenizers differ, so the 
 claim about normalized cost, compute, effort, quality, or one-human uniqueness.
 
 [ADR 0076](../decisions/0076-clean-agent-account-provider-reported-token-ranking.md) is the accepted
-clean-slate target. The current tree contains older local Codex-specific implementation while the
-replacement is built. [Implementation status](../IMPLEMENTATION_STATUS.md) is the evidence boundary;
+clean-slate target. The former Codex-specific source/score runtime is absent from the current tree;
+the remaining exact-version Codex reader is a recognized candidate, not a supported provider.
+[Implementation status](../IMPLEMENTATION_STATUS.md) is the evidence boundary. The
 [security invariants](../architecture/SECURITY_INVARIANTS.md) are the normative target. Local and
 synthetic tests are not deployment, provider, release, monitoring, capacity, or real-user evidence.
 

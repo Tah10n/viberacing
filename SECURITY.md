@@ -16,8 +16,8 @@ calibration. The [abuse-case catalog](docs/security/ABUSE_CASES.md),
 [privacy data map](docs/security/PRIVACY_DATA_MAP.md), and
 [security invariants](docs/architecture/SECURITY_INVARIANTS.md) are normative companion documents.
 
-The current repository has no runtime product. Planned controls in those documents are release
-gates, not claims that a deployed service exists.
+The current repository has local pre-release runtime components but no deployed runtime product.
+Controls in those documents are release and launch gates, not claims that a deployed service exists.
 
 ## Supported versions
 

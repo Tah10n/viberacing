@@ -14,7 +14,10 @@ function makeFixture(name) {
     "contracts/v1",
     "contracts/generated",
     "database/migrations",
+    "docs/decisions",
     "docs/getting-started",
+    "docs/operations",
+    "docs/security",
     "scripts",
   ]) {
     mkdirSync(resolve(directory, path), { recursive: true });
@@ -22,12 +25,19 @@ function makeFixture(name) {
   for (const path of [
     "README.md",
     "README.ru.md",
+    "CONTRIBUTING.md",
+    "GOVERNANCE.md",
+    "MAINTAINERS.md",
+    "SECURITY.md",
     "contracts/v1/manifest.json",
     "contracts/generated/openapi.v1.json",
     "database/README.md",
     "database/migrations/manifest.json",
     "docs/IMPLEMENTATION_STATUS.md",
+    "docs/decisions/README.md",
     "docs/getting-started/LOCAL_DEVELOPMENT.md",
+    "docs/operations/MIGRATION_RUNBOOK.md",
+    "docs/security/THREAT_MODEL.md",
   ]) {
     cpSync(resolve(root, path), resolve(directory, path));
   }
@@ -131,6 +141,58 @@ const cases = [
     },
     expectedStatus: 1,
     expectedText: "must contain one Mermaid thumbnail",
+  },
+  {
+    name: "rejects stale pre-replacement threat-model status",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/security/THREAT_MODEL.md",
+        "The former Codex-specific source/score runtime is absent from the current tree",
+        "The current tree contains older local Codex-specific implementation",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "clean replacement status is stale",
+  },
+  {
+    name: "rejects a stale clean-replacement ADR index",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/decisions/README.md",
+        "Accepted; implemented locally; external pending",
+        "Accepted; clean-slate target; implementation pending",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "ADR index status is stale",
+  },
+  {
+    name: "rejects stale migration evidence status",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/operations/MIGRATION_RUNBOOK.md",
+        "have landed as\nlocal synthetic evidence",
+        "remain pending as\nlocal synthetic evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "migration evidence status is stale",
+  },
+  {
+    name: "rejects stale publication governance status",
+    mutate(directory) {
+      replace(
+        directory,
+        "GOVERNANCE.md",
+        "maintainer-led public source-only pre-release project",
+        "maintainer-led project in unpublished source-only preparation",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "publication governance status is stale",
   },
 ];
 
