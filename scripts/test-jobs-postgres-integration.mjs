@@ -26,6 +26,7 @@ const extraRole = "viberacing_jobs_extra";
 const completedMessage = "Vibe Racing Jobs command completed.\n";
 const failedMessage = "Vibe Racing Jobs command failed.\n";
 const applicationName = "viberacing-jobs-maintenance";
+const migrationCount = 7;
 const schedulerTimeoutMs = 120_000;
 const processExitTimeoutMs = 20_000;
 const composePrefix = [
@@ -202,7 +203,7 @@ function loadReviewedMigrations() {
   if (findings.length > 0) {
     throw new Error(`migration manifest validation failed:\n- ${findings.join("\n- ")}`);
   }
-  assert.equal(manifest.migrations.length, 6);
+  assert.equal(manifest.migrations.length, migrationCount);
   return manifest.migrations.map((migration) => ({
     label: `migration ${migration.revision}: ${migration.name}`,
     sql: filesByPath.get(migration.path),
@@ -996,7 +997,7 @@ WHERE application_name = '${applicationName}'
     throw cleanupFailure;
   }
   process.stdout.write(
-    `Jobs PostgreSQL ${mode.replaceAll("_", "-")} integration passed (6-migration clean bootstrap, exact 13-capability catalog, narrow-login boundary, bounded lifecycle, and generic output evidence).\n`,
+    `Jobs PostgreSQL ${mode.replaceAll("_", "-")} integration passed (${migrationCount}-migration clean bootstrap, exact 13-capability catalog, narrow-login boundary, bounded lifecycle, and generic output evidence).\n`,
   );
 }
 
