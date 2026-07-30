@@ -151,6 +151,9 @@ const requiredStatements = Object.freeze([
   "all 35 private tables with forced RLS",
   "three bounded archives and two current-snapshot restores",
   "the same finalized snapshot identity and payload",
+  "one completed synthetic deletion whose profile remains absent",
+  "one independent revoked device whose authority remains revoked",
+  "That is exact current-snapshot non-resurrection evidence only.",
   "Dump content is never emitted; bounded buffers are overwritten after hashing.",
   "A successful local result is prerequisite evidence only.",
   "Stale-backup deletion replay is not implemented.",
@@ -174,6 +177,8 @@ const requiredIntegrationFragments = Object.freeze([
   "function canonicalArchiveDigest(archive, section)",
   "function semanticSchemaDigest()",
   "function finalizedSnapshotEvidence()",
+  "function seedRestoreSecurityState()",
+  "function restoreSecurityEvidence()",
   "function createArchive(database, archive)",
   "function restoreArchive(archive)",
   "stdout.fill(0);",
@@ -181,17 +186,19 @@ const requiredIntegrationFragments = Object.freeze([
   "restoreArchive(archiveOne);",
   '"first restored semantic oracle"',
   '"first restore changed the finalized snapshot"',
+  '"first restore resurrected deletion state or changed revoked-device authority"',
   "createArchive(databaseName, archiveTwo);",
   '"first restored data archive drifted"',
   "restoreArchive(archiveTwo);",
   '"second restored semantic oracle"',
   '"second restore changed the finalized snapshot"',
+  '"second restore resurrected deletion state or changed revoked-device authority"',
   '"normalized restored schema drifted across generations"',
   "createArchive(databaseName, archiveThree);",
   '"second restored data archive drifted"',
   'docker([...composePrefix, "down", "--volumes", "--remove-orphans"]',
   'docker([...composePrefix, "up", "--detach", "--wait", "postgres-test"]',
-  "two snapshot restores with byte-stable",
+  "two current-snapshot restores preserving terminal deletion and revoked-device state with byte-stable",
 ]);
 const requiredIdentityAssertionFragments = Object.freeze([
   "WHERE revision = 7\n      AND name = 'car_recipes'",
@@ -329,7 +336,17 @@ try {
   const restoredSecurityChecks = [
     ...normalizedSource.matchAll(/"(?:first|second) restored semantic oracle"/gu),
   ].length;
-  if (restoreCalls !== 2 || archiveCalls !== 3 || restoredSecurityChecks !== 2) {
+  const restoredAuthorityChecks = [
+    ...normalizedSource.matchAll(
+      /"(?:first|second) restore resurrected deletion state or changed revoked-device authority"/gu,
+    ),
+  ].length;
+  if (
+    restoreCalls !== 2 ||
+    archiveCalls !== 3 ||
+    restoredSecurityChecks !== 2 ||
+    restoredAuthorityChecks !== 2
+  ) {
     fail(
       "database restore integration no longer performs three archives, two restores, and two security checks",
     );

@@ -170,6 +170,20 @@ try {
   writeFileSync(
     databaseIntegrationPath,
     databaseIntegrationSource.replace(
+      '"first restore resurrected deletion state or changed revoked-device authority"',
+      '"first restore skipped deletion and revoked-device authority"',
+    ),
+    "utf8",
+  );
+  expectFailure(
+    "restore authority-check drift",
+    "no longer performs three archives, two restores, and two security checks",
+  );
+
+  restoreValidFixture();
+  writeFileSync(
+    databaseIntegrationPath,
+    databaseIntegrationSource.replace(
       'container("stat", ["-c", "%s", archive])',
       'container("stat", ["--format=%s", archive])',
     ),

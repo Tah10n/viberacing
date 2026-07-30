@@ -374,6 +374,308 @@ LIMIT 1;
   );
 }
 
+function seedRestoreSecurityState() {
+  requireSuccess(
+    psql(`
+BEGIN;
+SET LOCAL ROLE viberacing_owner;
+
+INSERT INTO viberacing_private.profiles (
+  profile_id,
+  github_user_id,
+  handle,
+  locale,
+  hidden_at
+)
+VALUES
+  (
+    '90000000-0000-4000-8000-000000000001',
+    990000000000001,
+    'restore-deleted',
+    'en',
+    pg_catalog.transaction_timestamp()
+  ),
+  (
+    '90000000-0000-4000-8000-000000000011',
+    990000000000011,
+    'restore-revoked',
+    'en',
+    pg_catalog.transaction_timestamp()
+  );
+
+UPDATE viberacing_private.profiles
+SET state = 'active'
+WHERE profile_id IN (
+  '90000000-0000-4000-8000-000000000001',
+  '90000000-0000-4000-8000-000000000011'
+);
+
+INSERT INTO viberacing_private.passkeys (
+  passkey_id,
+  profile_id,
+  credential_id,
+  cose_public_key,
+  backup_eligible,
+  backup_state,
+  label
+)
+VALUES (
+  '90000000-0000-4000-8000-000000000002',
+  '90000000-0000-4000-8000-000000000001',
+  pg_catalog.decode(pg_catalog.repeat('b1', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('b2', 32), 'hex'),
+  false,
+  false,
+  'Restore deletion passkey'
+);
+
+INSERT INTO viberacing_private.sessions (
+  session_id,
+  profile_id,
+  verifier_digest,
+  authenticated_by_passkey_id,
+  authentication_kind,
+  expires_at
+)
+VALUES (
+  '90000000-0000-4000-8000-000000000003',
+  '90000000-0000-4000-8000-000000000001',
+  pg_catalog.decode(pg_catalog.repeat('b3', 32), 'hex'),
+  '90000000-0000-4000-8000-000000000002',
+  'passkey',
+  pg_catalog.transaction_timestamp() + interval '1 day'
+);
+
+INSERT INTO viberacing_private.auth_challenges (
+  challenge_id,
+  session_id,
+  profile_id,
+  purpose,
+  challenge_digest,
+  context_digest,
+  expires_at
+)
+VALUES (
+  '90000000-0000-4000-8000-000000000004',
+  '90000000-0000-4000-8000-000000000003',
+  '90000000-0000-4000-8000-000000000001',
+  'profile_delete',
+  pg_catalog.decode(pg_catalog.repeat('b4', 32), 'hex'),
+  pg_catalog.decode(pg_catalog.repeat('b5', 32), 'hex'),
+  pg_catalog.transaction_timestamp() + interval '5 minutes'
+);
+
+INSERT INTO viberacing_private.agent_accounts (
+  agent_account_id,
+  profile_id,
+  provider_code,
+  accounting_revision,
+  scope_kind,
+  fingerprint_kind,
+  account_fingerprint_digest,
+  private_label,
+  identity_assurance
+)
+VALUES
+  (
+    'acc_YYYYYYYYYYYYYYYYYYYYYY',
+    '90000000-0000-4000-8000-000000000001',
+    'codex',
+    1,
+    'agent_account',
+    'stable_opaque',
+    pg_catalog.decode(pg_catalog.repeat('b6', 32), 'hex'),
+    'Restore deletion account',
+    'community_local'
+  ),
+  (
+    'acc_ZZZZZZZZZZZZZZZZZZZZZZ',
+    '90000000-0000-4000-8000-000000000011',
+    'codex',
+    1,
+    'agent_account',
+    'stable_opaque',
+    pg_catalog.decode(pg_catalog.repeat('b7', 32), 'hex'),
+    'Restore revoked account',
+    'community_local'
+  );
+
+INSERT INTO viberacing_private.connector_installations (
+  installation_id,
+  profile_id,
+  installation_public_key,
+  label,
+  connector_version,
+  os_family,
+  architecture,
+  state,
+  activated_at,
+  last_seen_at
+)
+VALUES
+  (
+    'ins_YYYYYYYYYYYYYYYYYYYYYY',
+    '90000000-0000-4000-8000-000000000001',
+    pg_catalog.decode(pg_catalog.repeat('b8', 32), 'hex'),
+    'Restore deletion installation',
+    '0.0.0',
+    'windows',
+    'x86_64',
+    'active',
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp()
+  ),
+  (
+    'ins_ZZZZZZZZZZZZZZZZZZZZZZ',
+    '90000000-0000-4000-8000-000000000011',
+    pg_catalog.decode(pg_catalog.repeat('b9', 32), 'hex'),
+    'Restore revoked installation',
+    '0.0.0',
+    'linux',
+    'x86_64',
+    'active',
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp()
+  );
+
+INSERT INTO viberacing_private.device_keys (
+  device_key_id,
+  device_id,
+  profile_id,
+  installation_id,
+  agent_account_id,
+  public_key,
+  state,
+  activated_at,
+  revoked_at,
+  last_used_at
+)
+VALUES
+  (
+    'key_YYYYYYYYYYYYYYYYYYYYYY',
+    'dev_YYYYYYYYYYYYYYYYYYYYYY',
+    '90000000-0000-4000-8000-000000000001',
+    'ins_YYYYYYYYYYYYYYYYYYYYYY',
+    'acc_YYYYYYYYYYYYYYYYYYYYYY',
+    pg_catalog.decode(pg_catalog.repeat('ba', 32), 'hex'),
+    'active',
+    pg_catalog.transaction_timestamp(),
+    NULL,
+    pg_catalog.transaction_timestamp()
+  ),
+  (
+    'key_ZZZZZZZZZZZZZZZZZZZZZZ',
+    'dev_ZZZZZZZZZZZZZZZZZZZZZZ',
+    '90000000-0000-4000-8000-000000000011',
+    'ins_ZZZZZZZZZZZZZZZZZZZZZZ',
+    'acc_ZZZZZZZZZZZZZZZZZZZZZZ',
+    pg_catalog.decode(pg_catalog.repeat('bb', 32), 'hex'),
+    'revoked',
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp(),
+    pg_catalog.transaction_timestamp()
+  );
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_web;
+
+SELECT viberacing_api.request_profile_deletion(
+  '90000000-0000-4000-8000-000000000003',
+  pg_catalog.decode(pg_catalog.repeat('b3', 32), 'hex'),
+  '90000000-0000-4000-8000-000000000004',
+  pg_catalog.decode(pg_catalog.repeat('b5', 32), 'hex'),
+  '90000000-0000-4000-8000-000000000002',
+  1,
+  false,
+  'restore-deleted'
+);
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_jobs;
+
+DO $purge$
+DECLARE
+  result record;
+BEGIN
+  SELECT * INTO STRICT result
+  FROM viberacing_api.purge_profile_deletions(10);
+  IF result.purged_profiles <> 1 THEN
+    RAISE EXCEPTION 'restore fixture deletion did not settle exactly once';
+  END IF;
+END
+$purge$;
+
+RESET ROLE;
+SET LOCAL ROLE viberacing_owner;
+
+DO $assertion$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM viberacing_private.profiles
+    WHERE profile_id = '90000000-0000-4000-8000-000000000001'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.profile_deletion_jobs
+    WHERE profile_id = '90000000-0000-4000-8000-000000000001'
+      AND state = 'completed'
+      AND completed_at IS NOT NULL
+      AND retention_expires_at = completed_at + interval '30 days'
+  ) OR NOT EXISTS (
+    SELECT 1
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = 'key_ZZZZZZZZZZZZZZZZZZZZZZ'
+      AND state = 'revoked'
+      AND revoked_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'restore security fixture did not reach its canonical state';
+  END IF;
+END
+$assertion$;
+
+COMMIT;
+`),
+    "seed current-snapshot deletion and revoked-device state",
+  );
+}
+
+function restoreSecurityEvidence() {
+  return JSON.parse(
+    psqlValue(`
+SELECT pg_catalog.jsonb_build_object(
+  'deletedProfileCount', (
+    SELECT pg_catalog.count(*)
+    FROM viberacing_private.profiles
+    WHERE profile_id = '90000000-0000-4000-8000-000000000001'
+  ),
+  'terminalDeletion', (
+    SELECT pg_catalog.jsonb_build_object(
+      'completedAt', completed_at,
+      'profileId', profile_id,
+      'retentionExpiresAt', retention_expires_at,
+      'state', state
+    )
+    FROM viberacing_private.profile_deletion_jobs
+    WHERE profile_id = '90000000-0000-4000-8000-000000000001'
+  ),
+  'revokedDevice', (
+    SELECT pg_catalog.jsonb_build_object(
+      'agentAccountId', agent_account_id,
+      'deviceId', device_id,
+      'deviceKeyId', device_key_id,
+      'installationId', installation_id,
+      'profileId', profile_id,
+      'revokedAt', revoked_at,
+      'state', state
+    )
+    FROM viberacing_private.device_keys
+    WHERE device_key_id = 'key_ZZZZZZZZZZZZZZZZZZZZZZ'
+  )
+)::text;
+`),
+  );
+}
+
 function createArchive(database, archive) {
   requireSuccess(
     container("pg_dump", [
@@ -829,6 +1131,8 @@ SELECT pg_catalog.json_build_object(
   assert.equal(Number(concurrentUsageEvidence.eventCount), 2);
   assert.equal(Number(concurrentUsageEvidence.chainHeadCount), 1);
 
+  seedRestoreSecurityState();
+
   requireSuccess(
     psql(`
 BEGIN;
@@ -879,6 +1183,10 @@ FROM viberacing_private.schema_migrations;
   );
 
   const sourceFinalizedSnapshot = finalizedSnapshotEvidence();
+  const sourceRestoreSecurity = restoreSecurityEvidence();
+  assert.equal(Number(sourceRestoreSecurity.deletedProfileCount), 0);
+  assert.equal(sourceRestoreSecurity.terminalDeletion.state, "completed");
+  assert.equal(sourceRestoreSecurity.revokedDevice.state, "revoked");
   createArchive(databaseName, archiveOne);
   const sourceData = canonicalArchiveDigest(archiveOne, "data");
   restoreArchive(archiveOne);
@@ -892,6 +1200,11 @@ FROM viberacing_private.schema_migrations;
     finalizedSnapshotEvidence(),
     sourceFinalizedSnapshot,
     "first restore changed the finalized snapshot",
+  );
+  assert.deepEqual(
+    restoreSecurityEvidence(),
+    sourceRestoreSecurity,
+    "first restore resurrected deletion state or changed revoked-device authority",
   );
 
   const firstRestoredSchema = semanticSchemaDigest();
@@ -910,6 +1223,11 @@ FROM viberacing_private.schema_migrations;
     finalizedSnapshotEvidence(),
     sourceFinalizedSnapshot,
     "second restore changed the finalized snapshot",
+  );
+  assert.deepEqual(
+    restoreSecurityEvidence(),
+    sourceRestoreSecurity,
+    "second restore resurrected deletion state or changed revoked-device authority",
   );
   const secondRestoredSchema = semanticSchemaDigest();
   assert.deepEqual(
@@ -931,5 +1249,5 @@ FROM viberacing_private.schema_migrations;
 }
 
 console.log(
-  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, single-use invite contention, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, direct-token ranking across 208 public profiles, immutable last-good/final snapshots, two-session refresh-overlap suppression, and two snapshot restores with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
+  `Database integration passed (${catalog.length} clean logical migrations, forced-RLS and least-privilege identity/auth semantics, concurrent GitHub convergence, single-use invite contention, adversarial multi-account pairing/device lifecycle, atomic exact-decimal usage with deterministic two-device concurrency, direct-token ranking across 208 public profiles, immutable last-good/final snapshots, two-session refresh-overlap suppression, and two current-snapshot restores preserving terminal deletion and revoked-device state with byte-stable ${restoreEvidence.schemaBytes}-byte schema/${restoreEvidence.dataBytes}-byte data evidence).`,
 );

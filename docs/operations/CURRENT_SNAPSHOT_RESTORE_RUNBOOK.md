@@ -75,9 +75,10 @@ The local archive budget is 64 MiB and each canonical schema or data buffer is b
 The current oracle requires the exact seven-row clean migration ledger, all 35 private tables with
 forced RLS, three bounded archives and two current-snapshot restores, SHA-256/length-identical
 canonical data, a byte-stable canonical restored schema, the same finalized snapshot identity and
-payload after both restores, and the complete identity/auth/provider/grant/legacy-object semantic
-oracle after each restore. Dump content is never emitted; bounded buffers are overwritten after
-hashing.
+payload after both restores, one completed synthetic deletion whose profile remains absent, one
+independent revoked device whose authority remains revoked, and the complete
+identity/auth/provider/grant/legacy-object semantic oracle after each restore. Dump content is never
+emitted; bounded buffers are overwritten after hashing.
 
 A successful local result is prerequisite evidence only. It does not select, decrypt, copy, or
 restore any deployment archive and does not authorize a staging or production action.
@@ -119,10 +120,15 @@ user data. Any mismatch leaves the target quarantined and the rehearsal failed.
 
 ## Stale-backup and deletion boundary
 
-Stale-backup deletion replay is not implemented. The current database contains an unused table shape
-for future keyed deletion tombstones, but the deletion request and purge deliberately do not invent
-an unkeyed marker. The local restore drill has no pre-deletion archive or external marker source and
-therefore cannot prove that a deleted profile remains deleted after restoring older state.
+Stale-backup deletion replay is not implemented. The local drill creates its archive after one
+synthetic profile has been atomically locked down and purged, then proves both restores preserve the
+absent profile, completed 30-day terminal job, independent revoked-device state, and finalized
+snapshot. That is exact current-snapshot non-resurrection evidence only.
+
+The current database contains an unused table shape for future keyed deletion tombstones, but the
+deletion request and purge deliberately do not invent an unkeyed marker. The drill has no
+pre-deletion archive or external marker source and therefore cannot prove that a deleted profile
+remains deleted after restoring older state.
 
 - [ ] VR-RESTORE-19: Stop before service startup whenever the archive could predate a profile
       deletion or the protected deletion-marker oracle is absent, incomplete, or unverified.
