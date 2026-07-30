@@ -42,13 +42,13 @@ user and contains the standalone runtime/static assets rather than the repositor
    fragment, IP literal, or non-default port.
 5. Keep these values exact:
 
-| Variable                              | Value   |
-| ------------------------------------- | ------- |
-| `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED` | `false` |
-| `VIBERACING_ENROLLMENT_ENABLED`       | `false` |
-| `VIBERACING_INVITE_GATE_ENABLED`      | `false` |
-| `VIBERACING_PAIRING_ENABLED`          | `false` |
-| `VIBERACING_CAR_PROPOSALS_ENABLED`    | `false` |
+   | Variable                              | Value   |
+   | ------------------------------------- | ------- |
+   | `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED` | `false` |
+   | `VIBERACING_ENROLLMENT_ENABLED`       | `false` |
+   | `VIBERACING_INVITE_GATE_ENABLED`      | `false` |
+   | `VIBERACING_PAIRING_ENABLED`          | `false` |
+   | `VIBERACING_CAR_PROPOSALS_ENABLED`    | `false` |
 
 6. Let Railway supply `PORT`; do not override the image command.
 7. Replace the process after final configuration and verify the root health check, static assets,

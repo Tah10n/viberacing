@@ -115,18 +115,18 @@ snapshots cannot be changed.
 4. Keep authentication and admission policy explicit on every operation.
 5. Regenerate derivatives:
 
-```text
-corepack pnpm run generate:contracts
-```
+   ```text
+   corepack pnpm run generate:contracts
+   ```
 
 6. Verify drift and runtime behavior:
 
-```text
-corepack pnpm run check:contracts
-corepack pnpm run lint:contracts
-corepack pnpm run typecheck:contracts
-corepack pnpm run test:contracts:coverage
-```
+   ```text
+   corepack pnpm run check:contracts
+   corepack pnpm run lint:contracts
+   corepack pnpm run typecheck:contracts
+   corepack pnpm run test:contracts:coverage
+   ```
 
 Contract changes are security and privacy changes. Read
 [security invariants](../docs/architecture/SECURITY_INVARIANTS.md),
