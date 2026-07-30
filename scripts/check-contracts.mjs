@@ -659,7 +659,7 @@ if (sources !== undefined) {
   if (providerSchema?.type !== "string" || !isDeepStrictEqual(providerSchema.enum, ["codex"])) {
     report(
       "contracts/v1/agent-provider.schema.json",
-      "supported provider enum differs from evidence",
+      "built-in reader provider enum differs from evidence",
     );
   }
 

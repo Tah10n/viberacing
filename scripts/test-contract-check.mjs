@@ -160,7 +160,7 @@ try {
         schema.enum.push("claude_code");
         schema.maxLength = 11;
       }),
-    /supported provider enum differs/u,
+    /built-in reader provider enum differs/u,
   );
   await expectFail(
     "usage-provider",

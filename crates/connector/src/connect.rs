@@ -81,7 +81,7 @@ pub enum ConnectorCliError {
     DifferentConfiguredOrigin,
     /// This installation already has at least one active account binding.
     AlreadyConnected,
-    /// No built-in reader produced a supported account candidate.
+    /// No built-in reader produced an eligible account candidate.
     NoAccounts,
     /// The requested local account selector is absent or inactive.
     InvalidAccountSelector,
@@ -133,7 +133,7 @@ impl fmt::Display for ConnectorCliError {
                 "this installation is already configured for a different origin"
             }
             Self::AlreadyConnected => "this installation is already connected",
-            Self::NoAccounts => "no supported agent account was discovered",
+            Self::NoAccounts => "no eligible agent account was discovered",
             Self::InvalidAccountSelector => "the account selector is invalid",
             Self::AccountMappingUnavailable => {
                 "the discovered agent account cannot be mapped safely; reconnect it"

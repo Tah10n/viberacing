@@ -510,7 +510,7 @@ impl ReaderDiagnostic {
 /// There is intentionally no dynamic library, script, WASM, shell, path-configured executable, or
 /// downloaded-plugin constructor.
 pub trait AgentUsageReader {
-    /// Returns the fixed supported provider.
+    /// Returns the fixed built-in provider.
     fn provider(&self) -> AgentProvider;
 
     /// Returns the immutable reader-contract version.

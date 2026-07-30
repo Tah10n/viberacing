@@ -146,7 +146,7 @@ const english = {
     "These controls affect only this browser and use the same local theme and motion preferences as the race.",
   deviceLocalAppearanceTitle: "This device",
   deviceRevoked: "Revoked device",
-  expectedReaderVersion: "Supported reader",
+  expectedReaderVersion: "Expected reader",
   installationConnectedAccounts: "Accounts on this installation",
   installationInventoryCopy:
     "Installation details are coarse and private. Revoking an installation terminates every active device key attached to it.",
@@ -175,7 +175,7 @@ const english = {
   quarantineNumeric: "A reported total was outside the accepted numeric range.",
   quarantineOverlap: "The submission overlapped another accounting domain.",
   quarantineRecovery:
-    "Keep the account paused, update or sign in to the supported reader, then request review if the problem remains. Raw usage is not shown here.",
+    "Keep the account paused, update or sign in to the expected reader, then request review if the problem remains. Raw usage is not shown here.",
   quarantineReview: "The account requires a safe manual review.",
   quarantineSeason: "The affected season no longer accepts this update.",
   rankLabel: "Rank",
@@ -198,7 +198,7 @@ const english = {
   statusUnsupportedAgentVersion: "Unsupported agent version",
   syncHealthy: "No sync problem is visible.",
   syncHealthCopy:
-    "Health is derived from the closed account lifecycle, supported reader revision, active device authority, and successful accepted sync state.",
+    "Health is derived from the closed account lifecycle, server-selected reader revision, active device authority, and successful accepted sync state.",
   syncHealthTitle: "Sync health",
   syncNeedsAttention: "account(s) need attention.",
   syncWaiting: "Connected accounts are waiting for their first successful sync.",
@@ -360,7 +360,7 @@ const russian: Record<JoinTranslationKey, string> = {
     "Эти настройки действуют только в этом браузере и используют те же локальные параметры темы и анимации, что и гонка.",
   deviceLocalAppearanceTitle: "Это устройство",
   deviceRevoked: "Устройство отозвано",
-  expectedReaderVersion: "Поддерживаемый ридер",
+  expectedReaderVersion: "Ожидаемый reader",
   installationConnectedAccounts: "Аккаунты этой установки",
   installationInventoryCopy:
     "Сведения об установке округлены и приватны. Отзыв установки завершает действие всех привязанных к ней активных ключей устройств.",
@@ -390,7 +390,7 @@ const russian: Record<JoinTranslationKey, string> = {
   quarantineNumeric: "Переданный итог вышел за допустимый числовой диапазон.",
   quarantineOverlap: "Отправка пересеклась с другой областью учёта.",
   quarantineRecovery:
-    "Оставьте аккаунт на паузе, обновите поддерживаемый reader или войдите в него заново, затем запросите проверку, если проблема сохранилась. Сырые данные здесь не показываются.",
+    "Оставьте аккаунт на паузе, обновите ожидаемый reader или войдите в него заново, затем запросите проверку, если проблема сохранилась. Сырые данные здесь не показываются.",
   quarantineReview: "Аккаунту нужна безопасная ручная проверка.",
   quarantineSeason: "Затронутый сезон больше не принимает это обновление.",
   rankLabel: "Место",
@@ -413,7 +413,7 @@ const russian: Record<JoinTranslationKey, string> = {
   statusUnsupportedAgentVersion: "Неподдерживаемая версия агента",
   syncHealthy: "Видимых проблем синхронизации нет.",
   syncHealthCopy:
-    "Состояние определяется закрытым жизненным циклом аккаунта, поддерживаемой ревизией reader, активными полномочиями устройства и успешной принятой синхронизацией.",
+    "Состояние определяется закрытым жизненным циклом аккаунта, выбранной сервером ревизией reader, активными полномочиями устройства и успешной принятой синхронизацией.",
   syncHealthTitle: "Состояние синхронизации",
   syncNeedsAttention: "аккаунт(а) требуют внимания.",
   syncWaiting: "Подключённые аккаунты ожидают первую успешную синхронизацию.",

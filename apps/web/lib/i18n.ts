@@ -23,7 +23,7 @@ const english = {
   fallbackBadge: "Synthetic fallback",
   freshness: "Freshness",
   heroCopy:
-    "Vibe Racing adds provider-reported tokens from connected accounts of supported coding agents. No model, price, or subscription multipliers.",
+    "Vibe Racing adds provider-reported tokens from connected coding-agent accounts. No model, price, or subscription multipliers.",
   heroTitle: "All your coding agents. Every account. One GitHub profile.",
   howRankingWorks: "How ranking works",
   language: "Language",
@@ -91,7 +91,7 @@ const russian: Record<TranslationKey, string> = {
   fallbackBadge: "Синтетический резерв",
   freshness: "Обновление",
   heroCopy:
-    "Vibe Racing складывает provider-reported tokens из подключённых аккаунтов поддерживаемых coding agents. Без коэффициентов по модели, цене или подписке.",
+    "Vibe Racing складывает provider-reported tokens из подключённых аккаунтов coding agents. Без коэффициентов по модели, цене или подписке.",
   heroTitle: "Все ваши coding agents. Все аккаунты. Один GitHub-профиль.",
   howRankingWorks: "Как считается рейтинг",
   language: "Язык",

@@ -5,7 +5,7 @@ import { resolvePublicOrigin } from "@/lib/public-origin";
 import "./globals.css";
 
 const siteDescription =
-  "Vibe Racing is a privacy-first Community vibecode rating: a self-reported weekly leaderboard of provider-reported tokens across supported coding agents.";
+  "Vibe Racing is a privacy-first Community vibecode rating: a self-reported weekly leaderboard of provider-reported tokens from connected coding-agent accounts.";
 const siteTitle = "Vibe Racing — Vibecode rating and token leaderboard";
 
 export const metadata: Metadata = {

@@ -26,6 +26,12 @@ migration paths.
 - `PublicProfilePathV1`, `PublicProfileQueryV1`, and `PublicProfileSummaryV1`
 - `UsageSyncV1` and `UsageSyncResultV1`
 
+`AgentProviderV1` is the closed protocol allowlist for providers with a repository-implemented
+reader candidate. Its current `codex` member is not a provider-support declaration: the clean
+database bootstrap keeps Codex `recognized`, leaves its accounting revision disabled for new
+accounts, and admits no provider until the separately reviewed registry, compatibility, and release
+evidence is complete.
+
 ### Policies
 
 - connector CarRecipe proposal authentication;
