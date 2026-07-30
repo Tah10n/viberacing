@@ -55,7 +55,7 @@ BEGIN
   WHERE namespace.nspname = 'viberacing_private'
     AND relation.relkind = 'r';
 
-  IF v_private_table_count <> 35 OR v_forced_rls_count <> v_private_table_count THEN
+  IF v_private_table_count <> 36 OR v_forced_rls_count <> v_private_table_count THEN
     RAISE EXCEPTION 'private tables are not exactly force-RLS protected';
   END IF;
 

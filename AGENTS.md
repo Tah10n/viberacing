@@ -34,7 +34,7 @@ The current tree has:
 - direct exact UTC-week sums, shared rank, immutable snapshots, and snapshot-only public reads;
 - three public snapshot routes and three contract-only connector routes;
 - a provider-neutral unreleased connector and one exact Codex `0.144.5` candidate reader;
-- seven checksum-ledgered clean-bootstrap migrations and 35 forced-RLS private tables;
+- seven checksum-ledgered clean-bootstrap migrations and 36 forced-RLS private tables;
 - one thirteen-capability Jobs runner and default-off scheduler;
 - local migration, deletion, containment, backup/restore, and release-candidate evidence; and
 - a database-free EN/RU synthetic Web experience.

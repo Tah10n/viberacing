@@ -90,9 +90,10 @@ const snapshotCleanupQuery = `SELECT
   cleanup.deleted_snapshots
 FROM viberacing_api.cleanup_snapshot_history($1::integer) AS cleanup`;
 
-const rankingEventCleanupQuery = `SELECT
-  cleanup.deleted_events
-FROM viberacing_api.cleanup_expired_ranking_events($1::integer) AS cleanup`;
+const auditEventCleanupQuery = `SELECT
+  cleanup.deleted_ranking_events,
+  cleanup.deleted_admin_audit_events
+FROM viberacing_api.cleanup_expired_audit_events($1::integer) AS cleanup`;
 
 const profileDeletionPurgeQuery = `SELECT
   purge.purged_profiles
@@ -113,7 +114,7 @@ export interface JobsDatabaseClient {
   cleanupAgedRevokedAuthority(batchSize: number): Promise<unknown>;
   cleanupExpiredAuthState(batchSize: number): Promise<unknown>;
   cleanupExpiredPairingState(batchSize: number): Promise<unknown>;
-  cleanupExpiredRankingEvents(batchSize: number): Promise<unknown>;
+  cleanupExpiredAuditEvents(batchSize: number): Promise<unknown>;
   cleanupExpiredUsageHistory(batchSize: number): Promise<unknown>;
   cleanupExpiredUsageNonces(batchSize: number): Promise<unknown>;
   cleanupSnapshotHistory(batchSize: number): Promise<unknown>;
@@ -180,8 +181,8 @@ function wrapClient(client: NodePostgresClient): JobsDatabaseClient {
     cleanupExpiredPairingState(batchSize: number): Promise<unknown> {
       return fixedQuery(pairingCleanupQuery, [batchSize]);
     },
-    cleanupExpiredRankingEvents(batchSize: number): Promise<unknown> {
-      return fixedQuery(rankingEventCleanupQuery, [batchSize]);
+    cleanupExpiredAuditEvents(batchSize: number): Promise<unknown> {
+      return fixedQuery(auditEventCleanupQuery, [batchSize]);
     },
     cleanupExpiredUsageHistory(batchSize: number): Promise<unknown> {
       return fixedQuery(usageHistoryCleanupQuery, [batchSize]);

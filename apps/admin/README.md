@@ -144,6 +144,11 @@ the session can return to the pool. Failed, malformed, widened, or incompletely 
 destroyed; post-write reset/probe failure is treated as ambiguous committed state. The adapter
 exposes no generic query, table, migration, Web, Ingest, Jobs, owner, or second Admin capability.
 
+The procedure writes the invite and one minimal `admin_audit_events` row at the same
+PostgreSQL-owned timestamp in one statement. A duplicate request or audit identifier rolls back both
+writes, audit updates are rejected, and the fixed Jobs audit cleanup deletes at most 1,000 globally
+ordered ranking/Admin events older than 180 days per call.
+
 Only these configuration names are recognized by the exported protected reader:
 
 ```text
@@ -181,7 +186,7 @@ redacted identity and dependency confinement, plus closed authorization/audit/re
 ordering, freshness, purpose, exact credential grammar, entropy and mutable-buffer clearing,
 ambiguous failure behavior, configuration, TLS policy, two-phase login/role boundary,
 reset-before-reuse, client destruction, and PostgreSQL-import confinement. A separate opt-in
-synthetic integration builds the production Admin JavaScript, applies the reviewed 40-migration
+synthetic integration builds the production Admin JavaScript, applies the reviewed seven-migration
 ledger to one disposable TLS PostgreSQL container, rejects an extra-membership login before
 private-table mutation, and runs the exact injected authorization/audit application through the
 narrow login. It proves hostname-verified TLS, one stored active invite, one exact database audit

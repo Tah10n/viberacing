@@ -48,7 +48,7 @@ backward-compatibility population.
 - 4 public authentication/transport policies.
 - 7 OpenAPI operations over 7 paths.
 - 7 checksum-ledgered, transactional SQL migrations.
-- 35 owner-owned private tables with forced row-level security.
+- 36 owner-owned private tables with forced row-level security.
 - 6 recognized provider identifiers and 0 supported providers.
 - 13 fixed Jobs capabilities.
 - 9 independent process/module capability decisions, of which 8 tracked environment defaults are
@@ -230,7 +230,7 @@ The clean empty-database bootstrap comprises seven logical revisions:
 7. CarRecipe state.
 
 Every revision is transactional, checksum-bound, owner-only, and forward-only after publication. All
-35 private tables force RLS with owner-only policies. Runtime logins receive no direct table or
+36 private tables force RLS with owner-only policies. Runtime logins receive no direct table or
 sequence privileges and exactly one non-login role. Reviewed `SECURITY DEFINER` functions use fixed
 `pg_catalog, pg_temp` search paths.
 
@@ -324,6 +324,10 @@ It requires injected complete authorization, fresh-passkey decision, external au
 narrow Admin database capability, and committed database audit before success. There is no Admin
 host, page, CLI, complete authorization adapter, fresh-passkey verifier, operational issuer, Access
 policy/key refresh, or deployment.
+
+The narrow procedure commits the invite and one immutable minimal Admin audit row atomically. One
+Jobs audit capability deletes at most 1,000 globally ordered ranking/Admin events older than 180
+days per call; no deployed cadence or external append-only audit sink is claimed.
 
 Pinned image definitions and Railway configuration exist for Web, Ingest, Jobs scheduler, and
 Migration. A stable-release workflow serializes source replacement behind secretless checks and a

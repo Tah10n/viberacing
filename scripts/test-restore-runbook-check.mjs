@@ -202,7 +202,7 @@ try {
   restoreValidFixture();
   writeFileSync(
     identityAssertionsPath,
-    identityAssertionsSource.replace("v_private_table_count <> 35", "v_private_table_count <> 34"),
+    identityAssertionsSource.replace("v_private_table_count <> 36", "v_private_table_count <> 35"),
     "utf8",
   );
   expectFailure("forced-RLS inventory drift", "restored identity oracle drifted");

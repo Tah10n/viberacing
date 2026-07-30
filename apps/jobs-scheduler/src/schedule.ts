@@ -20,7 +20,7 @@ export const hourlyJobs: readonly JobsMaintenanceJob[] = Object.freeze([
   Object.freeze({ kind: "finalize_due_season" }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,
-    kind: "cleanup_expired_ranking_events",
+    kind: "cleanup_expired_audit_events",
   }),
   Object.freeze({
     batchSize: maximumCleanupBatchSize,

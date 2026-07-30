@@ -30,7 +30,7 @@ export type JobsMaintenanceJob =
   | Readonly<{ batchSize: number; kind: "cleanup_expired_auth_state" }>
   | Readonly<{ batchSize: number; kind: "cleanup_aged_revoked_authority" }>
   | Readonly<{ batchSize: number; kind: "cleanup_snapshot_history" }>
-  | Readonly<{ batchSize: number; kind: "cleanup_expired_ranking_events" }>
+  | Readonly<{ batchSize: number; kind: "cleanup_expired_audit_events" }>
   | Readonly<{ batchSize: number; kind: "purge_profile_deletions" }>
   | Readonly<{ batchSize: number; kind: "cleanup_terminal_deletion_jobs" }>;
 
@@ -95,7 +95,7 @@ const cleanupKinds = new Set<JobsMaintenanceJob["kind"]>([
   "cleanup_expired_auth_state",
   "cleanup_aged_revoked_authority",
   "cleanup_snapshot_history",
-  "cleanup_expired_ranking_events",
+  "cleanup_expired_audit_events",
   "purge_profile_deletions",
   "cleanup_terminal_deletion_jobs",
 ]);
@@ -287,8 +287,9 @@ const cleanupResultColumns = Object.freeze({
     deleted_installations: maximumCleanupBatchSize,
     deleted_pairings: maximumCleanupBatchSize,
   }),
-  cleanup_expired_ranking_events: Object.freeze({
-    deleted_events: maximumCleanupBatchSize,
+  cleanup_expired_audit_events: Object.freeze({
+    deleted_admin_audit_events: maximumCleanupBatchSize,
+    deleted_ranking_events: maximumCleanupBatchSize,
   }),
   cleanup_expired_usage_history: Object.freeze({
     deleted_idempotency_records: maximumCleanupBatchSize,
@@ -325,6 +326,9 @@ function mapCleanupResult(
   let affectedCount = 0;
   for (const column of columns) {
     affectedCount += readCount(row, column, columnBounds[column as keyof typeof columnBounds]);
+  }
+  if (job.kind === "cleanup_expired_audit_events" && affectedCount > maximumCleanupBatchSize) {
+    fail("result_invalid");
   }
   return Object.freeze({ affectedCount, kind: job.kind });
 }
@@ -368,8 +372,8 @@ function executeCapability(client: JobsDatabaseClient, job: JobsMaintenanceJob):
       return client.cleanupAgedRevokedAuthority(job.batchSize);
     case "cleanup_snapshot_history":
       return client.cleanupSnapshotHistory(job.batchSize);
-    case "cleanup_expired_ranking_events":
-      return client.cleanupExpiredRankingEvents(job.batchSize);
+    case "cleanup_expired_audit_events":
+      return client.cleanupExpiredAuditEvents(job.batchSize);
     case "purge_profile_deletions":
       return client.purgeProfileDeletions(job.batchSize);
     case "cleanup_terminal_deletion_jobs":

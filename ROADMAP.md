@@ -75,7 +75,7 @@ tracked/untracked review pass on the final commit.
 ## Next: hosted staging evidence
 
 - Provision certificate-compatible PostgreSQL and four distinct least-privileged logins.
-- Run the checked one-shot migration and record the seven-row ledger, 35 forced-RLS tables, grants,
+- Run the checked one-shot migration and record the seven-row ledger, 36 forced-RLS tables, grants,
   TLS, lock, and cleanup.
 - Deploy Web closed, then validate snapshot reads separately.
 - Deploy Ingest and Edge closed with real protected secret delivery and all rate-limit bindings;

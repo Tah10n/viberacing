@@ -452,6 +452,23 @@ VALUES (
   pg_catalog.decode(pg_catalog.repeat('80', 32), 'hex')
 );
 
+INSERT INTO viberacing_private.admin_audit_events (
+  audit_event_id,
+  event_type,
+  actor_kind,
+  request_id,
+  reason_code,
+  occurred_at
+)
+VALUES (
+  '70000000-0000-4000-8000-000000000401',
+  'invite.issued',
+  'admin',
+  'req_ISEhISEhISEhISEhISEhIQ',
+  'BETA_ADMISSION',
+  pg_catalog.transaction_timestamp() - interval '181 days'
+);
+
 INSERT INTO viberacing_private.pairing_transactions (
   pairing_id,
   installation_id,
@@ -900,9 +917,11 @@ DECLARE
   cleanup record;
 BEGIN
   SELECT * INTO STRICT cleanup
-  FROM viberacing_api.cleanup_expired_ranking_events(1000);
-  IF cleanup.deleted_events <> 1 THEN
-    RAISE EXCEPTION 'ranking event cleanup result is invalid';
+  FROM viberacing_api.cleanup_expired_audit_events(1000);
+  IF cleanup.deleted_ranking_events <> 1
+    OR cleanup.deleted_admin_audit_events <> 1
+  THEN
+    RAISE EXCEPTION 'audit event cleanup result is invalid';
   END IF;
 
   SELECT * INTO STRICT cleanup

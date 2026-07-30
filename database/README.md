@@ -50,7 +50,7 @@ new reviewed forward revision. There is no generic down migration.
 
 ## Capability boundary
 
-`viberacing_private` is owner-only. All 35 private tables enable and force row-level security with
+`viberacing_private` is owner-only. All 36 private tables enable and force row-level security with
 an owner-only policy. Runtime roles have no private table or sequence grants. They receive only
 schema usage and explicit execution of reviewed `SECURITY DEFINER` procedures whose search path is
 `pg_catalog, pg_temp`.

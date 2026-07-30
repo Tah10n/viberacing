@@ -847,17 +847,57 @@ FROM viberacing_api.open_github_profile(
   );
 
   const inviteId = "24000000-0000-4000-8000-000000000001";
+  const inviteAuditEventId = "24000000-0000-4000-8000-000000000002";
   requireSuccess(
     psql(`
 SET ROLE viberacing_admin;
 SELECT viberacing_api.issue_invite(
   '${inviteId}',
   pg_catalog.decode(pg_catalog.repeat('61', 32), 'hex'),
-  'BETA_ACCESS',
-  pg_catalog.transaction_timestamp() + interval '7 days'
+  pg_catalog.transaction_timestamp() + interval '7 days',
+  '${inviteAuditEventId}',
+  'req_ISEhISEhISEhISEhISEhIQ',
+  'BETA_ADMISSION'
 );
 `),
     "concurrent invite setup",
+  );
+  assert.equal(
+    psqlValue(
+      `SELECT event_type || ':' || actor_kind || ':' || reason_code
+       FROM viberacing_private.admin_audit_events
+       WHERE audit_event_id = '${inviteAuditEventId}';`,
+    ),
+    "invite.issued:admin:BETA_ADMISSION",
+    "Admin invite issuance did not commit its exact database audit event",
+  );
+  const auditRewrite = psql(`
+SET ROLE viberacing_owner;
+UPDATE viberacing_private.admin_audit_events
+SET reason_code = 'BETA_ADMISSION'
+WHERE audit_event_id = '${inviteAuditEventId}';
+`);
+  assert.notEqual(auditRewrite.status, 0, "Admin database audit event was mutable");
+  const conflictingAudit = psql(`
+SET ROLE viberacing_admin;
+SELECT viberacing_api.issue_invite(
+  '24000000-0000-4000-8000-000000000003',
+  pg_catalog.decode(pg_catalog.repeat('64', 32), 'hex'),
+  pg_catalog.transaction_timestamp() + interval '7 days',
+  '${inviteAuditEventId}',
+  'req_ImJiYmJiYmJiYmJiYmJiYg',
+  'BETA_ADMISSION'
+);
+`);
+  assert.notEqual(conflictingAudit.status, 0, "duplicate Admin audit authority was accepted");
+  assert.equal(
+    psqlValue(
+      `SELECT pg_catalog.count(*)
+       FROM viberacing_private.invites
+       WHERE invite_id = '24000000-0000-4000-8000-000000000003';`,
+    ),
+    "0",
+    "failed Admin audit insertion left a partial invite",
   );
   const invitedContender = (profilePrefix, githubUserId, sessionPrefix, digestByte) => `
 SET ROLE viberacing_web;

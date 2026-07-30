@@ -50,7 +50,7 @@ const commandCases = [
   ["cleanup-expired-auth-state", { batchSize: 1_000, kind: "cleanup_expired_auth_state" }],
   ["cleanup-aged-revoked-authority", { batchSize: 1_000, kind: "cleanup_aged_revoked_authority" }],
   ["cleanup-snapshot-history", { batchSize: 1_000, kind: "cleanup_snapshot_history" }],
-  ["cleanup-expired-ranking-events", { batchSize: 1_000, kind: "cleanup_expired_ranking_events" }],
+  ["cleanup-expired-audit-events", { batchSize: 1_000, kind: "cleanup_expired_audit_events" }],
   ["purge-profile-deletions", { batchSize: 10, kind: "purge_profile_deletions" }],
   ["cleanup-terminal-deletion-jobs", { batchSize: 1_000, kind: "cleanup_terminal_deletion_jobs" }],
 ] as const;

@@ -105,10 +105,10 @@ export function parseJobsCommand(value: unknown): JobsMaintenanceJob {
         batchSize: maximumCleanupBatchSize,
         kind: "cleanup_snapshot_history",
       });
-    case "cleanup-expired-ranking-events":
+    case "cleanup-expired-audit-events":
       return Object.freeze({
         batchSize: maximumCleanupBatchSize,
-        kind: "cleanup_expired_ranking_events",
+        kind: "cleanup_expired_audit_events",
       });
     case "purge-profile-deletions":
       return Object.freeze({

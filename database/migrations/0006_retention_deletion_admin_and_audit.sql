@@ -98,6 +98,129 @@ VALUES
   ('deletion_job_cleanup'),
   ('pairing_rate_reset');
 
+CREATE TABLE viberacing_private.admin_audit_events (
+  audit_event_id uuid PRIMARY KEY,
+  event_type varchar(32) NOT NULL,
+  actor_kind varchar(12) NOT NULL,
+  request_id varchar(26) NOT NULL,
+  reason_code varchar(32) NOT NULL,
+  occurred_at timestamptz NOT NULL,
+  CONSTRAINT admin_audit_events_type_closed
+    CHECK (event_type = 'invite.issued'),
+  CONSTRAINT admin_audit_events_actor_closed
+    CHECK (actor_kind = 'admin'),
+  CONSTRAINT admin_audit_events_request_id_canonical
+    CHECK (request_id ~ '^req_[A-Za-z0-9_-]{22}$'),
+  CONSTRAINT admin_audit_events_reason_closed
+    CHECK (reason_code = 'BETA_ADMISSION'),
+  CONSTRAINT admin_audit_events_request_type_unique
+    UNIQUE (request_id, event_type)
+);
+
+CREATE INDEX admin_audit_events_retention_idx
+  ON viberacing_private.admin_audit_events (occurred_at, audit_event_id);
+
+ALTER TABLE viberacing_private.admin_audit_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE viberacing_private.admin_audit_events FORCE ROW LEVEL SECURITY;
+CREATE POLICY admin_audit_events_owner_only
+  ON viberacing_private.admin_audit_events
+  USING (CURRENT_USER = 'viberacing_owner')
+  WITH CHECK (CURRENT_USER = 'viberacing_owner');
+
+CREATE FUNCTION viberacing_private.reject_admin_audit_event_update()
+RETURNS trigger
+LANGUAGE plpgsql
+VOLATILE
+SET search_path = pg_catalog, pg_temp
+AS $function$
+BEGIN
+  PERFORM viberacing_private.operation_failed();
+  RETURN NULL;
+END
+$function$;
+
+CREATE TRIGGER admin_audit_events_append_only
+BEFORE UPDATE ON viberacing_private.admin_audit_events
+FOR EACH ROW EXECUTE FUNCTION viberacing_private.reject_admin_audit_event_update();
+
+REVOKE EXECUTE ON FUNCTION viberacing_api.issue_invite(uuid, bytea, text, timestamptz)
+  FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin;
+DROP FUNCTION viberacing_api.issue_invite(uuid, bytea, text, timestamptz);
+
+CREATE FUNCTION viberacing_api.issue_invite(
+  p_invite_id uuid,
+  p_verifier_digest bytea,
+  p_expires_at timestamptz,
+  p_audit_event_id uuid,
+  p_request_id text,
+  p_reason_code text
+)
+RETURNS void
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+AS $function$
+DECLARE
+  v_now timestamptz := pg_catalog.transaction_timestamp();
+BEGIN
+  IF p_invite_id IS NULL
+    OR pg_catalog.octet_length(p_verifier_digest) IS DISTINCT FROM 32
+    OR p_expires_at IS NULL
+    OR p_expires_at <= v_now
+    OR p_expires_at > v_now + interval '90 days'
+    OR p_audit_event_id IS NULL
+    OR p_request_id IS NULL
+    OR p_request_id !~ '^req_[A-Za-z0-9_-]{22}$'
+    OR p_reason_code IS DISTINCT FROM 'BETA_ADMISSION'
+  THEN
+    PERFORM viberacing_private.operation_failed();
+  END IF;
+
+  INSERT INTO viberacing_private.invites (
+    invite_id,
+    verifier_digest,
+    reason_code,
+    issued_at,
+    expires_at
+  )
+  VALUES (
+    p_invite_id,
+    p_verifier_digest,
+    p_reason_code,
+    v_now,
+    p_expires_at
+  );
+
+  INSERT INTO viberacing_private.admin_audit_events (
+    audit_event_id,
+    event_type,
+    actor_kind,
+    request_id,
+    reason_code,
+    occurred_at
+  )
+  VALUES (
+    p_audit_event_id,
+    'invite.issued',
+    'admin',
+    p_request_id,
+    p_reason_code,
+    v_now
+  );
+EXCEPTION
+  WHEN integrity_constraint_violation THEN
+    PERFORM viberacing_private.operation_failed();
+END
+$function$;
+
+REVOKE EXECUTE ON FUNCTION viberacing_api.issue_invite(
+  uuid, bytea, timestamptz, uuid, text, text
+) FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin;
+GRANT EXECUTE ON FUNCTION viberacing_api.issue_invite(
+  uuid, bytea, timestamptz, uuid, text, text
+) TO viberacing_admin;
+
 CREATE OR REPLACE FUNCTION viberacing_api.request_profile_deletion(
   p_session_id uuid,
   p_session_verifier_digest bytea,
@@ -868,9 +991,10 @@ BEGIN
 END
 $function$;
 
-CREATE FUNCTION viberacing_api.cleanup_expired_ranking_events(p_batch_size integer)
+CREATE FUNCTION viberacing_api.cleanup_expired_audit_events(p_batch_size integer)
 RETURNS TABLE (
-  deleted_events integer
+  deleted_ranking_events integer,
+  deleted_admin_audit_events integer
 )
 LANGUAGE plpgsql
 VOLATILE
@@ -883,28 +1007,48 @@ DECLARE
   v_now timestamptz := pg_catalog.clock_timestamp();
 BEGIN
   PERFORM viberacing_private.validate_maintenance_batch(p_batch_size, 1000);
-  deleted_events := 0;
+  deleted_ranking_events := 0;
+  deleted_admin_audit_events := 0;
   IF NOT viberacing_private.try_lock_maintenance('audit_cleanup') THEN
     RETURN NEXT;
     RETURN;
   END IF;
 
   WITH candidates AS MATERIALIZED (
-    SELECT event.ctid
+    SELECT
+      'ranking'::text AS event_kind,
+      event.ctid AS row_id,
+      event.occurred_at,
+      event.event_id AS stable_id
     FROM viberacing_private.ranking_events AS event
     WHERE event.occurred_at <= v_now - interval '180 days'
-    ORDER BY event.occurred_at, event.event_id
+    UNION ALL
+    SELECT
+      'admin'::text,
+      event.ctid,
+      event.occurred_at,
+      event.audit_event_id::text
+    FROM viberacing_private.admin_audit_events AS event
+    WHERE event.occurred_at <= v_now - interval '180 days'
+    ORDER BY occurred_at, stable_id, event_kind
     LIMIT p_batch_size
-    FOR UPDATE OF event SKIP LOCKED
-  ), deleted AS (
+  ), deleted_ranking AS (
     DELETE FROM viberacing_private.ranking_events AS event
     USING candidates
-    WHERE event.ctid = candidates.ctid
+    WHERE candidates.event_kind = 'ranking'
+      AND event.ctid = candidates.row_id
+    RETURNING 1
+  ), deleted_admin AS (
+    DELETE FROM viberacing_private.admin_audit_events AS event
+    USING candidates
+    WHERE candidates.event_kind = 'admin'
+      AND event.ctid = candidates.row_id
     RETURNING 1
   )
-  SELECT pg_catalog.count(*)::integer
-  INTO deleted_events
-  FROM deleted;
+  SELECT
+    (SELECT pg_catalog.count(*)::integer FROM deleted_ranking),
+    (SELECT pg_catalog.count(*)::integer FROM deleted_admin)
+  INTO deleted_ranking_events, deleted_admin_audit_events;
 
   RETURN NEXT;
 END
@@ -1147,6 +1291,8 @@ CREATE POLICY profile_deletion_jobs_owner_only
 
 REVOKE ALL ON TABLE viberacing_private.profile_deletion_jobs
   FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin;
+REVOKE ALL ON TABLE viberacing_private.admin_audit_events
+  FROM PUBLIC, viberacing_web, viberacing_ingest, viberacing_jobs, viberacing_admin;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA viberacing_private FROM PUBLIC;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA viberacing_api FROM PUBLIC;
 
@@ -1162,7 +1308,7 @@ GRANT EXECUTE ON FUNCTION viberacing_api.cleanup_aged_revoked_authority(integer)
   TO viberacing_jobs;
 GRANT EXECUTE ON FUNCTION viberacing_api.cleanup_snapshot_history(integer)
   TO viberacing_jobs;
-GRANT EXECUTE ON FUNCTION viberacing_api.cleanup_expired_ranking_events(integer)
+GRANT EXECUTE ON FUNCTION viberacing_api.cleanup_expired_audit_events(integer)
   TO viberacing_jobs;
 GRANT EXECUTE ON FUNCTION viberacing_api.purge_profile_deletions(integer)
   TO viberacing_jobs;

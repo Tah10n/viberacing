@@ -40,7 +40,7 @@ describe("Jobs database pool", () => {
     await client.ensureCurrentSeason();
     await client.refreshDirtyLeaderboard();
     await client.finalizeDueSeason();
-    await client.cleanupExpiredRankingEvents(1);
+    await client.cleanupExpiredAuditEvents(1);
     await client.cleanupExpiredUsageNonces(2);
     await client.cleanupExpiredUsageHistory(3);
     await client.cleanupExpiredPairingState(4);
@@ -80,7 +80,7 @@ describe("Jobs database pool", () => {
       "ensure_current_community_season()",
       "refresh_next_dirty_community_season()",
       "finalize_next_due_community_season()",
-      "cleanup_expired_ranking_events($1::integer)",
+      "cleanup_expired_audit_events($1::integer)",
       "cleanup_expired_usage_nonces($1::integer)",
       "cleanup_expired_usage_history($1::integer)",
       "cleanup_expired_pairing_state($1::integer)",

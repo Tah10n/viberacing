@@ -35,7 +35,7 @@
       "revision": 6,
       "name": "retention_deletion_admin_and_audit",
       "path": "database/migrations/0006_retention_deletion_admin_and_audit.sql",
-      "sha256": "246831beafd5fb6e16f470b4dd357b857294e60c55a10bb7fdc3c9d066073025"
+      "sha256": "62bc433f31b8c9c5a6efbeed4c22f02404cfb786b1a7294e37360262e921a210"
     },
     {
       "revision": 7,

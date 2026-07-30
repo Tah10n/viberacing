@@ -69,7 +69,7 @@ pnpm run test:jobs:postgres-integration
 pnpm --filter @viberacing/jobs start -- ensure-current-season
 pnpm --filter @viberacing/jobs start -- refresh-dirty-leaderboard
 pnpm --filter @viberacing/jobs start -- finalize-due-season
-pnpm --filter @viberacing/jobs start -- cleanup-expired-ranking-events
+pnpm --filter @viberacing/jobs start -- cleanup-expired-audit-events
 pnpm --filter @viberacing/jobs start -- cleanup-expired-usage-nonces
 pnpm --filter @viberacing/jobs start -- cleanup-expired-usage-history
 pnpm --filter @viberacing/jobs start -- cleanup-expired-pairing-state

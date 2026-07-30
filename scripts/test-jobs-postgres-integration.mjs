@@ -65,7 +65,7 @@ const commandCatalog = Object.freeze([
   "ensure-current-season",
   "refresh-dirty-leaderboard",
   "finalize-due-season",
-  "cleanup-expired-ranking-events",
+  "cleanup-expired-audit-events",
   "cleanup-expired-usage-nonces",
   "cleanup-expired-usage-history",
   "cleanup-expired-pairing-state",

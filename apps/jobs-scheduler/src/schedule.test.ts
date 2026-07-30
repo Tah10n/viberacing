@@ -7,7 +7,7 @@ const hourlyKinds = [
   "ensure_current_season",
   "refresh_dirty_leaderboard",
   "finalize_due_season",
-  "cleanup_expired_ranking_events",
+  "cleanup_expired_audit_events",
   "cleanup_expired_usage_nonces",
   "cleanup_expired_usage_history",
   "cleanup_expired_pairing_state",
@@ -46,7 +46,7 @@ describe("createMaintenanceSchedule", () => {
     expect(kinds.indexOf("refresh_dirty_leaderboard")).toBeLessThan(
       kinds.indexOf("purge_profile_deletions"),
     );
-    expect(kinds.indexOf("cleanup_expired_ranking_events")).toBeLessThan(
+    expect(kinds.indexOf("cleanup_expired_audit_events")).toBeLessThan(
       kinds.indexOf("cleanup_expired_usage_history"),
     );
     expect(kinds.indexOf("cleanup_expired_pairing_state")).toBeLessThan(

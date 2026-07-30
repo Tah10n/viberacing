@@ -46,7 +46,9 @@ function clientFixture(overrides: Partial<JobsDatabaseClient> = {}): JobsDatabas
     cleanupExpiredPairingState: vi.fn(() =>
       Promise.resolve([{ deleted_accounts: 2, deleted_installations: 1, deleted_pairings: 1 }]),
     ),
-    cleanupExpiredRankingEvents: vi.fn(() => Promise.resolve([{ deleted_events: 1 }])),
+    cleanupExpiredAuditEvents: vi.fn(() =>
+      Promise.resolve([{ deleted_admin_audit_events: 0, deleted_ranking_events: 1 }]),
+    ),
     cleanupExpiredUsageHistory: vi.fn(() =>
       Promise.resolve([
         {
@@ -109,7 +111,7 @@ describe("Jobs maintenance runner", () => {
       Object.freeze({ kind: "finalize_due_season" as const }),
       Object.freeze({
         batchSize: maximumCleanupBatchSize,
-        kind: "cleanup_expired_ranking_events" as const,
+        kind: "cleanup_expired_audit_events" as const,
       }),
       Object.freeze({
         batchSize: maximumCleanupBatchSize,
@@ -155,7 +157,7 @@ describe("Jobs maintenance runner", () => {
       { kind: "ensure_current_season", outcome: "ensured" },
       { kind: "refresh_dirty_leaderboard", outcome: "published" },
       { kind: "finalize_due_season", outcome: "finalized" },
-      { affectedCount: 1, kind: "cleanup_expired_ranking_events" },
+      { affectedCount: 1, kind: "cleanup_expired_audit_events" },
       { affectedCount: 2, kind: "cleanup_expired_usage_nonces" },
       { affectedCount: 4, kind: "cleanup_expired_usage_history" },
       { affectedCount: 4, kind: "cleanup_expired_pairing_state" },
@@ -325,6 +327,14 @@ describe("Jobs maintenance runner", () => {
         ),
       },
       { batchSize: 1000, kind: "cleanup_expired_usage_nonces" },
+    ],
+    [
+      {
+        cleanupExpiredAuditEvents: vi.fn(() =>
+          Promise.resolve([{ deleted_admin_audit_events: 500, deleted_ranking_events: 501 }]),
+        ),
+      },
+      { batchSize: 1000, kind: "cleanup_expired_audit_events" },
     ],
     [
       {

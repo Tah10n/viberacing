@@ -72,7 +72,7 @@ pnpm run test:database:integration
 ```
 
 The local archive budget is 64 MiB and each canonical schema or data buffer is bounded to 32 MiB.
-The current oracle requires the exact seven-row clean migration ledger, all 35 private tables with
+The current oracle requires the exact seven-row clean migration ledger, all 36 private tables with
 forced RLS, three bounded archives and two current-snapshot restores, SHA-256/length-identical
 canonical data, a byte-stable canonical restored schema, the same finalized snapshot identity and
 payload after both restores, one completed synthetic deletion whose profile remains absent, one

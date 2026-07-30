@@ -59,7 +59,7 @@ docker build --file deploy/Dockerfile.jobs-scheduler --tag viberacing-jobs-sched
 docker build --file deploy/Dockerfile.migrate --tag viberacing-migrate:local .
 ```
 
-These are local synthetic prerequisites. They prove the seven-row migration ledger, 35 forced-RLS
+These are local synthetic prerequisites. They prove the seven-row migration ledger, 36 forced-RLS
 private tables, exact route/application behavior, narrow roles, TLS fixtures, Edge/Ingest signature
 compatibility, and local process composition. They do not pre-approve a hosted environment.
 
@@ -72,7 +72,7 @@ Create a one-replica service from `deploy/railway/migrate.json`. Supply only:
 - protected CA trust when the runtime does not already trust the chain.
 
 The service has restart policy `NEVER`. Success is code zero, the generic completion line, exact
-seven-row ledger, exact provider state, all 35 forced-RLS private tables, expected narrow grants,
+seven-row ledger, exact provider state, all 36 forced-RLS private tables, expected narrow grants,
 and released database sessions/lock. On any other result, stop and follow the
 [migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md).
 
@@ -183,7 +183,7 @@ boundaries with direct table access or manual participant creation.
 Record only redacted, non-sensitive evidence:
 
 - exact source digest and image digest per service;
-- exact seven-row ledger and 35 forced-RLS tables;
+- exact seven-row ledger and 36 forced-RLS tables;
 - sole-group login/TLS probes for Migration, Web, Ingest, and Jobs;
 - three snapshot routes and four removed-route results;
 - disabled capability results before enablement;
