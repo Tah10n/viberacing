@@ -52,8 +52,8 @@ runbook.
       is exactly one.
 - [ ] VR-MIG-04: Prove a current backup can restore into an isolated target and record its expiry
       privately.
-- [ ] VR-MIG-05: Verify the deployed and candidate services both accept the expand-and-contract
-      schema state.
+- [ ] VR-MIG-05: Verify the candidate service matrix targets the exact clean-bootstrap schema and
+      starts with every capability closed.
 - [ ] VR-MIG-06: Verify the narrow login, owner membership, DNS name, trust material, and TLS policy
       privately.
 - [ ] VR-MIG-07: Confirm protected monitoring and an append-only operator record are available
@@ -112,13 +112,12 @@ multi-controller rollout.
       exactly.
 - [ ] VR-MIG-14: Verify owner, forced-RLS, runtime-role, TLS, connection, and advisory-lock
       invariants.
-- [ ] VR-MIG-15: Run the approved candidate and deployed-service smoke matrix before restoring
-      traffic state.
+- [ ] VR-MIG-15: Run the approved candidate-service smoke matrix before opening any traffic.
 
 Verification uses deployment-owned read-only oracles and redacted aggregate results. It must not
 print SQL bodies, database errors, identifiers, stored rows, credentials, certificate material, or
-configuration. A process success sentence without the ledger, role, service-compatibility, and
-resource-cleanup checks is incomplete evidence.
+configuration. A process success sentence without the ledger, role, candidate-service compatibility,
+and resource-cleanup checks is incomplete evidence.
 
 ## Forward recovery
 

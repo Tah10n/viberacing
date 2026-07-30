@@ -41,7 +41,7 @@ const expectedControls = Object.freeze([
   ],
   [
     "VR-MIG-05",
-    "Verify the deployed and candidate services both accept the expand-and-contract schema state.",
+    "Verify the candidate service matrix targets the exact clean-bootstrap schema and starts with every capability closed.",
   ],
   [
     "VR-MIG-06",
@@ -76,10 +76,7 @@ const expectedControls = Object.freeze([
     "VR-MIG-14",
     "Verify owner, forced-RLS, runtime-role, TLS, connection, and advisory-lock invariants.",
   ],
-  [
-    "VR-MIG-15",
-    "Run the approved candidate and deployed-service smoke matrix before restoring traffic state.",
-  ],
+  ["VR-MIG-15", "Run the approved candidate-service smoke matrix before opening any traffic."],
   [
     "VR-MIG-16",
     "On any failure, stop new controllers, preserve the protected record, and contain affected routes.",
