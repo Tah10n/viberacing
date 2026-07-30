@@ -991,7 +991,7 @@ async function waitForStableState(connection, sessionId, expected) {
           appMotion: app?.getAttribute("data-motion") ?? null,
           appTheme: app?.getAttribute("data-theme") ?? null,
           controls: controls.map((control) => control.value),
-          dataSource: app?.getAttribute("data-score-source") ?? null,
+          dataSource: app?.getAttribute("data-snapshot-source") ?? null,
           documentWidth: document.documentElement.scrollWidth,
           horizontalBounds: horizontalOverflows.length === 0,
           horizontalOverflows,

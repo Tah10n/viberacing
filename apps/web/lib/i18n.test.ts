@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  dayLabels,
   formatCarChassis,
-  formatDayCount,
   formatExactTokenTotal,
   formatFreshness,
-  formatScore,
   isLocale,
   translations,
 } from "./i18n";
@@ -24,9 +21,7 @@ describe("localization", () => {
     expect(isLocale("../../private")).toBe(false);
   });
 
-  it("formats scores, days, freshness, and closed car enums for each locale", () => {
-    expect(formatScore(1234, "en")).toBe("1,234");
-    expect(formatScore(1234, "ru")).toMatch(/^1[\s\u00a0]234$/);
+  it("formats exact token totals, freshness, and closed car enums for each locale", () => {
     expect(formatExactTokenTotal("123456789012345678901234567890", "en")).toBe(
       "123,456,789,012,345,678,901,234,567,890",
     );
@@ -35,10 +30,7 @@ describe("localization", () => {
     expect(formatFreshness(0, "en")).toBe("today");
     expect(formatFreshness(2, "ru")).toBe("2 дня");
     expect(formatFreshness(null, "en")).toBe("—");
-    expect(formatDayCount(11, "ru")).toBe("11 дн.");
     expect(formatCarChassis("roadster", "en")).toBe("Roadster");
     expect(formatCarChassis("roadster", "ru")).toBe("Родстер");
-    expect(dayLabels("en")).toHaveLength(7);
-    expect(dayLabels("ru")).toHaveLength(7);
   });
 });

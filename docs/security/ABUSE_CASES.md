@@ -51,7 +51,7 @@ not accepted.
 
 - **Attacker:** A participant with several installations or copied local authority.
 - **Preconditions:** More than one active device is bound to one AgentAccount.
-- **Abuse:** Submit the same cumulative date from every device and rely on device/source counting.
+- **Abuse:** Submit the same cumulative date from every device and rely on per-device counting.
 - **Impact:** Inflated account/day and weekly totals.
 - **Controls:** Unique AgentAccount/date total, monotonic maximum semantics, account-scoped
   observations, device-independent aggregation, and long-lived idempotency.

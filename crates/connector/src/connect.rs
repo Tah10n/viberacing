@@ -87,7 +87,7 @@ pub enum ConnectorCliError {
     InvalidAccountSelector,
     /// A discovered local account cannot be mapped uniquely to one active account credential.
     AccountMappingUnavailable,
-    /// No active source-bound credential exists for the requested origin and label.
+    /// No active account-bound credential exists for the requested origin and label.
     NotConnected,
     /// No discovered or explicitly selected Codex artifact passed exact admission.
     CodexNotAdmitted,

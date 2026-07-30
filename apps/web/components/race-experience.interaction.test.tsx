@@ -165,7 +165,7 @@ describe("RaceExperience interactions", () => {
     };
     const mounted = mountExperience(payload, false, "loop_lantern");
 
-    expect(mounted.container.querySelector(".race-app")?.getAttribute("data-score-source")).toBe(
+    expect(mounted.container.querySelector(".race-app")?.getAttribute("data-snapshot-source")).toBe(
       "community",
     );
     expect(mounted.container.textContent).toContain(

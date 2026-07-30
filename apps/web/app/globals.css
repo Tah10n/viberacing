@@ -556,7 +556,7 @@ a {
 }
 
 .demo-badge,
-.score-cap {
+.snapshot-badge {
   padding: 0.4rem 0.55rem;
   border: 2px solid var(--accent);
   color: var(--accent);
@@ -956,11 +956,11 @@ tbody .current-driver > :first-child {
   box-shadow: 6px 6px 0 var(--shadow);
 }
 
-.score-panel {
+.ranking-panel {
   grid-row: span 2;
 }
 
-.large-score {
+.large-token-total {
   display: block;
   margin: 0.5rem 0 1.75rem;
   color: var(--accent);
@@ -1348,7 +1348,7 @@ dd {
     grid-template-columns: 1fr;
   }
 
-  .score-panel {
+  .ranking-panel {
     grid-row: auto;
   }
 
@@ -1378,7 +1378,7 @@ dd {
 
   .brand-pixels,
   .demo-badge,
-  .score-cap,
+  .snapshot-badge,
   .primary-action,
   .secondary-action,
   .pixel-button,

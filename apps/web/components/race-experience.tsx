@@ -194,8 +194,8 @@ export function RaceExperience({
     <div
       className="race-app"
       data-motion={motionEnabled ? "on" : "off"}
-      data-score-metric="tokens"
-      data-score-source={payload.source}
+      data-ranking-metric="provider_reported_tokens_v1"
+      data-snapshot-source={payload.source}
       data-theme={theme}
     >
       <a className="skip-link" href="#leaderboard">
@@ -260,7 +260,7 @@ export function RaceExperience({
                 {seasonLabel} · {translation.tokenQualityDisclaimer}
               </p>
             </div>
-            <span className="score-cap">{sourceLabel}</span>
+            <span className="snapshot-badge">{sourceLabel}</span>
           </div>
           <div className="table-region" tabIndex={0}>
             <table className="semantic-leaderboard">
@@ -453,7 +453,7 @@ export function RaceExperience({
 
           {selectedProfileState !== "ready" || selectedProfile === null ? (
             <div className="profile-grid">
-              <article className="score-panel">
+              <article className="ranking-panel">
                 <p role="status">
                   {selectedProfileState === "unavailable"
                     ? translation.profileUnavailable
@@ -465,9 +465,9 @@ export function RaceExperience({
             </div>
           ) : (
             <div className="profile-grid public-profile-grid">
-              <article className="score-panel">
+              <article className="ranking-panel">
                 <h3>{translation.weeklyTokens}</h3>
-                <strong className="large-score">
+                <strong className="large-token-total">
                   {formatExactTokenTotal(selectedProfile.weeklyTokenTotal, locale)}{" "}
                   {translation.tokens}
                 </strong>
