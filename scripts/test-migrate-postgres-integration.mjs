@@ -38,6 +38,7 @@ const wideMigrationPassword = "synthetic-wide-migration-integration-password";
 const extraRole = "viberacing_migration_extra";
 const migrationApplicationName = "viberacing-migration-runner";
 const catalogLockKey = 824_762_001;
+const privateTableCount = 35;
 const holderReadyMarker = "viberacing_migration_holder_ready";
 const maximumChildOutputBytes = 8 * 1024;
 const maximumHolderOutputBytes = 16 * 1024;
@@ -822,7 +823,7 @@ WHERE namespace.nspname = 'viberacing_private'
   assert.deepEqual(schemaBoundary, {
     allForcedRls: true,
     allOwnerOwned: true,
-    privateTableCount: 30,
+    privateTableCount,
   });
 
   psql(
@@ -939,7 +940,7 @@ async function main() {
     assertControllerCleanup();
 
     console.log(
-      `Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact ${manifest.migrations.length}-row clean ledger, 30 forced-RLS tables, and released connections/lock).`,
+      `Migration PostgreSQL integration passed (widened-login denial, two emitted controllers behind one holder, verified TLS, exact ${manifest.migrations.length}-row clean ledger, ${privateTableCount} forced-RLS tables, and released connections/lock).`,
     );
   } catch (error) {
     primaryFailure = error;
