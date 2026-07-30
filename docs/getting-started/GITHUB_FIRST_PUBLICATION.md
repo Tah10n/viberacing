@@ -144,10 +144,14 @@ conduct channel. Source-only mode needs none because public participation surfac
 ### Web-created commit sign-off
 
 Enable **Require contributors to sign off on web-based commits** and read the setting back. GitHub
-creates a distinct commit for a normal pull-request merge, so the hosted sign-off policy is required
-even when every reviewed head commit already has a local DCO trailer. GitHub documents the setting
-in
+documents the setting in
 [Managing the commit signoff policy](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/managing-the-commit-signoff-policy-for-your-repository).
+
+Treat this setting as defense in depth, not as evidence that a pull-request merge commit is signed.
+On 2026-07-31 the setting read back enabled, but a normal merge still produced a raw commit without
+a DCO trailer. Before confirming each normal merge, use the exact confirmed public merge-author
+identity and put one exact author-matching `Signed-off-by` trailer at the end of the extended
+description. Read the raw commit back immediately; do not infer the author name from a handle.
 
 ## 5. Run the exact pre-push gate
 
@@ -254,12 +258,14 @@ target's immutable full commit ID and exact public author identity. Then follow
    remediation commit itself;
 4. run the checker mutation suite and complete reachable-history scan;
 5. submit the branch through the normal protected pull-request path; and
-6. require and read back automatic web sign-off before creating the new merge commit.
+6. keep automatic web sign-off enabled, add the exact final merge-author trailer manually, and read
+   the raw merge commit back.
 
 Use a normal merge that preserves the empty remediation commit. Do not rebase-merge it, hard-code a
 target exception, ignore merge commits, allow a third party to certify the target, or represent
-pull-request checks as successful hosted `main` recovery. Inspect the resulting merge identity and
-wait for the exhaustive `main` workflow.
+pull-request checks as successful hosted `main` recovery. Cancel the merge if the exact author
+identity is not confirmed. After merge, require both raw-object validation and the exhaustive `main`
+workflow.
 
 ## Opening participation later
 

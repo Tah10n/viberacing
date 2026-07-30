@@ -79,6 +79,8 @@ remove it from Git history.
 - scan every Git object reachable from the publication-candidate refs, not only the current tree;
 - confirm every reachable commit has a non-placeholder public Git identity and either one exact
   author-matching DCO sign-off or one ADR-0077-compliant individual remediation;
+- before a normal pull-request merge, confirm the exact merge-author identity, add its exact final
+  trailer manually, and read the raw published commit back; do not rely on the web sign-off setting;
 - record real public maintainers and CODEOWNERS without copying private workstation identities;
 - confirm the remote owner, repository visibility, default branch, license, security policy, and
   private vulnerability reporting;

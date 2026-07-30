@@ -42,3 +42,9 @@ include secrets, personal data, private logs, screenshots, account details, or l
 ## Reviewer notes
 
 <!-- Name the highest-risk assumption, the evidence a reviewer should inspect, and any follow-up. -->
+
+## Merge operator
+
+- [ ] For a normal merge, I confirmed the exact public merge-author identity and placed one exact
+      author-matching `Signed-off-by` trailer at the end of the extended description.
+- [ ] I read the raw published merge commit back and waited for the exhaustive `main` workflow.
