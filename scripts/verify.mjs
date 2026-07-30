@@ -149,6 +149,12 @@ const coreChecks = [
     ],
   ],
   [
+    "contract production build",
+    process.execPath,
+    [contractsTscBin, "--project", "tsconfig.build.json"],
+    contractsRoot,
+  ],
+  [
     "workspace unit tests",
     process.execPath,
     [
