@@ -71,6 +71,10 @@ permits one same-author, directly signed, strict-descendant remediation that nam
 commit ID. Third-party, sibling-branch, partial-ID, ambiguous, and different-email remediation is
 not accepted.
 
+GitHub's web sign-off setting is defense in depth and is not accepted as evidence for a pull-request
+merge commit. A maintainer using a normal merge must add one exact final author-matching trailer in
+the merge confirmation and read the raw published commit back.
+
 ## Review requirements
 
 Changes to auth, passkeys, connector, request signing, contracts, database privileges, edge

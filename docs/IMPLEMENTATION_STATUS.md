@@ -346,6 +346,12 @@ remediation for an already published missing or same-email name-mismatched trail
 implementation is not hosted recovery evidence; only a later successful exhaustive `main` workflow
 closes a recorded history failure.
 
+Hosted merge `4764cd63bc3581f741e96ee753b39b6ff93d1a80` demonstrated that GitHub's web sign-off
+setting can read back enabled while a normal pull-request merge still omits a DCO trailer. The
+setting remains defense in depth, but merge publication now requires one manually supplied exact
+author trailer plus immediate raw-commit readback. Forward remediation and a successful exhaustive
+`main` workflow remain pending for that merge.
+
 That hosted evidence covers the published source baseline only. It is not CI evidence for an
 unpushed branch, does not prove external vulnerability-report delivery, and grants no release,
 deployment, provider, service, or open-participation claim. External participation remains closed.

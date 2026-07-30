@@ -58,9 +58,15 @@ same-email target trailer are sanitized to reserved example identities before pu
 inspection. An invalid declaration remains ordinary commit text and therefore remains subject to the
 normal personal-data checks.
 
-Repository administrators require GitHub's automatic sign-off policy for future web-created commits
-and read it back before relying on it. This hosted setting prevents recurrence but does not
-retroactively repair an existing commit.
+Repository administrators keep GitHub's automatic sign-off policy enabled and read it back as a
+defense-in-depth control for web-created commits. Hosted evidence on 2026-07-31 showed that a normal
+pull-request merge still omitted the trailer while this setting was enabled. The setting is
+therefore not accepted as DCO evidence for a merge commit.
+
+Before confirming a normal merge, the operator confirms the exact public merge-author name and
+email, places one exact author-matching `Signed-off-by` trailer as the final extended-description
+line, and then reads the raw published commit back. A missing, duplicate, or mismatched result stops
+publication claims and requires the same forward-only remediation process.
 
 ## Security and privacy consequences
 
@@ -76,8 +82,9 @@ continues to reject the identity when it appears in tracked files, arbitrary mes
 remediation text, or a different-email target trailer.
 
 Affected controls are VR-PUBLIC-001 and the TB-01 public repository boundary. Residual risk remains
-that a repository host or maintainer account can create misleading Git metadata; protected branch
-review, hosted settings, exact history scanning, and human review remain required.
+that a repository host or maintainer account can create misleading Git metadata or change merge
+behavior; protected branch review, a manually verified merge trailer, raw commit readback, exact
+history scanning, and human review remain required.
 
 ## Alternatives considered
 
@@ -101,8 +108,8 @@ pull request.
 
 Rollback before publication removes the checker and documentation change. After a remediation is
 published, do not rewrite it or the target; supersede this ADR and replace the checker through a
-forward pull request if the policy changes. Disabling automatic GitHub web sign-off requires a
-documented replacement control.
+forward pull request if the policy changes. Automatic GitHub web sign-off remains enabled for the
+web surfaces it covers, but it does not replace the manual merge-trailer and raw-readback control.
 
 ## Verification
 
@@ -114,7 +121,8 @@ Required evidence includes:
 - the exact current-history remediation commit;
 - `check:public:staged`, `git diff --cached --check`, checker mutation tests, documentation checks,
   and the complete reachable-history scan; and
-- protected pull-request checks followed by a successful exhaustive `main` workflow.
+- protected pull-request checks, raw readback of the manually signed merge commit, and a successful
+  exhaustive `main` workflow.
 
 Neither local success nor pull-request success is hosted `main` evidence.
 
