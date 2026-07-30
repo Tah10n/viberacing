@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2026-07-29.
+Last updated: 2026-07-30.
 
 This file is the evidence ledger for the current working tree. “Implemented” below means local
 repository code plus the named deterministic or disposable-database evidence. It never means
@@ -396,6 +396,20 @@ release endpoint. The separately authorized read-only GitHub policy check above 
 source-publication evidence only. Any other live evidence requires explicit authorization, private
 configuration, a documented scope, safe redaction, and an updated status entry. Until then, it must
 not be inferred from local tests.
+
+## Current clean-replacement review boundary
+
+The current branch completed its full tracked/untracked self-review and the repository-owned local
+matrix: deterministic and release checks, exact Rust checks, local Windows connector checks, all
+disposable PostgreSQL process/integration modes, and four local image builds. Checker mutation
+suites cover the current contract, database, documentation, operations, architecture, public-file,
+configuration, compatibility, publication, and build-evidence boundaries.
+
+The registry-backed `pnpm audit` advisory lookup was not refreshed and is explicitly not counted as
+green evidence. No claim is made that the dependency graph is advisory-free. The completed matrix
+also remains local and synthetic: it does not add provider support, a released connector, hosted CI
+for this branch, deployment, production credentials, representative capacity, monitoring, backup
+operations, or real-user evidence.
 
 ## Remaining release blockers
 

@@ -48,8 +48,14 @@ release evidence pending.
 
 ## Stage 9 — Final evidence and review
 
-Status: in progress until the complete focused/release/PostgreSQL/Rust/platform matrix and final
-tracked/untracked review pass on the final commit.
+Status: local clean-replacement matrix complete; registry-backed advisory refresh and external
+evidence remain pending.
+
+The branch has completed its focused, release, disposable-PostgreSQL, Rust, local Windows,
+local-image, and tracked/untracked self-review matrix. The registry-backed `pnpm audit` refresh is
+outside the current execution boundary and is not counted as green evidence. Live provider, OAuth,
+hosted service/database, protected release, signing, monitoring, capacity, and real-user results
+remain separate future gates.
 
 ## Next: supported provider evidence
 

@@ -25,6 +25,7 @@ function makeFixture(name) {
   for (const path of [
     "README.md",
     "README.ru.md",
+    "ROADMAP.md",
     "CONTRIBUTING.md",
     "GOVERNANCE.md",
     "MAINTAINERS.md",
@@ -169,6 +170,20 @@ const cases = [
     expectedText: "ADR index status is stale",
   },
   {
+    name: "rejects a roadmap that reopens the completed local review",
+    mutate(directory) {
+      replace(
+        directory,
+        "ROADMAP.md",
+        "Status: local clean-replacement matrix complete; registry-backed advisory refresh and external\n" +
+          "evidence remain pending.",
+        "Status: implementation still pending.",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "final local review status is stale",
+  },
+  {
     name: "rejects an ADR index that presents historical implementation as current",
     mutate(directory) {
       replace(
@@ -180,6 +195,19 @@ const cases = [
     },
     expectedStatus: 1,
     expectedText: "historical ADR status boundary is stale",
+  },
+  {
+    name: "rejects a false green registry advisory boundary",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/IMPLEMENTATION_STATUS.md",
+        "was not refreshed and is explicitly not counted as\ngreen evidence",
+        "was refreshed and is counted as\ngreen evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "registry advisory evidence boundary is stale",
   },
   {
     name: "rejects stale migration evidence status",

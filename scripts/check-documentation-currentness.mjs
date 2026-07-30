@@ -126,6 +126,7 @@ if (
 
 const readme = read("README.md");
 const russianReadme = read("README.ru.md");
+const roadmap = read("ROADMAP.md");
 const databaseReadme = read("database/README.md");
 const implementationStatus = read("docs/IMPLEMENTATION_STATUS.md");
 const localDevelopment = read("docs/getting-started/LOCAL_DEVELOPMENT.md");
@@ -204,6 +205,12 @@ requireNormalized(
   "clean replacement status is stale",
 );
 requireNormalized(
+  "ROADMAP.md",
+  roadmap,
+  "Status: local clean-replacement matrix complete; registry-backed advisory refresh and external evidence remain pending.",
+  "final local review status is stale",
+);
+requireNormalized(
   "docs/decisions/README.md",
   decisionIndex,
   "Accepted; implemented locally; external pending",
@@ -220,6 +227,12 @@ requireNormalized(
   migrationRunbook,
   "The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as local synthetic evidence.",
   "migration evidence status is stale",
+);
+requireNormalized(
+  "docs/IMPLEMENTATION_STATUS.md",
+  implementationStatus,
+  "The registry-backed `pnpm audit` advisory lookup was not refreshed and is explicitly not counted as green evidence.",
+  "registry advisory evidence boundary is stale",
 );
 requireNormalized(
   "SECURITY.md",
