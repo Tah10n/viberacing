@@ -16,6 +16,7 @@
     "Cargo.lock",
     "compose.yaml",
     ".github/workflows/ci.yml",
+    ".github/workflows/connector-release-candidate.yml",
     ".github/workflows/deploy-release.yml"
   ],
   "npmPackages": [
@@ -2277,6 +2278,20 @@
       "declaredLicense": "MIT",
       "redistributed": false,
       "purpose": "Pinned Node.js setup in CI"
+    },
+    {
+      "kind": "github-action",
+      "identifier": "actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Protected connector candidate provenance and SPDX attestations"
+    },
+    {
+      "kind": "github-action",
+      "identifier": "actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f",
+      "declaredLicense": "MIT",
+      "redistributed": false,
+      "purpose": "Seven-day upload of the unsigned connector candidate bundle"
     },
     {
       "kind": "github-action",
