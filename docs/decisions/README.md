@@ -4,6 +4,15 @@ ADRs record durable decisions that change trust boundaries, public contracts, id
 scoring, compatibility, deployment, release, or repository safety. They explain why a choice exists,
 what it costs, how it is verified, and how it can be replaced.
 
+## Current-state boundary
+
+Rows before ADR 0076 preserve historical decision status and implementation notes; they are not
+current runtime evidence. Source-, score-, anonymous-, legacy-route-, and other incompatible
+pre-release shapes named there were removed by the clean replacement. ADR 0076 governs the current
+architecture, while `docs/IMPLEMENTATION_STATUS.md` is authoritative for current implementation and
+evidence. Older security, privacy, and operations controls apply only where ADR 0076 or current
+guidance restates them.
+
 ## Index
 
 | ADR                                                                 | Decision                                                             | Status                                                 |

@@ -210,6 +210,12 @@ requireNormalized(
   "ADR index status is stale",
 );
 requireNormalized(
+  "docs/decisions/README.md",
+  decisionIndex,
+  "Rows before ADR 0076 preserve historical decision status and implementation notes; they are not current runtime evidence.",
+  "historical ADR status boundary is stale",
+);
+requireNormalized(
   "docs/operations/MIGRATION_RUNBOOK.md",
   migrationRunbook,
   "The clean bootstrap manifest, roles, restore evidence, and migration-runner tests have landed as local synthetic evidence.",

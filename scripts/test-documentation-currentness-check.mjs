@@ -169,6 +169,19 @@ const cases = [
     expectedText: "ADR index status is stale",
   },
   {
+    name: "rejects an ADR index that presents historical implementation as current",
+    mutate(directory) {
+      replace(
+        directory,
+        "docs/decisions/README.md",
+        "they are not\ncurrent runtime evidence",
+        "they are\ncurrent runtime evidence",
+      );
+    },
+    expectedStatus: 1,
+    expectedText: "historical ADR status boundary is stale",
+  },
+  {
     name: "rejects stale migration evidence status",
     mutate(directory) {
       replace(
