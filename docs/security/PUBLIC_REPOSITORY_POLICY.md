@@ -40,9 +40,13 @@ account.
 
 Git identity metadata is the narrow exception. An author explicitly confirms a public
 GitHub-verified or GitHub-provided `noreply` address before it is used in Git Author/Committer
-headers and one exact author-matching DCO `Signed-off-by` trailer. The address remains forbidden in
-tracked files and ordinary commit-message text. Placeholder identities, missing or duplicate
-sign-offs, and author/sign-off mismatches fail the reachable-history check.
+headers and one exact author-matching DCO `Signed-off-by` trailer. If that trailer is already
+missing or has a same-email name mismatch in protected public history,
+[ADR 0077](../decisions/0077-forward-only-individual-dco-remediation.md) permits one same-author,
+directly signed, strict-descendant remediation that names the full target commit ID. The address
+remains forbidden in tracked files and ordinary commit-message text. Placeholder identities, missing
+sign-offs without valid remediation, different-email or duplicate sign-offs, and invalid, ambiguous,
+sibling-branch, or third-party remediation fail the reachable-history check.
 
 Screenshots and generated assets require metadata and visible-content review. Do not publish a
 screenshot of a signed-in browser or a terminal containing a user-home path. Prefer deterministic
@@ -73,8 +77,8 @@ remove it from Git history.
 
 - run `pnpm run verify:release` and require `pnpm run check:publication` to pass;
 - scan every Git object reachable from the publication-candidate refs, not only the current tree;
-- confirm every reachable commit has a non-placeholder public Git identity and one exact
-  author-matching DCO sign-off;
+- confirm every reachable commit has a non-placeholder public Git identity and either one exact
+  author-matching DCO sign-off or one ADR-0077-compliant individual remediation;
 - record real public maintainers and CODEOWNERS without copying private workstation identities;
 - confirm the remote owner, repository visibility, default branch, license, security policy, and
   private vulnerability reporting;
@@ -90,11 +94,12 @@ The initial publication is blocked until these checks have recorded evidence.
 
 `scripts/check-public-files.mjs` deliberately rejects common secret shapes, personal-looking
 addresses, user-home paths, and risky filenames. `scripts/check-git-history.mjs` exempts an address
-only after structurally validating the Author/Committer headers and exact author-matching DCO
-trailer; it still scans ordinary message text and every historical blob. Pattern matching cannot
-recognize every credential or private fact. Binary metadata, external systems, screenshots, and
-semantic disclosures require separate review. The scanners are controls in a layered publication
-process, not a confidentiality guarantee.
+only after structurally validating the Author/Committer headers and either the exact author-matching
+DCO trailer or ADR 0077's same-author remediation. It still scans ordinary message text, malformed
+remediation text, and every historical blob. Pattern matching cannot recognize every credential or
+private fact. Binary metadata, external systems, screenshots, and semantic disclosures require
+separate review. The scanners are controls in a layered publication process, not a confidentiality
+guarantee.
 
 The history checker scans every local ref by default for an operator-led publication review. Hosted
 `main` verification supplies the exact checked-out `HEAD` as its publication candidate so unrelated

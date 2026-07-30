@@ -125,7 +125,8 @@ pnpm run check:publication
 - `verify:release` adds coverage, production builds, documentation, history, visual/policy,
   checker-regression, license, formatting, and Windows connector evidence when available.
 - `check:public:staged` scans the exact Git index before a commit.
-- `check:history` scans reachable refs, identities, DCO trailers, paths, and blobs.
+- `check:history` scans reachable refs, identities, direct DCO trailers, bounded same-author forward
+  remediation records, paths, and blobs.
 - `check:publication` currently passes the tracked source-only boundary and fails closed on
   maintainer, CODEOWNERS, remote, reporting, or interaction-policy drift.
 
