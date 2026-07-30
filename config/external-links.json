@@ -46,16 +46,8 @@
       "purpose": "Canonical Prettier project documentation"
     },
     {
-      "hostname": "scorecard.dev",
-      "purpose": "OpenSSF Scorecard project documentation"
-    },
-    {
       "hostname": "www.contributor-covenant.org",
       "purpose": "Canonical Contributor Covenant text"
-    },
-    {
-      "hostname": "www.w3.org",
-      "purpose": "Canonical WebAuthn recommendation"
     }
   ]
 }
