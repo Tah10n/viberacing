@@ -94,7 +94,7 @@ guidance restates them.
 | [0074](0074-release-driven-protected-service-deployment.md)         | Release-driven protected service deployment                          | Accepted; checked workflow; hosted execution pending   |
 | [0075](0075-single-unreleased-usage-sync-protocol.md)               | Single unreleased Usage Sync protocol                                | Superseded by ADR 0076                                 |
 | [0076](0076-clean-agent-account-provider-reported-token-ranking.md) | Clean AgentAccount provider-reported token ranking                   | Accepted; implemented locally; external pending        |
-| [0077](0077-forward-only-individual-dco-remediation.md)             | Forward-only individual DCO remediation                              | Accepted; hosted recovery evidence pending             |
+| [0077](0077-forward-only-individual-dco-remediation.md)             | Forward-only individual DCO remediation                              | Accepted; hosted recovery verified                     |
 
 ## Lifecycle
 

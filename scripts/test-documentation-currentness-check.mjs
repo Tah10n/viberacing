@@ -202,8 +202,8 @@ const cases = [
       replace(
         directory,
         "docs/IMPLEMENTATION_STATUS.md",
-        "was not refreshed and is explicitly not counted as\ngreen evidence",
-        "was refreshed and is counted as\ngreen evidence",
+        "was not refreshed and\nis explicitly not counted as green evidence",
+        "was refreshed and\nis counted as green evidence",
       );
     },
     expectedStatus: 1,

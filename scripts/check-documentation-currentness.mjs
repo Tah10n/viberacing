@@ -231,7 +231,7 @@ requireNormalized(
 requireNormalized(
   "docs/IMPLEMENTATION_STATUS.md",
   implementationStatus,
-  "The registry-backed `pnpm audit` advisory lookup was not refreshed and is explicitly not counted as green evidence.",
+  "The registry-backed local `pnpm audit --audit-level moderate` advisory lookup was not refreshed and is explicitly not counted as green evidence.",
   "registry advisory evidence boundary is stale",
 );
 requireNormalized(

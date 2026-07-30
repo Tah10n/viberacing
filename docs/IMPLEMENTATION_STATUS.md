@@ -40,7 +40,7 @@ backward-compatibility population.
 | Profile deletion and terminal retention rehearsal              | Implemented locally                               | database integration and deletion-runbook checker                           |
 | Admin invitation kernel                                        | Transport-free only                               | Admin coverage and disposable PostgreSQL integration                        |
 | Edge/Web/Ingest/Jobs/Migration images and release declarations | Source/config only                                | image builds, config checks, no hosted result                               |
-| Public GitHub source publication                               | Public source-only; participation closed          | publication checker, hosted policy readback, baseline CI                    |
+| Public GitHub source publication                               | Public source-only; participation closed          | publication checker, policy readback, baseline and recovery CI              |
 
 ## Canonical inventories
 
@@ -343,18 +343,25 @@ published baseline `73532ec0b41f1dd3443787e7d644475493b56f85` completed hosted C
 The reachable-history checker implements direct author-matching DCO trailers and
 [ADR 0077](decisions/0077-forward-only-individual-dco-remediation.md)'s narrow same-author forward
 remediation for an already published missing or same-email name-mismatched trailer. Local
-implementation is not hosted recovery evidence; only a later successful exhaustive `main` workflow
-closes a recorded history failure.
+implementation alone is not hosted recovery evidence; the exact hosted result below closes the
+recorded history failure.
 
 Hosted merge `4764cd63bc3581f741e96ee753b39b6ff93d1a80` demonstrated that GitHub's web sign-off
 setting can read back enabled while a normal pull-request merge still omits a DCO trailer. The
 setting remains defense in depth, but merge publication now requires one manually supplied exact
-author trailer plus immediate raw-commit readback. Forward remediation and a successful exhaustive
-`main` workflow remain pending for that merge.
+author trailer plus immediate raw-commit readback.
 
-That hosted evidence covers the published source baseline only. It is not CI evidence for an
-unpushed branch, does not prove external vulnerability-report delivery, and grants no release,
-deployment, provider, service, or open-participation claim. External participation remains closed.
+[PR #14](https://github.com/Tah10n/viberacing/pull/14) added the same-author remediation for that
+merge and preserved it under manually signed merge `c99bf285002e5bdc452ca020c10a90791e9f1ad2`. Raw
+readback confirmed one exact author-matching trailer.
+[Hosted CI run 30589624660](https://github.com/Tah10n/viberacing/actions/runs/30589624660) then
+completed Node/repository, Rust, PostgreSQL invariant, and Windows portable jobs successfully,
+including the exhaustive history/release gate and every declared synthetic PostgreSQL lifecycle
+step.
+
+Those hosted results cover published source revisions only. They do not prove external
+vulnerability-report delivery and grant no release, deployment, provider, service, production-data,
+or open-participation claim. External participation remains closed.
 
 ## Capability defaults
 
@@ -411,17 +418,20 @@ not be inferred from local tests.
 
 ## Current clean-replacement review boundary
 
-The current branch completed its full tracked/untracked self-review and the repository-owned local
-matrix: deterministic and release checks, exact Rust checks, local Windows connector checks, all
-disposable PostgreSQL process/integration modes, and four local image builds. Checker mutation
-suites cover the current contract, database, documentation, operations, architecture, public-file,
-configuration, compatibility, publication, and build-evidence boundaries.
+The published clean replacement completed its full tracked/untracked self-review and the
+repository-owned local matrix: deterministic and release checks, exact Rust checks, local Windows
+connector checks, all disposable PostgreSQL process/integration modes, and four local image builds.
+Checker mutation suites cover the current contract, database, documentation, operations,
+architecture, public-file, configuration, compatibility, publication, and build-evidence boundaries.
+Hosted CI run 30589624660 independently completed the declared source-only matrix on `main`.
 
-The registry-backed `pnpm audit` advisory lookup was not refreshed and is explicitly not counted as
-green evidence. No claim is made that the dependency graph is advisory-free. The completed matrix
-also remains local and synthetic: it does not add provider support, a released connector, hosted CI
-for this branch, deployment, production credentials, representative capacity, monitoring, backup
-operations, or real-user evidence.
+The registry-backed local `pnpm audit --audit-level moderate` advisory lookup was not refreshed and
+is explicitly not counted as green evidence. Hosted CI run 30589624660 completed its separate
+high-severity `pnpm audit --audit-level high` step; this does not upgrade the unrefreshed
+moderate-severity boundary or prove that the dependency graph is advisory-free. The completed
+evidence remains synthetic: it does not add provider support, a released connector, deployment,
+production credentials, representative capacity, monitoring, backup operations, or real-user
+evidence.
 
 ## Remaining release blockers
 
