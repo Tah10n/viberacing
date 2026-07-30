@@ -368,7 +368,7 @@ and other required security paths.
 
 ```text
 corepack pnpm run verify
-cargo fmt --all -- --check
+cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 ```

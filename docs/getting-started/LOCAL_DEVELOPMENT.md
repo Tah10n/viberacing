@@ -243,7 +243,7 @@ or orchestrator behavior.
 ```text
 pnpm run check:codex-compatibility
 pnpm run test:connector:release-candidate
-cargo fmt --all -- --check
+cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 ```
