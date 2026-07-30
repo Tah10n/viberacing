@@ -99,6 +99,16 @@ assert.equal(parsed.length, 6);
 assert.deepEqual(assertPublicSnapshotPlanEvidence(parsed), { evidencedPlanCount: 6 });
 assert.equal(parse(renderLog(validPlans(), "\r\n")).length, 6);
 
+const boundedPayloadSequentialAccess = validPlans();
+boundedPayloadSequentialAccess[4].Plan.Plans[2] = node("Seq Scan", {
+  actualRows: 1,
+  relation: "leaderboard_snapshot_pages",
+});
+boundedPayloadSequentialAccess[4].Plan.Plans[2]["Rows Removed by Filter"] = 200;
+assert.deepEqual(assertPublicSnapshotPlanEvidence(boundedPayloadSequentialAccess), {
+  evidencedPlanCount: 6,
+});
+
 expectFailure(() => parse(`${validLog}private-marker`), /exposed a private integration value/);
 expectFailure(() => parse(validLog, 10), /exceeded their fixed byte budget/);
 expectFailure(() => parse("no plans here"), /emitted no auto_explain plans/);
@@ -203,7 +213,7 @@ for (const indexName of ["leaderboard_snapshot_pages_pkey", "leaderboard_snapsho
   }
   expectFailure(
     () => assertPublicSnapshotPlanEvidence(missingIndex),
-    /omitted an executed reviewed index/,
+    /omitted an executed reviewed index or bounded scan/,
   );
 }
 
@@ -211,7 +221,7 @@ const plannedOnlyIndex = validPlans();
 plannedOnlyIndex[3].Plan.Plans[2]["Actual Loops"] = 0;
 expectFailure(
   () => assertPublicSnapshotPlanEvidence(plannedOnlyIndex),
-  /omitted an executed reviewed index/,
+  /omitted an executed reviewed index or bounded scan/,
 );
 
 const missingBlockCounter = validPlans();

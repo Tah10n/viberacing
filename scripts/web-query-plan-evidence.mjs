@@ -29,6 +29,9 @@ const boundedDimensionSequentialRelations = new Set([
 const maximumDimensionSequentialRows = 8;
 const boundedPayloadSequentialRelations = new Set(["leaderboard_snapshot_pages"]);
 const maximumPayloadSequentialRows = 512;
+const boundedSequentialIndexAlternatives = new Map([
+  ["leaderboard_snapshot_pages_pkey", "leaderboard_snapshot_pages"],
+]);
 
 const evidenceDefinitions = Object.freeze([
   Object.freeze({
@@ -228,6 +231,7 @@ function assertBoundedReadPlan(entry, definition) {
 
   const executedNodeTypes = new Set();
   const executedIndexNames = new Set();
+  const executedBoundedSequentialRelations = new Set();
   for (const node of nodes) {
     const nodeType = node["Node Type"];
     if (typeof node["Actual Loops"] === "number" && node["Actual Loops"] > 0) {
@@ -270,6 +274,7 @@ function assertBoundedReadPlan(entry, definition) {
           true,
           `${definition.label} exceeded the small-payload sequential row cap`,
         );
+        executedBoundedSequentialRelations.add(node["Relation Name"]);
       }
     }
     for (const key of writeOrTemporaryBlockKeys) {
@@ -284,7 +289,7 @@ function assertBoundedReadPlan(entry, definition) {
       `${definition.label} omitted executed ${requiredNodeType} evidence`,
     );
   }
-  return executedIndexNames;
+  return Object.freeze({ executedBoundedSequentialRelations, executedIndexNames });
 }
 
 export function assertPublicSnapshotPlanEvidence(plans) {
@@ -312,16 +317,27 @@ export function assertPublicSnapshotPlanEvidence(plans) {
     );
     assert.ok(matchingEntries.length > 0, `${definition.label} plan evidence was not emitted`);
     const observedIndexes = new Set();
+    const observedBoundedSequentialRelations = new Set();
     for (const entry of matchingEntries) {
-      for (const indexName of assertBoundedReadPlan(entry, definition)) {
+      const access = assertBoundedReadPlan(entry, definition);
+      for (const indexName of access.executedIndexNames) {
         observedIndexes.add(indexName);
+      }
+      for (const relationName of access.executedBoundedSequentialRelations) {
+        observedBoundedSequentialRelations.add(relationName);
       }
     }
     for (const alternatives of definition.requiredIndexGroups) {
       assert.equal(
-        alternatives.some((indexName) => observedIndexes.has(indexName)),
+        alternatives.some(
+          (indexName) =>
+            observedIndexes.has(indexName) ||
+            observedBoundedSequentialRelations.has(
+              boundedSequentialIndexAlternatives.get(indexName),
+            ),
+        ),
         true,
-        `${definition.label} omitted an executed reviewed index: ${alternatives.join(" or ")}; observed ${[...observedIndexes].sort().join(", ") || "none"}`,
+        `${definition.label} omitted an executed reviewed index or bounded scan: ${alternatives.join(" or ")}; observed indexes ${[...observedIndexes].sort().join(", ") || "none"}; bounded scans ${[...observedBoundedSequentialRelations].sort().join(", ") || "none"}`,
       );
     }
   }
