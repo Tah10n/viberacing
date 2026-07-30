@@ -2,90 +2,31 @@
 
 ## Current scope
 
-The repository provides Phase 0 tooling, a disposable PostgreSQL service, a Phase 1 web prototype,
-and 43 checksum-ledgered database migrations. Repository verification uses synthetic data and
-injected capabilities only. It has procedure-only identity, passkey login/management, restricted
-recovery, pairing, and source/device lifecycle database capabilities plus Community ingest,
-retention cleanup, bounded primary profile deletion, scoring, terminal finalization, and public
-score/race/status projection procedures. A local Web slice now composes invite redemption, GitHub
-OAuth state plus PKCE, encrypted browser cookies, initial WebAuthn registration, returning
-discoverable-credential login, a private session-scoped passkey inventory, an account page, fresh
-revocation of an owned non-current passkey, and logout. It can also add a backup passkey after
-separate existing-key assertion and registration ceremonies and rotate a ten-code recovery batch
-after a fresh passkey assertion. A separate local `/recover` flow performs bounded exact-code/dummy
-Argon2id work, creates only a five-minute restricted authority, and requires exact replacement
-WebAuthn registration before a normal session exists. A transport-free Admin kernel now fixes the
-authorization/audit/database sequence for one beta invite, but it has no concrete verifier, audit
-backend, host, or operational composition. There is still no working invite/OAuth/database
-credential or live-authenticator evidence. A local `/connect` page adds session-rate-limited
-pending-code review, opaque new or active existing source selection, and fresh-passkey approval with
-synthetic evidence. Distributed recovery/anonymous pairing edge controls, deployed cleanup cadence,
-real-user ingestion, audited correction, and an operational connector remain absent. A library-only
-Rust crate implements the bounded stable App Server initialization exchange and a candidate
-`0.144.5` account/usage parser with fixed methods, discarded account/summary fields, and bounded
-normalized daily output. A one-shot supervisor now composes those states with a fixed child
-argument, local pipes, cleared ambient environment, output/deadline limits, and reap-before-success
-behavior. One Windows x86_64 development command validates the active native credential before
-bounded fixed-name `PATH` discovery or the explicit path fallback, and can construct that private
-launch only after the selected artifact matches the exact `0.144.5` size and SHA-256. It then builds
-the previously inaccessible context/key, signs the exact bounded sync JSON, and makes one fixed
-upload. It does not retry the POST or establish support. A separate explicitly invoked `check-codex`
-command performs only that same point-in-time candidate admission without opening credential
-storage, starting Codex, reading an account, persisting a result, or using the network; later sync
-repeats admission. A separate inaccessible pending-key/challenge signer and pure Web verifier agree
-on an exact synthetic pairing-possession proof. Two transport-free Web/Auth applications create
-bounded pending material and later handle protected poll-verifier derivation, a fixed approved-row
-lookup through a separately probed read-write pool, that strict proof, and exact atomic activation
-with server-owned IDs behind local admission/timing. They cannot perform pairing browser or WebAuthn
-approval themselves; the separate `/connect` flow supplies only that intervening step. Two exact
-local POST routes now compose those applications behind fixed distributed global/client-bucket
-admission. All four connector/browser pairing route modules remain default-off unless exact
-`VIBERACING_PAIRING_ENABLED=true` was resolved when each loaded. Creating a new source separately
-requires exact `VIBERACING_SOURCE_CREATION_ENABLED=true` in `/connect` and both approval modules;
-its default-off state preserves active existing-source pairing. One pairing-only Rust command
-generates a device key through the OS CSPRNG, stores resumable pairing state in the native
-credential store, and performs the exact start/poll proof. A separate exact local-only command
-deletes one origin/label native entry without reading it or revoking server authority. No supported
-Codex version, macOS/Linux admission, real-account/deployed sync result, package, release, or
-deployment exists. A local Ingest kernel bounds and authenticates a synthetic exact-body sync
-request, and a separate adapter constrains origin replay, database lookup, and submission mapping
-with mock-pool evidence. A transport-free application composes those exact boundaries, generates a
-server request ID, and validates the acknowledgement/problem decision; isolated PostgreSQL tests
-separately prove atomic replay and cleanup. A bounded local Fastify factory now preserves exact raw
-HTTP evidence, applies no-queue and deadline policy, and serializes only revalidated contracts. A
-separate local host now binds that exact composition only on loopback in development/test or under
-an explicit Railway-edge production declaration, with bounded partial-startup cleanup and process
-shutdown. A separate opt-in gate now proves one full synthetic loopback HTTP-to-PostgreSQL path
-through a disposable dedicated Ingest login. There is no deployment database credential/certificate,
-trusted external TLS/edge path, supported connector adapter, or deployment. A bounded local one-shot
-Jobs process now wraps only cleanup/refresh/finalization. A separate default-off local scheduler
-invokes only that runner from fixed UTC process slots. The opt-in scheduler gates compose that
-production core with the real Jobs runner and disposable PostgreSQL under fixed and real clocks,
-proving exact catalog order, recurring execution with overlap suppression, graceful and abrupt
-OS-signal settlement, clean-schema retry, one controlled uncommitted post-insert transaction
-rollback, and one local host-timer recurring refresh. There is still no committed/external-effect
-recovery, deployed signal route, controller/orchestrator grace, production login, durable/deployed
-cadence, monitor, or deployment; see [implementation status](../IMPLEMENTATION_STATUS.md) and
-[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md). A bounded server-only Web
-PostgreSQL adapter and local public-score GET are implemented and unit/build-tested, but this
-repository supplies no working deployment login or TLS certificate. A successful setup proves
-repository gates, synthetic frontend behavior, route/adapter boundaries, SQL constraints,
-session-bound procedure behavior, lifecycle/scoring concurrency, and database role isolation; it
-does not prove a live adapter, deployed API, or production flow. The Ingest server tests bind only
-ephemeral loopback sockets and use synthetic requests; no development command exposes it to the LAN
-or Internet.
+The repository provides a synthetic Web experience, closed public contracts, provider-neutral
+connector code, independently gated Edge/Ingest/Web/Jobs/Migration processes, and 7
+checksum-ledgered database migrations.
+
+All normal verification is local and synthetic. Docker-backed commands create disposable PostgreSQL
+databases, roles, certificates, and fixtures. Nothing here proves a supported provider, real-account
+read, hosted service, production credential, public route, representative capacity, released
+connector, or real-user ingestion. Read the
+[implementation evidence ledger](../IMPLEMENTATION_STATUS.md) before translating a green command
+into a product claim.
+
+The generated OpenAPI document contains 7 paths: 4 marked `implemented-local` and 3 marked
+`contract-only`.
 
 ## Prerequisites
 
-- Node.js `24.18.0`, as recorded in `.node-version`;
-- pnpm `11.7.0`, as recorded in `package.json`;
-- Rust `1.94.0` with `rustfmt` and `clippy`, installed from `rust-toolchain.toml`;
-- Git;
-- Docker with Compose v2 only when using the local database.
+- Node.js `24.18.0`, matching `.node-version`;
+- pnpm `11.7.0`, matching `package.json`;
+- Rust `1.94.0` with `rustfmt` and `clippy`;
+- Git; and
+- Docker with Compose v2 only for opt-in PostgreSQL evidence.
 
-Use a trusted package or toolchain manager. Do not pipe remote installation scripts into a shell.
+Use a trusted toolchain or package manager. Do not pipe remote installation scripts into a shell.
 
-## Install repository dependencies
+## Install and verify
 
 From the repository root:
 
@@ -94,602 +35,298 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run verify
 ```
 
-Direct dependencies are exact versions and the lockfile is committed. The workspace rejects
-unreviewed dependency build scripts, newly published packages inside the quarantine window,
-untrusted registry redirects, and exotic transitive sources.
+If the shell does not activate the pinned package manager automatically, use the same commands with
+`corepack pnpm`.
 
-`pnpm run verify` is the normal deterministic development gate. It checks the public/configuration
-boundaries, generated contracts, migration integrity, lint, types, unit tests across the workspaces,
-and Rust formatting/check/test/Clippy. It intentionally skips coverage collection, production
-builds, checker mutation suites, history/documentation/publication policy, visual evidence, and
-Docker-backed integrations.
+Dependencies are exact and the lockfile is committed. The repository rejects unreviewed dependency
+build scripts, exotic sources, untrusted registry redirects, newly published packages inside the
+quarantine window, and public-host allowlist widening.
 
-Use `pnpm run verify:release` only before release/publication or after a broad cross-cutting change.
-That command retains the exhaustive offline evidence. Docker-backed PostgreSQL integrations remain
-separate opt-in commands and run in secretless CI only on `main` or manual dispatch. The optional
-`pnpm run check:external-links:online` performs bounded network validation and may fail closed
-behind a private DNS/proxy; do not weaken its address or redirect rules to accommodate a
-workstation.
+`verify` is the bounded deterministic development gate. It covers configuration/public boundaries,
+generated contracts, migration integrity, workspace lint/types/unit tests, and Rust
+format/check/test/Clippy. It intentionally excludes Docker-backed integrations, production builds,
+coverage thresholds, hosted checks, and live services.
 
-After an intentionally reviewed dependency change, regenerate the machine inventory with
-`node scripts/check-licenses.mjs --write`, inspect every added package/license, and rerun
-verification. Regeneration is evidence capture, not approval. Platform-specific package metadata is
-refreshed only with the explicit `--refresh-npm-metadata` flag; review that network-derived diff as
-carefully as the lockfile.
+For broad release preparation:
 
-## Run the synthetic web prototype
+```text
+pnpm run verify:release
+```
 
-No environment file, account, database, or Codex installation is needed for Phase 1. From the
-repository root:
+That gate adds coverage, production builds, documentation, history, spelling, licenses, formatting,
+visual/policy checks, checker mutations, and platform evidence available on the current host. It is
+still local evidence.
+
+## Run the synthetic Web experience
 
 ```text
 pnpm run dev:web
 ```
 
-Open the configured port through the `localhost` hostname. The development server binds to that
-loopback hostname; do not change it to a LAN-wide address for convenience. The matching browser
-origin keeps local WebAuthn standards compliant. All displayed participants and activity are
-synthetic.
+Open the reported `localhost` URL. The root experience uses explicit repository-owned synthetic
+snapshots and requires no database, account, connector, `.env`, OAuth app, authenticator, or
+provider data.
 
-Useful focused commands:
+The synthetic surface includes EN/RU, three themes, current/history controls, pagination/filtering,
+public profile/garage views, forced-colors and reduced-motion behavior, and a lazy decorative race
+with semantic text/table fallback.
 
-```text
-pnpm run lint:web
-pnpm run typecheck:web
-pnpm run test:web
-pnpm run test:web:coverage
-pnpm run build:web
-pnpm run check:phase1-visual-baselines
-```
+## Capability defaults
 
-The baseline check is browser-free and validates the committed 18-image synthetic viewport matrix.
-To re-render and compare those images without changing them, first build and start the production
-frontend on an explicit loopback port, then run verification from another terminal with an absolute
-path to a reviewed Chromium executable:
+Copy `.env.example` to an ignored `.env` only when a focused local slice needs configuration. Never
+put a real secret or personal value in a tracked file.
 
-In the first terminal:
+| Decision                              | Tracked default | Scope                                   |
+| ------------------------------------- | --------------- | --------------------------------------- |
+| `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED` | `false`         | Three public snapshot route modules     |
+| `VIBERACING_ENROLLMENT_ENABLED`       | `false`         | Invite/OAuth/initial-passkey enrollment |
+| `VIBERACING_INVITE_GATE_ENABLED`      | `false`         | Optional invite-only beta policy        |
+| `VIBERACING_PAIRING_ENABLED`          | `false`         | Pairing start/poll and browser approval |
+| `VIBERACING_CAR_PROPOSALS_ENABLED`    | `false`         | Browser/connector proposal mutation     |
+| `VIBERACING_USAGE_SYNC_ENABLED`       | `false`         | Exact Edge usage route                  |
+| `VIBERACING_INGEST_ENABLED`           | `false`         | Ingest listener construction            |
+| `VIBERACING_JOBS_SCHEDULER_ENABLED`   | `false`         | Scheduler construction                  |
 
-```text
-pnpm run build:web
-pnpm --filter @viberacing/web exec next start --hostname 127.0.0.1 --port 3317
-```
+The one-shot migration runner has its own exact `VIBERACING_MIGRATIONS_ENABLED=true` decision and
+does not read the Web environment. Every other spelling, case, whitespace variant, missing value, or
+unreadable value fails closed.
 
-In a second PowerShell terminal, construct the exact loopback origin without treating it as a public
-link:
+These are startup/module-load decisions. Changing a value requires process replacement; they are not
+dynamic production kill switches. Use the
+[capability containment runbook](../operations/CAPABILITY_CONTAINMENT_RUNBOOK.md) when reasoning
+about closure or recovery order.
 
-```powershell
-$phase1Origin = [System.UriBuilder]::new("http", "127.0.0.1", 3317).Uri.AbsoluteUri
-$browserPath = "<absolute-path-to-reviewed-chromium>"
-pnpm run verify:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath
-```
+## Public contracts
 
-Verification first checks the committed manifest and PNGs, requires the reported browser product and
-local platform to match that manifest exactly, decodes both sides in isolated Chromium, and fails on
-one changed pixel channel. It does not write baseline files. The executable itself remains an
-explicit operator-reviewed input rather than a repository-provisioned artifact.
-
-Only when intentionally refreshing the reviewed evidence, use the separate write command and then
-the offline checker:
-
-```powershell
-pnpm run capture:phase1-visual-baselines -- --origin $phase1Origin --browser $browserPath --write
-pnpm run check:phase1-visual-baselines
-```
-
-The capture uses a new temporary profile, motion-off synthetic data, and page-only PNG output. It
-fails if page resources leave the exact loopback origin or reviewed header/hero elements exceed the
-viewport. It does not discover or reuse a signed-in browser. Inspect every image and manifest digest
-before staging; the offline root gate protects stored evidence but does not decide whether a visual
-change is acceptable.
-
-Contract-focused commands do not accept or read real account data:
+Canonical schemas and policies live under `contracts/v1`; generated TypeScript and OpenAPI files are
+drift-checked derivatives.
 
 ```text
+pnpm run generate:contracts
 pnpm run check:contracts
 pnpm run lint:contracts
 pnpm run typecheck:contracts
 pnpm run test:contracts:coverage
-pnpm run build:contracts
 ```
 
-Run `pnpm run generate:contracts` only after intentionally changing a canonical file or manifest
-operation under `contracts/v1/`; review both generated diffs and their source digest. The generated
-OpenAPI document contains 8 paths marked `implemented-local`. The four dynamic Next.js GET
-operations plus bounded pairing, proposal, and Ingest POST operations have request/response and
-build evidence, but no working deployment database login is tracked. The separate integrations
-create and remove only synthetic disposable logins; no deployment exists merely because the local
-operations are documented.
+The four locally implemented product routes are:
 
-Connector-focused commands use only checked-in synthetic fixtures. Rust tests launch a target-built
-fixture executable to prove fixed arguments, environment isolation, protocol order, timeout,
-stdout/stderr overload, cleanup, and bounded candidate-selection logic. They do not discover or
-launch an installed Codex binary, read a local account, open a credential store, or upload:
+- `POST /v1/usage`;
+- `GET /v1/leaderboards/current`;
+- `GET /v1/leaderboards/{seasonStart}`; and
+- `GET /v1/profiles/{handle}`.
 
-```text
-pnpm run check:codex-compatibility
-cargo test --workspace --all-targets --all-features --locked
-```
+Three connector pairing/proposal operations remain contract-only. The four former score/race/status
+and token-ranking routes and the old source-oriented Community usage route are absent. See
+[public contracts](../../contracts/README.md).
 
-The release gate also exercises the compatibility checker's fail-closed fixtures.
+## Disposable PostgreSQL
 
-The `0.144.5` directory, synthetic process fixture, and exact signed sync vector are candidate
-development evidence, not a supported-version installation. The vector uses only synthetic
-identifiers, usage, public key, and signature; the private test seed is derived at runtime from an
-obvious fixed label. Repository tests never run a local account or open a real credential.
-
-Before pairing, a Windows x86_64 developer may explicitly check only the exact candidate artifact:
+Start only the loopback development service:
 
 ```text
-cargo run -p viberacing-connector -- check-codex [--codex <absolute-codex-0.144.5-executable>] [--diagnostic-preview]
-```
-
-Without `--codex`, this reads only the bounded fixed-name `PATH` search defined by ADR 0051. The
-explicit form uses identical canonical size/SHA-256 admission. The command starts no Codex process,
-opens no connector credential or account, persists nothing, and uses no network. Success is only a
-point-in-time candidate result, explicitly does not claim support, and is never reused by `sync`.
-
-`--diagnostic-preview` replaces the normal success line with one closed local v1 preview containing
-only the connector/candidate versions, fixed Windows x86_64 contract, a passed/not-admitted/
-unsupported-platform class, and `supported-codex-versions: none`. A failed admission remains
-nonzero. The preview excludes paths, digests, environment values, credentials, account, and usage;
-the preview itself is written only to stdout, while the unchanged generic failure can still appear
-on stderr. The connector neither saves nor sends it. Read the complete preview before deliberately
-copying it to a trusted support context.
-
-On Windows x86_64, the repository can also build and exercise only a disposable portable copy of the
-development connector:
-
-```text
-pnpm run test:connector:windows-portable
-```
-
-This command builds the locked release profile, copies the fixed `0.0.0` binary under the operating
-system temporary directory, runs only exact help and missing-candidate checks with a cleared
-environment, and removes the copy. It is not an installer, package, upgrade, revoke, signature,
-provenance, support, or clean-machine result. The secretless CI workflow declares the same smoke on
-`windows-2025`; the tracked declaration alone is not evidence that a hosted run passed.
-
-After an explicit `connect` has activated the same origin and label, a Windows x86_64 developer may
-manually run one candidate sync:
-
-```text
-cargo run -p viberacing-connector -- sync --origin <https-origin> --label <device-label> [--codex <absolute-codex-0.144.5-executable>]
-```
-
-This command intentionally reads the local account's bounded daily usage and sends it once to the
-explicit origin. Without `--codex` it considers only two fixed executable names through a bounded
-absolute-directory `PATH` search; the optional explicit path is the controlled fallback. Both forms
-fail unless the executable exactly matches the checked-in candidate size/SHA-256 policy and can be
-held against write substitution. It does not supply edge origin proof, so a real remote origin still
-needs the separately reviewed edge/Ingest deployment path; loopback tests use synthetic data only.
-
-Ingest-focused commands use only synthetic key material, injected capabilities, and mock database
-pools:
-
-```text
-pnpm run lint:ingest
-pnpm run typecheck:ingest
-pnpm run test:ingest:coverage
-pnpm run build:ingest
-```
-
-They verify protected primary/secondary origin-key parsing, the raw-envelope/origin/parser/contract/
-device kernel, and redacted database config, fixed SQL, role/session probe, mapper, result, and
-failure boundaries. They do not open a database connection or persistent/external HTTP endpoint;
-some transport tests bind an ephemeral loopback socket and close it within the case. Do not supply a
-real edge key, public key, signature, nonce, usage payload, database credential, or captured
-request. See [`apps/ingest/README.md`](../../apps/ingest/README.md) for the exact boundary and
-remaining integration work.
-
-The separate host-focused gates use only synthetic placeholders and ephemeral loopback listeners:
-
-```text
-pnpm run lint:ingest-host
-pnpm run typecheck:ingest-host
-pnpm run test:ingest-host:coverage
-pnpm run build:contracts
-pnpm run build:ingest
-pnpm run build:ingest-host
-pnpm run check:ingest-host-entrypoint
-```
-
-After those ordered builds, the emitted entrypoint is `node apps/ingest-host/dist/main.js`. Start it
-with Node directly so SIGTERM reaches the process. Tracked `.env.example` values are deliberately
-non-working and keep `VIBERACING_INGEST_ENABLED=false`. An ignored local environment must first set
-that field to exact `true`; only then can exact loopback host/port and `loopback-cleartext` be
-evaluated. The independent tracked `VIBERACING_USAGE_SYNC_ENABLED=false` keeps the sole
-`POST /v1/community/usage` route absent; set it to exact `true` only when intentionally exercising
-Usage Sync, and use the same containment decision at Edge. It is not a protocol-migration switch.
-Production additionally requires exact `0.0.0.0`, Railway-injected `PORT`, `railway-edge`, and a
-40-to-300-second platform drain declaration. The latch is startup-only: it does not prove a deployed
-restart, route denial, or already-running instance drain. Do not add real login/key values to a
-repository file or treat a successful local bind as external TLS/deployment evidence. See
-[`apps/ingest-host/README.md`](../../apps/ingest-host/README.md) for the complete listener and
-shutdown contract.
-
-Jobs-focused commands use injected synthetic results and never need a database credential:
-
-```text
-pnpm run lint:jobs
-pnpm run typecheck:jobs
-pnpm run test:jobs:coverage
-pnpm run build:jobs
-```
-
-The built one-shot CLI accepts only `cleanup-expired-auth-state`, `cleanup-abandoned-enrollments`,
-`cleanup-expired-audit-events`, `cleanup-expired-car-recipe-proposals`, `cleanup-expired-invites`,
-`cleanup-expired-ingest-state`, `cleanup-expired-pairing-state`, `cleanup-expired-sessions`,
-`cleanup-finalized-source-day-values`, `cleanup-aged-revoked-passkeys`,
-`cleanup-aged-revoked-devices`, `reset-expired-pairing-request-windows`,
-`cleanup-terminal-deletion-jobs`, `redact-aged-pairing-approval-provenance`,
-`purge-profile-deletions`, `finalize-community-backlog`, `refresh-community-season YYYY-MM-DD`, or
-`finalize-community-season YYYY-MM-DD`. Do not invoke it against a persistent database until an
-environment-owned login has been separately provisioned with only `viberacing_jobs`; the repository
-does not create a deployment login.
-
-The separate synthetic Jobs application path is opt-in and requires Docker:
-
-```text
-pnpm run test:jobs:postgres-integration
-```
-
-It applies the reviewed migrations to one disposable PostgreSQL container, creates only synthetic
-narrow and negative-control logins, runs all eighteen built commands, verifies generic output and
-exact state, and removes the container and storage. It proves no external audit sink, combined
-scheduler execution, production login/TLS, monitoring, capacity, real-user retention, or deployment.
-See [`apps/jobs/README.md`](../../apps/jobs/README.md) for the exact boundary.
-
-The separate local scheduler uses injected time, timers, and a fake runner in its focused checks:
-
-```text
-pnpm run lint:jobs-scheduler
-pnpm run typecheck:jobs-scheduler
-pnpm run test:jobs-scheduler:coverage
-pnpm run build:jobs
-pnpm run build:jobs-scheduler
-pnpm run check:jobs-scheduler-entrypoint
-pnpm run test:jobs-scheduler:postgres-integration
-pnpm run test:jobs-scheduler:timer-postgres-integration
-pnpm run test:jobs-scheduler:lifecycle-postgres-integration
-pnpm run test:jobs-scheduler:process-postgres-integration
-pnpm run test:jobs-scheduler:wall-clock-postgres-integration
-pnpm run test:jobs-scheduler:signal-postgres-integration
-```
-
-The first PostgreSQL command is a separate opt-in Docker gate. It builds the production scheduler
-core and Jobs runner, injects one fixed UTC clock/timer, runs the exact ordered eighteen-job catalog
-against one disposable PostgreSQL database, fingerprints every private table around a widened-login
-denial, and checks exact narrow-login stored state. The remaining gates advance the fixed clock to
-prove recurring execution with overlap suppression, inject the first signal to prove graceful
-lifecycle settlement, run the built entry point under the real host clock to prove failure/crash
-containment and clean-schema retry (including one controlled uncommitted post-insert transaction
-rollback), and prove one native host-timer recurring refresh plus graceful Docker-delivered signal
-settlement. They do not prove committed/external-effect recovery, a deployed-controller restart,
-orchestrator grace policy, durable/deployed cadence, production credentials/TLS, monitoring,
-capacity, or real-user retention; see [implementation status](../IMPLEMENTATION_STATUS.md) and
-[ADR 0063](../decisions/0063-default-off-local-jobs-scheduler.md).
-
-The emitted process accepts no arguments and remains disabled unless the runtime supplies exact
-`VIBERACING_JOBS_SCHEDULER_ENABLED=true`. That latch is read before the Jobs runner or any database
-configuration. The fixed catalog derives only the current and latest grace-eligible Community Monday
-plus at most one oldest known data-backed historical season per hour, stores slot state in memory,
-and invokes the existing runner sequentially. Do not enable it against a persistent database until
-the separate narrow Jobs login, single-replica deployment, cadence, monitoring, capacity, and
-representative backlog policy have been reviewed. See
-[`apps/jobs-scheduler/README.md`](../../apps/jobs-scheduler/README.md) for the exact local boundary.
-
-The product components and libraries must meet the committed coverage thresholds. Small Next.js
-entrypoints are covered by the production build. See
-[`apps/web/README.md`](../../apps/web/README.md) for the frontend trust boundaries and data
-contract.
-
-Migration-runner focused commands use injected pools except for the final opt-in Docker gate:
-
-```text
-pnpm run lint:migrate
-pnpm run typecheck:migrate
-pnpm run test:migrate:coverage
-pnpm run build:migrate
-pnpm run check:migrate-entrypoint
-pnpm run check:migration-runbook
-pnpm run test:migration-runbook-check
-pnpm run test:migrate:postgres-integration
-```
-
-The integration builds the emitted entry point and starts one TLS-enabled disposable `postgres-test`
-container on an ephemeral loopback port. It proves one deliberately widened login fails before
-schema creation, holds the fixed session lock externally until two narrow emitted controllers are
-observed waiting over hostname-verified TLS, and then requires both to converge on the exact 43-row
-ledger. It also checks all 28 owner-owned forced-RLS private tables, identity invariants, and
-complete connection/lock cleanup before removing the generated certificate/key, container, network,
-and storage. It never uses the normal local database volume and proves no production credential/TLS,
-staging rollout/rollback, deployed replica, monitoring, deployment, or recovery. See
-[`apps/migrate/README.md`](../../apps/migrate/README.md) for the exact runtime boundary and the
-[staging migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md) for the checked
-operator prerequisite. The runbook is not evidence that staging or production was executed.
-
-Database-focused commands use deterministic synthetic fixtures:
-
-```text
-pnpm run check:restore-runbook
-pnpm run test:restore-runbook-check
-pnpm run test:database-check
-pnpm run check:database
-pnpm run test:database:integration
-```
-
-The integration command creates a uniquely named Compose project containing only `postgres-test`.
-That service publishes no host port, stores data on `tmpfs`, and is removed with its network and
-storage after the test. It does not touch the normal local database volume. See
-[`database/README.md`](../../database/README.md) before changing SQL, roles, or migrations, and read
-the
-[isolated current-snapshot restore rehearsal runbook](../operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md)
-before interpreting or extending restore evidence. The runbook does not authorize shared, staging,
-production, pre-deletion, or real-user database work.
-
-The separate full Ingest path is opt-in and also requires Docker:
-
-```text
-pnpm run test:ingest:postgres-integration
-```
-
-This command builds emitted contracts, Ingest, and host code; starts one one-off `postgres-test`
-container with only an ephemeral `127.0.0.1` port; applies the reviewed migration manifest; and
-creates an obviously synthetic login with only `viberacing_ingest`. It sends independently composed
-signed HTTP requests through the real loopback host and checks accepted, duplicate, persistent
-origin-replay, revoked-device, response-header, request-ID, and exact persistence behavior. It also
-holds four valid requests at the first replay-store call, requires a fifth generic 503 without a
-fifth replay call, and proves the four accepted responses after release. After closing the imported
-host, it starts the built entry point as a separate silent process, observes listener readiness with
-a connection-only probe, proves another accepted request, and forcibly ends only that child. The
-blocker, emitted child, container, network, and storage are removed in `finally`; the normal local
-database volume is never used. This is synthetic local evidence, not OS-signal delivery, graceful
-emitted-child settlement, a deployment credential, external TLS/edge route, secret-manager
-integration, real-user result, or capacity test.
-
-The separate emitted-process signal path is also opt-in and requires Docker:
-
-```text
-pnpm run test:ingest:signal-postgres-integration
-```
-
-This command assembles a link-free runtime containing only the emitted host, Ingest, contracts, and
-their exact installed production graph. It fingerprints that runtime, mounts it read-only under the
-pinned Linux Node image in only the disposable PostgreSQL network namespace, and sends one
-independently signed synthetic request from a separate capability-free client over stdin. The
-harness holds the request at the first origin-replay database call, delivers a real `SIGTERM` to the
-host container, releases the lock before the database deadline, and requires the exact accepted
-response and stored state. It also requires a silent code-0 host exit, complete database-session
-release, unchanged runtime contents, and bounded cleanup of the client, host, runtime, container,
-network, and storage. This proves one local Linux active-request signal path, not
-Railway/orchestrator drain, external TLS/edge routing, protected secret or production-login
-delivery, representative load/capacity, real-user input, or deployment.
-
-## Local configuration
-
-`.env.example` is a public schema containing placeholders and a known local-only compose bootstrap
-password. The current web prototype optionally reads `VIBERACING_PUBLIC_ORIGIN` for absolute social
-metadata. Without it, development uses loopback and production builds use a reserved `.example`
-origin that is not suitable for deployment. A real hosted build must receive its public HTTPS DNS
-origin through the deployment environment.
-
-The three public score/race/status routes remain generically unavailable unless an ignored local
-environment sets exact `VIBERACING_PUBLIC_RANKING_ENABLED=true` before their modules load. The
-tracked example stays false, so the visible page keeps its synthetic fallback. This local gate does
-not prove deployed route/cache denial or reload already-running instances.
-
-The direct-token route separately requires exact `VIBERACING_TOKEN_RANKING_ENABLED=true` before its
-module loads. The tracked example also stays false. The visible page tries this route first, falls
-back to the enabled legacy status route when the token route is unavailable, and otherwise retains
-the synthetic fallback.
-
-The separate full public-read path is opt-in and requires Docker:
-
-```text
-pnpm run test:web:postgres-integration
-```
-
-It builds the emitted standalone Web artifact with the reviewed `pg` driver bundled, generates one
-ephemeral self-signed exact-DNS certificate, and applies the reviewed migrations to a TLS-enabled
-one-off `postgres-test` container. It starts two emitted Next production processes on loopback,
-proves a login with extra membership fails generically without private-table mutation, validates
-exact score/race/status/token contracts plus TLS 1.2/1.3 through the narrow synthetic login, and
-repeats the full private-state fingerprint after successful reads. It then holds exactly four
-observed score queries behind a controlled owner lock, rejects a fifth request without a fifth
-public-score query, rolls back, and validates the four original responses. Next route declarations,
-including `next-env.d.ts`, are generated into ignored local output rather than restored as tracked
-source. The harness bounds and discards all child output and removes the ephemeral key directory,
-both Next processes, the blocker, container, network, and storage. It is not a deployment
-certificate/login, external TLS/edge, cache, monitoring, load/capacity, real-user, or deployment
-test.
-
-Connector pairing start/poll and signed-in approval options/verification remain generically
-unavailable unless an ignored local environment sets exact `VIBERACING_PAIRING_ENABLED=true` before
-all four modules load. The tracked example stays false. Disabled POST cancels an available request
-body before request parsing, runtime/service construction, admission acquisition, protected
-configuration, or database work. This is not a dynamic/deployed switch.
-
-New-source selection and approval separately remain unavailable unless the ignored local environment
-sets exact `VIBERACING_SOURCE_CREATION_ENABLED=true` before `/connect` and both approval modules
-load. The tracked example stays false. While disabled, the EN/RU form omits the new-source choice,
-defaults to the first active existing source, and disables submission when none exists. The service
-also rejects new-source initiation before code/challenge work and rejects an in-flight new-source
-challenge before passkey/database completion; its encrypted choice and v2 context digest remain
-exactly bound. Existing-source pairing still requires the pairing flag but not this second flag.
-Changing either environment value does not reload an existing worker, stop an old enabled instance,
-or prove deployed route denial.
-
-CarRecipe proposal creation and approval separately remain unavailable unless the ignored local
-environment sets exact `VIBERACING_CAR_PROPOSALS_ENABLED=true` before the account page, browser
-create/approve modules, and device proposal module load. The tracked example stays false. Disabled
-EN/RU account UI keeps active and private pending previews plus the exact encrypted session-bound
-reject form, but omits editor and approve. Browser/device mutation returns generic no-store 503
-before parsing, runtime/service construction, admission, proof, or database work; the browser
-service repeats the decision before recipe/control/session work. Changing the value does not reload
-an existing worker, stop an old enabled instance, or prove deployed route denial.
-
-Invite/OAuth/initial-passkey enrollment separately remains unavailable unless the ignored local
-environment sets exact `VIBERACING_ENROLLMENT_ENABLED=true` before `/join`, `/join/passkey`, GitHub
-start/callback, and initial-passkey options/verification modules load. The tracked example stays
-false. Disabled EN/RU pages omit both forms, and disabled HTTP returns generic no-store 503 before
-request parsing, runtime/service construction, admission, protected configuration, OAuth/WebAuthn,
-or database work. All four service methods repeat the literal decision before input, cookie, time,
-entropy, or private dependency work. Active-session redirects, returning login, restricted recovery,
-logout, and account security actions remain available. Changing the value does not clear an existing
-continuation or pending session, invoke the separate abandoned-enrollment cleanup, repair an invite,
-reload an existing worker, stop an enabled in-flight request, or prove deployed route denial. The
-explicit `cleanup-abandoned-enrollments` Jobs command is separately available only for canonical
-rows after every retained session/challenge expiry is past. The default-off local scheduler includes
-that exact object in its hourly catalog and combined synthetic PostgreSQL integration, but no
-deployed invocation is proven.
-
-The server-only score, enrollment, and local pairing adapters use only `VIBERACING_WEB_DATABASE_*`.
-Their tracked user/password are deliberately non-working placeholders and are checked against
-accidental reuse of the `DATABASE_*` compose owner. Local integration requires a separately
-provisioned login whose only membership is `viberacing_web`; login creation remains
-environment-owned and is not automated here. `disable` requires explicit `NODE_ENV=development` or
-`test` plus loopback. Every other environment requires `verify-full`, a certificate-valid
-multi-label DNS hostname, and TLS 1.2 or later. The synthetic page and build never construct either
-adapter, so they need none of these settings. The disabled join shell also renders without protected
-configuration; enabled server actions fail closed until the complete enrollment environment exists.
-
-Enabled local enrollment additionally requires a dedicated GitHub OAuth app whose callback is
-exactly `/auth/github/callback` on the configured `localhost` origin, valid `GITHUB_CLIENT_ID` and
-`GITHUB_CLIENT_SECRET`, and a fresh canonical 32-byte base64url `SESSION_SECRET`. Set
-`WEBAUTHN_ORIGIN` exactly equal to `VIBERACING_PUBLIC_ORIGIN` and set `WEBAUTHN_RP_ID` to that
-origin's lowercase hostname (`localhost` for the documented loopback setup). WebAuthn RP IDs cannot
-be IP addresses. Recovery-code rotation additionally needs a distinct canonical 32-byte
-`VIBERACING_RECOVERY_PEPPER` and deployment-reviewed integer values for the three
-`VIBERACING_RECOVERY_ARGON2_*` settings within the application's accepted range. Recovery options
-also require `VIBERACING_RECOVERY_MINIMUM_RESPONSE_MS`, a deployment-reviewed integer from 100 to
-5000; do not commit the chosen production timing value. The tracked values are non-working
-placeholders and intentionally do not publish deployment work factors or response timing. The
-`/connect` approval path additionally requires a distinct canonical 32-byte
-`VIBERACING_WEB_PAIRING_CODE_PRIMARY_KEY_BASE64URL`. Do not commit real keys. A manual flow also
-needs an externally issued invite whose stored digest matches its 256-bit secret; this repository
-intentionally provides no runnable issuer shortcut or sample valid invite. The library-only Admin
-kernel cannot issue one without future Access/admin/passkey/audit/host adapters. Never reuse these
-values between development, staging, and production.
-
-Constructing the start/activation pairing service additionally requires a fresh, distinct 32-byte
-canonical base64url value in `VIBERACING_WEB_PAIRING_POLL_PRIMARY_KEY_BASE64URL`; the code key above
-is shared only as protected configuration, never as a returned container. The tracked values are
-intentionally invalid. During a bounded rotation only, each previous primary may be supplied under
-its corresponding `VIBERACING_WEB_PAIRING_POLL_SECONDARY_KEY_BASE64URL` or
-`VIBERACING_WEB_PAIRING_CODE_SECONDARY_KEY_BASE64URL`; all configured poll/code values must remain
-pairwise distinct. Remove a secondary after every transaction created under that key has passed the
-ten-minute database lifetime. Never track, print, or reuse real keys.
-
-The anonymous pairing routes also require six deployment-private decimal settings:
-`VIBERACING_WEB_PAIRING_START_GLOBAL_LIMIT`, `VIBERACING_WEB_PAIRING_START_BUCKET_LIMIT`,
-`VIBERACING_WEB_PAIRING_START_WINDOW_SECONDS`, `VIBERACING_WEB_PAIRING_POLL_GLOBAL_LIMIT`,
-`VIBERACING_WEB_PAIRING_POLL_BUCKET_LIMIT`, and `VIBERACING_WEB_PAIRING_POLL_WINDOW_SECONDS`. Bucket
-limits must not exceed their operation-global limit; windows are one through 3600 seconds and global
-limits are at most 1,000,000. The tracked values are deliberately non-working placeholders. Review
-real values privately against capacity; do not commit them.
-
-### Inspect the local connector command
-
-```text
-cargo run -p viberacing-connector -- --help
-```
-
-After the complete Web/Auth database environment is configured, the local command shape is:
-
-```text
-cargo run -p viberacing-connector -- connect --origin <loopback-origin> --label "Local device"
-```
-
-This writes a real device credential to the current user's native OS credential store before the
-network start. Run only one connect process for an origin/label and do not use production or shared
-credentials in local development. The repository does not ship a valid invite, Web login, pairing
-HMAC key, database login, or released connector, so the command is not an end-to-end setup shortcut.
-
-To delete only that exact local origin/label record, use:
-
-```text
-cargo run -p viberacing-connector -- forget-local --origin <loopback-origin> --label "Local device"
-```
-
-The command is idempotent and does not inspect the record or contact the service. It does not revoke
-an activated server device or erase copied key material; review and revoke the matching device in
-the authenticated Vibe Racing account before reconnecting. Do not use it against a shared or
-production credential as a local-development cleanup shortcut.
-
-The one-shot Jobs runner independently uses only `VIBERACING_JOBS_DATABASE_*`. Its tracked
-user/password are separate non-working placeholders, and configuration checks reject reuse of the
-compose owner or Web login. Local integration requires another externally provisioned login whose
-only membership is `viberacing_jobs`. It follows the same loopback-only cleartext and verified-TLS
-rules as Web. Focused tests/builds do not construct a connection and need none of these settings.
-The scheduler's separate exact enable latch is not a credential and does not relax any of those
-requirements.
-
-If local work needs the public schema, copy `.env.example` to `.env`; `.env` is ignored and must
-never be committed.
-
-Do not put production or staging values on a development workstation. Do not use the example
-database password anywhere except the loopback-only Compose service, and never pass that owner to
-the Web or Jobs adapter.
-
-## Start PostgreSQL
-
-Validate and start the single local service:
-
-```text
-docker compose config --quiet
 docker compose up -d postgres
 docker compose ps
 ```
 
-The service uses the official PostgreSQL `18.4-alpine` image pinned to a multi-platform SHA-256
-index digest. Host access is bound to `127.0.0.1:54329`; it is not exposed on the LAN. Data is
-stored in the local `postgres-data` Docker volume. Compose does not apply application migrations to
-this persistent service automatically; revisions 0001 through 0041 are currently exercised by the
-isolated integration runner only.
+`compose.yaml` binds PostgreSQL to `127.0.0.1:54329`. Its owner credentials are disposable local
+bootstrap values. Runtime applications must never consume them.
 
-Stop the service without deleting its volume:
+To stop it:
 
 ```text
 docker compose down
 ```
 
-Delete only this project's disposable local database and start clean:
+The integration scripts normally create their own isolated Compose project, hostname-verified TLS
+database, narrow logins, and synthetic fixtures, then remove them. They do not use the persistent
+local service above.
+
+## Database and migration checks
+
+Static and checker-regression gates:
 
 ```text
-docker compose down --volumes
+pnpm run check:database
+pnpm run test:database-check
+pnpm run check:migration-runbook
+pnpm run test:migration-runbook-check
+pnpm run check:restore-runbook
+pnpm run test:restore-runbook-check
+pnpm run check:deletion-failure-runbook
+pnpm run test:deletion-failure-runbook-check
 ```
 
-Never point these commands at a production Compose project or reuse this file for deployment.
-
-## Before a commit
-
-Run the focused checks for the changed workspace plus the bounded root gate, then scan the exact
-staged blobs:
+Disposable database semantics:
 
 ```text
-pnpm run verify
-git add -- <intended paths>
+pnpm run test:database:integration
+pnpm run test:migrate:postgres-integration
+```
+
+The first command applies the clean seven-revision ledger and proves identity/auth races,
+least-privilege roles, batch pairing, exact-decimal multi-device accounting, replay/idempotency,
+10,001-profile snapshot semantics, finalization, deletion/retention, and two bounded
+current-snapshot restores preserving a completed deletion, one independent revoked device, and a
+finalized snapshot. The second proves the emitted one-shot controller under a narrow owner-member
+login, advisory-lock convergence, widened-login denial, exact ledger completion, and cleanup.
+
+Read [database guidance](../../database/README.md),
+[migration runbook](../operations/MIGRATION_RUNBOOK.md),
+[restore runbook](../operations/CURRENT_SNAPSHOT_RESTORE_RUNBOOK.md), and
+[deletion failure runbook](../operations/PROFILE_DELETION_FAILURE_RUNBOOK.md) before changing those
+surfaces.
+
+## Web checks
+
+```text
+pnpm run lint:web
+pnpm run typecheck:web
+pnpm run test:web:coverage
+pnpm run build:web
+pnpm run test:web:postgres-integration
+pnpm run test:web:standalone
+```
+
+The PostgreSQL gate uses one disposable narrow Web login and synthetic OAuth/passkey/device/account
+fixtures. The standalone gate imports or starts production Web processes locally. Neither proves
+live OAuth, a real authenticator, external TLS, edge admission, public reachability, or deployment.
+
+## Edge and Ingest checks
+
+```text
+pnpm run lint:edge
+pnpm run test:edge
+pnpm run lint:ingest
+pnpm run typecheck:ingest
+pnpm run test:ingest:coverage
+pnpm run lint:ingest-host
+pnpm run typecheck:ingest-host
+pnpm run test:ingest-host:coverage
+pnpm run test:edge-ingest-compatibility
+pnpm run test:ingest:postgres-integration
+pnpm run test:ingest:signal-postgres-integration
+```
+
+The Edge gate uses Fetch/Web Crypto fixtures. Ingest integrations exercise independently signed
+loopback requests, one narrow database login, concurrency admission, persistent origin replay, exact
+atomic state, a separate built child, and a real local termination signal. They prove no Cloudflare
+binding/secret, deployed Worker, Railway route, direct-origin denial, production certificate/login,
+or capacity.
+
+## Jobs and scheduler checks
+
+```text
+pnpm run lint:jobs
+pnpm run typecheck:jobs
+pnpm run test:jobs:coverage
+pnpm run lint:jobs-scheduler
+pnpm run typecheck:jobs-scheduler
+pnpm run test:jobs-scheduler:coverage
+pnpm run test:jobs:postgres-integration
+pnpm run test:jobs-scheduler:postgres-integration
+pnpm run test:jobs-scheduler:timer-postgres-integration
+pnpm run test:jobs-scheduler:lifecycle-postgres-integration
+pnpm run test:jobs-scheduler:process-postgres-integration
+pnpm run test:jobs-scheduler:signal-postgres-integration
+pnpm run test:jobs-scheduler:wall-clock-postgres-integration
+```
+
+The one-shot runner has only thirteen reviewed capabilities. The scheduler supplies no caller date
+or batch, runs sequentially, suppresses overlap, and bounds shutdown. These commands prove local
+fixed/real clocks, native timers, emitted processes, PostgreSQL rollback, failure/retry, and
+signals; they do not prove hosted cadence, replica topology, monitoring, external-effect recovery,
+or orchestrator behavior.
+
+## Connector checks
+
+```text
+pnpm run check:codex-compatibility
+pnpm run test:connector:release-candidate
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-targets --all-features --locked
+```
+
+On Windows x86_64:
+
+```text
+pnpm run test:connector:windows-portable
+```
+
+The Windows gate builds the repository binary, copies it into a bounded temporary directory,
+exercises only public-safe CLI/missing-candidate behavior, checks inventory/digests, and deletes the
+copy. Candidate reader tests use exact synthetic App Server fixtures and privacy sentinels. No
+command contacts a real account by default.
+
+Codex `0.144.5` is an exact recognized candidate, not a supported version. The provider
+compatibility table names the missing evidence. Do not run `connect` or `sync` against real
+credentials or services without an explicitly authorized live test plan.
+
+## Admin checks
+
+```text
+pnpm run lint:admin
+pnpm run typecheck:admin
+pnpm run test:admin:coverage
+pnpm run build:admin
+pnpm run test:admin:postgres-integration
+```
+
+These prove a transport-free invitation kernel, injected authorization/audit order, Access
+assertion/member prerequisites, and one narrow database capability. There is no Admin host, page,
+CLI, operational issuer, complete authorization adapter, real Access policy/key refresh, passkey,
+external audit backend, or deployment.
+
+## Documentation, public safety, and release review
+
+```text
+pnpm run check:documentation-currentness
+pnpm run test:documentation-currentness-check
+pnpm run check:architecture
+pnpm run check:docs
+pnpm run check:public
+pnpm run check:history
+pnpm run check:licenses
+pnpm run check:config
+pnpm run test:config-check
+pnpm run check:agent-skills
+pnpm run check:publication
+```
+
+Before committing, stage only the intended files and run:
+
+```text
 pnpm run check:public:staged
 git diff --cached --check
-git diff --cached
 ```
 
-The last command is a required human review, not ceremonial output. Check generated files, binary
-metadata, fixtures, links, environment examples, and workflow permissions before committing.
-Release/publication preparation additionally runs `pnpm run verify:release`.
+The staged scanner checks the exact index, while `check:public` checks tracked working-tree content.
+Neither makes an automated secrecy guarantee. Manually review every staged blob and commit message.
 
-## Troubleshooting versions
+The publication gate currently passes the tracked public source-only boundary: maintainer and
+CODEOWNERS identity, canonical GitHub remote, private vulnerability-reporting status, and restricted
+interaction policy. It does not query hosted settings or prove CI for the current commit. Read those
+back separately, and never weaken the gate to make a local tree appear published.
 
-The following commands should report the pinned major or exact toolchain versions:
+## Dependency changes
+
+Read [dependency policy](../security/DEPENDENCY_POLICY.md) before changing a dependency or CI pin.
+After an intentional change:
 
 ```text
-node --version
-pnpm --version
-rustc --version
-cargo --version
-docker --version
+node scripts/check-licenses.mjs --write
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm audit --audit-level high
+pnpm run verify:release
 ```
 
-If `pnpm run verify` says dependencies are stale, run the frozen install command above. Do not
-weaken `verifyDepsBeforeRun`, disable the lockfile, or approve a dependency build merely to clear an
-error.
+Inspect the lockfile, package provenance, license inventory, quarantine dates, native/build scripts,
+and target-specific metadata. Inventory regeneration records evidence; it is not approval.
+
+## Live or hosted work
+
+Local gates never authorize access to a provider account, OAuth application, credential store,
+hosted database, Cloudflare zone, Railway project, GitHub release, or production endpoint. A live
+check needs explicit user authorization, a narrowly documented data/secret/logging scope, rollback
+and cleanup steps, and a status update that distinguishes local, hosted, and production evidence.

@@ -25,10 +25,11 @@ The checked-in Codex reader:
 - discards email, plan, summary, home path, platform, user-agent, and fixture privacy sentinels;
 - has exact parser, process, admission, privacy-egress, and reader fixtures.
 
-Claude Code and opencode remain recognized but disabled until exact local evidence supports a
-reader. Qwen Code, Cline, and Aider are documented future candidates only. Recognition grants no
-pairing or sync authority. Codex also remains out of the public supported-provider registry until
-the final Web/database batch-pairing and end-to-end sync evidence passes.
+Claude Code, opencode, Qwen Code, Cline, and Aider remain recognized without a reader. Recognition
+grants no pairing or sync authority. Codex also remains out of the supported-provider registry: the
+tree has synthetic batch-pairing and sync components, but not one authorized clean-machine
+real-account read, one same-artifact composed connect/approval/credential/first-sync/snapshot
+result, or the required package lifecycle and protected release evidence.
 
 ## Batch connection
 

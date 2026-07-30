@@ -3,10 +3,11 @@
 > **Status:** local pre-alpha. The synthetic web prototype is runnable, but no production service or
 > released connector exists.
 
-External participation remains closed. The source can be published immediately in source-only mode
-after a real maintainer and CODEOWNERS are recorded, GitHub private vulnerability reporting is
-verified, and Issues/Discussions are disabled with Pull Requests limited to collaborators. See
-[First GitHub publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
+External participation remains closed. The repository is public in source-only mode with a recorded
+maintainer and matching CODEOWNERS, private vulnerability reporting enabled, Issues and Discussions
+disabled, collaborator-only pull requests, and an active `main` ruleset. This is public-source
+evidence only, not a release, deployment, beta, or invitation to contribute. See
+[GitHub source-only publication](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
 Vibe Racing is an open-source, pixel-art weekly leaderboard for exact provider-reported coding-agent
 tokens. The accepted clean-slate target uses one immutable GitHub identity, multiple logical
@@ -14,10 +15,11 @@ tokens. The accepted clean-slate target uses one immutable GitHub identity, mult
 snapshot-only public reads. Community remains self-reported, tokenizers differ, and rank represents
 neither normalized cost/compute nor a reward or privilege.
 
-The working branch is replacing the unreleased Codex-only local baseline under
-[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Until
-[implementation status](docs/IMPLEMENTATION_STATUS.md) records each replacement slice, do not treat
-the accepted target as implemented provider support, connector release, or deployment.
+The unreleased Codex-only baseline has been replaced locally under
+[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). The result
+is still pre-release synthetic evidence: no provider, connector version, target platform, hosted
+service, or deployment is declared supported without the separate evidence listed in
+[implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ![Synthetic Vibe Racing desktop preview in the Neon Night theme](docs/testing/phase1-visual-baselines/desktop-1280x720-en-neon-night.png)
 
@@ -53,21 +55,25 @@ boundaries.
 
 ## What works locally
 
-- A responsive EN/RU synthetic race, leaderboard, profile summary, garage, themes, reduced-motion
-  mode, and a browser-only score simulator.
-- Four bounded default-off public read routes for score, race, race status, and direct token
-  ranking.
-- Default-off invite, GitHub OAuth, passkey, recovery, account, pairing, device/source, deletion,
-  and CarRecipe application boundaries with injected or disposable-database evidence.
-- A single unreleased `UsageSyncV1` protocol through a dependency-free Cloudflare Worker boundary,
-  Ingest verification/application layers, and a least-privileged PostgreSQL capability.
-- A candidate-only Windows x86_64 connector foundation with native credential storage, pairing,
-  exact-version Codex admission, one-shot sync, and proposal-only commands.
-- Default-off migration and Jobs processes with checked local lifecycle and disposable PostgreSQL
-  integrations.
+- A responsive EN/RU semantic server-rendered leaderboard, lazy pixel race, public profile, garage,
+  three themes, forced-colors support, and reduced-motion behavior over synthetic snapshot data.
+- Three bounded default-off public snapshot routes: current leaderboard, historical leaderboard, and
+  current public profile. The four legacy score/race/status/token routes return 404.
+- Default-off invite, GitHub OAuth, passkey, recovery, private account, batch pairing,
+  AgentAccount/installation/device lifecycle, deletion, and CarRecipe boundaries with injected or
+  disposable-database evidence.
+- One unreleased `UsageSyncV1` protocol at `POST /v1/usage`, composed through a dependency-free
+  Cloudflare Worker boundary, Ingest verification/application layers, and one atomic
+  least-privileged PostgreSQL capability.
+- A provider-neutral unreleased connector with OS credential storage, bounded batch discovery and
+  pairing, account-scoped keys, sync/status/doctor commands, and one exact Codex `0.144.5` candidate
+  reader. Codex remains recognized rather than supported pending clean-machine real-account and
+  release evidence.
+- A seven-revision clean database bootstrap plus default-off migration, thirteen-capability Jobs,
+  and in-memory Jobs-scheduler processes with disposable PostgreSQL evidence.
 
-Current contract inventory: **14 schemas, 4 protocol policies, 8 OpenAPI operations, and 8 OpenAPI
-paths**. Current database inventory: **43 immutable SQL migration revisions**.
+Current contract inventory: **18 schemas, 4 protocol policies, 7 OpenAPI operations, and 7 OpenAPI
+paths**. Current database inventory: **7 immutable SQL migration revisions**.
 
 These are local and synthetic implementation claims. They do not prove a deployed service, live
 OAuth/authenticator/database credentials, external TLS or edge routing, representative capacity,
@@ -80,9 +86,10 @@ Community results are self-reported by local devices. They are not provider-veri
 be used for prizes, money, access control, or other valuable benefits. Verified ingestion remains
 disabled until an independently reviewable server-verifiable source exists.
 
-The project does not collect prompts, conversations, repository contents, Codex access tokens, API
-keys, or arbitrary user-uploaded files. Public projections omit raw usage, private identifiers, and
-exact receipt timestamps. See the [privacy data map](docs/security/PRIVACY_DATA_MAP.md),
+The network protocol has no fields for prompts, conversations, code, repository contents, local
+paths, email, access tokens, API keys, or arbitrary user-uploaded files. Public projections omit raw
+usage, private identifiers, and exact receipt timestamps. See the
+[privacy data map](docs/security/PRIVACY_DATA_MAP.md),
 [security invariants](docs/architecture/SECURITY_INVARIANTS.md), and
 [threat model](docs/security/THREAT_MODEL.md).
 
@@ -119,24 +126,26 @@ pnpm run check:publication
   checker-regression, license, formatting, and Windows connector evidence when available.
 - `check:public:staged` scans the exact Git index before a commit.
 - `check:history` scans reachable refs, identities, DCO trailers, paths, and blobs.
-- `check:publication` is intentionally fail-closed until real hosted GitHub identities and controls
-  are configured.
+- `check:publication` currently passes the tracked source-only boundary and fails closed on
+  maintainer, CODEOWNERS, remote, reporting, or interaction-policy drift.
 
 Docker-backed Web, Ingest, Migration, Database, Admin, and Jobs integrations remain opt-in local
 synthetic evidence. A green local command is not production or hosted-CI evidence.
 
 ## Publication status
 
-The source tree is designed for an immediate **public, source-only GitHub repository**. Create the
-empty public repository first, configure its security and interaction settings, and push source only
-after the local publication gate passes.
+The repository is already public in **source-only mode**. The published baseline has a successful
+hosted CI run; `main` has an active no-bypass ruleset with pull-request, conversation-resolution,
+strict required-check, deletion, and non-fast-forward protections.
 
-- confirm public maintainer identities and matching CODEOWNERS;
-- enable and test GitHub private vulnerability reporting before the source push;
-- disable Issues and Discussions and limit Pull Requests to collaborators;
-- push the reviewed `main`, protect it, and require the reviewed CI checks;
-- review the first hosted Actions run and its public logs;
-- rerun `verify:release` and `check:publication`.
+- the public maintainer registry and CODEOWNERS agree;
+- private vulnerability reporting is enabled and visible, though external-account submission and
+  notification delivery remain unproven;
+- Issues and Discussions are disabled and pull requests are limited to collaborators;
+- required checks are `Node and repository gates`, `Rust workspace gate`, and
+  `PostgreSQL capability and invariant gate`; and
+- every new revision still needs its own reviewed PR, hosted checks, and source-only policy
+  readback. A local green branch is not hosted evidence.
 
 No conduct endpoint is invented while participation is closed. Opening public interactions later
 requires a real tested private conduct channel. The exact sequence is documented in
@@ -164,8 +173,8 @@ External contributions are currently closed. Maintainer changes follow [CONTRIBU
 synthetic data plus DCO sign-off.
 
 Do not disclose vulnerabilities through a public issue, pull request, discussion, commit message, or
-social post. The repository must enable GitHub private vulnerability reporting before public
-announcement; until then, it is not open for external security reports. See [SECURITY.md].
+social post. Use the repository's private vulnerability-reporting action described in [SECURITY.md];
+external-account submission and notification delivery have not yet been end-to-end-tested.
 
 ## License
 

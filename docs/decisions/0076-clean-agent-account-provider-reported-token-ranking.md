@@ -1,6 +1,6 @@
 # ADR 0076: Clean AgentAccount provider-reported token ranking
 
-- Status: Accepted (clean-slate pre-release target; implementation evidence pending)
+- Status: Accepted (clean-slate target implemented locally; external evidence remains pending)
 - Date: 2026-07-28
 - Decision owners: Product, Identity, Connector, Contracts, Edge, Ingest, Web, Jobs, Database,
   Security, Privacy, Operations, and Release
@@ -26,8 +26,8 @@ server must therefore rank the exact accepted provider-reported totals, state th
 differ, and keep Community and Verified evidence separate.
 
 Because every existing runtime and database shape is pre-release and synthetic, the narrowest honest
-design is a clean replacement. This decision is normative before implementation, while
-`docs/IMPLEMENTATION_STATUS.md` remains the authority for what the current tree has actually proved.
+design is a clean replacement. This decision remains normative; `docs/IMPLEMENTATION_STATUS.md` is
+the authority for what the current tree has actually proved.
 
 ## Decision
 
@@ -170,18 +170,11 @@ immutable observation metadata, not ranking time.
 
 ### 7. Final public contracts
 
-The final version-one contract inventory contains:
-
-- `AgentProviderV1`;
-- `ConnectorDiscoveryManifestV1`;
-- `ConnectorPairingStartV1`;
-- `ConnectorPairingApprovalV1`;
-- `ConnectorPairingPollResultV1`;
-- `UsageSyncV1`;
-- `UsageSyncResultV1`;
-- `LeaderboardSnapshotV1`;
-- `PublicProfileSummaryV1`;
-- `ProblemDetailsV1`.
+The final version-one contract inventory contains 18 schemas: provider and CarRecipe values;
+connector discovery, proposal result, pairing start/result, approval, and poll/result; leaderboard
+query, season path, and snapshot; public profile path, query, and summary; usage sync/result; and
+bounded problem details. Four authentication/transport policies and seven OpenAPI operations are
+derived from the same manifest.
 
 `UsageSyncV1` contains exactly one server-issued `agentAccountId`, `syncId`, `observedAt`,
 `clientVersion`, `readerVersion`, and bounded unique `dailyEntries`. Each entry contains `usageDate`

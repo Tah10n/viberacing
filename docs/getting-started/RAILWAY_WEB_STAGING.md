@@ -1,75 +1,72 @@
-# Railway Web staging
+# Railway Web staging preparation
 
-This is the shortest supported deployment path for the current repository: one production Web
-container serving the synthetic EN/RU experience. Legacy ranking, direct-token ranking, enrollment,
-pairing, source creation, and CarRecipe mutation stay disabled, so this deployment needs no
-database, OAuth credential, passkey secret, or connector.
+This is a repository-owned procedure for a database-free synthetic Web preview. It is not evidence
+that Railway is configured, compatible, healthy, secure, or deployed. Verify current platform
+behavior and record hosted results before changing the implementation ledger.
 
-It is a deployable product preview, not the complete participant beta. It does not collect real
-usage, create accounts, issue invites, run Ingest or Jobs, or prove the planned
-Cloudflare-to-Railway direct-origin control.
+The preview serves the EN/RU synthetic experience with every data/account mutation capability
+closed. It accepts no real usage and needs no database, OAuth app, passkey secret, pairing key, or
+connector.
 
-## Verify the exact runtime
-
-Use the repository-pinned package manager from the repository root:
+## Verify the exact local runtime
 
 ```text
 corepack pnpm install --frozen-lockfile --ignore-scripts
 corepack pnpm run verify:web:deployment
 ```
 
-The command builds the contracts and Next.js standalone output, assembles the same runtime layout as
-the production image, then requires:
+The gate builds contracts and the Next standalone runtime, then checks:
 
-- a `200` home response with the production CSP and HSTS headers;
-- a referenced `/_next/static/` CSS or JavaScript asset returning `200`;
-- the configured HTTPS public origin in generated metadata;
-- generic `503` problem responses from both intentionally disabled public-ranking decisions.
+- a `200` home response with production CSP and HSTS;
+- one referenced static CSS or JavaScript asset;
+- the configured HTTPS public origin in metadata;
+- generic `503` from all three disabled public snapshot routes; and
+- `404` from the four removed legacy Community read routes.
 
-For an additional container-engine check:
+Optional local container smoke:
 
 ```text
 docker build --tag viberacing-web:local .
-docker run --rm --read-only --tmpfs /tmp --publish 3000:3000 --env VIBERACING_PUBLIC_RANKING_ENABLED=false --env VIBERACING_TOKEN_RANKING_ENABLED=false --env VIBERACING_ENROLLMENT_ENABLED=false --env VIBERACING_PAIRING_ENABLED=false --env VIBERACING_SOURCE_CREATION_ENABLED=false --env VIBERACING_CAR_PROPOSALS_ENABLED=false viberacing-web:local
+docker run --rm --read-only --tmpfs /tmp --publish 3000:3000 --env VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=false --env VIBERACING_ENROLLMENT_ENABLED=false --env VIBERACING_INVITE_GATE_ENABLED=false --env VIBERACING_PAIRING_ENABLED=false --env VIBERACING_CAR_PROPOSALS_ENABLED=false viberacing-web:local
 ```
 
-Open the loopback service on port `3000` only for this check. The image runs as the pre-existing
-unprivileged `node` user and contains the standalone server plus its required static assets, not the
-repository or build dependencies. The omitted public origin uses the reserved non-live production
-fallback for this smoke only; set the real origin before any hosted deployment.
+Use loopback port `3000` only for this smoke. The image runs as the existing unprivileged `node`
+user and contains the standalone runtime/static assets rather than the repository and build graph.
 
-## Deploy
+## Hosted preparation
 
-1. Create a Railway project and deploy this repository from its root. Railway detects `Dockerfile`;
-   `railway.json` sets the root health check and an on-failure restart policy.
-2. Generate the service domain or attach the intended custom domain.
-3. Set `VIBERACING_PUBLIC_ORIGIN` to that exact HTTPS origin. Use only the origin: no path, query,
-   fragment, credentials, IP literal, or non-default port.
-4. Set these exact values:
+1. Review `Dockerfile` and `railway.json` at the exact source revision.
+2. Create a new service from the repository root only after the project/operator has approved it.
+3. Generate or attach the intended domain.
+4. Set `VIBERACING_PUBLIC_ORIGIN` to that exact HTTPS DNS origin with no credentials, path, query,
+   fragment, IP literal, or non-default port.
+5. Keep these values exact:
 
-   | Variable                             | Value   |
-   | ------------------------------------ | ------- |
-   | `VIBERACING_PUBLIC_RANKING_ENABLED`  | `false` |
-   | `VIBERACING_TOKEN_RANKING_ENABLED`   | `false` |
-   | `VIBERACING_ENROLLMENT_ENABLED`      | `false` |
-   | `VIBERACING_PAIRING_ENABLED`         | `false` |
-   | `VIBERACING_SOURCE_CREATION_ENABLED` | `false` |
-   | `VIBERACING_CAR_PROPOSALS_ENABLED`   | `false` |
+| Variable                              | Value   |
+| ------------------------------------- | ------- |
+| `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED` | `false` |
+| `VIBERACING_ENROLLMENT_ENABLED`       | `false` |
+| `VIBERACING_INVITE_GATE_ENABLED`      | `false` |
+| `VIBERACING_PAIRING_ENABLED`          | `false` |
+| `VIBERACING_CAR_PROPOSALS_ENABLED`    | `false` |
 
-5. Redeploy after setting the final origin. Confirm the root health check is green, the page has its
-   styles, and both `/v1/community/race/status` and `/v1/community/tokens` return `503`. Those
-   responses prove that no database-backed participant surface was accidentally opened.
+6. Let Railway supply `PORT`; do not override the image command.
+7. Replace the process after final configuration and verify the root health check, static assets,
+   metadata origin, headers, three disabled snapshot responses, and four removed-route responses.
 
-Railway supplies `PORT`; do not override the image command. No tracked `.env` file is copied into
-the image.
+No tracked `.env` is copied into the image. Do not use a production/personal value in a build
+argument, Docker layer, source file, public log, screenshot, or issue.
 
-## Boundary for a data-backed deployment
+## Evidence boundary
 
-Do not turn the six switches on merely to make the preview look more complete. A real participant
-staging environment additionally needs separate least-privileged PostgreSQL principals, the checked
-migration runner, protected secrets, OAuth/WebAuthn origin registration, Ingest and Jobs services,
-edge direct-origin denial, and operational evidence. The repository now contains bounded images and
-configuration for those data-plane services plus a local Cloudflare signer; follow
-[Railway data-plane staging](RAILWAY_DATA_PLANE_STAGING.md) for their exact composition. It still
-does not supply a compatible production PostgreSQL service, protected credential, OAuth app, Admin
-invite host, released connector, monitoring, or live deployment evidence.
+A successful hosted preview would prove only that one exact synthetic Web revision was served. It
+would not prove:
+
+- a database, OAuth, passkey, pairing, provider, usage, Jobs, Edge, or Ingest path;
+- direct-origin denial, secret delivery, monitoring, capacity, backup, restore, or containment;
+- a supported/released connector; or
+- readiness for real participants.
+
+Do not enable data-backed capabilities opportunistically. Their narrow logins, verified TLS,
+protected values, migration, service order, negative controls, and rollback requirements are in
+[Railway data-plane staging preparation](RAILWAY_DATA_PLANE_STAGING.md).

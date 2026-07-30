@@ -85,7 +85,7 @@ A valid command prints only `Vibe Racing Jobs command completed.`. Every failure
 `Vibe Racing Jobs command failed.` and returns nonzero. Neither path prints command input, results,
 configuration, SQL, exceptions, or protected values.
 
-The Docker-backed command integration applies the six-file checksum-validated clean bootstrap,
+The Docker-backed command integration applies the seven-revision checksum-validated clean bootstrap,
 creates one narrow login and one deliberately widened negative control, fingerprints every private
 table around the denial, runs all thirteen built commands as separate processes, verifies exact
 generic output, current-season creation, admission-window mutation, connection cleanup, and removes

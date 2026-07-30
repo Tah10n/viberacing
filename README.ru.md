@@ -3,10 +3,11 @@
 > **Статус:** локальная pre-alpha. Синтетический веб-прототип запускается, но production-сервиса и
 > выпущенного connector пока нет.
 
-Внешнее участие закрыто. Исходники можно сразу опубликовать в source-only режиме после записи
-реального maintainer и CODEOWNERS, проверки GitHub Private Vulnerability Reporting, отключения
-Issues/Discussions и ограничения Pull Requests только collaborators. Последовательность описана в
-[инструкции первой GitHub-публикации (EN)](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
+Внешнее участие закрыто. Репозиторий уже публичен в source-only режиме: записан maintainer и
+matching CODEOWNERS, включён Private Vulnerability Reporting, Issues/Discussions отключены, Pull
+Requests ограничены collaborators, а `main` защищён активным ruleset. Это только public-source
+evidence, не release, deployment, beta или приглашение к участию. Процесс описан в
+[GitHub source-only publication (EN)](docs/getting-started/GITHUB_FIRST_PUBLICATION.md).
 
 Vibe Racing — открытый пиксельный недельный рейтинг точных provider-reported tokens coding agents.
 Принятая clean-slate модель использует один immutable GitHub identity, несколько логических
@@ -14,10 +15,11 @@ Vibe Racing — открытый пиксельный недельный рей�
 чтение только готовых snapshots. Community остаётся self-reported, токенизаторы различаются, а rank
 не означает нормализованные стоимость/compute, награду или привилегию.
 
-Рабочая ветка заменяет невыпущенный локальный Codex-only baseline по
-[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Пока
-[implementation status](docs/IMPLEMENTATION_STATUS.md) не зафиксирует каждый replacement slice,
-принятую модель нельзя считать реализованной поддержкой provider, выпуском connector или deployment.
+Невыпущенный локальный Codex-only baseline заменён по
+[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Результат
+остаётся pre-release синтетическим evidence: ни один provider, connector version, target platform,
+hosted service или deployment не считается supported без отдельных доказательств из
+[implementation status](docs/IMPLEMENTATION_STATUS.md).
 
 ![Синтетическое desktop-превью Vibe Racing на русском языке в теме Cyber Rally](docs/testing/phase1-visual-baselines/desktop-1280x720-ru-cyber-rally.png)
 
@@ -48,19 +50,23 @@ pnpm run verify
 
 ## Что реализовано локально
 
-- Адаптивная EN/RU синтетическая гонка, leaderboard, public profile, garage, три темы,
-  reduced-motion режим и браузерный score simulator.
-- Четыре bounded default-off public read route для score, race, race status и direct token ranking.
-- Default-off invite, GitHub OAuth, passkey, recovery, account, pairing, device/source, deletion и
-  CarRecipe boundaries с injected или disposable-database evidence.
-- Единственный unreleased протокол `UsageSyncV1`: Cloudflare origin signer, Ingest verification и
-  least-privileged PostgreSQL capability.
-- Candidate-only Windows x86_64 connector foundation с native credential storage, pairing,
-  exact-version Codex admission, one-shot sync и proposal-only командами.
-- Default-off migration и Jobs процессы с локальными lifecycle и disposable PostgreSQL tests.
+- Адаптивный EN/RU semantic server-rendered leaderboard, lazy pixel race, public profile, garage,
+  три темы, forced-colors и reduced-motion поверх синтетических snapshots.
+- Три bounded default-off public snapshot route: current leaderboard, historical leaderboard и
+  current public profile. Четыре legacy score/race/status/token route возвращают 404.
+- Default-off invite, GitHub OAuth, passkey, recovery, private account, batch pairing,
+  AgentAccount/installation/device lifecycle, deletion и CarRecipe boundaries с injected или
+  disposable-database evidence.
+- Единственный unreleased `UsageSyncV1` на `POST /v1/usage`: Cloudflare Worker boundary, Ingest
+  verification/application и одна атомарная least-privileged PostgreSQL capability.
+- Provider-neutral unreleased connector с OS credential storage, bounded batch discovery/pairing,
+  account-scoped keys и sync/status/doctor. Единственный exact Codex `0.144.5` reader остаётся
+  recognized, а не supported, до clean-machine real-account и release evidence.
+- Clean database bootstrap из семи revisions и default-off migration, Jobs из 13 capabilities и
+  in-memory Jobs scheduler с disposable PostgreSQL evidence.
 
-Текущий inventory контрактов: **14 схем, 4 protocol policies, 8 OpenAPI operations и 8 OpenAPI
-paths**. Текущий database inventory: **43 immutable SQL migration revisions**.
+Текущий inventory контрактов: **18 схем, 4 protocol policies, 7 OpenAPI operations и 7 OpenAPI
+paths**. Текущий database inventory: **7 immutable SQL migration revisions**.
 
 Это локальные и синтетические доказательства. Они не подтверждают deployed service, live
 OAuth/authenticator/database credentials, внешний TLS/edge route, representative capacity,
@@ -73,9 +79,9 @@ Community results предоставляются локальными устро
 использовать для денежных призов, доступа, авторизации или других ценных преимуществ. Verified
 ingestion остаётся выключенным до появления независимо проверяемого server-verifiable источника.
 
-Проект не собирает промпты, переписку, содержимое репозиториев, Codex access tokens, API-ключи или
-произвольные пользовательские файлы. Публичные projections не содержат raw usage, private
-identifiers и точное время получения. Подробнее:
+В network protocol нет полей для промптов, переписки, кода, содержимого репозиториев, локальных
+путей, email, access tokens, API-ключей или произвольных пользовательских файлов. Публичные
+projections не содержат raw usage, private identifiers и точное время получения. Подробнее:
 [Privacy data map (EN)](docs/security/PRIVACY_DATA_MAP.md),
 [Security invariants (EN)](docs/architecture/SECURITY_INVARIANTS.md) и
 [Threat model (EN)](docs/security/THREAT_MODEL.md).
@@ -113,22 +119,25 @@ pnpm run check:publication
   regressions, licenses, formatting и доступные Windows connector tests.
 - `check:public:staged` проверяет точный Git index перед коммитом.
 - `check:history` проверяет reachable refs, identities, DCO, paths и blobs.
-- `check:publication` fail-closed до настройки реальных GitHub identities и hosted controls.
+- `check:publication` сейчас проходит tracked source-only boundary и fail-closed при drift
+  maintainer, CODEOWNERS, remote, reporting или interaction policy.
 
 Зелёная локальная команда не является production или hosted-CI evidence.
 
 ## Готовность к GitHub
 
-Репозиторий рассчитан на немедленный **public source-only режим**. Сначала создаётся пустой public
-repository, затем настраиваются security/interaction controls, и только после зелёного publication
-gate отправляются исходники.
+Репозиторий уже публичен в **source-only режиме**. Для опубликованного baseline есть успешный hosted
+CI run; `main` защищён активным ruleset без bypass с pull-request, conversation-resolution, strict
+required-check, deletion и non-fast-forward controls.
 
-- подтверждены публичные maintainer identities и matching CODEOWNERS;
-- до source push включён и протестирован GitHub Private Vulnerability Reporting;
-- Issues и Discussions отключены, Pull Requests доступны только collaborators;
-- проверенный `main` отправлен, защищён и связан с обязательными CI checks;
-- просмотрен первый hosted Actions run и его public logs;
-- повторно пройдены `verify:release` и `check:publication`.
+- public maintainer registry совпадает с CODEOWNERS;
+- Private Vulnerability Reporting включён и видим, но external-account submission и notification
+  delivery не проверены end-to-end;
+- Issues и Discussions отключены, Pull Requests ограничены collaborators;
+- обязательные checks: `Node and repository gates`, `Rust workspace gate` и
+  `PostgreSQL capability and invariant gate`;
+- каждая новая revision всё равно требует reviewed PR, собственные hosted checks и повторный
+  source-only policy readback. Зелёная локальная branch не является hosted evidence.
 
 Пока participation закрыт, фиктивный conduct endpoint не создаётся. Для открытия public interactions
 позже потребуется реальный протестированный private conduct channel. Точный процесс:
@@ -154,8 +163,8 @@ gate отправляются исходники.
 используют только синтетические данные и DCO sign-off.
 
 Не публикуйте vulnerability details в issue, pull request, discussion, commit message или social
-post. До публичного объявления GitHub Private Vulnerability Reporting должен быть фактически включён
-и проверен. См. [SECURITY.md](SECURITY.md).
+post. Используйте private vulnerability-reporting action, описанный в [SECURITY.md](SECURITY.md);
+external-account submission и notification delivery ещё не протестированы end-to-end.
 
 ## Лицензия
 

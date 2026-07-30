@@ -1,195 +1,198 @@
-# Railway data-plane staging
+# Railway data-plane staging preparation
 
-This is the shortest repository-owned composition for deploying the existing data plane after the
-synthetic Web preview is healthy. It packages four separate Railway services and one dependency-free
-Cloudflare Worker:
+This document maps the repository's current deployment declarations into an operator rehearsal. It
+contains no credential and proves no hosted service, database, route, migration, monitoring, or
+deployment. Platform compatibility and every acceptance item must be verified at the exact revision
+and recorded separately.
 
-| Service        | Railway config path                        | Image entry point                       |
-| -------------- | ------------------------------------------ | --------------------------------------- |
-| Web            | `/railway.json`                            | `node apps/web/server.js`               |
-| Ingest         | `/deploy/railway/ingest.json`              | `node apps/ingest-host/dist/main.js`    |
-| Jobs scheduler | `/deploy/railway/jobs-scheduler.json`      | `node apps/jobs-scheduler/dist/main.js` |
-| Migrations     | `/deploy/railway/migrate.json`             | `node apps/migrate/dist/main.js`        |
-| Sync edge      | `apps/edge/wrangler.jsonc` outside Railway | Cloudflare module Worker `fetch`        |
+| Component      | Configuration                        | Entry point                          |
+| -------------- | ------------------------------------ | ------------------------------------ |
+| Web            | `railway.json`                       | Next standalone `apps/web/server.js` |
+| Ingest         | `deploy/railway/ingest.json`         | `apps/ingest-host/dist/main.js`      |
+| Jobs scheduler | `deploy/railway/jobs-scheduler.json` | `apps/jobs-scheduler/dist/main.js`   |
+| Migration      | `deploy/railway/migrate.json`        | `apps/migrate/dist/main.js`          |
+| Edge           | `apps/edge/wrangler.jsonc`           | Cloudflare module Worker             |
 
-The Web preview can be deployed independently by following
-[Railway Web staging](RAILWAY_WEB_STAGING.md). The rest of this document is for an operator who
-already has protected infrastructure configuration. It contains no credential and is not evidence
-that a live deployment occurred.
+The Web-only synthetic preview is covered by
+[Railway Web staging preparation](RAILWAY_WEB_STAGING.md). A stable-release workflow can replace
+sources in the order Migration, Web, Ingest, Jobs, Edge after protected-environment approval, but it
+does not provision or validate any prerequisite below.
 
-After the project, services, roles, runtime variables, and Worker secrets in this guide exist,
-follow [GitHub Release deployment](GITHUB_RELEASE_DEPLOYMENT.md) to make stable releases perform
-this same order automatically. That workflow does not provision any prerequisite in this guide.
+## Hard prerequisite: verified PostgreSQL
 
-## Hard prerequisite: compatible PostgreSQL
+Every production client requires:
 
-All production database clients require:
+- a certificate-valid DNS hostname, never an IP literal or `localhost`;
+- exact `verify-full` TLS mode;
+- a trusted CA chain for that hostname;
+- one distinct `NOINHERIT` login for Migration, Web, Ingest, and Jobs; and
+- exactly one corresponding non-login group per login.
 
-- a DNS hostname, not an IP literal or `localhost`;
-- `VIBERACING_*_DATABASE_TLS_MODE=verify-full`;
-- a server certificate valid for that exact hostname and a CA trusted by Node; and
-- distinct non-owner logins for migration, Web, Ingest, and Jobs.
+| Login     | Sole group          |
+| --------- | ------------------- |
+| Migration | `viberacing_owner`  |
+| Web       | `viberacing_web`    |
+| Ingest    | `viberacing_ingest` |
+| Jobs      | `viberacing_jobs`   |
 
-Do not switch production to `disable`, `require`, or certificate verification without hostname
-verification. The Railway PostgreSQL SSL template reviewed on 2026-07-26 generated a certificate for
-`localhost` only, so it is not a drop-in match for this contract when another Railway service
-connects through a different hostname. Use a PostgreSQL service with hostname-valid TLS or provide a
-reviewed certificate/trust configuration before continuing.
+Run `database/roles/bootstrap.sql` once through a protected administrative principal. Runtime probes
+must reject owner login, inheritance, administrative capability, extra group membership, unsafe
+search path, and TLS mismatch.
 
-Run `database/roles/bootstrap.sql` once through a protected database administration principal. That
-script creates the five `NOLOGIN` capability groups and database defaults. Provision four distinct
-`NOINHERIT` logins outside the repository and grant each exactly one group:
+Do not weaken hostname verification to accommodate a managed database template. Select or configure
+a service whose certificate contract is actually compatible.
 
-| Login purpose | Only group membership |
-| ------------- | --------------------- |
-| Migration     | `viberacing_owner`    |
-| Web           | `viberacing_web`      |
-| Ingest        | `viberacing_ingest`   |
-| Jobs          | `viberacing_jobs`     |
-
-The runtime probes reject an owner login, inherited or administrative membership, extra group
-membership, unsafe search path, excessive cluster authority, or TLS mismatch.
-
-## Verify the pinned source
-
-From a clean checkout of the exact revision to deploy:
+## Verify the pinned source locally
 
 ```text
 corepack pnpm install --frozen-lockfile --ignore-scripts
 corepack pnpm run verify:release
-corepack pnpm run test:edge-ingest-compatibility
+corepack pnpm run test:database:integration
 corepack pnpm run test:migrate:postgres-integration
 corepack pnpm run test:web:postgres-integration
+corepack pnpm run test:edge-ingest-compatibility
+corepack pnpm run test:ingest:postgres-integration
+corepack pnpm run test:jobs-scheduler:process-postgres-integration
+docker build --tag viberacing-web:local .
 docker build --file deploy/Dockerfile.ingest --tag viberacing-ingest:local .
 docker build --file deploy/Dockerfile.jobs-scheduler --tag viberacing-jobs-scheduler:local .
 docker build --file deploy/Dockerfile.migrate --tag viberacing-migrate:local .
 ```
 
-The image definitions use the repository-pinned Node image, install with the frozen lockfile and
-blocked scripts, copy only the emitted production graph, and run as the existing unprivileged `node`
-user. The local edge compatibility test proves that the Worker's exact HMAC is accepted by the
-production Ingest verifier. The migration and Web integrations prove the exact 43-row ledger and all
-four public production routes through separate least-privileged verified-TLS logins. The
-Docker-backed Ingest/PostgreSQL integration remains an optional stronger synthetic prerequisite:
-
-```text
-corepack pnpm run test:ingest:postgres-integration
-```
+These are local synthetic prerequisites. They prove the seven-row migration ledger, 35 forced-RLS
+private tables, exact route/application behavior, narrow roles, TLS fixtures, Edge/Ingest signature
+compatibility, and local process composition. They do not pre-approve a hosted environment.
 
 ## 1. Run migrations once
 
-Create a Railway service with config path `/deploy/railway/migrate.json`. Supply only:
+Create a one-replica service from `deploy/railway/migrate.json`. Supply only:
 
-- `VIBERACING_MIGRATIONS_ENABLED=true`;
-- the six `VIBERACING_MIGRATIONS_DATABASE_{HOST,PORT,NAME,USER,PASSWORD,TLS_MODE}` values; and
-- protected CA trust through the runtime when the certificate chain is not already trusted.
+- exact `VIBERACING_MIGRATIONS_ENABLED=true`;
+- the six protected `VIBERACING_MIGRATIONS_DATABASE_*` values; and
+- protected CA trust when the runtime does not already trust the chain.
 
-The service is one replica with restart policy `NEVER`. Success is exit code zero and exactly
-`Vibe Racing migrations completed.` with no standard error. On any other result, stop and follow the
-[staging migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md). Do not retry
-automatically, run raw migration SQL from a runtime service, or share this login with Web, Ingest,
-or Jobs. Remove the exact enable value after success.
+The service has restart policy `NEVER`. Success is code zero, the generic completion line, exact
+seven-row ledger, exact provider state, all 35 forced-RLS private tables, expected narrow grants,
+and released database sessions/lock. On any other result, stop and follow the
+[migration and forward-recovery runbook](../operations/MIGRATION_RUNBOOK.md).
+
+Do not auto-retry, run ad hoc SQL from a runtime service, grant migration authority to another
+service, or leave the enable value in place after success.
 
 ## 2. Deploy Web closed
 
-Deploy the root Web service exactly as described in [Railway Web staging](RAILWAY_WEB_STAGING.md).
-Keep all six feature controls `false` initially. This establishes the public origin, health check,
-production headers, and rollback target without requiring database or identity secrets.
+Deploy the Web preview with all five Web decisions false as documented in
+[Railway Web staging preparation](RAILWAY_WEB_STAGING.md). This provides a rollback target without
+requiring protected data-plane configuration.
 
-When the migrated database and narrow Web login are ready, add the six
-`VIBERACING_WEB_DATABASE_{HOST,PORT,NAME,USER,PASSWORD,TLS_MODE}` values. Enable
-`VIBERACING_PUBLIC_RANKING_ENABLED=true` first and require the three legacy routes to return valid
-versioned responses. Then enable `VIBERACING_TOKEN_RANKING_ENABLED=true`, redeploy, and require
-`/v1/community/tokens` to return a valid `CommunityTokenRaceStatusPageV1` response before enabling
-another capability. The browser is token-first and keeps the legacy route as rollback fallback.
+After the exact database and narrow Web login pass their probes, add the six protected
+`VIBERACING_WEB_DATABASE_*` values. If the reviewed staging scope includes data-backed synthetic
+reads, enable only `VIBERACING_PUBLIC_SNAPSHOTS_ENABLED=true`, replace the process, and validate:
 
-## 3. Deploy Ingest
+- current and historical leaderboard contracts;
+- current public profile contract;
+- exact cache policy by season state;
+- no private-table mutation;
+- no raw-usage aggregation on requests; and
+- generic failure on malformed, unavailable, or saturated requests.
 
-Create a Railway service with config path `/deploy/railway/ingest.json`. Railway supplies `PORT`; do
-not set the local listener host or port and do not override the image command. Supply:
+Do not enable enrollment, invite policy, pairing, or CarRecipe mutation as part of this read smoke.
 
-| Variable                                                             | Required value                     |
-| -------------------------------------------------------------------- | ---------------------------------- |
-| `VIBERACING_INGEST_ENABLED`                                          | `true`                             |
-| `VIBERACING_USAGE_SYNC_ENABLED`                                      | `false`                            |
-| `VIBERACING_INGEST_TLS_TERMINATION`                                  | `railway-edge`                     |
-| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`                                | `40`                               |
-| `VIBERACING_INGEST_DATABASE_{HOST,PORT,NAME,USER,PASSWORD,TLS_MODE}` | protected Ingest connection fields |
-| `VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID`                            | one canonical `edge_*` identifier  |
-| `VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL`                     | one canonical 32-byte secret       |
+## 3. Deploy Ingest closed
 
-Generate the origin key in a protected secret manager. Use the same pair only in Ingest and the
-Cloudflare Worker. Do not add a health route or broaden the restart policy to hide startup failure.
-One replica and a 40-second drain are already fixed in the Railway configuration. Keep Usage Sync
-false during closed deployment. Enabling the sole usage-ingest route later requires one coordinated
-Ingest replacement and Cloudflare Worker replacement with exact `true`; changing only one side must
-leave it unavailable. This is containment sequencing, not a protocol migration.
+Create one service from `deploy/railway/ingest.json`. Railway supplies `PORT`. Supply:
 
-## 4. Deploy the sync edge
+| Variable                                         | Required value                  |
+| ------------------------------------------------ | ------------------------------- |
+| `VIBERACING_INGEST_ENABLED`                      | `true`                          |
+| `VIBERACING_USAGE_SYNC_ENABLED`                  | `false`                         |
+| `VIBERACING_INGEST_TLS_TERMINATION`              | `railway-edge`                  |
+| `RAILWAY_DEPLOYMENT_DRAINING_SECONDS`            | `40`                            |
+| `VIBERACING_INGEST_DATABASE_*`                   | protected narrow connection     |
+| `VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID`        | canonical protected key ID      |
+| `VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL` | canonical protected 32-byte key |
 
-Configure the intended Cloudflare custom domain for the Worker; `workers_dev` is disabled. From the
-pinned checkout, set the three secrets through prompts and deploy:
+Do not set the loopback listener host/port, add a health route, widen the restart policy, or
+override the entry point. Confirm startup is silent apart from approved generic lifecycle output and
+that an unsigned direct request produces no device lookup or private mutation.
 
-```text
-corepack pnpm dlx wrangler@4.112.0 secret put VIBERACING_INGEST_ORIGIN_URL --config apps/edge/wrangler.jsonc
-corepack pnpm dlx wrangler@4.112.0 secret put VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_ID --config apps/edge/wrangler.jsonc
-corepack pnpm dlx wrangler@4.112.0 secret put VIBERACING_INGEST_ORIGIN_PRIMARY_KEY_BASE64URL --config apps/edge/wrangler.jsonc
-corepack pnpm dlx wrangler@4.112.0 deploy --config apps/edge/wrangler.jsonc
-```
+Keep `/v1/usage` closed until the matching Edge source, rate-limit bindings, secrets, synthetic
+device/account fixture, rollback, and containment sequence are all ready.
 
-The origin URL is the exact dedicated HTTPS Railway Ingest origin with no path, query, fragment,
-credential, IP literal, or non-default port. A direct unsigned request to that Railway origin must
-fail generically before device or database work. A request through Cloudflare still needs a valid
-device signature; the edge proof does not authenticate a participant. The checked Worker value keeps
-`VIBERACING_USAGE_SYNC_ENABLED=false`. After the matching Ingest replacement is healthy with exact
-`true`, deploy the same reviewed source once with the single non-secret override:
+## 4. Deploy Edge closed, then coordinate usage enablement
 
-```text
-corepack pnpm dlx wrangler@4.112.0 deploy --var VIBERACING_USAGE_SYNC_ENABLED:true --config apps/edge/wrangler.jsonc
-```
+`workers_dev` is disabled. Configure the intended custom route, seven named rate-limit bindings, one
+fixed HTTPS Ingest origin, and the shared origin key pair in protected platform state.
 
-The current repository-built Windows connector is still candidate-only and supports only exact Codex
-`0.144.5`; this coordinated route activation does not turn it into a released or supported package.
+The repository config keeps `VIBERACING_USAGE_SYNC_ENABLED=false`. First deploy that closed source
+and verify removed/unknown routes, methods, malformed framing, and caller-supplied origin headers
+fail before forwarding.
 
-## 5. Start the Jobs scheduler
+Usage enablement requires one coordinated Ingest replacement and one Edge replacement with exact
+`true`. Activate only after the synthetic staging request has:
 
-Create a Railway service with config path `/deploy/railway/jobs-scheduler.json`. Supply
-`VIBERACING_JOBS_SCHEDULER_ENABLED=true` and the six
-`VIBERACING_JOBS_DATABASE_{HOST,PORT,NAME,USER,PASSWORD,TLS_MODE}` fields. Keep exactly one replica.
-The image already invokes the fixed sequential catalog; do not add a Railway cron, command, parallel
-replica, queue, or second scheduler.
+- a valid active AgentAccount-bound device signature;
+- passed all seven rate-limit policies;
+- reached exact `POST /v1/usage`;
+- consumed origin replay before device/idempotency work;
+- committed one exact atomic account/day/event/dirty-season result; and
+- produced no sensitive logs.
 
-## 6. Enable participant capabilities deliberately
+Changing only one side must leave usage unavailable. This is a containment sequence, not a protocol
+migration.
 
-Ranking, enrollment, pairing, source creation, and CarRecipe proposals are independent startup
-decisions. Do not turn them all on as a smoke test.
+No provider is currently supported and no connector is released. Therefore even a successful
+synthetic route check does not authorize real participant ingestion.
 
-Enrollment additionally needs the dedicated GitHub OAuth application, exact callback and WebAuthn
-origin/RP settings, a fresh session key, a distinct recovery pepper, reviewed Argon2 settings, the
-protected Web login, and an operational invite-issuance path. Pairing additionally needs distinct
-poll/code keys and reviewed private attempt/rate windows. The exact variable inventory is in
-`.env.example`; its placeholders are intentionally unusable.
+## 5. Start Jobs scheduler
 
-The repository still has no Admin host or invite UI and no released connector. Therefore this
-composition can run the preview, public data reads, Ingest, migrations, and maintenance, but it is
-not a self-service public beta. Do not create real participants by bypassing the invitation kernel
-or by granting a browser/runtime service direct table access.
+Create one service from `deploy/railway/jobs-scheduler.json`. Supply exact
+`VIBERACING_JOBS_SCHEDULER_ENABLED=true` and the protected narrow `VIBERACING_JOBS_DATABASE_*`
+values. Keep exactly one replica and the checked entry point.
 
-## Deployment acceptance
+Do not add Railway cron, a second scheduler, a queue, caller-selected job/date/batch, or overlapping
+processes. Acceptance must distinguish:
 
-Record only redacted aggregate results outside the public repository:
+- minute dirty refresh;
+- five-minute refresh/finalization;
+- hourly dependency-ordered retention/deletion/reset;
+- failure without reflective output;
+- bounded first-signal drain; and
+- PostgreSQL idempotency under restart.
 
-- Web root and static assets return `200` with CSP and HSTS;
-- every capability left disabled returns its documented generic failure;
-- the migration ledger equals all 43 reviewed revisions;
-- Web, Ingest, Jobs, and migration probes each admit only their one intended login/group;
-- database connections use hostname-verified TLS;
-- direct-origin sync lacks a valid proof and produces no private mutation;
-- Cloudflare forwards one correctly signed `UsageSyncV1` synthetic request only through the reviewed
-  path;
-- one Jobs cycle settles and no second scheduler session exists; and
-- SIGTERM drains Web/Ingest/Jobs within the configured platform window.
+Hosted cadence, capacity, alerting, and external-effect recovery remain separate evidence.
 
-Local tests do not establish any item in this list against a hosted environment. Monitoring,
-provider logs, alerting, backups, stale-backup deletion replay, real-user recovery, capacity, and
-incident operation remain separate deployment work.
+## 6. Participant capabilities
+
+Enrollment, optional invite policy, pairing, and CarRecipe mutation are independent exact decisions.
+Do not enable them together as a smoke test.
+
+Enrollment additionally requires a dedicated GitHub OAuth app, exact callback and WebAuthn
+origin/RP, fresh purpose-separated session/recovery material, reviewed Argon2 parameters, a working
+invite issuance policy if enabled, recovery-attempt controls, and a real authenticator test.
+
+Pairing additionally requires distinct poll/code verifier keys, reviewed private rate windows,
+working protected Web login, supported provider/accounting revision, released connector, full batch
+review, fresh-passkey step-up, credential persistence, and first-sync evidence.
+
+The repository has no Admin host or invite UI and zero supported providers. Do not bypass those
+boundaries with direct table access or manual participant creation.
+
+## Hosted acceptance record
+
+Record only redacted, non-sensitive evidence:
+
+- exact source digest and image digest per service;
+- exact seven-row ledger and 35 forced-RLS tables;
+- sole-group login/TLS probes for Migration, Web, Ingest, and Jobs;
+- three snapshot routes and four removed-route results;
+- disabled capability results before enablement;
+- direct-origin non-mutation;
+- one exact synthetic Edge-to-Ingest atomic usage result if explicitly authorized;
+- one settled Jobs cycle with one scheduler;
+- SIGTERM settlement within the configured drain;
+- backup/restore, containment, rollback, monitoring, and capacity results where actually performed.
+
+Local commands do not establish these hosted facts. Do not update
+[implementation status](../IMPLEMENTATION_STATUS.md) until the exact environment, controls, negative
+cases, cleanup, and evidence boundary have been independently reviewed.

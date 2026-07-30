@@ -84,6 +84,16 @@ const cases = [
     expectedText: "OpenAPI path inventory differs",
   },
   {
+    name: "rejects operation implementation-status drift",
+    mutate(directory) {
+      mutateJson(directory, "contracts/v1/manifest.json", (manifest) => {
+        manifest.operations[0].implementationStatus = "implemented-local";
+      });
+    },
+    expectedStatus: 1,
+    expectedText: "OpenAPI path inventory differs",
+  },
+  {
     name: "rejects migration inventory drift",
     mutate(directory) {
       mutateJson(directory, "database/migrations/manifest.json", (manifest) => {

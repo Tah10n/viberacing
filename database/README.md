@@ -2,109 +2,98 @@
 
 ## Status
 
-This directory is the first-release, empty-database bootstrap for the agent-neutral
-`provider_reported_tokens_v1` platform. The prior 43-step pre-release history has been removed. No
-production or shared database used that history, so there is no data migration, backfill, cutover,
-compatibility wrapper, or revision 0044.
+This directory is the first-release empty-database bootstrap for the agent-neutral
+`provider_reported_tokens_v1` platform. The unreleased 43-step Codex/score history was removed
+because no shared or production database used it. There is no revision 0044, compatibility wrapper,
+data cutover, or legacy backfill.
 
-The catalog is intentionally small and logical. It currently contains the identity, authentication,
-agent-account/pairing, atomic usage-accounting, and snapshot-ranking layers. The remaining
-first-release retention/Admin and CarRecipe layers are added to this same catalog as their
-end-to-end slices land. The final inventory is bounded to seven revisions.
+This directory contains 7 SQL-first revisions. `manifest.json` is their sole ordered inventory and
+SHA-256 source. A revision is logical rather than artificially small:
 
-## Current catalog
+1. `0001_roles_schemas_and_identity.sql` — non-login roles, private/API schemas, exact ledger,
+   immutable numeric GitHub identity, profile lifecycle, default-deny grants, and forced RLS.
+2. `0002_authentication_passkeys_and_recovery.sql` — optional invites, sessions, passkeys,
+   challenges, recovery, login, private profile controls, and immediate deletion lock-down.
+3. `0003_agent_accounts_installations_and_pairing.sql` — closed provider registry, immutable
+   accounting revisions, multiple AgentAccounts per profile, installation identity, account-scoped
+   device keys, bounded batch pairing, one-assertion approval, fallback-code admission, and
+   lifecycle controls.
+4. `0004_usage_ingest_replay_and_idempotency.sql` — origin/device replay, immutable observations,
+   long-lived idempotency, exact `numeric(30,0)` account/day totals, coalesced dirty-season work,
+   and hash-chained ranking events in one atomic submission.
+5. `0005_seasons_ranking_and_snapshots.sql` — UTC Monday-Sunday seasons, exact weekly profile and
+   provider sums, shared ranks, deterministic display order, immutable pages/profile summaries,
+   last-good publication pointers, bounded refresh retry, and finalization.
+6. `0006_retention_deletion_admin_and_audit.sql` — bounded retention, profile-deletion jobs and
+   purge, terminal evidence cleanup, Admin invitation/audit state, and the closed Jobs catalog.
+7. `0007_car_recipes.sql` — closed CarRecipe proposal, activation, rejection, expiry, and public
+   active-recipe projection.
 
-- `0001_roles_schemas_and_identity.sql` creates the closed private/API schemas, exact migration
-  ledger, GitHub-bound profile model, immutable numeric identity, profile lifecycle guards,
-  forced-RLS policies, and default-deny grants.
-- `0002_authentication_passkeys_and_recovery.sql` creates optional invite authority, bounded
-  sessions, passkeys, WebAuthn challenges, recovery-code storage, GitHub profile open/create,
-  initial-passkey activation, returning-passkey login, private profile/visibility controls, and
-  immediate deletion lock-down.
-- `0003_agent_accounts_installations_and_pairing.sql` creates the closed provider catalog, immutable
-  accounting revisions and AgentAccounts, installation identity, independent account-scoped device
-  keys, digest-bound batch pairing, one-assertion atomic decisions, bounded fallback-code attempts,
-  activation, inventory, and lifecycle controls. Providers remain `recognized` until their reader
-  evidence is complete.
-- `0004_usage_ingest_replay_and_idempotency.sql` adds the non-mutating Ingest material read and one
-  atomic Community submission procedure. Exact decimal strings become `numeric(30,0)` only in
-  PostgreSQL; origin/device replay, long-lived idempotency, monotonic account/day totals, immutable
-  observations, coalesced dirty-season work, and hash-chained ranking events settle together or roll
-  back together.
-- `0005_seasons_ranking_and_snapshots.sql` adds explicit UTC Monday-Sunday Community seasons, exact
-  direct-token profile/provider totals, deterministic shared ranks and display order, immutable
-  versioned pages/profile summaries, a last-good publication pointer, coalesced bounded retry,
-  snapshot-only Web reads, and Jobs-only ensure/refresh/finalize capabilities. Season finalization
-  is the authoritative direct-mutation closure; the checked scheduler is responsible for invoking it
-  after the fixed 48-hour grace deadline.
-- `manifest.json` is the sole ordered inventory and SHA-256 source used by the static checker and
-  default-off migration runner.
+All seven revisions run in explicit transactions under the fixed migration advisory lock and insert
+one exact ledger row. Once any revision reaches a shared environment it is immutable; repair is a
+new reviewed forward revision. There is no generic down migration.
 
-Planned catalog names are architectural slots, not claims of current implementation:
+## Data and trust model
 
-1. roles, schemas, and identity;
-2. authentication, passkeys, and recovery;
-3. agent accounts, installations, devices, and batch pairing;
-4. atomic usage, replay, idempotency, and ranking events;
-5. seasons, direct-token ranking, and immutable snapshots;
-6. retention, deletion, Admin, and audit maintenance;
-7. CarRecipe persistence.
+- One positive immutable `github_user_id` creates at most one profile. Anonymous profiles do not
+  exist.
+- One profile may own multiple providers and multiple AgentAccounts for the same provider.
+- One AgentAccount may have multiple independent device keys. Cumulative account/day replacement
+  prevents devices from summing the same domain twice.
+- Provider, accounting revision, scope, backfill window, trust tier, and season are server-owned.
+- Competitive scope is only non-overlapping `agent_account`. Ambiguous aggregate domains fail
+  closed.
+- Community totals are self-reported. No database row turns them into provider-verified usage.
+- Codex is `recognized`, not `supported`, and its revision is disabled for new accounts by default.
+  Disposable tests explicitly promote it to exercise pairing and ingestion. All other catalog
+  providers remain recognized with no enabled accounting revision.
 
-## Trust and capability boundary
+## Capability boundary
 
-`viberacing_private` is owner-only. Every private table enables and forces row-level security with
-an owner-only policy. Runtime roles receive no table or sequence grants. They receive only `USAGE`
-on `viberacing_api` and explicit execution of fixed `SECURITY DEFINER` procedures with
-`search_path = pg_catalog, pg_temp`.
+`viberacing_private` is owner-only. All 35 private tables enable and force row-level security with
+an owner-only policy. Runtime roles have no private table or sequence grants. They receive only
+schema usage and explicit execution of reviewed `SECURITY DEFINER` procedures whose search path is
+`pg_catalog, pg_temp`.
 
-The cluster bootstrap creates these non-login, non-owner runtime groups:
+| Role                | Capability boundary                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| `viberacing_owner`  | Reviewed migrations and procedure implementations only                               |
+| `viberacing_web`    | Identity/auth, private account, pairing approval, lifecycle, CarRecipe, public reads |
+| `viberacing_ingest` | Device/material lookup and one atomic usage submission                               |
+| `viberacing_jobs`   | Thirteen fixed season/snapshot/retention/deletion maintenance functions              |
+| `viberacing_admin`  | One bounded invitation plus committed audit capability                               |
+| `PUBLIC`            | None                                                                                 |
 
-| Role                | Current capability                                                                |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `viberacing_owner`  | Owns reviewed schema and procedure implementations; migration runner only         |
-| `viberacing_web`    | GitHub identity, passkey/session, private profile, visibility, and deletion calls |
-| `viberacing_ingest` | Active-device material read and one atomic Community usage submission             |
-| `viberacing_jobs`   | Ensure current season, refresh one dirty season, and finalize one due season      |
-| `viberacing_admin`  | One bounded optional-invite issuance call                                         |
-| `PUBLIC`            | None                                                                              |
+Deployment login principals and passwords are environment-owned and absent from tracked SQL. The
+migration login must be a distinct `NOINHERIT` member of only `viberacing_owner`; each runtime login
+must have exactly one runtime group and never owner membership.
 
-Deployment login principals are environment-owned. They are not declared or given passwords in
-tracked SQL. The protected migration login must be a narrow `NOINHERIT` member of only
-`viberacing_owner`; runtime logins must each have exactly one runtime group and never owner
-membership.
+## Important invariants
 
-## Identity and authentication invariants
-
-- `github_user_id` is positive, unique, and immutable. There is no anonymous profile state.
-- A concurrent repeated OAuth completion converges on one profile for that numeric GitHub ID.
-- Handle uniqueness is independent from identity; a collision fails without rebinding identity.
-- New profiles remain hidden and `enrolling` until a verified initial passkey is registered.
-- WebAuthn verification remains application work. Database calls only consume the exact bounded
-  challenge after the application verifies RP ID, origin, challenge, context, signature, and user
+- Profile creation and concurrent OAuth convergence are keyed by numeric GitHub ID, not handle.
+- WebAuthn verification is application work; PostgreSQL consumes only exact bounded challenges after
   verification.
-- Session and challenge verifiers are stored only as 32-byte keyed digests.
-- Profile deletion immediately forces hidden state and revokes browser/passkey authority. Later
-  catalog layers add installation/account revocation and bounded physical purge.
-- Generic database procedure failures expose neither row existence nor protected values.
+- Pairing candidates bind provider/reader/revision/scope/account key to the signed manifest.
+- A single fresh passkey assertion settles the whole bounded candidate batch atomically.
+- Invalid signature/body/date/replay/idempotency input leaves no partial persistent usage state.
+- Exact decimal strings are parsed only by PostgreSQL and never pass through JavaScript `Number`.
+- Rank depends only on exact weekly token total. Equal totals share rank; display order uses stable
+  public tie breakers.
+- Public Web procedures read immutable snapshots only and never aggregate raw usage.
+- Refresh failure preserves the last-good pointer; finalized snapshots are immutable.
+- Profile deletion hides the profile and revokes browser, recovery, installation, AgentAccount, and
+  device authority before Jobs can physically purge it.
 
-## Migration workflow
+## Migration and verification workflow
 
-1. Read `AGENTS.md`, the accepted ADRs, threat/abuse model, privacy map, and relevant runbook.
-2. Change only the next logical first-release layer. Do not recreate artificial historical steps.
-3. Keep one explicit transaction, bounded lock/statement time, the fixed advisory lock, and
-   `SET LOCAL ROLE viberacing_owner`.
-4. Insert the exact revision/name ledger row, calculate SHA-256, and update the sole manifest.
-5. Add semantic positive, negative, race, grant, RLS, restore, and failure-path evidence.
-6. Run static checks, disposable PostgreSQL gates, the complete affected workspace gates, and a
-   staged public-data/secret review.
-
-The migration runner accepts no caller-selected path, SQL, revision, repair, or rollback. It loads
-only `database/migrations/manifest.json` and the exact digest-bound inventory, probes the narrow
-verified-TLS login, takes one session advisory lock, rereads an exact ledger prefix, applies missing
-reviewed bodies, and requires the complete ledger. Concurrent controllers therefore converge without
-making migration SQL broadly idempotent.
-
-Focused commands:
+1. Read the root and database `AGENTS.md`, accepted ADRs, threat/abuse model, privacy map, and
+   applicable runbook.
+2. Change the smallest logical revision; do not recreate pre-release history.
+3. Preserve bounded lock/statement time, exact role, fixed search path, forced RLS, and narrow
+   grants.
+4. Update the revision digest in `manifest.json`.
+5. Add positive, negative, race, grant, restore, and failure-path evidence.
+6. Run:
 
 ```text
 corepack pnpm run test:database-check
@@ -113,19 +102,15 @@ corepack pnpm run test:database:integration
 corepack pnpm run test:migrate:postgres-integration
 ```
 
-The PostgreSQL tests own disposable Compose projects and ephemeral storage. They prove clean
-creation, forced RLS, narrow grants, identity/auth semantics, concurrent GitHub convergence,
-exact-decimal accounting, deterministic multi-account ranking, snapshot failure recovery,
-current-snapshot restore, and migration-controller overlap locally. They do not prove a production
-credential, deployed TLS route, staging rollout, production backup/restore, monitoring, capacity, or
+The default-off migration runner loads only the exact manifest, revalidates every digest, probes one
+narrow verified-TLS login, takes the fixed session lock, rereads an exact ledger prefix, applies
+only missing reviewed bodies, and requires the complete seven-row ledger. It accepts no selected
+path, SQL, revision, repair, or rollback.
+
+Docker-backed gates use disposable Compose projects and synthetic data. They prove clean creation,
+forced RLS, narrow grants, identity/auth semantics, batch pairing, exact-decimal multi-device
+accounting, 10,001-profile snapshot scale, retention/deletion behavior, controller convergence, and
+two current-snapshot restores preserving a completed deletion, independent revoked-device state, and
+one finalized snapshot locally. They do not prove production credentials, a deployed TLS route,
+staging rollout, stale-backup deletion replay, monitoring, representative capacity, RPO/RTO, or
 deployment.
-
-## Restore and rollback boundary
-
-Before any shared environment exists, a disposable database may be dropped and rebuilt from this
-catalog. Once a revision reaches a shared environment it is immutable and repair is forward-only.
-There is no generic down migration.
-
-The checked current-snapshot rehearsal is local synthetic evidence. It does not authorize restoring
-a shared, production, pre-deletion, or real-user database and does not prove stale-backup deletion
-replay, external backup encryption, cluster-role recreation, or an RPO/RTO.

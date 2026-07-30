@@ -136,7 +136,7 @@ private key, or supports/releases a connector.
 - [ADR 0025](0025-bounded-candidate-device-signing-boundary.md)
 - [Pairing authentication policy](../../contracts/v1/connector-pairing-authentication.json)
 - [Shared synthetic pairing vector](../../contracts/v1/connector-pairing-possession.test-vector.json)
-- [Pairing database capability](../../database/migrations/0003_pairing_capabilities.sql)
+- [AgentAccount pairing database capability](../../database/migrations/0003_agent_accounts_installations_and_pairing.sql)
 - [Project plan](../PROJECT_PLAN.md)
 - [Implementation status](../IMPLEMENTATION_STATUS.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

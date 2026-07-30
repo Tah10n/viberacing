@@ -103,7 +103,7 @@ version rather than reinterpreting stored version 1 rows.
 
 - [ADR 0005](0005-enum-only-car-recipe.md)
 - [CarRecipe reference](../reference/car-recipe.md)
-- [Migration 0025](../../database/migrations/0025_car_recipe_proposals.sql)
+- [Clean-bootstrap CarRecipe revision](../../database/migrations/0007_car_recipes.sql)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)
 - [Car injection abuse case](../security/ABUSE_CASES.md#vr-abuse-car-injection-executable-or-remote-content-in-customization)
 - [ADR 0036](0036-bounded-car-recipe-proposal-cleanup.md)

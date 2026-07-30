@@ -164,7 +164,7 @@ an HTTP endpoint.
 - [ADR 0004](0004-edge-service-and-database-isolation.md)
 - [ADR 0011](0011-bounded-web-postgresql-score-adapter.md)
 - [ADR 0026](0026-bounded-pairing-possession-proof.md)
-- [Pairing database capability](../../database/migrations/0003_pairing_capabilities.sql)
+- [AgentAccount pairing database capability](../../database/migrations/0003_agent_accounts_installations_and_pairing.sql)
 - [Project plan](../PROJECT_PLAN.md)
 - [Implementation status](../IMPLEMENTATION_STATUS.md)
 - [Security invariants](../architecture/SECURITY_INVARIANTS.md)

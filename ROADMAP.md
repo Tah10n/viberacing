@@ -1,95 +1,117 @@
-# Vibe Racing roadmap
+# Roadmap
 
-This roadmap implements the clean pre-release architecture accepted in
-[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). Current
-proof is tracked in [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md). No row below implies
-a released connector, deployed service, production database, supported provider, or real-user
-result.
+This roadmap follows
+[ADR 0076](docs/decisions/0076-clean-agent-account-provider-reported-token-ranking.md). The
+[implementation ledger](docs/IMPLEMENTATION_STATUS.md) is authoritative for evidence. No item
+implies a supported provider, released connector, deployed service, production database, or
+real-user result.
 
-## Stage 0 — Clean architecture contract
-
-- Accept AgentAccount as the accounting principal.
-- Reject anonymous identity and legacy compatibility.
-- Fix exact direct-token, UTC, deduplication, trust, atomic-Ingest, privacy, snapshot, and release
-  invariants.
-- Update threat, abuse, and privacy maps.
+## Local clean foundation
 
 ## Stage 1 — Clean database bootstrap
 
-- Replace all 43 pre-release revisions with one small reviewed bootstrap catalog.
-- Preserve owner separation, forced RLS, narrow runtime roles, exact procedures, restore, migration
-  serialization, and cleanup evidence.
-- Prove empty-database creation and delete the old catalog, old manifest, and count assertions.
+Status: implemented locally; external database evidence pending.
 
-## Stage 2 — Identity, AgentAccounts, installations, and batch pairing
-
-- Keep one immutable GitHub numeric ID per profile and required primary passkey.
-- Add provider/accounting registries, multiple same-provider AgentAccounts, installations,
-  independent account-scoped devices, create/attach/skip batch transactions, one-assertion approval,
-  and fallback code.
-- Prove concurrency, IDOR, replay, terminal cleanup, and no device/account multiplication.
+- AgentAccount is the accounting principal; immutable GitHub numeric ID is the sole profile
+  identity.
+- Anonymous ownership and the unreleased source/score compatibility surface are absent.
+- The database is a seven-revision empty bootstrap with forced RLS, narrow roles, exact procedures,
+  migration serialization, deletion, retention, and current-snapshot restore evidence.
 
 ## Stage 3 — Atomic usage accounting
 
-- Add exact decimal-string `UsageSyncV1`, immutable observations, one AgentAccount/day cumulative
-  total, PostgreSQL-clock UTC/backfill, monotonic updates, replay, long-lived idempotency, dirty
-  outbox, and audit.
-- Prove invalid body/signature leaves zero persistent state and every accepted mutation is one
-  transaction.
+Status: implemented locally; hosted Edge/Ingest evidence pending.
 
-## Stage 4 — Direct seasons and snapshots
-
-- Use only `provider_reported_tokens_v1`.
-- Sum exact unique AgentAccount/day totals and share ranks for equal totals.
-- Build immutable pages, top-32 race payload, and profile summaries from the dirty outbox.
-- Prove 10,000-profile scale, last-good preservation, finalization, visibility, ETag, 304, shared
-  cache, and private `no-store`.
-
-## Stage 5 — Final contracts, Edge, and Ingest
-
-- Keep only the final ten V1 schemas and four public routes.
-- Remove every `/v1/community/*` route, score contract, generated artifact, and wrapper.
-- Enforce exact Edge framing/HMAC and Ingest verification order before the atomic transaction.
+- Multiple same-provider AgentAccounts, installations, independent account-scoped devices, batch
+  create/attach/skip, one-assertion approval, and fallback code exist locally.
+- `UsageSyncV1` uses exact decimal strings, PostgreSQL-clock UTC/backfill, replay-first durable
+  admission, long-lived idempotency, cumulative multi-device accounting, ranking events, and
+  coalesced dirty work in one atomic transaction.
+- `provider_reported_tokens_v1` uses exact weekly sums, shared ranks, immutable pages/profile
+  summaries, last-good publication, and finalization.
+- The canonical manifest contains 18 schemas, four policies, and seven operations. The sole usage
+  route is `POST /v1/usage`; public reads are snapshot-only.
+- Edge, Ingest, Web, Jobs, Scheduler, Migration, and their independent default-off decisions have
+  local deterministic/disposable evidence.
 
 ## Stage 6 — Thin multi-agent connector
 
-- Add one installation identity, bounded built-in readers, automatic discovery, privacy-only output
-  types, sentinel fixtures, and account-scoped native-store keys.
-- Support only providers with exact local schema/accounting evidence; keep the rest recognized or
-  disabled with precise gaps.
-- Implement connect, sync, status, doctor, account lifecycle, disconnect, and forget-local.
+Status: implemented as an unreleased provider-neutral local connector; supported provider and
+release evidence pending.
 
-## Stage 7 — GitHub-first Web product
-
-- Minimize join to invite if configured, GitHub OAuth plus PKCE, handle, primary passkey, connect.
-- Implement one-passkey batch approval and ranking-first private dashboard.
-- Replace public live calculation with semantic snapshot leaderboard/profile routes and one lazy
-  top-32 race payload.
-- Remove simulator, Source labels, points/logarithm language, and pre-value cosmetic choices.
-
-## Stage 8 — Jobs, operations, and release preparation
-
-- Run only fixed reviewed refresh/finalization/retention/deletion commands with default-off
-  scheduling, no overlap, bounded settlement, and restart-safe state.
-- Update migration, restore, containment, deletion, snapshot failure, and connector release
-  runbooks.
-- Add secretless CI plus protected Windows/macOS/Linux package declarations, checksums, SBOM,
-  provenance, signing policy, and clean-machine lifecycle gates without claiming hosted success.
+- The provider-neutral connector implements native credentials, batch connect, sync, status, doctor,
+  account lifecycle, disconnect, and forget-local.
+- The GitHub-first Web product implements the synthetic public experience and local enrollment,
+  account, pairing, deletion, and CarRecipe slices.
+- Checked migration, restore, containment, deletion, staging-preparation, publication, and
+  release-candidate procedures exist.
 
 ## Stage 9 — Final evidence and review
 
-- Run focused, full development, release, history, dependency, Rust, Docker/PostgreSQL, scale,
-  packaging, staged-public, and diff checks.
-- Review every tracked and untracked file, generated artifact, role/grant, route, schema, reader
-  support claim, EN/RU string, and evidence statement.
-- Fix all findings before completion.
+Status: in progress until the complete focused/release/PostgreSQL/Rust/platform matrix and final
+tracked/untracked review pass on the final commit.
+
+## Next: supported provider evidence
+
+- Perform one explicitly authorized clean-machine real-account Codex read against the exact admitted
+  version without leaking prohibited data.
+- Prove one same-artifact composed connect → browser batch review → fresh-passkey approval →
+  persisted credentials → first/repeat sync → exact account/day → published snapshot result.
+- Revalidate immutable accounting semantics, account-domain/overlap behavior, privacy sentinels,
+  drift rejection, and failure cleanup.
+- Promote provider/revision state only in the same reviewed change that contains the complete
+  evidence and explicit support declaration.
+- Apply the same evidence bar independently to any additional provider.
+
+## Next: connector release evidence
+
+- Run protected builds for the declared Windows/macOS/Linux target matrix.
+- Produce and verify checksums, SPDX SBOMs, provenance/attestations, and platform-native signatures
+  where applicable.
+- Prove clean-machine install, credential-store behavior, update, rollback, uninstall, and
+  server-revocation lifecycle per supported target.
+- Publish no official package until the supported provider/platform/version matrix is exact.
+
+## Next: hosted staging evidence
+
+- Provision certificate-compatible PostgreSQL and four distinct least-privileged logins.
+- Run the checked one-shot migration and record the seven-row ledger, 35 forced-RLS tables, grants,
+  TLS, lock, and cleanup.
+- Deploy Web closed, then validate snapshot reads separately.
+- Deploy Ingest and Edge closed with real protected secret delivery and all rate-limit bindings;
+  prove direct-origin non-mutation before any coordinated synthetic usage enablement.
+- Start exactly one Jobs scheduler and prove cadence, signals, monitoring, failure/retry, and
+  containment.
+- Rehearse backup/restore, deletion, stale-backup handling, incident closure/recovery, rollback, and
+  capacity with redacted evidence.
+
+## Next: participant beta readiness
+
+- Complete the Admin issuer/authorization/audit host or choose another reviewed invite path.
+- Verify real GitHub OAuth, WebAuthn authenticators, protected cookies/secrets, distributed recovery
+  attempt controls, notifications, and operational retention/deletion.
+- Add monitored abuse controls and a real private conduct/reporting channel before opening external
+  participation.
+- Keep rankings reward-free and Community-labeled; never make rank an authorization or valuable
+  benefit.
+
+## Public source publication
+
+Status: public source-only baseline published; external participation closed.
+
+- Maintainer identity, matching CODEOWNERS, private vulnerability reporting, restricted
+  interactions, and the active protected `main` ruleset have readback evidence.
+- The published baseline completed hosted CI; every later revision still needs its own reviewed PR,
+  required checks, history/staged-public/publication gates, and hosted policy readback.
+- External-account vulnerability-report submission/notification and a private conduct channel remain
+  unproven. Do not open participation until both have reviewed evidence.
 
 ## Explicitly deferred
 
 - optional MCP submission;
-- any Verified provider without a real reviewed server-side integration;
-- subjective provider/model/price normalization;
+- any Verified tier without a reviewed server-side provider integration;
+- provider/model/price normalization;
 - rewards, prizes, authorization, or valuable rank privileges;
-- production data migration or legacy protocol/history compatibility;
-- public beta, deployment, monitoring, capacity, signing, or official connector claims without
-  external hosted evidence.
+- production data migration or legacy protocol/history compatibility; and
+- deployment, capacity, monitoring, signing, public beta, or official connector claims without the
+  corresponding external evidence.

@@ -94,6 +94,16 @@ const policyCount = Array.isArray(contractManifest?.policies)
 const operationCount = Array.isArray(contractManifest?.operations)
   ? contractManifest.operations.length
   : undefined;
+const implementedLocalOperationCount = Array.isArray(contractManifest?.operations)
+  ? contractManifest.operations.filter(
+      (operation) => operation?.implementationStatus === "implemented-local",
+    ).length
+  : undefined;
+const contractOnlyOperationCount = Array.isArray(contractManifest?.operations)
+  ? contractManifest.operations.filter(
+      (operation) => operation?.implementationStatus === "contract-only",
+    ).length
+  : undefined;
 const migrationCount = Array.isArray(migrationManifest?.migrations)
   ? migrationManifest.migrations.length
   : undefined;
@@ -106,6 +116,8 @@ if (
   schemaCount === undefined ||
   policyCount === undefined ||
   operationCount === undefined ||
+  implementedLocalOperationCount === undefined ||
+  contractOnlyOperationCount === undefined ||
   migrationCount === undefined ||
   pathCount === undefined
 ) {
@@ -122,6 +134,8 @@ if (
   schemaCount !== undefined &&
   policyCount !== undefined &&
   operationCount !== undefined &&
+  implementedLocalOperationCount !== undefined &&
+  contractOnlyOperationCount !== undefined &&
   pathCount !== undefined &&
   migrationCount !== undefined
 ) {
@@ -158,7 +172,7 @@ if (
   requireNormalized(
     "docs/getting-started/LOCAL_DEVELOPMENT.md",
     localDevelopment,
-    `OpenAPI document contains ${pathCount} paths marked \`implemented-local\``,
+    `OpenAPI document contains ${pathCount} paths: ${implementedLocalOperationCount} marked \`implemented-local\` and ${contractOnlyOperationCount} marked \`contract-only\``,
     "OpenAPI path inventory differs from the generated document",
   );
 }
@@ -185,5 +199,5 @@ if (findings.length > 0) {
 }
 
 console.log(
-  `Documentation currentness check passed (${schemaCount} schemas, ${policyCount} policies, ${operationCount} operations, ${pathCount} paths, ${migrationCount} migrations, README ${lineCount(readme)}/${lineCount(russianReadme)} EN/RU lines).`,
+  `Documentation currentness check passed (${schemaCount} schemas, ${policyCount} policies, ${operationCount} operations: ${implementedLocalOperationCount} implemented-local and ${contractOnlyOperationCount} contract-only; ${pathCount} paths, ${migrationCount} migrations, README ${lineCount(readme)}/${lineCount(russianReadme)} EN/RU lines).`,
 );
