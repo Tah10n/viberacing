@@ -1183,6 +1183,21 @@ export function validateRootPackage(manifest) {
   }
   findings.push(...validateDependencyDeclarations(manifest));
   findings.push(...validatePackageScripts(manifest));
+  if (isObject(manifest?.scripts ?? {})) {
+    for (const [name, command] of Object.entries(manifest.scripts ?? {})) {
+      if (typeof command !== "string") {
+        continue;
+      }
+      const pnpmInvocations = command.matchAll(/\bpnpm(?:\.cmd)?(?=\s|$)/giu);
+      for (const invocation of pnpmInvocations) {
+        const prefix = command.slice(0, invocation.index);
+        if (!/\bcorepack\s+$/iu.test(prefix)) {
+          findings.push(`root script ${name} must invoke pnpm through Corepack`);
+          break;
+        }
+      }
+    }
+  }
   return findings;
 }
 

@@ -1147,8 +1147,24 @@ assert.deepEqual(
     private: true,
     packageManager: "pnpm@11.7.0",
     devDependencies: { tool: "1.2.3" },
+    scripts: {
+      build: "corepack pnpm --filter @viberacing/tool run build",
+      verify:
+        "corepack pnpm --filter @viberacing/tool run build && corepack pnpm --filter @viberacing/tool run test",
+    },
   }),
   [],
+);
+assert.match(
+  validateRootPackage({
+    private: true,
+    packageManager: "pnpm@11.7.0",
+    scripts: {
+      verify:
+        "corepack pnpm --filter @viberacing/tool run build && pnpm --filter @viberacing/tool run test",
+    },
+  }).join("\n"),
+  /root script verify must invoke pnpm through Corepack/,
 );
 assert.match(
   validateRootPackage({
@@ -1294,4 +1310,4 @@ assert.deepEqual(
   [],
 );
 
-console.log("Configuration checker tests passed (80 cases).");
+console.log("Configuration checker tests passed (81 cases).");
