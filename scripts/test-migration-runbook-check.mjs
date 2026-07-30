@@ -18,7 +18,7 @@ const enablementSourcePath = join(temporaryRoot, "apps", "migrate", "src", "enab
 
 const validRootPackage = Object.freeze({
   scripts: {
-    "build:migrate": "pnpm --filter @viberacing/migrate run build",
+    "build:migrate": "corepack pnpm --filter @viberacing/migrate run build",
     "check:database": "node scripts/check-database.mjs",
     "check:migrate-entrypoint": "node scripts/check-migrate-entrypoint.mjs",
     "check:migration-runbook": "node scripts/check-migration-runbook.mjs",

@@ -101,7 +101,7 @@ const expectedCommands = Object.freeze([
   "pnpm --filter @viberacing/migrate start",
 ]);
 const expectedRootScripts = Object.freeze({
-  "build:migrate": "pnpm --filter @viberacing/migrate run build",
+  "build:migrate": "corepack pnpm --filter @viberacing/migrate run build",
   "check:database": "node scripts/check-database.mjs",
   "check:migrate-entrypoint": "node scripts/check-migrate-entrypoint.mjs",
   "check:migration-runbook": "node scripts/check-migration-runbook.mjs",

@@ -38,10 +38,11 @@ const validRootPackage = Object.freeze({
     "test:database-check": "node scripts/test-database-check.mjs",
     "test:database:integration": "node scripts/test-database-integration.mjs",
     "test:deletion-failure-runbook-check": "node scripts/test-deletion-failure-runbook-check.mjs",
-    "test:jobs-scheduler:coverage": "pnpm --filter @viberacing/jobs-scheduler run test:coverage",
-    "test:jobs:coverage": "pnpm --filter @viberacing/jobs run test:coverage",
+    "test:jobs-scheduler:coverage":
+      "corepack pnpm --filter @viberacing/jobs-scheduler run test:coverage",
+    "test:jobs:coverage": "corepack pnpm --filter @viberacing/jobs run test:coverage",
     "test:jobs:postgres-integration": "node scripts/test-jobs-postgres-integration.mjs",
-    "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
+    "test:web:coverage": "corepack pnpm --filter @viberacing/web run test:coverage",
     "verify:release:node": "node scripts/verify.mjs --release --node-only",
   },
 });

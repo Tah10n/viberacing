@@ -51,10 +51,11 @@ const validRootPackage = Object.freeze({
     "check:containment-runbook": "node scripts/check-containment-runbook.mjs",
     "test:config-check": "node scripts/test-config-check.mjs",
     "test:containment-runbook-check": "node scripts/test-containment-runbook-check.mjs",
-    "test:ingest-host:coverage": "pnpm --filter @viberacing/ingest-host run test:coverage",
-    "test:jobs-scheduler:coverage": "pnpm --filter @viberacing/jobs-scheduler run test:coverage",
-    "test:migrate:coverage": "pnpm --filter @viberacing/migrate run test:coverage",
-    "test:web:coverage": "pnpm --filter @viberacing/web run test:coverage",
+    "test:ingest-host:coverage": "corepack pnpm --filter @viberacing/ingest-host run test:coverage",
+    "test:jobs-scheduler:coverage":
+      "corepack pnpm --filter @viberacing/jobs-scheduler run test:coverage",
+    "test:migrate:coverage": "corepack pnpm --filter @viberacing/migrate run test:coverage",
+    "test:web:coverage": "corepack pnpm --filter @viberacing/web run test:coverage",
     "verify:release:node": "node scripts/verify.mjs --release --node-only",
   },
 });
