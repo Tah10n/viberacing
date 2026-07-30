@@ -1,6 +1,6 @@
 # ADR 0077: Forward-only individual DCO remediation
 
-- Status: Accepted (local checker implemented; hosted recovery evidence pending)
+- Status: Accepted (implemented; hosted recovery verified)
 - Date: 2026-07-30
 - Decision owners: Maintainers, Security, Privacy, and Developer Experience
 - Supersedes: None
