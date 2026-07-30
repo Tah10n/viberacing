@@ -141,6 +141,14 @@ Conduct reporting channel: not configured.
 Do not use a public issue, private vulnerability report, personal inbox, or placeholder URL as a
 conduct channel. Source-only mode needs none because public participation surfaces remain closed.
 
+### Web-created commit sign-off
+
+Enable **Require contributors to sign off on web-based commits** and read the setting back. GitHub
+creates a distinct commit for a normal pull-request merge, so the hosted sign-off policy is required
+even when every reviewed head commit already has a local DCO trailer. GitHub documents the setting
+in
+[Managing the commit signoff policy](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/managing-the-commit-signoff-policy-for-your-repository).
+
 ## 5. Run the exact pre-push gate
 
 With the canonical `origin`, confirmed maintainer, CODEOWNERS, verified interaction settings, and
@@ -232,6 +240,26 @@ their tracked claims.
 Public source publication proves none of the following: deployed Web/Ingest/Jobs/Edge services,
 production credentials or TLS, a released connector, real-user ingestion, operational monitoring,
 capacity, support, or open participation.
+
+## Forward-only DCO repair
+
+Do not use remediation for an unpublished branch: amend or rebase that branch before merge. If an
+already published protected commit fails the exact author-matching DCO check, first confirm the
+target's immutable full commit ID and exact public author identity. Then follow
+[ADR 0077](../decisions/0077-forward-only-individual-dco-remediation.md):
+
+1. branch from the current protected tip without rewriting or force-pushing it;
+2. create one empty strict-descendant remediation commit under the exact same author identity;
+3. include the exact ADR declaration naming the full 40-hex target ID and directly sign the
+   remediation commit itself;
+4. run the checker mutation suite and complete reachable-history scan;
+5. submit the branch through the normal protected pull-request path; and
+6. require and read back automatic web sign-off before creating the new merge commit.
+
+Use a normal merge that preserves the empty remediation commit. Do not rebase-merge it, hard-code a
+target exception, ignore merge commits, allow a third party to certify the target, or represent
+pull-request checks as successful hosted `main` recovery. Inspect the resulting merge identity and
+wait for the exhaustive `main` workflow.
 
 ## Opening participation later
 

@@ -31,7 +31,11 @@ for (let index = 0; index < args.length; index += 1) {
 const findings = new Set();
 const identityEmailPattern = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
 const signedOffByPrefix = "Signed-off-by:";
+const individualRemediationMarker = "hereby add my Signed-off-by to this commit:";
+const individualRemediationPattern =
+  /^I, ([^<>\r\n]+) <([^<>\s]+)>, hereby add my Signed-off-by to this commit: ([0-9a-f]{40})$/;
 let verifiedDcoCommits = 0;
+let verifiedDcoRemediationCount = 0;
 
 function git(arguments_, encoding = "utf8") {
   return execFileSync("git", arguments_, {
@@ -118,11 +122,11 @@ function splitCommitObject(scope, buffer) {
   return { headers, message: buffer.subarray(separator + 2).toString("utf8") };
 }
 
-function inspectCommit(scope, buffer) {
+function parseCommitRecord(scope, oid, buffer) {
   const parsed = splitCommitObject(scope, buffer);
   if (parsed === null) {
     inspectBuffer(scope, buffer);
-    return;
+    return null;
   }
 
   const authors = parsed.headers.filter((header) => header.name === "author");
@@ -148,6 +152,20 @@ function inspectCommit(scope, buffer) {
   while (lines.at(-1) === "") {
     lines.pop();
   }
+
+  return {
+    author,
+    lines,
+    oid,
+    parents: parsed.headers
+      .filter((header) => header.name === "parent")
+      .map((header) => header.value),
+    scope,
+  };
+}
+
+function evaluateDirectDco(record) {
+  const { author, lines } = record;
   const signoffIndexes = [];
   for (const [index, line] of lines.entries()) {
     if (line.toLowerCase().startsWith(signedOffByPrefix.toLowerCase())) {
@@ -155,34 +173,164 @@ function inspectCommit(scope, buffer) {
     }
   }
 
+  const result = {
+    eligibleForRemediation: false,
+    findings: [],
+    match: null,
+    signoffIndex: null,
+    valid: false,
+  };
   if (signoffIndexes.length === 0) {
-    report(scope, null, "missing exact author DCO sign-off");
+    result.eligibleForRemediation = author !== null;
+    result.findings.push("missing exact author DCO sign-off");
   } else if (signoffIndexes.length !== 1) {
-    report(scope, null, "commit must contain exactly one Signed-off-by trailer");
-  }
-
-  let validDco = false;
-  if (signoffIndexes.length === 1) {
+    result.findings.push("commit must contain exactly one Signed-off-by trailer");
+  } else {
     const index = signoffIndexes[0];
+    result.signoffIndex = index;
     if (index !== lines.length - 1) {
-      report(scope, null, "Signed-off-by must be the final commit trailer");
+      result.findings.push("Signed-off-by must be the final commit trailer");
     } else {
       const match = /^Signed-off-by: ([^<>\r\n]+) <([^<>\s]+)>$/.exec(lines[index]);
+      result.match = match;
       if (match === null || !identityEmailPattern.test(match[2])) {
-        report(scope, null, "malformed Signed-off-by trailer");
+        result.findings.push("malformed Signed-off-by trailer");
       } else if (author === null || match[1] !== author.name || match[2] !== author.email) {
-        report(scope, null, "DCO sign-off does not match commit author");
+        result.eligibleForRemediation =
+          author !== null && match[2] === author.email && match[1] !== author.name;
+        result.findings.push("DCO sign-off does not match commit author");
       } else {
-        validDco = true;
-        lines[index] = "Signed-off-by: Public Contributor <contributor@example.invalid>";
-        inspectBuffer(`${scope} DCO name`, Buffer.from(match[1], "utf8"));
+        result.valid = true;
       }
     }
   }
 
-  inspectBuffer(`${scope} message`, Buffer.from(`${lines.join("\n")}\n`, "utf8"));
+  return result;
+}
+
+function isStrictAncestor(records, ancestorOid, descendantOid) {
+  const pending = [...(records.get(descendantOid)?.parents ?? [])];
+  const visited = new Set();
+  while (pending.length > 0) {
+    const oid = pending.pop();
+    if (oid === ancestorOid) {
+      return true;
+    }
+    if (visited.has(oid)) {
+      continue;
+    }
+    visited.add(oid);
+    pending.push(...(records.get(oid)?.parents ?? []));
+  }
+  return false;
+}
+
+function collectIndividualRemediationState(records) {
+  const candidatesByTarget = new Map();
+  const sanitizedLinesByCommit = new Map();
+
+  for (const record of records.values()) {
+    const declarationIndexes = record.lines
+      .map((line, index) => ({ index, line }))
+      .filter(({ line }) => line.includes(individualRemediationMarker));
+    if (declarationIndexes.length === 0) {
+      continue;
+    }
+    if (declarationIndexes.length !== 1) {
+      report(record.scope, null, "remediation commit must contain exactly one DCO declaration");
+      continue;
+    }
+
+    const [{ index, line }] = declarationIndexes;
+    const match = individualRemediationPattern.exec(line);
+    if (match === null || !identityEmailPattern.test(match[2])) {
+      report(record.scope, index + 1, "malformed individual DCO remediation declaration");
+      continue;
+    }
+
+    const [, name, email, targetOid] = match;
+    const target = records.get(targetOid);
+    if (target === undefined) {
+      report(record.scope, index + 1, "DCO remediation target must be reachable");
+      continue;
+    }
+    if (!record.directDco.valid) {
+      report(record.scope, index + 1, "individual DCO remediation commit must be directly signed");
+      continue;
+    }
+    if (
+      record.author === null ||
+      record.author.name !== name ||
+      record.author.email !== email ||
+      target.author === null ||
+      target.author.name !== name ||
+      target.author.email !== email
+    ) {
+      report(record.scope, index + 1, "individual DCO remediation must match both commit authors");
+      continue;
+    }
+    if (!target.directDco.eligibleForRemediation) {
+      report(record.scope, index + 1, "target commit is not eligible for DCO remediation");
+      continue;
+    }
+    if (!isStrictAncestor(records, targetOid, record.oid)) {
+      report(record.scope, index + 1, "DCO remediation target must be a strict ancestor");
+      continue;
+    }
+
+    if (!candidatesByTarget.has(targetOid)) {
+      candidatesByTarget.set(targetOid, []);
+    }
+    candidatesByTarget.get(targetOid).push({ declarationIndex: index, record });
+  }
+
+  const remediationByTarget = new Map();
+  for (const [targetOid, candidates] of candidatesByTarget) {
+    if (candidates.length !== 1) {
+      report(
+        records.get(targetOid).scope,
+        null,
+        "commit must have exactly one individual DCO remediation",
+      );
+      continue;
+    }
+    const [candidate] = candidates;
+    remediationByTarget.set(targetOid, candidate);
+    sanitizedLinesByCommit.set(candidate.record.oid, new Set([candidate.declarationIndex]));
+  }
+
+  return { remediationByTarget, sanitizedLinesByCommit };
+}
+
+function inspectCommit(record, remediationState) {
+  const lines = [...record.lines];
+  const remediation = remediationState.remediationByTarget.get(record.oid);
+  const validDco = record.directDco.valid || remediation !== undefined;
+
+  if (!validDco) {
+    for (const finding of record.directDco.findings) {
+      report(record.scope, null, finding);
+    }
+  } else if (record.directDco.signoffIndex !== null) {
+    const match = record.directDco.match;
+    lines[record.directDco.signoffIndex] =
+      "Signed-off-by: Public Contributor <contributor@example.invalid>";
+    inspectBuffer(`${record.scope} DCO name`, Buffer.from(match[1], "utf8"));
+  }
+
+  for (const index of remediationState.sanitizedLinesByCommit.get(record.oid) ?? []) {
+    const match = individualRemediationPattern.exec(lines[index]);
+    lines[index] =
+      `I, Public Contributor <contributor@example.invalid>, ${individualRemediationMarker} ${match[3]}`;
+    inspectBuffer(`${record.scope} remediation DCO name`, Buffer.from(match[1], "utf8"));
+  }
+
+  inspectBuffer(`${record.scope} message`, Buffer.from(`${lines.join("\n")}\n`, "utf8"));
   if (validDco) {
     verifiedDcoCommits += 1;
+    if (remediation !== undefined) {
+      verifiedDcoRemediationCount += 1;
+    }
   }
 }
 
@@ -236,8 +384,25 @@ const blobLocations = new Map();
 const tagObjects = new Set(refs.filter(([, , type]) => type === "tag").map(([, oid]) => oid));
 let uniqueHistoricalPaths = 0;
 
+const commitRecords = new Map();
 for (const commit of commits) {
-  inspectCommit(`commit ${commit.slice(0, 12)}`, git(["cat-file", "commit", commit], "buffer"));
+  const record = parseCommitRecord(
+    `commit ${commit.slice(0, 12)}`,
+    commit,
+    git(["cat-file", "commit", commit], "buffer"),
+  );
+  if (record !== null) {
+    record.directDco = evaluateDirectDco(record);
+    commitRecords.set(commit, record);
+  }
+}
+const remediationState = collectIndividualRemediationState(commitRecords);
+
+for (const commit of commits) {
+  const record = commitRecords.get(commit);
+  if (record !== undefined) {
+    inspectCommit(record, remediationState);
+  }
 
   const records = git(["ls-tree", "-r", "-z", "--full-tree", commit], "buffer")
     .toString("utf8")
@@ -315,5 +480,5 @@ if (findings.size > 0) {
 }
 
 console.log(
-  `Git history check passed (${refs.length} ref(s), ${commits.length} commit(s), ${verifiedDcoCommits} author-matched DCO sign-off(s), ${blobLocations.size} unique blob(s), ${uniqueHistoricalPaths} historical path(s), ${binaryBlobs} binary blob(s), ${tagObjects.size} annotated tag(s)).`,
+  `Git history check passed (${refs.length} ref(s), ${commits.length} commit(s), ${verifiedDcoCommits} DCO-certified commit(s), ${verifiedDcoRemediationCount} individual remediation record(s), ${blobLocations.size} unique blob(s), ${uniqueHistoricalPaths} historical path(s), ${binaryBlobs} binary blob(s), ${tagObjects.size} annotated tag(s)).`,
 );

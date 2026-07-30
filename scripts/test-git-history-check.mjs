@@ -22,6 +22,10 @@ function commit(directory, ...args) {
   return git(directory, "commit", "--quiet", "-s", ...args);
 }
 
+function individualRemediationMessage(name, email, oid) {
+  return `I, ${name} <${email}>, hereby add my Signed-off-by to this commit: ${oid}`;
+}
+
 function makeFixture(name) {
   const directory = join(fixtureRoot, name);
   mkdirSync(join(directory, "scripts", "lib"), { recursive: true });
@@ -135,6 +139,230 @@ try {
   );
   expectFailure("mismatched DCO", run(mismatchedDco), "DCO sign-off does not match commit author");
 
+  const remediatedMissingDco = makeFixture("remediated-missing-dco");
+  git(
+    remediatedMissingDco,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned published change",
+  );
+  const missingDcoOid = git(remediatedMissingDco, "rev-parse", "HEAD").trim();
+  commit(
+    remediatedMissingDco,
+    "--allow-empty",
+    "-m",
+    "remediate published DCO",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, missingDcoOid),
+  );
+  expectPass("same-author missing-DCO remediation", run(remediatedMissingDco));
+
+  const remediatedNameMismatch = makeFixture("remediated-name-mismatch");
+  git(
+    remediatedNameMismatch,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "published name mismatch",
+    "-m",
+    `Signed-off-by: Wrong History Name <${fixtureEmail}>`,
+  );
+  const mismatchedNameOid = git(remediatedNameMismatch, "rev-parse", "HEAD").trim();
+  commit(
+    remediatedNameMismatch,
+    "--allow-empty",
+    "-m",
+    "remediate published DCO",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, mismatchedNameOid),
+  );
+  expectPass("same-email name-mismatch remediation", run(remediatedNameMismatch));
+
+  const unreachableRemediationTarget = makeFixture("unreachable-remediation-target");
+  commit(
+    unreachableRemediationTarget,
+    "--allow-empty",
+    "-m",
+    "reference unreachable remediation target",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, "0".repeat(40)),
+  );
+  expectFailure(
+    "unreachable remediation target",
+    run(unreachableRemediationTarget),
+    "DCO remediation target must be reachable",
+  );
+
+  const nonAncestorRemediation = makeFixture("non-ancestor-remediation");
+  git(nonAncestorRemediation, "switch", "--quiet", "-c", "published-target");
+  git(
+    nonAncestorRemediation,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned sibling change",
+  );
+  const siblingTargetOid = git(nonAncestorRemediation, "rev-parse", "HEAD").trim();
+  git(nonAncestorRemediation, "switch", "--quiet", "main");
+  commit(
+    nonAncestorRemediation,
+    "--allow-empty",
+    "-m",
+    "invalid sibling remediation",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, siblingTargetOid),
+  );
+  expectFailure(
+    "non-ancestor remediation",
+    run(nonAncestorRemediation),
+    "DCO remediation target must be a strict ancestor",
+  );
+
+  const unsignedRemediation = makeFixture("unsigned-remediation");
+  git(unsignedRemediation, "commit", "--quiet", "--allow-empty", "-m", "unsigned published change");
+  const unsignedTargetOid = git(unsignedRemediation, "rev-parse", "HEAD").trim();
+  git(
+    unsignedRemediation,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned remediation",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, unsignedTargetOid),
+  );
+  expectFailure(
+    "unsigned remediation",
+    run(unsignedRemediation),
+    "individual DCO remediation commit must be directly signed",
+  );
+
+  const wrongAuthorRemediation = makeFixture("wrong-author-remediation");
+  git(
+    wrongAuthorRemediation,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned published change",
+  );
+  const wrongAuthorTargetOid = git(wrongAuthorRemediation, "rev-parse", "HEAD").trim();
+  git(wrongAuthorRemediation, "config", "user.name", "Different History Test");
+  git(wrongAuthorRemediation, "config", "user.email", differentFixtureEmail);
+  commit(
+    wrongAuthorRemediation,
+    "--allow-empty",
+    "-m",
+    "wrong-author remediation",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, wrongAuthorTargetOid),
+  );
+  expectFailure(
+    "wrong-author remediation",
+    run(wrongAuthorRemediation),
+    "individual DCO remediation must match both commit authors",
+  );
+
+  const differentEmailTarget = makeFixture("different-email-target");
+  git(
+    differentEmailTarget,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "published different-email sign-off",
+    "-m",
+    `Signed-off-by: Different History Test <${differentFixtureEmail}>`,
+  );
+  const differentEmailTargetOid = git(differentEmailTarget, "rev-parse", "HEAD").trim();
+  commit(
+    differentEmailTarget,
+    "--allow-empty",
+    "-m",
+    "ineligible remediation",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, differentEmailTargetOid),
+  );
+  expectFailure(
+    "different-email target remediation",
+    run(differentEmailTarget),
+    "target commit is not eligible for DCO remediation",
+  );
+
+  const duplicateRemediation = makeFixture("duplicate-remediation");
+  git(
+    duplicateRemediation,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned published change",
+  );
+  const duplicateTargetOid = git(duplicateRemediation, "rev-parse", "HEAD").trim();
+  for (const ordinal of ["first", "second"]) {
+    commit(
+      duplicateRemediation,
+      "--allow-empty",
+      "-m",
+      `${ordinal} remediation`,
+      "-m",
+      individualRemediationMessage(fixtureName, fixtureEmail, duplicateTargetOid),
+    );
+  }
+  expectFailure(
+    "duplicate remediation",
+    run(duplicateRemediation),
+    "commit must have exactly one individual DCO remediation",
+  );
+
+  const malformedRemediation = makeFixture("malformed-remediation");
+  commit(
+    malformedRemediation,
+    "--allow-empty",
+    "-m",
+    "malformed remediation",
+    "-m",
+    individualRemediationMessage(fixtureName, fixtureEmail, "a".repeat(12)),
+  );
+  expectFailure(
+    "malformed remediation",
+    run(malformedRemediation),
+    "malformed individual DCO remediation declaration",
+  );
+
+  const multipleDeclarations = makeFixture("multiple-remediation-declarations");
+  git(
+    multipleDeclarations,
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "-m",
+    "unsigned published change",
+  );
+  const multipleDeclarationsTargetOid = git(multipleDeclarations, "rev-parse", "HEAD").trim();
+  const repeatedDeclaration = individualRemediationMessage(
+    fixtureName,
+    fixtureEmail,
+    multipleDeclarationsTargetOid,
+  );
+  commit(
+    multipleDeclarations,
+    "--allow-empty",
+    "-m",
+    "ambiguous remediation",
+    "-m",
+    `${repeatedDeclaration}\n${repeatedDeclaration}`,
+  );
+  expectFailure(
+    "multiple remediation declarations",
+    run(multipleDeclarations),
+    "remediation commit must contain exactly one DCO declaration",
+  );
+
   const placeholderIdentity = makeFixture("placeholder-identity");
   git(placeholderIdentity, "config", "user.name", "Vibe Racing Maintainer");
   git(placeholderIdentity, "config", "user.email", "maintainer@viberacing.invalid");
@@ -190,7 +418,7 @@ try {
   );
   expectPass("explicit publication revision", run(explicitRevision, ["--ref", "HEAD"]));
 
-  console.log("Git history checker tests passed (12 cases).");
+  console.log("Git history checker tests passed (22 cases).");
 } finally {
   rmSync(fixtureRoot, { force: true, recursive: true });
 }

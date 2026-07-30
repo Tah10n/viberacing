@@ -64,6 +64,13 @@ clones, but contributors must still rotate a real exposed credential before hist
    `noreply` identity. That narrow Git metadata exception does not permit an email address in a
    tracked file or ordinary commit-message text.
 
+Fix a missing or mismatched sign-off on an unpublished branch by amending or rebasing before merge.
+Do not use remediation as a normal contribution shortcut. If protected public history already
+contains the commit, [ADR 0077](docs/decisions/0077-forward-only-individual-dco-remediation.md)
+permits one same-author, directly signed, strict-descendant remediation that names the full target
+commit ID. Third-party, sibling-branch, partial-ID, ambiguous, and different-email remediation is
+not accepted.
+
 ## Review requirements
 
 Changes to auth, passkeys, connector, request signing, contracts, database privileges, edge

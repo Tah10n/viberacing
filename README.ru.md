@@ -118,7 +118,8 @@ pnpm run check:publication
 - `verify:release` добавляет coverage, production builds, docs/history/visual/policy checks, checker
   regressions, licenses, formatting и доступные Windows connector tests.
 - `check:public:staged` проверяет точный Git index перед коммитом.
-- `check:history` проверяет reachable refs, identities, DCO, paths и blobs.
+- `check:history` проверяет reachable refs, identities, прямые DCO trailers, ограниченные
+  same-author forward remediations, paths и blobs.
 - `check:publication` сейчас проходит tracked source-only boundary и fail-closed при drift
   maintainer, CODEOWNERS, remote, reporting или interaction policy.
 

@@ -309,7 +309,8 @@ cargo test --workspace --all-targets --all-features --locked
 The final branch runs:
 
 - documentation, architecture, contracts, configuration, database, agent-skill, public-file,
-  formatting, spelling, Markdown, license, history, and checker-mutation gates;
+  formatting, spelling, Markdown, license, direct-or-remediated DCO history, and checker-mutation
+  gates;
 - every workspace lint, typecheck, unit coverage, and production build;
 - clean database, migration, restore, Admin, Web, Ingest, Edge, Jobs, scheduler, signal, lifecycle,
   timer, scale, and snapshot PostgreSQL integrations;

@@ -430,7 +430,8 @@ trust-label cases are distributed across the preceding and following sections.
 - **Detection:** Config/dependency/history/checker mutations, online advisories, provenance review,
   and complete diff inspection.
 - **Recovery:** Stop release, revoke affected credentials, replace compromised pins/artifacts,
-  repair history if needed, and rerun clean protected builds.
+  repair sensitive history only through the approved incident process, use ADR 0077's forward-only
+  same-author remediation only for an eligible DCO failure, and rerun clean protected builds.
 - **Residual risk:** Compiler, runner image, OS packages, registry, and upstream maintainers remain
   trusted dependencies.
 
@@ -482,8 +483,10 @@ and remote content remain rejected.
 - **Controls:** Private vulnerability reporting, public-file/history/staged scans, synthetic
   reproduction policy, non-reflective logs/errors, and protected incident/change systems.
 - **Detection:** Automated pattern checks plus human decoded/binary/diff review.
-- **Recovery:** Stop publication, rotate exposed authority, remove/repair history through the
-  approved process, notify affected owners privately, and publish only a sanitized summary.
+- **Recovery:** Stop publication, rotate exposed authority, remove or repair sensitive history
+  through the approved incident process, use ADR 0077's forward-only same-author remediation only
+  for an eligible DCO failure, notify affected owners privately, and publish only a sanitized
+  summary.
 - **Residual risk:** Automated scanners cannot identify every sensitive value or external copy;
   reviewers remain responsible for meaning.
 

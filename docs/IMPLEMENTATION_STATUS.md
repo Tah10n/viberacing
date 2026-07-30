@@ -340,6 +340,12 @@ requests are collaborator-only; and the active no-bypass `main` ruleset requires
 conversation resolution, strict named checks, and blocks deletion/non-fast-forward updates. The
 published baseline `73532ec0b41f1dd3443787e7d644475493b56f85` completed hosted CI successfully.
 
+The reachable-history checker implements direct author-matching DCO trailers and
+[ADR 0077](decisions/0077-forward-only-individual-dco-remediation.md)'s narrow same-author forward
+remediation for an already published missing or same-email name-mismatched trailer. Local
+implementation is not hosted recovery evidence; only a later successful exhaustive `main` workflow
+closes a recorded history failure.
+
 That hosted evidence covers the published source baseline only. It is not CI evidence for an
 unpushed branch, does not prove external vulnerability-report delivery, and grants no release,
 deployment, provider, service, or open-participation claim. External participation remains closed.
