@@ -83,14 +83,14 @@ jobs:
 
       - name: Sign build provenance with GitHub Sigstore
         id: provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-path:
             target/connector-release-candidate/${{ matrix.target }}/${{ matrix.executable }}
 
       - name: Sign the SPDX SBOM attestation with GitHub Sigstore
         id: sbom
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           sbom-path: target/connector-release-candidate/${{ matrix.target }}/sbom.spdx.json
           subject-path:
