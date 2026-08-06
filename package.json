@@ -126,7 +126,7 @@
   "devDependencies": {
     "cspell": "10.0.1",
     "markdownlint-cli2": "0.23.1",
-    "prettier": "3.9.4",
+    "prettier": "3.9.6",
     "yaml": "2.8.3"
   }
 }
