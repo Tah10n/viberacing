@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { digest, pairingCode, randomToken } from "./crypto";
+import { deviceTokenFromPollToken, digest, pairingCode, randomToken, secretEqual } from "./crypto";
 
 describe("credential helpers", () => {
   it("creates URL-safe high-entropy tokens", () => {
@@ -14,5 +14,15 @@ describe("credential helpers", () => {
 
   it("creates a readable pairing code", () => {
     expect(pairingCode()).toMatch(/^[A-Z2-9]{8}$/);
+  });
+
+  it("derives a stable URL-safe device token without storing plaintext", () => {
+    expect(deviceTokenFromPollToken("poll-secret")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(deviceTokenFromPollToken("poll-secret")).toBe(deviceTokenFromPollToken("poll-secret"));
+  });
+
+  it("compares secrets by fixed-size digests", () => {
+    expect(secretEqual("same", "same")).toBe(true);
+    expect(secretEqual("same", "different")).toBe(false);
   });
 });

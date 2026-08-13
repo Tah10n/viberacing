@@ -116,6 +116,21 @@
   color: var(--color-danger);
 }
 
+.account-actions {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-3);
+  border-top: 0.0625rem solid var(--color-line);
+  padding-top: var(--space-3);
+}
+
+.source-row {
+  justify-content: space-between;
+  color: var(--color-muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
 .connect-panel {
   display: grid;
   grid-template-columns: minmax(15rem, 0.8fr) minmax(27.5rem, 1.2fr);

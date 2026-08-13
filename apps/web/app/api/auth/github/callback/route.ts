@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { publicOrigin, requiredEnv } from "@/lib/config";
-import { randomToken } from "@/lib/crypto";
+import { randomToken, secretEqual } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { createSession } from "@/lib/session";
 
@@ -38,7 +38,12 @@ export async function GET(request: Request): Promise<Response> {
   const next = cookieStore.get("vr_oauth_next")?.value ?? "/dashboard";
   cookieStore.delete("vr_oauth_state");
   cookieStore.delete("vr_oauth_next");
-  if (code === null || state === null || expectedState === undefined || state !== expectedState) {
+  if (
+    code === null ||
+    state === null ||
+    expectedState === undefined ||
+    !secretEqual(state, expectedState)
+  ) {
     return authFailed();
   }
 
@@ -94,7 +99,7 @@ export async function GET(request: Request): Promise<Response> {
     );
     const result = await client.query<UserRow>(
       `INSERT INTO users (github_id, handle) VALUES ($1, $2)
-       ON CONFLICT (github_id) DO UPDATE SET handle = EXCLUDED.handle
+       ON CONFLICT (github_id) DO UPDATE SET handle = EXCLUDED.handle, updated_at = now()
        RETURNING id::text`,
       [profile.id, profile.login],
     );
