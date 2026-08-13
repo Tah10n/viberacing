@@ -13,9 +13,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  connector:
+    name: Connector (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025, macos-15]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack install --global pnpm@11.7.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @viberacing/connector test
+
+  local-smoke:
+    name: Documented local startup
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      VIBERACING_LOCAL_DATABASE_PORT: 55433
+      VIBERACING_LOCAL_VOLUME_NAME: viberacing-ci-local-data
+      VIBERACING_LOCAL_WEB_PORT: 3011
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - run: corepack enable
+      - run: corepack install --global pnpm@11.7.0
+      - name: Create synthetic local configuration
+        run: |
+          printf '%s\n' \
+            'DATABASE_URL=postgresql://viberacing:viberacing@localhost:55433/viberacing' \
+            'VIBERACING_PUBLIC_ORIGIN=http://localhost:3011' \
+            'VIBERACING_ALLOW_INSECURE_LOCAL=true' \
+            'GITHUB_CLIENT_ID=synthetic-local-client' \
+            'GITHUB_CLIENT_SECRET=synthetic-local-secret' \
+            'VIBERACING_DATABASE_SSL=false' \
+            'VIBERACING_MIN_CONNECTOR_VERSION=0.2.0' \
+            'VIBERACING_MAX_DAILY_TOKENS=9999999999999999' > apps/web/.env.local
+      - name: Start the documented Compose stack
+        run: corepack pnpm local:up
+      - name: Verify local readiness
+        run: curl --fail --silent http://127.0.0.1:3011/ready
+      - name: Stop the local stack
+        if: always()
+        run: corepack pnpm local:down
+
+  production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17.6-bookworm@sha256:feff5b24fedd610975a1f5e743c51a4b360437f4dc3a11acf740dcd708f413f6
@@ -28,34 +86,66 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U viberacing -d viberacing" --health-interval 2s
           --health-timeout 2s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://viberacing:viberacing@127.0.0.1:55432/viberacing
+      VIBERACING_PUBLIC_ORIGIN: http://localhost:3000
+      VIBERACING_DATABASE_SSL: "false"
+      VIBERACING_ALLOW_INSECURE_LOCAL: "true"
+      VIBERACING_MIN_CONNECTOR_VERSION: 0.2.0
+      VIBERACING_MAX_DAILY_TOKENS: 9999999999999999
+      GITHUB_CLIENT_ID: synthetic-ci-client
+      GITHUB_CLIENT_SECRET: synthetic-ci-secret
     steps:
-      - name: Check out
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: .node-version
           package-manager-cache: false
-
-      - name: Install pnpm
-        run: |
-          corepack enable
-          corepack install --global pnpm@11.7.0
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Verify
+      - run: corepack enable
+      - run: corepack install --global pnpm@11.7.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify source, unit tests, and production build
         run: pnpm verify
-
+      - name: Migrate an empty database twice
+        run: |
+          pnpm db:migrate
+          pnpm db:migrate
+          test "$(psql "$DATABASE_URL" --tuples-only --no-align --command='SELECT count(*) FROM schema_migrations')" = "1"
+      - name: Run server integration scenarios
+        run: |
+          node apps/web/.next/standalone/apps/web/server.js &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3000/ready >/dev/null && break
+            sleep 1
+          done
+          node scripts/test-local-scenarios.mjs
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+      - name: Verify connector package contents
+        run: npm pack --dry-run --json ./packages/connector
       - name: Build production image
         run: docker build --tag viberacing:ci .
-
-      - name: Run production migration
-        run: >-
-          docker run --rm --network host --env
-          DATABASE_URL=postgresql://viberacing:viberacing@127.0.0.1:55432/viberacing --env
-          VIBERACING_DATABASE_SSL=false viberacing:ci node scripts/migrate.mjs
+      - name: Verify production container and readiness
+        run: |
+          test "$(docker image inspect viberacing:ci --format '{{.Config.User}}')" = "node"
+          docker run --detach --name viberacing-ci --network host \
+            --env DATABASE_URL="$DATABASE_URL" \
+            --env VIBERACING_PUBLIC_ORIGIN=http://localhost:3010 \
+            --env VIBERACING_ALLOW_INSECURE_LOCAL=true \
+            --env VIBERACING_DATABASE_SSL=false \
+            --env VIBERACING_MIN_CONNECTOR_VERSION=0.2.0 \
+            --env VIBERACING_MAX_DAILY_TOKENS=9999999999999999 \
+            --env GITHUB_CLIENT_ID=synthetic-ci-client \
+            --env GITHUB_CLIENT_SECRET=synthetic-ci-secret \
+            --env PORT=3010 viberacing:ci
+          trap 'docker rm --force viberacing-ci >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3010/ready >/dev/null && exit 0
+            sleep 1
+          done
+          docker logs viberacing-ci
+          exit 1

@@ -6,11 +6,8 @@
 !apps/
 !apps/web/
 !apps/web/**
-!docker/
-!docker/local.Dockerfile
 !scripts/
-!scripts/local-container-entrypoint.sh
-!scripts/test-local-scenarios.mjs
+!scripts/check-privacy.mjs
 
 **/.env
 **/.env.*
