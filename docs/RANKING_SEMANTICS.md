@@ -1,0 +1,33 @@
+# Ranking semantics
+
+The leaderboard measures exact token volume reported by paired local connectors during the current
+Monday–Sunday UTC week. It does not measure cost, requests, productivity, output quality, or work
+value. A user-controlled machine can alter its local data, so results are self-reported rather than
+cryptographically verified.
+
+For each source and UTC date, `totalTokens` is an authoritative provider total when available;
+otherwise it is the non-overlapping sum of input, output, cache read, cache creation/write, and
+separately reported reasoning. Adapters remove provider-specific overlap such as cached input
+already included in prompt input. All integers remain canonical decimal strings in the protocol and
+`numeric(30,0)` in PostgreSQL.
+
+For an `account_max` account, daily usage is the maximum across linked sources. This prevents an
+account-wide Codex daily bucket reported from two computers from doubling. For a `source_sum`
+account, daily usage is the sum across machine-local histories. Daily account totals then sum across
+multiple accounts of the same agent; agent totals sum into the user's weekly total.
+
+Ranks use SQL `dense_rank` by weekly total descending, so ties share a rank. Display order within a
+tie is deterministic by case-folded handle and user ID. Public profiles and leaderboard pages read
+the same weekly summary table.
+
+## Corrections
+
+Each source snapshot has a monotonic sequence and inclusive UTC range. A stale or repeated sequence
+is a no-op. A newer `complete` snapshot replaces values and deletes dates missing from the range; a
+newer `partial` snapshot changes present dates but preserves missing dates. Values may decrease.
+Only weeks touched by an accepted snapshot are rebuilt.
+
+Operational correction requires no admin portal: restore/correct the authoritative local usage store
+and run `viberacing sync`. To delete retained history, disconnect and explicitly delete the agent
+account in the dashboard. Use **Leave leaderboard** for all ranking rows or **Delete Vibe Racing
+account** for the complete user record.

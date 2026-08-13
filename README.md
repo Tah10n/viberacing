@@ -1,38 +1,32 @@
 # Vibe Racing
 
-Vibe Racing is a weekly leaderboard for coding-agent token usage. A user signs in with GitHub,
-connects Codex or Claude Code from one or more computers, and sees their current UTC-week rank.
+Vibe Racing is a fast weekly leaderboard for exact, self-reported coding-agent token usage. One
+GitHub user can connect several computers, several agents, and several accounts of the same agent.
 
-The product has one Next.js service, one PostgreSQL database, and one local connector. The connector
-sends aggregate token totals, never prompts, code, paths, repository names, hostnames, provider
-credentials, models, or costs. See [Privacy](docs/PRIVACY.md) for the exact data boundary.
+The production shape stays deliberately small: one Next.js service, one PostgreSQL database, and one
+local connector. Only UTC dates and aggregate token counters cross the local boundary—never prompts,
+responses, code, paths, repositories, hostnames, provider identities, credentials, model names, or
+costs.
 
-## Local preview
+Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Cursor CLI,
+Antigravity CLI, and Gemini CLI. Cursor Desktop and Antigravity Desktop are not counted. See
+[agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
-Requirements: Node 24, pnpm 11 through Corepack, Docker, and a GitHub OAuth app.
+## Local production preview
 
-1. Copy the local environment template:
+Requirements: Node 24, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.
 
-```bash
-cp .env.example apps/web/.env.local
-```
-
-2. Create a GitHub OAuth app with:
-
-- Homepage URL: `http://localhost:3000`
-- Authorization callback URL: `http://localhost:3000/api/auth/github/callback`
-- Device Flow: not required; Vibe Racing uses the browser OAuth flow
-
-Add its client ID and secret to `apps/web/.env.local`. This ignored file is not copied into Git or
-the Docker image.
-
-3. Start the complete site and PostgreSQL in one container:
+1. Copy `.env.example` to `apps/web/.env.local` and add the OAuth client ID and secret.
+2. Configure the OAuth app homepage as `http://localhost:3000` and callback as
+   `http://localhost:3000/api/auth/github/callback`. Device Flow is not needed.
+3. Start the production image and PostgreSQL:
 
 ```bash
 corepack pnpm local:up
 ```
 
-Open `http://localhost:3000`, sign in, then connect this computer:
+The command waits for `/ready`. The web app is at `http://localhost:3000`; PostgreSQL is exposed
+only at `127.0.0.1:55432`. Pair the local connector with:
 
 ```bash
 node packages/connector/bin/viberacing.mjs connect --origin http://localhost:3000
@@ -41,25 +35,14 @@ node packages/connector/bin/viberacing.mjs connect --origin http://localhost:300
 Useful commands:
 
 ```bash
-corepack pnpm local:test  # isolated end-to-end scenarios
-corepack pnpm local:down  # stop the site; keep the local database
+corepack pnpm local:test   # isolated HTTP/SQL end-to-end scenarios
+corepack pnpm local:down   # stop services; retain the database volume
+corepack pnpm local:reset  # explicitly delete only the local Vibe Racing volume and restart
+corepack pnpm verify       # privacy, format, lint, types, unit tests, production build
 ```
 
-The database stays in the `viberacing-local-data` Docker volume. The scenario test creates and
-removes its own synthetic user; it does not change your account.
-
-## Verify
-
-```bash
-corepack pnpm verify
-```
-
-This checks the privacy boundary, formatting, lint, types, tests, and a production build.
-
-## Deploy
-
-The supported production path is Railway with Railway PostgreSQL. See
-[Deployment](docs/DEPLOYMENT.md).
+The local scenario creates and removes synthetic users. See [deployment](docs/DEPLOYMENT.md) and the
+[production checklist](docs/PRODUCTION_CHECKLIST.md) before inviting users.
 
 Reference: [Architecture](docs/ARCHITECTURE.md) · [Privacy](docs/PRIVACY.md) ·
 [Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md)
