@@ -1,0 +1,7 @@
+[
+  {
+    "id": "m1",
+    "time_created": 1786363200000,
+    "data": "{\"role\":\"assistant\",\"time\":{\"created\":1786363200000},\"tokens\":{\"input\":10,\"output\":5,\"reasoning\":3,\"cache\":{\"read\":3,\"write\":2}}}"
+  }
+]
