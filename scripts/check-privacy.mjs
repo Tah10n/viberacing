@@ -15,10 +15,16 @@ const candidates = execFileSync(
 
 const forbiddenSegments = new Set([
   ".claude",
+  ".cursor",
+  ".gemini",
+  ".kimi-code",
   ".codex",
+  ".qwen",
   ".local-data",
   ".viberacing",
   "postgres-data",
+  "captures",
+  "telemetry",
   "temp",
   "tmp",
 ]);
@@ -89,10 +95,20 @@ for (const path of candidates) {
     sensitiveContent.push(path);
 }
 
+const fixtureFailures = [];
+const fixturePrefix = "packages/connector/test/fixtures/";
+const forbiddenFixtureKeys =
+  /"(?:args|code|content|credential|file_?path|prompt|repository|response|text|tool_?arguments)"\s*:/i;
+for (const path of candidates.filter((candidate) => candidate.startsWith(fixturePrefix))) {
+  const content = readFileSync(resolve(root, path), "utf8");
+  if (forbiddenFixtureKeys.test(content)) fixtureFailures.push(path);
+}
+
 const failures = [
   ...forbiddenPaths.map((path) => `local artifact would be committed: ${path}`),
   ...missingIgnoreRules.map((path) => `missing ignore protection for: ${path}`),
   ...sensitiveContent.map((path) => `possible credential in: ${path}`),
+  ...fixtureFailures.map((path) => `fixture contains non-usage payload fields: ${path}`),
 ];
 if (failures.length > 0) {
   process.stderr.write(`${failures.join("\n")}\n`);

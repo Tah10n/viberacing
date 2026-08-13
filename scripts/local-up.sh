@@ -6,18 +6,19 @@ if [ ! -f apps/web/.env.local ]; then
   exit 1
 fi
 
-docker build --quiet --tag viberacing:local-web .
-docker build --quiet --file docker/local.Dockerfile --tag viberacing:local-one-container .
+docker compose up --build --detach
 
-if docker container inspect viberacing-local >/dev/null 2>&1; then
-  docker rm --force viberacing-local >/dev/null
-fi
+web_port="${VIBERACING_LOCAL_WEB_PORT:-3000}"
+attempt=0
+while [ "$attempt" -lt 60 ]; do
+  if curl --fail --silent "http://127.0.0.1:${web_port}/ready" >/dev/null; then
+    echo "Vibe Racing is ready at http://localhost:${web_port} (PostgreSQL: 127.0.0.1:${VIBERACING_LOCAL_DATABASE_PORT:-55432})"
+    exit 0
+  fi
+  attempt=$((attempt + 1))
+  sleep 1
+done
 
-docker run --detach \
-  --name viberacing-local \
-  --publish 3000:3000 \
-  --volume viberacing-local-data:/var/lib/postgresql/data \
-  --env-file apps/web/.env.local \
-  viberacing:local-one-container
-
-echo "Vibe Racing is starting at http://localhost:3000"
+docker compose logs web >&2
+echo "Vibe Racing did not become ready within 60 seconds." >&2
+exit 1
