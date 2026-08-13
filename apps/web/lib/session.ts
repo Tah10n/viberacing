@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { secureCookies } from "./config";
 import { digest, randomToken } from "./crypto";
-import { query } from "./db";
+import { query, transaction } from "./db";
 
 const cookieName = "vr_session";
 const sessionSeconds = 60 * 60 * 24 * 30;
@@ -31,11 +31,43 @@ export async function viewer(): Promise<Viewer | null> {
 
 export async function createSession(userId: string): Promise<void> {
   const token = randomToken();
-  await query(
-    "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '30 days')",
-    [digest(token), userId],
-  );
-  (await cookies()).set(cookieName, token, {
+  const store = await cookies();
+  const previous = store.get(cookieName)?.value;
+  await transaction(async (client) => {
+    await client.query(
+      `DELETE FROM sessions WHERE token_hash IN (
+         SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 100
+       )`,
+    );
+    await client.query(
+      `DELETE FROM installations WHERE id IN (
+         SELECT i.id FROM installations i
+          WHERE i.status = 'revoked' AND i.revoked_at < now() - interval '90 days'
+            AND NOT EXISTS (
+              SELECT 1 FROM installation_sources s
+              JOIN daily_usage d ON d.source_id = s.id
+              WHERE s.installation_id = i.id
+            )
+          LIMIT 25
+       )`,
+    );
+    await client.query(
+      `DELETE FROM agent_accounts WHERE id IN (
+         SELECT a.id FROM agent_accounts a
+          WHERE a.created_at < now() - interval '1 day'
+            AND NOT EXISTS (SELECT 1 FROM installation_sources s WHERE s.agent_account_id = a.id)
+          LIMIT 25
+       )`,
+    );
+    if (previous !== undefined) {
+      await client.query("DELETE FROM sessions WHERE token_hash = $1", [digest(previous)]);
+    }
+    await client.query(
+      "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '30 days')",
+      [digest(token), userId],
+    );
+  });
+  store.set(cookieName, token, {
     httpOnly: true,
     maxAge: sessionSeconds,
     path: "/",

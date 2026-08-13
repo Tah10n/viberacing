@@ -17,11 +17,19 @@ export async function POST(request: Request): Promise<Response> {
       ? problem(413, "body_too_large")
       : problem(400, "invalid_request");
   }
-  const connectionId = form.get("connectionId");
-  if (!isUuid(connectionId)) return problem(400, "invalid_connection");
+  const installationId = form.get("installationId");
+  if (!isUuid(installationId)) return problem(400, "invalid_installation");
   await query(
-    "UPDATE connections SET status = 'revoked' WHERE id = $1 AND user_id = $2 AND status = 'active'",
-    [connectionId, current.id],
+    `WITH revoked AS (
+       UPDATE installations
+          SET status = 'revoked', device_token_hash = NULL, revoked_at = now(), updated_at = now()
+        WHERE id = $1 AND user_id = $2 AND status = 'active'
+        RETURNING id
+     )
+     UPDATE installation_sources
+        SET status = 'disconnected', updated_at = now()
+      WHERE installation_id IN (SELECT id FROM revoked) AND status = 'active'`,
+    [installationId, current.id],
   );
   return NextResponse.redirect(new URL("/dashboard?disconnected=1", publicOrigin()), 303);
 }

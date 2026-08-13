@@ -36,7 +36,7 @@ export function Panel({ children, className }: PanelProps) {
 
 interface BadgeProps {
   readonly children: ReactNode;
-  readonly tone?: "accent" | "success";
+  readonly tone?: "accent" | "success" | "neutral" | "warning";
 }
 
 export function Badge({ children, tone = "accent" }: BadgeProps) {
