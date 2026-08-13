@@ -21,10 +21,21 @@ export async function POST(request: Request): Promise<Response> {
   await transaction(async (client) => {
     await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
     await client.query(
-      "UPDATE connections SET status = 'revoked' WHERE user_id = $1 AND status = 'active'",
+      `UPDATE installations
+          SET status = 'revoked', device_token_hash = NULL, revoked_at = now(), updated_at = now()
+        WHERE user_id = $1 AND status = 'active'`,
       [current.id],
     );
-    await client.query("DELETE FROM daily_usage WHERE user_id = $1", [current.id]);
+    await client.query(
+      "UPDATE installation_sources SET status = 'disconnected', updated_at = now() WHERE user_id = $1",
+      [current.id],
+    );
+    await client.query(
+      `DELETE FROM daily_usage
+        WHERE source_id IN (SELECT id FROM installation_sources WHERE user_id = $1)`,
+      [current.id],
+    );
+    await client.query("DELETE FROM weekly_agent_usage WHERE user_id = $1", [current.id]);
   });
   return NextResponse.redirect(new URL("/dashboard?left=1", publicOrigin()), 303);
 }

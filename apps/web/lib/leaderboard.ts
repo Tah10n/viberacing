@@ -69,6 +69,16 @@ function projectRow(row: LeaderboardRowDb): LeaderboardRow {
   return { handle: row.handle, rank: row.rank, total: row.total, breakdown };
 }
 
+const rankedSummarySql = `WITH per_user AS (
+  SELECT user_id, sum(tokens) AS total
+    FROM weekly_agent_usage
+   WHERE week_start = $1::date
+   GROUP BY user_id
+), ranked AS (
+  SELECT user_id, total, dense_rank() OVER (ORDER BY total DESC) AS rank
+    FROM per_user
+)`;
+
 export async function leaderboard({ limit = 100, offset = 0 }: LeaderboardOptions = {}): Promise<
   readonly LeaderboardRow[]
 > {
@@ -81,23 +91,11 @@ export async function leaderboard({ limit = 100, offset = 0 }: LeaderboardOption
     throw new RangeError("Leaderboard offset must be a non-negative safe integer.");
   }
   const rows = await query<LeaderboardRowDb>(
-    `WITH per_day AS (
-       SELECT user_id, agent, usage_date,
-              CASE WHEN agent = 'codex' THEN max(tokens) ELSE sum(tokens) END AS tokens
-         FROM daily_usage
-        WHERE usage_date >= $1::date AND usage_date < ($1::date + 7)
-        GROUP BY user_id, agent, usage_date
-     ), per_agent AS (
-       SELECT user_id, agent, sum(tokens)::text AS tokens
-         FROM per_day
-        GROUP BY user_id, agent
-     ), totals AS (
-       SELECT user_id, sum(tokens::numeric) AS total FROM per_agent GROUP BY user_id
-     ), ranked AS (
-       SELECT user_id, total, dense_rank() OVER (ORDER BY total DESC) AS rank FROM totals
-     )
+    `${rankedSummarySql}
      SELECT u.handle, r.rank::text, r.total::text,
-            (SELECT jsonb_object_agg(p.agent, p.tokens) FROM per_agent p WHERE p.user_id = r.user_id) AS breakdown
+            (SELECT jsonb_object_agg(w.agent_id, w.tokens::text)
+               FROM weekly_agent_usage w
+              WHERE w.week_start = $1::date AND w.user_id = r.user_id) AS breakdown
        FROM ranked r JOIN users u ON u.id = r.user_id
       ORDER BY r.rank, lower(u.handle), u.id
       LIMIT $2 OFFSET $3`,
@@ -108,24 +106,14 @@ export async function leaderboard({ limit = 100, offset = 0 }: LeaderboardOption
 
 export async function publicProfile(handle: string): Promise<LeaderboardRow | null> {
   const rows = await query<LeaderboardRowDb>(
-    `WITH per_day AS (
-       SELECT user_id, agent, usage_date,
-              CASE WHEN agent = 'codex' THEN max(tokens) ELSE sum(tokens) END AS tokens
-         FROM daily_usage
-        WHERE usage_date >= $1::date AND usage_date < ($1::date + 7)
-        GROUP BY user_id, agent, usage_date
-     ), per_agent AS (
-       SELECT user_id, agent, sum(tokens)::text AS tokens
-         FROM per_day
-        GROUP BY user_id, agent
-     ), totals AS (
-       SELECT user_id, sum(tokens::numeric) AS total FROM per_agent GROUP BY user_id
-     ), ranked AS (
-       SELECT user_id, total, dense_rank() OVER (ORDER BY total DESC) AS rank FROM totals
-     )
+    `${rankedSummarySql}
      SELECT u.handle, r.rank::text, r.total::text,
-            (SELECT jsonb_object_agg(p.agent, p.tokens) FROM per_agent p WHERE p.user_id = r.user_id) AS breakdown
-       FROM ranked r JOIN users u ON u.id = r.user_id WHERE lower(u.handle) = lower($2) LIMIT 1`,
+            (SELECT jsonb_object_agg(w.agent_id, w.tokens::text)
+               FROM weekly_agent_usage w
+              WHERE w.week_start = $1::date AND w.user_id = r.user_id) AS breakdown
+       FROM ranked r JOIN users u ON u.id = r.user_id
+      WHERE lower(u.handle) = lower($2)
+      LIMIT 1`,
     [currentWeekStart(), handle],
   );
   const row = rows[0];

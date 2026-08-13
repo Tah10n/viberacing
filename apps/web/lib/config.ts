@@ -22,3 +22,57 @@ export function publicOrigin(): URL {
 export function secureCookies(): boolean {
   return publicOrigin().protocol === "https:";
 }
+
+export const connectorProtocolVersion = 2;
+export const expectedSchemaVersion = "001_initial.sql";
+
+export function maximumDailyTokens(): bigint {
+  const value = process.env.VIBERACING_MAX_DAILY_TOKENS?.trim() || "9999999999999999";
+  if (!/^[1-9]\d{0,29}$/.test(value)) {
+    throw new Error("VIBERACING_MAX_DAILY_TOKENS must be a positive canonical decimal string");
+  }
+  return BigInt(value);
+}
+
+export function minimumConnectorVersion(): string {
+  const value = process.env.VIBERACING_MIN_CONNECTOR_VERSION?.trim() || "0.2.0";
+  if (!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(value)) {
+    throw new Error("VIBERACING_MIN_CONNECTOR_VERSION must be a semantic version");
+  }
+  return value;
+}
+
+export function versionAtLeast(candidate: string, minimum: string): boolean {
+  const parse = (value: string) => (value.split("-", 1)[0] ?? "").split(".").map(Number);
+  const left = parse(candidate);
+  const right = parse(minimum);
+  if (left.length !== 3 || right.length !== 3 || [...left, ...right].some(Number.isNaN))
+    return false;
+  for (let index = 0; index < 3; index += 1) {
+    const leftPart = left[index];
+    const rightPart = right[index];
+    if (leftPart === undefined || rightPart === undefined) return false;
+    if (leftPart > rightPart) return true;
+    if (leftPart < rightPart) return false;
+  }
+  return true;
+}
+
+export function validateRuntimeConfig(): void {
+  requiredEnv("DATABASE_URL");
+  const origin = publicOrigin();
+  const localHttpAllowed =
+    process.env.VIBERACING_ALLOW_INSECURE_LOCAL === "true" &&
+    ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+  if (process.env.NODE_ENV === "production" && origin.protocol !== "https:" && !localHttpAllowed) {
+    throw new Error("VIBERACING_PUBLIC_ORIGIN must use HTTPS in production");
+  }
+  requiredEnv("GITHUB_CLIENT_ID");
+  requiredEnv("GITHUB_CLIENT_SECRET");
+  const tls = requiredEnv("VIBERACING_DATABASE_SSL");
+  if (tls !== "true" && tls !== "false") {
+    throw new Error("VIBERACING_DATABASE_SSL must be true or false");
+  }
+  minimumConnectorVersion();
+  maximumDailyTokens();
+}

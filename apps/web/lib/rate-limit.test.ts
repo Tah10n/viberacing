@@ -1,19 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { clientAddress, createFixedWindowLimiter } from "./rate-limit";
+import { clientAddress, consumeRateLimit } from "./rate-limit";
 
-describe("pairing rate limit", () => {
-  it("allows a small burst and resets after the window", () => {
-    const allow = createFixedWindowLimiter(2, 1_000, 10);
-    expect(allow("client", 0)).toBe(true);
-    expect(allow("client", 1)).toBe(true);
-    expect(allow("client", 2)).toBe(false);
-    expect(allow("client", 1_001)).toBe(true);
+describe("database-backed rate limits", () => {
+  it("rejects invalid bucket configuration before touching the database", async () => {
+    await expect(consumeRateLimit("Bad Scope", "client", 2, 60)).rejects.toThrow(
+      "Invalid rate-limit scope",
+    );
+    await expect(consumeRateLimit("pairing", "client", 0, 60)).rejects.toThrow(
+      "Invalid rate-limit limit",
+    );
   });
 
-  it("uses the proxy-appended address instead of a spoofable first value", () => {
+  it("uses Railway's trusted client-address header", () => {
     const request = new Request("https://viberacing.example", {
-      headers: { "x-forwarded-for": "spoofed, 203.0.113.7" },
+      headers: {
+        "x-forwarded-for": "spoofed, 203.0.113.7",
+        "x-real-ip": "203.0.113.9",
+      },
     });
-    expect(clientAddress(request)).toBe("203.0.113.7");
+    expect(clientAddress(request)).toBe("203.0.113.9");
   });
 });

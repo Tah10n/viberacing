@@ -18,6 +18,8 @@ describe("leaderboard query", () => {
 
     expect(queryMock).toHaveBeenCalledOnce();
     expect(queryMock.mock.calls[0]?.[0]).toMatch(/LIMIT \$2 OFFSET \$3/);
+    expect(queryMock.mock.calls[0]?.[0]).toMatch(/dense_rank\(\) OVER \(ORDER BY total DESC\)/);
+    expect(queryMock.mock.calls[0]?.[0]).toMatch(/ORDER BY r\.rank, lower\(u\.handle\), u\.id/);
     expect(queryMock.mock.calls[0]?.[1]).toEqual([currentWeekStart(), 101, 100]);
   });
 

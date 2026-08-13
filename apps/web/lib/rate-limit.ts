@@ -1,30 +1,42 @@
-interface Bucket {
-  count: number;
-  resetAt: number;
-}
+import { digest } from "./crypto";
+import { transaction } from "./db";
 
-export function createFixedWindowLimiter(limit: number, windowMs: number, maximumKeys: number) {
-  const buckets = new Map<string, Bucket>();
-  return (key: string, now = Date.now()): boolean => {
-    const current = buckets.get(key);
-    if (current !== undefined && now < current.resetAt) {
-      current.count += 1;
-      return current.count <= limit;
-    }
-    if (current === undefined && buckets.size >= maximumKeys) {
-      for (const [candidate, bucket] of buckets)
-        if (now >= bucket.resetAt) buckets.delete(candidate);
-      if (buckets.size >= maximumKeys) return false;
-    }
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  };
+export async function consumeRateLimit(
+  scope: string,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  if (!/^[a-z][a-z0-9_]{0,39}$/.test(scope)) throw new RangeError("Invalid rate-limit scope");
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("Invalid rate-limit limit");
+  if (!Number.isSafeInteger(windowSeconds) || windowSeconds < 1)
+    throw new RangeError("Invalid rate-limit window");
+  return transaction(async (client) => {
+    await client.query(
+      `DELETE FROM rate_limit_buckets
+        WHERE ctid IN (
+          SELECT ctid FROM rate_limit_buckets WHERE expires_at <= now() LIMIT 100
+        )`,
+    );
+    const result = await client.query<{ request_count: number }>(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         $1, $2,
+         to_timestamp(floor(extract(epoch FROM now()) / $3) * $3),
+         1,
+         to_timestamp((floor(extract(epoch FROM now()) / $3) + 1) * $3)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = rate_limit_buckets.request_count + 1
+       RETURNING request_count`,
+      [scope, digest(key), windowSeconds],
+    );
+    return (result.rows[0]?.request_count ?? limit + 1) <= limit;
+  });
 }
 
 export function clientAddress(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
-  const address = forwarded || request.headers.get("x-real-ip")?.trim() || "unknown";
-  return address.slice(0, 128);
+  // Railway's edge overwrites X-Real-IP with the address it observed.
+  return request.headers.get("x-real-ip")?.trim().slice(0, 128) || "unknown";
 }
-
-export const allowPairingStart = createFixedWindowLimiter(6, 60_000, 10_000);
