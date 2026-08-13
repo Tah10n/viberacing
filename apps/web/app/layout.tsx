@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { AppHeader } from "./components/app-header";
+import { currentWeekLabel, currentWeekNumber } from "@/lib/leaderboard";
 import { viewer } from "@/lib/session";
 import "./styles.css";
 
@@ -14,29 +15,15 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
   return (
     <html lang="en">
       <body>
-        <header className="topbar">
-          <Link className="brand" href="/">
-            <span>VIBE</span> RACING
-          </Link>
-          <nav aria-label="Main navigation">
-            <Link href="/">Leaderboard</Link>
-            {current === null ? (
-              <a className="button small" href="/api/auth/github/start">
-                Join with GitHub
-              </a>
-            ) : (
-              <>
-                <Link href="/dashboard">@{current.handle}</Link>
-                <form action="/api/auth/logout" method="post">
-                  <button className="link-button" type="submit">
-                    Log out
-                  </button>
-                </form>
-              </>
-            )}
-          </nav>
-        </header>
-        {children}
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
+        <AppHeader
+          handle={current?.handle ?? null}
+          weekLabel={currentWeekLabel()}
+          weekNumber={currentWeekNumber()}
+        />
+        <div id="main-content">{children}</div>
         <footer>
           <div>
             <strong>Vibe Racing</strong>

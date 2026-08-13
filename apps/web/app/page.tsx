@@ -1,36 +1,83 @@
 import { connection } from "next/server";
 import Link from "next/link";
+import { RacerLink } from "./components/racer-link";
+import { StandingsTable } from "./components/standings-table";
 import {
   currentWeekLabel,
+  currentWeekNumber,
   formatCompactTokens,
   formatExactTokens,
   leaderboard,
+  publicProfile,
 } from "@/lib/leaderboard";
 import { viewer } from "@/lib/session";
 
-export default async function HomePage() {
+interface HomePageProps {
+  readonly searchParams: Promise<{ page?: string | string[] }>;
+}
+
+const leaderboardPageSize = 100;
+const maximumPageNumber = Math.floor(Number.MAX_SAFE_INTEGER / leaderboardPageSize);
+
+function parsePage(value: string | string[] | undefined): number {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page >= 1 && page <= maximumPageNumber ? page : 1;
+}
+
+function pageHref(page: number): string {
+  return page === 1 ? "/" : `/?page=${page.toString()}`;
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();
-  const [rows, current] = await Promise.all([leaderboard(), viewer()]);
+  const page = parsePage((await searchParams).page);
+  const offset = (page - 1) * leaderboardPageSize;
+  const current = await viewer();
+  const [pageRows, profile] = await Promise.all([
+    leaderboard({ limit: leaderboardPageSize + 1, offset }),
+    current === null ? Promise.resolve(null) : publicProfile(current.handle),
+  ]);
+  const hasNextPage = pageRows.length > leaderboardPageSize;
+  const rows = pageRows.slice(0, leaderboardPageSize);
   return (
-    <main>
-      <section className="hero">
+    <main className="home-page">
+      <section className="hero" aria-labelledby="race-title">
         <div className="hero-copy">
-          <p className="eyebrow">WEEKLY TOKEN LEADERBOARD</p>
-          <h1>
-            See who is setting the <span>pace.</span>
-          </h1>
-          <p>
-            Compare weekly Codex and Claude Code usage. Connect in a minute; only daily totals leave
-            your computer.
-          </p>
-          <a className="button" href={current === null ? "/api/auth/github/start" : "/dashboard"}>
-            {current === null ? "Join with GitHub" : "Manage computers"}
-          </a>
+          <h1 id="race-title">The weekly token race</h1>
+        </div>
+        <div className="user-callout" aria-label="Your weekly position">
+          <span className="eyebrow">Your position</span>
+          {current === null ? (
+            <div className="hero-guest">
+              <strong className="user-empty">Your grid is open</strong>
+              <a className="button button-secondary" href="/api/auth/github/start">
+                Join with GitHub
+              </a>
+            </div>
+          ) : (
+            <div className="user-score-line">
+              <span className="user-rank">{profile === null ? "—" : `#${profile.rank}`}</span>
+              <RacerLink handle={current.handle} />
+              {profile === null ? null : (
+                <span className="user-agent">
+                  {profile.breakdown.length === 1
+                    ? profile.breakdown[0]?.label
+                    : `${profile.breakdown.length.toString()} agents`}
+                </span>
+              )}
+              <strong title={`${formatExactTokens(profile?.total ?? "0")} tokens`}>
+                {formatCompactTokens(profile?.total ?? "0")}
+              </strong>
+              <small>tokens</small>
+            </div>
+          )}
         </div>
         <aside className="hero-summary" aria-label="How Vibe Racing works">
           <div>
             <span>Current race</span>
             <strong>{currentWeekLabel()}</strong>
+            <small>Ends Sunday · 23:59 UTC</small>
           </div>
           <div>
             <span>Supported agents</span>
@@ -39,64 +86,48 @@ export default async function HomePage() {
           <div>
             <span>Privacy</span>
             <strong>Aggregates only</strong>
+            <small>Daily totals. No code.</small>
           </div>
         </aside>
       </section>
       <section className="leaderboard" aria-labelledby="leaderboard-title">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">LIVE STANDINGS</p>
-            <h2 id="leaderboard-title">This week</h2>
-          </div>
-          <span>
-            {rows.length} {rows.length === 1 ? "racer" : "racers"} · {currentWeekLabel()}
-          </span>
+        <div className="section-heading standings-heading">
+          <h2 id="leaderboard-title">Week {currentWeekNumber()} standings</h2>
+          <span>{currentWeekLabel()}</span>
         </div>
         {rows.length === 0 ? (
           <div className="empty">
-            <strong>The starting grid is empty.</strong>
-            <p>Be the first racer to connect an agent.</p>
+            <strong>
+              {page === 1 ? "The starting grid is empty." : "No racers on this page."}
+            </strong>
+            <p>
+              {page === 1
+                ? "Be the first racer to connect an agent."
+                : "Return to the previous page of standings."}
+            </p>
           </div>
         ) : (
-          <div className="table-scroll">
-            <table className="ranking-table">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Racer</th>
-                  <th scope="col">Agent mix</th>
-                  <th scope="col">This week</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.handle}>
-                    <td className="rank-cell">#{row.rank}</td>
-                    <td className="racer-cell">
-                      <Link href={`/u/${row.handle}`}>@{row.handle}</Link>
-                      {current?.handle.toLowerCase() === row.handle.toLowerCase() ? (
-                        <span className="you-badge">You</span>
-                      ) : null}
-                    </td>
-                    <td>
-                      <div className="agent-list">
-                        {row.breakdown.map((item) => (
-                          <span className="agent-chip" key={item.agent}>
-                            {item.label} {formatCompactTokens(item.tokens)}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="token-cell" title={`${formatExactTokens(row.total)} tokens`}>
-                      <strong>{formatCompactTokens(row.total)}</strong>
-                      <span>tokens</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <StandingsTable currentHandle={current?.handle} rows={rows} />
         )}
+        {page > 1 || hasNextPage ? (
+          <nav className="standings-pagination" aria-label="Standings pages">
+            {page > 1 ? (
+              <Link className="button button-secondary" href={pageHref(page - 1)}>
+                Previous 100
+              </Link>
+            ) : (
+              <span />
+            )}
+            <span>Page {page}</span>
+            {hasNextPage ? (
+              <Link className="button button-secondary" href={pageHref(page + 1)}>
+                Next 100
+              </Link>
+            ) : (
+              <span />
+            )}
+          </nav>
+        ) : null}
       </section>
       <section className="privacy-strip">
         <div>

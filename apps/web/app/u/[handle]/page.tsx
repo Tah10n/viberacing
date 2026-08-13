@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PageHeader, Panel } from "../../components/ui";
 import {
   currentWeekLabel,
   formatCompactTokens,
@@ -23,11 +24,11 @@ export default async function ProfilePage({ params }: ProfileProps) {
       <Link className="back-link" href="/">
         Back to standings
       </Link>
-      <header className="page-heading">
-        <p className="eyebrow">RACER PROFILE</p>
-        <h1>@{profile.handle}</h1>
-        <p>Weekly performance · {currentWeekLabel()}</p>
-      </header>
+      <PageHeader
+        description={`Weekly performance · ${currentWeekLabel()}`}
+        eyebrow="Racer profile"
+        title={`@${profile.handle}`}
+      />
       <section className="score-card" aria-label="Weekly score">
         <div>
           <span>Weekly rank</span>
@@ -41,7 +42,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
           <small>tokens</small>
         </div>
       </section>
-      <section className="panel">
+      <Panel>
         <div className="panel-heading">
           <h2>Usage by agent</h2>
           <span>{profile.breakdown.length} connected</span>
@@ -57,7 +58,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
             </strong>
           </div>
         ))}
-      </section>
+      </Panel>
     </main>
   );
 }

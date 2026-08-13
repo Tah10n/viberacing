@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   currentWeekLabel,
+  currentWeekNumber,
   currentWeekStart,
+  formatAgentShare,
   formatCompactTokens,
   formatExactTokens,
 } from "./leaderboard";
@@ -24,5 +26,17 @@ describe("leaderboard helpers", () => {
   it("prints a compact UTC week range", () => {
     expect(currentWeekLabel(new Date("2026-08-13T12:00:00Z"))).toBe("10–16 Aug 2026");
     expect(currentWeekLabel(new Date("2026-08-31T12:00:00Z"))).toBe("31 Aug–6 Sept 2026");
+  });
+
+  it("returns the ISO week number", () => {
+    expect(currentWeekNumber(new Date("2026-08-13T12:00:00Z"))).toBe(33);
+    expect(currentWeekNumber(new Date("2027-01-01T12:00:00Z"))).toBe(53);
+    expect(currentWeekNumber(new Date("2027-01-04T12:00:00Z"))).toBe(1);
+  });
+
+  it("formats real agent shares", () => {
+    expect(formatAgentShare("720", "1000")).toBe("72%");
+    expect(formatAgentShare("1", "3")).toBe("33%");
+    expect(formatAgentShare("0", "0")).toBe("0%");
   });
 });

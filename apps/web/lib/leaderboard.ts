@@ -1,6 +1,8 @@
 import { agentNames, isSupportedAgent, type SupportedAgent } from "./agents";
 import { query } from "./db";
 
+export { formatAgentShare, formatCompactTokens, formatExactTokens } from "./leaderboard-format";
+
 interface LeaderboardRowDb {
   handle: string;
   rank: string;
@@ -14,6 +16,13 @@ export interface LeaderboardRow {
   readonly total: string;
   readonly breakdown: readonly { agent: SupportedAgent; label: string; tokens: string }[];
 }
+
+interface LeaderboardOptions {
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
+const maximumLeaderboardPageSize = 101;
 
 export function currentWeekStart(now = new Date()): string {
   const day = now.getUTCDay();
@@ -44,6 +53,13 @@ export function currentWeekLabel(now = new Date()): string {
     : `${month.format(start)}–${endLabel}`;
 }
 
+export function currentWeekNumber(now = new Date()): number {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
+
 function projectRow(row: LeaderboardRowDb): LeaderboardRow {
   const breakdown = Object.entries(row.breakdown ?? {}).flatMap(([agent, tokens]) =>
     isSupportedAgent(agent) && typeof tokens === "string"
@@ -53,7 +69,17 @@ function projectRow(row: LeaderboardRowDb): LeaderboardRow {
   return { handle: row.handle, rank: row.rank, total: row.total, breakdown };
 }
 
-export async function leaderboard(limit = 100): Promise<readonly LeaderboardRow[]> {
+export async function leaderboard({ limit = 100, offset = 0 }: LeaderboardOptions = {}): Promise<
+  readonly LeaderboardRow[]
+> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > maximumLeaderboardPageSize) {
+    throw new RangeError(
+      `Leaderboard limit must be between 1 and ${maximumLeaderboardPageSize.toString()}.`,
+    );
+  }
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new RangeError("Leaderboard offset must be a non-negative safe integer.");
+  }
   const rows = await query<LeaderboardRowDb>(
     `WITH per_day AS (
        SELECT user_id, agent, usage_date,
@@ -73,8 +99,9 @@ export async function leaderboard(limit = 100): Promise<readonly LeaderboardRow[
      SELECT u.handle, r.rank::text, r.total::text,
             (SELECT jsonb_object_agg(p.agent, p.tokens) FROM per_agent p WHERE p.user_id = r.user_id) AS breakdown
        FROM ranked r JOIN users u ON u.id = r.user_id
-      ORDER BY r.rank, lower(u.handle), u.id LIMIT $2`,
-    [currentWeekStart(), limit],
+      ORDER BY r.rank, lower(u.handle), u.id
+      LIMIT $2 OFFSET $3`,
+    [currentWeekStart(), limit, offset],
   );
   return rows.map(projectRow);
 }
@@ -103,32 +130,4 @@ export async function publicProfile(handle: string): Promise<LeaderboardRow | nu
   );
   const row = rows[0];
   return row === undefined ? null : projectRow(row);
-}
-
-export function formatExactTokens(value: string): string {
-  return value.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-}
-
-export function formatCompactTokens(value: string): string {
-  const tokens = BigInt(value);
-  const units = [
-    { divisor: 1n, suffix: "" },
-    { divisor: 1_000n, suffix: "K" },
-    { divisor: 1_000_000n, suffix: "M" },
-    { divisor: 1_000_000_000n, suffix: "B" },
-    { divisor: 1_000_000_000_000n, suffix: "T" },
-  ];
-  let index = units.findLastIndex((unit) => tokens >= unit.divisor);
-  if (index <= 0) return tokens.toString();
-  let unit = units[index];
-  if (unit === undefined) return tokens.toString();
-  let tenths = (tokens * 10n + unit.divisor / 2n) / unit.divisor;
-  if (tenths >= 10_000n && index < units.length - 1) {
-    index += 1;
-    unit = units[index] ?? unit;
-    tenths = (tokens * 10n + unit.divisor / 2n) / unit.divisor;
-  }
-  const whole = tenths / 10n;
-  const decimal = tenths % 10n;
-  return `${whole.toString()}${decimal === 0n ? "" : `,${decimal.toString()}`}${unit.suffix}`;
 }

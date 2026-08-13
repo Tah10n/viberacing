@@ -1,0 +1,359 @@
+@media (max-width: 78.75rem) {
+  .app-header {
+    grid-template-columns: 15.25rem minmax(10rem, 1fr) auto;
+  }
+
+  .brand {
+    padding: 0 var(--space-5);
+  }
+
+  .race-meta > span:last-child {
+    display: none;
+  }
+
+  .app-nav > a,
+  .link-button {
+    min-width: 7rem;
+    padding: 0 var(--space-4);
+  }
+
+  .app-nav > a:first-child {
+    min-width: 9.75rem;
+  }
+
+  .app-nav > form .link-button {
+    min-width: 8.75rem;
+  }
+
+  .hero {
+    grid-template-columns: minmax(18rem, 0.8fr) minmax(29rem, 1.2fr);
+  }
+
+  .hero-summary {
+    display: none;
+  }
+}
+
+@media (max-width: 60rem) {
+  .app-header {
+    grid-template-columns: 13.5rem 1fr;
+  }
+
+  .race-meta {
+    display: none;
+  }
+
+  .app-nav {
+    justify-self: end;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    padding: var(--space-5);
+  }
+
+  .hero-copy {
+    padding: 0 0 var(--space-4);
+  }
+
+  .user-callout {
+    border-top: 0.0625rem solid var(--color-line);
+    border-left: 0;
+    padding: var(--space-4) 0 0;
+  }
+
+  .connect-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .connect-panel > .muted {
+    grid-column: 1;
+    margin-top: calc(var(--space-3) * -1);
+  }
+}
+
+@media (max-width: 60rem) {
+  .table-scroll {
+    max-height: 62vh;
+    overflow-x: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  .ranking-table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .ranking-table th,
+  .ranking-table td {
+    padding-right: var(--space-3);
+    padding-left: var(--space-3);
+  }
+
+  .ranking-table th:first-child,
+  .ranking-table td:first-child {
+    width: 3.5rem;
+  }
+
+  .ranking-table th:nth-child(2) {
+    width: auto;
+  }
+
+  .ranking-table th:nth-child(3),
+  .ranking-table td:nth-child(3) {
+    display: none;
+  }
+
+  .ranking-table th:last-child,
+  .ranking-table td:last-child {
+    width: 7.25rem;
+  }
+
+  .ranking-table td {
+    height: 4.75rem;
+  }
+
+  .racer-line {
+    gap: var(--space-2);
+  }
+
+  .racer-cell a {
+    font-size: var(--text-body);
+  }
+
+  .mobile-agent-mix {
+    display: block;
+    margin-top: var(--space-2);
+  }
+
+  .mobile-agent-mix .agent-chip {
+    min-height: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .mobile-agent-mix .agent-stat {
+    gap: var(--space-1);
+  }
+
+  .token-cell strong {
+    font-size: 1.375rem;
+  }
+}
+
+@media (max-width: 45rem) {
+  .app-header {
+    grid-template-columns: 1fr;
+  }
+
+  .brand {
+    min-height: 3.5rem;
+    justify-content: center;
+    border-right: 0;
+    border-bottom: 0.0625rem solid var(--color-line);
+    padding: 0 var(--space-4);
+    font-size: 1.25rem;
+  }
+
+  .app-nav {
+    display: grid;
+    min-height: 3rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+
+  .app-nav-guest {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-nav > a,
+  .app-nav > form,
+  .app-nav > form .link-button,
+  .app-nav > a:first-child,
+  .app-nav .button-small {
+    width: 100%;
+    min-width: 0;
+    min-height: 3rem;
+    border-radius: 0;
+    padding: 0 var(--space-2);
+    font-size: 0.6875rem;
+  }
+
+  .app-nav > a:first-child {
+    border-left: 0;
+  }
+
+  .app-nav [aria-current="page"] {
+    box-shadow: inset 0 -0.125rem var(--color-action);
+  }
+
+  .hero-copy h1 {
+    font-size: 1.875rem;
+  }
+
+  .user-score-line {
+    gap: var(--space-2);
+  }
+
+  .user-score-line a {
+    font-size: 1.5rem;
+  }
+
+  .user-agent,
+  .user-score-line small {
+    display: none;
+  }
+
+  .user-score-line strong {
+    font-size: 3rem;
+  }
+
+  .hero-guest {
+    align-items: stretch;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .hero-guest .button {
+    width: 100%;
+  }
+
+  .leaderboard {
+    padding: var(--space-5) var(--space-4) 0;
+  }
+
+  .standings-pagination {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .standings-pagination > :first-child {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .standings-pagination > :nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .standings-pagination > :last-child {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .standings-pagination .button {
+    width: 100%;
+    padding-right: var(--space-2);
+    padding-left: var(--space-2);
+    font-size: var(--text-xs);
+  }
+
+  .racer-profile-dialog {
+    width: calc(100vw - 1.5rem);
+    margin-top: 4.5rem;
+  }
+
+  .racer-profile-card {
+    padding: var(--space-5);
+  }
+
+  .section-heading {
+    align-items: flex-end;
+  }
+
+  .section-heading > span {
+    display: none;
+  }
+
+  .privacy-strip,
+  footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .privacy-strip {
+    margin: var(--space-3) var(--space-4) 0;
+    gap: var(--space-2);
+  }
+
+  footer p {
+    text-align: left;
+  }
+
+  .dashboard-page,
+  .narrow {
+    width: min(100% - 2rem, var(--container-narrow));
+    padding-top: var(--space-6);
+  }
+
+  .page-heading-with-action {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .summary-grid,
+  .settings-grid,
+  .score-card,
+  .pairing-details {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-grid > div,
+  .score-card > div,
+  .pairing-details > div {
+    border-top: 0.0625rem solid var(--color-line);
+    border-left: 0;
+  }
+
+  .summary-grid > div:first-child,
+  .score-card > div:first-child,
+  .pairing-details > div:first-child {
+    border-top: 0;
+  }
+
+  .device-card {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}
+
+@media (max-width: 32.5rem) {
+  .hero {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .user-score-line strong {
+    margin-left: auto;
+  }
+
+  .privacy-strip div,
+  footer div {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .page-heading h1 {
+    font-size: 2.5rem;
+  }
+
+  .panel,
+  .empty,
+  .empty-state {
+    padding: var(--space-5);
+  }
+
+  .ranking-table th:last-child,
+  .ranking-table td:last-child {
+    width: 6.5rem;
+  }
+
+  .badge {
+    padding-inline: var(--space-1);
+  }
+}
+
+@media (max-width: 22.5rem) {
+  .racer-cell .badge {
+    display: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Badge, PageHeader, Panel } from "../components/ui";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
@@ -54,18 +55,25 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           : null;
   return (
     <main className="dashboard-page">
-      <header className="page-heading dashboard-heading">
-        <div>
-          <p className="eyebrow">RACER CONTROL</p>
-          <h1>Your race setup</h1>
-          <p>
+      <PageHeader
+        action={
+          <a
+            className="button button-secondary"
+            href={`https://github.com/${encodeURIComponent(current.handle)}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open GitHub profile ↗
+          </a>
+        }
+        description={
+          <>
             Signed in as <strong>@{current.handle}</strong>. Manage every connected computer here.
-          </p>
-        </div>
-        <a className="secondary-button" href={`/u/${current.handle}`}>
-          View public profile
-        </a>
-      </header>
+          </>
+        }
+        eyebrow="Racer control"
+        title="Your race setup"
+      />
 
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
@@ -106,7 +114,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                 <div className="device-main">
                   <div className="device-title">
                     <h3>{item.name}</h3>
-                    <span className="status-badge">Connected</span>
+                    <Badge tone="success">Connected</Badge>
                   </div>
                   <div className="agent-list">
                     {item.agents.map((agent) => (
@@ -132,7 +140,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         )}
       </section>
 
-      <section className="panel connect-panel">
+      <Panel className="connect-panel">
         <div>
           <p className="eyebrow">ADD A COMPUTER</p>
           <h2>Connect Codex or Claude Code</h2>
@@ -145,10 +153,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <code>{command}</code>
         </pre>
         <p className="muted">No provider API keys are requested or uploaded.</p>
-      </section>
+      </Panel>
 
       <div className="settings-grid">
-        <section className="panel privacy-panel">
+        <Panel className="privacy-panel">
           <p className="eyebrow">PRIVACY</p>
           <h2>Only totals cross the boundary</h2>
           <ul>
@@ -156,9 +164,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             <li>Never uploaded: prompts, code, paths, repositories, credentials, or models.</li>
             <li>Codex account totals are deduplicated; Claude computer totals are combined.</li>
           </ul>
-        </section>
+        </Panel>
 
-        <section className="panel danger-panel">
+        <Panel className="danger-panel">
           <p className="eyebrow">RACE CONTROL</p>
           <h2>Leave the leaderboard</h2>
           <p>
@@ -174,7 +182,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               Leave leaderboard
             </button>
           </form>
-        </section>
+        </Panel>
       </div>
     </main>
   );

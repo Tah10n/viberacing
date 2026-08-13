@@ -1,0 +1,113 @@
+@font-face {
+  font-family: "Vibe Display";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/barlow-condensed-regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Display";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/barlow-condensed-semibold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Display";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/barlow-condensed-extrabold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Body";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/barlow-regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Body";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/barlow-semibold.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/space-mono-regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Vibe Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/space-mono-bold.ttf") format("truetype");
+}
+
+:root {
+  color-scheme: dark;
+
+  --color-track: #050708;
+  --color-track-header: #030506;
+  --color-track-raised: #090c0e;
+  --color-track-hot: #0d1113;
+  --color-row: #06090a;
+  --color-row-current: #0c1008;
+  --color-line: #252b2e;
+  --color-line-strong: #3a4144;
+  --color-line-soft: #1a1f21;
+  --color-ink: #f2f3ef;
+  --color-muted: #949ba0;
+  --color-muted-strong: #b9bec1;
+  --color-action: #d7ff00;
+  --color-action-soft: #bce000;
+  --color-action-border: #788a00;
+  --color-action-ink: #050700;
+  --color-info: #21dcf4;
+  --color-info-border: #007d8b;
+  --color-danger: #ff593f;
+  --color-danger-border: #5c2920;
+  --color-danger-surface: #160b08;
+  --color-danger-ink: #ffc6bc;
+  --color-success: #73d63d;
+  --color-success-border: #477f30;
+  --color-success-surface: #0b1309;
+  --color-success-ink: #c8edb8;
+  --color-selection-ink: #020300;
+
+  --font-display: "Vibe Display", "Arial Narrow", sans-serif;
+  --font-body: "Vibe Body", Arial, sans-serif;
+  --font-mono: "Vibe Mono", Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-body: 1rem;
+  --text-lg: 1.125rem;
+  --text-section: clamp(1.625rem, 2.2vw, 2.125rem);
+  --text-page: clamp(2.375rem, 4.6vw, 4.125rem);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  --radius-sm: 0.375rem;
+  --control-height: 2.75rem;
+  --container-wide: 73.75rem;
+  --container-narrow: 51.25rem;
+  --header-height: 4.25rem;
+}

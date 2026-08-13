@@ -22,6 +22,7 @@ WORKDIR /app
 
 COPY --from=build --chown=node:node /workspace/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /workspace/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build --chown=node:node /workspace/apps/web/public ./apps/web/public
 COPY --from=build --chown=node:node /workspace/apps/web/database ./apps/web/database
 COPY --from=build --chown=node:node /workspace/apps/web/scripts ./apps/web/scripts
 COPY --from=build --chown=node:node /runtime-deps/node_modules ./apps/web/node_modules

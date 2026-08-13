@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { ActionLink, PageHeader, Panel } from "../components/ui";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { viewer } from "@/lib/session";
@@ -27,18 +28,22 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
   const returnPath = `/connect?code=${encodeURIComponent(code)}`;
   return (
     <main className="narrow connect-page">
-      <header className="page-heading">
-        <p className="eyebrow">PAIR CONNECTOR</p>
-        <h1>Approve this computer</h1>
-        <p>Review what was detected before adding this computer to your race setup.</p>
-      </header>
+      <PageHeader
+        description="Review what was detected before adding this computer to your race setup."
+        eyebrow="Pair connector"
+        title="Approve this computer"
+      />
       {pairing === undefined ? (
-        <section className="panel error">
+        <Panel className="state-panel state-panel-error">
+          <p className="eyebrow">Connection expired</p>
           <h2>Pairing code expired</h2>
           <p>Run the connect command again to get a fresh link.</p>
-        </section>
+          <ActionLink href={current === null ? "/" : "/dashboard"} variant="secondary">
+            {current === null ? "Back to leaderboard" : "Back to race setup"}
+          </ActionLink>
+        </Panel>
       ) : (
-        <section className="panel">
+        <Panel>
           <dl className="pairing-details">
             <div>
               <dt>Agents detected</dt>
@@ -72,7 +77,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
               </button>
             </form>
           )}
-        </section>
+        </Panel>
       )}
     </main>
   );
