@@ -1,0 +1,24 @@
+{
+  "name": "@viberacing/connector",
+  "version": "0.1.0",
+  "description": "Privacy-minimized Codex and Claude Code token sync for Vibe Racing",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "viberacing": "bin/viberacing.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

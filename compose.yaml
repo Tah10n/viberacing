@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17.6-bookworm@sha256:feff5b24fedd610975a1f5e743c51a4b360437f4dc3a11acf740dcd708f413f6
+    environment:
+      POSTGRES_DB: viberacing
+      POSTGRES_PASSWORD: viberacing
+      POSTGRES_USER: viberacing
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viberacing -d viberacing"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

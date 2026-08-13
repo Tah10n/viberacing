@@ -1,0 +1,41 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# Dependencies and generated output
+node_modules/
+.pnpm-store/
+.next/
+coverage/
+dist/
+*.tsbuildinfo
+*.log
+
+# Local agent and editor state
+.codex/
+.codex-log/
+.claude/
+.viberacing/
+.idea/
+.vscode/settings.json
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
+.local-data/
+postgres-data/
+*.backup
+*.db
+*.dump
+*.sqlite
+*.sqlite3
+*.tgz
+token-usage*
+usage-export*
+*.tmp
+*.swp

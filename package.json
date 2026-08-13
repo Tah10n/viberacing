@@ -1,0 +1,32 @@
+{
+  "name": "viberacing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Weekly leaderboard for coding-agent token usage",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.14.0 <25",
+    "pnpm": "11.7.x"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "audit": "corepack pnpm audit --audit-level high",
+    "build": "corepack pnpm --filter @viberacing/web build",
+    "db:migrate": "corepack pnpm --filter @viberacing/web db:migrate",
+    "dev": "corepack pnpm --filter @viberacing/web dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "corepack pnpm --filter @viberacing/web lint",
+    "local:down": "sh scripts/local-down.sh",
+    "local:test": "docker exec viberacing-local node scripts/test-local-scenarios.mjs",
+    "local:up": "sh scripts/local-up.sh",
+    "privacy:check": "node scripts/check-privacy.mjs",
+    "test": "corepack pnpm --filter @viberacing/web test && corepack pnpm --filter @viberacing/connector test",
+    "typecheck": "corepack pnpm --filter @viberacing/web typecheck",
+    "verify": "corepack pnpm run privacy:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
+  },
+  "devDependencies": {
+    "prettier": "3.9.4"
+  }
+}

@@ -1,0 +1,63 @@
+import { connection } from "next/server";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import {
+  currentWeekLabel,
+  formatCompactTokens,
+  formatExactTokens,
+  publicProfile,
+} from "@/lib/leaderboard";
+
+interface ProfileProps {
+  params: Promise<{ handle: string }>;
+}
+
+export default async function ProfilePage({ params }: ProfileProps) {
+  await connection();
+  const { handle } = await params;
+  if (!/^[A-Za-z0-9-]{1,39}$/.test(handle)) notFound();
+  const profile = await publicProfile(handle);
+  if (profile === null) notFound();
+  return (
+    <main className="narrow profile-page">
+      <Link className="back-link" href="/">
+        Back to standings
+      </Link>
+      <header className="page-heading">
+        <p className="eyebrow">RACER PROFILE</p>
+        <h1>@{profile.handle}</h1>
+        <p>Weekly performance · {currentWeekLabel()}</p>
+      </header>
+      <section className="score-card" aria-label="Weekly score">
+        <div>
+          <span>Weekly rank</span>
+          <strong>#{profile.rank}</strong>
+        </div>
+        <div>
+          <span>Total usage</span>
+          <strong title={`${formatExactTokens(profile.total)} tokens`}>
+            {formatCompactTokens(profile.total)}
+          </strong>
+          <small>tokens</small>
+        </div>
+      </section>
+      <section className="panel">
+        <div className="panel-heading">
+          <h2>Usage by agent</h2>
+          <span>{profile.breakdown.length} connected</span>
+        </div>
+        {profile.breakdown.map((item) => (
+          <div className="breakdown" key={item.agent}>
+            <div>
+              <strong>{item.label}</strong>
+              <span>Weekly aggregate</span>
+            </div>
+            <strong title={`${formatExactTokens(item.tokens)} tokens`}>
+              {formatCompactTokens(item.tokens)}
+            </strong>
+          </div>
+        ))}
+      </section>
+    </main>
+  );
+}
