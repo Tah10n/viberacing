@@ -21,3 +21,18 @@ data.
 Good-faith research must avoid accessing another person's data, persistence, destructive actions,
 denial of service, social engineering, credential theft, and production testing when a local
 reproduction is possible.
+
+## Security properties
+
+Browser mutations require a valid HttpOnly session and exact same-origin `Origin`. OAuth state is
+random and timing-safe compared; login rotates the browser session. Installation, pairing, poll,
+device, and session capabilities are stored only as SHA-256 hashes. The server accepts usage only
+for an active source belonging to the authenticated installation and enforces body/range/count/
+numeric limits plus PostgreSQL-backed rate limits.
+
+Production requires an explicit HTTPS origin and starts as a non-root user with CSP, frame,
+referrer, content-type, permissions, and cross-origin isolation headers. The only insecure-origin
+escape hatch accepts loopback and is reserved for the documented local production preview.
+
+The ranking is intentionally self-reported: these controls prevent anonymous/manual web writes and
+cross-account access, but they cannot prove that a user-controlled local usage store is honest.

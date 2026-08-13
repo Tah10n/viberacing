@@ -1,40 +1,34 @@
 # Privacy
 
-During pairing, the connector sends the detected agent identifiers and random pairing credentials.
-When reconnecting to the same origin, it also sends its previous Vibe Racing device token so the
-server can replace that computer's connection without duplicating history. It does not send the
-computer hostname.
+Vibe Racing sends only the data needed to compute a self-reported ranking.
 
-During usage sync, the connector uploads only:
+During pairing the connector sends protocol/connector versions, a random installation identity and
+proof, opaque client source IDs, agent IDs, allowlisted collection methods, supported surface, and a
+neutral suggested label. During sync it sends a server source ID, sequence, UTC range,
+complete/partial status, UTC dates, aggregate total tokens, and optional aggregate input/output/
+cache/reasoning counters.
 
-- supported agent identifier (`codex` or `claude_code`);
-- UTC date;
-- cumulative token count for that agent and date.
+It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
+paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
+monetary/request metrics. Raw session stores can contain sensitive content, so adapters extract
+usage locally and discard every other field. Cursor and Antigravity capture wrappers pass native
+output through to the terminal but persist only a random event ID, UTC date, and token counters.
 
-It never uploads prompts, responses, code, transcript text, repository names, local paths, provider
-credentials, model names, or costs.
+GitHub OAuth requests `read:user`. The access token is used once to obtain immutable GitHub ID and
+current handle and is not stored. Browser, installation, poll, and device secrets are SHA-256 hashed
+in PostgreSQL. Local Vibe Racing directories are owner-only; secrets/config files are `0600` and the
+installed executable is `0700`.
 
-GitHub OAuth requests the `read:user` scope. The server reads and stores only the GitHub ID and
-handle; the access token is used for that request and is not stored. The server also stores hashed
-session and connector credentials, connection status, detected agent identifiers, sync timestamps,
-and daily aggregate totals.
+Public pages expose GitHub handle, current UTC-week rank, total, and agent breakdown. They do not
+expose daily data, account labels, source/installation details, or credentials. Local data is under
+the user's control, so the leaderboard is explicitly self-reported and grants no authorization,
+reward, or access.
 
-The leaderboard and public profile show the GitHub handle, weekly rank, weekly token total, and
-weekly total for each connected agent. Daily totals, GitHub ID, session and connector credentials,
-connection status, and sync metadata are not exposed on public pages.
+Disconnecting an installation or source revokes future ingestion but retains its history. Deleting
+an agent account deletes its sources and usage. **Leave leaderboard** deletes all usage and revokes
+installations while retaining the GitHub identity and empty account labels. **Delete Vibe Racing
+account** deletes the user and all dependent data and clears the browser session.
 
-Usage comes from files controlled by the user's machine and is therefore self-reported. The
-leaderboard compares reported token volume, not price, work quality, productivity, or effort.
-
-Users can disconnect one computer without deleting prior totals. The **Leave leaderboard** action
-deletes all usage totals and revokes every computer connection immediately; the GitHub identity and
-current browser sign-in remain so the user can join again later.
-
-Codex reports account-wide daily buckets, so duplicate reports from several computers are collapsed
-to the largest value. Claude Code history is machine-local, so totals from separate computers are
-added.
-
-Local development credentials live in the ignored `apps/web/.env.local`. Agent state, temporary
-screenshots, database files, dumps, and usage exports are also ignored. `pnpm verify` runs a privacy
-guard that fails when these paths or recognizable credentials could be committed. The Docker build
-uses an allowlist and cannot copy local environment files into the image.
+The repository privacy guard rejects known local stores, telemetry, captures, databases, dumps,
+credentials, and fixtures containing content/path/tool fields. Fixtures are synthetic usage-only
+records.

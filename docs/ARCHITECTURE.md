@@ -1,28 +1,45 @@
 # Architecture
 
-Vibe Racing uses the smallest production shape that serves the product:
-
 ```text
-Codex / Claude Code -> local connector -> Next.js -> PostgreSQL
-                                          |
-Browser -------- GitHub OAuth ------------+
+eight local agent adapters -> connector protocol v2 -> Next.js -> PostgreSQL
+browser ---------------------- GitHub OAuth -----------^
 ```
 
-`apps/web` owns OAuth, sessions, browser pairing, usage ingestion, profiles, and ranking.
-`packages/connector` reads supported local agent usage and sends daily aggregates. PostgreSQL stores
-users, sessions, computer connections, and daily usage.
+`apps/web` owns OAuth, hashed sessions, browser pairing, authenticated snapshot ingestion,
+account/source lifecycle, SSR pages, and ranking. `packages/connector` owns stable installation
+identity, local-only source paths, exact collectors, additive hooks, CLI capture wrappers,
+single-flight/retry/pending state, and diagnostics. PostgreSQL is the only shared state. There is no
+queue, cache, worker, proxy, ORM, or second service.
 
-Pairing returns a short browser code plus separate poll and device secrets. Secrets and session
-tokens are SHA-256 hashed before storage. A user may have several independently revocable computer
-connections. The server assigns neutral labels such as `Computer 1`; hostnames are not collected.
-Usage updates are idempotent per connection, agent, and UTC date: retries can only keep or increase
-the stored value. Account-wide Codex buckets use the largest daily value reported across computers;
-machine-local Claude Code totals are summed. Reconnecting the same installation replaces its old
-connection and preserves its history.
+## Identity and pairing
 
-Disconnecting one computer revokes only its device token and keeps historical weekly totals. Leaving
-the leaderboard revokes every device token and deletes all usage rows while preserving the GitHub
-identity so the user can join again later.
+`installation.json` contains a random UUID and secret that survive reconnect. `config.json` contains
+the current server origin, device capability, local source mapping, and local paths. The connector
+sends only opaque client source IDs and allowlisted source metadata during pairing. In one browser
+transaction, each source is mapped to a new or existing `agent_account` of the same user and agent.
+Approval rotates the device token; a transaction lock serializes reconnects.
 
-Weekly ranking is calculated directly from daily rows. There is no cache, queue, worker, or separate
-ingestion service.
+Server storage separates `installations`, human-defined `agent_accounts`, and machine-local
+`installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
+
+## Snapshot ingestion and ranking
+
+Every source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence. Complete
+snapshots replace values and delete missing dates; partial snapshots update only present dates.
+Values may decrease. The server validates canonical decimal strings, source ownership, body/range
+limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction.
+
+Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
+Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
+use daily `max`; machine-local sources use daily `sum`. Different accounts and agents sum.
+
+## Reliability and lifecycle
+
+Collectors run independently with concurrency four. A stale-aware atomic file lock provides
+cross-process single flight. Network calls use bounded exponential retry with jitter; one latest
+pending snapshot file per source survives a process or network failure. Owned hook handlers carry
+the exact `viberacing-hook-v2` marker and can be updated or removed without touching other hooks.
+
+`/health` is process liveness. `/ready` validates production configuration, PostgreSQL, and the
+exact migration ledger. Small opportunistic cleanup batches remove expired sessions/pairings,
+rate-limit buckets, old empty revoked installations, and orphaned empty accounts.
