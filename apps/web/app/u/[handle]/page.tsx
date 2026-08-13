@@ -58,6 +58,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
             </strong>
           </div>
         ))}
+        <p className="muted">Token totals are self-reported by local connectors.</p>
       </Panel>
     </main>
   );

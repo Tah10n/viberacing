@@ -1,11 +1,23 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { publicOrigin, secureCookies } from "./config";
+import { publicOrigin, secureCookies, validateRuntimeConfig } from "./config";
 
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
+const originalDatabaseUrl = process.env.DATABASE_URL;
+const originalDatabaseSsl = process.env.VIBERACING_DATABASE_SSL;
+const originalClientId = process.env.GITHUB_CLIENT_ID;
+const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
 
 afterEach(() => {
   if (originalOrigin === undefined) delete process.env.VIBERACING_PUBLIC_ORIGIN;
   else process.env.VIBERACING_PUBLIC_ORIGIN = originalOrigin;
+  if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = originalDatabaseUrl;
+  if (originalDatabaseSsl === undefined) delete process.env.VIBERACING_DATABASE_SSL;
+  else process.env.VIBERACING_DATABASE_SSL = originalDatabaseSsl;
+  if (originalClientId === undefined) delete process.env.GITHUB_CLIENT_ID;
+  else process.env.GITHUB_CLIENT_ID = originalClientId;
+  if (originalClientSecret === undefined) delete process.env.GITHUB_CLIENT_SECRET;
+  else process.env.GITHUB_CLIENT_SECRET = originalClientSecret;
 });
 
 describe("public origin", () => {
@@ -23,5 +35,27 @@ describe("public origin", () => {
   it("uses secure cookies over HTTPS", () => {
     process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
     expect(secureCookies()).toBe(true);
+  });
+
+  it("fails startup validation when required production configuration is absent", () => {
+    delete process.env.DATABASE_URL;
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    process.env.VIBERACING_DATABASE_SSL = "true";
+    process.env.GITHUB_CLIENT_ID = "synthetic-client";
+    process.env.GITHUB_CLIENT_SECRET = "synthetic-secret";
+    expect(() => {
+      validateRuntimeConfig();
+    }).toThrow(/DATABASE_URL/);
+  });
+
+  it("accepts a complete, internally consistent runtime configuration", () => {
+    process.env.DATABASE_URL = "postgresql://example.invalid/viberacing";
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    process.env.VIBERACING_DATABASE_SSL = "true";
+    process.env.GITHUB_CLIENT_ID = "synthetic-client";
+    process.env.GITHUB_CLIENT_SECRET = "synthetic-secret";
+    expect(() => {
+      validateRuntimeConfig();
+    }).not.toThrow();
   });
 });

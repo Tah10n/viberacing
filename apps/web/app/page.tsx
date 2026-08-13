@@ -81,7 +81,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
           <div>
             <span>Supported agents</span>
-            <strong>Codex · Claude Code</strong>
+            <strong>8 exact adapters</strong>
+            <small>CLI-first · documented surfaces</small>
           </div>
           <div>
             <span>Privacy</span>
