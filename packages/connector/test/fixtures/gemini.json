@@ -1,0 +1,8 @@
+[
+  {
+    "id": "event-1",
+    "type": "gemini",
+    "timestamp": "2026-08-10T12:00:00Z",
+    "tokens": { "input": 10, "output": 5, "cached": 3, "thoughts": 2, "tool": 0, "total": 17 }
+  }
+]
