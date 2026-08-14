@@ -2,7 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, chmod, mkdir, mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import {
+  access,
+  appendFile,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  stat,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -13,8 +23,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
 
+const sourceIds = new Map();
 function source(agentId) {
-  return { agentId };
+  if (!sourceIds.has(agentId)) {
+    const suffix = (sourceIds.size + 1).toString().padStart(12, "0");
+    sourceIds.set(agentId, `00000000-0000-4000-8000-${suffix}`);
+  }
+  return { agentId, clientSourceId: sourceIds.get(agentId) };
 }
 
 function connectorEnvironment(home, extra = {}) {
@@ -60,8 +75,8 @@ async function readLocalSources(directory) {
 
 async function writeCaptureInstallation(home, origin, options = {}) {
   const directory = join(home, ".viberacing");
-  const capture = join(directory, "captures", "antigravity.jsonl");
   const clientSourceId = options.clientSourceId ?? "abababab-abab-4bab-8bab-abababababab";
+  const capture = join(directory, "captures", `${clientSourceId}.jsonl`);
   const sourceId = options.sourceId ?? "89898989-8989-4989-8989-898989898989";
   const date = new Date().toISOString().slice(0, 10);
   await mkdir(join(directory, "captures"), { recursive: true });
@@ -101,7 +116,44 @@ async function writeCaptureInstallation(home, origin, options = {}) {
       ],
     })}\n`,
   );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: { [sourceId]: "0" } })}\n`,
+  );
   return { directory, capture, clientSourceId, sourceId };
+}
+
+async function writeMappedInstallation(home, origin, sources) {
+  const directory = join(home, ".viberacing");
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(
+    directory,
+    sources.map(({ sourceId: _sourceId, accountLabel: _accountLabel, ...source }) => source),
+  );
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin,
+      deviceToken: "synthetic-device-token-that-is-long-enough",
+      sources: sources.map((source) => ({
+        clientSourceId: source.clientSourceId,
+        sourceId: source.sourceId,
+        agentId: source.agentId,
+        accountLabel: source.accountLabel ?? source.suggestedLabel,
+        collectionMethod: source.collectionMethod,
+        lastAcceptedSyncSequence: "0",
+      })),
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: Object.fromEntries(sources.map((source) => [source.sourceId, "0"])),
+    })}\n`,
+  );
+  return directory;
 }
 
 async function runWithInput(arguments_, environment, input) {
@@ -163,17 +215,18 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     const qwen = JSON.parse(await readFile(join(home, ".qwen", "settings.json"), "utf8"));
     const kimi = await readFile(join(home, ".kimi", "config.toml"), "utf8");
     assert.equal(codex.hooks.SessionEnd[0].hooks[0].command, "keep-me");
+    const codexMarker = module.hookMarkerForSource(source("codex").clientSourceId);
     assert.equal(
-      codex.hooks.SessionEnd.filter((group) => JSON.stringify(group).includes(module.hookMarker))
-        .length,
+      codex.hooks.SessionEnd.filter((group) => JSON.stringify(group).includes(codexMarker)).length,
       1,
     );
-    assert.match(JSON.stringify(claude), /viberacing-hook-v2/);
-    assert.match(JSON.stringify(gemini), /viberacing-hook-v2/);
-    assert.match(JSON.stringify(qwen), /viberacing-hook-v2/);
+    assert.doesNotMatch(JSON.stringify(codex), /viberacing-hook-v2/);
+    assert.match(JSON.stringify(claude), /viberacing-hook-v3:/);
+    assert.match(JSON.stringify(gemini), /viberacing-hook-v3:/);
+    assert.match(JSON.stringify(qwen), /viberacing-hook-v3:/);
     assert.equal(gemini.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
     assert.equal(qwen.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
-    assert.match(kimi, /\[\[hooks\]\][\s\S]*Stop[\s\S]*viberacing-hook-v2/);
+    assert.match(kimi, /\[\[hooks\]\][\s\S]*Stop[\s\S]*viberacing-hook-v3:/);
     const hooks = await module.diagnoseHooks([
       source("codex"),
       source("claude_code"),
@@ -201,7 +254,7 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
               hooks: [
                 {
                   type: "command",
-                  command: "node obsolete.mjs hook --viberacing-hook-id=viberacing-hook-v2",
+                  command: `node obsolete.mjs hook ${module.hookMarkerForSource(source("claude_code").clientSourceId)}`,
                 },
               ],
             },
@@ -216,12 +269,12 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     await module.removeHooks();
     assert.doesNotMatch(
       await readFile(join(home, ".codex", "hooks.json"), "utf8"),
-      /viberacing-hook-v2/,
+      /viberacing-hook-v[23]/,
     );
     assert.match(await readFile(join(home, ".codex", "hooks.json"), "utf8"), /keep-me/);
     assert.doesNotMatch(
       await readFile(join(home, ".kimi", "config.toml"), "utf8"),
-      /viberacing-hook-v2/,
+      /viberacing-hook-v[23]/,
     );
   } finally {
     restoreEnvironment();
@@ -240,6 +293,90 @@ test("reports invalid existing hook settings instead of claiming success", async
         source("claude_code"),
       ]),
       /Cannot read hook settings/,
+    );
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("source-owned hooks reconcile profiles independently and upgrade legacy markers", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-source-hooks-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?source-hooks=${encodeURIComponent(home)}`);
+    const first = {
+      clientSourceId: "71717171-7171-4171-8171-717171717171",
+      agentId: "qwen_code",
+      dataPath: join(home, "qwen-personal"),
+      collectionMethod: "qwen_stats_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Personal",
+    };
+    const second = {
+      ...first,
+      clientSourceId: "72727272-7272-4272-8272-727272727272",
+      dataPath: join(home, "qwen-work"),
+      suggestedLabel: "Work",
+    };
+    for (const profile of [first, second]) {
+      await mkdir(profile.dataPath, { recursive: true });
+      await writeFile(
+        join(profile.dataPath, "settings.json"),
+        JSON.stringify({
+          hooks: {
+            SessionEnd: [
+              { hooks: [{ type: "command", command: "keep-foreign-hook" }] },
+              ...(profile === first
+                ? [
+                    {
+                      hooks: [
+                        {
+                          type: "command",
+                          command: `node old hook ${module.legacyHookMarker}`,
+                        },
+                      ],
+                    },
+                  ]
+                : []),
+            ],
+          },
+        }),
+      );
+    }
+    await module.reconcileHooks(
+      new URL("../bin/viberacing.mjs", import.meta.url),
+      [first, second],
+      [first, second],
+    );
+    const firstSettings = await readFile(join(first.dataPath, "settings.json"), "utf8");
+    const secondSettings = await readFile(join(second.dataPath, "settings.json"), "utf8");
+    assert.match(firstSettings, new RegExp(module.hookMarkerForSource(first.clientSourceId)));
+    assert.match(firstSettings, new RegExp(`--source ${first.clientSourceId}`));
+    assert.match(secondSettings, new RegExp(module.hookMarkerForSource(second.clientSourceId)));
+    assert.match(secondSettings, new RegExp(`--source ${second.clientSourceId}`));
+    assert.doesNotMatch(firstSettings, /viberacing-hook-v2/);
+    assert.match(firstSettings, /keep-foreign-hook/);
+
+    await module.removeHookForSource(first);
+    assert.doesNotMatch(
+      await readFile(join(first.dataPath, "settings.json"), "utf8"),
+      new RegExp(module.hookMarkerForSource(first.clientSourceId)),
+    );
+    assert.match(
+      await readFile(join(second.dataPath, "settings.json"), "utf8"),
+      new RegExp(module.hookMarkerForSource(second.clientSourceId)),
+    );
+    assert.equal(await module.diagnoseHookForSource(first), "missing");
+    await module.reconcileHooks(
+      new URL("../bin/viberacing.mjs", import.meta.url),
+      [first],
+      [first, second],
+    );
+    assert.equal(await module.diagnoseHookForSource(first), "current");
+    assert.equal(await module.diagnoseHookForSource(second), "missing");
+    assert.match(
+      await readFile(join(second.dataPath, "settings.json"), "utf8"),
+      /keep-foreign-hook/,
     );
   } finally {
     restoreEnvironment();
@@ -380,18 +517,36 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
   try {
     const runtime = await import(`../lib/runtime.mjs?auto-dirty=${encodeURIComponent(home)}`);
     const start = Date.parse("2026-08-14T08:00:00.000Z");
+    const clientSourceId = "12121212-1212-4121-8121-121212121212";
     for (let index = 0; index < 20; index += 1) {
-      await runtime.markDirty(new Date(start + index * 1_500));
+      await runtime.markDirty(clientSourceId, new Date(start + index * 1_500));
     }
     const dirty = await runtime.readDirty();
-    assert.equal(dirty.dirtySince, new Date(start).toISOString());
-    assert.equal(dirty.lastEventAt, new Date(start + 28_500).toISOString());
+    const entry = dirty.sources[clientSourceId];
+    assert.equal(entry.dirtySince, new Date(start).toISOString());
+    assert.equal(entry.lastEventAt, new Date(start + 28_500).toISOString());
     assert.equal(runtime.automaticDueAt(dirty), start + 43_500);
-    assert.equal(
-      runtime.automaticDueAt({ ...dirty, lastEventAt: new Date(start + 300_000).toISOString() }, 0),
-      start + 120_000,
-    );
+    const delayed = structuredClone(dirty);
+    delayed.sources[clientSourceId].lastEventAt = new Date(start + 300_000).toISOString();
+    assert.equal(runtime.automaticDueAt(delayed, 0), start + 120_000);
     assert.equal(runtime.automaticDueAt(dirty, start + 50_000), start + 170_000);
+    const secondSourceId = "23232323-2323-4232-8232-232323232323";
+    await Promise.all([
+      runtime.markDirty(clientSourceId, new Date(start + 30_000)),
+      runtime.markDirty(secondSourceId, new Date(start + 30_000)),
+    ]);
+    const concurrent = await runtime.readDirty();
+    assert.deepEqual(
+      new Set(runtime.dirtyEntries(concurrent).map(([id]) => id)),
+      new Set([clientSourceId, secondSourceId]),
+    );
+    const claims = runtime.dirtyClaims(concurrent);
+    await runtime.markDirty(clientSourceId, new Date(start + 31_000));
+    await runtime.clearDirty(claims);
+    assert.deepEqual(
+      runtime.dirtyEntries(await runtime.readDirty()).map(([id]) => id),
+      [clientSourceId],
+    );
     assert.deepEqual(
       runtime.configuredAutomaticSyncTimings({
         NODE_ENV: "test",
@@ -458,18 +613,19 @@ test("capture compaction serializes concurrent safe appends", async (context) =>
     import { appendCapture, compactCapture } from ${JSON.stringify(runtimeUrl)};
     import { join } from "node:path";
     const date = "2026-08-10";
+    const path = join(process.env.VIBERACING_STATE_DIR, "captures", "34343434-3434-4343-8343-343434343434.jsonl");
+    const source = { agentId: "antigravity", clientSourceId: "34343434-3434-4343-8343-343434343434", dataPath: path };
     const usage = (id) => ({ id, date, usage: { date, totalTokens: "12", inputTokens: "5", outputTokens: "7" } });
-    await appendCapture("antigravity", [usage("initial")]);
-    const path = join(process.env.VIBERACING_STATE_DIR, "captures", "antigravity.jsonl");
+    await appendCapture(source, [usage("initial")]);
     await Promise.all([
-      ...Array.from({ length: 20 }, (_, index) => appendCapture("antigravity", [usage(\`concurrent-\${index}\`)])),
+      ...Array.from({ length: 20 }, (_, index) => appendCapture(source, [usage(\`concurrent-\${index}\`)])),
       ...Array.from({ length: 5 }, () => compactCapture(path, new Date("2026-08-14T12:00:00Z"), 1)),
     ]);
   `;
   await execFileAsync(process.execPath, ["--input-type=module", "--eval", script], {
     env: connectorEnvironment(home),
   });
-  const path = join(home, ".viberacing", "captures", "antigravity.jsonl");
+  const path = join(home, ".viberacing", "captures", "34343434-3434-4343-8343-343434343434.jsonl");
   const ids = (await readFile(path, "utf8"))
     .trim()
     .split("\n")
@@ -566,7 +722,7 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   const hookResults = await Promise.all(
     Array.from({ length: 20 }, (_, index) =>
       runWithInput(
-        ["hook", "--agent", "antigravity"],
+        ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
         environment,
         JSON.stringify({ prompt: `private-${index}`, cwd: `/private/${index}` }),
       ),
@@ -578,7 +734,11 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   const appendScript = `
     import { appendCapture } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url))).href)};
     const date = new Date().toISOString().slice(0, 10);
-    await appendCapture("antigravity", [{
+    await appendCapture({
+      agentId: "antigravity",
+      clientSourceId: ${JSON.stringify(installation.clientSourceId)},
+      dataPath: ${JSON.stringify(installation.capture)},
+    }, [{
       id: "event-during-sync",
       date,
       usage: { date, totalTokens: "5", inputTokens: "2", outputTokens: "3" },
@@ -588,7 +748,7 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
     env: environment,
   });
   const secondHook = await runWithInput(
-    ["hook", "--agent", "antigravity"],
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
     environment,
     '{"prompt":"private-during-sync"}',
   );
@@ -605,6 +765,381 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   await waitFor(async () => {
     try {
       await access(join(installation.directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+});
+
+test("a Claude hook collects only its dirty source and unchanged data sends no HTTP", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+          sourceSequences: body.snapshots.map((snapshot) => ({
+            sourceId: snapshot.sourceId,
+            lastAcceptedSyncSequence: snapshot.syncSequence,
+            accepted: true,
+          })),
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-targeted-claude-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const fixtureRoot = fileURLToPath(new URL("fixtures", import.meta.url));
+  const sources = [
+    {
+      clientSourceId: "10101010-1010-4010-8010-101010101010",
+      sourceId: "11111111-1010-4010-8010-101010101010",
+      agentId: "claude_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Claude",
+    },
+    {
+      clientSourceId: "20202020-2020-4020-8020-202020202020",
+      sourceId: "22222222-2020-4020-8020-202020202020",
+      agentId: "codex",
+      dataPath: join(home, "codex-profile"),
+      collectionMethod: "codex_app_server",
+      supportedSurface: "cli",
+      suggestedLabel: "Codex",
+    },
+    {
+      clientSourceId: "30303030-3030-4030-8030-303030303030",
+      sourceId: "33333333-3030-4030-8030-303030303030",
+      agentId: "opencode",
+      dataPath: join(home, "must-not-open.db"),
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+    },
+  ];
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+  const bin = join(home, "bin");
+  const codexLaunch = join(home, "codex-launched");
+  await mkdir(bin);
+  await writeFile(
+    join(bin, "codex"),
+    `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(codexLaunch)}, "launched");\n`,
+  );
+  await chmod(join(bin, "codex"), 0o700);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    PATH: `${bin}${delimiter}${process.env.PATH}`,
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "25,150,100",
+  });
+  const hookArguments = ["hook", "--source", sources[0].clientSourceId, "--agent", "claude_code"];
+  await runWithInput(hookArguments, environment, '{"prompt":"private"}');
+  await waitFor(() => bodies.length === 1);
+  assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"), [sources[0].clientSourceId]);
+  assert.equal(bodies[0].snapshots.length, 1);
+  assert.equal(bodies[0].snapshots[0].sourceId, sources[0].sourceId);
+  await assert.rejects(access(codexLaunch));
+
+  await runWithInput(hookArguments, environment, '{"response":"private"}');
+  await waitFor(async () => (await readFile(trace, "utf8")).trim().split("\n").length === 2);
+  await waitFor(async () => {
+    try {
+      await access(join(directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal(bodies.length, 1);
+  assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"), [
+    sources[0].clientSourceId,
+    sources[0].clientSourceId,
+  ]);
+  await assert.rejects(access(codexLaunch));
+});
+
+test("events from Claude and Kimi coalesce without collecting other sources", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+          sourceSequences: body.snapshots.map((snapshot) => ({
+            sourceId: snapshot.sourceId,
+            lastAcceptedSyncSequence: snapshot.syncSequence,
+            accepted: true,
+          })),
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-targeted-coalesced-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const fixtureRoot = fileURLToPath(new URL("fixtures", import.meta.url));
+  const sources = [
+    {
+      clientSourceId: "40404040-4040-4040-8040-404040404040",
+      sourceId: "44444444-4040-4040-8040-404040404040",
+      agentId: "claude_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Claude",
+    },
+    {
+      clientSourceId: "50505050-5050-4050-8050-505050505050",
+      sourceId: "55555555-5050-4050-8050-505050505050",
+      agentId: "kimi_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "kimi_wire_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Kimi",
+    },
+    {
+      clientSourceId: "60606060-6060-4060-8060-606060606060",
+      sourceId: "66666666-6060-4060-8060-606060606060",
+      agentId: "opencode",
+      dataPath: join(home, "must-not-open.db"),
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+    },
+  ];
+  await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "50,200,150",
+  });
+  await Promise.all(
+    sources
+      .slice(0, 2)
+      .map((source) =>
+        runWithInput(
+          ["hook", "--source", source.clientSourceId, "--agent", source.agentId],
+          environment,
+          "{}",
+        ),
+      ),
+  );
+  await waitFor(() => bodies.length === 1);
+  assert.deepEqual(
+    new Set((await readFile(trace, "utf8")).trim().split("\n")),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+  assert.deepEqual(
+    new Set(bodies[0].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set(sources.slice(0, 2).map((source) => source.sourceId)),
+  );
+});
+
+test("manual sync collects every active source and clears only its prior dirty generations", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+          sourceSequences: body.snapshots.map((snapshot) => ({
+            sourceId: snapshot.sourceId,
+            lastAcceptedSyncSequence: snapshot.syncSequence,
+            accepted: true,
+          })),
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-manual-dirty-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  const date = new Date().toISOString().slice(0, 10);
+  const sources = [0, 1].map((index) => ({
+    clientSourceId: `${index + 7}0707070-7070-4070-8070-70707070707${index}`,
+    sourceId: `${index + 8}0808080-8080-4080-8080-80808080808${index}`,
+    agentId: "antigravity",
+    dataPath: join(directory, "captures", `${index}.jsonl`),
+    collectionMethod: "antigravity_cli_capture",
+    supportedSurface: "cli",
+    suggestedLabel: `Antigravity ${index}`,
+  }));
+  await mkdir(join(directory, "captures"), { recursive: true });
+  for (const [index, source] of sources.entries())
+    await writeFile(
+      source.dataPath,
+      `${JSON.stringify({
+        id: `manual-${index}`,
+        date,
+        usage: { date, totalTokens: `${index + 1}` },
+      })}\n`,
+    );
+  await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: Object.fromEntries(
+        sources.map((source, index) => [
+          source.clientSourceId,
+          {
+            dirtySince: new Date().toISOString(),
+            lastEventAt: new Date().toISOString(),
+            generation: `90909090-9090-4090-8090-90909090909${index}`,
+          },
+        ]),
+      ),
+    })}\n`,
+  );
+  const trace = join(home, "manual-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+  });
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.deepEqual(
+    new Set((await readFile(trace, "utf8")).trim().split("\n")),
+    new Set(sources.map((source) => source.clientSourceId)),
+  );
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0].snapshots.length, 2);
+  await assert.rejects(access(join(directory, "dirty.json")));
+  await assert.rejects(access(join(directory, "scheduler.lock")));
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(bodies.length, 1);
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 4);
+});
+
+test("an event arriving during manual sync survives for the next targeted batch", async (context) => {
+  const bodies = [];
+  let firstRequestStarted;
+  let releaseFirstResponse;
+  const firstRequest = new Promise((resolve) => (firstRequestStarted = resolve));
+  const firstResponseCanFinish = new Promise((resolve) => (releaseFirstResponse = resolve));
+  context.after(() => releaseFirstResponse());
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      if (bodies.length === 1) firstRequestStarted();
+      const finish = () => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+            sourceSequences: body.snapshots.map((snapshot) => ({
+              sourceId: snapshot.sourceId,
+              lastAcceptedSyncSequence: snapshot.syncSequence,
+              accepted: true,
+            })),
+          }),
+        );
+      };
+      if (bodies.length === 1) firstResponseCanFinish.then(finish);
+      else finish();
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-manual-event-race-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const now = new Date().toISOString();
+  await writeFile(
+    join(installation.directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [installation.clientSourceId]: {
+          dirtySince: now,
+          lastEventAt: now,
+          generation: "91919191-9191-4191-8191-919191919191",
+        },
+      },
+    })}\n`,
+  );
+  const trace = join(home, "manual-race-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "25,150,100",
+  });
+  const manual = execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  await firstRequest;
+  const date = new Date().toISOString().slice(0, 10);
+  await appendFile(
+    installation.capture,
+    `${JSON.stringify({
+      id: "manual-race-second-event",
+      date,
+      usage: { date, totalTokens: "5", inputTokens: "2", outputTokens: "3" },
+    })}\n`,
+  );
+  await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  releaseFirstResponse();
+  await manual;
+  await waitFor(() => bodies.length === 2);
+  assert.equal(bodies[1].snapshots[0].entries[0].totalTokens, "8");
+  assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"), [
+    installation.clientSourceId,
+    installation.clientSourceId,
+  ]);
+  await waitFor(async () => {
+    try {
+      await access(join(installation.directory, "dirty.json"));
       return false;
     } catch {
       return true;
@@ -652,10 +1187,10 @@ test("requires an explicit safe label when adding a local data root", async (con
   await assert.rejects(access(join(state, "config.json")));
 });
 
-test("removes an already-disconnected source and its pending state idempotently", async (context) => {
+test("removes a source online with all local state and remains idempotent", async (context) => {
   const server = createServer((_request, response) => {
-    response.writeHead(404, { "content-type": "application/json" });
-    response.end(JSON.stringify({ error: "source_not_found" }));
+    response.writeHead(204);
+    response.end();
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -707,6 +1242,8 @@ test("removes an already-disconnected source and its pending state idempotently"
       version: 1,
       sequences: { [sourceId]: "4" },
       adapters: { [sourceId]: { cursor: 1 } },
+      fingerprints: { [sourceId]: "fingerprint" },
+      quarantine: { [sourceId]: "invalid_payload" },
     })}\n`,
   );
   await writeFile(
@@ -717,6 +1254,40 @@ test("removes an already-disconnected source and its pending state idempotently"
       sourceErrors: [],
     })}\n`,
   );
+  await mkdir(join(pending, "quarantine"));
+  await writeFile(join(pending, "quarantine", `${sourceId}.json`), "{}\n");
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [clientSourceId]: {
+          dirtySince: new Date().toISOString(),
+          lastEventAt: new Date().toISOString(),
+          generation: "81818181-8181-4181-8181-818181818181",
+        },
+      },
+    })}\n`,
+  );
+  await mkdir(join(home, "claude"), { recursive: true });
+  await writeFile(
+    join(home, "claude", "settings.json"),
+    JSON.stringify({
+      hooks: {
+        Stop: [
+          { hooks: [{ type: "command", command: "keep-foreign" }] },
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
 
   await execFileAsync(process.execPath, [connectorPath, "source", "remove", clientSourceId], {
     env: connectorEnvironment(home),
@@ -726,7 +1297,94 @@ test("removes an already-disconnected source and its pending state idempotently"
   assert.deepEqual(config.sources, []);
   assert.equal(localState.sequences[sourceId], undefined);
   assert.equal(localState.adapters[sourceId], undefined);
+  assert.equal(localState.fingerprints[sourceId], undefined);
+  assert.equal(localState.quarantine[sourceId], undefined);
   await assert.rejects(access(join(pending, `${sourceId}.json`)));
+  await assert.rejects(access(join(pending, "quarantine", `${sourceId}.json`)));
+  await assert.rejects(access(join(directory, "dirty.json")));
+  const hookSettings = await readFile(join(home, "claude", "settings.json"), "utf8");
+  assert.doesNotMatch(hookSettings, /viberacing-hook-v3/);
+  assert.match(hookSettings, /keep-foreign/);
+  const repeated = await execFileAsync(
+    process.execPath,
+    [connectorPath, "source", "remove", clientSourceId],
+    { env: connectorEnvironment(home) },
+  );
+  assert.match(repeated.stdout, /already absent/i);
+});
+
+test("source removal is offline-safe and stops its local hook", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-source-remove-offline-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const clientSourceId = "82828282-8282-4282-8282-828282828282";
+  const sourceId = "83838383-8383-4383-8383-838383838383";
+  const root = join(home, "qwen-custom");
+  const local = {
+    clientSourceId,
+    agentId: "qwen_code",
+    dataPath: root,
+    collectionMethod: "qwen_stats_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Offline",
+  };
+  const directory = await writeMappedInstallation(home, "http://127.0.0.1:1", [
+    { ...local, sourceId },
+  ]);
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    join(root, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  const result = await execFileAsync(
+    process.execPath,
+    [connectorPath, "source", "remove", clientSourceId],
+    { env: connectorEnvironment(home) },
+  );
+  assert.match(result.stderr, /remote source disconnect could not be confirmed/i);
+  assert.doesNotMatch(await readFile(join(root, "settings.json"), "utf8"), /viberacing-hook/);
+  assert.deepEqual(await readLocalSources(directory), []);
+  assert.deepEqual(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).sources, []);
+});
+
+test("source removal keeps custom-root metadata when hook cleanup fails", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-source-remove-hook-failure-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const clientSourceId = "84848484-8484-4484-8484-848484848484";
+  const root = join(home, "claude-invalid");
+  const local = {
+    clientSourceId,
+    agentId: "claude_code",
+    dataPath: root,
+    collectionMethod: "claude_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Retry cleanup",
+  };
+  const directory = join(home, ".viberacing");
+  await mkdir(root, { recursive: true });
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(directory, [local]);
+  await writeFile(join(root, "settings.json"), "{invalid-json");
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "source", "remove", clientSourceId], {
+      env: connectorEnvironment(home),
+    }),
+    /metadata was kept for retry/,
+  );
+  assert.equal((await readLocalSources(directory))[0].clientSourceId, clientSourceId);
+  assert.equal(await readFile(join(root, "settings.json"), "utf8"), "{invalid-json");
 });
 
 test("quarantines a server-disconnected pending source without poisoning future syncs", async (context) => {
@@ -797,6 +1455,37 @@ test("quarantines a server-disconnected pending source without poisoning future 
       sourceErrors: [],
     })}\n`,
   );
+  await mkdir(join(home, "claude"), { recursive: true });
+  await writeFile(
+    join(home, "claude", "settings.json"),
+    JSON.stringify({
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [clientSourceId]: {
+          dirtySince: new Date().toISOString(),
+          lastEventAt: new Date().toISOString(),
+          generation: "85858585-8585-4585-8585-858585858585",
+        },
+      },
+    })}\n`,
+  );
 
   await execFileAsync(process.execPath, [connectorPath, "sync"], {
     env: connectorEnvironment(home),
@@ -804,12 +1493,32 @@ test("quarantines a server-disconnected pending source without poisoning future 
   assert.equal(requests, 1);
   assert.deepEqual(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).sources, []);
   assert.deepEqual(await import("node:fs/promises").then(({ readdir }) => readdir(pending)), []);
+  assert.equal((await readLocalSources(directory))[0].clientSourceId, clientSourceId);
+  assert.doesNotMatch(
+    await readFile(join(home, "claude", "settings.json"), "utf8"),
+    /viberacing-hook/,
+  );
+  await assert.rejects(access(join(directory, "dirty.json")));
+  await runWithInput(
+    ["hook", "--source", clientSourceId, "--agent", "claude_code"],
+    connectorEnvironment(home),
+    "{}",
+  );
+  await assert.rejects(access(join(directory, "scheduler.lock")));
+  await assert.rejects(access(join(directory, "dirty.json")));
 });
 
 test("doctor collects Claude diagnostics with the required UTC range", async (context) => {
+  const sourceId = "55555555-5555-4555-8555-555555555555";
   const server = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ status: "active", lastSyncAt: null, sources: [] }));
+    response.end(
+      JSON.stringify({
+        status: "active",
+        lastSyncAt: null,
+        sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "0" }],
+      }),
+    );
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -832,7 +1541,7 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
       sources: [
         {
           clientSourceId,
-          sourceId: "55555555-5555-4555-8555-555555555555",
+          sourceId,
           agentId: "claude_code",
           accountLabel: "Work",
           dataPath: fileURLToPath(new URL("fixtures", import.meta.url)),
@@ -890,6 +1599,65 @@ test("doctor disables a revoked installation and recommends reconnecting", async
   await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 
+test("doctor removes a hook after dashboard-side source disconnect", async (context) => {
+  const sourceId = "86868686-8686-4686-8686-868686868686";
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        status: "active",
+        sources: [{ sourceId, status: "disconnected", lastAcceptedSyncSequence: "0" }],
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-dashboard-disconnect-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const clientSourceId = "87878787-8787-4787-8787-878787878787";
+  const root = join(home, "qwen-dashboard");
+  const local = {
+    clientSourceId,
+    sourceId,
+    agentId: "qwen_code",
+    dataPath: root,
+    collectionMethod: "qwen_stats_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Dashboard",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    local,
+  ]);
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    join(root, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home),
+  });
+  assert.deepEqual(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).sources, []);
+  assert.equal((await readLocalSources(directory))[0].clientSourceId, clientSourceId);
+  assert.doesNotMatch(await readFile(join(root, "settings.json"), "utf8"), /viberacing-hook/);
+});
+
 test("recovers a missing local sequence from 500 and sends snapshot 501", async (context) => {
   let uploaded;
   let uploadCount = 0;
@@ -900,7 +1668,7 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
       response.end(
         JSON.stringify({
           status: "active",
-          sources: [{ sourceId, lastAcceptedSyncSequence: "500" }],
+          sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "500" }],
         }),
       );
       return;
@@ -1371,6 +2139,55 @@ test("disconnect removes local hooks, token, dirty state, and pending data when 
   assert.equal((await readLocalSources(directory)).length, 1);
 });
 
+test("uninstall removes v2 and source-owned hooks from remembered custom roots", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-custom-roots-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  const root = join(home, "gemini-custom");
+  const clientSourceId = "88888888-8888-4888-8888-888888888888";
+  await mkdir(root, { recursive: true });
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "gemini_cli",
+      dataPath: root,
+      collectionMethod: "gemini_session_json",
+      supportedSurface: "cli",
+      suggestedLabel: "Custom",
+    },
+  ]);
+  await writeFile(
+    join(root, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          { hooks: [{ type: "command", command: "keep-foreign" }] },
+          {
+            hooks: [
+              {
+                type: "command",
+                command: "node legacy --viberacing-hook-id=viberacing-hook-v2",
+              },
+              {
+                type: "command",
+                command: `node current --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await execFileAsync(process.execPath, [connectorPath, "uninstall"], {
+    env: connectorEnvironment(home),
+  });
+  await assert.rejects(access(directory));
+  const settings = await readFile(join(root, "settings.json"), "utf8");
+  assert.match(settings, /keep-foreign/);
+  assert.doesNotMatch(settings, /viberacing-hook-v[23]/);
+});
+
 test(
   "wrappers pass exact argv and preserve native output, exit status, and safe metadata",
   { skip: process.platform === "win32" },
@@ -1426,10 +2243,15 @@ test(
       "hello",
       "--output-format=stream-json",
     ]);
-    const capture = await readFile(
-      join(home, ".viberacing", "captures", "antigravity.jsonl"),
-      "utf8",
+    const antigravitySource = (await readLocalSources(join(home, ".viberacing"))).find(
+      (source) => source.agentId === "antigravity",
     );
+    assert.ok(antigravitySource);
+    assert.match(
+      antigravitySource.dataPath,
+      new RegExp(`${antigravitySource.clientSourceId}\\.jsonl$`),
+    );
+    const capture = await readFile(antigravitySource.dataPath, "utf8");
     assert.match(capture, /safe-session/);
     assert.doesNotMatch(capture, /prompt|response|synthetic private/);
     await execFileAsync(process.execPath, [connectorPath, "disconnect"], { env: environment });
@@ -1461,5 +2283,134 @@ test(
     const [code, signal] = await once(child, "close");
     assert.equal(code, null);
     assert.equal(signal, "SIGINT");
+  },
+);
+
+test(
+  "Antigravity and Cursor wrappers select source-specific profiles",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-profiles-"));
+    context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+    const bin = join(home, "bin");
+    await mkdir(bin, { recursive: true });
+    await writeFile(
+      join(bin, "agy"),
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2))); process.stdout.write(JSON.stringify({type:"result",session_id:process.env.SYNTHETIC_SESSION_ID,timestamp:new Date().toISOString(),prompt:"private",response:"private",usage:{input_tokens:2,output_tokens:3}})+"\\n");\n`,
+    );
+    await writeFile(
+      join(bin, "cursor-agent"),
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2))); process.stdout.write(JSON.stringify({type:"result",session_id:"cursor-no-counters",result:"private"})+"\\n");\n`,
+    );
+    await chmod(join(bin, "agy"), 0o700);
+    await chmod(join(bin, "cursor-agent"), 0o700);
+    const environment = connectorEnvironment(home, {
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+    });
+    for (const name of ["Personal", "Work"])
+      await execFileAsync(
+        process.execPath,
+        [connectorPath, "source", "add", "--agent", "antigravity", "--name", name],
+        { env: environment },
+      );
+    const antigravitySources = (await readLocalSources(join(home, ".viberacing"))).filter(
+      (source) => source.agentId === "antigravity",
+    );
+    assert.equal(antigravitySources.length, 2);
+    assert.notEqual(antigravitySources[0].dataPath, antigravitySources[1].dataPath);
+    for (const source of antigravitySources)
+      assert.match(source.dataPath, new RegExp(`${source.clientSourceId}\\.jsonl$`));
+    await assert.rejects(
+      execFileAsync(process.execPath, [connectorPath, "run", "antigravity", "--", "review"], {
+        env: environment,
+      }),
+      /Multiple antigravity sources.*--source/,
+    );
+    for (let index = 0; index < antigravitySources.length; index += 1) {
+      const source = antigravitySources[index];
+      const argvPath = join(home, `agy-argv-${index}.json`);
+      await execFileAsync(
+        process.execPath,
+        [
+          connectorPath,
+          "run",
+          "antigravity",
+          "--source",
+          source.clientSourceId,
+          "--",
+          `native-${index}`,
+        ],
+        {
+          env: {
+            ...environment,
+            SYNTHETIC_ARGV_PATH: argvPath,
+            SYNTHETIC_SESSION_ID: `profile-${index}`,
+          },
+        },
+      );
+      assert.deepEqual(JSON.parse(await readFile(argvPath, "utf8")), [
+        "--print",
+        `native-${index}`,
+        "--output-format",
+        "stream-json",
+      ]);
+      const capture = await readFile(source.dataPath, "utf8");
+      assert.match(capture, new RegExp(`profile-${index}`));
+      assert.doesNotMatch(capture, /prompt|response|private/);
+    }
+    assert.doesNotMatch(await readFile(antigravitySources[0].dataPath, "utf8"), /profile-1/);
+    assert.doesNotMatch(await readFile(antigravitySources[1].dataPath, "utf8"), /profile-0/);
+
+    for (const name of ["Personal", "Work"])
+      await execFileAsync(
+        process.execPath,
+        [connectorPath, "source", "add", "--agent", "cursor", "--name", name],
+        { env: environment },
+      );
+    const allSources = await readLocalSources(join(home, ".viberacing"));
+    const cursorSources = allSources.filter((source) => source.agentId === "cursor");
+    await assert.rejects(
+      execFileAsync(process.execPath, [connectorPath, "run", "cursor", "--", "inspect"], {
+        env: environment,
+      }),
+      /Multiple cursor sources.*--source/,
+    );
+    const cursorArgv = join(home, "cursor-selected-argv.json");
+    await execFileAsync(
+      process.execPath,
+      [
+        connectorPath,
+        "run",
+        "cursor",
+        "--source",
+        cursorSources[0].clientSourceId,
+        "--",
+        "inspect",
+      ],
+      { env: { ...environment, SYNTHETIC_ARGV_PATH: cursorArgv } },
+    );
+    assert.deepEqual(JSON.parse(await readFile(cursorArgv, "utf8")), [
+      "--print",
+      "inspect",
+      "--output-format",
+      "stream-json",
+    ]);
+    await assert.rejects(access(cursorSources[0].dataPath));
+    await assert.rejects(
+      execFileAsync(
+        process.execPath,
+        [
+          connectorPath,
+          "run",
+          "cursor",
+          "--source",
+          antigravitySources[0].clientSourceId,
+          "--",
+          "inspect",
+        ],
+        { env: environment },
+      ),
+      /belongs to antigravity/,
+    );
   },
 );

@@ -20,7 +20,15 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
-export const hookMarker = "--viberacing-hook-id=viberacing-hook-v2";
+export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
+const captureAgents = new Set(["cursor", "antigravity"]);
+const sourceIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function hookMarkerForSource(clientSourceId) {
+  if (!sourceIdPattern.test(clientSourceId)) throw new Error("Invalid hook source id");
+  return `--viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`;
+}
 
 function claudeRoot() {
   return process.env.CLAUDE_CONFIG_DIR
@@ -111,14 +119,20 @@ function validLocalSource(source) {
 
 function normalizedLocalSource(source, clientSourceId = source.clientSourceId ?? randomUUID()) {
   const label = source.suggestedLabel?.trim();
-  if (!label || label.length > 40 || typeof source.dataPath !== "string") {
+  const dataPath =
+    typeof source.dataPath === "string"
+      ? source.dataPath
+      : captureAgents.has(source.agentId)
+        ? join(stateDirectory, "captures", `${clientSourceId}.jsonl`)
+        : null;
+  if (!label || label.length > 40 || dataPath === null) {
     throw new Error("Local source requires a safe label and data directory");
   }
   return {
     clientSourceId,
     agentId: source.agentId,
     collectionMethod: source.collectionMethod,
-    dataPath: resolve(source.dataPath),
+    dataPath: resolve(dataPath),
     suggestedLabel: label,
     supportedSurface: source.supportedSurface,
   };
@@ -217,24 +231,37 @@ export async function readOrCreateInstallation() {
   return value;
 }
 
-function ownsHook(handler) {
-  return typeof handler?.command === "string" && handler.command.includes(hookMarker);
+function ownsHook(handler, marker) {
+  return typeof handler?.command === "string" && handler.command.includes(marker);
 }
 
-async function jsonHookStatus(path, event, expectedCommand) {
+function ownsAnyHook(handler) {
+  return (
+    typeof handler?.command === "string" &&
+    (handler.command.includes(legacyHookMarker) ||
+      /--viberacing-hook-id=viberacing-hook-v3:[0-9a-f-]{36}/i.test(handler.command))
+  );
+}
+
+async function jsonHookStatus(path, event, expectedCommand, marker) {
   try {
     const settings = JSON.parse(await readFile(path, "utf8"));
     const groups = settings?.hooks?.[event];
     if (!Array.isArray(groups)) return "missing";
     const owned = groups.flatMap((group) => (Array.isArray(group?.hooks) ? group.hooks : []));
-    if (!owned.some(ownsHook)) return "missing";
-    return owned.some((handler) => handler?.command === expectedCommand) ? "current" : "outdated";
+    if (!owned.some((handler) => ownsHook(handler, marker))) return "missing";
+    return owned.some(
+      (handler) => ownsHook(handler, marker) && handler?.command === expectedCommand,
+    )
+      ? "current"
+      : "outdated";
   } catch (error) {
     return error?.code === "ENOENT" ? "missing" : "invalid-settings";
   }
 }
 
-async function updateHook(path, event, hook, remove = false) {
+async function updateHook(path, event, hook, options = {}) {
+  const { remove = false, markers = [], removeAll = false } = options;
   let settings = {};
   try {
     settings = JSON.parse(await readFile(path, "utf8"));
@@ -258,7 +285,15 @@ async function updateHook(path, event, hook, remove = false) {
   const retained = groups
     .map((group) =>
       Array.isArray(group?.hooks)
-        ? { ...group, hooks: group.hooks.filter((handler) => !ownsHook(handler)) }
+        ? {
+            ...group,
+            hooks: group.hooks.filter(
+              (handler) =>
+                !(removeAll
+                  ? ownsAnyHook(handler)
+                  : markers.some((marker) => ownsHook(handler, marker))),
+            ),
+          }
         : group,
     )
     .filter((group) => !Array.isArray(group?.hooks) || group.hooks.length > 0);
@@ -268,10 +303,24 @@ async function updateHook(path, event, hook, remove = false) {
   return true;
 }
 
-async function updateKimiHook(root, command, remove = false) {
+function hookBlockMarker(marker) {
+  return marker.slice("--viberacing-hook-id=".length);
+}
+
+function stripDelimitedBlock(contents, marker) {
+  const block = hookBlockMarker(marker).replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return contents.replace(
+    new RegExp(`(?:^|\\n)# ${block}:start[\\s\\S]*?# ${block}:end(?:\\n|$)`, "g"),
+    "\n",
+  );
+}
+
+async function updateKimiHook(root, command, marker, options = {}) {
+  const { remove = false, removeLegacy = false, removeAll = false } = options;
   const path = join(root, "config.toml");
-  const start = "# viberacing-hook-v2:start";
-  const end = "# viberacing-hook-v2:end";
+  const blockMarker = hookBlockMarker(marker);
+  const start = `# ${blockMarker}:start`;
+  const end = `# ${blockMarker}:end`;
   let contents = "";
   try {
     contents = await readFile(path, "utf8");
@@ -279,11 +328,14 @@ async function updateKimiHook(root, command, remove = false) {
     if (error?.code !== "ENOENT")
       throw new Error(`Cannot read hook settings at ${path}: ${error.message}`, { cause: error });
   }
-  const pattern = new RegExp(
-    `(?:^|\\n)${start.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${end.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\n|$)`,
-    "g",
-  );
-  const retained = contents.replace(pattern, "\n").trimEnd();
+  let retained = stripDelimitedBlock(contents, marker);
+  if (removeLegacy || removeAll) retained = stripDelimitedBlock(retained, legacyHookMarker);
+  if (removeAll)
+    retained = retained.replace(
+      /(?:^|\n)# viberacing-hook-v3:[0-9a-f-]{36}:start[\s\S]*?# viberacing-hook-v3:[0-9a-f-]{36}:end(?:\n|$)/gi,
+      "\n",
+    );
+  retained = retained.trimEnd();
   const block = remove
     ? ""
     : `${start}\n[[hooks]]\nevent = \"Stop\"\ncommand = ${JSON.stringify(command)}\ntimeout = 3\n${end}`;
@@ -320,36 +372,48 @@ async function installRuntime(sourceUrl) {
   return installedScript;
 }
 
+function sourceHookCommand(installedScript, source) {
+  const marker = hookMarkerForSource(source.clientSourceId);
+  return `\"${process.execPath}\" \"${installedScript}\" hook --source ${source.clientSourceId} --agent ${source.agentId} ${marker}`;
+}
+
+export async function installHookForSource(source, installedScript) {
+  const marker = hookMarkerForSource(source.clientSourceId);
+  const command = sourceHookCommand(installedScript, source);
+  const options = { markers: [legacyHookMarker, marker] };
+  if (source.agentId === "codex")
+    return updateHook(
+      join(hookRoot(source, "codex"), "hooks.json"),
+      "SessionEnd",
+      { hooks: [{ type: "command", command, timeout: 3 }] },
+      options,
+    );
+  if (source.agentId === "claude_code")
+    return updateHook(
+      join(hookRoot(source, "claude_code"), "settings.json"),
+      "Stop",
+      { hooks: [{ type: "command", command, timeout: 10, async: true }] },
+      options,
+    );
+  if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
+    return updateHook(
+      join(hookRoot(source, source.agentId), "settings.json"),
+      "SessionEnd",
+      { hooks: [{ type: "command", command, timeout: 10_000 }] },
+      options,
+    );
+  if (source.agentId === "kimi_code")
+    return updateKimiHook(hookRoot(source, "kimi_code"), command, marker, {
+      removeLegacy: true,
+    });
+  return false;
+}
+
 export async function installHooks(sourceUrl, sources) {
   const installedScript = await installRuntime(sourceUrl);
   const result = {};
-  for (const source of sources) {
-    const command = `\"${process.execPath}\" \"${installedScript}\" hook --agent ${source.agentId} ${hookMarker}`;
-    if (source.agentId === "codex")
-      result.codex = await updateHook(join(hookRoot(source, "codex"), "hooks.json"), "SessionEnd", {
-        hooks: [{ type: "command", command, timeout: 3 }],
-      });
-    if (source.agentId === "claude_code")
-      result.claude_code = await updateHook(
-        join(hookRoot(source, "claude_code"), "settings.json"),
-        "Stop",
-        { hooks: [{ type: "command", command, timeout: 10, async: true }] },
-      );
-    if (source.agentId === "gemini_cli")
-      result.gemini_cli = await updateHook(
-        join(hookRoot(source, "gemini_cli"), "settings.json"),
-        "SessionEnd",
-        { hooks: [{ type: "command", command, timeout: 10_000 }] },
-      );
-    if (source.agentId === "qwen_code")
-      result.qwen_code = await updateHook(
-        join(hookRoot(source, "qwen_code"), "settings.json"),
-        "SessionEnd",
-        { hooks: [{ type: "command", command, timeout: 10_000 }] },
-      );
-    if (source.agentId === "kimi_code")
-      result.kimi_code = await updateKimiHook(hookRoot(source, "kimi_code"), command);
-  }
+  for (const source of sources)
+    result[source.clientSourceId] = await installHookForSource(source, installedScript);
   return result;
 }
 
@@ -373,55 +437,55 @@ function hookRoot(source, agentId) {
   return dataPath;
 }
 
-export async function diagnoseHooks(sources) {
+export async function diagnoseHookForSource(source) {
   const installedScript = join(stateDirectory, "bin", "viberacing.mjs");
+  const marker = hookMarkerForSource(source.clientSourceId);
+  const command = sourceHookCommand(installedScript, source);
+  if (source.agentId === "codex")
+    return jsonHookStatus(
+      join(hookRoot(source, "codex"), "hooks.json"),
+      "SessionEnd",
+      command,
+      marker,
+    );
+  if (source.agentId === "claude_code")
+    return jsonHookStatus(
+      join(hookRoot(source, "claude_code"), "settings.json"),
+      "Stop",
+      command,
+      marker,
+    );
+  if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
+    return jsonHookStatus(
+      join(hookRoot(source, source.agentId), "settings.json"),
+      "SessionEnd",
+      command,
+      marker,
+    );
+  if (source.agentId === "kimi_code") {
+    try {
+      const contents = await readFile(join(hookRoot(source, "kimi_code"), "config.toml"), "utf8");
+      if (!contents.includes(`# ${hookBlockMarker(marker)}:start`)) return "missing";
+      return contents.includes(`command = ${JSON.stringify(command)}`) &&
+        contents.includes('event = "Stop"') &&
+        contents.includes("timeout = 3")
+        ? "current"
+        : "outdated";
+    } catch (error) {
+      return error?.code === "ENOENT" ? "missing" : "invalid-settings";
+    }
+  }
+  if (source.agentId === "opencode") return "manual-sync";
+  if (captureAgents.has(source.agentId)) return "capture-wrapper";
+  return undefined;
+}
+
+export async function diagnoseHooks(sources) {
   const result = {};
   for (const source of sources) {
-    const command = `\"${process.execPath}\" \"${installedScript}\" hook --agent ${source.agentId} ${hookMarker}`;
-    let status;
-    if (source.agentId === "codex")
-      status = await jsonHookStatus(
-        join(hookRoot(source, "codex"), "hooks.json"),
-        "SessionEnd",
-        command,
-      );
-    if (source.agentId === "claude_code")
-      status = await jsonHookStatus(
-        join(hookRoot(source, "claude_code"), "settings.json"),
-        "Stop",
-        command,
-      );
-    if (source.agentId === "gemini_cli")
-      status = await jsonHookStatus(
-        join(hookRoot(source, "gemini_cli"), "settings.json"),
-        "SessionEnd",
-        command,
-      );
-    if (source.agentId === "qwen_code")
-      status = await jsonHookStatus(
-        join(hookRoot(source, "qwen_code"), "settings.json"),
-        "SessionEnd",
-        command,
-      );
-    if (source.agentId === "kimi_code") {
-      try {
-        const contents = await readFile(join(hookRoot(source, "kimi_code"), "config.toml"), "utf8");
-        status = !contents.includes(hookMarker)
-          ? "missing"
-          : contents.includes(`command = ${JSON.stringify(command)}`) &&
-              contents.includes('event = "Stop"') &&
-              contents.includes("timeout = 3")
-            ? "current"
-            : "outdated";
-      } catch (error) {
-        status = error?.code === "ENOENT" ? "missing" : "invalid-settings";
-      }
-    }
+    const status = await diagnoseHookForSource(source);
     if (status) result[source.agentId] = mergeHookStatus(result[source.agentId], status);
   }
-  const ids = new Set(sources.map((source) => source.agentId));
-  for (const id of ["opencode", "cursor", "antigravity"])
-    if (ids.has(id)) result[id] = id === "opencode" ? "manual-sync" : "capture-wrapper";
   return result;
 }
 
@@ -429,6 +493,38 @@ function mergeHookStatus(previous, next) {
   if (!previous || previous === next) return next;
   const priority = ["invalid-settings", "outdated", "missing", "current"];
   return priority.indexOf(previous) <= priority.indexOf(next) ? previous : next;
+}
+
+export async function removeHookForSource(source, options = {}) {
+  const marker = hookMarkerForSource(source.clientSourceId);
+  const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
+  const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
+  const root = hookRoot(source, source.agentId);
+  if (source.agentId === "codex")
+    return updateHook(join(root, "hooks.json"), "SessionEnd", null, hookOptions);
+  if (source.agentId === "claude_code")
+    return updateHook(join(root, "settings.json"), "Stop", null, hookOptions);
+  if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
+    return updateHook(join(root, "settings.json"), "SessionEnd", null, hookOptions);
+  if (source.agentId === "kimi_code")
+    return updateKimiHook(root, "", marker, {
+      remove: true,
+      removeLegacy: options.removeLegacy,
+      removeAll: options.removeAll,
+    });
+  return false;
+}
+
+export async function reconcileHooks(sourceUrl, activeSources, knownLocalSources = []) {
+  const installedScript = await installRuntime(sourceUrl);
+  const activeIds = new Set(activeSources.map((source) => source.clientSourceId));
+  for (const source of knownLocalSources)
+    if (!activeIds.has(source.clientSourceId))
+      await removeHookForSource(source, { removeLegacy: true });
+  const result = {};
+  for (const source of activeSources)
+    result[source.clientSourceId] = await installHookForSource(source, installedScript);
+  return result;
 }
 
 export async function removeHooks() {
@@ -450,13 +546,25 @@ export async function removeHooks() {
     const key = `${source.agentId}\0${root}`;
     if (visited.has(key)) continue;
     visited.add(key);
-    if (source.agentId === "codex")
-      await updateHook(join(root, "hooks.json"), "SessionEnd", null, true);
-    if (source.agentId === "claude_code")
-      await updateHook(join(root, "settings.json"), "Stop", null, true);
-    if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
-      await updateHook(join(root, "settings.json"), "SessionEnd", null, true);
-    if (source.agentId === "kimi_code") await updateKimiHook(root, "", true);
+    if (source.clientSourceId)
+      await removeHookForSource(source, { removeLegacy: true, removeAll: true });
+    else if (source.agentId === "codex")
+      await updateHook(join(root, "hooks.json"), "SessionEnd", null, {
+        remove: true,
+        removeAll: true,
+      });
+    else if (source.agentId === "claude_code")
+      await updateHook(join(root, "settings.json"), "Stop", null, {
+        remove: true,
+        removeAll: true,
+      });
+    else if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
+      await updateHook(join(root, "settings.json"), "SessionEnd", null, {
+        remove: true,
+        removeAll: true,
+      });
+    else if (source.agentId === "kimi_code")
+      await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });
   }
 }
 
