@@ -11,6 +11,7 @@ import {
   publicProfile,
 } from "@/lib/leaderboard";
 import { viewer } from "@/lib/session";
+import { countedAgentCount } from "@/lib/agents";
 
 interface HomePageProps {
   readonly searchParams: Promise<{ page?: string | string[] }>;
@@ -81,8 +82,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
           <div>
             <span>Supported agents</span>
-            <strong>8 exact adapters</strong>
-            <small>CLI-first · documented surfaces</small>
+            <strong>{countedAgentCount} counted agents</strong>
+            <small>Cursor awaits authoritative counters</small>
           </div>
           <div>
             <span>Privacy</span>

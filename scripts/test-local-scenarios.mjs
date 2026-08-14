@@ -680,14 +680,15 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
-  await pool.query("INSERT INTO schema_migrations (version) VALUES ('999_invalid_test')");
-  const wrongSchema = await fetch(`${appUrl}/ready`);
-  check(wrongSchema.status === 503, "readiness accepted an unexpected schema version");
-  await pool.query("DELETE FROM schema_migrations WHERE version = '999_invalid_test'");
+  await pool.query("INSERT INTO schema_migrations (version) VALUES ('002_synthetic_future.sql')");
   check(
     (await fetch(`${appUrl}/ready`)).status === 200,
-    "readiness did not recover after schema repair",
+    "readiness rejected a later migration ledger row",
   );
+  await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
+  const missingExpectedSchema = await fetch(`${appUrl}/ready`);
+  check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
+  await pool.query("INSERT INTO schema_migrations (version) VALUES ('001_initial.sql')");
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },

@@ -335,7 +335,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         <pre>
           <code>{command}</code>
         </pre>
-        <p className="muted">No provider API keys are requested or uploaded.</p>
+        <p className="muted">
+          Seven agents provide counted exact totals. Cursor awaits authoritative counters. No
+          provider API keys are requested or uploaded.
+        </p>
       </Panel>
 
       <div className="settings-grid">

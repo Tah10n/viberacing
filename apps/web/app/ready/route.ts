@@ -7,25 +7,21 @@ export async function GET(): Promise<Response> {
   try {
     validateRuntimeConfig();
     const rows = await query<{
-      migration_count: number;
-      exact_version: boolean;
+      expected_version: boolean;
       required_tables: boolean;
     }>(
-      `SELECT count(*)::int AS migration_count,
-              coalesce(bool_and(version = $1), false) AS exact_version,
+      `SELECT EXISTS (
+                SELECT 1
+                  FROM schema_migrations
+                 WHERE version = $1
+              ) AS expected_version,
               to_regclass('public.installation_sources') IS NOT NULL
                 AND to_regclass('public.daily_usage') IS NOT NULL
-                AND to_regclass('public.weekly_agent_usage') IS NOT NULL AS required_tables
-         FROM schema_migrations`,
+                AND to_regclass('public.weekly_agent_usage') IS NOT NULL AS required_tables`,
       [expectedSchemaVersion],
     );
     const schema = rows[0];
-    if (
-      schema === undefined ||
-      schema.migration_count !== 1 ||
-      !schema.exact_version ||
-      !schema.required_tables
-    ) {
+    if (schema === undefined || !schema.expected_version || !schema.required_tables) {
       return Response.json(
         { status: "not_ready", reason: "schema_version" },
         { status: 503, headers: { "Cache-Control": "no-store" } },
