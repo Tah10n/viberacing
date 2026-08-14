@@ -680,11 +680,14 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
-  await pool.query("INSERT INTO schema_migrations (version) VALUES ('002_synthetic_future.sql')");
+  await pool.query(
+    "INSERT INTO schema_migrations (version) VALUES ('002_synthetic_future.sql') ON CONFLICT DO NOTHING",
+  );
   check(
     (await fetch(`${appUrl}/ready`)).status === 200,
     "readiness rejected a later migration ledger row",
   );
+  await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
   await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
   const missingExpectedSchema = await fetch(`${appUrl}/ready`);
   check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
