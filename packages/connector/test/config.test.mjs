@@ -11,6 +11,7 @@ import {
   readFile,
   readdir,
   stat,
+  unlink,
   utimes,
   writeFile,
 } from "node:fs/promises";
@@ -1307,6 +1308,78 @@ test("an event arriving during manual sync survives for the next targeted batch"
   });
 });
 
+test("automatic sync makes one bounded retry after its sync-lock wait expires", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+          sourceSequences: body.snapshots.map((snapshot) => ({
+            sourceId: snapshot.sourceId,
+            lastAcceptedSyncSequence: snapshot.syncSequence,
+            accepted: true,
+          })),
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-deferred-lock-retry-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const syncLock = join(installation.directory, "sync.lock");
+  const trace = join(home, "automatic-sync-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+    VIBERACING_TEST_AUTOMATIC_SYNC_LOCK_WAIT_MS: "80",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TRACE: trace,
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+
+  await writeFile(syncLock, "synthetic-owner\n");
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(
+    async () => (await readFile(trace, "utf8").catch(() => "")) === "sync-lock-skipped\n",
+  );
+  await unlink(syncLock);
+  await waitFor(() => bodies.length === 1);
+  await waitFor(async () =>
+    access(join(installation.directory, "scheduler.lock")).then(
+      () => false,
+      () => true,
+    ),
+  );
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
+
+  await writeFile(syncLock, "synthetic-owner\n");
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(async () => (await readFile(trace, "utf8")).trim().split("\n").length === 3);
+  await waitFor(async () =>
+    access(join(installation.directory, "scheduler.lock")).then(
+      () => false,
+      () => true,
+    ),
+  );
+  await delay(250);
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 3);
+  assert.equal(bodies.length, 1);
+  await access(join(installation.directory, "dirty.json"));
+  await unlink(syncLock);
+});
+
 test("requires an explicit safe label when adding a local data root", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-source-label-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
@@ -1727,6 +1800,171 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
   });
   assert.match(result.stdout, /claude_code \(Work\): ok/);
   assert.doesNotMatch(result.stdout, /reading 'rangeStart'/);
+});
+
+test("doctor serializes remote reconciliation behind an active sync", async (context) => {
+  let releaseUpload;
+  let uploadStarted;
+  const firstUpload = new Promise((resolve) => (uploadStarted = resolve));
+  const uploadCanFinish = new Promise((resolve) => (releaseUpload = resolve));
+  context.after(() => releaseUpload());
+  let currentRequests = 0;
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "GET") {
+        currentRequests += 1;
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            status: "active",
+            sources: [
+              {
+                sourceId: installation.sourceId,
+                agentId: "antigravity",
+                collectionMethod: "antigravity_cli_capture",
+                status: "active",
+                lastAcceptedSyncSequence: "1",
+              },
+            ],
+          }),
+        );
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      uploadStarted();
+      uploadCanFinish.then(() => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            acceptedEntries: 1,
+            sourceSequences: body.snapshots.map((snapshot) => ({
+              sourceId: snapshot.sourceId,
+              lastAcceptedSyncSequence: snapshot.syncSequence,
+              accepted: true,
+            })),
+          }),
+        );
+      });
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-sync-lock-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const activeSync = execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  await firstUpload;
+
+  const doctor = spawn(process.execPath, [connectorPath, "doctor"], {
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let doctorOutput = "";
+  doctor.stdout.setEncoding("utf8").on("data", (chunk) => (doctorOutput += chunk));
+  await waitFor(() => doctorOutput.includes("Connected origin:"));
+  await delay(100);
+  assert.equal(currentRequests, 0);
+
+  releaseUpload();
+  await activeSync;
+  const [doctorCode] = await once(doctor, "close");
+  assert.equal(doctorCode, 0);
+  assert.equal(currentRequests, 1);
+  assert.match(doctorOutput, /Pairing status: active/);
+});
+
+test("doctor repair re-enables automatic sync after a connector upgrade", async (context) => {
+  let usageRequests = 0;
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "GET") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            status: "active",
+            sources: [
+              {
+                sourceId: installation.sourceId,
+                agentId: "antigravity",
+                collectionMethod: "antigravity_cli_capture",
+                status: "active",
+                lastAcceptedSyncSequence: "0",
+              },
+            ],
+          }),
+        );
+        return;
+      }
+      usageRequests += 1;
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+          sourceSequences: body.snapshots.map((snapshot) => ({
+            sourceId: snapshot.sourceId,
+            lastAcceptedSyncSequence: snapshot.syncSequence,
+            accepted: true,
+          })),
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-upgrade-repair-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      automaticDisabledReason: "unsupported_connector",
+    })}\n`,
+  );
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
+    env: environment,
+  });
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
+      .automaticDisabledReason,
+    undefined,
+  );
+  await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() => usageRequests === 1);
+  await waitFor(async () =>
+    access(join(installation.directory, "scheduler.lock")).then(
+      () => false,
+      () => true,
+    ),
+  );
 });
 
 test("doctor disables a revoked installation and recommends reconnecting", async (context) => {
@@ -2441,6 +2679,137 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
   assert.equal(bodies.length, 2);
   assert.equal(bodies[0].snapshots.length, 32);
   assert.equal(bodies[1].sourceErrors.length, 32);
+});
+
+test("reconnect replaces authorization after an in-flight sync without token resurrection", async (context) => {
+  let releaseOldUpload;
+  let oldUploadStarted;
+  const oldUpload = new Promise((resolve) => (oldUploadStarted = resolve));
+  const oldUploadCanFinish = new Promise((resolve) => (releaseOldUpload = resolve));
+  context.after(() => releaseOldUpload());
+  const authorizations = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.url === "/api/pairing/start") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            installationId: "replacement-installation",
+            pollToken: "replacement-poll-token",
+            verificationUrl: "http://127.0.0.1/verify",
+            code: "RECONNECT",
+            expiresInSeconds: 30,
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/poll") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            status: "active",
+            deviceToken: "replacement-device-token-that-is-long-enough",
+            protocol: { version: 2 },
+            sources: [
+              {
+                clientSourceId: installation.clientSourceId,
+                sourceId: installation.sourceId,
+                agentId: "antigravity",
+                accountLabel: "Antigravity",
+                collectionMethod: "antigravity_cli_capture",
+                lastAcceptedSyncSequence: "0",
+              },
+            ],
+          }),
+        );
+        return;
+      }
+      if (request.url !== "/api/usage") {
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "not_found" }));
+        return;
+      }
+      const authorization = request.headers.authorization;
+      authorizations.push(authorization);
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const finish = () => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            acceptedEntries: body.snapshots.flatMap((snapshot) => snapshot.entries).length,
+            sourceSequences: body.snapshots.map((snapshot) => ({
+              sourceId: snapshot.sourceId,
+              lastAcceptedSyncSequence: snapshot.syncSequence,
+              accepted: true,
+            })),
+          }),
+        );
+      };
+      if (authorization?.includes("synthetic-device-token")) {
+        oldUploadStarted();
+        oldUploadCanFinish.then(finish);
+      } else finish();
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-reconnect-sync-race-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      automaticDisabledReason: "unsupported_connector",
+    })}\n`,
+  );
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    PATH: "",
+    VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+  });
+  const oldSync = execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  await oldUpload;
+  const reconnect = execFileAsync(
+    process.execPath,
+    [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
+    { env: environment },
+  );
+  await waitFor(() =>
+    access(join(installation.directory, "lifecycle-revoking.lock")).then(
+      () => true,
+      () => false,
+    ),
+  );
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "config.json"), "utf8")).deviceToken,
+    "synthetic-device-token-that-is-long-enough",
+  );
+
+  releaseOldUpload();
+  const oldResult = await oldSync.catch((error) => error);
+  assert.equal(oldResult.code, 1);
+  assert.match(oldResult.stderr, /stopped by a local lifecycle operation/i);
+  await reconnect;
+
+  const config = JSON.parse(await readFile(join(installation.directory, "config.json"), "utf8"));
+  assert.equal(config.deviceToken, "replacement-device-token-that-is-long-enough");
+  assert.equal(config.installationId, "replacement-installation");
+  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.automaticDisabledReason, undefined);
+  assert.deepEqual(authorizations, [
+    "Bearer synthetic-device-token-that-is-long-enough",
+    "Bearer replacement-device-token-that-is-long-enough",
+  ]);
 });
 
 test("disconnect serializes with an in-flight sync and prevents state resurrection", async (context) => {

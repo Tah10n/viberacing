@@ -9,7 +9,8 @@ npx @viberacing/connector connect --origin https://viberacing.example
 
 The browser approval maps every detected local source to a new or existing account. Re-running
 `connect` keeps the stable installation identity, rotates device authorization, refreshes the
-installed connector copy, and updates only Vibe Racing-owned hooks.
+installed connector copy, and updates only Vibe Racing-owned hooks. The final token/config swap is
+serialized behind any active sync, so an older request cannot restore superseded authorization.
 
 ## Commands
 
@@ -60,7 +61,9 @@ without deleting its local definition or blocking other agents. Directories are 
 OS supports permissions; secrets are `0600`. `doctor` reconciles the last server-accepted sequence
 and reports hook freshness, mapped accounts, supported surfaces, excluded desktop surfaces, data
 availability, partial warnings, and the last hook error; `doctor --repair` refreshes the installed
-runtime and owned hooks; it does not sync unless the user separately runs `viberacing sync`.
+runtime and owned hooks; its server reconciliation shares the sync lock, and it does not collect
+usage unless the user separately runs `viberacing sync`. A successful compatible reconnect,
+authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
 OpenCode uses its read-only SQLite store and a documented `sync`; Cursor and Antigravity require the
@@ -73,11 +76,12 @@ limited to roughly one attempt per 120 seconds, and forced by 120 seconds of con
 Each dirty generation receives at most one automatic attempt; collector errors complete that
 generation, while failed uploads remain compactly pending until another hook or manual sync. A
 generation created during the attempt schedules the next finite batch; if a manual sync still owns
-the single-flight lock, that automatic batch waits for it for at most 60 seconds rather than losing
-the event. During already-triggered activity, a TTL-bounded installation check removes
-dashboard-disconnected mappings and hooks even when counters are unchanged. There is no resident
-daemon, polling loop, or file watcher. Manual sync and initial connect bypass the cooldown and
-collect all active sources; unchanged data sends no request.
+the single-flight lock, that automatic batch makes at most two bounded 60-second lock acquisitions.
+If both expire, it exits with the dirty generation intact for the next hook or manual sync. During
+already-triggered activity, a TTL-bounded installation check removes dashboard-disconnected mappings
+and hooks even when counters are unchanged. There is no resident daemon, polling loop, or file
+watcher. Manual sync and initial connect bypass the cooldown and collect all active sources;
+unchanged data sends no request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
