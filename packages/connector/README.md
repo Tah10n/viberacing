@@ -34,10 +34,12 @@ logs, and installed code; provider data and foreign hooks are untouched. `reset-
 explicit escape hatch for intentionally creating a new installation identity.
 
 State lives under `~/.viberacing`: `installation.json`, `config.json`, `state.json`, one compact
-pending snapshot per source, hook diagnostics, the installed executable/library, and usage-only CLI
-captures. Directories are owner-only; secrets are `0600`. `doctor` reports hook freshness, mapped
-accounts, supported surfaces, excluded desktop surfaces, data availability, partial warnings, and
-the last hook error; `doctor --repair` refreshes the installed runtime and owned hooks.
+pending snapshot and safe diagnostic per source, hook diagnostics, the installed executable/library,
+and usage-only CLI captures. Pending records are uploaded in bounded batches, and a source already
+disconnected on the server is removed locally without blocking other agents. Directories are
+owner-only; secrets are `0600`. `doctor` reports hook freshness, mapped accounts, supported
+surfaces, excluded desktop surfaces, data availability, partial warnings, and the last hook error;
+`doctor --repair` refreshes the installed runtime and owned hooks.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
 OpenCode uses its read-only SQLite store and a documented `sync`; Cursor and Antigravity require the

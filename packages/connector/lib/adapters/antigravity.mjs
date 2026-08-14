@@ -26,13 +26,13 @@ export function parseAntigravityLines(lines) {
       const entry = componentEntry(
         date,
         {
-          inputTokens: usage.input_tokens,
-          outputTokens: usage.output_tokens,
-          cacheReadTokens: usage.cache_read_tokens,
-          cacheWriteTokens: usage.cache_write_tokens,
-          reasoningTokens: usage.reasoning_tokens ?? usage.thinking_tokens,
+          inputTokens: usage.input_tokens ?? usage.inputTokens,
+          outputTokens: usage.output_tokens ?? usage.outputTokens,
+          cacheReadTokens: usage.cache_read_tokens ?? usage.cacheReadTokens,
+          cacheWriteTokens: usage.cache_write_tokens ?? usage.cacheWriteTokens,
+          reasoningTokens: usage.reasoning_tokens ?? usage.thinking_tokens ?? usage.reasoningTokens,
         },
-        usage.total_tokens,
+        usage.total_tokens ?? usage.totalTokens,
       );
       if (entry) entries.push(entry);
     } catch {}

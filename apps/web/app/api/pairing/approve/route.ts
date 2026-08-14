@@ -62,10 +62,10 @@ export async function POST(request: Request): Promise<Response> {
       const sources = await client.query<SourceRow>(
         `SELECT id::text, agent_id, agent_account_id::text, suggested_label
            FROM installation_sources
-          WHERE installation_id = $1 AND status = 'pending'
+          WHERE installation_id = $1 AND pending_pairing_code_hash = $2
           ORDER BY created_at, id
           FOR UPDATE`,
-        [installation.id],
+        [installation.id, digest(code)],
       );
       if (sources.rows.length === 0) throw new ApprovalError("sources");
 
@@ -134,6 +134,7 @@ export async function POST(request: Request): Promise<Response> {
               SET user_id = $2,
                   agent_account_id = $3,
                   status = 'active',
+                  pending_pairing_code_hash = NULL,
                   updated_at = now()
             WHERE id = $1`,
           [source.id, current.id, assignments.get(source.id)],

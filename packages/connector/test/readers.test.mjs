@@ -16,6 +16,7 @@ import {
   adapters,
   adapterFor,
   recentEntries,
+  safeCaptureRecord,
 } from "../lib/readers.mjs";
 
 async function fixture(name) {
@@ -335,14 +336,19 @@ test("capture adapters deduplicate events and aggregate multiple UTC days", asyn
 test("capture collectors accept their configured JSONL file directly", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-capture-"));
   context.after(() => rm(directory, { force: true, recursive: true }));
-  const path = join(directory, "cursor.jsonl");
-  await writeFile(path, await fixture("cursor.jsonl"));
-  const result = await adapterFor("cursor").collect({ dataPath: path }, undefined, {});
-  assert.equal(result.completeness, "complete");
-  assert.deepEqual(
-    result.entries.map((entry) => entry.totalTokens),
-    ["20"],
-  );
+  for (const agentId of ["cursor", "antigravity"]) {
+    const native = (await fixture(`${agentId}.jsonl`)).trim().split("\n").at(-1);
+    const persisted = safeCaptureRecord(agentId, native);
+    assert.equal(persisted.id, "session-1");
+    const path = join(directory, `${agentId}.jsonl`);
+    await writeFile(path, `${JSON.stringify(persisted)}\n`);
+    const result = await adapterFor(agentId).collect({ dataPath: path }, undefined, {});
+    assert.equal(result.completeness, "complete");
+    assert.deepEqual(
+      result.entries.map((item) => item.totalTokens),
+      ["20"],
+    );
+  }
 });
 
 test("collector limits are explicit partial results with diagnostics", async () => {

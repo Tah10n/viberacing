@@ -6,7 +6,23 @@ export { parseGeminiRecords } from "./adapters/gemini.mjs";
 export { parseKimiLines } from "./adapters/kimi.mjs";
 export { parseOpenCodeMessages } from "./adapters/opencode.mjs";
 export { parseQwenLines } from "./adapters/qwen.mjs";
+import { adapterFor } from "./registry.mjs";
 export { adapters, adapterFor, defaultSources } from "./registry.mjs";
+
+export function safeCaptureRecord(agentId, line) {
+  const adapter = adapterFor(agentId);
+  if (typeof adapter?.parseCapture !== "function") return null;
+  try {
+    const native = JSON.parse(line);
+    const id = native?.id ?? native?.sessionId ?? native?.session_id;
+    if (typeof id !== "string" || id.length < 1 || id.length > 256) return null;
+    const entries = adapter.parseCapture([line]);
+    if (entries.length !== 1) return null;
+    return { id, date: entries[0].date, usage: entries[0] };
+  } catch {
+    return null;
+  }
+}
 
 export function recentEntries(entries, now = new Date()) {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSnapshots } from "./route";
+import { parseSnapshots, parseSourceErrors } from "./route";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -61,5 +61,18 @@ describe("usage payload privacy and numeric contract", () => {
         },
       ]),
     ).toThrow("token_components_mismatch");
+  });
+
+  it("accepts only an allowlisted content-free source diagnostic", () => {
+    expect(parseSourceErrors([{ sourceId, code: "collector_failed" }])).toEqual([
+      { sourceId, code: "collector_failed" },
+    ]);
+    for (const unsafe of [
+      { sourceId, code: "collector_failed", path: "/private/repository" },
+      { sourceId, code: "ENOENT /private/repository" },
+      { sourceId, code: "collector_failed", message: "prompt content" },
+    ]) {
+      expect(() => parseSourceErrors([unsafe])).toThrow("invalid_source_error");
+    }
   });
 });

@@ -9,6 +9,7 @@ import { refreshAgentWeek } from "@/lib/usage-summary";
 interface UsageBody {
   protocolVersion?: unknown;
   snapshots?: unknown;
+  sourceErrors?: unknown;
 }
 
 interface SnapshotInput {
@@ -28,6 +29,11 @@ interface EntryInput {
   cacheReadTokens?: unknown;
   cacheWriteTokens?: unknown;
   reasoningTokens?: unknown;
+}
+
+interface SourceErrorInput {
+  sourceId?: unknown;
+  code?: unknown;
 }
 
 interface InstallationRow {
@@ -61,6 +67,11 @@ interface ParsedSnapshot {
   entries: ParsedEntry[];
 }
 
+interface ParsedSourceError {
+  sourceId: string;
+  code: "collector_failed";
+}
+
 class UsageError extends Error {
   constructor(
     readonly status: number,
@@ -73,7 +84,7 @@ class UsageError extends Error {
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const tokenPattern = /^(?:0|[1-9]\d{0,29})$/;
 const sequencePattern = /^[1-9]\d{0,29}$/;
-const bodyKeys = new Set(["protocolVersion", "snapshots"]);
+const bodyKeys = new Set(["protocolVersion", "snapshots", "sourceErrors"]);
 const snapshotKeys = new Set([
   "sourceId",
   "syncSequence",
@@ -91,6 +102,7 @@ const entryKeys = new Set([
   "cacheWriteTokens",
   "reasoningTokens",
 ]);
+const sourceErrorKeys = new Set(["sourceId", "code"]);
 
 function onlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
@@ -108,7 +120,7 @@ function optionalToken(value: unknown): string | null | undefined {
 }
 
 export function parseSnapshots(value: unknown): ParsedSnapshot[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
+  if (!Array.isArray(value) || value.length > 32) {
     throw new UsageError(400, "invalid_snapshots");
   }
   const maximum = maximumDailyTokens();
@@ -206,6 +218,29 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
   });
 }
 
+export function parseSourceErrors(value: unknown): ParsedSourceError[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 32) {
+    throw new UsageError(400, "invalid_source_errors");
+  }
+  const sourceIds = new Set<string>();
+  return value.map((raw): ParsedSourceError => {
+    if (!isRecord(raw) || !onlyKeys(raw, sourceErrorKeys)) {
+      throw new UsageError(400, "invalid_source_error");
+    }
+    const sourceError = raw as SourceErrorInput;
+    if (
+      !isUuid(sourceError.sourceId) ||
+      sourceIds.has(sourceError.sourceId) ||
+      sourceError.code !== "collector_failed"
+    ) {
+      throw new UsageError(400, "invalid_source_error");
+    }
+    sourceIds.add(sourceError.sourceId);
+    return { sourceId: sourceError.sourceId, code: sourceError.code };
+  });
+}
+
 function affectedWeeks(snapshot: ParsedSnapshot): Set<string> {
   const result = new Set<string>();
   if (snapshot.completeness === "partial") {
@@ -251,28 +286,43 @@ export async function POST(request: Request): Promise<Response> {
       return problem(426, "unsupported_protocol_version");
     }
     const snapshots = parseSnapshots(body.snapshots);
+    const sourceErrors = parseSourceErrors(body.sourceErrors);
+    const sourceIds = [
+      ...snapshots.map((snapshot) => snapshot.sourceId),
+      ...sourceErrors.map((sourceError) => sourceError.sourceId),
+    ];
+    if (
+      sourceIds.length < 1 ||
+      sourceIds.length > 32 ||
+      new Set(sourceIds).size !== sourceIds.length
+    ) {
+      return problem(400, "invalid_request");
+    }
     const result = await transaction(async (client) => {
-      const active = await client.query(
-        "SELECT 1 FROM installations WHERE id = $1 AND status = 'active' FOR UPDATE",
-        [installation.id],
+      const active = await client.query<InstallationRow>(
+        `SELECT id::text, user_id::text FROM installations
+          WHERE id = $1 AND device_token_hash = $2 AND status = 'active'
+          FOR UPDATE`,
+        [installation.id, digest(token)],
       );
-      if (active.rowCount !== 1) throw new UsageError(401, "unauthorized");
+      const lockedInstallation = active.rows[0];
+      if (lockedInstallation === undefined) throw new UsageError(401, "unauthorized");
       const sources = await client.query<SourceRow>(
         `SELECT id::text, user_id::text, agent_id, last_accepted_sync_sequence::text
            FROM installation_sources
           WHERE installation_id = $1 AND id = ANY($2::uuid[]) AND status = 'active'
           FOR UPDATE`,
-        [installation.id, snapshots.map((snapshot) => snapshot.sourceId)],
+        [lockedInstallation.id, sourceIds],
       );
       const sourceById = new Map(sources.rows.map((source) => [source.id, source]));
-      if (sources.rows.length !== snapshots.length) throw new UsageError(400, "unsupported_source");
+      if (sources.rows.length !== sourceIds.length) throw new UsageError(400, "unsupported_source");
 
       let acceptedEntries = 0;
       let acceptedSnapshots = 0;
       const summaries = new Set<string>();
       for (const snapshot of snapshots) {
         const source = sourceById.get(snapshot.sourceId);
-        if (source === undefined || source.user_id !== installation.user_id) {
+        if (source === undefined || source.user_id !== lockedInstallation.user_id) {
           throw new UsageError(400, "unsupported_source");
         }
         if (BigInt(snapshot.syncSequence) <= BigInt(source.last_accepted_sync_sequence)) continue;
@@ -343,6 +393,18 @@ export async function POST(request: Request): Promise<Response> {
           summaries.add(`${source.user_id}\0${source.agent_id}\0${week}`);
         }
       }
+      for (const sourceError of sourceErrors) {
+        const source = sourceById.get(sourceError.sourceId);
+        if (source === undefined || source.user_id !== lockedInstallation.user_id) {
+          throw new UsageError(400, "unsupported_source");
+        }
+        await client.query(
+          `UPDATE installation_sources
+              SET last_error_summary = 'Collector failed', updated_at = now()
+            WHERE id = $1`,
+          [sourceError.sourceId],
+        );
+      }
       for (const summary of summaries) {
         const [userId, agentId, week] = summary.split("\0");
         if (userId === undefined || agentId === undefined || week === undefined) {
@@ -353,12 +415,13 @@ export async function POST(request: Request): Promise<Response> {
       if (acceptedSnapshots > 0) {
         await client.query(
           "UPDATE installations SET last_sync_at = now(), updated_at = now() WHERE id = $1",
-          [installation.id],
+          [lockedInstallation.id],
         );
       }
       return {
         acceptedEntries,
         acceptedSnapshots,
+        acceptedSourceErrors: sourceErrors.length,
         staleSnapshots: snapshots.length - acceptedSnapshots,
       };
     });
