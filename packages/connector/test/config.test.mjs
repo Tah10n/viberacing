@@ -2499,6 +2499,12 @@ test("disconnect serializes with an in-flight sync and prevents state resurrecti
   const disconnectPromise = execFileAsync(process.execPath, [connectorPath, "disconnect"], {
     env: environment,
   });
+  await waitFor(() =>
+    access(join(installation.directory, "lifecycle-revoking.lock")).then(
+      () => true,
+      () => false,
+    ),
+  );
   assert.equal(
     await Promise.race([
       disconnectPromise.then(() => "finished"),
