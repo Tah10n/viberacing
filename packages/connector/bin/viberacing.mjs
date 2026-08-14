@@ -2,11 +2,11 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { adapterFor, defaultSources, recentEntries } from "../lib/readers.mjs";
+import { adapterFor, defaultSources, recentEntries, safeCaptureRecord } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
 import {
   installHooks,
@@ -24,7 +24,9 @@ import {
   pendingPayloads,
   readPending,
   readState,
+  mergePendingPayloads,
   removePending,
+  removePendingForSource,
   savePending,
   withSyncLock,
   writeState,
@@ -67,6 +69,7 @@ async function request(origin, path, options = {}, attempts = 1) {
           `Vibe Racing returned ${response.status}: ${payload.error ?? "request failed"}`,
         );
         error.status = response.status;
+        error.code = payload.error;
         if (response.status < 500 && response.status !== 429) throw error;
         lastError = error;
       } else return payload;
@@ -180,15 +183,117 @@ async function deliver(config, payload) {
   );
 }
 
-async function drainPending(config) {
-  let accepted = 0;
-  for (const path of await pendingPayloads()) {
-    const payload = await readPending(path);
-    const result = await deliver(config, payload);
-    accepted += result.acceptedEntries ?? 0;
-    await removePending(path);
+function pendingSourceId(payload) {
+  const ids = [
+    ...(payload.snapshots ?? []).map((snapshot) => snapshot.sourceId),
+    ...(payload.sourceErrors ?? []).map((sourceError) => sourceError.sourceId),
+  ];
+  return ids.length === 1 && typeof ids[0] === "string" ? ids[0] : null;
+}
+
+async function forgetSourceState(sourceIds) {
+  const state = await readState();
+  state.sequences ??= {};
+  state.adapters ??= {};
+  for (const sourceId of sourceIds) {
+    delete state.sequences[sourceId];
+    delete state.adapters[sourceId];
+    await removePendingForSource(sourceId);
   }
-  return accepted;
+  await writeState(state);
+}
+
+async function deliverPendingGroup(config, items, retired) {
+  const eligible = [];
+  for (const item of items) {
+    if (retired.has(item.sourceId)) await removePending(item.path);
+    else eligible.push(item);
+  }
+  if (eligible.length === 0) return 0;
+  try {
+    const result = await deliver(
+      config,
+      mergePendingPayloads(eligible.map((item) => item.payload)),
+    );
+    for (const item of eligible) await removePending(item.path);
+    return result.acceptedEntries ?? 0;
+  } catch (error) {
+    if (error?.status !== 400 || error?.code !== "unsupported_source") throw error;
+    if (eligible.length > 1) {
+      const middle = Math.ceil(eligible.length / 2);
+      return (
+        (await deliverPendingGroup(config, eligible.slice(0, middle), retired)) +
+        (await deliverPendingGroup(config, eligible.slice(middle), retired))
+      );
+    }
+    retired.add(eligible[0].sourceId);
+    await removePending(eligible[0].path);
+    return 0;
+  }
+}
+
+function pendingGroups(items) {
+  const groups = [];
+  let current = [];
+  for (const item of items) {
+    const candidate = [...current, item];
+    const payload = mergePendingPayloads(candidate.map((entry) => entry.payload));
+    const entries = payload.snapshots.reduce(
+      (total, snapshot) => total + (snapshot.entries?.length ?? 0),
+      0,
+    );
+    const tooLarge =
+      candidate.length > 32 ||
+      entries > 1_024 ||
+      Buffer.byteLength(JSON.stringify(payload)) > 120_000;
+    if (current.length > 0 && tooLarge) {
+      groups.push(current);
+      current = [item];
+    } else current = candidate;
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+async function drainPending(config) {
+  const configured = new Set(
+    config.sources
+      .map((source) => source.sourceId)
+      .filter((sourceId) => typeof sourceId === "string"),
+  );
+  const items = [];
+  for (const path of await pendingPayloads()) {
+    let payload;
+    try {
+      payload = await readPending(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    const sourceId = pendingSourceId(payload);
+    if (sourceId === null) throw new Error("Invalid pending payload");
+    if (!configured.has(sourceId)) {
+      await removePending(path);
+      continue;
+    }
+    items.push({ path, payload, sourceId });
+  }
+  const retired = new Set();
+  let accepted = 0;
+  const groups = [
+    items.filter((item) => (item.payload.snapshots?.length ?? 0) > 0),
+    items.filter((item) => (item.payload.sourceErrors?.length ?? 0) > 0),
+  ];
+  for (const selected of groups) {
+    for (const group of pendingGroups(selected))
+      accepted += await deliverPendingGroup(config, group, retired);
+  }
+  if (retired.size > 0) {
+    config.sources = config.sources.filter((source) => !retired.has(source.sourceId));
+    await writeConfig(config);
+    await forgetSourceState(retired);
+  }
+  return { accepted, retiredSources: [...retired] };
 }
 
 async function settleLimited(items, worker, limit = 4) {
@@ -213,7 +318,8 @@ async function settleLimited(items, worker, limit = 4) {
 async function sync(providedConfig) {
   return withSyncLock(async () => {
     const config = providedConfig ?? (await readConfig());
-    await drainPending(config);
+    const previous = await drainPending(config);
+    let accepted = previous.accepted;
     const state = await readState();
     const range = snapshotRange();
     state.adapters ??= {};
@@ -228,12 +334,14 @@ async function sync(providedConfig) {
       };
     });
     const snapshots = [];
+    const sourceErrors = [];
     const failures = [];
     for (let index = 0; index < collected.length; index += 1) {
       const outcome = collected[index];
       const source = syncSources[index];
       if (outcome.status === "rejected") {
         failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
+        sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
         continue;
       }
       const previous = BigInt(state.sequences[source.sourceId] ?? "0");
@@ -248,13 +356,16 @@ async function sync(providedConfig) {
         entries: recentEntries(outcome.value.result.entries),
       });
     }
+    await writeState(state);
+    const payload = { protocolVersion, snapshots, sourceErrors };
+    await savePending(payload);
+    const delivered = await drainPending(config);
+    accepted += delivered.accepted;
     if (snapshots.length === 0)
       throw new Error(failures.join("; ") || "No configured collectors succeeded");
-    await writeState(state);
-    const payload = { protocolVersion, snapshots };
-    await savePending(payload);
-    const accepted = await drainPending(config);
     output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
+    for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
+      failures.push(`server disconnected source ${sourceId}`);
     if (failures.length) process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
     return { accepted, failures };
   });
@@ -278,6 +389,8 @@ async function doctor() {
   );
   try {
     const config = await readConfig();
+    const state = await readState();
+    const range = snapshotRange();
     if (arguments_.includes("--repair")) {
       await installHooks(import.meta.url, config.sources);
       output("Installed connector copy and owned hooks repaired.");
@@ -304,7 +417,11 @@ async function doctor() {
         output(
           `${source.agentId} diagnostics: ${diagnostic.status}; method ${diagnostic.collectionMethod}; surfaces ${diagnostic.supportedSurfaces.join(",")}; data ${diagnostic.dataLocationAvailable === false ? "unavailable" : "available"}${diagnostic.excluded.length ? `; excluded ${diagnostic.excluded.join(", ")}` : ""}`,
         );
-        const result = await adapter.collect(source);
+        const result = await adapter.collect(
+          source,
+          range,
+          state.adapters?.[source.sourceId] ?? {},
+        );
         output(
           `${source.agentId} (${source.accountLabel}): ok, ${result.entries.length} UTC day(s), ${result.completeness}${result.warnings.length ? `; warnings ${result.warnings.join(", ")}` : ""}`,
         );
@@ -334,8 +451,9 @@ async function sourceCommand() {
   if (action === "add") {
     const agentId = option("--agent");
     const dataPath = option("--data-dir", option("--path"));
+    const label = option("--name", option("--label"))?.trim();
     const adapter = adapterFor(agentId);
-    if (!adapter || !dataPath)
+    if (!adapter || !dataPath || !label || label.length > 40)
       throw new Error("Usage: viberacing source add --agent AGENT --name NAME --data-dir PATH");
     config.sources.push({
       clientSourceId: `${agentId}:${randomUUID()}`,
@@ -343,10 +461,7 @@ async function sourceCommand() {
       dataPath,
       collectionMethod: adapter.collectionMethods[0],
       supportedSurface: adapter.supportedSurfaces[0],
-      suggestedLabel: option(
-        "--name",
-        option("--label", `${adapter.displayName} ${basename(dataPath)}`),
-      ),
+      suggestedLabel: label,
     });
     await writeConfig(config);
     output(
@@ -361,12 +476,18 @@ async function sourceCommand() {
     const removed = config.sources.find((source) => source.clientSourceId === id);
     config.sources = config.sources.filter((source) => source.clientSourceId !== id);
     if (before === config.sources.length) throw new Error("Unknown source id");
-    if (typeof removed.sourceId === "string")
-      await request(config.origin, `/api/sources/${removed.sourceId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${config.deviceToken}` },
-      });
+    if (typeof removed.sourceId === "string") {
+      try {
+        await request(config.origin, `/api/sources/${removed.sourceId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${config.deviceToken}` },
+        });
+      } catch (error) {
+        if (error?.status !== 404) throw error;
+      }
+    }
     await writeConfig(config);
+    if (typeof removed.sourceId === "string") await forgetSourceState([removed.sourceId]);
     output("Source disconnected and removed locally.");
     return;
   }
@@ -384,20 +505,27 @@ async function wrap(agentId) {
     stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
   });
+  const outcomePromise = new Promise((resolve) => {
+    child.once("error", (error) => resolve({ error }));
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
   const forwardInt = () => child.kill("SIGINT");
   const forwardTerm = () => child.kill("SIGTERM");
   process.once("SIGINT", forwardInt);
   process.once("SIGTERM", forwardTerm);
   const reader = createInterface({ input: child.stdout, crlfDelay: Infinity });
   const safe = [];
+  const seen = new Set();
   for await (const line of reader) {
     process.stdout.write(`${line}\n`);
-    const parsed = adapterFor(agentId).parseCapture([line]);
-    if (parsed.length) safe.push({ id: randomUUID(), date: parsed[0].date, usage: parsed[0] });
+    const record = safeCaptureRecord(agentId, line);
+    if (record !== null && !seen.has(record.id)) {
+      seen.add(record.id);
+      safe.push(record);
+    }
   }
-  const outcome = await new Promise((resolve) =>
-    child.once("close", (code, signal) => resolve({ code, signal })),
-  );
+  const outcome = await outcomePromise;
+  if (outcome.error) throw outcome.error;
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
   if (safe.length) {

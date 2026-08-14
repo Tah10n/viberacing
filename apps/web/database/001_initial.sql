@@ -91,6 +91,9 @@ CREATE TABLE installation_sources (
   suggested_label varchar(40) CHECK (
     suggested_label IS NULL OR length(trim(suggested_label)) BETWEEN 1 AND 40
   ),
+  pending_pairing_code_hash bytea CHECK (
+    pending_pairing_code_hash IS NULL OR octet_length(pending_pairing_code_hash) = 32
+  ),
   status varchar(16) NOT NULL CHECK (status IN ('pending', 'active', 'disconnected')),
   last_successful_sync_at timestamptz,
   last_error_summary varchar(500),
@@ -107,7 +110,7 @@ CREATE TABLE installation_sources (
   FOREIGN KEY (agent_account_id, user_id, agent_id)
     REFERENCES agent_accounts(id, user_id, agent_id) ON DELETE CASCADE,
   CHECK (
-    (status = 'pending' AND (
+    (status = 'pending' AND pending_pairing_code_hash IS NOT NULL AND (
       (user_id IS NULL AND agent_account_id IS NULL)
       OR (user_id IS NOT NULL AND agent_account_id IS NOT NULL)
     ))
@@ -118,6 +121,9 @@ CREATE INDEX installation_sources_installation_idx
   ON installation_sources(installation_id, status, created_at);
 CREATE INDEX installation_sources_owner_idx
   ON installation_sources(user_id, agent_account_id, status);
+CREATE INDEX installation_sources_pairing_idx
+  ON installation_sources(installation_id, pending_pairing_code_hash)
+  WHERE pending_pairing_code_hash IS NOT NULL;
 
 CREATE TABLE daily_usage (
   source_id uuid NOT NULL REFERENCES installation_sources(id) ON DELETE CASCADE,

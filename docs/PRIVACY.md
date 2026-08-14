@@ -6,13 +6,16 @@ During pairing the connector sends protocol/connector versions, a random install
 proof, opaque client source IDs, agent IDs, allowlisted collection methods, supported surface, and a
 neutral suggested label. During sync it sends a server source ID, sequence, UTC range,
 complete/partial status, UTC dates, aggregate total tokens, and optional aggregate input/output/
-cache/reasoning counters.
+cache/reasoning counters. If collection fails, it may instead send the fixed `collector_failed`
+diagnostic code and source ID; exception messages are kept local.
 
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
 monetary/request metrics. Raw session stores can contain sensitive content, so adapters extract
 usage locally and discard every other field. Cursor and Antigravity capture wrappers pass native
-output through to the terminal but persist only a random event ID, UTC date, and token counters.
+output through to the terminal but persist only the native stable event ID, UTC date, and token
+counters needed for exact deduplication. `source add` requires an explicit label and never derives
+network metadata from the local data-root path.
 
 GitHub OAuth requests `read:user`. The access token is used once to obtain immutable GitHub ID and
 current handle and is not stored. Browser, installation, poll, and device secrets are SHA-256 hashed

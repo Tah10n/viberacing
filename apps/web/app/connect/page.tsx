@@ -55,9 +55,9 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
       : await query<SourceRow>(
           `SELECT id::text, agent_id, suggested_label, supported_surface, agent_account_id::text
              FROM installation_sources
-            WHERE installation_id = $1 AND status = 'pending'
+            WHERE installation_id = $1 AND pending_pairing_code_hash = $2
             ORDER BY created_at, id`,
-          [pairing.id],
+          [pairing.id, digest(code)],
         );
   const accounts =
     current === null

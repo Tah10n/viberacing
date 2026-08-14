@@ -270,11 +270,13 @@ export async function removeConfig() {
 
 export async function resetInstallation() {
   await removeConfig();
-  try {
-    await unlink(installationPath);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+  for (const path of [installationPath, join(stateDirectory, "state.json")])
+    try {
+      await unlink(path);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  await rm(join(stateDirectory, "pending"), { recursive: true, force: true });
 }
 
 export async function removeLocalState() {

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
 
 const requireFromWeb = createRequire(new URL("../apps/web/package.json", import.meta.url));
@@ -92,8 +93,8 @@ async function beginPairing(installation, sources) {
 
 async function approvePairing(pairing, selections) {
   const pending = await pool.query(
-    "SELECT id::text, client_source_id FROM installation_sources WHERE installation_id = $1 AND status = 'pending' ORDER BY created_at, id",
-    [pairing.installationId],
+    "SELECT id::text, client_source_id FROM installation_sources WHERE installation_id = $1 AND pending_pairing_code_hash = $2 ORDER BY created_at, id",
+    [pairing.installationId, digest(pairing.code)],
   );
   const body = { code: pairing.code };
   for (const row of pending.rows) {
@@ -120,12 +121,39 @@ async function pair(installation, sources, selections = {}) {
   return approvePairing(await beginPairing(installation, sources), selections);
 }
 
-async function usage(deviceToken, snapshots) {
+async function usage(deviceToken, snapshots, sourceErrors = []) {
   return json(
     "/api/usage",
-    { protocolVersion: 2, snapshots },
+    { protocolVersion: 2, snapshots, sourceErrors },
     { authorization: `Bearer ${deviceToken}` },
   );
+}
+
+function rawUsage(deviceToken, snapshots, sourceErrors = []) {
+  const payload = Buffer.from(JSON.stringify({ protocolVersion: 2, snapshots, sourceErrors }));
+  const target = new URL("/api/usage", appUrl);
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      target,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${deviceToken}`,
+          "content-length": payload.length,
+          "content-type": "application/json",
+        },
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () =>
+          resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString("utf8") }),
+        );
+      },
+    );
+    request.on("error", reject);
+    request.end(payload);
+  });
 }
 
 function snapshot(
@@ -219,6 +247,63 @@ try {
   );
 
   const target = byClient.get("codex-work").sourceId;
+  const lockClient = await pool.connect();
+  const replacementDeviceToken = token();
+  try {
+    await lockClient.query("BEGIN");
+    await lockClient.query("SELECT id FROM installations WHERE id = $1 FOR UPDATE", [
+      firstInstallation.id,
+    ]);
+    const racingUsage = rawUsage(
+      first.deviceToken,
+      [],
+      [{ sourceId: target, code: "collector_failed" }],
+    );
+    let blocked = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await pool.query(
+        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%FROM installations%' AND query LIKE '%FOR UPDATE%'",
+      );
+      if ((waiting.rows[0]?.count ?? 0) > 0) {
+        blocked = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    check(blocked, "usage request did not reach the locked authentication boundary");
+    await lockClient.query("UPDATE installations SET device_token_hash = $2 WHERE id = $1", [
+      firstInstallation.id,
+      digest(replacementDeviceToken),
+    ]);
+    await lockClient.query("COMMIT");
+    const raced = await racingUsage;
+    check(
+      raced.status === 401,
+      `old token crossed concurrent rotation boundary: ${raced.status} ${raced.body}`,
+    );
+    first.deviceToken = replacementDeviceToken;
+  } catch (error) {
+    await lockClient.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    lockClient.release();
+  }
+  console.log("ok - token hash is rechecked under the ingestion row lock");
+
+  let diagnostic = await usage(
+    first.deviceToken,
+    [],
+    [{ sourceId: target, code: "collector_failed" }],
+  );
+  check(diagnostic.status === 200, "source diagnostic update failed");
+  let diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    diagnosticRow.rows[0]?.last_error_summary === "Collector failed",
+    "source diagnostic was not persisted",
+  );
   let response = await usage(first.deviceToken, [
     snapshot(target, 2, [
       [yesterday, 50],
@@ -226,6 +311,12 @@ try {
     ]),
   ]);
   check(response.status === 200, "complete correction failed");
+  diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(diagnosticRow.rows[0]?.last_error_summary === null, "successful sync did not clear error");
+  console.log("ok - safe source diagnostics persist and clear after a successful snapshot");
   response = await usage(first.deviceToken, [snapshot(target, 2, [[today, 999]])]);
   check(
     response.status === 200 && (await response.json()).staleSnapshots === 1,
@@ -345,15 +436,32 @@ try {
   check(response.status === 200, "UTC boundary cleanup failed");
   console.log("ok - UTC Sunday/Monday usage lands in separate weekly summaries");
 
+  const reconnectSources = [
+    source("codex-personal-a", "codex"),
+    source("codex-work", "codex"),
+    source("claude-personal", "claude_code"),
+    source("opencode-personal", "opencode"),
+  ];
+  const abandoned = await beginPairing(firstInstallation, reconnectSources);
+  await pool.query(
+    "UPDATE installations SET pairing_expires_at = now() - interval '1 second' WHERE id = $1",
+    [firstInstallation.id],
+  );
+  response = await usage(first.deviceToken, [snapshot(target, 5, [[today, 20]])]);
+  const activeDuringReconnect = await pool.query(
+    "SELECT count(*)::int AS count FROM installation_sources WHERE installation_id = $1 AND status = 'active'",
+    [firstInstallation.id],
+  );
+  check(
+    response.status === 200 && activeDuringReconnect.rows[0].count === reconnectSources.length,
+    `abandoned reconnect disabled active sources (${abandoned.code})`,
+  );
+  console.log("ok - abandoned reconnect leaves the current token and sources usable");
+
   const oldDeviceToken = first.deviceToken;
   const reconnect = await pair(
     firstInstallation,
-    [
-      source("codex-personal-a", "codex"),
-      source("codex-work", "codex"),
-      source("claude-personal", "claude_code"),
-      source("opencode-personal", "opencode"),
-    ],
+    reconnectSources,
     Object.fromEntries(first.sources.map((item) => [item.clientSourceId, item.agentAccountId])),
   );
   check(reconnect.deviceToken !== oldDeviceToken, "device token did not rotate");
@@ -374,18 +482,8 @@ try {
   console.log("ok - reconnect preserves identity/history and rotates device authorization");
 
   const concurrent = await Promise.all([
-    beginPairing(firstInstallation, [
-      source("codex-personal-a", "codex"),
-      source("codex-work", "codex"),
-      source("claude-personal", "claude_code"),
-      source("opencode-personal", "opencode"),
-    ]),
-    beginPairing(firstInstallation, [
-      source("codex-personal-a", "codex"),
-      source("codex-work", "codex"),
-      source("claude-personal", "claude_code"),
-      source("opencode-personal", "opencode"),
-    ]),
+    beginPairing(firstInstallation, reconnectSources),
+    beginPairing(firstInstallation, reconnectSources),
   ]);
   const currentCode = await pool.query(
     "SELECT pairing_code_hash FROM installations WHERE id = $1",

@@ -17,7 +17,11 @@ queue, cache, worker, proxy, ORM, or second service.
 the current server origin, device capability, local source mapping, and local paths. The connector
 sends only opaque client source IDs and allowlisted source metadata during pairing. In one browser
 transaction, each source is mapped to a new or existing `agent_account` of the same user and agent.
-Approval rotates the device token; a transaction lock serializes reconnects.
+Reconnect stages source mappings with the hashed pairing code without changing an existing source's
+active status, so an abandoned or expired browser approval cannot interrupt the current connector.
+Approval atomically activates the staged mappings and rotates the device token; a transaction lock
+serializes reconnects. Usage authentication rechecks that token under the same installation row
+lock.
 
 Server storage separates `installations`, human-defined `agent_accounts`, and machine-local
 `installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
@@ -27,7 +31,9 @@ Server storage separates `installations`, human-defined `agent_accounts`, and ma
 Every source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence. Complete
 snapshots replace values and delete missing dates; partial snapshots update only present dates.
 Values may decrease. The server validates canonical decimal strings, source ownership, body/range
-limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction.
+limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction. A failed
+collector can send only the allowlisted `collector_failed` diagnostic code for its mapped source;
+raw errors, content, and paths are never part of the protocol.
 
 Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
 Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
@@ -37,8 +43,10 @@ use daily `max`; machine-local sources use daily `sum`. Different accounts and a
 
 Collectors run independently with concurrency four. A stale-aware atomic file lock provides
 cross-process single flight. Network calls use bounded exponential retry with jitter; one latest
-pending snapshot file per source survives a process or network failure. Owned hook handlers carry
-the exact `viberacing-hook-v2` marker and can be updated or removed without touching other hooks.
+pending snapshot file per source survives a process or network failure. Pending sources are batched
+by source count, entry count, and serialized body size; a server-disconnected source is quarantined
+without blocking the remaining collectors. Owned hook handlers carry the exact `viberacing-hook-v2`
+marker and can be updated or removed without touching other hooks.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, and the
 exact migration ledger. Small opportunistic cleanup batches remove expired sessions/pairings,

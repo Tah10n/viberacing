@@ -110,6 +110,7 @@ export async function POST(request: Request): Promise<Response> {
     const connectorVersion = body.connectorVersion as string;
 
     const code = pairingCode();
+    const pairingHash = digest(code);
     const pollToken = randomToken();
     const pendingDeviceHash = digest(deviceTokenFromPollToken(pollToken));
     const outcome = await transaction(async (client) => {
@@ -160,6 +161,15 @@ export async function POST(request: Request): Promise<Response> {
         }
       }
 
+      await client.query(
+        "DELETE FROM installation_sources WHERE installation_id = $1 AND status = 'pending'",
+        [installationId],
+      );
+      await client.query(
+        "UPDATE installation_sources SET pending_pairing_code_hash = NULL WHERE installation_id = $1 AND pending_pairing_code_hash IS NOT NULL",
+        [installationId],
+      );
+
       if (installation === undefined) {
         await client.query(
           `INSERT INTO installations
@@ -169,7 +179,7 @@ export async function POST(request: Request): Promise<Response> {
           [
             installationId,
             digest(installationSecret),
-            digest(code),
+            pairingHash,
             digest(pollToken),
             pendingDeviceHash,
             connectorVersion,
@@ -190,7 +200,7 @@ export async function POST(request: Request): Promise<Response> {
             WHERE id = $1`,
           [
             installationId,
-            digest(code),
+            pairingHash,
             digest(pollToken),
             pendingDeviceHash,
             connectorVersion,
@@ -203,12 +213,12 @@ export async function POST(request: Request): Promise<Response> {
         await client.query(
           `INSERT INTO installation_sources
              (id, installation_id, agent_id, client_source_id, collection_method,
-              supported_surface, suggested_label, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+              supported_surface, suggested_label, pending_pairing_code_hash, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
            ON CONFLICT (installation_id, client_source_id) DO UPDATE
              SET supported_surface = EXCLUDED.supported_surface,
                  suggested_label = EXCLUDED.suggested_label,
-                 status = 'pending',
+                 pending_pairing_code_hash = EXCLUDED.pending_pairing_code_hash,
                  updated_at = now()`,
           [
             randomUUID(),
@@ -218,6 +228,7 @@ export async function POST(request: Request): Promise<Response> {
             source.collectionMethod,
             source.supportedSurface,
             typeof source.suggestedLabel === "string" ? source.suggestedLabel.trim() : null,
+            pairingHash,
           ],
         );
       }

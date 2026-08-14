@@ -26,13 +26,18 @@ async function collect(_source, _range, state = {}) {
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })[
     Symbol.asyncIterator
   ]();
+  const spawnFailure = new Promise((_, reject) => child.once("error", reject));
   const next = async () => {
-    const result = await Promise.race([
-      lines.next(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Codex App Server timed out")), 8_000),
-      ),
-    ]);
+    let timeout;
+    const timedOut = new Promise((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Codex App Server timed out")), 8_000);
+    });
+    let result;
+    try {
+      result = await Promise.race([lines.next(), spawnFailure, timedOut]);
+    } finally {
+      clearTimeout(timeout);
+    }
     if (result.done) throw new Error("Codex App Server closed unexpectedly");
     return JSON.parse(result.value);
   };

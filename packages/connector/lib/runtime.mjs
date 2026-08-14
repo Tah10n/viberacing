@@ -5,6 +5,13 @@ import { stateDirectory } from "./config.mjs";
 const statePath = join(stateDirectory, "state.json");
 const lockPath = join(stateDirectory, "sync.lock");
 const pendingDirectory = join(stateDirectory, "pending");
+const sourceIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function pendingPath(sourceId, kind = "snapshot") {
+  if (!sourceIdPattern.test(sourceId)) throw new Error("Invalid pending source id");
+  return join(pendingDirectory, `${sourceId}${kind === "error" ? ".error" : ""}.json`);
+}
 
 async function atomicJson(path, value) {
   const temporary = `${path}.${process.pid}.tmp`;
@@ -49,10 +56,21 @@ export async function withSyncLock(callback) {
 
 export async function savePending(payload) {
   await mkdir(pendingDirectory, { recursive: true, mode: 0o700 });
-  for (const snapshot of payload.snapshots)
-    await atomicJson(join(pendingDirectory, `${snapshot.sourceId}.json`), {
+  for (const snapshot of payload.snapshots ?? []) {
+    await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
+      sourceErrors: [],
+    });
+    await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
+  for (const sourceError of payload.sourceErrors ?? [])
+    await atomicJson(pendingPath(sourceError.sourceId, "error"), {
+      protocolVersion: payload.protocolVersion,
+      snapshots: [],
+      sourceErrors: [sourceError],
     });
 }
 
@@ -72,5 +90,22 @@ export async function readPending(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 export async function removePending(path) {
-  await unlink(path);
+  await unlink(path).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
+}
+
+export async function removePendingForSource(sourceId) {
+  for (const kind of ["snapshot", "error"])
+    await unlink(pendingPath(sourceId, kind)).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+}
+
+export function mergePendingPayloads(payloads) {
+  return {
+    protocolVersion: payloads[0]?.protocolVersion,
+    snapshots: payloads.flatMap((payload) => payload.snapshots ?? []),
+    sourceErrors: payloads.flatMap((payload) => payload.sourceErrors ?? []),
+  };
 }
