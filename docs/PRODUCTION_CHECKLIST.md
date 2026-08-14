@@ -37,7 +37,9 @@
   sequence state resumes from the server value; and offline disconnect removes hooks and the device
   token. Race disconnect/remove/uninstall against an in-flight sync, verify dashboard disconnect is
   reconciled during active use, and verify partial uninstall continues across later roots while
-  retaining failed-root metadata for retry.
+  retaining failed-root metadata for retry. Race reconnect and doctor reconciliation against an
+  in-flight sync; verify only the replacement token survives, a repaired connector clears the 426
+  automatic-disable flag, and a lock timeout gets exactly one bounded deferred acquisition.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Do not enable exact Cursor ranking until

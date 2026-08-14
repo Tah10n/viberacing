@@ -74,6 +74,18 @@ const remoteReconciliationIntervalMs =
   /^\d+$/.test(process.env.VIBERACING_TEST_REMOTE_RECONCILIATION_INTERVAL_MS ?? "")
     ? Number(process.env.VIBERACING_TEST_REMOTE_RECONCILIATION_INTERVAL_MS)
     : 10 * 60_000;
+const pairingPollIntervalMs =
+  process.env.NODE_ENV === "test" &&
+  /^\d+$/.test(process.env.VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS ?? "")
+    ? Number(process.env.VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS)
+    : 2_000;
+const automaticSyncLockWaitMs =
+  process.env.NODE_ENV === "test" &&
+  /^\d+$/.test(process.env.VIBERACING_TEST_AUTOMATIC_SYNC_LOCK_WAIT_MS ?? "")
+    ? Number(process.env.VIBERACING_TEST_AUTOMATIC_SYNC_LOCK_WAIT_MS)
+    : process.env.NODE_ENV === "test"
+      ? 5_000
+      : 60_000;
 const option = (name, fallback) => {
   const index = arguments_.indexOf(name);
   return index >= 0 && arguments_[index + 1] ? arguments_[index + 1] : fallback;
@@ -158,7 +170,7 @@ async function connect() {
   openBrowser(pairing.verificationUrl);
   const deadline = Date.now() + pairing.expiresInSeconds * 1_000;
   while (Date.now() < deadline) {
-    await delay(2_000);
+    await delay(pairingPollIntervalMs);
     const result = await request(origin, "/api/pairing/poll", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -168,23 +180,32 @@ async function connect() {
       }),
     });
     if (result.status === "active") {
-      const localById = sources;
-      const mapped = result.sources.map((mapping) => ({
-        ...localById.get(mapping.clientSourceId),
-        ...mapping,
-      }));
-      const config = {
-        version: 2,
-        origin,
-        installationId: pairing.installationId,
-        deviceToken: result.deviceToken,
-        sources: mapped,
-        protocol: result.protocol,
-      };
-      await writeConfig(config);
-      await reconcileHooks(import.meta.url, mapped, localSources);
+      const config = await withLifecycleMutation(async () => {
+        const currentLocalSources = await readSources();
+        const localById = new Map(
+          currentLocalSources.map((source) => [source.clientSourceId, source]),
+        );
+        const mapped = result.sources.map((mapping) => {
+          const local = localById.get(mapping.clientSourceId);
+          if (!local) throw new Error("Paired source is no longer configured locally");
+          return { ...local, ...mapping };
+        });
+        const nextConfig = {
+          version: 2,
+          origin,
+          installationId: pairing.installationId,
+          deviceToken: result.deviceToken,
+          sources: mapped,
+          protocol: result.protocol,
+        };
+        await writeConfig(nextConfig);
+        await reconcileHooks(import.meta.url, mapped, currentLocalSources);
+        await confirmAutomaticCompatibility();
+        return nextConfig;
+      });
       output("Connected. Exact aggregate sync is active.");
-      await sync(config);
+      const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
+      if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
       return;
     }
     if (result.status !== "pending") throw new Error("Pairing was revoked");
@@ -333,6 +354,14 @@ async function rememberServerSequences(config, sequences) {
   return state;
 }
 
+async function confirmAutomaticCompatibility() {
+  const state = await readState();
+  if (state.automaticDisabledReason !== "unsupported_connector") return state;
+  delete state.automaticDisabledReason;
+  await writeState(state);
+  return state;
+}
+
 async function lifecycleFailure(error) {
   if (error?.status === 401 || error?.status === 403) {
     await disableLocalConnection(true);
@@ -380,6 +409,9 @@ async function reconcileServerState(config, state) {
     await writeState(fresh);
     return fresh;
   }
+  if (await lifecycleMutationActive())
+    throw new Error("Remote reconciliation stopped by a local lifecycle operation");
+  await confirmAutomaticCompatibility();
   await reconcileRemoteSources(config, remote.sources);
   const reconciled = await rememberServerSequences(
     config,
@@ -409,6 +441,7 @@ async function deliverPendingGroup(config, items, retired) {
     );
     if (await lifecycleMutationActive())
       throw new Error("Pending reconciliation stopped by a local lifecycle operation");
+    await confirmAutomaticCompatibility();
     await rememberServerSequences(config, result.sourceSequences);
     const sequenceById = new Map(
       (result.sourceSequences ?? []).map((item) => [item.sourceId, item]),
@@ -699,7 +732,7 @@ async function sync(providedConfig, options = {}) {
         process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
       return { accepted, failures };
     },
-    { waitMs: options.automatic ? (process.env.NODE_ENV === "test" ? 5_000 : 60_000) : 0 },
+    { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
 }
 
@@ -757,6 +790,7 @@ async function automaticSync() {
   const schedulerOwner = option("--scheduler-owner");
   let attemptedClaims = {};
   let attempted = false;
+  let deferredLockRetryAvailable = true;
   try {
     for (;;) {
       if (!(await ownsScheduler(schedulerOwner))) return;
@@ -785,7 +819,15 @@ async function automaticSync() {
       attemptedClaims = dirtyClaims(current);
       attempted = true;
       const result = await sync(undefined, { automatic: true });
-      if (result?.skipped) attempted = false;
+      if (result?.skipped) {
+        attempted = false;
+        if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_AUTOMATIC_SYNC_TRACE)
+          await appendFile(process.env.VIBERACING_TEST_AUTOMATIC_SYNC_TRACE, "sync-lock-skipped\n");
+        if (!result.lifecycle && deferredLockRetryAvailable) {
+          deferredLockRetryAvailable = false;
+          continue;
+        }
+      }
       return;
     }
   } finally {
@@ -813,7 +855,7 @@ async function doctor() {
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
   try {
-    const config = await readConfig();
+    let config = await readConfig();
     let state = await readState();
     const range = snapshotRange();
     if (arguments_.includes("--repair")) {
@@ -823,39 +865,66 @@ async function doctor() {
     const hooks = await diagnoseHooks(config.sources);
     for (const [agentId, status] of Object.entries(hooks)) output(`${agentId} hook: ${status}`);
     output(`Connected origin: ${config.origin}`);
-    try {
-      const remote = await request(config.origin, "/api/installations/current", {
-        headers: { Authorization: `Bearer ${config.deviceToken}` },
-      });
-      await reconcileRemoteSources(config, remote.sources);
-      state = await rememberServerSequences(
-        config,
-        remote.sources?.map((source) => ({
-          sourceId: source.sourceId,
-          lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
-        })),
-      );
+    const reconciliation = await withSyncLock(
+      async () => {
+        const lockedConfig = await readConfig();
+        let remote;
+        try {
+          remote = await request(lockedConfig.origin, "/api/installations/current", {
+            headers: { Authorization: `Bearer ${lockedConfig.deviceToken}` },
+          });
+        } catch (error) {
+          if (await lifecycleMutationActive()) return { status: "lifecycle" };
+          if (error?.status === 401 || error?.status === 403) {
+            const cleanupWarnings = await disableLocalConnection();
+            return { status: "revoked", cleanupWarnings };
+          }
+          if (error?.status === 426) {
+            const lockedState = await readState();
+            lockedState.automaticDisabledReason = "unsupported_connector";
+            await writeState(lockedState);
+            return { status: "unsupported" };
+          }
+          return { status: "error", error };
+        }
+        if (await lifecycleMutationActive()) return { status: "lifecycle" };
+        await confirmAutomaticCompatibility();
+        await reconcileRemoteSources(lockedConfig, remote.sources);
+        const lockedState = await rememberServerSequences(
+          lockedConfig,
+          remote.sources?.map((source) => ({
+            sourceId: source.sourceId,
+            lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
+          })),
+        );
+        return { status: "active", config: lockedConfig, state: lockedState, remote };
+      },
+      { waitMs: automaticSyncLockWaitMs },
+    );
+    if (reconciliation?.skipped) {
+      output("Pairing status: busy; timed out waiting for an active sync.");
+    } else if (reconciliation.status === "lifecycle") {
+      output("Pairing status: busy; a local lifecycle operation is active.");
+    } else if (reconciliation.status === "revoked") {
+      output("Pairing status: disconnected. Installation authorization was revoked.");
+      output("Run `viberacing connect` to reconnect this installation.");
+      if (reconciliation.cleanupWarnings)
+        output("One or more auxiliary hook cleanup steps need manual inspection.");
+      return;
+    } else if (reconciliation.status === "unsupported") {
+      output("Pairing status: connector update required; automatic sync is disabled.");
+      return;
+    } else if (reconciliation.status === "error") {
+      output(`Pairing status: error (${reconciliation.error.message})`);
+    } else {
+      config = reconciliation.config;
+      state = reconciliation.state;
+      const { remote } = reconciliation;
       output(`Pairing status: ${remote.status}; server last sync: ${remote.lastSyncAt ?? "never"}`);
-      for (const source of remote.sources)
+      for (const source of remote.sources ?? [])
         output(
           `${source.agentId}/${source.collectionMethod}: ${source.status}, ${source.completeness ?? "not synced"}${source.warning ? `, warning: ${source.warning}` : ""}${source.error ? `, error: ${source.error}` : ""}`,
         );
-    } catch (error) {
-      if (error?.status === 401 || error?.status === 403) {
-        const cleanupWarnings = await disableLocalConnection();
-        output("Pairing status: disconnected. Installation authorization was revoked.");
-        output("Run `viberacing connect` to reconnect this installation.");
-        if (cleanupWarnings)
-          output("One or more auxiliary hook cleanup steps need manual inspection.");
-        return;
-      }
-      if (error?.status === 426) {
-        state.automaticDisabledReason = "unsupported_connector";
-        await writeState(state);
-        output("Pairing status: connector update required; automatic sync is disabled.");
-        return;
-      }
-      output(`Pairing status: error (${error.message})`);
     }
     for (const source of config.sources) {
       const adapter = adapterFor(source.agentId);

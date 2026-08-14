@@ -76,8 +76,9 @@ when its generation still matches, so concurrent events survive for the next bat
 first connect collect every active source and apply the same generation-safe clearing. One dirty
 generation produces one automatic attempt: collector failures finish it, network failures retain the
 compact pending payload, and only a newer generation schedules another process. An automatic batch
-waits at most 60 seconds for an in-flight manual sync's single-flight lock, so an event arriving
-during that sync is neither dropped nor turned into an unbounded retry. Scheduler and sync locks
+makes one bounded 60-second wait for an in-flight manual sync's single-flight lock and, if that
+expires, exactly one further bounded acquisition. A second timeout exits with the dirty generation
+intact, so the event is neither dropped nor turned into an unbounded retry. Scheduler and sync locks
 carry ownership tokens, so a stale owner cannot remove a replacement lock. There is no daemon,
 watcher, polling loop, or required cron.
 
@@ -93,10 +94,12 @@ the local definition for reconnect. A TTL-bounded remote reconciliation runs onl
 hook/manual activity, not by polling, so an unchanged dashboard-disconnected source is retired too.
 Lifecycle mutations set a revocation marker and wait on the same exclusive sync lock before cleanup;
 an in-flight sync checks the marker before saving or starting another delivery. Uninstall attempts
-all known roots and retains failed-root metadata/runtime until a repeat succeeds. Authorization
-revocation removes hooks/token/automatic state, and HTTP 426 disables automatic attempts until an
-update. Successful capture syncs retain only 35 days and atomically compact oversized
-source-specific files.
+all known roots and retains failed-root metadata/runtime until a repeat succeeds. Reconnect performs
+its final config/token/hook replacement under that lifecycle lock; doctor performs mutable remote
+reconciliation under the sync lock. Authorization revocation removes hooks/token/automatic state,
+and HTTP 426 disables automatic attempts until a compatible reconnect or authenticated server
+response confirms the updated connector. Successful capture syncs retain only 35 days and atomically
+compact oversized source-specific files.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small
