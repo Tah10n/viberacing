@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-eight local agent adapters -> connector protocol v2 -> Next.js -> PostgreSQL
+local adapter registry -> connector protocol v2 -> Next.js -> PostgreSQL
 browser ---------------------- GitHub OAuth -----------^
 ```
 
@@ -29,7 +29,11 @@ Server storage separates `installations`, human-defined `agent_accounts`, and ma
 `installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
 Reassigning a source during pairing rebuilds only the affected user's agent summaries in that same
 transaction. Separate Codex profiles are selected with source-specific `CODEX_HOME` environments;
-the `account_max` rule prevents account-wide totals shared across computers from doubling.
+the `account_max` rule prevents account-wide totals shared across computers from doubling. Capture
+sources use `captures/<clientSourceId>.jsonl`. Antigravity Personal and Work therefore have
+independent files and can map to independent accounts; the wrapper consumes `--source` locally when
+more than one profile exists. Cursor uses the same selection path but produces no capture without
+authoritative native counters.
 
 ## Snapshot ingestion and ranking
 
@@ -56,22 +60,35 @@ complete byte offset; unchanged files are not reopened for content, appends resu
 replacement rereads only that file, and disappeared files leave the index. OpenCode's read-only SQL
 is range-bounded. One Codex App Server is started per actually configured profile per batch.
 
-Owned hook handlers carry the exact `viberacing-hook-v2` marker and can be updated or removed
-without touching other hooks. A hook discards stdin, atomically updates `dirty.json`, claims one
-scheduler lock, and exits with the provider's minimal response. The short-lived detached scheduler
-uses one timer: 15-second debounce, 120-second minimum automatic interval, and 120-second maximum
-delay. It rereads dirty state before and after sync so events during a batch are retained. There is
-no daemon, watcher, polling loop, or required cron. Manual sync and first connect bypass cooldown.
+Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable local
+source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and other
+Vibe Racing profiles. Connect and `doctor --repair` reconcile active mappings to current hooks,
+remove hooks for known unmapped sources, and replace the one legacy v2 marker. A hook discards
+stdin, updates its entry in the version-2 `dirty.json` ledger under a short read-modify-write file
+lock, claims one scheduler lock, and exits with the provider's minimal response. Entries contain
+only source UUID, timestamps, and a generation—never a path or account label.
+
+The short-lived detached scheduler uses one timer: 15-second debounce, 120-second minimum automatic
+interval, and 120-second maximum delay. After taking the single-flight sync lock it drains pending
+payloads, snapshots dirty generations, maps those client IDs to active sources, and runs only those
+collectors. It saves fingerprints/sequences only for processed sources and clears a dirty entry only
+when its generation still matches, so concurrent events survive for the next batch. Manual sync and
+first connect collect every active source and apply the same generation-safe clearing. There is no
+daemon, watcher, polling loop, or required cron.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with
 no pending payload make no HTTP request. Network calls use at most three attempts with exponential
 backoff and jitter; one latest pending snapshot file per source survives a process or network
-failure. Permanent payload errors move one safe payload per source to `pending/quarantine` without
-blocking future snapshots. `unsupported_source` retires only its server mapping, authorization
-revocation removes hooks/token/automatic state, and HTTP 426 disables automatic attempts until an
-update. Successful capture syncs retain only 35 days and atomically compact oversized files.
+failure. Pending delivery never implies another collector scan. Permanent payload errors move one
+safe payload per source to `pending/quarantine` without blocking future snapshots.
+`unsupported_source` or a disconnected status observed during installation inspection removes the
+mapping, owned hook, dirty/pending/quarantine/adapter/sequence/fingerprint state while preserving
+the local definition for reconnect. Authorization revocation removes hooks/token/automatic state,
+and HTTP 426 disables automatic attempts until an update. Successful capture syncs retain only 35
+days and atomically compact oversized source-specific files.
 
-`/health` is process liveness. `/ready` validates production configuration, PostgreSQL, and the
-exact migration ledger. Small opportunistic cleanup batches remove expired sessions/pairings,
-rate-limit buckets, old empty revoked installations, and orphaned empty accounts.
+`/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
+tables, and the presence of the latest required migration; later ledger rows remain ready. Small
+opportunistic cleanup batches remove expired sessions/pairings, rate-limit buckets, old empty
+revoked installations, and orphaned empty accounts.
