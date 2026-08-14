@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppHeader } from "./components/app-header";
-import { currentWeekLabel, currentWeekNumber } from "@/lib/leaderboard";
 import { viewer } from "@/lib/session";
 import "./styles.css";
 
@@ -18,11 +17,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
-        <AppHeader
-          handle={current?.handle ?? null}
-          weekLabel={currentWeekLabel()}
-          weekNumber={currentWeekNumber()}
-        />
+        <AppHeader handle={current?.handle ?? null} />
         <div id="main-content">{children}</div>
         <footer>
           <div>

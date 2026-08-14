@@ -4,14 +4,13 @@ import { RacerLink } from "./components/racer-link";
 import { StandingsTable } from "./components/standings-table";
 import {
   currentWeekLabel,
-  currentWeekNumber,
   formatCompactTokens,
   formatExactTokens,
   leaderboard,
   publicProfile,
 } from "@/lib/leaderboard";
 import { viewer } from "@/lib/session";
-import { countedAgentCount } from "@/lib/agents";
+import { agentNames, supportedAgents } from "@/lib/agents";
 
 interface HomePageProps {
   readonly searchParams: Promise<{ page?: string | string[] }>;
@@ -19,6 +18,7 @@ interface HomePageProps {
 
 const leaderboardPageSize = 100;
 const maximumPageNumber = Math.floor(Number.MAX_SAFE_INTEGER / leaderboardPageSize);
+const supportedAgentLabels = supportedAgents.map((agent) => agentNames[agent]).join(" · ");
 
 function parsePage(value: string | string[] | undefined): number {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return 1;
@@ -44,59 +44,66 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <main className="home-page">
       <section className="hero" aria-labelledby="race-title">
-        <div className="hero-copy">
-          <h1 id="race-title">The weekly token race</h1>
-        </div>
-        <div className="user-callout" aria-label="Your weekly position">
-          <span className="eyebrow">Your position</span>
-          {current === null ? (
-            <div className="hero-guest">
-              <strong className="user-empty">Your grid is open</strong>
-              <a className="button button-secondary" href="/api/auth/github/start">
-                Join with GitHub
-              </a>
-            </div>
-          ) : (
-            <div className="user-score-line">
-              <span className="user-rank">{profile === null ? "—" : `#${profile.rank}`}</span>
-              <RacerLink handle={current.handle} />
-              {profile === null ? null : (
-                <span className="user-agent">
-                  {profile.breakdown.length === 1
-                    ? profile.breakdown[0]?.label
-                    : `${profile.breakdown.length.toString()} agents`}
-                </span>
-              )}
-              <strong title={`${formatExactTokens(profile?.total ?? "0")} tokens`}>
-                {formatCompactTokens(profile?.total ?? "0")}
-              </strong>
-              <small>tokens</small>
-            </div>
-          )}
+        <div className="hero-primary">
+          <div className="hero-copy">
+            <h1 id="race-title">The weekly token race</h1>
+          </div>
+          <div
+            className={`user-callout${current === null ? " user-callout-guest" : ""}`}
+            aria-label="Your weekly position"
+          >
+            <span className="eyebrow meta-label">Your position</span>
+            {current === null ? (
+              <div className="hero-guest">
+                <strong className="meta-value">Your grid is open</strong>
+              </div>
+            ) : (
+              <div className="user-score-line">
+                <span className="user-rank">{profile === null ? "—" : `#${profile.rank}`}</span>
+                <RacerLink handle={current.handle} />
+                {profile === null ? null : (
+                  <span className="user-agent">
+                    {profile.breakdown.length === 1
+                      ? profile.breakdown[0]?.label
+                      : `${profile.breakdown.length.toString()} agents`}
+                  </span>
+                )}
+                <strong title={`${formatExactTokens(profile?.total ?? "0")} tokens`}>
+                  {formatCompactTokens(profile?.total ?? "0")}
+                </strong>
+                <small>tokens</small>
+              </div>
+            )}
+          </div>
+          <div className="hero-race" aria-label="Current race">
+            <span className="meta-label">Current race</span>
+            <strong className="meta-value">{currentWeekLabel()}</strong>
+            <small className="meta-value">Ends Sun · 23:59 UTC</small>
+          </div>
         </div>
         <aside className="hero-summary" aria-label="How Vibe Racing works">
-          <div>
-            <span>Current race</span>
-            <strong>{currentWeekLabel()}</strong>
-            <small>Ends Sunday · 23:59 UTC</small>
+          <div className="hero-agents">
+            <span className="meta-label">Supported agents</span>
+            <p>{supportedAgentLabels}</p>
           </div>
-          <div>
-            <span>Supported agents</span>
-            <strong>{countedAgentCount} counted agents</strong>
-            <small>Cursor awaits authoritative counters</small>
-          </div>
-          <div>
-            <span>Privacy</span>
-            <strong>Aggregates only</strong>
-            <small>Daily totals. No code.</small>
+          <div className="hero-privacy">
+            <span className="meta-label">Privacy</span>
+            <div className="hero-privacy-copy">
+              <p>
+                <b>Collects</b> Agent · UTC date · aggregate token total
+              </p>
+              <p>
+                <b>Never collects</b> Prompts · responses · code · transcripts · repos · paths ·
+                hostnames · provider identities · credentials · models · costs
+              </p>
+            </div>
           </div>
         </aside>
       </section>
       <section className="leaderboard" aria-labelledby="leaderboard-title">
-        <div className="section-heading standings-heading">
-          <h2 id="leaderboard-title">Week {currentWeekNumber()} standings</h2>
-          <span>{currentWeekLabel()}</span>
-        </div>
+        <h2 className="sr-only" id="leaderboard-title">
+          Standings
+        </h2>
         {rows.length === 0 ? (
           <div className="empty">
             <strong>
@@ -130,13 +137,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             )}
           </nav>
         ) : null}
-      </section>
-      <section className="privacy-strip">
-        <div>
-          <strong>Private by default</strong>
-          <span>Agent · UTC date · cumulative token count</span>
-        </div>
-        <p>No prompts, code, paths, keys, models, costs, or repository names.</p>
       </section>
     </main>
   );

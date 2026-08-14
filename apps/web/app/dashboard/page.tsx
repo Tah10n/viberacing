@@ -1,6 +1,10 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { Badge, PageHeader, Panel } from "../components/ui";
+import { connectorArchiveName } from "@/lib/connector";
+import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
+import { CopyCommandButton } from "../components/copy-command-button";
+import { DangerActionForm } from "../components/danger-action-form";
+import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
@@ -44,6 +48,13 @@ function agentLabel(agent: string): string {
   return isSupportedAgent(agent) ? agentNames[agent] : agent;
 }
 
+function accountTitle(agent: string, label: string): string {
+  const displayName = agentLabel(agent);
+  return displayName.toLowerCase() === label.trim().toLowerCase()
+    ? displayName
+    : `${displayName} · ${label}`;
+}
+
 function syncLabel(value: Date | null): string {
   if (value === null) return "Waiting for first sync";
   return `${new Intl.DateTimeFormat("en-GB", {
@@ -54,6 +65,10 @@ function syncLabel(value: Date | null): string {
     hour12: false,
     timeZone: "UTC",
   }).format(value)} UTC`;
+}
+
+function countLabel(count: number, singular: string, plural = `${singular}s`): string {
+  return `${String(count)} ${count === 1 ? singular : plural}`;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
@@ -114,21 +129,24 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id],
     ),
   ]);
-  const command = `npx @viberacing/connector connect --origin ${publicOrigin().origin}`;
+  const origin = publicOrigin().origin;
+  const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
-      : params.disconnected === "1"
-        ? "Computer disconnected. Saved totals remain until you delete them."
-        : params.left === "1"
-          ? "You left the leaderboard. Usage totals were deleted and all computers disconnected."
-          : params.accountDeleted === "1"
-            ? "Agent account and its stored usage were deleted."
-            : params.updated === "1"
-              ? "Account mapping updated."
-              : null;
+      : params.sourceDisconnected === "1"
+        ? "Source disconnected. Saved totals remain until you delete them."
+        : params.disconnected === "1"
+          ? "Computer disconnected. Saved totals remain until you delete them."
+          : params.left === "1"
+            ? "You left the leaderboard. Usage totals were deleted and all computers disconnected."
+            : params.accountDeleted === "1"
+              ? "Agent account and its stored usage were deleted."
+              : params.updated === "1"
+                ? "Account mapping updated."
+                : null;
   return (
-    <main className="dashboard-page">
+    <PageShell className="dashboard-page">
       <PageHeader
         action={
           <a
@@ -137,7 +155,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             rel="noreferrer"
             target="_blank"
           >
-            Open GitHub profile ↗
+            GitHub profile ↗
           </a>
         }
         description={
@@ -152,6 +170,46 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
       )}
+
+      <details
+        className="panel connect-disclosure"
+        id="connect-computer"
+        open={installations.length === 0}
+      >
+        <summary>
+          <span>
+            <span className="eyebrow">ADD A COMPUTER</span>
+            <span className="connect-disclosure-title">
+              {installations.length === 0
+                ? "Connect your coding agents"
+                : "Connect another computer"}
+            </span>
+          </span>
+          <span className="connect-disclosure-action" aria-hidden="true">
+            <span className="connect-disclosure-closed">Show command</span>
+            <span className="connect-disclosure-open">Hide command</span>
+          </span>
+        </summary>
+        <div className="connect-panel-body">
+          <div className="connect-intro">
+            <ol className="connect-steps">
+              <li>Run this command in Terminal.</li>
+              <li>Approve the detected sources in your browser.</li>
+              <li>Aggregate token sync starts automatically.</li>
+            </ol>
+          </div>
+          <div className="connect-command">
+            <pre>
+              <code>{command}</code>
+            </pre>
+            <CopyCommandButton command={command} />
+            <p className="muted">
+              No provider keys, prompts, code, paths, repositories, model names, or costs are
+              uploaded.
+            </p>
+          </div>
+        </div>
+      </details>
 
       <section className="summary-grid" aria-label="Connection summary">
         <div>
@@ -187,9 +245,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               <article className="device-card" key={account.id}>
                 <div className="device-main">
                   <div className="device-title">
-                    <h3>
-                      {agentLabel(account.agent_id)} · {account.label}
-                    </h3>
+                    <h3>{accountTitle(account.agent_id, account.label)}</h3>
                     <Badge
                       tone={account.has_error ? "warning" : account.partial ? "neutral" : "success"}
                     >
@@ -199,7 +255,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   <div className="agent-list">
                     <span className="agent-chip">{formatCompactTokens(account.tokens)} tokens</span>
                     <span className="agent-chip">
-                      {account.source_count} sources · {account.installation_count} computers
+                      {countLabel(account.source_count, "source")} ·{" "}
+                      {countLabel(account.installation_count, "computer")}
                     </span>
                     <span className="agent-chip">
                       {account.aggregation_mode === "account_max" ? "Deduplicated" : "Summed"}
@@ -210,71 +267,74 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   <span>Last sync</span>
                   <strong>{syncLabel(account.last_sync_at)}</strong>
                 </div>
-                <div className="account-actions">
-                  <form action="/api/accounts/rename" method="post">
-                    <input name="accountId" type="hidden" value={account.id} />
-                    <label>
-                      <span className="sr-only">Account label</span>
-                      <input defaultValue={account.label} maxLength={40} name="label" required />
-                    </label>
-                    <button className="text-button" type="submit">
-                      Rename
-                    </button>
-                  </form>
-                  {sources
-                    .filter((source) => source.agent_account_id === account.id)
-                    .map((source) => (
-                      <div className="source-row" key={source.id}>
-                        <span>
-                          {source.installation_name} · {source.collection_method} ·{" "}
-                          {source.supported_surface}
-                        </span>
-                        {source.status === "active" ? (
-                          <>
-                            <form action="/api/sources/reassign" method="post">
-                              <input name="sourceId" type="hidden" value={source.id} />
-                              <select
-                                aria-label="Move source to account"
-                                defaultValue={account.id}
-                                name="accountId"
-                              >
-                                {accounts
-                                  .filter((candidate) => candidate.agent_id === account.agent_id)
-                                  .map((candidate) => (
-                                    <option key={candidate.id} value={candidate.id}>
-                                      {candidate.label}
-                                    </option>
-                                  ))}
-                              </select>
-                              <button className="text-button" type="submit">
-                                Move
-                              </button>
-                            </form>
-                            <form action="/api/sources/disconnect" method="post">
-                              <input name="sourceId" type="hidden" value={source.id} />
-                              <button className="text-button danger-text" type="submit">
-                                Disconnect source
-                              </button>
-                            </form>
-                          </>
-                        ) : (
-                          <Badge tone="neutral">Disconnected</Badge>
-                        )}
-                      </div>
-                    ))}
-                  <form action="/api/accounts/delete" method="post">
-                    <input name="accountId" type="hidden" value={account.id} />
-                    {sources.some((source) => source.agent_account_id === account.id) ? (
-                      <label className="confirm-row">
-                        <input name="confirm" required type="checkbox" value="delete" />
-                        <span>Delete linked sources and usage</span>
+                <details className="account-management">
+                  <summary>Manage account</summary>
+                  <div className="account-actions">
+                    <SameOriginActionForm action="/api/accounts/rename">
+                      <input name="accountId" type="hidden" value={account.id} />
+                      <label>
+                        <span className="sr-only">Account label</span>
+                        <input defaultValue={account.label} maxLength={40} name="label" required />
                       </label>
-                    ) : null}
-                    <button className="text-button danger-text" type="submit">
-                      Delete account
-                    </button>
-                  </form>
-                </div>
+                      <button className="text-button" type="submit">
+                        Rename
+                      </button>
+                    </SameOriginActionForm>
+                    {sources
+                      .filter((source) => source.agent_account_id === account.id)
+                      .map((source) => (
+                        <div className="source-row" key={source.id}>
+                          <span>
+                            {source.installation_name} · {source.collection_method} ·{" "}
+                            {source.supported_surface}
+                          </span>
+                          {source.status === "active" ? (
+                            <>
+                              <SameOriginActionForm action="/api/sources/reassign">
+                                <input name="sourceId" type="hidden" value={source.id} />
+                                <select
+                                  aria-label="Move source to account"
+                                  defaultValue={account.id}
+                                  name="accountId"
+                                >
+                                  {accounts
+                                    .filter((candidate) => candidate.agent_id === account.agent_id)
+                                    .map((candidate) => (
+                                      <option key={candidate.id} value={candidate.id}>
+                                        {candidate.label}
+                                      </option>
+                                    ))}
+                                </select>
+                                <button className="text-button" type="submit">
+                                  Move
+                                </button>
+                              </SameOriginActionForm>
+                              <SameOriginActionForm action="/api/sources/disconnect">
+                                <input name="sourceId" type="hidden" value={source.id} />
+                                <button className="text-button danger-text" type="submit">
+                                  Disconnect source
+                                </button>
+                              </SameOriginActionForm>
+                            </>
+                          ) : (
+                            <Badge tone="neutral">Disconnected</Badge>
+                          )}
+                        </div>
+                      ))}
+                    <SameOriginActionForm action="/api/accounts/delete">
+                      <input name="accountId" type="hidden" value={account.id} />
+                      {sources.some((source) => source.agent_account_id === account.id) ? (
+                        <label className="confirm-row">
+                          <input name="confirm" required type="checkbox" value="delete" />
+                          <span>Delete linked sources and usage</span>
+                        </label>
+                      ) : null}
+                      <button className="text-button danger-text" type="submit">
+                        Delete account
+                      </button>
+                    </SameOriginActionForm>
+                  </div>
+                </details>
               </article>
             ))}
           </div>
@@ -304,42 +364,26 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                     <Badge tone="success">Connected</Badge>
                   </div>
                   <div className="agent-list">
-                    <span className="agent-chip">{item.source_count} local sources</span>
+                    <span className="agent-chip">
+                      {countLabel(item.source_count, "local source")}
+                    </span>
                   </div>
                 </div>
                 <div className="device-meta">
                   <span>Last sync</span>
                   <strong>{syncLabel(item.last_sync_at)}</strong>
                 </div>
-                <form action="/api/connections/revoke" method="post">
+                <SameOriginActionForm action="/api/connections/revoke">
                   <input name="installationId" type="hidden" value={item.id} />
                   <button className="text-button danger-text" type="submit">
                     Disconnect
                   </button>
-                </form>
+                </SameOriginActionForm>
               </article>
             ))}
           </div>
         )}
       </section>
-
-      <Panel className="connect-panel">
-        <div>
-          <p className="eyebrow">ADD A COMPUTER</p>
-          <h2>Connect your coding agents</h2>
-          <p>
-            Run this on another computer. It detects exact usage sources and lets you map each one
-            to a new or existing account.
-          </p>
-        </div>
-        <pre>
-          <code>{command}</code>
-        </pre>
-        <p className="muted">
-          Seven agents provide counted exact totals. Cursor awaits authoritative counters. No
-          provider API keys are requested or uploaded.
-        </p>
-      </Panel>
 
       <div className="settings-grid">
         <Panel className="privacy-panel">
@@ -359,15 +403,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             Delete every usage total and disconnect all computers. Your GitHub sign-in and empty
             agent-account labels remain so you can join again later.
           </p>
-          <form action="/api/leaderboard/leave" method="post">
-            <label className="confirm-row">
-              <input name="confirm" required type="checkbox" value="leave" />
-              <span>I understand that my ranking data will be deleted.</span>
-            </label>
-            <button className="danger-button" type="submit">
-              Leave leaderboard
-            </button>
-          </form>
+          <DangerActionForm
+            action="/api/leaderboard/leave"
+            buttonLabel="Leave leaderboard"
+            confirmation="I understand that my ranking data will be deleted."
+            confirmValue="leave"
+          />
         </Panel>
         <Panel className="danger-panel">
           <p className="eyebrow">ACCOUNT DELETION</p>
@@ -375,17 +416,14 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <p>
             Delete the GitHub-linked user, sessions, installations, agent accounts, and all usage.
           </p>
-          <form action="/api/account/delete" method="post">
-            <label className="confirm-row">
-              <input name="confirm" required type="checkbox" value="delete-account" />
-              <span>I understand this cannot be undone.</span>
-            </label>
-            <button className="danger-button" type="submit">
-              Delete account
-            </button>
-          </form>
+          <DangerActionForm
+            action="/api/account/delete"
+            buttonLabel="Delete account"
+            confirmation="I understand this cannot be undone."
+            confirmValue="delete-account"
+          />
         </Panel>
       </div>
-    </main>
+    </PageShell>
   );
 }

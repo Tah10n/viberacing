@@ -96,6 +96,15 @@
   --text-section: clamp(1.625rem, 2.2vw, 2.125rem);
   --text-page: clamp(2.375rem, 4.6vw, 4.125rem);
 
+  /* System typography: labels and values must share one baseline. */
+  --meta-font-size: var(--text-xs);
+  --meta-line-height: 1.35;
+  --meta-label-weight: 700;
+  --meta-value-weight: 400;
+  --meta-label-tracking: 0.04em;
+  --nav-tracking: 0.06em;
+  --nav-line-height: 1.5;
+
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -109,5 +118,17 @@
   --control-height: 2.75rem;
   --container-wide: 73.75rem;
   --container-narrow: 51.25rem;
-  --header-height: 4.25rem;
+
+  /* System shell and layout rhythm. */
+  --shell-header-height: 3rem;
+  --shell-row-height: 3.25rem;
+  --shell-mobile-brand-height: 2.5rem;
+  --shell-mobile-nav-height: 2.25rem;
+  --shell-inline-padding: var(--space-5);
+  --page-gutter-wide: 1.75rem;
+  --page-gutter-narrow: 1.5rem;
+  --page-block-start: 2.375rem;
+  --page-block-end: 4.375rem;
+  --surface-padding: var(--space-6);
+  --surface-padding-compact: var(--space-5);
 }

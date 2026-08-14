@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PageHeader, Panel } from "../../components/ui";
+import { PageHeader, PageShell, Panel } from "../../components/ui";
 import {
   currentWeekLabel,
   formatCompactTokens,
@@ -20,7 +20,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
   const profile = await publicProfile(handle);
   if (profile === null) notFound();
   return (
-    <main className="narrow profile-page">
+    <PageShell className="profile-page" width="narrow">
       <Link className="back-link" href="/">
         Back to standings
       </Link>
@@ -60,6 +60,6 @@ export default async function ProfilePage({ params }: ProfileProps) {
         ))}
         <p className="muted">Token totals are self-reported by local connectors.</p>
       </Panel>
-    </main>
+    </PageShell>
   );
 }
