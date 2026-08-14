@@ -1,5 +1,6 @@
 import { connection } from "next/server";
-import { ActionLink, PageHeader, Panel } from "../components/ui";
+import { ActionLink, PageHeader, PageShell, Panel } from "../components/ui";
+import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { query } from "@/lib/db";
@@ -74,7 +75,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
         );
   const returnPath = `/connect?code=${encodeURIComponent(code)}`;
   return (
-    <main className="narrow connect-page">
+    <PageShell className="connect-page" width="narrow">
       <PageHeader
         description="Review each local source and map it to the right agent account."
         eyebrow="Pair connector"
@@ -113,7 +114,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
               Sign in with GitHub to approve
             </a>
           ) : (
-            <form action="/api/pairing/approve" method="post">
+            <SameOriginActionForm action="/api/pairing/approve">
               <input name="code" type="hidden" value={code} />
               <div className="pairing-source-list">
                 {sources.map((source, index) => {
@@ -159,7 +160,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
               <button className="button" type="submit">
                 Approve for @{current.handle}
               </button>
-            </form>
+            </SameOriginActionForm>
           )}
           <p className="muted">
             Only opaque source IDs and usage totals cross the boundary. Local paths and provider
@@ -167,6 +168,6 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
           </p>
         </Panel>
       )}
-    </main>
+    </PageShell>
   );
 }

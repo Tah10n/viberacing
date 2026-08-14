@@ -1,10 +1,10 @@
 "use client";
 
-import { PageHeader, Panel } from "./components/ui";
+import { PageHeader, PageShell, Panel } from "./components/ui";
 
 export default function ErrorPage({ reset }: Readonly<{ reset: () => void }>) {
   return (
-    <main className="narrow state-page">
+    <PageShell className="state-page" width="narrow">
       <PageHeader
         description="Your account and race data were not changed."
         eyebrow="Temporary problem"
@@ -16,6 +16,6 @@ export default function ErrorPage({ reset }: Readonly<{ reset: () => void }>) {
           Try again
         </button>
       </Panel>
-    </main>
+    </PageShell>
   );
 }

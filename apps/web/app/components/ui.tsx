@@ -1,6 +1,17 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+interface PageShellProps {
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly width?: "narrow" | "wide";
+}
+
+export function PageShell({ children, className, width = "wide" }: PageShellProps) {
+  const classes = ["page-shell", `page-shell-${width}`, className].filter(Boolean).join(" ");
+  return <main className={classes}>{children}</main>;
+}
+
 interface PageHeaderProps {
   readonly action?: ReactNode;
   readonly description?: ReactNode;
@@ -12,7 +23,7 @@ export function PageHeader({ action, description, eyebrow, title }: PageHeaderPr
   return (
     <header className={`page-heading${action === undefined ? "" : " page-heading-with-action"}`}>
       <div>
-        <p className="eyebrow">{eyebrow}</p>
+        <p className="eyebrow meta-label">{eyebrow}</p>
         <h1>{title}</h1>
         {description === undefined ? null : <p>{description}</p>}
       </div>
@@ -24,11 +35,12 @@ export function PageHeader({ action, description, eyebrow, title }: PageHeaderPr
 interface PanelProps {
   readonly children: ReactNode;
   readonly className?: string;
+  readonly id?: string;
 }
 
-export function Panel({ children, className }: PanelProps) {
+export function Panel({ children, className, id }: PanelProps) {
   return (
-    <section className={`panel${className === undefined ? "" : ` ${className}`}`}>
+    <section className={`panel${className === undefined ? "" : ` ${className}`}`} id={id}>
       {children}
     </section>
   );

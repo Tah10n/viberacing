@@ -1,8 +1,8 @@
-import { ActionLink, PageHeader, Panel } from "./components/ui";
+import { ActionLink, PageHeader, PageShell, Panel } from "./components/ui";
 
 export default function NotFound() {
   return (
-    <main className="narrow state-page">
+    <PageShell className="state-page" width="narrow">
       <PageHeader
         description="This route is not on the current race map."
         eyebrow="Route not found"
@@ -12,6 +12,6 @@ export default function NotFound() {
         <p>The racer or page may have moved, left the leaderboard, or never existed.</p>
         <ActionLink href="/">Return to standings</ActionLink>
       </Panel>
-    </main>
+    </PageShell>
   );
 }
