@@ -26,12 +26,11 @@ export async function defaultSources() {
   const result = [];
   for (const adapter of adapters) {
     const detected = await adapter.detect({});
-    for (let index = 0; index < detected.length; index += 1)
+    for (const source of detected)
       result.push({
-        clientSourceId: `${adapter.id}:default${index || ""}`,
         agentId: adapter.id,
         suggestedLabel: adapter.displayName,
-        ...detected[index],
+        ...source,
       });
   }
   return result;

@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { access, mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -16,10 +16,110 @@ function source(agentId) {
   return { agentId };
 }
 
+function connectorEnvironment(home, extra = {}) {
+  return {
+    ...process.env,
+    VIBERACING_STATE_DIR: join(home, ".viberacing"),
+    CODEX_HOME: join(home, ".codex"),
+    CLAUDE_CONFIG_DIR: join(home, ".claude"),
+    KIMI_SHARE_DIR: join(home, ".kimi"),
+    QWEN_HOME: join(home, ".qwen"),
+    GEMINI_CLI_HOME: home,
+    ...extra,
+  };
+}
+
+function useModuleEnvironment(home) {
+  const environment = connectorEnvironment(home);
+  const names = [
+    "VIBERACING_STATE_DIR",
+    "CODEX_HOME",
+    "CLAUDE_CONFIG_DIR",
+    "KIMI_SHARE_DIR",
+    "QWEN_HOME",
+    "GEMINI_CLI_HOME",
+  ];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  for (const name of names) process.env[name] = environment[name];
+  return () => {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  };
+}
+
+async function writeLocalSources(directory, sources) {
+  await writeFile(join(directory, "sources.json"), `${JSON.stringify({ version: 1, sources })}\n`);
+}
+
+async function readLocalSources(directory) {
+  return JSON.parse(await readFile(join(directory, "sources.json"), "utf8")).sources;
+}
+
+async function writeCaptureInstallation(home, origin, options = {}) {
+  const directory = join(home, ".viberacing");
+  const capture = join(directory, "captures", "antigravity.jsonl");
+  const clientSourceId = options.clientSourceId ?? "abababab-abab-4bab-8bab-abababababab";
+  const sourceId = options.sourceId ?? "89898989-8989-4989-8989-898989898989";
+  const date = new Date().toISOString().slice(0, 10);
+  await mkdir(join(directory, "captures"), { recursive: true });
+  await writeFile(
+    capture,
+    `${JSON.stringify({
+      id: options.eventId ?? "synthetic-network-event",
+      date,
+      usage: { date, totalTokens: "3", inputTokens: "1", outputTokens: "2" },
+    })}\n`,
+  );
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "antigravity",
+      dataPath: capture,
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Antigravity",
+    },
+  ]);
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin,
+      deviceToken: "synthetic-device-token-that-is-long-enough",
+      sources: [
+        {
+          clientSourceId,
+          sourceId,
+          agentId: "antigravity",
+          accountLabel: "Antigravity",
+          collectionMethod: "antigravity_cli_capture",
+          lastAcceptedSyncSequence: "0",
+        },
+      ],
+    })}\n`,
+  );
+  return { directory, capture, clientSourceId, sourceId };
+}
+
+async function runWithInput(arguments_, environment, input) {
+  const child = spawn(process.execPath, [connectorPath, ...arguments_], {
+    env: environment,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+  child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  child.stdin.end(input);
+  const [code] = await once(child, "close");
+  return { code, stdout, stderr };
+}
+
 test("installs a runnable connector copy and additive, owned hooks", async () => {
-  const previousHome = process.env.HOME;
   const home = await mkdtemp(join(tmpdir(), "viberacing-connector-"));
-  process.env.HOME = home;
+  const restoreEnvironment = useModuleEnvironment(home);
   try {
     await mkdir(join(home, ".codex"));
     await writeFile(
@@ -52,7 +152,7 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     const claude = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8"));
     const gemini = JSON.parse(await readFile(join(home, ".gemini", "settings.json"), "utf8"));
     const qwen = JSON.parse(await readFile(join(home, ".qwen", "settings.json"), "utf8"));
-    const kimi = await readFile(join(home, ".kimi-code", "config.toml"), "utf8");
+    const kimi = await readFile(join(home, ".kimi", "config.toml"), "utf8");
     assert.equal(codex.hooks.SessionEnd[0].hooks[0].command, "keep-me");
     assert.equal(
       codex.hooks.SessionEnd.filter((group) => JSON.stringify(group).includes(module.hookMarker))
@@ -62,7 +162,9 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     assert.match(JSON.stringify(claude), /viberacing-hook-v2/);
     assert.match(JSON.stringify(gemini), /viberacing-hook-v2/);
     assert.match(JSON.stringify(qwen), /viberacing-hook-v2/);
-    assert.match(kimi, /\[\[hooks\]\][\s\S]*SessionEnd[\s\S]*viberacing-hook-v2/);
+    assert.equal(gemini.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
+    assert.equal(qwen.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
+    assert.match(kimi, /\[\[hooks\]\][\s\S]*Stop[\s\S]*viberacing-hook-v2/);
     const hooks = await module.diagnoseHooks([
       source("codex"),
       source("claude_code"),
@@ -109,19 +211,17 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     );
     assert.match(await readFile(join(home, ".codex", "hooks.json"), "utf8"), /keep-me/);
     assert.doesNotMatch(
-      await readFile(join(home, ".kimi-code", "config.toml"), "utf8"),
+      await readFile(join(home, ".kimi", "config.toml"), "utf8"),
       /viberacing-hook-v2/,
     );
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
+    restoreEnvironment();
   }
 });
 
 test("reports invalid existing hook settings instead of claiming success", async () => {
-  const previousHome = process.env.HOME;
   const home = await mkdtemp(join(tmpdir(), "viberacing-connector-invalid-settings-"));
-  process.env.HOME = home;
+  const restoreEnvironment = useModuleEnvironment(home);
   try {
     await mkdir(join(home, ".claude"));
     await writeFile(join(home, ".claude", "settings.json"), "{not-json");
@@ -133,15 +233,13 @@ test("reports invalid existing hook settings instead of claiming success", async
       /Cannot read hook settings/,
     );
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
+    restoreEnvironment();
   }
 });
 
 test("keeps installation identity stable and pairing state separate", async () => {
-  const previousHome = process.env.HOME;
   const home = await mkdtemp(join(tmpdir(), "viberacing-connector-identity-"));
-  process.env.HOME = home;
+  const restoreEnvironment = useModuleEnvironment(home);
   try {
     const module = await import(`../lib/config.mjs?identity-home=${encodeURIComponent(home)}`);
     const first = await module.readOrCreateInstallation();
@@ -167,15 +265,51 @@ test("keeps installation identity stable and pairing state separate", async () =
     await assert.rejects(access(join(home, ".viberacing", "state.json")));
     await assert.rejects(access(join(home, ".viberacing", "pending")));
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
+    restoreEnvironment();
+  }
+});
+
+test("keeps source UUIDs stable when detected path order changes", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-stable-sources-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?stable-sources=${encodeURIComponent(home)}`);
+    const firstPath = join(home, "opencode-a.db");
+    const secondPath = join(home, "opencode-b.db");
+    const shape = (dataPath, label) => ({
+      agentId: "opencode",
+      collectionMethod: "opencode_sqlite",
+      dataPath,
+      suggestedLabel: label,
+      supportedSurface: "cli",
+    });
+    const first = await module.reconcileDetectedSources([
+      shape(firstPath, "First"),
+      shape(secondPath, "Second"),
+    ]);
+    const firstIds = new Map(first.map((item) => [item.dataPath, item.clientSourceId]));
+    const reordered = await module.reconcileDetectedSources([
+      shape(secondPath, "Second"),
+      shape(firstPath, "First"),
+      shape(firstPath, "Duplicate"),
+    ]);
+    assert.equal(reordered.length, 2);
+    assert.equal(
+      reordered.find((item) => item.dataPath === firstPath).clientSourceId,
+      firstIds.get(firstPath),
+    );
+    assert.equal(
+      reordered.find((item) => item.dataPath === secondPath).clientSourceId,
+      firstIds.get(secondPath),
+    );
+  } finally {
+    restoreEnvironment();
   }
 });
 
 test("prevents overlapping syncs with an atomic lock", async () => {
-  const previousHome = process.env.HOME;
   const home = await mkdtemp(join(tmpdir(), "viberacing-runtime-lock-"));
-  process.env.HOME = home;
+  const restoreEnvironment = useModuleEnvironment(home);
   try {
     const runtime = await import(`../lib/runtime.mjs?lock-home=${encodeURIComponent(home)}`);
     let release;
@@ -227,22 +361,92 @@ test("prevents overlapping syncs with an atomic lock", async () => {
     await runtime.removePendingForSource(errorSourceId);
     assert.equal((await runtime.pendingPayloads()).length, 1);
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
+    restoreEnvironment();
   }
+});
+
+test("coalesces dirty events with debounce, cooldown, and a bounded maximum delay", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-auto-dirty-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const runtime = await import(`../lib/runtime.mjs?auto-dirty=${encodeURIComponent(home)}`);
+    const start = Date.parse("2026-08-14T08:00:00.000Z");
+    for (let index = 0; index < 20; index += 1) {
+      await runtime.markDirty(new Date(start + index * 1_500));
+    }
+    const dirty = await runtime.readDirty();
+    assert.equal(dirty.dirtySince, new Date(start).toISOString());
+    assert.equal(dirty.lastEventAt, new Date(start + 28_500).toISOString());
+    assert.equal(runtime.automaticDueAt(dirty), start + 43_500);
+    assert.equal(
+      runtime.automaticDueAt({ ...dirty, lastEventAt: new Date(start + 300_000).toISOString() }, 0),
+      start + 120_000,
+    );
+    assert.equal(runtime.automaticDueAt(dirty, start + 50_000), start + 170_000);
+    assert.equal(await runtime.claimScheduler(), true);
+    assert.equal(await runtime.claimScheduler(), false);
+    await runtime.releaseScheduler();
+    const { stateDirectory } = await import("../lib/config.mjs");
+    const staleLock = join(stateDirectory, "scheduler.lock");
+    await writeFile(staleLock, "stale\n");
+    const staleTime = new Date(Date.now() - 11 * 60_000);
+    await utimes(staleLock, staleTime, staleTime);
+    assert.equal(await runtime.claimScheduler(), true);
+    await runtime.releaseScheduler();
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("capture compaction keeps only recent allowlisted usage metadata", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-capture-compaction-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const runtime = await import(`../lib/runtime.mjs?capture=${encodeURIComponent(home)}`);
+    const path = join(home, "capture.jsonl");
+    const usage = (date) => ({
+      id: `event-${date}`,
+      date,
+      usage: { date, totalTokens: "12", inputTokens: "5", outputTokens: "7" },
+      prompt: "must-not-survive",
+    });
+    await writeFile(
+      path,
+      `${JSON.stringify(usage("2026-07-09"))}\n${JSON.stringify(usage("2026-08-10"))}\n`,
+    );
+    assert.equal(await runtime.compactCapture(path, new Date("2026-08-14T12:00:00Z"), 1), true);
+    const compacted = await readFile(path, "utf8");
+    assert.doesNotMatch(compacted, /2026-07-09|prompt|must-not-survive/);
+    assert.match(compacted, /2026-08-10/);
+    assert.equal(await runtime.compactCapture(path, new Date("2026-08-14T12:00:00Z")), false);
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("hook discards stdin, emits only contract JSON, and fails open", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-hook-lightweight-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const blockedState = join(home, "state-is-a-file");
+  await writeFile(blockedState, "not a directory");
+  const result = await runWithInput(
+    ["hook", "--agent", "qwen_code"],
+    { ...connectorEnvironment(home), VIBERACING_STATE_DIR: blockedState },
+    '{"prompt":"synthetic-private-prompt","cwd":"/synthetic/private/path"}',
+  );
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, "{}\n");
+  assert.equal(result.stderr, "");
+  assert.equal(await readFile(blockedState, "utf8"), "not a directory");
 });
 
 test("requires an explicit safe label when adding a local data root", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-source-label-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const state = join(home, ".viberacing");
-  await mkdir(state);
-  await writeFile(
-    join(state, "config.json"),
-    `${JSON.stringify({ version: 2, origin: "https://example.test", sources: [] })}\n`,
-  );
   const sensitivePath = join(home, "client-secret-repository");
-  const environment = { ...process.env, HOME: home };
+  const environment = connectorEnvironment(home);
   await assert.rejects(
     execFileAsync(
       process.execPath,
@@ -254,7 +458,7 @@ test("requires an explicit safe label when adding a local data root", async (con
       return true;
     },
   );
-  assert.deepEqual(JSON.parse(await readFile(join(state, "config.json"), "utf8")).sources, []);
+  await assert.rejects(access(join(state, "sources.json")));
 
   await execFileAsync(
     process.execPath,
@@ -271,8 +475,10 @@ test("requires an explicit safe label when adding a local data root", async (con
     ],
     { env: environment },
   );
-  const config = JSON.parse(await readFile(join(state, "config.json"), "utf8"));
-  assert.equal(config.sources[0].suggestedLabel, "Work");
+  const local = JSON.parse(await readFile(join(state, "sources.json"), "utf8"));
+  assert.equal(local.sources[0].suggestedLabel, "Work");
+  assert.match(local.sources[0].clientSourceId, /^[0-9a-f-]{36}$/);
+  await assert.rejects(access(join(state, "config.json")));
 });
 
 test("removes an already-disconnected source and its pending state idempotently", async (context) => {
@@ -293,7 +499,7 @@ test("removes an already-disconnected source and its pending state idempotently"
   const pending = join(directory, "pending");
   await mkdir(pending, { recursive: true });
   const sourceId = "33333333-3333-4333-8333-333333333333";
-  const clientSourceId = "claude_code:manual";
+  const clientSourceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   await writeFile(
     join(directory, "config.json"),
     `${JSON.stringify({
@@ -314,6 +520,16 @@ test("removes an already-disconnected source and its pending state idempotently"
       ],
     })}\n`,
   );
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "claude_code",
+      dataPath: join(home, "claude"),
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Work",
+    },
+  ]);
   await writeFile(
     join(directory, "state.json"),
     `${JSON.stringify({
@@ -332,7 +548,7 @@ test("removes an already-disconnected source and its pending state idempotently"
   );
 
   await execFileAsync(process.execPath, [connectorPath, "source", "remove", clientSourceId], {
-    env: { ...process.env, HOME: home },
+    env: connectorEnvironment(home),
   });
   const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   const localState = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
@@ -344,7 +560,12 @@ test("removes an already-disconnected source and its pending state idempotently"
 
 test("quarantines a server-disconnected pending source without poisoning future syncs", async (context) => {
   let requests = 0;
-  const server = createServer((_request, response) => {
+  const server = createServer((request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ sources: [] }));
+      return;
+    }
     requests += 1;
     response.writeHead(400, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "unsupported_source" }));
@@ -362,6 +583,7 @@ test("quarantines a server-disconnected pending source without poisoning future 
   const pending = join(directory, "pending");
   await mkdir(pending, { recursive: true });
   const sourceId = "44444444-4444-4444-8444-444444444444";
+  const clientSourceId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   await writeFile(
     join(directory, "config.json"),
     `${JSON.stringify({
@@ -370,7 +592,7 @@ test("quarantines a server-disconnected pending source without poisoning future 
       deviceToken: "synthetic-device-token",
       sources: [
         {
-          clientSourceId: "claude_code:retired",
+          clientSourceId,
           sourceId,
           agentId: "claude_code",
           accountLabel: "Retired",
@@ -382,6 +604,20 @@ test("quarantines a server-disconnected pending source without poisoning future 
       ],
     })}\n`,
   );
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "claude_code",
+      dataPath: join(home, "claude"),
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Retired",
+    },
+  ]);
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: { [sourceId]: "1" } })}\n`,
+  );
   await writeFile(
     join(pending, `${sourceId}.json`),
     `${JSON.stringify({
@@ -391,12 +627,9 @@ test("quarantines a server-disconnected pending source without poisoning future 
     })}\n`,
   );
 
-  await assert.rejects(
-    execFileAsync(process.execPath, [connectorPath, "sync"], {
-      env: { ...process.env, HOME: home },
-    }),
-    /No configured collectors succeeded/,
-  );
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
   assert.equal(requests, 1);
   assert.deepEqual(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).sources, []);
   assert.deepEqual(await import("node:fs/promises").then(({ readdir }) => readdir(pending)), []);
@@ -417,6 +650,7 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
   const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-claude-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const directory = join(home, ".viberacing");
+  const clientSourceId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
   await mkdir(directory, { recursive: true });
   await writeFile(
     join(directory, "config.json"),
@@ -426,7 +660,7 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
       deviceToken: "synthetic-device-token",
       sources: [
         {
-          clientSourceId: "claude_code:doctor",
+          clientSourceId,
           sourceId: "55555555-5555-4555-8555-555555555555",
           agentId: "claude_code",
           accountLabel: "Work",
@@ -438,11 +672,328 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
       ],
     })}\n`,
   );
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "claude_code",
+      dataPath: fileURLToPath(new URL("fixtures", import.meta.url)),
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Work",
+    },
+  ]);
   const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
-    env: { ...process.env, HOME: home, PATH: "" },
+    env: connectorEnvironment(home, { PATH: "" }),
   });
   assert.match(result.stdout, /claude_code \(Work\): ok/);
   assert.doesNotMatch(result.stdout, /reading 'rangeStart'/);
+});
+
+test("recovers a missing local sequence from 500 and sends snapshot 501", async (context) => {
+  let uploaded;
+  let uploadCount = 0;
+  const sourceId = "66666666-6666-4666-8666-666666666666";
+  const server = createServer((request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          status: "active",
+          sources: [{ sourceId, lastAcceptedSyncSequence: "500" }],
+        }),
+      );
+      return;
+    }
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      uploadCount += 1;
+      uploaded = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: 1,
+          acceptedSnapshots: 1,
+          staleSnapshots: 0,
+          sourceSequences: [{ sourceId, lastAcceptedSyncSequence: "501", accepted: true }],
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-sequence-recovery-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  const capture = join(directory, "captures", "cursor.jsonl");
+  await mkdir(join(directory, "captures"), { recursive: true });
+  const today = new Date().toISOString().slice(0, 10);
+  await writeFile(
+    capture,
+    `${JSON.stringify({
+      id: "synthetic-sequence-event",
+      date: today,
+      usage: {
+        date: today,
+        totalTokens: "1",
+        inputTokens: "1",
+        outputTokens: "0",
+        cacheReadTokens: "0",
+        cacheWriteTokens: "0",
+        reasoningTokens: "0",
+      },
+    })}\n`,
+  );
+  const clientSourceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "cursor",
+      dataPath: capture,
+      collectionMethod: "cursor_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Cursor",
+    },
+  ]);
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin: `http://127.0.0.1:${address.port}`,
+      deviceToken: "synthetic-device-token",
+      sources: [
+        {
+          clientSourceId,
+          sourceId,
+          agentId: "cursor",
+          accountLabel: "Cursor",
+          collectionMethod: "cursor_cli_capture",
+          lastAcceptedSyncSequence: "0",
+        },
+      ],
+    })}\n`,
+  );
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.equal(uploaded.snapshots[0].syncSequence, "501");
+  assert.equal(
+    JSON.parse(await readFile(join(directory, "state.json"), "utf8")).sequences[sourceId],
+    "501",
+  );
+  const unchanged = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.equal(uploadCount, 1);
+  assert.match(unchanged.stdout, /no request was sent/i);
+});
+
+test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      const sequence = bodies.length === 1 ? "500" : bodies.length === 2 ? "501" : "502";
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          acceptedEntries: bodies.length === 3 ? 1 : 0,
+          acceptedSnapshots: bodies.length === 1 ? 0 : 1,
+          staleSnapshots: bodies.length === 1 ? 1 : 0,
+          sourceSequences: [
+            {
+              sourceId: body.snapshots[0].sourceId,
+              lastAcceptedSyncSequence: sequence,
+              accepted: bodies.length !== 1,
+            },
+          ],
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-stale-pending-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await mkdir(join(installation.directory, "pending"), { recursive: true });
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: { [installation.sourceId]: "1" } })}\n`,
+  );
+  await writeFile(
+    join(installation.directory, "pending", `${installation.sourceId}.json`),
+    `${JSON.stringify({
+      protocolVersion: 2,
+      snapshots: [
+        {
+          sourceId: installation.sourceId,
+          syncSequence: "1",
+          rangeStart: "2026-07-15",
+          rangeEnd: "2026-08-14",
+          completeness: "complete",
+          entries: [],
+        },
+      ],
+      sourceErrors: [],
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.deepEqual(
+    bodies.map((body) => body.snapshots[0].syncSequence),
+    ["1", "501", "502"],
+  );
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8")).sequences[
+      installation.sourceId
+    ],
+    "502",
+  );
+});
+
+test("retries transient uploads at most three times and clears the compact pending snapshot", async (context) => {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ sources: [] }));
+      return;
+    }
+    requests += 1;
+    response.writeHead(requests < 3 ? 503 : 200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify(
+        requests < 3 ? { error: "server_error" } : { acceptedEntries: 1, acceptedSnapshots: 1 },
+      ),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-transient-retry-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.equal(requests, 3);
+  assert.deepEqual(
+    await import("node:fs/promises").then(({ readdir }) =>
+      readdir(join(installation.directory, "pending")),
+    ),
+    [],
+  );
+});
+
+test("quarantines a permanent 400 once without blocking the next corrected snapshot", async (context) => {
+  let requests = 0;
+  const bodies = [];
+  const server = createServer((request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ sources: [] }));
+      return;
+    }
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      requests += 1;
+      bodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      response.writeHead(requests === 1 ? 400 : 200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify(
+          requests === 1
+            ? { error: "token_components_mismatch" }
+            : { acceptedEntries: 1, acceptedSnapshots: 1 },
+        ),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-permanent-quarantine-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+
+  const rejected = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.equal(requests, 1);
+  assert.match(rejected.stderr, /payload quarantined/);
+  const quarantine = join(
+    installation.directory,
+    "pending",
+    "quarantine",
+    `${installation.sourceId}.json`,
+  );
+  await access(quarantine);
+
+  const capture = JSON.parse((await readFile(installation.capture, "utf8")).trim());
+  capture.id = "synthetic-corrected-event-with-a-longer-id";
+  capture.usage.totalTokens = "4";
+  capture.usage.outputTokens = "3";
+  await writeFile(installation.capture, `${JSON.stringify(capture)}\n`);
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+  assert.equal(requests, 2);
+  assert.equal(bodies[1].snapshots[0].syncSequence, "2");
+  await assert.rejects(access(quarantine));
+});
+
+test("revoked authorization removes pairing config and stops automatic scheduling", async (context) => {
+  let requests = 0;
+  const server = createServer((_request, response) => {
+    requests += 1;
+    response.writeHead(401, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "unauthorized" }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-revoked-auth-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await writeFile(
+    join(installation.directory, "dirty.json"),
+    `${JSON.stringify({ dirtySince: new Date().toISOString(), lastEventAt: new Date().toISOString() })}\n`,
+  );
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: connectorEnvironment(home),
+    }),
+    /authorization was revoked/,
+  );
+  assert.equal(requests, 1);
+  await assert.rejects(access(join(installation.directory, "config.json")));
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 
 test("uploads the supported 32 sources in bounded batches below the server rate limit", async (context) => {
@@ -476,13 +1027,16 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
   const directory = join(home, ".viberacing");
   const pending = join(directory, "pending");
   await mkdir(pending, { recursive: true });
-  const sources = Array.from({ length: 32 }, (_, index) => ({
-    clientSourceId: `unsupported:${index}`,
-    sourceId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-    agentId: "unsupported",
-    collectionMethod: "unsupported",
-    supportedSurface: "cli",
-  }));
+  const sources = Array.from({ length: 32 }, (_, index) => {
+    const id = `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+    return {
+      clientSourceId: id,
+      sourceId: id,
+      agentId: "unsupported",
+      collectionMethod: "unsupported",
+      supportedSurface: "cli",
+    };
+  });
   await writeFile(
     join(directory, "config.json"),
     `${JSON.stringify({
@@ -490,6 +1044,24 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
       origin: `http://127.0.0.1:${address.port}`,
       deviceToken: "synthetic-device-token",
       sources,
+    })}\n`,
+  );
+  await writeLocalSources(
+    directory,
+    sources.map((source, index) => ({
+      clientSourceId: source.clientSourceId,
+      agentId: source.agentId,
+      dataPath: join(home, `unsupported-${index}`),
+      collectionMethod: source.collectionMethod,
+      supportedSurface: source.supportedSurface,
+      suggestedLabel: `Unsupported ${index}`,
+    })),
+  );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: Object.fromEntries(sources.map((source) => [source.sourceId, "1"])),
     })}\n`,
   );
   for (const source of sources)
@@ -504,7 +1076,7 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
 
   await assert.rejects(
     execFileAsync(process.execPath, [connectorPath, "sync"], {
-      env: { ...process.env, HOME: home },
+      env: connectorEnvironment(home),
     }),
     /Unsupported configured source/,
   );
@@ -512,3 +1084,181 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
   assert.equal(bodies[0].snapshots.length, 32);
   assert.equal(bodies[1].sourceErrors.length, 32);
 });
+
+test("disconnect removes local hooks, token, dirty state, and pending data when offline", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-offline-disconnect-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  const qwenRoot = join(home, ".qwen");
+  const qwenUsage = join(qwenRoot, "usage");
+  await mkdir(join(directory, "pending"), { recursive: true });
+  await mkdir(qwenUsage, { recursive: true });
+  await mkdir(join(home, ".claude"), { recursive: true });
+  await writeFile(join(home, ".claude", "settings.json"), "{invalid-json");
+  const clientSourceId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  const sourceId = "77777777-7777-4777-8777-777777777777";
+  await writeLocalSources(directory, [
+    {
+      clientSourceId,
+      agentId: "qwen_code",
+      dataPath: qwenUsage,
+      collectionMethod: "qwen_stats_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Qwen",
+    },
+  ]);
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin: "http://127.0.0.1:1",
+      deviceToken: "synthetic-device-token-that-is-long-enough",
+      sources: [
+        {
+          clientSourceId,
+          sourceId,
+          agentId: "qwen_code",
+          accountLabel: "Qwen",
+          collectionMethod: "qwen_stats_jsonl",
+        },
+      ],
+    })}\n`,
+  );
+  await writeFile(
+    join(qwenRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          { hooks: [{ type: "command", command: "keep-me" }] },
+          {
+            hooks: [
+              {
+                type: "command",
+                command: "node hook --viberacing-hook-id=viberacing-hook-v2",
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await writeFile(
+    join(directory, "pending", `${sourceId}.json`),
+    `${JSON.stringify({
+      protocolVersion: 2,
+      snapshots: [{ sourceId, syncSequence: "1", entries: [] }],
+      sourceErrors: [],
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({ dirtySince: new Date().toISOString(), lastEventAt: new Date().toISOString() })}\n`,
+  );
+  const result = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: connectorEnvironment(home),
+  });
+  assert.match(result.stderr, /remote revoke could not be confirmed/);
+  assert.match(result.stderr, /auxiliary cleanup steps/);
+  await assert.rejects(access(join(directory, "config.json")));
+  await assert.rejects(access(join(directory, "dirty.json")));
+  await assert.rejects(access(join(directory, "pending", `${sourceId}.json`)));
+  assert.match(await readFile(join(qwenRoot, "settings.json"), "utf8"), /keep-me/);
+  assert.doesNotMatch(
+    await readFile(join(qwenRoot, "settings.json"), "utf8"),
+    /viberacing-hook-v2/,
+  );
+  assert.equal((await readLocalSources(directory)).length, 1);
+});
+
+test(
+  "wrappers pass exact argv and preserve native output, exit status, and safe metadata",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-executable-"));
+    context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+    const bin = join(home, "bin");
+    await mkdir(bin, { recursive: true });
+    const cursorArgv = join(home, "cursor-argv.json");
+    const antigravityArgv = join(home, "antigravity-argv.json");
+    const cursorExecutable = join(bin, "cursor-agent");
+    const antigravityExecutable = join(bin, "agy");
+    await writeFile(
+      cursorExecutable,
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({type:"result",subtype:"success",result:"synthetic private response",session_id:"00000000-0000-4000-8000-000000000001"})+"\\n");\nprocess.stderr.write("native cursor stderr\\n");\nprocess.exitCode=7;\n`,
+    );
+    await writeFile(
+      antigravityExecutable,
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({type:"result",session_id:"safe-session",timestamp:new Date().toISOString(),prompt:"synthetic private prompt",response:"synthetic private response",usage:{input_tokens:1,output_tokens:2,cache_read_tokens:0,cache_write_tokens:0}})+"\\n");\n`,
+    );
+    await chmod(cursorExecutable, 0o700);
+    await chmod(antigravityExecutable, 0o700);
+    const environment = connectorEnvironment(home, {
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+    });
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [connectorPath, "run", "cursor", "--", "hello"], {
+        env: { ...environment, SYNTHETIC_ARGV_PATH: cursorArgv },
+      }),
+      (error) => {
+        assert.equal(error.code, 7);
+        assert.match(error.stdout, /synthetic private response/);
+        assert.match(error.stderr, /native cursor stderr/);
+        return true;
+      },
+    );
+    assert.deepEqual(JSON.parse(await readFile(cursorArgv, "utf8")), [
+      "--print",
+      "hello",
+      "--output-format",
+      "stream-json",
+    ]);
+    await assert.rejects(access(join(home, ".viberacing", "captures", "cursor.jsonl")));
+
+    await execFileAsync(
+      process.execPath,
+      [connectorPath, "run", "antigravity", "--", "-p", "hello", "--output-format=stream-json"],
+      { env: { ...environment, SYNTHETIC_ARGV_PATH: antigravityArgv } },
+    );
+    assert.deepEqual(JSON.parse(await readFile(antigravityArgv, "utf8")), [
+      "-p",
+      "hello",
+      "--output-format=stream-json",
+    ]);
+    const capture = await readFile(
+      join(home, ".viberacing", "captures", "antigravity.jsonl"),
+      "utf8",
+    );
+    assert.match(capture, /safe-session/);
+    assert.doesNotMatch(capture, /prompt|response|synthetic private/);
+    await execFileAsync(process.execPath, [connectorPath, "disconnect"], { env: environment });
+  },
+);
+
+test(
+  "wrapper forwards SIGINT to the native executable",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-signal-"));
+    context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+    const bin = join(home, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = join(bin, "cursor-agent");
+    await writeFile(
+      executable,
+      '#!/usr/bin/env node\nprocess.stdout.write("ready\\n");\nsetInterval(() => {}, 1000);\n',
+    );
+    await chmod(executable, 0o700);
+    const child = spawn(process.execPath, [connectorPath, "run", "cursor", "--", "hello"], {
+      env: connectorEnvironment(home, { PATH: `${bin}${delimiter}${process.env.PATH}` }),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    context.after(() => child.kill("SIGKILL"));
+    child.stdout.setEncoding("utf8");
+    await new Promise((resolve) => child.stdout.once("data", resolve));
+    child.kill("SIGINT");
+    const [code, signal] = await once(child, "close");
+    assert.equal(code, null);
+    assert.equal(signal, "SIGINT");
+  },
+);
