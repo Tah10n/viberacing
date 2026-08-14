@@ -22,6 +22,8 @@ const quarantineDirectory = join(pendingDirectory, "quarantine");
 const dirtyPath = join(stateDirectory, "dirty.json");
 const dirtyLockPath = join(stateDirectory, "dirty.lock");
 const schedulerLockPath = join(stateDirectory, "scheduler.lock");
+const lifecycleLockPath = join(stateDirectory, "lifecycle.lock");
+const lifecycleMarkerPath = join(stateDirectory, "lifecycle-revoking.lock");
 export const automaticSyncTimings = Object.freeze({
   debounceMs: 15_000,
   minimumIntervalMs: 120_000,
@@ -218,27 +220,70 @@ export async function clearDirtyForSources(clientSourceIds) {
   });
 }
 
-export async function claimScheduler() {
+async function acquireOwnedLock(path, options = {}) {
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
-  let handle;
-  try {
-    handle = await open(schedulerLockPath, "wx", 0o600);
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-    const info = await stat(schedulerLockPath).catch(() => null);
-    if (info && Date.now() - info.mtimeMs <= 10 * 60_000) return false;
-    await unlink(schedulerLockPath).catch(() => {});
-    handle = await open(schedulerLockPath, "wx", 0o600);
+  const ownershipToken = randomUUID();
+  const owner = `${process.pid}:${ownershipToken}\n`;
+  const deadline = Date.now() + (options.waitMs ?? 0);
+  const staleMs = options.staleMs ?? 10 * 60_000;
+  for (;;) {
+    let handle;
+    let created = false;
+    try {
+      handle = await open(path, "wx", 0o600);
+      created = true;
+      await handle.writeFile(owner);
+      await handle.close();
+      return { path, owner, ownershipToken };
+    } catch (error) {
+      await handle?.close().catch(() => {});
+      if (created) await unlink(path).catch(() => {});
+      if (error?.code !== "EEXIST") throw error;
+      const info = await stat(path).catch(() => null);
+      if (info && Date.now() - info.mtimeMs > staleMs) {
+        const stalePath = `${path}.stale.${ownershipToken}`;
+        try {
+          await rename(path, stalePath);
+          await unlink(stalePath).catch(() => {});
+        } catch (renameError) {
+          if (renameError?.code !== "ENOENT") throw renameError;
+        }
+        continue;
+      }
+      if (Date.now() >= deadline) return null;
+      await delay(25);
+    }
   }
-  await handle.writeFile(`${process.pid}\n`);
-  await handle.close();
+}
+
+async function releaseOwnedLock(lock) {
+  if (!lock) return false;
+  const currentOwner = await readFile(lock.path, "utf8").catch(() => null);
+  if (currentOwner !== lock.owner) return false;
+  await unlink(lock.path).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
   return true;
 }
 
-export async function releaseScheduler() {
+export async function claimScheduler() {
+  return (await acquireOwnedLock(schedulerLockPath)) ?? false;
+}
+
+export async function ownsScheduler(ownershipToken) {
+  if (typeof ownershipToken !== "string" || ownershipToken.length === 0) return false;
+  const owner = await readFile(schedulerLockPath, "utf8").catch(() => null);
+  return owner?.endsWith(`:${ownershipToken}\n`) === true;
+}
+
+export async function releaseScheduler(ownershipToken) {
+  if (typeof ownershipToken !== "string" || ownershipToken.length === 0) return false;
+  const owner = await readFile(schedulerLockPath, "utf8").catch(() => null);
+  if (owner?.endsWith(`:${ownershipToken}\n`) !== true) return false;
   await unlink(schedulerLockPath).catch((error) => {
     if (error?.code !== "ENOENT") throw error;
   });
+  return true;
 }
 
 export async function clearAutomaticState() {
@@ -456,24 +501,43 @@ export async function writeState(value) {
   await atomicJson(statePath, value);
 }
 
-export async function withSyncLock(callback) {
-  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
-  let handle;
-  try {
-    handle = await open(lockPath, "wx", 0o600);
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-    const info = await stat(lockPath).catch(() => null);
-    if (info && Date.now() - info.mtimeMs <= 10 * 60_000) return { skipped: true };
-    await unlink(lockPath).catch(() => {});
-    handle = await open(lockPath, "wx", 0o600);
+export async function lifecycleMutationActive() {
+  const info = await stat(lifecycleMarkerPath).catch(() => null);
+  if (!info) return false;
+  if (Date.now() - info.mtimeMs <= 10 * 60_000) return true;
+  await unlink(lifecycleMarkerPath).catch(() => {});
+  return false;
+}
+
+export async function withSyncLock(callback, options = {}) {
+  if (!options.allowDuringLifecycle && (await lifecycleMutationActive()))
+    return { skipped: true, lifecycle: true };
+  const lock = await acquireOwnedLock(lockPath, { waitMs: options.waitMs ?? 0 });
+  if (!lock) return { skipped: true };
+  if (!options.allowDuringLifecycle && (await lifecycleMutationActive())) {
+    await releaseOwnedLock(lock);
+    return { skipped: true, lifecycle: true };
   }
   try {
-    await handle.writeFile(`${process.pid}\n`);
     return await callback();
   } finally {
-    await handle.close();
-    await unlink(lockPath).catch(() => {});
+    await releaseOwnedLock(lock);
+  }
+}
+
+export async function withLifecycleMutation(callback, options = {}) {
+  const waitMs = options.waitMs ?? 60_000;
+  const lifecycleLock = await acquireOwnedLock(lifecycleLockPath, { waitMs });
+  if (!lifecycleLock) throw new Error("Timed out waiting for another lifecycle operation");
+  await writeFile(lifecycleMarkerPath, lifecycleLock.owner, { mode: 0o600 });
+  try {
+    const result = await withSyncLock(callback, { waitMs, allowDuringLifecycle: true });
+    if (result?.skipped) throw new Error("Timed out waiting for active sync to finish");
+    return result;
+  } finally {
+    const markerOwner = await readFile(lifecycleMarkerPath, "utf8").catch(() => null);
+    if (markerOwner === lifecycleLock.owner) await unlink(lifecycleMarkerPath).catch(() => {});
+    await releaseOwnedLock(lifecycleLock);
   }
 }
 

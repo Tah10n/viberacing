@@ -45,6 +45,8 @@ import {
   markDirty,
   dirtyClaims,
   dirtyEntries,
+  lifecycleMutationActive,
+  ownsScheduler,
   pendingPayloads,
   quarantinePending,
   quarantinedPayloads,
@@ -56,6 +58,7 @@ import {
   removePending,
   removePendingForSource,
   savePending,
+  withLifecycleMutation,
   withSyncLock,
   writeState,
 } from "../lib/runtime.mjs";
@@ -66,6 +69,11 @@ const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
 const automaticTimings = configuredAutomaticSyncTimings();
+const remoteReconciliationIntervalMs =
+  process.env.NODE_ENV === "test" &&
+  /^\d+$/.test(process.env.VIBERACING_TEST_REMOTE_RECONCILIATION_INTERVAL_MS ?? "")
+    ? Number(process.env.VIBERACING_TEST_REMOTE_RECONCILIATION_INTERVAL_MS)
+    : 10 * 60_000;
 const option = (name, fallback) => {
   const index = arguments_.indexOf(name);
   return index >= 0 && arguments_[index + 1] ? arguments_[index + 1] : fallback;
@@ -196,6 +204,8 @@ function fingerprint(value) {
 }
 
 async function deliver(config, payload) {
+  if (await lifecycleMutationActive())
+    throw new Error("Sync delivery stopped by a local lifecycle operation");
   return request(
     config.origin,
     "/api/usage",
@@ -237,6 +247,8 @@ async function forgetSourceState(sourceIds) {
 }
 
 async function retireMappedSources(config, sourceIds) {
+  if (await lifecycleMutationActive())
+    throw new Error("Source retirement stopped by a local lifecycle operation");
   const retired = new Set(sourceIds);
   const mappings = config.sources.filter((source) => retired.has(source.sourceId));
   for (const source of mappings)
@@ -271,7 +283,8 @@ async function disableLocalConnection(clearPending = false) {
   if (clearPending) operations.push(clearPendingPayloads());
   const results = await Promise.allSettled(operations);
   if (results[1].status === "rejected") throw results[1].reason;
-  return results.filter((result) => result.status === "rejected").length;
+  const hookFailures = results[0].status === "fulfilled" ? results[0].value.failures.length : 1;
+  return hookFailures + results.slice(1).filter((result) => result.status === "rejected").length;
 }
 
 async function compactSuccessfulCaptures(config) {
@@ -291,9 +304,11 @@ async function compactSuccessfulCaptures(config) {
   }
 }
 
-async function rememberServerSequences(config, sequences, providedState) {
-  if (!Array.isArray(sequences) || sequences.length === 0) return providedState;
-  const state = providedState ?? (await readState());
+async function rememberServerSequences(config, sequences) {
+  if (await lifecycleMutationActive())
+    throw new Error("Sequence reconciliation stopped by a local lifecycle operation");
+  const state = await readState();
+  if (!Array.isArray(sequences) || sequences.length === 0) return state;
   state.sequences ??= {};
   const byId = new Map(sequences.map((item) => [item.sourceId, item.lastAcceptedSyncSequence]));
   let changed = false;
@@ -320,7 +335,7 @@ async function rememberServerSequences(config, sequences, providedState) {
 
 async function lifecycleFailure(error) {
   if (error?.status === 401 || error?.status === 403) {
-    await disableLocalConnection();
+    await disableLocalConnection(true);
     throw new Error("Installation authorization was revoked; run `viberacing connect`");
   }
   if (error?.status === 426) {
@@ -332,32 +347,50 @@ async function lifecycleFailure(error) {
   throw error;
 }
 
-async function reconcileMissingSequences(config, state) {
+async function reconcileServerState(config, state) {
   const missing = config.sources.some(
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
   );
-  if (!missing) return state;
+  const lastReconciliation = state.lastRemoteReconciliationAt;
+  if (!missing && lastReconciliation === undefined) {
+    state.lastRemoteReconciliationAt = Date.now();
+    await writeState(state);
+    return state;
+  }
+  if (
+    !missing &&
+    Number.isFinite(lastReconciliation) &&
+    Date.now() - lastReconciliation < remoteReconciliationIntervalMs
+  )
+    return state;
   let remote;
   try {
     remote = await request(
       config.origin,
       "/api/installations/current",
       { headers: { Authorization: `Bearer ${config.deviceToken}` } },
-      3,
+      missing ? 3 : 1,
     );
   } catch (error) {
-    await lifecycleFailure(error);
+    if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
+      await lifecycleFailure(error);
+    const fresh = await readState();
+    fresh.lastRemoteReconciliationAt = Date.now();
+    await writeState(fresh);
+    return fresh;
   }
   await reconcileRemoteSources(config, remote.sources);
-  return rememberServerSequences(
+  const reconciled = await rememberServerSequences(
     config,
     remote.sources?.map((source) => ({
       sourceId: source.sourceId,
       lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
     })),
-    state,
   );
+  reconciled.lastRemoteReconciliationAt = Date.now();
+  await writeState(reconciled);
+  return reconciled;
 }
 
 async function deliverPendingGroup(config, items, retired) {
@@ -368,10 +401,14 @@ async function deliverPendingGroup(config, items, retired) {
   }
   if (eligible.length === 0) return { accepted: 0, staleSources: [], quarantinedSources: [] };
   try {
+    if (await lifecycleMutationActive())
+      throw new Error("Pending delivery stopped by a local lifecycle operation");
     const result = await deliver(
       config,
       mergePendingPayloads(eligible.map((item) => item.payload)),
     );
+    if (await lifecycleMutationActive())
+      throw new Error("Pending reconciliation stopped by a local lifecycle operation");
     await rememberServerSequences(config, result.sourceSequences);
     const sequenceById = new Map(
       (result.sourceSequences ?? []).map((item) => [item.sourceId, item]),
@@ -389,6 +426,8 @@ async function deliverPendingGroup(config, items, retired) {
       ) {
         const sequence = (BigInt(reported) + 1n).toString();
         snapshot.syncSequence = sequence;
+        if (await lifecycleMutationActive())
+          throw new Error("Pending repair stopped by a local lifecycle operation");
         await savePending(item.payload);
         const state = await readState();
         state.sequences ??= {};
@@ -494,6 +533,8 @@ async function drainPending(config, retryStale = true) {
   ];
   for (const selected of groups) {
     for (const group of pendingGroups(selected)) {
+      if (await lifecycleMutationActive())
+        throw new Error("Pending delivery stopped by a local lifecycle operation");
       const delivered = await deliverPendingGroup(config, group, retired);
       accepted += delivered.accepted;
       for (const sourceId of delivered.staleSources) staleSources.add(sourceId);
@@ -542,7 +583,7 @@ async function sync(providedConfig, options = {}) {
     const previous = await drainPending(config);
     let accepted = previous.accepted;
     let state = await readState();
-    state = await reconcileMissingSequences(config, state);
+    state = await reconcileServerState(config, state);
     const range = snapshotRange();
     state.adapters ??= {};
     state.fingerprints ??= {};
@@ -614,6 +655,8 @@ async function sync(providedConfig, options = {}) {
         entries,
       });
     }
+    if (await lifecycleMutationActive())
+      throw new Error("Sync persistence stopped by a local lifecycle operation");
     await writeState(state);
     const clearSuccessfulDirty = () =>
       clearDirty(
@@ -633,6 +676,8 @@ async function sync(providedConfig, options = {}) {
       return { accepted, failures, unchanged: true };
     }
     const payload = { protocolVersion, snapshots, sourceErrors };
+    if (await lifecycleMutationActive())
+      throw new Error("Sync persistence stopped by a local lifecycle operation");
     await savePending(payload);
     const delivered = await drainPending(config);
     accepted += delivered.accepted;
@@ -653,13 +698,24 @@ async function sync(providedConfig, options = {}) {
 async function launchAutomaticScheduler() {
   const state = await readState();
   if (state.automaticDisabledReason) return false;
-  if (!(await claimScheduler())) return false;
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "auto-sync", "--quiet"], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.on("error", () => releaseScheduler().catch(() => {}));
+  const scheduler = await claimScheduler();
+  if (!scheduler) return false;
+  const child = spawn(
+    process.execPath,
+    [
+      fileURLToPath(import.meta.url),
+      "auto-sync",
+      "--quiet",
+      "--scheduler-owner",
+      scheduler.ownershipToken,
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    },
+  );
+  child.on("error", () => releaseScheduler(scheduler.ownershipToken).catch(() => {}));
   child.unref();
   return true;
 }
@@ -690,14 +746,19 @@ async function hook() {
 }
 
 async function automaticSync() {
+  const schedulerOwner = option("--scheduler-owner");
+  let attemptedClaims = {};
+  let attempted = false;
   try {
     for (;;) {
+      if (!(await ownsScheduler(schedulerOwner))) return;
       const dirty = await readDirty();
       if (!dirty) return;
       let state = await readState();
       const dueAt = automaticDueAt(dirty, state.lastAutomaticSyncAt ?? 0, automaticTimings);
       const waitMs = Math.max(0, dueAt - Date.now());
       if (waitMs > 0) await delay(waitMs);
+      if (!(await ownsScheduler(schedulerOwner))) return;
       const current = await readDirty();
       if (!current) return;
       state = await readState();
@@ -713,12 +774,22 @@ async function automaticSync() {
         await clearDirty(dirtyClaims(current));
         return;
       }
+      attemptedClaims = dirtyClaims(current);
+      attempted = true;
       const result = await sync(undefined, { automatic: true });
-      if (result?.skipped) return;
+      if (result?.skipped) attempted = false;
+      return;
     }
   } finally {
-    await releaseScheduler();
-    if (await readDirty()) {
+    if (attempted) await clearDirty(attemptedClaims).catch(() => {});
+    await releaseScheduler(schedulerOwner);
+    const remaining = dirtyEntries(await readDirty().catch(() => null));
+    const hasNewGeneration =
+      attempted &&
+      remaining.some(
+        ([clientSourceId, entry]) => attemptedClaims[clientSourceId] !== entry.generation,
+      );
+    if (hasNewGeneration) {
       try {
         await readConfig();
         await launchAutomaticScheduler();
@@ -735,7 +806,7 @@ async function doctor() {
   );
   try {
     const config = await readConfig();
-    const state = await readState();
+    let state = await readState();
     const range = snapshotRange();
     if (arguments_.includes("--repair")) {
       await reconcileHooks(import.meta.url, config.sources, await readSources());
@@ -749,13 +820,12 @@ async function doctor() {
         headers: { Authorization: `Bearer ${config.deviceToken}` },
       });
       await reconcileRemoteSources(config, remote.sources);
-      await rememberServerSequences(
+      state = await rememberServerSequences(
         config,
         remote.sources?.map((source) => ({
           sourceId: source.sourceId,
           lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
         })),
-        state,
       );
       output(`Pairing status: ${remote.status}; server last sync: ${remote.lastSyncAt ?? "never"}`);
       for (const source of remote.sources)
@@ -989,23 +1059,27 @@ try {
   else if (command === "accounts") {
     const config = await readConfig();
     for (const source of config.sources) output(`${source.agentId}: ${source.accountLabel}`);
-  } else if (command === "source") await sourceCommand();
+  } else if (command === "source" && arguments_[1] === "remove")
+    await withLifecycleMutation(() => sourceCommand());
+  else if (command === "source") await sourceCommand();
   else if (command === "run" && ["cursor", "antigravity"].includes(arguments_[1]))
     await wrap(arguments_[1]);
   else if (command === "disconnect") {
     let remoteError;
     let localWarnings = 0;
-    try {
-      const config = await readConfig();
-      await request(config.origin, "/api/installations/current", {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${config.deviceToken}` },
-      });
-    } catch (error) {
-      remoteError = error;
-    } finally {
-      localWarnings = await disableLocalConnection(true);
-    }
+    await withLifecycleMutation(async () => {
+      try {
+        const config = await readConfig();
+        await request(config.origin, "/api/installations/current", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${config.deviceToken}` },
+        });
+      } catch (error) {
+        remoteError = error;
+      } finally {
+        localWarnings = await disableLocalConnection(true);
+      }
+    });
     output("Installation disconnected locally; provider histories were not changed.");
     if (remoteError)
       process.stderr.write(
@@ -1016,34 +1090,53 @@ try {
         "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.\n",
       );
   } else if (command === "reset-installation") {
-    await removeHooks();
-    await resetInstallation();
+    const cleanup = await withLifecycleMutation(async () => {
+      const result = await removeHooks();
+      await resetInstallation();
+      await clearAutomaticState();
+      return result;
+    });
     output(
       "Installation identity reset. The prior server installation must be disconnected separately if still active.",
     );
-  } else if (command === "uninstall") {
-    try {
-      const config = await readConfig();
-      await request(config.origin, "/api/installations/current", {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${config.deviceToken}` },
-      });
-    } catch {}
-    let hookWarning = false;
-    try {
-      await removeHooks();
-    } catch {
-      hookWarning = true;
-    } finally {
-      await removeLocalState();
-    }
-    output(
-      "Vibe Racing hooks, installed copy, secrets, and local state removed. Provider data was not changed.",
-    );
-    if (hookWarning)
+    if (cleanup.failures.length > 0)
       process.stderr.write(
-        "Vibe Racing warning: local state was removed, but one or more owned hook files need manual inspection.\n",
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned; local source metadata was retained.\n`,
       );
+  } else if (command === "uninstall") {
+    const cleanup = await withLifecycleMutation(async () => {
+      try {
+        const config = await readConfig();
+        await request(config.origin, "/api/installations/current", {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${config.deviceToken}` },
+        });
+      } catch {}
+      const result = await removeHooks();
+      if (result.failures.length === 0) await removeLocalState();
+      else {
+        await resetInstallation();
+        await clearAutomaticState();
+      }
+      return result;
+    });
+    if (cleanup.failures.length === 0)
+      output(
+        "Vibe Racing hooks, installed copy, secrets, and local state removed. Provider data was not changed.",
+      );
+    else {
+      output(
+        "Vibe Racing network access and secrets were removed; cleanup metadata and runtime were retained for retry.",
+      );
+      process.stderr.write(
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned. Fix the reported provider settings and run \`viberacing uninstall\` again.\n`,
+      );
+      for (const failure of cleanup.failures)
+        process.stderr.write(
+          `- ${failure.agentId ?? "sources"}: ${failure.path} (${failure.message})\n`,
+        );
+      process.exitCode = 1;
+    }
   } else
     output(
       "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor|antigravity [--source ID] -- …",
