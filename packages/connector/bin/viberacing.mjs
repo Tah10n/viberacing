@@ -86,6 +86,13 @@ const automaticSyncLockWaitMs =
     : process.env.NODE_ENV === "test"
       ? 5_000
       : 60_000;
+const manualSyncLockWaitMs =
+  process.env.NODE_ENV === "test" &&
+  /^\d+$/.test(process.env.VIBERACING_TEST_MANUAL_SYNC_LOCK_WAIT_MS ?? "")
+    ? Number(process.env.VIBERACING_TEST_MANUAL_SYNC_LOCK_WAIT_MS)
+    : process.env.NODE_ENV === "test"
+      ? 5_000
+      : 60_000;
 const option = (name, fallback) => {
   const index = arguments_.indexOf(name);
   return index >= 0 && arguments_[index + 1] ? arguments_[index + 1] : fallback;
@@ -1129,8 +1136,10 @@ async function wrap(agentId) {
 
 try {
   if (command === "connect") await connect();
-  else if (command === "sync") await sync();
-  else if (command === "hook") await hook();
+  else if (command === "sync") {
+    const result = await sync(undefined, { waitMs: manualSyncLockWaitMs });
+    if (result?.skipped) throw new Error("Another sync is already running.");
+  } else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
   else if (command === "doctor") await doctor();
   else if (command === "accounts") {
