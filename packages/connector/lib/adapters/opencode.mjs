@@ -34,13 +34,18 @@ export function parseOpenCodeMessages(rows) {
   return mergeEntries(entries);
 }
 
-async function collect(source, _range, state = {}) {
+async function collect(source, range, state = {}) {
   const { DatabaseSync } = await import("node:sqlite");
   const database = new DatabaseSync(source.dataPath, { readOnly: true });
   try {
     const rows = database
-      .prepare("SELECT id, time_created, data FROM message ORDER BY time_created")
-      .all();
+      .prepare(
+        "SELECT id, time_created, data FROM message WHERE time_created >= ? AND time_created < ? ORDER BY time_created",
+      )
+      .all(
+        Date.parse(`${range.rangeStart}T00:00:00.000Z`),
+        Date.parse(`${range.rangeEnd}T00:00:00.000Z`) + 86_400_000,
+      );
     return {
       entries: parseOpenCodeMessages(rows),
       completeness: "complete",

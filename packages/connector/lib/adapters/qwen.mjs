@@ -43,6 +43,18 @@ export function parseQwenLines(lines) {
   return mergeEntries(entries);
 }
 
+function qwenEventKey(line) {
+  try {
+    const record = JSON.parse(line);
+    const date = utcDay(record?.timestamp);
+    return record?.schemaVersion === 1 && typeof record?.id === "string" && date
+      ? { id: record.id, date }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolvedRoot(value) {
   if (value === "~") return homedir();
   if (/^~[\\/]/.test(value ?? "")) return join(homedir(), value.slice(2));
@@ -83,12 +95,14 @@ export const qwenAdapter = Object.freeze({
         });
     return result;
   },
-  collect: (source, _range, state) =>
+  collect: (source, range, state) =>
     collectJsonl(
       source,
       parseQwenLines,
       (path) => basename(path).startsWith("token-usage-"),
       state,
+      range,
+      qwenEventKey,
     ),
   diagnose: (source) => diagnosePath(source),
 });

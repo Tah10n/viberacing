@@ -1,6 +1,6 @@
 export { parseAntigravityLines } from "./adapters/antigravity.mjs";
 export { parseClaudeLines } from "./adapters/claude.mjs";
-export { parseCodexUsage } from "./adapters/codex.mjs";
+export { codexProfileEnvironment, parseCodexUsage } from "./adapters/codex.mjs";
 export { parseCursorLines } from "./adapters/cursor.mjs";
 export { parseGeminiRecords } from "./adapters/gemini.mjs";
 export { parseKimiLines } from "./adapters/kimi.mjs";
@@ -8,6 +8,18 @@ export { parseOpenCodeMessages } from "./adapters/opencode.mjs";
 export { parseQwenLines } from "./adapters/qwen.mjs";
 import { adapterFor } from "./registry.mjs";
 export { adapters, adapterFor, defaultSources } from "./registry.mjs";
+
+export function wrapperInvocation(agentId, passed) {
+  const executable = agentId === "cursor" ? "cursor-agent" : "agy";
+  const args = [...passed];
+  const hasPrint = args.some((argument) => argument === "--print" || argument === "-p");
+  const hasOutputFormat = args.some(
+    (argument) => argument === "--output-format" || argument.startsWith("--output-format="),
+  );
+  if (!hasPrint) args.unshift("--print");
+  if (!hasOutputFormat) args.push("--output-format", "stream-json");
+  return { executable, args };
+}
 
 export function safeCaptureRecord(agentId, line) {
   const adapter = adapterFor(agentId);

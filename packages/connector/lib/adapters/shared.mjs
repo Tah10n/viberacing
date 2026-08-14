@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
-import { access, opendir, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, open, opendir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -90,7 +90,14 @@ export async function walk(root, suffixes, maximum = 2_000) {
       return {
         files:
           rootInfo.size <= 20_000_000 && suffixes.some((suffix) => root.endsWith(suffix))
-            ? [{ path: root, size: rootInfo.size, modifiedAt: rootInfo.mtimeMs }]
+            ? [
+                {
+                  path: root,
+                  size: rootInfo.size,
+                  modifiedAt: rootInfo.mtimeMs,
+                  ino: rootInfo.ino,
+                },
+              ]
             : [],
         incomplete: rootInfo.size > 20_000_000,
       };
@@ -118,7 +125,7 @@ export async function walk(root, suffixes, maximum = 2_000) {
         try {
           const info = await stat(path);
           if (info.size <= 20_000_000)
-            found.push({ path, size: info.size, modifiedAt: info.mtimeMs });
+            found.push({ path, size: info.size, modifiedAt: info.mtimeMs, ino: info.ino });
           else incomplete = true;
         } catch {
           incomplete = true;
@@ -137,20 +144,52 @@ export async function walk(root, suffixes, maximum = 2_000) {
   };
 }
 
-export async function jsonLines(path, start = 0) {
-  const result = [];
-  const input = createInterface({
-    input: createReadStream(path, { encoding: "utf8", start }),
-    crlfDelay: Infinity,
+export async function jsonLinesChunk(path, start = 0, size) {
+  if (size !== undefined && start >= size) return { lines: [], safeOffset: start };
+  let contents = "";
+  const stream = createReadStream(path, {
+    encoding: "utf8",
+    start,
+    ...(size === undefined ? {} : { end: size - 1 }),
   });
-  for await (const line of input) if (Buffer.byteLength(line) <= 1_000_000) result.push(line);
-  return result;
+  for await (const chunk of stream) contents += chunk;
+  const newline = contents.lastIndexOf("\n");
+  if (newline < 0) return { lines: [], safeOffset: start };
+  const complete = contents.slice(0, newline + 1);
+  return {
+    lines: complete.split(/\r?\n/).filter((line) => Buffer.byteLength(line) <= 1_000_000),
+    safeOffset: start + Buffer.byteLength(complete),
+  };
 }
 
-export async function collectJsonl(source, parser, filter = () => true, state = {}) {
+export async function jsonLines(path, start = 0, size) {
+  return (await jsonLinesChunk(path, start, size)).lines;
+}
+
+export async function tailFingerprint(path, offset) {
+  const length = Math.min(256, Math.max(0, offset));
+  const buffer = Buffer.alloc(length);
+  const handle = await open(path, "r");
+  try {
+    if (length > 0) await handle.read(buffer, 0, length, offset - length);
+  } finally {
+    await handle.close();
+  }
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+export async function collectJsonl(
+  source,
+  parser,
+  filter = () => true,
+  state = {},
+  range,
+  eventKey,
+) {
   const discovered = await walk(source.dataPath, [".jsonl"]);
   const files = discovered.files.filter((file) => filter(file.path));
-  const lines = [];
+  const nextState = { files: {} };
+  const entries = [];
   let incomplete = discovered.incomplete;
   let bytes = 0;
   for (const file of files) {
@@ -159,16 +198,83 @@ export async function collectJsonl(source, parser, filter = () => true, state = 
       continue;
     }
     bytes += file.size;
+    const previous = state.files?.[file.path];
+    if (
+      previous &&
+      previous.size === file.size &&
+      previous.modifiedAt === file.modifiedAt &&
+      (previous.ino === undefined || previous.ino === file.ino)
+    ) {
+      nextState.files[file.path] = previous;
+      entries.push(...(previous.entries ?? []));
+      continue;
+    }
+    let appended =
+      previous &&
+      previous.size <= file.size &&
+      previous.safeOffset <= file.size &&
+      (previous.ino === undefined || previous.ino === file.ino);
+    if (appended && previous.tailFingerprint !== undefined) {
+      try {
+        appended =
+          previous.tailFingerprint === (await tailFingerprint(file.path, previous.safeOffset));
+      } catch {
+        appended = false;
+      }
+    }
+    const offset = appended ? previous.safeOffset : 0;
     try {
-      lines.push(...(await jsonLines(file.path)));
+      const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
+      const unseenLines = [];
+      for (const line of chunk.lines) {
+        const event = eventKey?.(line);
+        if (
+          !event ||
+          typeof event.id !== "string" ||
+          !dayPattern.test(event.date ?? "") ||
+          (range && (event.date < range.rangeStart || event.date > range.rangeEnd))
+        ) {
+          unseenLines.push(line);
+          continue;
+        }
+        const key = createHash("sha256").update(event.id).digest("hex");
+        if (eventDays[key] !== undefined) continue;
+        eventDays[key] = event.date;
+        unseenLines.push(line);
+      }
+      if (range)
+        for (const [key, date] of Object.entries(eventDays))
+          if (date < range.rangeStart || date > range.rangeEnd) delete eventDays[key];
+      const parsed = parser(unseenLines);
+      const fileEntries = mergeEntries([...(appended ? (previous.entries ?? []) : []), ...parsed]);
+      const ranged = range
+        ? fileEntries.filter(
+            (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
+          )
+        : fileEntries;
+      nextState.files[file.path] = {
+        size: file.size,
+        modifiedAt: file.modifiedAt,
+        ino: file.ino,
+        safeOffset: chunk.safeOffset,
+        tailFingerprint: await tailFingerprint(file.path, chunk.safeOffset),
+        eventDays,
+        entries: ranged,
+      };
+      entries.push(...ranged);
     } catch {
       incomplete = true;
+      if (previous) {
+        nextState.files[file.path] = previous;
+        entries.push(...(previous.entries ?? []));
+      }
     }
   }
   return {
-    entries: parser(lines),
+    entries: mergeEntries(entries),
     completeness: incomplete ? "partial" : "complete",
-    nextState: state,
+    nextState,
     warnings: incomplete ? ["collector_limits_or_unreadable_files"] : [],
   };
 }
