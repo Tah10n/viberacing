@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { ActionLink, PageHeader, Panel } from "../components/ui";
-import { agentNames, isSupportedAgent } from "@/lib/agents";
+import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { viewer } from "@/lib/session";
@@ -28,7 +28,10 @@ interface AccountRow {
 }
 
 function agentLabel(agent: string): string {
-  return isSupportedAgent(agent) ? agentNames[agent] : agent;
+  if (!isSupportedAgent(agent)) return agent;
+  return agentRegistry[agent].countsExactTokens
+    ? agentNames[agent]
+    : `${agentNames[agent]} (not counted yet)`;
 }
 
 export default async function ConnectPage({ searchParams }: ConnectPageProps) {
