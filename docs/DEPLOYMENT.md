@@ -21,10 +21,19 @@
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
 
+   Keep `VIBERACING_MAX_DAILY_TOKENS` quoted in YAML-based deployment definitions. Exponential
+   notation, surrounding whitespace, leading zeroes, and fractional values are rejected so token
+   integers stay canonical decimal strings.
+
 4. Deploy. `railway.json` builds the pinned root image, runs the idempotent migration before
    traffic, and gates rollout on `/ready`.
 5. Verify `/health`, `/ready`, GitHub sign-in, multi-source pairing, sync/correction, reconnect
    token rotation, source/installation disconnect, public ranking, and deletion.
+
+The connector needs no daemon, system service, watcher, queue, or cron. Supported provider hooks
+only mark local dirty state and start one short-lived timer process. Automatic upload attempts are
+debounced and limited to about one batch per two minutes; manual sync and first connect are
+immediate. Deployments should not describe the ranking as real-time.
 
 Production startup validates all required variables. The service refuses non-HTTPS remote origins,
 unknown schema versions, or missing PostgreSQL connectivity. See the

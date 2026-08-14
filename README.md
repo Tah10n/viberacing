@@ -8,9 +8,17 @@ local connector. Only UTC dates and aggregate token counters cross the local bou
 responses, code, paths, repositories, hostnames, provider identities, credentials, model names, or
 costs.
 
-Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Cursor CLI,
-Antigravity CLI, and Gemini CLI. Cursor Desktop and Antigravity Desktop are not counted. See
-[agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
+Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Antigravity
+CLI, and Gemini CLI. Cursor CLI has a privacy-safe wrapper, but its current published structured
+output does not include authoritative token counters, so it is not presently counted. Cursor Desktop
+and Antigravity Desktop are not supported. See [agent support](docs/AGENT_SUPPORT.md) and
+[ranking semantics](docs/RANKING_SEMANTICS.md).
+
+Supported lifecycle hooks only mark the connector dirty. One short-lived detached scheduler
+coalesces events and sends at most about one automatic batch every two minutes; there is no daemon,
+watcher, or polling loop. Manual `viberacing sync` and the first successful `connect` run
+immediately. The first collection is bounded to 31 UTC days, later JSONL reads resume from safe byte
+offsets, and an unchanged normalized snapshot causes no HTTP request.
 
 ## Local production preview
 
