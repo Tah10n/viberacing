@@ -513,6 +513,29 @@ test("prevents overlapping syncs with an atomic lock", async () => {
   }
 });
 
+test("manual sync reports a busy lock after a bounded wait", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-manual-sync-busy-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:1");
+  await writeFile(join(installation.directory, "sync.lock"), "synthetic-owner\n");
+
+  const startedAt = Date.now();
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        VIBERACING_TEST_MANUAL_SYNC_LOCK_WAIT_MS: "100",
+      }),
+    }),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /Another sync is already running\./);
+      return true;
+    },
+  );
+  assert.ok(Date.now() - startedAt >= 80);
+});
+
 test("coalesces dirty events with debounce, cooldown, and a bounded maximum delay", async () => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-auto-dirty-"));
   const restoreEnvironment = useModuleEnvironment(home);

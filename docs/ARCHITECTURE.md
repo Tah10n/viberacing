@@ -84,22 +84,23 @@ watcher, polling loop, or required cron.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with
-no pending payload make no HTTP request. Network calls use at most three attempts with exponential
-backoff and jitter; one latest pending snapshot file per source survives a process or network
-failure. Pending delivery never implies another collector scan. Permanent payload errors move one
-safe payload per source to `pending/quarantine` without blocking future snapshots.
-`unsupported_source` or a disconnected status observed during installation inspection removes the
-mapping, owned hook, dirty/pending/quarantine/adapter/sequence/fingerprint state while preserving
-the local definition for reconnect. A TTL-bounded remote reconciliation runs only during existing
-hook/manual activity, not by polling, so an unchanged dashboard-disconnected source is retired too.
-Lifecycle mutations set a revocation marker and wait on the same exclusive sync lock before cleanup;
-an in-flight sync checks the marker before saving or starting another delivery. Uninstall attempts
-all known roots and retains failed-root metadata/runtime until a repeat succeeds. Reconnect performs
-its final config/token/hook replacement under that lifecycle lock; doctor performs mutable remote
-reconciliation under the sync lock. Authorization revocation removes hooks/token/automatic state,
-and HTTP 426 disables automatic attempts until a compatible reconnect or authenticated server
-response confirms the updated connector. Successful capture syncs retain only 35 days and atomically
-compact oversized source-specific files.
+no pending payload make no HTTP request. A direct manual sync waits at most 60 seconds for that lock
+and exits nonzero with an explicit busy message if it remains occupied. Network calls use at most
+three attempts with exponential backoff and jitter; one latest pending snapshot file per source
+survives a process or network failure. Pending delivery never implies another collector scan.
+Permanent payload errors move one safe payload per source to `pending/quarantine` without blocking
+future snapshots. `unsupported_source` or a disconnected status observed during installation
+inspection removes the mapping, owned hook, dirty/pending/quarantine/adapter/sequence/fingerprint
+state while preserving the local definition for reconnect. A TTL-bounded remote reconciliation runs
+only during existing hook/manual activity, not by polling, so an unchanged dashboard-disconnected
+source is retired too. Lifecycle mutations set a revocation marker and wait on the same exclusive
+sync lock before cleanup; an in-flight sync checks the marker before saving or starting another
+delivery. Uninstall attempts all known roots and retains failed-root metadata/runtime until a repeat
+succeeds. Reconnect performs its final config/token/hook replacement under that lifecycle lock;
+doctor performs mutable remote reconciliation under the sync lock. Authorization revocation removes
+hooks/token/automatic state, and HTTP 426 disables automatic attempts until a compatible reconnect
+or authenticated server response confirms the updated connector. Successful capture syncs retain
+only 35 days and atomically compact oversized source-specific files.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small

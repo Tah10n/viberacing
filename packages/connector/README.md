@@ -80,8 +80,9 @@ the single-flight lock, that automatic batch makes at most two bounded 60-second
 If both expire, it exits with the dirty generation intact for the next hook or manual sync. During
 already-triggered activity, a TTL-bounded installation check removes dashboard-disconnected mappings
 and hooks even when counters are unchanged. There is no resident daemon, polling loop, or file
-watcher. Manual sync and initial connect bypass the cooldown and collect all active sources;
-unchanged data sends no request.
+watcher. Manual sync and initial connect bypass the cooldown and collect all active sources; a
+direct manual sync waits up to 60 seconds for an existing sync and reports a busy error if the lock
+remains occupied. Unchanged data sends no request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
