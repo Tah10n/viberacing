@@ -129,6 +129,23 @@ test("reads Kimi wire usage with stable event deduplication", async () => {
       reasoningTokens: "0",
     },
   ]);
+
+  const nested = JSON.parse(lines[1]);
+  const direct = JSON.stringify({
+    ...nested.message,
+    timestamp: new Date(nested.timestamp * 1_000).toISOString(),
+  });
+  assert.deepEqual(parseKimiLines([direct]), [
+    {
+      date: "2026-08-10",
+      totalTokens: "20",
+      inputTokens: "10",
+      outputTokens: "5",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "2",
+      reasoningTokens: "0",
+    },
+  ]);
 });
 
 test("reads Qwen content-free stats using UTC timestamp instead of localDate", async () => {

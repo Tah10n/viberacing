@@ -7,7 +7,7 @@ export { parseKimiLines } from "./adapters/kimi.mjs";
 export { parseOpenCodeMessages } from "./adapters/opencode.mjs";
 export { parseQwenLines } from "./adapters/qwen.mjs";
 import { adapterFor } from "./registry.mjs";
-export { adapters, adapterFor, defaultSources } from "./registry.mjs";
+export { adapters, adapterFor, defaultSources, discoverSources } from "./registry.mjs";
 
 export function wrapperInvocation(agentId, passed) {
   const executable = agentId === "cursor" ? "cursor-agent" : "agy";

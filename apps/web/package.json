@@ -11,6 +11,8 @@
     "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
     "dev": "next dev --hostname localhost",
     "lint": "eslint .",
+    "prebuild": "node scripts/package-connector.mjs",
+    "predev": "node scripts/package-connector.mjs",
     "start": "next start --hostname 0.0.0.0",
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit"

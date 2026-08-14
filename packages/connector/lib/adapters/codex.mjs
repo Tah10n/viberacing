@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
+import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { executableOverride, resolveAgentExecutable } from "../executables.mjs";
 import { totalEntry } from "./shared.mjs";
 
 export function parseCodexUsage(payload) {
@@ -30,7 +32,12 @@ export function codexProfileEnvironment(source, environment = process.env) {
 }
 
 async function collect(source, _range, state = {}) {
-  const child = spawn("codex", ["app-server"], {
+  const executable = await resolveAgentExecutable("codex");
+  if (!executable)
+    throw new Error(
+      `Codex executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride("codex")} to its absolute path`,
+    );
+  const child = spawn(executable, ["app-server"], {
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,
     env: codexProfileEnvironment(source),
@@ -62,7 +69,7 @@ async function collect(source, _range, state = {}) {
         clientInfo: {
           name: "viberacing_connector",
           title: "Vibe Racing Connector",
-          version: "0.2.0",
+          version: "0.2.1",
         },
       },
     });
@@ -98,18 +105,19 @@ export const codexAdapter = Object.freeze({
       ? resolve(process.env.CODEX_HOME)
       : join(homedir(), ".codex");
     try {
-      await collect({ dataPath }, {}, {});
-      return [
-        {
-          dataPath,
-          collectionMethod: "codex_app_server",
-          supportedSurface: "desktop",
-          suggestedLabel: "Codex",
-        },
-      ];
+      await access(dataPath);
     } catch {
       return [];
     }
+    await collect({ dataPath }, {}, {});
+    return [
+      {
+        dataPath,
+        collectionMethod: "codex_app_server",
+        supportedSurface: "desktop",
+        suggestedLabel: "Codex",
+      },
+    ];
   },
   collect,
   diagnose: async (source) => {

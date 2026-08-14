@@ -208,7 +208,14 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       source("qwen_code"),
       source("kimi_code"),
     ]);
-    for (const name of ["browser.mjs", "config.mjs", "readers.mjs", "registry.mjs", "runtime.mjs"])
+    for (const name of [
+      "browser.mjs",
+      "config.mjs",
+      "executables.mjs",
+      "readers.mjs",
+      "registry.mjs",
+      "runtime.mjs",
+    ])
       await access(join(home, ".viberacing", "lib", name));
     await access(join(home, ".viberacing", "lib", "adapters", "codex.mjs"));
     const codex = JSON.parse(await readFile(join(home, ".codex", "hooks.json"), "utf8"));
@@ -3006,6 +3013,27 @@ test("disconnect removes local hooks, token, dirty state, and pending data when 
     /viberacing-hook-v2/,
   );
   assert.equal((await readLocalSources(directory)).length, 1);
+});
+
+test("disconnected commands are clear and disconnect remains idempotent", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-already-disconnected-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const environment = connectorEnvironment(home);
+
+  for (const command of ["sync", "accounts"]) {
+    const result = await execFileAsync(process.execPath, [connectorPath, command], {
+      env: environment,
+    }).catch((error) => error);
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /This computer is not connected/);
+    assert.doesNotMatch(result.stderr, /ENOENT|config\.json/);
+  }
+
+  const result = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: environment,
+  });
+  assert.match(result.stdout, /Installation disconnected locally/);
+  assert.equal(result.stderr, "");
 });
 
 test("uninstall removes v2 and source-owned hooks from remembered custom roots", async (context) => {
