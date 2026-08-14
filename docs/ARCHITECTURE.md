@@ -73,8 +73,11 @@ interval, and 120-second maximum delay. After taking the single-flight sync lock
 payloads, snapshots dirty generations, maps those client IDs to active sources, and runs only those
 collectors. It saves fingerprints/sequences only for processed sources and clears a dirty entry only
 when its generation still matches, so concurrent events survive for the next batch. Manual sync and
-first connect collect every active source and apply the same generation-safe clearing. There is no
-daemon, watcher, polling loop, or required cron.
+first connect collect every active source and apply the same generation-safe clearing. One dirty
+generation produces one automatic attempt: collector failures finish it, network failures retain the
+compact pending payload, and only a newer generation schedules another process. Scheduler and sync
+locks carry ownership tokens, so a stale owner cannot remove a replacement lock. There is no daemon,
+watcher, polling loop, or required cron.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with
@@ -84,9 +87,14 @@ failure. Pending delivery never implies another collector scan. Permanent payloa
 safe payload per source to `pending/quarantine` without blocking future snapshots.
 `unsupported_source` or a disconnected status observed during installation inspection removes the
 mapping, owned hook, dirty/pending/quarantine/adapter/sequence/fingerprint state while preserving
-the local definition for reconnect. Authorization revocation removes hooks/token/automatic state,
-and HTTP 426 disables automatic attempts until an update. Successful capture syncs retain only 35
-days and atomically compact oversized source-specific files.
+the local definition for reconnect. A TTL-bounded remote reconciliation runs only during existing
+hook/manual activity, not by polling, so an unchanged dashboard-disconnected source is retired too.
+Lifecycle mutations set a revocation marker and wait on the same exclusive sync lock before cleanup;
+an in-flight sync checks the marker before saving or starting another delivery. Uninstall attempts
+all known roots and retains failed-root metadata/runtime until a repeat succeeds. Authorization
+revocation removes hooks/token/automatic state, and HTTP 426 disables automatic attempts until an
+update. Successful capture syncs retain only 35 days and atomically compact oversized
+source-specific files.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small

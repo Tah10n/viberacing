@@ -28,13 +28,16 @@
 - Confirm a 20-event burst produces one deferred batch, automatic attempts respect the two-minute
   interval/maximum delay, a Claude event does not start Codex or open OpenCode SQLite, pending
   delivery does not rescan collectors, manual sync collects all sources immediately, and unchanged
-  data produces no request. No daemon, watcher, polling loop, system service, or required cron
-  should be installed.
+  data produces no request. Verify permanent collector/network failure ends after one generation,
+  retains safe pending/error state, and retries only after a new hook/manual sync. No daemon,
+  watcher, polling loop, system service, or required cron should be installed.
 - Verify two Codex profiles use distinct `CODEX_HOME` roots; Antigravity Personal and Work use
   distinct client-source capture files and require `--source`; removing or server-retiring one
   source removes only its hook; multi-account reassignment immediately rebuilds totals; missing
   sequence state resumes from the server value; and offline disconnect removes hooks and the device
-  token.
+  token. Race disconnect/remove/uninstall against an in-flight sync, verify dashboard disconnect is
+  reconciled during active use, and verify partial uninstall continues across later roots while
+  retaining failed-root metadata for retry.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Do not enable exact Cursor ranking until

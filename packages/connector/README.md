@@ -44,9 +44,12 @@ capture until its native output provides authoritative counters.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
-local source identities. `uninstall` also removes all local Vibe Racing state and installed code;
-provider data and foreign hooks are untouched. `reset-installation` is the explicit escape hatch for
-creating a new installation identity.
+local source identities. Lifecycle removal commands serialize with an active sync before revoking or
+deleting state. `uninstall` removes every cleanable owned hook even if another profile is damaged;
+on a partial failure it removes network credentials but retains source/root metadata and the small
+installed runtime so an ordinary repeated `uninstall` can finish safely. Provider data and foreign
+hooks are untouched. `reset-installation` is the explicit escape hatch for creating a new
+installation identity.
 
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per
@@ -67,8 +70,13 @@ one short-lived timer process, and return the provider's minimal response. Autom
 first drains pending payloads and then scans only active dirty sources; events for other sources do
 not start Codex, open OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds,
 limited to roughly one attempt per 120 seconds, and forced by 120 seconds of continuous activity.
-There is no resident daemon, polling loop, or file watcher. Manual sync and initial connect bypass
-the cooldown and collect all active sources; unchanged data sends no request.
+Each dirty generation receives at most one automatic attempt; collector errors complete that
+generation, while failed uploads remain compactly pending until another hook or manual sync. A
+generation created during the attempt schedules the next finite batch. During already-triggered
+activity, a TTL-bounded installation check removes dashboard-disconnected mappings and hooks even
+when counters are unchanged. There is no resident daemon, polling loop, or file watcher. Manual sync
+and initial connect bypass the cooldown and collect all active sources; unchanged data sends no
+request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
