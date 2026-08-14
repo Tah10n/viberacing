@@ -6,6 +6,7 @@ import { digest, normalizePairingCode } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { viewer } from "@/lib/session";
+import { rebuildAgentSummaries } from "@/lib/usage-summary";
 
 interface InstallationRow {
   id: string;
@@ -70,6 +71,7 @@ export async function POST(request: Request): Promise<Response> {
       if (sources.rows.length === 0) throw new ApprovalError("sources");
 
       const assignments = new Map<string, string>();
+      const summariesToRebuild = new Set<SupportedAgent>();
       for (const source of sources.rows) {
         const selection = form.get(`account_${source.id}`);
         if (selection === null && source.agent_account_id !== null) {
@@ -107,6 +109,17 @@ export async function POST(request: Request): Promise<Response> {
         assignments.set(source.id, selection);
       }
 
+      for (const source of sources.rows) {
+        const nextAccountId = assignments.get(source.id);
+        if (
+          source.agent_account_id !== null &&
+          nextAccountId !== undefined &&
+          source.agent_account_id !== nextAccountId
+        ) {
+          summariesToRebuild.add(source.agent_id);
+        }
+      }
+
       let name = installation.name;
       if (name === null) {
         const result = await client.query<{ position: number }>(
@@ -139,6 +152,9 @@ export async function POST(request: Request): Promise<Response> {
             WHERE id = $1`,
           [source.id, current.id, assignments.get(source.id)],
         );
+      }
+      for (const agentId of summariesToRebuild) {
+        await rebuildAgentSummaries(client, current.id, agentId);
       }
     });
   } catch (error) {

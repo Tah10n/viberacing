@@ -202,6 +202,10 @@ try {
     new Set(first.sources.map((item) => item.agentAccountId)).size === 4,
     "multiple accounts were not created",
   );
+  check(
+    first.sources.every((item) => item.lastAcceptedSyncSequence === "0"),
+    "pairing poll omitted the initial server sequence",
+  );
   console.log("ok - one pairing maps multiple agents and two Codex sources to separate accounts");
 
   const byClient = new Map(first.sources.map((item) => [item.clientSourceId, item]));
@@ -318,9 +322,23 @@ try {
   check(diagnosticRow.rows[0]?.last_error_summary === null, "successful sync did not clear error");
   console.log("ok - safe source diagnostics persist and clear after a successful snapshot");
   response = await usage(first.deviceToken, [snapshot(target, 2, [[today, 999]])]);
+  const staleBody = await response.json();
   check(
-    response.status === 200 && (await response.json()).staleSnapshots === 1,
+    response.status === 200 &&
+      staleBody.staleSnapshots === 1 &&
+      staleBody.sourceSequences[0]?.lastAcceptedSyncSequence === "2" &&
+      staleBody.sourceSequences[0]?.accepted === false,
     "same sequence was not idempotent",
+  );
+  const currentInstallation = await fetch(`${appUrl}/api/installations/current`, {
+    headers: { authorization: `Bearer ${first.deviceToken}` },
+  });
+  const currentInstallationBody = await currentInstallation.json();
+  check(
+    currentInstallation.status === 200 &&
+      currentInstallationBody.sources.find((item) => item.sourceId === target)
+        ?.lastAcceptedSyncSequence === "2",
+    "current installation response omitted the accepted server sequence",
   );
   response = await usage(first.deviceToken, [snapshot(target, 1, [[today, 999]])]);
   check(response.status === 200, "stale request failed unexpectedly");
@@ -459,11 +477,11 @@ try {
   console.log("ok - abandoned reconnect leaves the current token and sources usable");
 
   const oldDeviceToken = first.deviceToken;
-  const reconnect = await pair(
-    firstInstallation,
-    reconnectSources,
-    Object.fromEntries(first.sources.map((item) => [item.clientSourceId, item.agentAccountId])),
+  const reconnectAssignments = Object.fromEntries(
+    first.sources.map((item) => [item.clientSourceId, item.agentAccountId]),
   );
+  reconnectAssignments["codex-work"] = byClient.get("codex-personal-a").agentAccountId;
+  const reconnect = await pair(firstInstallation, reconnectSources, reconnectAssignments);
   check(reconnect.deviceToken !== oldDeviceToken, "device token did not rotate");
   const rejectedOldToken = await usage(oldDeviceToken, [snapshot(target, 6, [[today, 1]])]);
   check(rejectedOldToken.status === 401, "old device token remained usable");
@@ -479,7 +497,17 @@ try {
     installationCount.rows[0].count === 1 && history.rows[0].count === 1,
     "reconnect duplicated installation or lost history",
   );
-  console.log("ok - reconnect preserves identity/history and rotates device authorization");
+  let pairingSummary = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    [userId],
+  );
+  check(
+    pairingSummary.rows[0]?.tokens === "100",
+    "pairing reassignment did not immediately collapse account_max summaries",
+  );
+  console.log(
+    "ok - reconnect preserves identity/history, rotates authorization, and immediately rebuilds reassigned summaries",
+  );
 
   const concurrent = await Promise.all([
     beginPairing(firstInstallation, reconnectSources),
@@ -501,6 +529,14 @@ try {
     [firstInstallation.id],
   );
   check(countAfterConcurrent.rows[0].count === 1, "concurrent reconnect created a duplicate");
+  pairingSummary = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    [userId],
+  );
+  check(
+    pairingSummary.rows[0]?.tokens === "120",
+    "pairing reassignment did not immediately restore separate account totals",
+  );
   console.log("ok - concurrent reconnect remains one installation");
 
   const expiredInstallation = { id: randomUUID(), secret: token() };

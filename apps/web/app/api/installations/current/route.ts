@@ -25,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
               'agentId', s.agent_id,
               'status', s.status,
               'collectionMethod', s.collection_method,
+              'lastAcceptedSyncSequence', s.last_accepted_sync_sequence::text,
               'lastSuccessfulSyncAt', s.last_successful_sync_at,
               'completeness', s.last_completeness,
               'warning', s.last_warning_summary,

@@ -19,6 +19,7 @@ interface SourceRow {
   agent_id: string;
   account_label: string;
   collection_method: string;
+  last_accepted_sync_sequence: string;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -63,7 +64,8 @@ export async function POST(request: Request): Promise<Response> {
               a.id::text AS agent_account_id,
               s.agent_id,
               a.label AS account_label,
-              s.collection_method
+              s.collection_method,
+              s.last_accepted_sync_sequence::text
          FROM installation_sources s
          JOIN agent_accounts a ON a.id = s.agent_account_id
          JOIN installations i ON i.id = s.installation_id
@@ -85,6 +87,7 @@ export async function POST(request: Request): Promise<Response> {
           agentId: source.agent_id,
           accountLabel: source.account_label,
           collectionMethod: source.collection_method,
+          lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
         })),
         protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
       },
