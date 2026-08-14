@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
@@ -32,6 +32,8 @@ import {
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
+  configuredAutomaticSyncTimings,
+  appendCapture,
   claimScheduler,
   compactCapture,
   clearAutomaticState,
@@ -59,6 +61,7 @@ const protocolVersion = 2;
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
+const automaticTimings = configuredAutomaticSyncTimings();
 const option = (name, fallback) => {
   const index = arguments_.indexOf(name);
   return index >= 0 && arguments_[index + 1] ? arguments_[index + 1] : fallback;
@@ -611,13 +614,17 @@ async function automaticSync() {
       const dirty = await readDirty();
       if (!dirty) return;
       let state = await readState();
-      const dueAt = automaticDueAt(dirty, state.lastAutomaticSyncAt ?? 0);
+      const dueAt = automaticDueAt(dirty, state.lastAutomaticSyncAt ?? 0, automaticTimings);
       const waitMs = Math.max(0, dueAt - Date.now());
       if (waitMs > 0) await delay(waitMs);
       const current = await readDirty();
       if (!current) return;
       state = await readState();
-      const currentDueAt = automaticDueAt(current, state.lastAutomaticSyncAt ?? 0);
+      const currentDueAt = automaticDueAt(
+        current,
+        state.lastAutomaticSyncAt ?? 0,
+        automaticTimings,
+      );
       if (currentDueAt > Date.now()) continue;
       try {
         await readConfig();
@@ -677,6 +684,20 @@ async function doctor() {
           `${source.agentId}/${source.collectionMethod}: ${source.status}, ${source.completeness ?? "not synced"}${source.warning ? `, warning: ${source.warning}` : ""}${source.error ? `, error: ${source.error}` : ""}`,
         );
     } catch (error) {
+      if (error?.status === 401 || error?.status === 403) {
+        const cleanupWarnings = await disableLocalConnection();
+        output("Pairing status: disconnected. Installation authorization was revoked.");
+        output("Run `viberacing connect` to reconnect this installation.");
+        if (cleanupWarnings)
+          output("One or more auxiliary hook cleanup steps need manual inspection.");
+        return;
+      }
+      if (error?.status === 426) {
+        state.automaticDisabledReason = "unsupported_connector";
+        await writeState(state);
+        output("Pairing status: connector update required; automatic sync is disabled.");
+        return;
+      }
       output(`Pairing status: error (${error.message})`);
     }
     for (const source of config.sources) {
@@ -814,13 +835,7 @@ async function wrap(agentId) {
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
   if (safe.length) {
-    const directory = join(stateDirectory, "captures");
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    await appendFile(
-      join(directory, `${agentId}.jsonl`),
-      `${safe.map(JSON.stringify).join("\n")}\n`,
-      { mode: 0o600 },
-    );
+    await appendCapture(agentId, safe);
     await markDirty();
     await launchAutomaticScheduler();
   }

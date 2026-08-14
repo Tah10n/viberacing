@@ -1,5 +1,5 @@
 export { parseAntigravityLines } from "./adapters/antigravity.mjs";
-export { parseClaudeLines } from "./adapters/claude.mjs";
+export { collectClaude, parseClaudeLines } from "./adapters/claude.mjs";
 export { codexProfileEnvironment, parseCodexUsage } from "./adapters/codex.mjs";
 export { parseCursorLines } from "./adapters/cursor.mjs";
 export { parseGeminiRecords } from "./adapters/gemini.mjs";

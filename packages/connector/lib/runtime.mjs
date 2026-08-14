@@ -1,6 +1,18 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { createReadStream } from "node:fs";
+import {
+  appendFile,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { stateDirectory } from "./config.mjs";
 
 const statePath = join(stateDirectory, "state.json");
@@ -14,10 +26,31 @@ export const automaticSyncTimings = Object.freeze({
   minimumIntervalMs: 120_000,
   maximumDelayMs: 120_000,
 });
+
+export function configuredAutomaticSyncTimings(environment = process.env) {
+  if (
+    environment.NODE_ENV !== "test" ||
+    environment.VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS === undefined
+  )
+    return automaticSyncTimings;
+  const values = environment.VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS.split(",").map(Number);
+  if (
+    values.length !== 3 ||
+    values.some((value) => !Number.isSafeInteger(value) || value < 1 || value > 60_000)
+  ) {
+    throw new Error("Invalid test automatic sync timings");
+  }
+  return Object.freeze({
+    debounceMs: values[0],
+    minimumIntervalMs: values[1],
+    maximumDelayMs: values[2],
+  });
+}
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 const decimalPattern = /^(?:0|[1-9]\d*)$/;
+const maximumCaptureLineBytes = 1_000_000;
 const captureTokenKeys = [
   "totalTokens",
   "inputTokens",
@@ -147,28 +180,128 @@ function safeCaptureLine(line, oldestDate) {
   return JSON.stringify({ id: record.id, date: record.date, usage });
 }
 
-export async function compactCapture(path, now = new Date(), maximumBytes = 1_000_000) {
-  let info;
-  try {
-    info = await stat(path);
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
+async function withCaptureLock(path, callback) {
+  const captureLockPath = `${path}.lock`;
+  const ownershipToken = randomUUID();
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  const deadline = Date.now() + 5_000;
+  let handle;
+  for (;;) {
+    try {
+      handle = await open(captureLockPath, "wx", 0o600);
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const info = await stat(captureLockPath).catch(() => null);
+      if (info && Date.now() - info.mtimeMs > 10 * 60_000) {
+        await unlink(captureLockPath).catch(() => {});
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error("Timed out waiting for capture file lock");
+      await delay(25);
+    }
   }
-  const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  oldest.setUTCDate(oldest.getUTCDate() - 35);
-  const oldestDate = oldest.toISOString().slice(0, 10);
-  const contents = await readFile(path, "utf8");
-  const retained = contents
-    .split(/\r?\n/)
-    .map((line) => safeCaptureLine(line, oldestDate))
-    .filter(Boolean);
-  const compacted = `${retained.join("\n")}${retained.length ? "\n" : ""}`;
-  if (info.size <= maximumBytes && compacted === contents) return false;
-  const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, compacted, { mode: 0o600 });
-  await rename(temporary, path);
-  return true;
+  try {
+    await handle.writeFile(`${process.pid}:${ownershipToken}\n`);
+    return await callback();
+  } finally {
+    await handle.close();
+    const currentOwner = await readFile(captureLockPath, "utf8").catch(() => null);
+    if (currentOwner === `${process.pid}:${ownershipToken}\n`)
+      await unlink(captureLockPath).catch(() => {});
+  }
+}
+
+export async function appendCapture(agentId, records) {
+  if (!new Set(["cursor", "antigravity"]).has(agentId) || !Array.isArray(records)) {
+    throw new Error("Invalid capture append request");
+  }
+  const lines = records.map((record) => safeCaptureLine(JSON.stringify(record), "0000-00-00"));
+  if (lines.some((line) => line === null)) throw new Error("Invalid capture usage record");
+  if (lines.length === 0) return null;
+  const path = join(stateDirectory, "captures", `${agentId}.jsonl`);
+  await withCaptureLock(path, () => appendFile(path, `${lines.join("\n")}\n`, { mode: 0o600 }));
+  return path;
+}
+
+export async function compactCapture(path, now = new Date(), maximumBytes = 1_000_000) {
+  return withCaptureLock(path, async () => {
+    let info;
+    try {
+      info = await stat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") return false;
+      throw error;
+    }
+    const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    oldest.setUTCDate(oldest.getUTCDate() - 35);
+    const oldestDate = oldest.toISOString().slice(0, 10);
+    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    if (info.size <= Math.min(maximumBytes, 1_000_000)) {
+      const contents = await readFile(path, "utf8");
+      const retained = contents
+        .split(/\r?\n/)
+        .map((line) => safeCaptureLine(line, oldestDate))
+        .filter(Boolean);
+      const compacted = `${retained.join("\n")}${retained.length ? "\n" : ""}`;
+      if (compacted === contents) return false;
+      await writeFile(temporary, compacted, { mode: 0o600 });
+      await rename(temporary, path);
+      return true;
+    }
+    const output = await open(temporary, "w", 0o600);
+    let pending = Buffer.alloc(0);
+    let discardingLongLine = false;
+    let changed = info.size > maximumBytes;
+    const retain = async (line, terminated = true) => {
+      const raw = line.toString("utf8");
+      const normalized = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      const safe = safeCaptureLine(normalized, oldestDate);
+      if (safe === null) {
+        changed = true;
+        return;
+      }
+      if (safe !== normalized || raw !== normalized || !terminated) changed = true;
+      await output.write(`${safe}\n`);
+    };
+    try {
+      for await (const chunk of createReadStream(path)) {
+        let start = 0;
+        while (start < chunk.length) {
+          const newline = chunk.indexOf(10, start);
+          const end = newline < 0 ? chunk.length : newline;
+          const part = chunk.subarray(start, end);
+          if (!discardingLongLine) {
+            if (pending.length + part.length > maximumCaptureLineBytes) {
+              pending = Buffer.alloc(0);
+              discardingLongLine = true;
+              changed = true;
+            } else if (part.length > 0) {
+              pending = pending.length === 0 ? Buffer.from(part) : Buffer.concat([pending, part]);
+            }
+          }
+          if (newline < 0) break;
+          if (!discardingLongLine) await retain(pending);
+          pending = Buffer.alloc(0);
+          discardingLongLine = false;
+          start = newline + 1;
+        }
+      }
+      if (discardingLongLine) changed = true;
+      else if (pending.length > 0) await retain(pending, false);
+      await output.close();
+      if (!changed) {
+        await unlink(temporary);
+        return false;
+      }
+      await rename(temporary, path);
+      return true;
+    } catch (error) {
+      await output.close().catch(() => {});
+      await unlink(temporary).catch(() => {});
+      throw error;
+    }
+  });
 }
 
 export async function quarantinePending(sourceId, payload, errorCode) {

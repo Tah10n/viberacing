@@ -47,11 +47,22 @@ export function parseClaudeLines(lines) {
   return mergeEntries([...messages.values()]);
 }
 
-async function collect(source, range, state = {}) {
+export async function collectClaude(
+  source,
+  range,
+  state = {},
+  { maximumBytes = 100_000_000 } = {},
+) {
   const discovered = await walk(source.dataPath, [".jsonl"], 10_000);
   const nextState = { files: { ...(state.files ?? {}) }, messages: { ...(state.messages ?? {}) } };
   let partial = discovered.incomplete;
+  let bytes = 0;
   for (const file of discovered.files) {
+    if (bytes + file.size > maximumBytes) {
+      partial = true;
+      continue;
+    }
+    bytes += file.size;
     const previous = nextState.files[file.path];
     if (
       previous &&
@@ -145,6 +156,6 @@ export const claudeAdapter = Object.freeze({
           },
         ]
       : [],
-  collect,
+  collect: collectClaude,
   diagnose: (source) => diagnosePath(source),
 });
