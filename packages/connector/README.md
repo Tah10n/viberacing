@@ -72,11 +72,12 @@ not start Codex, open OpenCode SQLite, or read unrelated histories. It is deboun
 limited to roughly one attempt per 120 seconds, and forced by 120 seconds of continuous activity.
 Each dirty generation receives at most one automatic attempt; collector errors complete that
 generation, while failed uploads remain compactly pending until another hook or manual sync. A
-generation created during the attempt schedules the next finite batch. During already-triggered
-activity, a TTL-bounded installation check removes dashboard-disconnected mappings and hooks even
-when counters are unchanged. There is no resident daemon, polling loop, or file watcher. Manual sync
-and initial connect bypass the cooldown and collect all active sources; unchanged data sends no
-request.
+generation created during the attempt schedules the next finite batch; if a manual sync still owns
+the single-flight lock, that automatic batch waits for it for at most 60 seconds rather than losing
+the event. During already-triggered activity, a TTL-bounded installation check removes
+dashboard-disconnected mappings and hooks even when counters are unchanged. There is no resident
+daemon, polling loop, or file watcher. Manual sync and initial connect bypass the cooldown and
+collect all active sources; unchanged data sends no request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
