@@ -529,9 +529,18 @@ export async function reconcileHooks(sourceUrl, activeSources, knownLocalSources
 
 export async function removeHooks() {
   let sources = [];
+  const failures = [];
+  const cleaned = [];
   try {
     sources = await readSources();
-  } catch {}
+  } catch (error) {
+    failures.push({
+      agentId: null,
+      clientSourceId: null,
+      path: sourcesPath,
+      message: error instanceof Error ? error.message : "Unable to read local sources",
+    });
+  }
   const candidates = [
     ...sources,
     { agentId: "codex" },
@@ -546,26 +555,41 @@ export async function removeHooks() {
     const key = `${source.agentId}\0${root}`;
     if (visited.has(key)) continue;
     visited.add(key);
-    if (source.clientSourceId)
-      await removeHookForSource(source, { removeLegacy: true, removeAll: true });
-    else if (source.agentId === "codex")
-      await updateHook(join(root, "hooks.json"), "SessionEnd", null, {
-        remove: true,
-        removeAll: true,
+    try {
+      if (source.clientSourceId)
+        await removeHookForSource(source, { removeLegacy: true, removeAll: true });
+      else if (source.agentId === "codex")
+        await updateHook(join(root, "hooks.json"), "SessionEnd", null, {
+          remove: true,
+          removeAll: true,
+        });
+      else if (source.agentId === "claude_code")
+        await updateHook(join(root, "settings.json"), "Stop", null, {
+          remove: true,
+          removeAll: true,
+        });
+      else if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
+        await updateHook(join(root, "settings.json"), "SessionEnd", null, {
+          remove: true,
+          removeAll: true,
+        });
+      else if (source.agentId === "kimi_code")
+        await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });
+      cleaned.push({
+        agentId: source.agentId,
+        clientSourceId: source.clientSourceId ?? null,
+        path: root,
       });
-    else if (source.agentId === "claude_code")
-      await updateHook(join(root, "settings.json"), "Stop", null, {
-        remove: true,
-        removeAll: true,
+    } catch (error) {
+      failures.push({
+        agentId: source.agentId,
+        clientSourceId: source.clientSourceId ?? null,
+        path: root,
+        message: error instanceof Error ? error.message : "Hook cleanup failed",
       });
-    else if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
-      await updateHook(join(root, "settings.json"), "SessionEnd", null, {
-        remove: true,
-        removeAll: true,
-      });
-    else if (source.agentId === "kimi_code")
-      await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });
+    }
   }
+  return { cleaned, failures };
 }
 
 export async function removeConfig() {

@@ -9,6 +9,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   stat,
   utimes,
   writeFile,
@@ -561,16 +562,22 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
       }),
       runtime.automaticSyncTimings,
     );
-    assert.equal(await runtime.claimScheduler(), true);
+    const firstScheduler = await runtime.claimScheduler();
+    assert.equal(typeof firstScheduler.ownershipToken, "string");
     assert.equal(await runtime.claimScheduler(), false);
-    await runtime.releaseScheduler();
+    assert.equal(await runtime.ownsScheduler(firstScheduler.ownershipToken), true);
+    assert.equal(await runtime.releaseScheduler(firstScheduler.ownershipToken), true);
     const { stateDirectory } = await import("../lib/config.mjs");
     const staleLock = join(stateDirectory, "scheduler.lock");
-    await writeFile(staleLock, "stale\n");
+    const staleOwner = "stale-owner";
+    await writeFile(staleLock, `1:${staleOwner}\n`);
     const staleTime = new Date(Date.now() - 11 * 60_000);
     await utimes(staleLock, staleTime, staleTime);
-    assert.equal(await runtime.claimScheduler(), true);
-    await runtime.releaseScheduler();
+    const replacementScheduler = await runtime.claimScheduler();
+    assert.equal(typeof replacementScheduler.ownershipToken, "string");
+    assert.equal(await runtime.releaseScheduler(staleOwner), false);
+    assert.equal(await runtime.ownsScheduler(replacementScheduler.ownershipToken), true);
+    await runtime.releaseScheduler(replacementScheduler.ownershipToken);
   } finally {
     restoreEnvironment();
   }
@@ -770,6 +777,143 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
       return true;
     }
   });
+});
+
+test("a failed collector gets one automatic attempt per hook generation", async (context) => {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    if (request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ status: "active", sources: [] }));
+      return;
+    }
+    request.resume();
+    request.on("end", () => {
+      requests += 1;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ acceptedEntries: 0, sourceSequences: [] }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-finite-collector-failure-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const source = {
+    clientSourceId: "41414141-4141-4141-8141-414141414141",
+    sourceId: "42424242-4242-4242-8242-424242424242",
+    agentId: "claude_code",
+    dataPath: join(home, "claude"),
+    collectionMethod: "synthetic_invalid_collector",
+    supportedSurface: "cli",
+    suggestedLabel: "Broken collector",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    source,
+  ]);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+  });
+  const hookArguments = ["hook", "--source", source.clientSourceId, "--agent", source.agentId];
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(async () => {
+    try {
+      await access(join(directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return requests === 1;
+    }
+  });
+  assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"), [source.clientSourceId]);
+  await assert.rejects(access(join(directory, "dirty.json")));
+  assert.equal(
+    JSON.parse(await readFile(join(directory, "state.json"), "utf8")).fingerprints[source.sourceId]
+      .length,
+    64,
+  );
+
+  await delay(300);
+  assert.equal(requests, 1);
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 1);
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(async () => (await readFile(trace, "utf8")).trim().split("\n").length === 2);
+  await waitFor(async () => {
+    try {
+      await access(join(directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal(requests, 1);
+});
+
+test("a permanent upload failure leaves one pending payload without background retries", async (context) => {
+  let requests = 0;
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      requests += 1;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "synthetic_unavailable" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-finite-upload-failure-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => requests === 3, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(join(installation.directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 1);
+  assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
+
+  await delay(300);
+  assert.equal(requests, 3);
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => requests === 6, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(join(installation.directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 1);
+  assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
 });
 
 test("a Claude hook collects only its dirty source and unchanged data sends no HTTP", async (context) => {
@@ -1658,6 +1802,235 @@ test("doctor removes a hook after dashboard-side source disconnect", async (cont
   assert.doesNotMatch(await readFile(join(root, "settings.json"), "utf8"), /viberacing-hook/);
 });
 
+test("automatic sync reconciles a dashboard disconnect before unchanged collection", async (context) => {
+  let currentRequests = 0;
+  let usageRequests = 0;
+  const sourceId = "a1a1a1a1-a1a1-41a1-81a1-a1a1a1a1a1a1";
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      if (request.method === "GET" && request.url === "/api/installations/current") {
+        currentRequests += 1;
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            status: "active",
+            sources: [{ sourceId, status: "disconnected", lastAcceptedSyncSequence: "0" }],
+          }),
+        );
+        return;
+      }
+      usageRequests += 1;
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unexpected_usage" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-auto-dashboard-disconnect-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const clientSourceId = "a2a2a2a2-a2a2-42a2-82a2-a2a2a2a2a2a2";
+  const root = join(home, "claude-dashboard");
+  const source = {
+    clientSourceId,
+    sourceId,
+    agentId: "claude_code",
+    dataPath: root,
+    collectionMethod: "claude_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Dashboard",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    source,
+  ]);
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [sourceId]: "0" },
+      adapters: { [sourceId]: { offset: 12 } },
+      fingerprints: { [sourceId]: "synthetic-fingerprint" },
+      lastRemoteReconciliationAt: 0,
+    })}\n`,
+  );
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    join(root, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+    VIBERACING_TEST_REMOTE_RECONCILIATION_INTERVAL_MS: "1",
+  });
+
+  await runWithInput(
+    ["hook", "--source", clientSourceId, "--agent", "claude_code"],
+    environment,
+    "{}",
+  );
+  await waitFor(async () => {
+    const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+    return currentRequests === 1 && config.sources.length === 0;
+  });
+  await waitFor(async () => {
+    try {
+      await access(join(directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  assert.equal(usageRequests, 0);
+  await assert.rejects(access(trace));
+  assert.doesNotMatch(await readFile(join(root, "settings.json"), "utf8"), /viberacing-hook/);
+  const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.equal(state.sequences?.[sourceId], undefined);
+  assert.equal(state.adapters?.[sourceId], undefined);
+  assert.equal(state.fingerprints?.[sourceId], undefined);
+  assert.equal((await readLocalSources(directory))[0].clientSourceId, clientSourceId);
+
+  await runWithInput(
+    ["hook", "--source", clientSourceId, "--agent", "claude_code"],
+    environment,
+    "{}",
+  );
+  await delay(150);
+  assert.equal(currentRequests, 1);
+  assert.equal(usageRequests, 0);
+  await assert.rejects(access(trace));
+});
+
+test("remote reconciliation cannot restore retired runtime state from a stale snapshot", async (context) => {
+  const retiredSourceId = "b1b1b1b1-b1b1-41b1-81b1-b1b1b1b1b1b1";
+  const activeSourceId = "b2b2b2b2-b2b2-42b2-82b2-b2b2b2b2b2b2";
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        status: "active",
+        sources: [
+          {
+            sourceId: retiredSourceId,
+            agentId: "qwen_code",
+            collectionMethod: "qwen_stats_jsonl",
+            status: "disconnected",
+            lastAcceptedSyncSequence: "4",
+          },
+          {
+            sourceId: activeSourceId,
+            agentId: "antigravity",
+            collectionMethod: "antigravity_cli_capture",
+            status: "active",
+            lastAcceptedSyncSequence: "7",
+          },
+        ],
+      }),
+    );
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-reconcile-fresh-state-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const qwenRoot = join(home, "qwen-retired");
+  const capture = join(home, "active-capture.jsonl");
+  const date = new Date().toISOString().slice(0, 10);
+  await writeFile(
+    capture,
+    `${JSON.stringify({
+      id: "active-event",
+      date,
+      usage: { date, totalTokens: "7", inputTokens: "3", outputTokens: "4" },
+    })}\n`,
+  );
+  const retired = {
+    clientSourceId: "b3b3b3b3-b3b3-43b3-83b3-b3b3b3b3b3b3",
+    sourceId: retiredSourceId,
+    agentId: "qwen_code",
+    dataPath: qwenRoot,
+    collectionMethod: "qwen_stats_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Retired",
+  };
+  const active = {
+    clientSourceId: "b4b4b4b4-b4b4-44b4-84b4-b4b4b4b4b4b4",
+    sourceId: activeSourceId,
+    agentId: "antigravity",
+    dataPath: capture,
+    collectionMethod: "antigravity_cli_capture",
+    supportedSurface: "cli",
+    suggestedLabel: "Active",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    retired,
+    active,
+  ]);
+  await mkdir(qwenRoot, { recursive: true });
+  await writeFile(
+    join(qwenRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${retired.clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [retiredSourceId]: "4", [activeSourceId]: "0" },
+      adapters: { [retiredSourceId]: { offset: 99 } },
+      fingerprints: { [retiredSourceId]: "retired-fingerprint" },
+      quarantine: { [retiredSourceId]: "invalid_payload" },
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home),
+  });
+  const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.equal(state.sequences[activeSourceId], "7");
+  assert.equal(state.sequences[retiredSourceId], undefined);
+  assert.equal(state.adapters?.[retiredSourceId], undefined);
+  assert.equal(state.fingerprints?.[retiredSourceId], undefined);
+  assert.equal(state.quarantine?.[retiredSourceId], undefined);
+  assert.doesNotMatch(await readFile(join(qwenRoot, "settings.json"), "utf8"), /viberacing/);
+});
+
 test("recovers a missing local sequence from 500 and sends snapshot 501", async (context) => {
   let uploaded;
   let uploadCount = 0;
@@ -2054,6 +2427,88 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
   assert.equal(bodies[1].sourceErrors.length, 32);
 });
 
+test("disconnect serializes with an in-flight sync and prevents state resurrection", async (context) => {
+  const methods = [];
+  let releaseUpload;
+  let uploadStarted;
+  const firstUpload = new Promise((resolve) => {
+    uploadStarted = resolve;
+  });
+  const uploadCanFinish = new Promise((resolve) => {
+    releaseUpload = resolve;
+  });
+  context.after(() => releaseUpload());
+  const server = createServer((request, response) => {
+    methods.push(request.method);
+    request.resume();
+    request.on("end", () => {
+      if (request.method === "DELETE") {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      uploadStarted();
+      uploadCanFinish.then(() => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            acceptedEntries: 1,
+            sourceSequences: [
+              {
+                sourceId: installation.sourceId,
+                lastAcceptedSyncSequence: "1",
+                accepted: true,
+              },
+            ],
+          }),
+        );
+      });
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-disconnect-sync-race-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const environment = connectorEnvironment(home);
+  const syncPromise = execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: environment,
+  });
+  await firstUpload;
+  const disconnectPromise = execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: environment,
+  });
+  assert.equal(
+    await Promise.race([
+      disconnectPromise.then(() => "finished"),
+      delay(100).then(() => "waiting"),
+    ]),
+    "waiting",
+  );
+
+  releaseUpload();
+  const syncResult = await syncPromise.catch((error) => error);
+  assert.equal(syncResult.code, 1);
+  assert.match(syncResult.stderr, /stopped by a local lifecycle operation/i);
+  await disconnectPromise;
+  assert.deepEqual(methods, ["POST", "DELETE"]);
+  await assert.rejects(access(join(installation.directory, "config.json")));
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
+  assert.deepEqual(
+    await readdir(join(installation.directory, "pending")).catch((error) =>
+      error?.code === "ENOENT" ? [] : Promise.reject(error),
+    ),
+    [],
+  );
+  await delay(150);
+  assert.deepEqual(methods, ["POST", "DELETE"]);
+});
+
 test("disconnect removes local hooks, token, dirty state, and pending data when offline", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-offline-disconnect-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
@@ -2186,6 +2641,91 @@ test("uninstall removes v2 and source-owned hooks from remembered custom roots",
   const settings = await readFile(join(root, "settings.json"), "utf8");
   assert.match(settings, /keep-foreign/);
   assert.doesNotMatch(settings, /viberacing-hook-v[23]/);
+});
+
+test("uninstall cleans later roots and retains failed-root metadata for an idempotent retry", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-partial-hooks-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  const brokenRoot = join(home, "broken-qwen");
+  const geminiRoot = join(home, "gemini-work");
+  const claudeRoot = join(home, "claude-personal");
+  const sources = [
+    {
+      clientSourceId: "91919191-9191-4191-8191-919191919191",
+      sourceId: "92929292-9292-4292-8292-929292929292",
+      agentId: "qwen_code",
+      dataPath: brokenRoot,
+      collectionMethod: "qwen_stats_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Broken first",
+    },
+    {
+      clientSourceId: "93939393-9393-4393-8393-939393939393",
+      sourceId: "94949494-9494-4494-8494-949494949494",
+      agentId: "gemini_cli",
+      dataPath: geminiRoot,
+      collectionMethod: "gemini_session_json",
+      supportedSurface: "cli",
+      suggestedLabel: "Gemini after",
+    },
+    {
+      clientSourceId: "95959595-9595-4595-8595-959595959595",
+      sourceId: "96969696-9696-4696-8696-969696969696",
+      agentId: "claude_code",
+      dataPath: claudeRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Claude after",
+    },
+  ];
+  await writeMappedInstallation(home, "http://127.0.0.1:1", sources);
+  await mkdir(join(directory, "bin"), { recursive: true });
+  await writeFile(join(directory, "bin", "viberacing.mjs"), "// retained cleanup runtime\n");
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({ version: 1, installationId: "synthetic-secret" })}\n`,
+  );
+  for (const root of [brokenRoot, geminiRoot, claudeRoot]) await mkdir(root, { recursive: true });
+  await writeFile(join(brokenRoot, "settings.json"), "{ invalid json");
+  const ownedSettings = (source, event) =>
+    JSON.stringify({
+      hooks: {
+        [event]: [
+          { hooks: [{ type: "command", command: "keep-foreign" }] },
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${source.clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    });
+  await writeFile(join(geminiRoot, "settings.json"), ownedSettings(sources[1], "SessionEnd"));
+  await writeFile(join(claudeRoot, "settings.json"), ownedSettings(sources[2], "Stop"));
+  const environment = connectorEnvironment(home);
+
+  const first = await runWithInput(["uninstall"], environment, "");
+  assert.equal(first.code, 1);
+  assert.match(first.stderr, /1 owned hook root/i);
+  assert.match(first.stderr, /broken-qwen/);
+  assert.doesNotMatch(await readFile(join(geminiRoot, "settings.json"), "utf8"), /viberacing/);
+  assert.doesNotMatch(await readFile(join(claudeRoot, "settings.json"), "utf8"), /viberacing/);
+  assert.match(await readFile(join(geminiRoot, "settings.json"), "utf8"), /keep-foreign/);
+  assert.match(await readFile(join(claudeRoot, "settings.json"), "utf8"), /keep-foreign/);
+  assert.equal((await readLocalSources(directory)).length, 3);
+  await access(join(directory, "bin", "viberacing.mjs"));
+  await assert.rejects(access(join(directory, "config.json")));
+  await assert.rejects(access(join(directory, "installation.json")));
+
+  await writeFile(join(brokenRoot, "settings.json"), ownedSettings(sources[0], "SessionEnd"));
+  const second = await runWithInput(["uninstall"], environment, "");
+  assert.equal(second.code, 0);
+  await assert.rejects(access(directory));
+  assert.doesNotMatch(await readFile(join(brokenRoot, "settings.json"), "utf8"), /viberacing/);
 });
 
 test(
