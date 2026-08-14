@@ -27,7 +27,7 @@ export const connectorProtocolVersion = 2;
 export const expectedSchemaVersion = "001_initial.sql";
 
 export function maximumDailyTokens(): bigint {
-  const value = process.env.VIBERACING_MAX_DAILY_TOKENS?.trim() || "9999999999999999";
+  const value = process.env.VIBERACING_MAX_DAILY_TOKENS ?? "9999999999999999";
   if (!/^[1-9]\d{0,29}$/.test(value)) {
     throw new Error("VIBERACING_MAX_DAILY_TOKENS must be a positive canonical decimal string");
   }
