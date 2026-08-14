@@ -737,6 +737,10 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   );
   assert.ok(hookResults.every((result) => result.code === 0 && result.stdout === ""));
   await firstRequest;
+  const firstAutomaticSyncAt = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  ).lastAutomaticSyncAt;
+  assert.equal(typeof firstAutomaticSyncAt, "number");
 
   const appendScript = `
     import { appendCapture } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url))).href)};
@@ -768,7 +772,7 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   assert.equal(bodies[0].snapshots.length, 1);
   assert.equal(bodies[1].snapshots.length, 1);
   assert.equal(bodies[1].snapshots[0].entries[0].totalTokens, "8");
-  assert.ok(requestTimes[1] - requestTimes[0] >= 300);
+  assert.ok(requestTimes[1] >= firstAutomaticSyncAt + 400);
   await waitFor(async () => {
     try {
       await access(join(installation.directory, "scheduler.lock"));
