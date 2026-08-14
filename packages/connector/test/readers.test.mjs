@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,7 @@ import {
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
+  codexProfileEnvironment,
   parseCursorLines,
   parseGeminiRecords,
   parseKimiLines,
@@ -17,6 +18,7 @@ import {
   adapterFor,
   recentEntries,
   safeCaptureRecord,
+  wrapperInvocation,
 } from "../lib/readers.mjs";
 
 async function fixture(name) {
@@ -27,6 +29,16 @@ test("projects authoritative Codex UTC buckets", async () => {
   assert.deepEqual(parseCodexUsage(JSON.parse(await fixture("codex.json"))), [
     { date: "2026-08-10", totalTokens: "9007199254740993" },
   ]);
+});
+
+test("isolates each Codex App Server with its source-specific CODEX_HOME", () => {
+  const work = join(tmpdir(), "synthetic-codex-work");
+  const personal = join(tmpdir(), "synthetic-codex-personal");
+  const first = codexProfileEnvironment({ dataPath: work }, { PATH: "bin" });
+  const second = codexProfileEnvironment({ dataPath: personal }, { PATH: "bin" });
+  assert.equal(first.CODEX_HOME, work);
+  assert.equal(second.CODEX_HOME, personal);
+  assert.notEqual(first.CODEX_HOME, second.CODEX_HOME);
 });
 
 test("deduplicates Claude messages without reading content", async () => {
@@ -61,7 +73,7 @@ test("reads OpenCode assistant usage and avoids cache double-counting", async ()
 
 test("reads Kimi wire usage with stable event deduplication", async () => {
   const lines = (await fixture("kimi.jsonl")).trim().split("\n");
-  assert.deepEqual(parseKimiLines([...lines, lines[0]]), [
+  assert.deepEqual(parseKimiLines([...lines, lines[1]]), [
     {
       date: "2026-08-10",
       totalTokens: "20",
@@ -69,6 +81,15 @@ test("reads Kimi wire usage with stable event deduplication", async () => {
       outputTokens: "5",
       cacheReadTokens: "3",
       cacheWriteTokens: "2",
+      reasoningTokens: "0",
+    },
+    {
+      date: "2026-08-11",
+      totalTokens: "10",
+      inputTokens: "4",
+      outputTokens: "3",
+      cacheReadTokens: "2",
+      cacheWriteTokens: "1",
       reasoningTokens: "0",
     },
   ]);
@@ -89,19 +110,10 @@ test("reads Qwen content-free stats using UTC timestamp instead of localDate", a
   ]);
 });
 
-test("reads Cursor CLI terminal-result usage", async () => {
+test("does not count current Cursor terminal results without authoritative counters", async () => {
   const lines = (await fixture("cursor.jsonl")).trim().split("\n");
-  assert.deepEqual(parseCursorLines(lines), [
-    {
-      date: "2026-08-10",
-      totalTokens: "20",
-      inputTokens: "10",
-      outputTokens: "5",
-      cacheReadTokens: "3",
-      cacheWriteTokens: "2",
-      reasoningTokens: "0",
-    },
-  ]);
+  assert.deepEqual(parseCursorLines(lines), []);
+  assert.equal(safeCaptureRecord("cursor", lines.at(-1)), null);
 });
 
 test("reads Antigravity CLI snake-case usage", async () => {
@@ -194,7 +206,6 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
   const claude = JSON.parse((await fixture("claude.jsonl")).trim());
   const openCode = JSON.parse(await fixture("opencode.json"))[0];
   const qwen = JSON.parse((await fixture("qwen.jsonl")).trim());
-  const cursor = JSON.parse((await fixture("cursor.jsonl")).trim().split("\n").at(-1));
   const antigravity = JSON.parse((await fixture("antigravity.jsonl")).trim());
   const gemini = JSON.parse(await fixture("gemini.json"))[0];
   const cases = [
@@ -235,14 +246,6 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
       ],
     ],
     [
-      parseCursorLines,
-      [
-        JSON.stringify(cursor),
-        JSON.stringify(cursor),
-        JSON.stringify({ ...cursor, id: "session-2", timestamp: "2026-08-11T00:00:00Z" }),
-      ],
-    ],
-    [
       parseAntigravityLines,
       [
         JSON.stringify(antigravity),
@@ -268,8 +271,16 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
     assert.equal(entries[0].totalTokens, entries[1].totalTokens);
   }
 
-  const kimi = (await fixture("kimi.jsonl")).trim();
-  const nextKimi = JSON.stringify({ ...JSON.parse(kimi), time: "2026-08-11T00:00:00Z" });
+  const kimi = (await fixture("kimi.jsonl")).trim().split("\n")[1];
+  const parsedKimi = JSON.parse(kimi);
+  const nextKimi = JSON.stringify({
+    ...parsedKimi,
+    timestamp: parsedKimi.timestamp + 86_400,
+    message: {
+      ...parsedKimi.message,
+      payload: { ...parsedKimi.message.payload, message_id: "synthetic-kimi-message-3" },
+    },
+  });
   assert.deepEqual(
     parseKimiLines([kimi, kimi, nextKimi]).map((entry) => entry.date),
     ["2026-08-10", "2026-08-11"],
@@ -278,10 +289,10 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
 
 test("adapter output never carries prompt, response, model, path, or credential fields", async () => {
   const sensitive = "synthetic-sensitive-value";
-  const cursor = JSON.parse((await fixture("cursor.jsonl")).trim().split("\n").at(-1));
-  const output = parseCursorLines([
+  const antigravity = JSON.parse((await fixture("antigravity.jsonl")).trim());
+  const output = parseAntigravityLines([
     JSON.stringify({
-      ...cursor,
+      ...antigravity,
       prompt: sensitive,
       response: sensitive,
       model: sensitive,
@@ -311,16 +322,8 @@ test("Codex rejects duplicate authoritative day buckets", async () => {
 });
 
 test("capture adapters deduplicate events and aggregate multiple UTC days", async () => {
-  const cursor = (await fixture("cursor.jsonl")).trim().split("\n").at(-1);
-  const second = JSON.stringify({
-    ...JSON.parse(cursor),
-    id: "session-2",
-    timestamp: "2026-08-11T00:00:00Z",
-  });
-  assert.deepEqual(
-    parseCursorLines([cursor, cursor, second]).map((entry) => entry.date),
-    ["2026-08-10", "2026-08-11"],
-  );
+  const cursor = (await fixture("cursor.jsonl")).trim().split("\n");
+  assert.deepEqual(parseCursorLines(cursor), []);
   const antigravity = (await fixture("antigravity.jsonl")).trim();
   const other = JSON.stringify({
     ...JSON.parse(antigravity),
@@ -336,7 +339,7 @@ test("capture adapters deduplicate events and aggregate multiple UTC days", asyn
 test("capture collectors accept their configured JSONL file directly", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-capture-"));
   context.after(() => rm(directory, { force: true, recursive: true }));
-  for (const agentId of ["cursor", "antigravity"]) {
+  for (const agentId of ["antigravity"]) {
     const native = (await fixture(`${agentId}.jsonl`)).trim().split("\n").at(-1);
     const persisted = safeCaptureRecord(agentId, native);
     assert.equal(persisted.id, "session-1");
@@ -349,6 +352,54 @@ test("capture collectors accept their configured JSONL file directly", async (co
       ["20"],
     );
   }
+});
+
+test("JSONL collectors reuse unchanged state and resume at the last complete byte offset", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-incremental-jsonl-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "antigravity.jsonl");
+  const native = JSON.parse((await fixture("antigravity.jsonl")).trim());
+  const firstRecord = safeCaptureRecord("antigravity", JSON.stringify(native));
+  await writeFile(path, `${JSON.stringify(firstRecord)}\n`);
+  const adapter = adapterFor("antigravity");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await adapter.collect({ dataPath: path }, range, {});
+  const unchanged = await adapter.collect({ dataPath: path }, range, first.nextState);
+  assert.deepEqual(unchanged.nextState, first.nextState);
+
+  const secondNative = {
+    ...native,
+    session_id: "session-2",
+    timestamp: "2026-08-11T12:00:00Z",
+  };
+  const secondRecord = safeCaptureRecord("antigravity", JSON.stringify(secondNative));
+  await appendFile(path, JSON.stringify(secondRecord));
+  const partialLine = await adapter.collect({ dataPath: path }, range, unchanged.nextState);
+  const priorOffset = first.nextState.files[path].safeOffset;
+  assert.equal(partialLine.nextState.files[path].safeOffset, priorOffset);
+  assert.deepEqual(
+    partialLine.entries.map((entry) => entry.date),
+    ["2026-08-10"],
+  );
+
+  await appendFile(path, "\n");
+  const appended = await adapter.collect({ dataPath: path }, range, partialLine.nextState);
+  assert.ok(appended.nextState.files[path].safeOffset > priorOffset);
+  assert.deepEqual(
+    appended.entries.map((entry) => entry.date),
+    ["2026-08-10", "2026-08-11"],
+  );
+
+  await appendFile(path, `${JSON.stringify(secondRecord)}\n`);
+  const duplicate = await adapter.collect({ dataPath: path }, range, appended.nextState);
+  assert.equal(duplicate.entries.find((entry) => entry.date === "2026-08-11")?.totalTokens, "20");
+
+  await writeFile(path, `${JSON.stringify(secondRecord)}\n`);
+  const truncated = await adapter.collect({ dataPath: path }, range, duplicate.nextState);
+  assert.deepEqual(
+    truncated.entries.map((entry) => entry.date),
+    ["2026-08-11"],
+  );
 });
 
 test("collector limits are explicit partial results with diagnostics", async () => {
@@ -364,4 +415,18 @@ test("collector limits are explicit partial results with diagnostics", async () 
   assert.deepEqual(result.warnings, ["collector_limits_or_unreadable_files"]);
   assert.equal(diagnostic.dataLocationAvailable, false);
   assert.deepEqual(diagnostic.excluded, ["Cursor Desktop usage"]);
+});
+
+test("capture wrappers use current executables and required headless structured flags", () => {
+  assert.deepEqual(wrapperInvocation("cursor", ["hello"]), {
+    executable: "cursor-agent",
+    args: ["--print", "hello", "--output-format", "stream-json"],
+  });
+  assert.deepEqual(
+    wrapperInvocation("antigravity", ["-p", "hello", "--output-format=stream-json"]),
+    {
+      executable: "agy",
+      args: ["-p", "hello", "--output-format=stream-json"],
+    },
+  );
 });

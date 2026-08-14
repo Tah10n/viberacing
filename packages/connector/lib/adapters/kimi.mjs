@@ -12,43 +12,62 @@ export function parseKimiLines(lines) {
     } catch {
       continue;
     }
-    const payload = record?.payload ?? record;
-    const usage = payload?.usage ?? payload?.token_usage ?? payload?.tokenUsage;
+    const message = record?.message;
+    const payload = message?.payload;
+    const usage = payload?.token_usage;
+    const id = payload?.message_id;
+    const timestamp = record?.timestamp;
+    const day =
+      typeof timestamp === "number" && Number.isFinite(timestamp)
+        ? utcDay(timestamp * 1_000)
+        : null;
     if (
-      record?.type &&
-      record.type !== "usage.record" &&
-      !payload?.token_usage &&
-      !payload?.tokenUsage
+      message?.type !== "StatusUpdate" ||
+      !usage ||
+      typeof id !== "string" ||
+      id.length === 0 ||
+      id.length > 256 ||
+      seen.has(id) ||
+      day === null
     )
       continue;
-    const id = record?.id ?? payload?.id ?? payload?.message_id ?? payload?.messageId ?? line;
-    const day = utcDay(record?.timestamp ?? payload?.timestamp ?? record?.time);
-    if (!usage || !id || seen.has(id) || day === null) continue;
     seen.add(id);
     entries.push(
-      componentEntry(
-        day,
-        {
-          inputTokens: usage.inputOther ?? usage.input_other ?? usage.input_tokens,
-          outputTokens: usage.output ?? usage.output_tokens,
-          cacheReadTokens:
-            usage.inputCacheRead ?? usage.input_cache_read ?? usage.cache_read_input_tokens,
-          cacheWriteTokens:
-            usage.inputCacheCreation ??
-            usage.input_cache_creation ??
-            usage.cache_creation_input_tokens,
-          reasoningTokens: usage.reasoning ?? usage.thoughts_tokens,
-        },
-        usage.total ?? usage.total_tokens,
-      ),
+      componentEntry(day, {
+        inputTokens: usage.input_other,
+        outputTokens: usage.output,
+        cacheReadTokens: usage.input_cache_read,
+        cacheWriteTokens: usage.input_cache_creation,
+        reasoningTokens: 0,
+      }),
     );
   }
   return mergeEntries(entries);
 }
 
-const kimiRoot = process.env.KIMI_CODE_HOME
-  ? resolve(process.env.KIMI_CODE_HOME)
-  : join(homedir(), ".kimi-code");
+function kimiEventKey(line) {
+  try {
+    const record = JSON.parse(line);
+    const timestamp = record?.timestamp;
+    const date =
+      typeof timestamp === "number" && Number.isFinite(timestamp)
+        ? utcDay(timestamp * 1_000)
+        : null;
+    const id = record?.message?.payload?.message_id;
+    return record?.message?.type === "StatusUpdate" &&
+      record?.message?.payload?.token_usage &&
+      typeof id === "string" &&
+      date
+      ? { id, date }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const kimiRoot = process.env.KIMI_SHARE_DIR
+  ? resolve(process.env.KIMI_SHARE_DIR)
+  : join(homedir(), ".kimi");
 const defaultPath = join(kimiRoot, "sessions");
 export const kimiAdapter = Object.freeze({
   id: "kimi_code",
@@ -56,7 +75,7 @@ export const kimiAdapter = Object.freeze({
   supportedSurfaces: ["cli"],
   collectionMethods: ["kimi_wire_jsonl"],
   aggregationMode: "source_sum",
-  trigger: "manual sync",
+  trigger: "Stop hook",
   defaultPaths: [defaultPath],
   detect: async () =>
     (
@@ -75,7 +94,14 @@ export const kimiAdapter = Object.freeze({
           },
         ]
       : [],
-  collect: (source, _range, state) =>
-    collectJsonl(source, parseKimiLines, (path) => basename(path) === "wire.jsonl", state),
+  collect: (source, range, state) =>
+    collectJsonl(
+      source,
+      parseKimiLines,
+      (path) => basename(path) === "wire.jsonl",
+      state,
+      range,
+      kimiEventKey,
+    ),
   diagnose: (source) => diagnosePath(source),
 });

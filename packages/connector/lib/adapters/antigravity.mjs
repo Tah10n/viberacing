@@ -1,5 +1,5 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { stateDirectory } from "../config.mjs";
 import {
   collectJsonl,
   componentEntry,
@@ -39,7 +39,18 @@ export function parseAntigravityLines(lines) {
   return mergeEntries(entries);
 }
 
-const defaultPath = join(homedir(), ".viberacing", "captures", "antigravity.jsonl");
+function captureEventKey(line) {
+  try {
+    const record = JSON.parse(line);
+    return record?.usage && typeof record?.id === "string" && dayPattern.test(record?.date ?? "")
+      ? { id: record.id, date: record.date }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const defaultPath = join(stateDirectory, "captures", "antigravity.jsonl");
 export const antigravityAdapter = Object.freeze({
   id: "antigravity",
   displayName: "Antigravity CLI",
@@ -68,8 +79,8 @@ export const antigravityAdapter = Object.freeze({
           },
         ]
       : [],
-  collect: (source, _range, state) =>
-    collectJsonl(source, parseAntigravityLines, () => true, state),
+  collect: (source, range, state) =>
+    collectJsonl(source, parseAntigravityLines, () => true, state, range, captureEventKey),
   parseCapture: parseAntigravityLines,
   diagnose: (source) => diagnosePath(source, ["Antigravity Desktop usage"]),
 });

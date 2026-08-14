@@ -1,5 +1,5 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { stateDirectory } from "../config.mjs";
 import {
   collectJsonl,
   componentEntry,
@@ -39,7 +39,18 @@ export function parseCursorLines(lines) {
   return mergeEntries(entries);
 }
 
-const defaultPath = join(homedir(), ".viberacing", "captures", "cursor.jsonl");
+function captureEventKey(line) {
+  try {
+    const record = JSON.parse(line);
+    return record?.usage && typeof record?.id === "string" && dayPattern.test(record?.date ?? "")
+      ? { id: record.id, date: record.date }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const defaultPath = join(stateDirectory, "captures", "cursor.jsonl");
 export const cursorAdapter = Object.freeze({
   id: "cursor",
   displayName: "Cursor CLI",
@@ -64,7 +75,8 @@ export const cursorAdapter = Object.freeze({
           },
         ]
       : [],
-  collect: (source, _range, state) => collectJsonl(source, parseCursorLines, () => true, state),
+  collect: (source, range, state) =>
+    collectJsonl(source, parseCursorLines, () => true, state, range, captureEventKey),
   parseCapture: parseCursorLines,
   diagnose: (source) => diagnosePath(source, ["Cursor Desktop usage"]),
 });

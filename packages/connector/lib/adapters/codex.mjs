@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { totalEntry } from "./shared.mjs";
 
@@ -18,10 +20,20 @@ export function parseCodexUsage(payload) {
   });
 }
 
-async function collect(_source, _range, state = {}) {
+export function codexProfileEnvironment(source, environment = process.env) {
+  const codexHome = source?.dataPath
+    ? resolve(source.dataPath)
+    : environment.CODEX_HOME
+      ? resolve(environment.CODEX_HOME)
+      : join(homedir(), ".codex");
+  return { ...environment, CODEX_HOME: codexHome };
+}
+
+async function collect(source, _range, state = {}) {
   const child = spawn("codex", ["app-server"], {
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,
+    env: codexProfileEnvironment(source),
   });
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })[
     Symbol.asyncIterator
@@ -82,17 +94,27 @@ export const codexAdapter = Object.freeze({
   collectionMethods: ["codex_app_server"],
   aggregationMode: "account_max",
   detect: async () => {
+    const dataPath = process.env.CODEX_HOME
+      ? resolve(process.env.CODEX_HOME)
+      : join(homedir(), ".codex");
     try {
-      await collect({}, {}, {});
-      return [{ collectionMethod: "codex_app_server", supportedSurface: "desktop" }];
+      await collect({ dataPath }, {}, {});
+      return [
+        {
+          dataPath,
+          collectionMethod: "codex_app_server",
+          supportedSurface: "desktop",
+          suggestedLabel: "Codex",
+        },
+      ];
     } catch {
       return [];
     }
   },
   collect,
-  diagnose: async () => {
+  diagnose: async (source) => {
     try {
-      await collect({}, {}, {});
+      await collect(source, {}, {});
       return {
         status: "ok",
         collectionMethod: "codex_app_server",

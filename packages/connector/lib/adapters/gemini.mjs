@@ -1,7 +1,13 @@
-import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { componentEntry, diagnosePath, integer, mergeEntries, utcDay, walk } from "./shared.mjs";
+import { basename, join, resolve } from "node:path";
+import {
+  collectJsonl,
+  componentEntry,
+  diagnosePath,
+  integer,
+  mergeEntries,
+  utcDay,
+} from "./shared.mjs";
 
 export function parseGeminiRecords(records) {
   const seen = new Set();
@@ -49,37 +55,28 @@ export function parseGeminiRecords(records) {
   return mergeEntries(entries);
 }
 
-async function collect(source, _range, state = {}) {
-  const discovered = await walk(source.dataPath, [".json", ".jsonl"]);
+function parseGeminiLines(lines) {
   const records = [];
-  let partial = discovered.incomplete;
-  for (const file of discovered.files) {
+  for (const line of lines) {
     try {
-      const text = await readFile(file.path, "utf8");
-      if (file.path.endsWith(".jsonl"))
-        for (const line of text.split(/\r?\n/))
-          try {
-            records.push(JSON.parse(line));
-          } catch {}
-      else {
-        const value = JSON.parse(text);
-        if (Array.isArray(value)) records.push(...value);
-        else {
-          records.push(value);
-          for (const key of ["messages", "events", "history"])
-            if (Array.isArray(value?.[key])) records.push(...value[key]);
-        }
-      }
-    } catch {
-      partial = true;
-    }
+      records.push(JSON.parse(line));
+    } catch {}
   }
-  return {
-    entries: parseGeminiRecords(records),
-    completeness: partial ? "partial" : "complete",
-    nextState: state,
-    warnings: partial ? ["unreadable_session_file"] : [],
-  };
+  return parseGeminiRecords(records);
+}
+
+function geminiEventKey(line) {
+  try {
+    const record = JSON.parse(line);
+    const id = record?.id ?? record?.messageId ?? record?.event_id;
+    const date = utcDay(record?.timestamp ?? record?.time ?? record?.startTime);
+    const usage = record?.usageMetadata ?? record?.usage ?? record?.tokenUsage ?? record?.tokens;
+    return record?.type === "gemini" && usage && typeof id === "string" && date
+      ? { id, date }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 const geminiHome = process.env.GEMINI_CLI_HOME ? resolve(process.env.GEMINI_CLI_HOME) : homedir();
@@ -109,6 +106,14 @@ export const geminiAdapter = Object.freeze({
           },
         ]
       : [],
-  collect,
+  collect: (source, range, state) =>
+    collectJsonl(
+      source,
+      parseGeminiLines,
+      (path) => basename(path).startsWith("session-"),
+      state,
+      range,
+      geminiEventKey,
+    ),
   diagnose: (source) => diagnosePath(source),
 });

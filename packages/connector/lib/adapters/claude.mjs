@@ -1,6 +1,14 @@
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { componentEntry, diagnosePath, jsonLines, mergeEntries, utcDay, walk } from "./shared.mjs";
+import {
+  componentEntry,
+  diagnosePath,
+  jsonLinesChunk,
+  mergeEntries,
+  tailFingerprint,
+  utcDay,
+  walk,
+} from "./shared.mjs";
 
 function contribution(line) {
   let record;
@@ -45,21 +53,48 @@ async function collect(source, range, state = {}) {
   let partial = discovered.incomplete;
   for (const file of discovered.files) {
     const previous = nextState.files[file.path];
-    let offset = previous?.size ?? 0;
-    if (offset > file.size) {
-      for (const id of previous?.ids ?? []) delete nextState.messages[id];
-      offset = 0;
+    if (
+      previous &&
+      previous.size === file.size &&
+      previous.modifiedAt === file.modifiedAt &&
+      (previous.ino === undefined || previous.ino === file.ino)
+    )
+      continue;
+    let appended =
+      previous &&
+      previous.size <= file.size &&
+      (previous.ino === undefined || previous.ino === file.ino);
+    if (appended && previous.tailFingerprint !== undefined) {
+      try {
+        appended =
+          previous.tailFingerprint ===
+          (await tailFingerprint(file.path, previous.safeOffset ?? previous.size));
+      } catch {
+        appended = false;
+      }
     }
-    const ids = offset === 0 ? [] : [...(previous?.ids ?? [])];
+    const offset = appended ? (previous.safeOffset ?? previous.size) : 0;
+    if (!appended) {
+      for (const id of previous?.ids ?? []) delete nextState.messages[id];
+    }
+    const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
-      for (const line of await jsonLines(file.path, offset)) {
+      const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      for (const line of chunk.lines) {
         const value = contribution(line);
         if (value) {
           nextState.messages[value.id] = value.entry;
-          ids.push(value.id);
+          ids.add(value.id);
         }
       }
-      nextState.files[file.path] = { size: file.size, ids };
+      nextState.files[file.path] = {
+        size: file.size,
+        modifiedAt: file.modifiedAt,
+        ino: file.ino,
+        safeOffset: chunk.safeOffset,
+        tailFingerprint: await tailFingerprint(file.path, chunk.safeOffset),
+        ids: [...ids],
+      };
     } catch {
       partial = true;
     }
