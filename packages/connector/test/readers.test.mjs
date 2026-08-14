@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  collectClaude,
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
@@ -54,6 +55,41 @@ test("deduplicates Claude messages without reading content", async () => {
       reasoningTokens: "0",
     },
   ]);
+});
+
+test("bounds cumulative Claude history reads and reports a partial snapshot", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-claude-budget-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const line = (id, timestamp) =>
+    `${JSON.stringify({
+      type: "assistant",
+      timestamp,
+      message: {
+        id,
+        role: "assistant",
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          reasoning_tokens: 0,
+        },
+      },
+    })}\n`;
+  const firstContents = line("message-1", "2026-08-10T00:00:00Z");
+  const secondContents = line("message-2", "2026-08-11T00:00:00Z");
+  await writeFile(join(directory, "first.jsonl"), firstContents);
+  await writeFile(join(directory, "second.jsonl"), secondContents);
+  const result = await collectClaude(
+    { dataPath: directory },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+    { maximumBytes: Math.max(Buffer.byteLength(firstContents), Buffer.byteLength(secondContents)) },
+  );
+  assert.equal(result.completeness, "partial");
+  assert.equal(result.entries.length, 1);
+  assert.deepEqual(result.warnings, ["unreadable_or_unbounded_session_data"]);
+  assert.equal(Object.keys(result.nextState.files).length, 1);
 });
 
 test("reads OpenCode assistant usage and avoids cache double-counting", async () => {

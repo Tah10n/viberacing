@@ -3,7 +3,7 @@ import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { refreshAgentWeek } from "@/lib/usage-summary";
 
 interface UsageBody {
@@ -266,7 +266,7 @@ export async function POST(request: Request): Promise<Response> {
   const token = authorization.slice(7);
   if (token.length < 32 || token.length > 128) return problem(401, "unauthorized");
   try {
-    if (!(await consumeRateLimit("usage_sync", token, 30, 60))) {
+    if (!(await consumeRateLimit("usage_pre_auth", clientAddress(request), 120, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -279,6 +279,12 @@ export async function POST(request: Request): Promise<Response> {
     );
     const installation = installations[0];
     if (installation === undefined) return problem(401, "unauthorized");
+    if (!(await consumeRateLimit("usage_sync", installation.id, 30, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
     const rawBody = await readBoundedJson(request, 131_072);
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as UsageBody;

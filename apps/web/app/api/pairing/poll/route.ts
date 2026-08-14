@@ -1,7 +1,7 @@
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 
 interface PollBody {
   installationId?: unknown;
@@ -9,6 +9,7 @@ interface PollBody {
 }
 
 interface PollRow {
+  id: string;
   status: "pending" | "active" | "revoked";
 }
 
@@ -35,14 +36,14 @@ export async function POST(request: Request): Promise<Response> {
     ) {
       return problem(400, "invalid_request");
     }
-    if (!(await consumeRateLimit("pairing_poll", body.pollToken, 40, 60))) {
+    if (!(await consumeRateLimit("pairing_poll_pre_auth", clientAddress(request), 120, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
     const rows = await query<PollRow>(
-      `SELECT status FROM installations
+      `SELECT id::text, status FROM installations
         WHERE id = $1
           AND poll_token_hash = $2
           AND pairing_expires_at > now()
@@ -51,6 +52,12 @@ export async function POST(request: Request): Promise<Response> {
     );
     const installation = rows[0];
     if (installation === undefined) return problem(404, "pairing_not_found");
+    if (!(await consumeRateLimit("pairing_poll", installation.id, 40, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
     if (installation.status !== "active") {
       return Response.json(
         { status: installation.status },

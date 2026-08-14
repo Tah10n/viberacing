@@ -6,6 +6,7 @@ import { access, chmod, mkdir, mkdtemp, readFile, stat, utimes, writeFile } from
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -115,6 +116,14 @@ async function runWithInput(arguments_, environment, input) {
   child.stdin.end(input);
   const [code] = await once(child, "close");
   return { code, stdout, stderr };
+}
+
+async function waitFor(predicate, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for test condition");
+    await delay(20);
+  }
 }
 
 test("installs a runnable connector copy and additive, owned hooks", async () => {
@@ -383,6 +392,20 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
       start + 120_000,
     );
     assert.equal(runtime.automaticDueAt(dirty, start + 50_000), start + 170_000);
+    assert.deepEqual(
+      runtime.configuredAutomaticSyncTimings({
+        NODE_ENV: "test",
+        VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "25,200,200",
+      }),
+      { debounceMs: 25, minimumIntervalMs: 200, maximumDelayMs: 200 },
+    );
+    assert.equal(
+      runtime.configuredAutomaticSyncTimings({
+        NODE_ENV: "production",
+        VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1,1,1",
+      }),
+      runtime.automaticSyncTimings,
+    );
     assert.equal(await runtime.claimScheduler(), true);
     assert.equal(await runtime.claimScheduler(), false);
     await runtime.releaseScheduler();
@@ -425,6 +448,40 @@ test("capture compaction keeps only recent allowlisted usage metadata", async (c
   }
 });
 
+test("capture compaction serializes concurrent safe appends", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-capture-lock-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const runtimeUrl = pathToFileURL(
+    fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url)),
+  ).href;
+  const script = `
+    import { appendCapture, compactCapture } from ${JSON.stringify(runtimeUrl)};
+    import { join } from "node:path";
+    const date = "2026-08-10";
+    const usage = (id) => ({ id, date, usage: { date, totalTokens: "12", inputTokens: "5", outputTokens: "7" } });
+    await appendCapture("antigravity", [usage("initial")]);
+    const path = join(process.env.VIBERACING_STATE_DIR, "captures", "antigravity.jsonl");
+    await Promise.all([
+      ...Array.from({ length: 20 }, (_, index) => appendCapture("antigravity", [usage(\`concurrent-\${index}\`)])),
+      ...Array.from({ length: 5 }, () => compactCapture(path, new Date("2026-08-14T12:00:00Z"), 1)),
+    ]);
+  `;
+  await execFileAsync(process.execPath, ["--input-type=module", "--eval", script], {
+    env: connectorEnvironment(home),
+  });
+  const path = join(home, ".viberacing", "captures", "antigravity.jsonl");
+  const ids = (await readFile(path, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line).id)
+    .sort();
+  assert.deepEqual(
+    ids,
+    ["initial", ...Array.from({ length: 20 }, (_, index) => `concurrent-${index}`)].sort(),
+  );
+  await assert.rejects(access(`${path}.lock`));
+});
+
 test("hook discards stdin, emits only contract JSON, and fails open", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-hook-lightweight-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
@@ -439,6 +496,120 @@ test("hook discards stdin, emits only contract JSON, and fails open", async (con
   assert.equal(result.stdout, "{}\n");
   assert.equal(result.stderr, "");
   assert.equal(await readFile(blockedState, "utf8"), "not a directory");
+});
+
+test("real hooks coalesce into one batch and preserve an event arriving during sync", async (context) => {
+  const bodies = [];
+  const requestTimes = [];
+  let firstRequestStarted;
+  let releaseFirstResponse;
+  const firstRequest = new Promise((resolve) => {
+    firstRequestStarted = resolve;
+  });
+  const firstResponseCanFinish = new Promise((resolve) => {
+    releaseFirstResponse = resolve;
+  });
+  context.after(() => releaseFirstResponse());
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method !== "POST" || request.url !== "/api/usage") {
+        response.writeHead(404, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "not_found" }));
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      requestTimes.push(Date.now());
+      if (bodies.length === 1) firstRequestStarted();
+      const finish = () => {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            acceptedEntries: body.snapshots.reduce(
+              (total, snapshot) => total + snapshot.entries.length,
+              0,
+            ),
+            acceptedSnapshots: body.snapshots.length,
+            sourceSequences: body.snapshots.map((snapshot) => ({
+              sourceId: snapshot.sourceId,
+              lastAcceptedSyncSequence: snapshot.syncSequence,
+              accepted: true,
+            })),
+          }),
+        );
+      };
+      if (bodies.length === 1) firstResponseCanFinish.then(finish);
+      else finish();
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-real-scheduler-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: { [installation.sourceId]: "0" } })}\n`,
+  );
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "50,400,200",
+  });
+
+  const hookResults = await Promise.all(
+    Array.from({ length: 20 }, (_, index) =>
+      runWithInput(
+        ["hook", "--agent", "antigravity"],
+        environment,
+        JSON.stringify({ prompt: `private-${index}`, cwd: `/private/${index}` }),
+      ),
+    ),
+  );
+  assert.ok(hookResults.every((result) => result.code === 0 && result.stdout === ""));
+  await firstRequest;
+
+  const appendScript = `
+    import { appendCapture } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url))).href)};
+    const date = new Date().toISOString().slice(0, 10);
+    await appendCapture("antigravity", [{
+      id: "event-during-sync",
+      date,
+      usage: { date, totalTokens: "5", inputTokens: "2", outputTokens: "3" },
+    }]);
+  `;
+  await execFileAsync(process.execPath, ["--input-type=module", "--eval", appendScript], {
+    env: environment,
+  });
+  const secondHook = await runWithInput(
+    ["hook", "--agent", "antigravity"],
+    environment,
+    '{"prompt":"private-during-sync"}',
+  );
+  assert.equal(secondHook.code, 0);
+  releaseFirstResponse();
+
+  await waitFor(() => bodies.length === 2);
+  await delay(250);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].snapshots.length, 1);
+  assert.equal(bodies[1].snapshots.length, 1);
+  assert.equal(bodies[1].snapshots[0].entries[0].totalTokens, "8");
+  assert.ok(requestTimes[1] - requestTimes[0] >= 300);
+  await waitFor(async () => {
+    try {
+      await access(join(installation.directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
 });
 
 test("requires an explicit safe label when adding a local data root", async (context) => {
@@ -687,6 +858,36 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
   });
   assert.match(result.stdout, /claude_code \(Work\): ok/);
   assert.doesNotMatch(result.stdout, /reading 'rangeStart'/);
+});
+
+test("doctor disables a revoked installation and recommends reconnecting", async (context) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(401, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "unauthorized" }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-revoked-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  await writeFile(
+    join(installation.directory, "dirty.json"),
+    `${JSON.stringify({ dirtySince: new Date().toISOString(), lastEventAt: new Date().toISOString() })}\n`,
+  );
+
+  const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home),
+  });
+
+  assert.match(result.stdout, /authorization was revoked/i);
+  assert.match(result.stdout, /viberacing connect/i);
+  await assert.rejects(access(join(installation.directory, "config.json")));
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 
 test("recovers a missing local sequence from 500 and sends snapshot 501", async (context) => {
