@@ -16,6 +16,12 @@ account-wide Codex daily bucket reported from two computers from doubling. For a
 account, daily usage is the sum across machine-local histories. Daily account totals then sum across
 multiple accounts of the same agent; agent totals sum into the user's weekly total.
 
+Local sources have random stable identities independent of discovery order. Pairing can assign two
+profiles of the same agent to different accounts, which makes their account totals additive, or to
+one account, which applies that account's `account_max`/`source_sum` rule. Reassignment rebuilds the
+affected user's agent summaries in the approval transaction, so the public total changes immediately
+without waiting for another upload.
+
 Ranks use SQL `dense_rank` by weekly total descending, so ties share a rank. Display order within a
 tie is deterministic by case-folded handle and user ID. Public profiles and leaderboard pages read
 the same weekly summary table.
@@ -23,9 +29,15 @@ the same weekly summary table.
 ## Corrections
 
 Each source snapshot has a monotonic sequence and inclusive UTC range. A stale or repeated sequence
-is a no-op. A newer `complete` snapshot replaces values and deletes dates missing from the range; a
-newer `partial` snapshot changes present dates but preserves missing dates. Values may decrease.
-Only weeks touched by an accepted snapshot are rebuilt.
+is a no-op. The server exposes its last accepted sequence so a connector that lost local state
+continues at `server + 1`; one stale pending snapshot is repaired and retried once. A newer
+`complete` snapshot replaces values and deletes dates missing from the range; a newer `partial`
+snapshot changes present dates but preserves missing dates. Values may decrease. Only weeks touched
+by an accepted snapshot are rebuilt.
+
+Automatic scheduling changes delivery timing, not ranking semantics. Hooks coalesce events into at
+most about one batch every two minutes, while manual sync and first connect run immediately. An
+unchanged snapshot makes no request. The leaderboard is intentionally not advertised as real-time.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
 and run `viberacing sync`. To delete retained history, disconnect and explicitly delete the agent
