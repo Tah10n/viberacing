@@ -361,7 +361,14 @@ async function installRuntime(sourceUrl) {
   await mkdir(installedLibrary, { recursive: true, mode: 0o700 });
   if (resolve(sourceScript) !== resolve(installedScript)) {
     await copyFile(sourceScript, installedScript);
-    for (const name of ["browser.mjs", "config.mjs", "readers.mjs", "registry.mjs", "runtime.mjs"])
+    for (const name of [
+      "browser.mjs",
+      "config.mjs",
+      "executables.mjs",
+      "readers.mjs",
+      "registry.mjs",
+      "runtime.mjs",
+    ])
       await copyFile(join(sourceRoot, "lib", name), join(installedLibrary, name));
     await cp(join(sourceRoot, "lib", "adapters"), join(installedLibrary, "adapters"), {
       recursive: true,

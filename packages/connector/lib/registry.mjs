@@ -22,16 +22,29 @@ export function adapterFor(agentId) {
   return adapters.find((adapter) => adapter.id === agentId);
 }
 
-export async function defaultSources() {
+export async function discoverSources(availableAdapters = adapters) {
   const result = [];
-  for (const adapter of adapters) {
-    const detected = await adapter.detect({});
-    for (const source of detected)
-      result.push({
+  const diagnostics = [];
+  for (const adapter of availableAdapters) {
+    try {
+      const detected = await adapter.detect({});
+      for (const source of detected)
+        result.push({
+          agentId: adapter.id,
+          suggestedLabel: adapter.displayName,
+          ...source,
+        });
+    } catch (error) {
+      diagnostics.push({
         agentId: adapter.id,
-        suggestedLabel: adapter.displayName,
-        ...source,
+        displayName: adapter.displayName,
+        error: error instanceof Error ? error.message : "source detection failed",
       });
+    }
   }
-  return result;
+  return { sources: result, diagnostics };
+}
+
+export async function defaultSources() {
+  return (await discoverSources()).sources;
 }

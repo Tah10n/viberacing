@@ -5,9 +5,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY LICENSE LICENSE
 COPY apps/web/package.json apps/web/package.json
 RUN corepack pnpm install --filter @viberacing/web... --frozen-lockfile --ignore-scripts
 
+COPY packages/connector packages/connector
 COPY apps/web apps/web
 RUN corepack pnpm --filter @viberacing/web build
 RUN corepack pnpm --filter @viberacing/web deploy --prod /runtime-deps

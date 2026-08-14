@@ -1,11 +1,15 @@
 *
 
 !package.json
+!LICENSE
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !apps/
 !apps/web/
 !apps/web/**
+!packages/
+!packages/connector/
+!packages/connector/**
 !scripts/
 !scripts/check-privacy.mjs
 

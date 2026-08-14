@@ -4,8 +4,20 @@ The Node 24 connector collects exact aggregate token counters from supported cod
 and pairs them with Vibe Racing agent accounts. It never uploads raw sessions or local paths.
 
 ```bash
-npx @viberacing/connector connect --origin https://viberacing.example
+npx --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- \
+  viberacing connect --origin https://viberacing.example
 ```
+
+Use the command shown by your Vibe Racing dashboard. The connector package is served by that same
+Vibe Racing origin, so a separate npm publication is not required.
+
+Discovery is independent of the directory where the command runs. Provider data comes from each
+agent's documented home/profile roots and supported environment overrides. Executable-backed
+adapters search the current `PATH`, installed macOS applications, Windows application roots and
+WindowsApps, and common npm, pnpm, Bun, Volta, Homebrew, MacPorts, Scoop, Chocolatey, and system
+binary directories. Portable installations can set `VIBERACING_CODEX_BIN`,
+`VIBERACING_CURSOR_AGENT_BIN`, or `VIBERACING_ANTIGRAVITY_BIN` to an absolute executable path. One
+broken installed agent is reported as a detection warning and never hides the other healthy sources.
 
 The browser approval maps every detected local source to a new or existing account. Re-running
 `connect` keeps the stable installation identity, rotates device authorization, refreshes the

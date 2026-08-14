@@ -12,15 +12,15 @@ export function parseKimiLines(lines) {
     } catch {
       continue;
     }
-    const message = record?.message;
+    const message = record?.message ?? record;
     const payload = message?.payload;
     const usage = payload?.token_usage;
     const id = payload?.message_id;
-    const timestamp = record?.timestamp;
+    const timestamp = record?.timestamp ?? message?.timestamp;
     const day =
       typeof timestamp === "number" && Number.isFinite(timestamp)
         ? utcDay(timestamp * 1_000)
-        : null;
+        : utcDay(timestamp);
     if (
       message?.type !== "StatusUpdate" ||
       !usage ||
@@ -48,14 +48,15 @@ export function parseKimiLines(lines) {
 function kimiEventKey(line) {
   try {
     const record = JSON.parse(line);
-    const timestamp = record?.timestamp;
+    const message = record?.message ?? record;
+    const timestamp = record?.timestamp ?? message?.timestamp;
     const date =
       typeof timestamp === "number" && Number.isFinite(timestamp)
         ? utcDay(timestamp * 1_000)
-        : null;
-    const id = record?.message?.payload?.message_id;
-    return record?.message?.type === "StatusUpdate" &&
-      record?.message?.payload?.token_usage &&
+        : utcDay(timestamp);
+    const id = message?.payload?.message_id;
+    return message?.type === "StatusUpdate" &&
+      message?.payload?.token_usage &&
       typeof id === "string" &&
       date
       ? { id, date }
@@ -65,10 +66,10 @@ function kimiEventKey(line) {
   }
 }
 
-const kimiRoot = process.env.KIMI_SHARE_DIR
-  ? resolve(process.env.KIMI_SHARE_DIR)
-  : join(homedir(), ".kimi");
-const defaultPath = join(kimiRoot, "sessions");
+const kimiRoots = process.env.KIMI_SHARE_DIR
+  ? [resolve(process.env.KIMI_SHARE_DIR)]
+  : [join(homedir(), ".kimi-code"), join(homedir(), ".kimi")];
+export const kimiDefaultPaths = kimiRoots.map((root) => join(root, "sessions"));
 export const kimiAdapter = Object.freeze({
   id: "kimi_code",
   displayName: "Kimi Code",
@@ -76,24 +77,27 @@ export const kimiAdapter = Object.freeze({
   collectionMethods: ["kimi_wire_jsonl"],
   aggregationMode: "source_sum",
   trigger: "Stop hook",
-  defaultPaths: [defaultPath],
-  detect: async () =>
-    (
-      await diagnosePath({
-        dataPath: defaultPath,
-        collectionMethod: "kimi_wire_jsonl",
-        supportedSurface: "cli",
-      })
-    ).dataLocationAvailable
-      ? [
-          {
-            dataPath: defaultPath,
+  defaultPaths: kimiDefaultPaths,
+  detect: async () => {
+    const result = [];
+    for (const dataPath of kimiDefaultPaths)
+      if (
+        (
+          await diagnosePath({
+            dataPath,
             collectionMethod: "kimi_wire_jsonl",
             supportedSurface: "cli",
-            suggestedLabel: "Kimi Code",
-          },
-        ]
-      : [],
+          })
+        ).dataLocationAvailable
+      )
+        result.push({
+          dataPath,
+          collectionMethod: "kimi_wire_jsonl",
+          supportedSurface: "cli",
+          suggestedLabel: "Kimi Code",
+        });
+    return result;
+  },
   collect: (source, range, state) =>
     collectJsonl(
       source,

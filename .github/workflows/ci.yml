@@ -143,9 +143,21 @@ jobs:
             --env GITHUB_CLIENT_SECRET=synthetic-ci-secret \
             --env PORT=3010 viberacing:ci
           trap 'docker rm --force viberacing-ci >/dev/null 2>&1 || true' EXIT
+          viberacing_ready=false
           for attempt in $(seq 1 60); do
-            curl --fail --silent http://127.0.0.1:3010/ready >/dev/null && exit 0
+            if curl --fail --silent http://127.0.0.1:3010/ready >/dev/null; then
+              viberacing_ready=true
+              break
+            fi
             sleep 1
           done
-          docker logs viberacing-ci
-          exit 1
+          if [ "$viberacing_ready" != true ]; then
+            docker logs viberacing-ci
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --output "$RUNNER_TEMP/viberacing-connector.tgz" \
+            http://127.0.0.1:3010/downloads/viberacing-connector.tgz
+          npm exec --yes --cache "$RUNNER_TEMP/viberacing-npm-cache" \
+            --package http://127.0.0.1:3010/downloads/viberacing-connector.tgz \
+            -- viberacing --help

@@ -8,12 +8,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import {
   adapterFor,
-  defaultSources,
+  discoverSources,
   recentEntries,
   safeCaptureRecord,
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
+import { executableOverride, resolveAgentExecutable } from "../lib/executables.mjs";
 import {
   addSource,
   diagnoseHooks,
@@ -63,7 +64,7 @@ import {
   writeState,
 } from "../lib/runtime.mjs";
 
-const connectorVersion = "0.2.0";
+const connectorVersion = "0.2.1";
 const protocolVersion = 2;
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
@@ -100,6 +101,18 @@ const option = (name, fallback) => {
 const output = (...values) => {
   if (!quiet) process.stdout.write(`${values.join(" ")}\n`);
 };
+
+async function readConnectedConfig() {
+  try {
+    return await readConfig();
+  } catch (error) {
+    if (error?.code === "ENOENT")
+      throw new Error(
+        "This computer is not connected. Run `viberacing connect --origin <your Vibe Racing URL>`.",
+      );
+    throw error;
+  }
+}
 
 function normalizedOrigin(value) {
   const url = new URL(value);
@@ -152,7 +165,10 @@ function publicSource(source) {
 async function connect() {
   const origin = normalizedOrigin(option("--origin", "https://viberacing.com"));
   output("Detecting supported agent sources…");
-  const detected = await defaultSources();
+  const discovery = await discoverSources();
+  const detected = discovery.sources;
+  for (const diagnostic of discovery.diagnostics)
+    process.stderr.write(`Vibe Racing warning: ${diagnostic.displayName}: ${diagnostic.error}.\n`);
   const localSources = await reconcileDetectedSources(detected);
   const sources = new Map(localSources.map((source) => [source.clientSourceId, source]));
   if (localSources.length === 0)
@@ -856,11 +872,14 @@ async function automaticSync() {
 }
 
 async function doctor() {
-  const detected = await defaultSources();
+  const discovery = await discoverSources();
+  const detected = discovery.sources;
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
+  for (const diagnostic of discovery.diagnostics)
+    output(`Detection error (${diagnostic.displayName}): ${diagnostic.error}`);
   try {
     let config = await readConfig();
     let state = await readState();
@@ -1092,7 +1111,12 @@ async function wrap(agentId) {
             .slice(2)
             .filter((_, index) => index !== sourceOption && index !== sourceOption + 1)
         : arguments_.slice(2);
-  const { executable, args } = wrapperInvocation(agentId, passed);
+  const { args } = wrapperInvocation(agentId, passed);
+  const executable = await resolveAgentExecutable(agentId);
+  if (!executable)
+    throw new Error(
+      `${adapterFor(agentId).displayName} executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride(agentId)} to its absolute path`,
+    );
   const child = spawn(executable, args, {
     stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
@@ -1137,13 +1161,13 @@ async function wrap(agentId) {
 try {
   if (command === "connect") await connect();
   else if (command === "sync") {
-    const result = await sync(undefined, { waitMs: manualSyncLockWaitMs });
+    const result = await sync(await readConnectedConfig(), { waitMs: manualSyncLockWaitMs });
     if (result?.skipped) throw new Error("Another sync is already running.");
   } else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
   else if (command === "doctor") await doctor();
   else if (command === "accounts") {
-    const config = await readConfig();
+    const config = await readConnectedConfig();
     for (const source of config.sources) output(`${source.agentId}: ${source.accountLabel}`);
   } else if (command === "source" && arguments_[1] === "remove")
     await withLifecycleMutation(() => sourceCommand());
@@ -1161,7 +1185,7 @@ try {
           headers: { Authorization: `Bearer ${config.deviceToken}` },
         });
       } catch (error) {
-        remoteError = error;
+        if (error?.code !== "ENOENT") remoteError = error;
       } finally {
         localWarnings = await disableLocalConnection(true);
       }
