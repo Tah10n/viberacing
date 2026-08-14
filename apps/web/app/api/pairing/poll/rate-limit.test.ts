@@ -47,7 +47,7 @@ describe("pairing poll pre-auth rate limiting", () => {
 
   it("keys the authenticated poll quota by the server-side installation id", async () => {
     consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    queryMock.mockResolvedValue([{ id: installationId, status: "pending" }]);
+    queryMock.mockResolvedValue([{ id: installationId, status: "pending", pairing_pending: true }]);
 
     const response = await POST(request("synthetic-poll-token-that-is-long-enough"));
 
@@ -60,5 +60,16 @@ describe("pairing poll pre-auth rate limiting", () => {
       60,
     );
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "pairing_poll", installationId, 40, 60);
+  });
+
+  it("keeps an active installation pending until its replacement token is approved", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId, status: "active", pairing_pending: true }]);
+
+    const response = await POST(request("replacement-poll-token-that-is-long-enough"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "pending" });
+    expect(queryMock).toHaveBeenCalledOnce();
   });
 });

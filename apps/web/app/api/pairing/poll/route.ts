@@ -11,6 +11,7 @@ interface PollBody {
 interface PollRow {
   id: string;
   status: "pending" | "active" | "revoked";
+  pairing_pending: boolean;
 }
 
 interface SourceRow {
@@ -43,7 +44,10 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     const rows = await query<PollRow>(
-      `SELECT id::text, status FROM installations
+      `SELECT id::text,
+              status,
+              pending_device_token_hash IS NOT NULL AS pairing_pending
+         FROM installations
         WHERE id = $1
           AND poll_token_hash = $2
           AND pairing_expires_at > now()
@@ -58,9 +62,9 @@ export async function POST(request: Request): Promise<Response> {
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
-    if (installation.status !== "active") {
+    if (installation.status !== "active" || installation.pairing_pending) {
       return Response.json(
-        { status: installation.status },
+        { status: installation.pairing_pending ? "pending" : installation.status },
         { headers: { "Cache-Control": "no-store" } },
       );
     }

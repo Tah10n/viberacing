@@ -1,0 +1,96 @@
+"use client";
+
+import { useState, type SyntheticEvent } from "react";
+
+interface DangerActionFormProps {
+  readonly action: string;
+  readonly buttonLabel: string;
+  readonly confirmation: string;
+  readonly confirmValue: string;
+}
+
+function responseError(status: number, code: unknown): string {
+  if (code === "confirmation_required") return "Check the confirmation box and try again.";
+  return `The action failed (${status.toString()}). Please try again.`;
+}
+
+function authenticationPath(): string {
+  const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return `/api/auth/github/start?next=${encodeURIComponent(next)}`;
+}
+
+export function DangerActionForm({
+  action,
+  buttonLabel,
+  confirmation,
+  confirmValue,
+}: DangerActionFormProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitForm(form: HTMLFormElement): Promise<void> {
+    if (!form.reportValidity()) return;
+    const actionUrl = new URL(action, window.location.href);
+    if (actionUrl.origin !== window.location.origin) {
+      setError("The action location was invalid. Refresh the page.");
+      return;
+    }
+    const body = new URLSearchParams();
+    for (const [key, value] of new FormData(form)) {
+      if (typeof value === "string") body.append(key, value);
+    }
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch(actionUrl, {
+        body,
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        method: "POST",
+        redirect: "follow",
+      });
+      if (response.status === 401) {
+        window.location.assign(authenticationPath());
+        return;
+      }
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        setError(responseError(response.status, payload?.error));
+        return;
+      }
+      const destination = new URL(response.url, window.location.href);
+      if (!response.redirected || destination.origin !== window.location.origin) {
+        setError("The action completed, but the return location was invalid. Refresh the page.");
+        return;
+      }
+      window.location.assign(destination.href);
+    } catch {
+      setError("The server could not be reached. Please try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function submit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>): void {
+    event.preventDefault();
+    if (pending) return;
+    void submitForm(event.currentTarget);
+  }
+
+  return (
+    <form action={action} aria-busy={pending} method="post" onSubmit={submit}>
+      <label className="confirm-row">
+        <input disabled={pending} name="confirm" required type="checkbox" value={confirmValue} />
+        <span>{confirmation}</span>
+      </label>
+      <button className="danger-button" disabled={pending} type="submit">
+        {pending ? "Working…" : buttonLabel}
+      </button>
+      {error === null ? null : (
+        <p className="danger-form-error" role="alert">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}

@@ -31,8 +31,7 @@ function validLabel(value: string | null): string | null {
 export async function POST(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
   const current = await viewer();
-  if (current === null)
-    return NextResponse.redirect(new URL("/api/auth/github/start", publicOrigin()), 303);
+  if (current === null) return problem(401, "unauthorized");
   let form: URLSearchParams;
   try {
     form = await readBoundedForm(request, 16_384);
