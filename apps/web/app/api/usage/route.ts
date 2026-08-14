@@ -319,6 +319,10 @@ export async function POST(request: Request): Promise<Response> {
 
       let acceptedEntries = 0;
       let acceptedSnapshots = 0;
+      const acceptedSequences = new Map(
+        sources.rows.map((source) => [source.id, source.last_accepted_sync_sequence]),
+      );
+      const acceptedSourceIds = new Set<string>();
       const summaries = new Set<string>();
       for (const snapshot of snapshots) {
         const source = sourceById.get(snapshot.sourceId);
@@ -389,6 +393,8 @@ export async function POST(request: Request): Promise<Response> {
         );
         acceptedEntries += snapshot.entries.length;
         acceptedSnapshots += 1;
+        acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
+        acceptedSourceIds.add(snapshot.sourceId);
         for (const week of affectedWeeks(snapshot)) {
           summaries.add(`${source.user_id}\0${source.agent_id}\0${week}`);
         }
@@ -423,6 +429,11 @@ export async function POST(request: Request): Promise<Response> {
         acceptedSnapshots,
         acceptedSourceErrors: sourceErrors.length,
         staleSnapshots: snapshots.length - acceptedSnapshots,
+        sourceSequences: sourceIds.map((sourceId) => ({
+          sourceId,
+          lastAcceptedSyncSequence: acceptedSequences.get(sourceId) ?? "0",
+          accepted: acceptedSourceIds.has(sourceId),
+        })),
       };
     });
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
