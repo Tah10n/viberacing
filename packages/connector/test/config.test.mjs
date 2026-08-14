@@ -1085,7 +1085,11 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
       suggestedLabel: "OpenCode",
     },
   ];
-  await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
   const trace = join(home, "collector-trace.txt");
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
@@ -1112,6 +1116,14 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     new Set(bodies[0].snapshots.map((snapshot) => snapshot.sourceId)),
     new Set(sources.slice(0, 2).map((source) => source.sourceId)),
   );
+  await waitFor(async () => {
+    try {
+      await access(join(directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
 });
 
 test("manual sync collects every active source and clears only its prior dirty generations", async (context) => {
