@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { publicOrigin, secureCookies, validateRuntimeConfig } from "./config";
+import { maximumDailyTokens, publicOrigin, secureCookies, validateRuntimeConfig } from "./config";
 
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalDatabaseSsl = process.env.VIBERACING_DATABASE_SSL;
 const originalClientId = process.env.GITHUB_CLIENT_ID;
 const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
+const originalMaximumDailyTokens = process.env.VIBERACING_MAX_DAILY_TOKENS;
 
 afterEach(() => {
   if (originalOrigin === undefined) delete process.env.VIBERACING_PUBLIC_ORIGIN;
@@ -18,6 +19,8 @@ afterEach(() => {
   else process.env.GITHUB_CLIENT_ID = originalClientId;
   if (originalClientSecret === undefined) delete process.env.GITHUB_CLIENT_SECRET;
   else process.env.GITHUB_CLIENT_SECRET = originalClientSecret;
+  if (originalMaximumDailyTokens === undefined) delete process.env.VIBERACING_MAX_DAILY_TOKENS;
+  else process.env.VIBERACING_MAX_DAILY_TOKENS = originalMaximumDailyTokens;
 });
 
 describe("public origin", () => {
@@ -57,5 +60,14 @@ describe("public origin", () => {
     expect(() => {
       validateRuntimeConfig();
     }).not.toThrow();
+  });
+
+  it("accepts only a canonical decimal maximum token limit", () => {
+    process.env.VIBERACING_MAX_DAILY_TOKENS = "9999999999999999";
+    expect(maximumDailyTokens()).toBe(9999999999999999n);
+    for (const invalid of ["1E+16", " 999 ", "0999", "1.5"]) {
+      process.env.VIBERACING_MAX_DAILY_TOKENS = invalid;
+      expect(() => maximumDailyTokens()).toThrow(/canonical decimal string/);
+    }
   });
 });
