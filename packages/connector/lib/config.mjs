@@ -408,7 +408,9 @@ export async function diagnoseHooks(sources) {
         const contents = await readFile(join(hookRoot(source, "kimi_code"), "config.toml"), "utf8");
         status = !contents.includes(hookMarker)
           ? "missing"
-          : contents.includes(installedScript) && contents.includes(process.execPath)
+          : contents.includes(`command = ${JSON.stringify(command)}`) &&
+              contents.includes('event = "Stop"') &&
+              contents.includes("timeout = 3")
             ? "current"
             : "outdated";
       } catch (error) {
