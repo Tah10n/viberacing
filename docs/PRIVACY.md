@@ -18,12 +18,17 @@ output through to the terminal but persist only the native stable event ID, UTC 
 counters needed for exact deduplication. Current Cursor structured output has no authoritative
 counter, so its wrapper persists nothing. Capture records older than 35 days are removed after a
 successful sync and large files are rewritten atomically with the same allowlist. `source add`
-requires an explicit label and never derives network metadata from the local data-root path.
+requires an explicit label and never derives network metadata from the local data-root path. Each
+capture profile is keyed by its random client source ID, not an account label, provider identity, or
+agent name. Multiple Antigravity accounts therefore remain in separate local files.
 
 Hook stdin can contain private provider context. The hook reads it to EOF only because provider
 contracts require that, then discards it without parsing, logging, or persistence. Hooks never scan
-history or access the network. Automatic collection happens later in a short-lived process and sends
-nothing when the normalized aggregate snapshot is unchanged.
+history or access the network. Their dirty ledger contains only stable local source IDs, UTC event
+timestamps, and random generations; it contains no paths. Automatic collection happens later in a
+short-lived process, scans only dirty active sources, and sends nothing when the normalized
+aggregate snapshot is unchanged. Saved pending aggregates can be delivered without rereading any
+provider store.
 
 GitHub OAuth requests `read:user`. The access token is used once to obtain immutable GitHub ID and
 current handle and is not stored. Browser, installation, poll, and device secrets are SHA-256 hashed
@@ -39,6 +44,11 @@ Disconnecting an installation or source revokes future ingestion but retains its
 an agent account deletes its sources and usage. **Leave leaderboard** deletes all usage and revokes
 installations while retaining the GitHub identity and empty account labels. **Delete Vibe Racing
 account** deletes the user and all dependent data and clears the browser session.
+
+Removing a local source deletes its owned hook before discarding the custom-root metadata needed for
+cleanup. If the server is unreachable, local automatic activity still stops and the CLI reports that
+remote disconnect was not confirmed. A server-retired source keeps its local definition for a later
+reconnect but loses its hook and automatic runtime state at the next connector contact.
 
 The repository privacy guard rejects known local stores, telemetry, captures, databases, dumps,
 credentials, and fixtures containing content/path/tool fields. Fixtures are synthetic usage-only

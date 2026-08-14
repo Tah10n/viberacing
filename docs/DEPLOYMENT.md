@@ -30,14 +30,16 @@
 5. Verify `/health`, `/ready`, GitHub sign-in, multi-source pairing, sync/correction, reconnect
    token rotation, source/installation disconnect, public ranking, and deletion.
 
-The connector needs no daemon, system service, watcher, queue, or cron. Supported provider hooks
-only mark local dirty state and start one short-lived timer process. Automatic upload attempts are
-debounced and limited to about one batch per two minutes; manual sync and first connect are
-immediate. Deployments should not describe the ranking as real-time.
+The connector needs no daemon, system service, watcher, queue, polling loop, or cron. Supported
+provider hooks mark one source in local dirty state and start one short-lived timer process.
+Automatic upload attempts are debounced and limited to about one batch per two minutes; they drain
+pending aggregates and collect only dirty sources. Manual sync and first connect collect all active
+sources immediately. Deployments should not describe the ranking as real-time.
 
-Production startup validates all required variables. The service refuses non-HTTPS remote origins,
-unknown schema versions, or missing PostgreSQL connectivity. See the
-[production checklist](PRODUCTION_CHECKLIST.md) for backups, repository controls, and npm setup.
+Production startup validates all required variables. The service refuses non-HTTPS remote origins, a
+missing latest required migration/table, or missing PostgreSQL connectivity; additional later
+migration ledger rows are valid. See the [production checklist](PRODUCTION_CHECKLIST.md) for
+backups, repository controls, and npm setup.
 
 ## Connector publication
 

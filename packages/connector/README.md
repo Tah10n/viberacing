@@ -20,12 +20,13 @@ viberacing doctor [--repair]
 viberacing accounts
 viberacing source list
 viberacing source add --agent opencode --name Work --data-dir <path>
+viberacing source add --agent antigravity --name Personal
 viberacing source remove <client-source-id>
 viberacing disconnect
 viberacing uninstall
 viberacing reset-installation
-viberacing run cursor -- <native cursor arguments>
-viberacing run antigravity -- <native agy arguments>
+viberacing run cursor [--source <client-source-id>] -- <native cursor arguments>
+viberacing run antigravity [--source <client-source-id>] -- <native agy arguments>
 ```
 
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
@@ -33,6 +34,13 @@ collection method, surface, and user-provided safe label are stored only in loca
 Pairing configuration contains the server mapping but never a path or path hash. Separate Codex
 accounts require separate `--data-dir` profile roots; each App Server launch gets that source's
 `CODEX_HOME`, so one profile is never collected twice as two local sources.
+
+Capture-based Cursor and Antigravity sources do not require `--data-dir`. Their default local path
+is `captures/<clientSourceId>.jsonl`, so Personal and Work accounts never share a capture file. A
+wrapper selects its only matching source automatically; with multiple profiles, `--source` is
+required and is consumed by Vibe Racing rather than passed to the native CLI. The first wrapper run
+creates one default source when none exists. Cursor follows the same selection rules but writes no
+capture until its native output provides authoritative counters.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
@@ -43,20 +51,24 @@ creating a new installation identity.
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per
 source, hook diagnostics, the installed executable/library, and usage-only CLI captures. Pending
-records are uploaded in bounded batches, and a source already disconnected on the server is removed
-locally without blocking other agents. Directories are owner-only where the OS supports permissions;
-secrets are `0600`. `doctor` reconciles the last server-accepted sequence and reports hook
-freshness, mapped accounts, supported surfaces, excluded desktop surfaces, data availability,
-partial warnings, and the last hook error; `doctor --repair` refreshes the installed runtime and
-owned hooks; it does not sync unless the user separately runs `viberacing sync`.
+records are uploaded in bounded batches without forcing another collector scan. A source already
+disconnected on the server loses its mapping, pending/runtime state, dirty entry, and owned hook
+without deleting its local definition or blocking other agents. Directories are owner-only where the
+OS supports permissions; secrets are `0600`. `doctor` reconciles the last server-accepted sequence
+and reports hook freshness, mapped accounts, supported surfaces, excluded desktop surfaces, data
+availability, partial warnings, and the last hook error; `doctor --repair` refreshes the installed
+runtime and owned hooks; it does not sync unless the user separately runs `viberacing sync`.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
 OpenCode uses its read-only SQLite store and a documented `sync`; Cursor and Antigravity require the
-opt-in `run` wrappers. Hooks only discard stdin, atomically mark dirty, start/reuse one short-lived
-timer process, and return the provider's minimal response. Automatic collection is debounced for 15
-seconds, limited to roughly one attempt per 120 seconds, and forced by 120 seconds of continuous
-activity. There is no resident daemon or file watcher. Manual sync and initial connect bypass the
-cooldown; unchanged data sends no request.
+opt-in `run` wrappers. Every installed hook contains its stable `clientSourceId` and a source-owned
+v3 marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
+one short-lived timer process, and return the provider's minimal response. Automatic collection
+first drains pending payloads and then scans only active dirty sources; events for other sources do
+not start Codex, open OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds,
+limited to roughly one attempt per 120 seconds, and forced by 120 seconds of continuous activity.
+There is no resident daemon, polling loop, or file watcher. Manual sync and initial connect bypass
+the cooldown and collect all active sources; unchanged data sends no request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file

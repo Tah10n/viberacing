@@ -35,9 +35,15 @@ continues at `server + 1`; one stale pending snapshot is repaired and retried on
 snapshot changes present dates but preserves missing dates. Values may decrease. Only weeks touched
 by an accepted snapshot are rebuilt.
 
-Automatic scheduling changes delivery timing, not ranking semantics. Hooks coalesce events into at
-most about one batch every two minutes, while manual sync and first connect run immediately. An
-unchanged snapshot makes no request. The leaderboard is intentionally not advertised as real-time.
+Automatic scheduling changes delivery timing, not ranking semantics. Source-owned hooks coalesce
+events into at most about one batch every two minutes; only dirty sources are collected, while
+pending aggregates can upload without a rescan. Manual sync and first connect collect all active
+sources immediately. An unchanged snapshot makes no request. The leaderboard is intentionally not
+advertised as real-time.
+
+Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
+Code, Qwen Code, Antigravity, and Gemini CLI. Cursor has the same privacy-safe profile-selection
+wrapper but is excluded from totals until its structured output exposes authoritative counters.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
 and run `viberacing sync`. To delete retained history, disconnect and explicitly delete the agent

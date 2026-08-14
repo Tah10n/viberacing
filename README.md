@@ -14,11 +14,12 @@ output does not include authoritative token counters, so it is not presently cou
 and Antigravity Desktop are not supported. See [agent support](docs/AGENT_SUPPORT.md) and
 [ranking semantics](docs/RANKING_SEMANTICS.md).
 
-Supported lifecycle hooks only mark the connector dirty. One short-lived detached scheduler
-coalesces events and sends at most about one automatic batch every two minutes; there is no daemon,
-watcher, or polling loop. Manual `viberacing sync` and the first successful `connect` run
-immediately. The first collection is bounded to 31 UTC days, later JSONL reads resume from safe byte
-offsets, and an unchanged normalized snapshot causes no HTTP request.
+Supported lifecycle hooks mark only their owning local source dirty. One short-lived detached
+scheduler coalesces source events and sends at most about one automatic batch every two minutes; it
+drains saved payloads first and runs collectors only for currently dirty sources. There is no
+daemon, watcher, or polling loop. Manual `viberacing sync` and the first successful `connect` still
+collect every active source immediately. The first collection is bounded to 31 UTC days, later JSONL
+reads resume from safe byte offsets, and an unchanged normalized snapshot causes no HTTP request.
 
 ## Local production preview
 
