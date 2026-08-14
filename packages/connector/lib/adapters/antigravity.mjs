@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { stateDirectory } from "../config.mjs";
 import {
   collectJsonl,
   componentEntry,
@@ -50,7 +48,6 @@ function captureEventKey(line) {
   }
 }
 
-const defaultPath = join(stateDirectory, "captures", "antigravity.jsonl");
 export const antigravityAdapter = Object.freeze({
   id: "antigravity",
   displayName: "Antigravity CLI",
@@ -58,27 +55,8 @@ export const antigravityAdapter = Object.freeze({
   collectionMethods: ["antigravity_cli_capture"],
   aggregationMode: "source_sum",
   trigger: "viberacing run antigravity",
-  defaultPaths: [defaultPath],
-  detect: async () =>
-    (
-      await diagnosePath(
-        {
-          dataPath: defaultPath,
-          collectionMethod: "antigravity_cli_capture",
-          supportedSurface: "cli",
-        },
-        ["Antigravity Desktop usage"],
-      )
-    ).dataLocationAvailable
-      ? [
-          {
-            dataPath: defaultPath,
-            collectionMethod: "antigravity_cli_capture",
-            supportedSurface: "cli",
-            suggestedLabel: "Antigravity CLI",
-          },
-        ]
-      : [],
+  defaultPaths: [],
+  detect: async () => [],
   collect: (source, range, state) =>
     collectJsonl(source, parseAntigravityLines, () => true, state, range, captureEventKey),
   parseCapture: parseAntigravityLines,

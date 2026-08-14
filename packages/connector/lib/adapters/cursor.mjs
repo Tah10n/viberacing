@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { stateDirectory } from "../config.mjs";
 import {
   collectJsonl,
   componentEntry,
@@ -50,7 +48,6 @@ function captureEventKey(line) {
   }
 }
 
-const defaultPath = join(stateDirectory, "captures", "cursor.jsonl");
 export const cursorAdapter = Object.freeze({
   id: "cursor",
   displayName: "Cursor CLI",
@@ -58,23 +55,8 @@ export const cursorAdapter = Object.freeze({
   collectionMethods: ["cursor_cli_capture"],
   aggregationMode: "source_sum",
   trigger: "viberacing run cursor",
-  defaultPaths: [defaultPath],
-  detect: async () =>
-    (
-      await diagnosePath(
-        { dataPath: defaultPath, collectionMethod: "cursor_cli_capture", supportedSurface: "cli" },
-        ["Cursor Desktop usage"],
-      )
-    ).dataLocationAvailable
-      ? [
-          {
-            dataPath: defaultPath,
-            collectionMethod: "cursor_cli_capture",
-            supportedSurface: "cli",
-            suggestedLabel: "Cursor CLI",
-          },
-        ]
-      : [],
+  defaultPaths: [],
+  detect: async () => [],
   collect: (source, range, state) =>
     collectJsonl(source, parseCursorLines, () => true, state, range, captureEventKey),
   parseCapture: parseCursorLines,

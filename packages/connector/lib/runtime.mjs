@@ -11,7 +11,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { stateDirectory } from "./config.mjs";
 
@@ -20,6 +20,7 @@ const lockPath = join(stateDirectory, "sync.lock");
 const pendingDirectory = join(stateDirectory, "pending");
 const quarantineDirectory = join(pendingDirectory, "quarantine");
 const dirtyPath = join(stateDirectory, "dirty.json");
+const dirtyLockPath = join(stateDirectory, "dirty.lock");
 const schedulerLockPath = join(stateDirectory, "scheduler.lock");
 export const automaticSyncTimings = Object.freeze({
   debounceMs: 15_000,
@@ -67,14 +68,28 @@ function pendingPath(sourceId, kind = "snapshot") {
 
 async function atomicJson(path, value) {
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
-  const temporary = `${path}.${process.pid}.tmp`;
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
   await rename(temporary, path);
 }
 
+export function dirtyEntries(dirty) {
+  if (dirty?.version !== 2 || dirty.sources === null || typeof dirty.sources !== "object")
+    return [];
+  return Object.entries(dirty.sources).filter(
+    ([clientSourceId, entry]) =>
+      sourceIdPattern.test(clientSourceId) &&
+      typeof entry?.dirtySince === "string" &&
+      typeof entry?.lastEventAt === "string" &&
+      typeof entry?.generation === "string",
+  );
+}
+
 export function automaticDueAt(dirty, lastAutomaticSyncAt = 0, timings = automaticSyncTimings) {
-  const dirtySince = Date.parse(dirty.dirtySince);
-  const lastEventAt = Date.parse(dirty.lastEventAt);
+  const entries = dirtyEntries(dirty).map(([, entry]) => entry);
+  const candidates = entries.length > 0 ? entries : [dirty];
+  const dirtySince = Math.min(...candidates.map((entry) => Date.parse(entry?.dirtySince)));
+  const lastEventAt = Math.max(...candidates.map((entry) => Date.parse(entry?.lastEventAt)));
   if (!Number.isFinite(dirtySince) || !Number.isFinite(lastEventAt)) {
     throw new Error("Invalid automatic sync state");
   }
@@ -93,25 +108,114 @@ export async function readDirty() {
   }
 }
 
-export async function markDirty(now = new Date()) {
-  const previous = await readDirty().catch(() => null);
-  const timestamp = now.toISOString();
-  const dirty = {
-    dirtySince: previous?.dirtySince ?? timestamp,
-    lastEventAt: timestamp,
-    nonce: randomUUID(),
-  };
-  await atomicJson(dirtyPath, dirty);
-  return dirty;
+async function withDirtyLock(callback) {
+  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  const deadline = Date.now() + 5_000;
+  let handle;
+  for (;;) {
+    try {
+      handle = await open(dirtyLockPath, "wx", 0o600);
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const info = await stat(dirtyLockPath).catch(() => null);
+      if (info && Date.now() - info.mtimeMs > 60_000) {
+        await unlink(dirtyLockPath).catch(() => {});
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error("Timed out waiting for dirty state lock");
+      await delay(10);
+    }
+  }
+  try {
+    await handle.writeFile(`${process.pid}\n`);
+    return await callback();
+  } finally {
+    await handle.close();
+    await unlink(dirtyLockPath).catch(() => {});
+  }
 }
 
-export async function clearDirty(nonce) {
-  const current = await readDirty();
-  if (current?.nonce !== nonce) return false;
-  await unlink(dirtyPath).catch((error) => {
-    if (error?.code !== "ENOENT") throw error;
+export async function markDirty(clientSourceId, now = new Date()) {
+  if (!sourceIdPattern.test(clientSourceId)) throw new Error("Invalid dirty source id");
+  return withDirtyLock(async () => {
+    const previous = await readDirty().catch(() => null);
+    const previousEntry = dirtyEntries(previous).find(([id]) => id === clientSourceId)?.[1];
+    const timestamp = now.toISOString();
+    const dirty =
+      previous?.version === 2 && previous.sources && typeof previous.sources === "object"
+        ? previous
+        : { version: 2, sources: {} };
+    dirty.sources[clientSourceId] = {
+      dirtySince: previousEntry?.dirtySince ?? timestamp,
+      lastEventAt: timestamp,
+      generation: randomUUID(),
+    };
+    await atomicJson(dirtyPath, dirty);
+    return dirty;
   });
-  return true;
+}
+
+export function dirtyClaims(dirty, clientSourceIds) {
+  const selected = clientSourceIds ? new Set(clientSourceIds) : null;
+  return Object.fromEntries(
+    dirtyEntries(dirty)
+      .filter(([clientSourceId]) => selected === null || selected.has(clientSourceId))
+      .map(([clientSourceId, entry]) => [clientSourceId, entry.generation]),
+  );
+}
+
+export async function clearDirty(claims) {
+  return withDirtyLock(async () => {
+    const current = await readDirty();
+    if (!current) return false;
+    if (current.version !== 2) {
+      await unlink(dirtyPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+      return true;
+    }
+    let changed = false;
+    for (const [clientSourceId, generation] of Object.entries(claims ?? {})) {
+      if (current.sources?.[clientSourceId]?.generation !== generation) continue;
+      delete current.sources[clientSourceId];
+      changed = true;
+    }
+    if (!changed) return false;
+    if (dirtyEntries(current).length === 0)
+      await unlink(dirtyPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+    else await atomicJson(dirtyPath, current);
+    return true;
+  });
+}
+
+export async function clearDirtyForSources(clientSourceIds) {
+  const selected = new Set(clientSourceIds);
+  return withDirtyLock(async () => {
+    const current = await readDirty();
+    if (!current) return false;
+    if (current.version !== 2) {
+      await unlink(dirtyPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+      return true;
+    }
+    let changed = false;
+    for (const clientSourceId of selected)
+      if (current.sources?.[clientSourceId]) {
+        delete current.sources[clientSourceId];
+        changed = true;
+      }
+    if (!changed) return false;
+    if (dirtyEntries(current).length === 0)
+      await unlink(dirtyPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+    else await atomicJson(dirtyPath, current);
+    return true;
+  });
 }
 
 export async function claimScheduler() {
@@ -138,13 +242,14 @@ export async function releaseScheduler() {
 }
 
 export async function clearAutomaticState() {
-  await Promise.all(
-    [dirtyPath, schedulerLockPath].map((path) =>
-      unlink(path).catch((error) => {
-        if (error?.code !== "ENOENT") throw error;
-      }),
-    ),
+  await withDirtyLock(() =>
+    unlink(dirtyPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    }),
   );
+  await unlink(schedulerLockPath).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
 }
 
 export async function clearPendingPayloads() {
@@ -212,14 +317,19 @@ async function withCaptureLock(path, callback) {
   }
 }
 
-export async function appendCapture(agentId, records) {
-  if (!new Set(["cursor", "antigravity"]).has(agentId) || !Array.isArray(records)) {
+export async function appendCapture(source, records) {
+  if (
+    !new Set(["cursor", "antigravity"]).has(source?.agentId) ||
+    !sourceIdPattern.test(source?.clientSourceId ?? "") ||
+    typeof source?.dataPath !== "string" ||
+    !Array.isArray(records)
+  ) {
     throw new Error("Invalid capture append request");
   }
   const lines = records.map((record) => safeCaptureLine(JSON.stringify(record), "0000-00-00"));
   if (lines.some((line) => line === null)) throw new Error("Invalid capture usage record");
   if (lines.length === 0) return null;
-  const path = join(stateDirectory, "captures", `${agentId}.jsonl`);
+  const path = resolve(source.dataPath);
   await withCaptureLock(path, () => appendFile(path, `${lines.join("\n")}\n`, { mode: 0o600 }));
   return path;
 }

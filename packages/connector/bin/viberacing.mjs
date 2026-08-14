@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,14 +15,15 @@ import {
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
 import {
-  installHooks,
   addSource,
   diagnoseHooks,
+  reconcileHooks,
   readConfig,
   readOrCreateInstallation,
   readSources,
   reconcileDetectedSources,
   removeConfig,
+  removeHookForSource,
   removeHooks,
   removeLocalState,
   removeSource,
@@ -38,9 +39,12 @@ import {
   compactCapture,
   clearAutomaticState,
   clearDirty,
+  clearDirtyForSources,
   clearPendingPayloads,
   clearQuarantine,
   markDirty,
+  dirtyClaims,
+  dirtyEntries,
   pendingPayloads,
   quarantinePending,
   quarantinedPayloads,
@@ -170,7 +174,7 @@ async function connect() {
         protocol: result.protocol,
       };
       await writeConfig(config);
-      await installHooks(import.meta.url, mapped);
+      await reconcileHooks(import.meta.url, mapped, localSources);
       output("Connected. Exact aggregate sync is active.");
       await sync(config);
       return;
@@ -219,12 +223,47 @@ async function forgetSourceState(sourceIds) {
   const state = await readState();
   state.sequences ??= {};
   state.adapters ??= {};
+  state.fingerprints ??= {};
+  state.quarantine ??= {};
   for (const sourceId of sourceIds) {
     delete state.sequences[sourceId];
     delete state.adapters[sourceId];
+    delete state.fingerprints[sourceId];
+    delete state.quarantine[sourceId];
     await removePendingForSource(sourceId);
+    await clearQuarantine(sourceId);
   }
   await writeState(state);
+}
+
+async function retireMappedSources(config, sourceIds) {
+  const retired = new Set(sourceIds);
+  const mappings = config.sources.filter((source) => retired.has(source.sourceId));
+  for (const source of mappings)
+    try {
+      await removeHookForSource(source, { removeLegacy: true });
+    } catch (error) {
+      process.stderr.write(
+        `Vibe Racing warning: hook cleanup failed for disconnected ${source.agentId} source: ${error.message}\n`,
+      );
+    }
+  await clearDirtyForSources(mappings.map((source) => source.clientSourceId));
+  await forgetSourceState(mappings.map((source) => source.sourceId));
+  config.sources = config.sources.filter((source) => !retired.has(source.sourceId));
+  await writeConfig(config);
+  return mappings;
+}
+
+async function reconcileRemoteSources(config, remoteSources) {
+  const active = new Set(
+    (remoteSources ?? [])
+      .filter((source) => source.status === "active")
+      .map((source) => source.sourceId),
+  );
+  const retired = config.sources
+    .filter((source) => typeof source.sourceId === "string" && !active.has(source.sourceId))
+    .map((source) => source.sourceId);
+  if (retired.length > 0) await retireMappedSources(config, retired);
 }
 
 async function disableLocalConnection(clearPending = false) {
@@ -310,6 +349,7 @@ async function reconcileMissingSequences(config, state) {
   } catch (error) {
     await lifecycleFailure(error);
   }
+  await reconcileRemoteSources(config, remote.sources);
   return rememberServerSequences(
     config,
     remote.sources?.map((source) => ({
@@ -461,9 +501,7 @@ async function drainPending(config, retryStale = true) {
     }
   }
   if (retired.size > 0) {
-    config.sources = config.sources.filter((source) => !retired.has(source.sourceId));
-    await writeConfig(config);
-    await forgetSourceState(retired);
+    await retireMappedSources(config, retired);
   }
   if (retryStale && staleSources.size > 0) {
     const retried = await drainPending(config, false);
@@ -498,19 +536,38 @@ async function settleLimited(items, worker, limit = 4) {
   return results;
 }
 
-async function sync(providedConfig) {
+async function sync(providedConfig, options = {}) {
   return withSyncLock(async () => {
     const config = providedConfig ?? (await readConfig());
-    let state = await readState();
-    state = await reconcileMissingSequences(config, state);
     const previous = await drainPending(config);
     let accepted = previous.accepted;
-    state = await readState();
+    let state = await readState();
+    state = await reconcileMissingSequences(config, state);
     const range = snapshotRange();
     state.adapters ??= {};
     state.fingerprints ??= {};
-    const syncSources = config.sources.filter((source) => typeof source.sourceId === "string");
+    const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
+    const dirty = await readDirty();
+    const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
+    const syncSources = options.automatic
+      ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
+      : mappedSources;
+    const activeIds = new Set(mappedSources.map((source) => source.clientSourceId));
+    const unmappedDirtyIds = [...dirtyIds].filter(
+      (clientSourceId) => !activeIds.has(clientSourceId),
+    );
+    if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
+    const claims = dirtyClaims(
+      dirty,
+      syncSources.map((source) => source.clientSourceId),
+    );
+    if (options.automatic && syncSources.length > 0) {
+      state.lastAutomaticSyncAt = Date.now();
+      await writeState(state);
+    }
     const collected = await settleLimited(syncSources, async (source) => {
+      if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
+        await appendFile(process.env.VIBERACING_TEST_COLLECTOR_TRACE, `${source.clientSourceId}\n`);
       const adapter = adapterFor(source.agentId);
       if (!adapter || !adapter.collectionMethods.includes(source.collectionMethod))
         throw new Error(`Unsupported configured source ${source.agentId}`);
@@ -522,6 +579,7 @@ async function sync(providedConfig) {
     const snapshots = [];
     const sourceErrors = [];
     const failures = [];
+    const successfullyChecked = [];
     for (let index = 0; index < collected.length; index += 1) {
       const outcome = collected[index];
       const source = syncSources[index];
@@ -534,6 +592,7 @@ async function sync(providedConfig) {
         }
         continue;
       }
+      successfullyChecked.push(source.clientSourceId);
       state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
       const entries = recentEntries(outcome.value.result.entries);
       const nextFingerprint = fingerprint({
@@ -556,8 +615,18 @@ async function sync(providedConfig) {
       });
     }
     await writeState(state);
+    const clearSuccessfulDirty = () =>
+      clearDirty(
+        Object.fromEntries(
+          successfullyChecked
+            .filter((clientSourceId) => claims[clientSourceId])
+            .map((clientSourceId) => [clientSourceId, claims[clientSourceId]]),
+        ),
+      );
     if (snapshots.length === 0 && sourceErrors.length === 0) {
-      if (failures.length === 0) await compactSuccessfulCaptures(config);
+      await clearSuccessfulDirty();
+      if (failures.length === 0 && syncSources.length > 0)
+        await compactSuccessfulCaptures({ ...config, sources: syncSources });
       output("No usage changes; no request was sent.");
       if (failures.length)
         process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
@@ -567,6 +636,7 @@ async function sync(providedConfig) {
     await savePending(payload);
     const delivered = await drainPending(config);
     accepted += delivered.accepted;
+    await clearSuccessfulDirty();
     if (snapshots.length === 0)
       throw new Error(failures.join("; ") || "No configured collectors succeeded");
     output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
@@ -574,7 +644,7 @@ async function sync(providedConfig) {
       failures.push(`server disconnected source ${sourceId}`);
     for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
       failures.push(`server rejected source ${sourceId}; payload quarantined`);
-    if (failures.length === 0) await compactSuccessfulCaptures(config);
+    if (failures.length === 0) await compactSuccessfulCaptures({ ...config, sources: syncSources });
     if (failures.length) process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
     return { accepted, failures };
   });
@@ -599,8 +669,19 @@ async function hook() {
     for await (const _chunk of process.stdin) {
       // Hook input can contain private agent context. Discard it without parsing or logging.
     }
-    await markDirty();
-    await launchAutomaticScheduler();
+    const clientSourceId = option("--source");
+    const agentId = option("--agent");
+    const config = await readConfig();
+    const active = config.sources.some(
+      (source) =>
+        source.clientSourceId === clientSourceId &&
+        source.agentId === agentId &&
+        typeof source.sourceId === "string",
+    );
+    if (active) {
+      await markDirty(clientSourceId);
+      await launchAutomaticScheduler();
+    }
   } catch {
     // Provider hooks are fail-open: local scheduling failures must never affect the agent.
   }
@@ -629,14 +710,11 @@ async function automaticSync() {
       try {
         await readConfig();
       } catch {
-        await clearDirty(current.nonce);
+        await clearDirty(dirtyClaims(current));
         return;
       }
-      state.lastAutomaticSyncAt = Date.now();
-      await writeState(state);
-      const result = await sync();
-      if (result?.skipped) continue;
-      await clearDirty(current.nonce);
+      const result = await sync(undefined, { automatic: true });
+      if (result?.skipped) return;
     }
   } finally {
     await releaseScheduler();
@@ -660,7 +738,7 @@ async function doctor() {
     const state = await readState();
     const range = snapshotRange();
     if (arguments_.includes("--repair")) {
-      await installHooks(import.meta.url, config.sources);
+      await reconcileHooks(import.meta.url, config.sources, await readSources());
       output("Installed connector copy and owned hooks repaired.");
     }
     const hooks = await diagnoseHooks(config.sources);
@@ -670,6 +748,7 @@ async function doctor() {
       const remote = await request(config.origin, "/api/installations/current", {
         headers: { Authorization: `Bearer ${config.deviceToken}` },
       });
+      await reconcileRemoteSources(config, remote.sources);
       await rememberServerSequences(
         config,
         remote.sources?.map((source) => ({
@@ -755,8 +834,9 @@ async function sourceCommand() {
     const dataPath = option("--data-dir", option("--path"));
     const label = option("--name", option("--label"))?.trim();
     const adapter = adapterFor(agentId);
-    if (!adapter || !dataPath || !label || label.length > 40)
-      throw new Error("Usage: viberacing source add --agent AGENT --name NAME --data-dir PATH");
+    const captureBased = ["cursor", "antigravity"].includes(agentId);
+    if (!adapter || (!captureBased && !dataPath) || !label || label.length > 40)
+      throw new Error("Usage: viberacing source add --agent AGENT --name NAME [--data-dir PATH]");
     const result = await addSource({
       agentId,
       dataPath,
@@ -773,12 +853,21 @@ async function sourceCommand() {
   if (action === "remove") {
     const id = arguments_[2];
     const local = (await readSources()).find((source) => source.clientSourceId === id);
-    if (!local) throw new Error("Unknown source id");
+    if (!local) {
+      output("Source is already absent locally.");
+      return;
+    }
     let config;
     try {
       config = await readConfig();
     } catch {}
     const mapping = config?.sources.find((source) => source.clientSourceId === id);
+    try {
+      await removeHookForSource(local, { removeLegacy: true });
+    } catch (error) {
+      throw new Error(`Hook cleanup failed; source metadata was kept for retry: ${error.message}`);
+    }
+    let remoteWarning = false;
     if (typeof mapping?.sourceId === "string") {
       try {
         await request(config.origin, `/api/sources/${mapping.sourceId}`, {
@@ -786,26 +875,69 @@ async function sourceCommand() {
           headers: { Authorization: `Bearer ${config.deviceToken}` },
         });
       } catch (error) {
-        if (error?.status !== 404) throw error;
+        if (error?.status !== 404) remoteWarning = true;
       }
     }
-    await removeSource(id);
     if (config) {
       config.sources = config.sources.filter((source) => source.clientSourceId !== id);
       await writeConfig(config);
     }
     if (typeof mapping?.sourceId === "string") await forgetSourceState([mapping.sourceId]);
+    await clearDirtyForSources([id]);
+    await removeSource(id);
     output("Source disconnected and removed locally.");
+    if (remoteWarning)
+      process.stderr.write(
+        "Vibe Racing warning: remote source disconnect could not be confirmed; its local hook and automatic state were removed.\n",
+      );
     return;
   }
   throw new Error(
-    "Usage: viberacing source list | source add --agent AGENT --name NAME --data-dir PATH | source remove ID",
+    "Usage: viberacing source list | source add --agent AGENT --name NAME [--data-dir PATH] | source remove ID",
   );
 }
 
-async function wrap(agentId) {
+async function wrapperSource(agentId) {
   const separator = arguments_.indexOf("--");
-  const passed = separator < 0 ? arguments_.slice(2) : arguments_.slice(separator + 1);
+  const controls = arguments_.slice(2, separator < 0 ? undefined : separator);
+  const sourceOption = controls.indexOf("--source");
+  const requested = sourceOption >= 0 ? controls[sourceOption + 1] : undefined;
+  if (sourceOption >= 0 && !requested) throw new Error("--source requires a clientSourceId");
+  let sources = (await readSources()).filter((source) => source.agentId === agentId);
+  if (requested) {
+    const selected = (await readSources()).find((source) => source.clientSourceId === requested);
+    if (!selected) throw new Error(`Unknown ${agentId} source id`);
+    if (selected.agentId !== agentId)
+      throw new Error(`Selected source belongs to ${selected.agentId}`);
+    return { source: selected, separator, sourceOption };
+  }
+  if (sources.length === 0) {
+    const adapter = adapterFor(agentId);
+    const created = await addSource({
+      agentId,
+      collectionMethod: adapter.collectionMethods[0],
+      supportedSurface: adapter.supportedSurfaces[0],
+      suggestedLabel: adapter.displayName.replace(/ CLI$/, ""),
+    });
+    sources = [created.source];
+  }
+  if (sources.length > 1)
+    throw new Error(
+      `Multiple ${agentId} sources are configured; choose one with --source <clientSourceId>`,
+    );
+  return { source: sources[0], separator, sourceOption };
+}
+
+async function wrap(agentId) {
+  const { source, separator, sourceOption } = await wrapperSource(agentId);
+  const passed =
+    separator >= 0
+      ? arguments_.slice(separator + 1)
+      : sourceOption >= 0
+        ? arguments_
+            .slice(2)
+            .filter((_, index) => index !== sourceOption && index !== sourceOption + 1)
+        : arguments_.slice(2);
   const { executable, args } = wrapperInvocation(agentId, passed);
   const child = spawn(executable, args, {
     stdio: ["inherit", "pipe", "inherit"],
@@ -835,9 +967,14 @@ async function wrap(agentId) {
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
   if (safe.length) {
-    await appendCapture(agentId, safe);
-    await markDirty();
-    await launchAutomaticScheduler();
+    await appendCapture(source, safe);
+    try {
+      const config = await readConfig();
+      if (config.sources.some((mapping) => mapping.clientSourceId === source.clientSourceId)) {
+        await markDirty(source.clientSourceId);
+        await launchAutomaticScheduler();
+      }
+    } catch {}
   }
   if (outcome.signal) process.kill(process.pid, outcome.signal);
   else process.exitCode = outcome.code ?? 1;
@@ -909,7 +1046,7 @@ try {
       );
   } else
     output(
-      "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor|antigravity -- …",
+      "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor|antigravity [--source ID] -- …",
     );
 } catch (error) {
   if (quiet) {
