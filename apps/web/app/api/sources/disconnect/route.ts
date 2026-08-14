@@ -17,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
       [sourceId, current.id],
     );
     if (changed.length === 0) return problem(404, "source_not_found");
-    return NextResponse.redirect(new URL("/dashboard?disconnected=1", publicOrigin()), 303);
+    return NextResponse.redirect(new URL("/dashboard?sourceDisconnected=1", publicOrigin()), 303);
   } catch (error) {
     return error instanceof RangeError
       ? problem(413, "body_too_large")
