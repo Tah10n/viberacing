@@ -578,121 +578,129 @@ async function settleLimited(items, worker, limit = 4) {
 }
 
 async function sync(providedConfig, options = {}) {
-  return withSyncLock(async () => {
-    const config = providedConfig ?? (await readConfig());
-    const previous = await drainPending(config);
-    let accepted = previous.accepted;
-    let state = await readState();
-    state = await reconcileServerState(config, state);
-    const range = snapshotRange();
-    state.adapters ??= {};
-    state.fingerprints ??= {};
-    const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
-    const dirty = await readDirty();
-    const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
-    const syncSources = options.automatic
-      ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
-      : mappedSources;
-    const activeIds = new Set(mappedSources.map((source) => source.clientSourceId));
-    const unmappedDirtyIds = [...dirtyIds].filter(
-      (clientSourceId) => !activeIds.has(clientSourceId),
-    );
-    if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
-    const claims = dirtyClaims(
-      dirty,
-      syncSources.map((source) => source.clientSourceId),
-    );
-    if (options.automatic && syncSources.length > 0) {
-      state.lastAutomaticSyncAt = Date.now();
-      await writeState(state);
-    }
-    const collected = await settleLimited(syncSources, async (source) => {
-      if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
-        await appendFile(process.env.VIBERACING_TEST_COLLECTOR_TRACE, `${source.clientSourceId}\n`);
-      const adapter = adapterFor(source.agentId);
-      if (!adapter || !adapter.collectionMethods.includes(source.collectionMethod))
-        throw new Error(`Unsupported configured source ${source.agentId}`);
-      return {
-        source,
-        result: await adapter.collect(source, range, state.adapters[source.sourceId] ?? {}),
-      };
-    });
-    const snapshots = [];
-    const sourceErrors = [];
-    const failures = [];
-    const successfullyChecked = [];
-    for (let index = 0; index < collected.length; index += 1) {
-      const outcome = collected[index];
-      const source = syncSources[index];
-      if (outcome.status === "rejected") {
-        failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
-        const nextFingerprint = fingerprint({ error: "collector_failed" });
-        if (state.fingerprints[source.sourceId] !== nextFingerprint) {
-          sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
-          state.fingerprints[source.sourceId] = nextFingerprint;
-        }
-        continue;
-      }
-      successfullyChecked.push(source.clientSourceId);
-      state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
-      const entries = recentEntries(outcome.value.result.entries);
-      const nextFingerprint = fingerprint({
-        ...range,
-        completeness: outcome.value.result.completeness,
-        entries,
-        warnings: [...(outcome.value.result.warnings ?? [])].sort(),
-      });
-      if (state.fingerprints[source.sourceId] === nextFingerprint) continue;
-      const previous = BigInt(state.sequences[source.sourceId] ?? "0");
-      const sequence = (previous + 1n).toString();
-      state.sequences[source.sourceId] = sequence;
-      state.fingerprints[source.sourceId] = nextFingerprint;
-      snapshots.push({
-        sourceId: source.sourceId,
-        syncSequence: sequence,
-        ...range,
-        completeness: outcome.value.result.completeness,
-        entries,
-      });
-    }
-    if (await lifecycleMutationActive())
-      throw new Error("Sync persistence stopped by a local lifecycle operation");
-    await writeState(state);
-    const clearSuccessfulDirty = () =>
-      clearDirty(
-        Object.fromEntries(
-          successfullyChecked
-            .filter((clientSourceId) => claims[clientSourceId])
-            .map((clientSourceId) => [clientSourceId, claims[clientSourceId]]),
-        ),
+  return withSyncLock(
+    async () => {
+      const config = providedConfig ?? (await readConfig());
+      const previous = await drainPending(config);
+      let accepted = previous.accepted;
+      let state = await readState();
+      state = await reconcileServerState(config, state);
+      const range = snapshotRange();
+      state.adapters ??= {};
+      state.fingerprints ??= {};
+      const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
+      const dirty = await readDirty();
+      const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
+      const syncSources = options.automatic
+        ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
+        : mappedSources;
+      const activeIds = new Set(mappedSources.map((source) => source.clientSourceId));
+      const unmappedDirtyIds = [...dirtyIds].filter(
+        (clientSourceId) => !activeIds.has(clientSourceId),
       );
-    if (snapshots.length === 0 && sourceErrors.length === 0) {
+      if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
+      const claims = dirtyClaims(
+        dirty,
+        syncSources.map((source) => source.clientSourceId),
+      );
+      if (options.automatic && syncSources.length > 0) {
+        state.lastAutomaticSyncAt = Date.now();
+        await writeState(state);
+      }
+      const collected = await settleLimited(syncSources, async (source) => {
+        if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
+          await appendFile(
+            process.env.VIBERACING_TEST_COLLECTOR_TRACE,
+            `${source.clientSourceId}\n`,
+          );
+        const adapter = adapterFor(source.agentId);
+        if (!adapter || !adapter.collectionMethods.includes(source.collectionMethod))
+          throw new Error(`Unsupported configured source ${source.agentId}`);
+        return {
+          source,
+          result: await adapter.collect(source, range, state.adapters[source.sourceId] ?? {}),
+        };
+      });
+      const snapshots = [];
+      const sourceErrors = [];
+      const failures = [];
+      const successfullyChecked = [];
+      for (let index = 0; index < collected.length; index += 1) {
+        const outcome = collected[index];
+        const source = syncSources[index];
+        if (outcome.status === "rejected") {
+          failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
+          const nextFingerprint = fingerprint({ error: "collector_failed" });
+          if (state.fingerprints[source.sourceId] !== nextFingerprint) {
+            sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
+            state.fingerprints[source.sourceId] = nextFingerprint;
+          }
+          continue;
+        }
+        successfullyChecked.push(source.clientSourceId);
+        state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
+        const entries = recentEntries(outcome.value.result.entries);
+        const nextFingerprint = fingerprint({
+          ...range,
+          completeness: outcome.value.result.completeness,
+          entries,
+          warnings: [...(outcome.value.result.warnings ?? [])].sort(),
+        });
+        if (state.fingerprints[source.sourceId] === nextFingerprint) continue;
+        const previous = BigInt(state.sequences[source.sourceId] ?? "0");
+        const sequence = (previous + 1n).toString();
+        state.sequences[source.sourceId] = sequence;
+        state.fingerprints[source.sourceId] = nextFingerprint;
+        snapshots.push({
+          sourceId: source.sourceId,
+          syncSequence: sequence,
+          ...range,
+          completeness: outcome.value.result.completeness,
+          entries,
+        });
+      }
+      if (await lifecycleMutationActive())
+        throw new Error("Sync persistence stopped by a local lifecycle operation");
+      await writeState(state);
+      const clearSuccessfulDirty = () =>
+        clearDirty(
+          Object.fromEntries(
+            successfullyChecked
+              .filter((clientSourceId) => claims[clientSourceId])
+              .map((clientSourceId) => [clientSourceId, claims[clientSourceId]]),
+          ),
+        );
+      if (snapshots.length === 0 && sourceErrors.length === 0) {
+        await clearSuccessfulDirty();
+        if (failures.length === 0 && syncSources.length > 0)
+          await compactSuccessfulCaptures({ ...config, sources: syncSources });
+        output("No usage changes; no request was sent.");
+        if (failures.length)
+          process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
+        return { accepted, failures, unchanged: true };
+      }
+      const payload = { protocolVersion, snapshots, sourceErrors };
+      if (await lifecycleMutationActive())
+        throw new Error("Sync persistence stopped by a local lifecycle operation");
+      await savePending(payload);
+      const delivered = await drainPending(config);
+      accepted += delivered.accepted;
       await clearSuccessfulDirty();
-      if (failures.length === 0 && syncSources.length > 0)
+      if (snapshots.length === 0)
+        throw new Error(failures.join("; ") || "No configured collectors succeeded");
+      output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
+      for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
+        failures.push(`server disconnected source ${sourceId}`);
+      for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
+        failures.push(`server rejected source ${sourceId}; payload quarantined`);
+      if (failures.length === 0)
         await compactSuccessfulCaptures({ ...config, sources: syncSources });
-      output("No usage changes; no request was sent.");
       if (failures.length)
         process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
-      return { accepted, failures, unchanged: true };
-    }
-    const payload = { protocolVersion, snapshots, sourceErrors };
-    if (await lifecycleMutationActive())
-      throw new Error("Sync persistence stopped by a local lifecycle operation");
-    await savePending(payload);
-    const delivered = await drainPending(config);
-    accepted += delivered.accepted;
-    await clearSuccessfulDirty();
-    if (snapshots.length === 0)
-      throw new Error(failures.join("; ") || "No configured collectors succeeded");
-    output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
-    for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
-      failures.push(`server disconnected source ${sourceId}`);
-    for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
-      failures.push(`server rejected source ${sourceId}; payload quarantined`);
-    if (failures.length === 0) await compactSuccessfulCaptures({ ...config, sources: syncSources });
-    if (failures.length) process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
-    return { accepted, failures };
-  });
+      return { accepted, failures };
+    },
+    { waitMs: options.automatic ? (process.env.NODE_ENV === "test" ? 5_000 : 60_000) : 0 },
+  );
 }
 
 async function launchAutomaticScheduler() {

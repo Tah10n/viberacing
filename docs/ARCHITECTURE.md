@@ -75,8 +75,10 @@ collectors. It saves fingerprints/sequences only for processed sources and clear
 when its generation still matches, so concurrent events survive for the next batch. Manual sync and
 first connect collect every active source and apply the same generation-safe clearing. One dirty
 generation produces one automatic attempt: collector failures finish it, network failures retain the
-compact pending payload, and only a newer generation schedules another process. Scheduler and sync
-locks carry ownership tokens, so a stale owner cannot remove a replacement lock. There is no daemon,
+compact pending payload, and only a newer generation schedules another process. An automatic batch
+waits at most 60 seconds for an in-flight manual sync's single-flight lock, so an event arriving
+during that sync is neither dropped nor turned into an unbounded retry. Scheduler and sync locks
+carry ownership tokens, so a stale owner cannot remove a replacement lock. There is no daemon,
 watcher, polling loop, or required cron.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
