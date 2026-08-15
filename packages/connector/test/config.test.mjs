@@ -309,7 +309,7 @@ test("keeps a manual Qwen hook root through reconnect and uninstall", async (con
       join(qwenHome, "settings.json"),
       `{
         // Preserve this user comment.
-        "advanced": { "runtimeOutputDir": "${runtimeRoot}" },
+        "advanced": { "runtimeOutputDir": ${JSON.stringify(runtimeRoot)} },
         "unknownSetting": { "keep": true }
       }\n`,
     );
