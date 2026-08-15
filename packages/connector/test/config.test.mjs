@@ -11,6 +11,7 @@ import {
   readFile,
   readdir,
   stat,
+  symlink,
   unlink,
   utimes,
   writeFile,
@@ -42,7 +43,10 @@ function connectorEnvironment(home, extra = {}) {
     CLAUDE_CONFIG_DIR: join(home, ".claude"),
     KIMI_CODE_HOME: join(home, ".kimi-code"),
     KIMI_SHARE_DIR: join(home, ".kimi"),
+    XDG_DATA_HOME: join(home, ".local", "share"),
+    OPENCODE_DB: "",
     QWEN_HOME: join(home, ".qwen"),
+    QWEN_RUNTIME_DIR: "",
     GEMINI_CLI_HOME: home,
     ...extra,
   };
@@ -490,6 +494,38 @@ test("keeps source UUIDs stable when detected path order changes", async () => {
       reordered.find((item) => item.dataPath === secondPath).clientSourceId,
       firstIds.get(secondPath),
     );
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("deduplicates a configured token root through its symlink without changing display path", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-symlink-source-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?symlink-source=${encodeURIComponent(home)}`);
+    const root = join(home, "usage-root");
+    const alias = join(home, "usage-alias");
+    await mkdir(root);
+    await symlink(root, alias, process.platform === "win32" ? "junction" : "dir");
+    const direct = await module.addSource({
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: root,
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+    });
+    const duplicate = await module.addSource({
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: alias,
+      suggestedLabel: "Claude alias",
+      supportedSurface: "cli",
+    });
+    assert.equal(direct.added, true);
+    assert.equal(duplicate.added, false);
+    assert.equal(duplicate.source.clientSourceId, direct.source.clientSourceId);
+    assert.equal((await module.readSources())[0].dataPath, root);
   } finally {
     restoreEnvironment();
   }
@@ -1644,6 +1680,110 @@ test("requires an explicit safe label when adding a local data root", async (con
   await assert.rejects(access(join(state, "config.json")));
 });
 
+test("connect pairs only exact sources and keeps every local path out of its payload", async (context) => {
+  let pairingBody;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      pairingBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          installationId: "privacy-installation",
+          pollToken: "privacy-poll-token",
+          verificationUrl: "http://127.0.0.1/verify",
+          code: "PRIVATE",
+          expiresInSeconds: 0,
+        }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-pairing-privacy-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(directory, [
+    {
+      clientSourceId: "11111111-2222-4333-8444-555555555555",
+      agentId: "antigravity",
+      dataPath: join(home, "private", "antigravity.jsonl"),
+      executablePath: join(home, "private", "agy"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Antigravity",
+    },
+    {
+      clientSourceId: "66666666-7777-4888-8999-000000000000",
+      agentId: "cursor",
+      dataPath: join(home, "private", "cursor.jsonl"),
+      executablePath: join(home, "private", "cursor-agent"),
+      collectionMethod: "cursor_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Cursor",
+    },
+  ]);
+
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
+      { env: connectorEnvironment(home, { PATH: "" }) },
+    ),
+    /Pairing expired/,
+  );
+  assert.equal(pairingBody.sources.length, 1);
+  assert.deepEqual(Object.keys(pairingBody.sources[0]).sort(), [
+    "agentId",
+    "clientSourceId",
+    "collectionMethod",
+    "suggestedLabel",
+    "supportedSurface",
+  ]);
+  assert.equal(pairingBody.sources[0].agentId, "antigravity");
+  assert.doesNotMatch(JSON.stringify(pairingBody), new RegExp(home.replaceAll("\\", "\\\\")));
+  for (const forbidden of [
+    "dataPath",
+    "canonicalPath",
+    "executablePath",
+    "prompt",
+    "response",
+    "model",
+    "repository",
+    "credentials",
+  ])
+    assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
+});
+
+test("connect does not treat a configured Cursor wrapper as an exact token source", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-cursor-connect-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const directory = join(home, ".viberacing");
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(directory, [
+    {
+      clientSourceId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      agentId: "cursor",
+      dataPath: join(home, "cursor.jsonl"),
+      collectionMethod: "cursor_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Cursor",
+    },
+  ]);
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "connect"], {
+      env: connectorEnvironment(home, { PATH: "" }),
+    }),
+    /No exact token source was found yet/,
+  );
+});
+
 test("removes a source online with all local state and remains idempotent", async (context) => {
   const server = createServer((_request, response) => {
     response.writeHead(204);
@@ -2024,6 +2164,30 @@ test("doctor reports Claude availability without collecting usage", async (conte
   });
   assert.match(result.stdout, /claude_code diagnostics: ok/);
   assert.doesNotMatch(result.stdout, /claude_code \(Work\): ok/);
+});
+
+test("doctor explains Qwen relative settings, Antigravity wrapper-only, and Cursor exclusion", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-discovery-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  await mkdir(join(home, ".qwen"), { recursive: true });
+  await writeFile(
+    join(home, ".qwen", "settings.json"),
+    JSON.stringify({ advanced: { runtimeOutputDir: "project-runtime" } }),
+  );
+  const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home, { PATH: "" }),
+  });
+  assert.match(result.stdout, /Qwen Code:[\s\S]*runtimeOutputDir is relative/);
+  assert.match(result.stdout, /viberacing source add --agent qwen_code/);
+  assert.match(result.stdout, /Antigravity CLI:[\s\S]*Status: wrapper-only/);
+  assert.match(
+    result.stdout,
+    /only Antigravity CLI sessions launched through the Vibe Racing wrapper are counted/,
+  );
+  assert.match(
+    result.stdout,
+    /Cursor CLI:[\s\S]*authoritative token accounting unavailable; not counted/,
+  );
 });
 
 test("doctor serializes remote reconciliation behind an active sync", async (context) => {
