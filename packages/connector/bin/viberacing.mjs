@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import {
+  adapters,
   adapterFor,
   discoverSources,
   recentEntries,
@@ -168,6 +169,24 @@ function publicSource(source) {
   };
 }
 
+async function exactPairingSources(sources) {
+  const result = [];
+  for (const source of sources) {
+    const adapter = adapterFor(source.agentId);
+    if (!adapter || adapter.exactAccounting === false) continue;
+    if (source.agentId === "antigravity") {
+      result.push(source);
+      continue;
+    }
+    try {
+      const diagnostic = await adapter.diagnose(source);
+      if (diagnostic.status === "ok" && diagnostic.dataLocationAvailable !== false)
+        result.push(source);
+    } catch {}
+  }
+  return result;
+}
+
 async function connect() {
   const origin = normalizedOrigin(option("--origin", "https://viberacing.com"));
   output("Detecting supported agent sources…");
@@ -181,10 +200,11 @@ async function connect() {
   const supersededClientSourceIds = sourcesBeforeDiscovery
     .filter((source) => !localSourceIds.has(source.clientSourceId))
     .map((source) => source.clientSourceId);
-  const sources = new Map(localSources.map((source) => [source.clientSourceId, source]));
-  if (localSources.length === 0)
+  const exactSources = await exactPairingSources(localSources);
+  const sources = new Map(exactSources.map((source) => [source.clientSourceId, source]));
+  if (exactSources.length === 0)
     throw new Error(
-      "No exact supported source was found. Run an agent once or add a source explicitly.",
+      "No exact token source was found yet. Run a supported agent at least once, or add its token data root explicitly. Try `viberacing doctor` or `viberacing source add --agent <agent> --name <label> --data-dir <usage-root>`.",
     );
   const installation = await readOrCreateInstallation();
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
@@ -900,12 +920,63 @@ async function automaticSync() {
 async function doctor() {
   const discovery = await discoverSources();
   const detected = discovery.sources;
+  const localSources = await readSources().catch(() => []);
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
   for (const diagnostic of discovery.diagnostics)
     output(`Detection error (${diagnostic.displayName}): ${diagnostic.error}`);
+  const expectedSources = {
+    codex: "account/usage/read account usage",
+    claude_code: "session JSONL with usage",
+    opencode: "compatible OpenCode SQLite message store",
+    kimi_code: "current or legacy wire records",
+    qwen_code: "runtime usage directory",
+    cursor: "authoritative provider token counters",
+    antigravity: "Vibe Racing wrapper capture",
+    gemini_cli: "session JSONL records",
+  };
+  for (const adapter of adapters) {
+    const automatic = detected.filter((source) => source.agentId === adapter.id);
+    const configured = localSources.filter((source) => source.agentId === adapter.id);
+    output(`${adapter.displayName}:`);
+    output(`  Expected source type: ${expectedSources[adapter.id]}`);
+    if (adapter.id === "cursor") {
+      output(`  Status: ${configured.length ? "configured locally; " : ""}not counted`);
+      output("  Reason: Cursor CLI authoritative token accounting unavailable; not counted");
+      continue;
+    }
+    if (adapter.id === "antigravity") {
+      output(
+        `  Status: wrapper-only${configured.length ? `; ${configured.length} capture source(s) configured` : ""}`,
+      );
+      output(
+        "  Reason: only Antigravity CLI sessions launched through the Vibe Racing wrapper are counted; earlier, direct, and Desktop sessions are not included",
+      );
+      output("  Manual command: viberacing run antigravity -- ...");
+      continue;
+    }
+    const visible = automatic.length ? automatic : configured;
+    if (visible.length) {
+      output(
+        adapter.id === "opencode"
+          ? `  Status: found ${visible.length} compatible SQLite store(s)`
+          : `  Status: ${automatic.length ? "detected" : "configured manually"}`,
+      );
+      for (const source of visible) {
+        output(`  Detected token root: ${source.dataPath}`);
+        output(`  Collection method: ${source.collectionMethod}`);
+      }
+      continue;
+    }
+    const reason = discovery.diagnostics.find((item) => item.agentId === adapter.id)?.error;
+    output("  Status: not detected");
+    output(`  Reason: ${reason ?? "no exact token store has been created yet"}`);
+    output(
+      `  Manual command: viberacing source add --agent ${adapter.id} --name <label> --data-dir <usage-root>`,
+    );
+  }
   try {
     let config = await readConfig();
     let state = await readState();
@@ -1053,6 +1124,14 @@ async function sourceCommand() {
       supportedSurface: adapter.supportedSurfaces[0],
       suggestedLabel: label,
     });
+    if (agentId === "cursor") {
+      output(
+        result.added
+          ? "Cursor wrapper profile saved locally. Authoritative token accounting is unavailable, so it will not be paired or counted."
+          : "That local Cursor wrapper profile was already configured; Cursor is not counted.",
+      );
+      return;
+    }
     output(
       result.added ? "Source saved locally." : "That local source was already configured.",
       "Run `viberacing connect` to approve it.",
