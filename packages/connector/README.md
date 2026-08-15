@@ -15,12 +15,12 @@ Discovery is independent of the directory where the command runs. Provider data 
 documented token-store roots, supported environment overrides, Qwen's user-level settings, and roots
 explicitly saved with `source add`. Finding an executable does not create a ranking source. When an
 exact source needs an executable, the resolver can use `PATH`, installed application roots, and
-common package-manager locations. Portable installations can set `VIBERACING_CODEX_BIN`,
-`VIBERACING_CURSOR_AGENT_BIN`, or `VIBERACING_ANTIGRAVITY_BIN` to an absolute executable path. One
-resolved override is saved only in local `sources.json`, so later processes do not require the
-variable again. Windows npm `.cmd`/`.bat` shims are launched through `ComSpec` with escaped
-arguments. One broken source adapter is reported as a detection warning and never hides other
-healthy sources. Discovery never scans the whole home directory or disk.
+common package-manager locations. Portable installations can set `VIBERACING_CODEX_BIN` or
+`VIBERACING_ANTIGRAVITY_BIN` to an absolute executable path. One resolved override is saved only in
+local `sources.json`, so later processes do not require the variable again. Windows npm
+`.cmd`/`.bat` shims are launched through `ComSpec` with escaped arguments. One broken source adapter
+is reported as a detection warning and never hides other healthy sources. Discovery never scans the
+whole home directory or disk.
 
 The browser approval maps every detected local source to a new or existing account. Re-running
 `connect` keeps the stable installation identity, rotates device authorization, refreshes the
@@ -44,7 +44,6 @@ viberacing source remove <client-source-id>
 viberacing disconnect
 viberacing uninstall
 viberacing reset-installation
-viberacing run cursor [--source <client-source-id>] -- <native cursor arguments>
 viberacing run antigravity [--source <client-source-id>] -- <native agy arguments>
 ```
 
@@ -61,13 +60,11 @@ an approved migration, the server disconnects the superseded legacy mapping and 
 duplicated ranking rows before the current source performs its first sync. An abandoned pairing
 leaves both the local legacy source and its server history unchanged.
 
-Capture-based Cursor and Antigravity sources do not require `--data-dir`. Their default local path
-is `captures/<clientSourceId>.jsonl`, so Personal and Work accounts never share a capture file. A
+Capture-based Antigravity sources do not require `--data-dir`. Their default local path is
+`captures/<clientSourceId>.jsonl`, so Personal and Work accounts never share a capture file. The
 wrapper selects its only matching source automatically; with multiple profiles, `--source` is
 required and is consumed by Vibe Racing rather than passed to the native CLI. The first wrapper run
-creates one default source when none exists. Cursor follows the same local selection rules, but it
-never writes a capture and is never sent for pairing while the official CLI lacks authoritative
-token counters.
+creates one default source when none exists.
 
 OpenCode enumerates only names matching `opencode.db` or `opencode-<channel>.db` inside the official
 data root, plus `OPENCODE_DB` (absolute or relative to that root). Every candidate must expose the
@@ -99,9 +96,9 @@ usage unless the user separately runs `viberacing sync`. A successful compatible
 authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
-OpenCode uses its read-only SQLite store and a documented `sync`; Cursor and Antigravity require the
-opt-in `run` wrappers. Every installed hook contains its stable `clientSourceId` and a source-owned
-v3 marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
+OpenCode uses its read-only SQLite store and a documented `sync`; Antigravity requires the opt-in
+`run` wrapper. Every installed hook contains its stable `clientSourceId` and a source-owned v3
+marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
 one short-lived timer process, and return the provider's minimal response. Automatic collection
 first drains pending payloads and then scans only active dirty sources; events for other sources do
 not start Codex, open OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds,
@@ -122,8 +119,7 @@ and resumes at the last complete byte offset, detecting append, truncation, repl
 removal. Partial passes retain prior per-file contributions, and valid usage metadata in a JSONL
 record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode queries only the
 UTC range. Successful Antigravity capture syncs remove records older than 35 days and atomically
-compact large files. Cursor's current official result schema has no token-usage field, so its
-wrapper deliberately captures nothing and its local profile is not paired. Only Antigravity CLI
-sessions launched through the Vibe Racing wrapper are counted; earlier/direct sessions, Cursor
-Desktop, and Antigravity Desktop are not included. Detailed versions, formulas, and limitations are
-in [AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).
+compact large files. Only Antigravity CLI sessions launched through the Vibe Racing wrapper are
+counted; earlier/direct sessions and Antigravity Desktop are not included. Detailed versions,
+formulas, and limitations are in
+[AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).

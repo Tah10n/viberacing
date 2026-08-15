@@ -72,18 +72,11 @@ test("covers Windows package managers and installed application roots", () => {
 });
 
 test("uses common standalone locations for every executable-backed agent", () => {
-  const cursor = executableCandidates("cursor", {
-    platform: "darwin",
-    home: "/Users/racer",
-    environment: { PATH: "" },
-  });
   const antigravity = executableCandidates("antigravity", {
     platform: "linux",
     home: "/home/racer",
     environment: { PATH: "" },
   });
-  assert.ok(cursor.includes("/Users/racer/.local/bin/cursor-agent"));
-  assert.ok(cursor.includes("/Applications/Cursor.app/Contents/Resources/cursor-agent"));
   assert.ok(antigravity.includes("/home/racer/.local/bin/agy"));
   assert.ok(antigravity.includes("/snap/bin/agy"));
 });
@@ -108,7 +101,7 @@ test("routes Windows command shims through ComSpec with escaped arguments", () =
 });
 
 test(
-  "executes Codex, Cursor, and Antigravity Windows npm shims with literal argv",
+  "executes Codex and Antigravity Windows npm shims with literal argv",
   { skip: process.platform !== "win32" },
   async (context) => {
     const directory = await mkdtemp(join(tmpdir(), "viberacing windows shims "));
@@ -116,7 +109,7 @@ test(
     const target = join(directory, "capture-args.mjs");
     await writeFile(target, "process.stdout.write(JSON.stringify(process.argv.slice(2)))\n");
     const expected = ["app-server", "path with spaces", 'quoted "value"', "a&b", "c|d", "x<y>z"];
-    for (const name of ["codex.cmd", "cursor-agent.cmd", "agy.cmd"]) {
+    for (const name of ["codex.cmd", "agy.cmd"]) {
       const shim = join(directory, name);
       await writeFile(shim, `@echo off\r\n"${process.execPath}" "${target}" %*\r\n`);
       const child = spawnResolvedExecutable(shim, expected, {

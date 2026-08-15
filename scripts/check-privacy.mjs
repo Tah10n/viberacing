@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,7 +11,7 @@ const candidates = execFileSync(
 )
   .toString("utf8")
   .split("\0")
-  .filter(Boolean);
+  .filter((path) => path && existsSync(resolve(root, path)));
 
 const forbiddenSegments = new Set([
   ".claude",

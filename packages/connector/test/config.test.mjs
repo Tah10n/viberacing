@@ -249,7 +249,6 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       source("qwen_code"),
       source("kimi_code"),
       source("opencode"),
-      source("cursor"),
     ]);
     assert.deepEqual(hooks, {
       codex: "current",
@@ -258,7 +257,6 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       qwen_code: "current",
       kimi_code: "current",
       opencode: "manual-sync",
-      cursor: "capture-wrapper",
     });
     await writeFile(
       join(home, ".claude", "settings.json"),
@@ -1719,15 +1717,6 @@ test("connect pairs only exact sources and keeps every local path out of its pay
       supportedSurface: "cli",
       suggestedLabel: "Antigravity",
     },
-    {
-      clientSourceId: "66666666-7777-4888-8999-000000000000",
-      agentId: "cursor",
-      dataPath: join(home, "private", "cursor.jsonl"),
-      executablePath: join(home, "private", "cursor-agent"),
-      collectionMethod: "cursor_cli_capture",
-      supportedSurface: "cli",
-      suggestedLabel: "Cursor",
-    },
   ]);
 
   await assert.rejects(
@@ -1759,29 +1748,6 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "credentials",
   ])
     assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
-});
-
-test("connect does not treat a configured Cursor wrapper as an exact token source", async (context) => {
-  const home = await mkdtemp(join(tmpdir(), "viberacing-cursor-connect-"));
-  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
-  const directory = join(home, ".viberacing");
-  await mkdir(directory, { recursive: true });
-  await writeLocalSources(directory, [
-    {
-      clientSourceId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
-      agentId: "cursor",
-      dataPath: join(home, "cursor.jsonl"),
-      collectionMethod: "cursor_cli_capture",
-      supportedSurface: "cli",
-      suggestedLabel: "Cursor",
-    },
-  ]);
-  await assert.rejects(
-    execFileAsync(process.execPath, [connectorPath, "connect"], {
-      env: connectorEnvironment(home, { PATH: "" }),
-    }),
-    /No exact token source was found yet/,
-  );
 });
 
 test("removes a source online with all local state and remains idempotent", async (context) => {
@@ -1838,7 +1804,7 @@ test("removes a source online with all local state and remains idempotent", asyn
     `${JSON.stringify({
       version: 1,
       sequences: { [sourceId]: "4" },
-      adapters: { [sourceId]: { cursor: 1 } },
+      adapters: { [sourceId]: { qwen: 1 } },
       fingerprints: { [sourceId]: "fingerprint" },
       quarantine: { [sourceId]: "invalid_payload" },
     })}\n`,
@@ -2166,7 +2132,7 @@ test("doctor reports Claude availability without collecting usage", async (conte
   assert.doesNotMatch(result.stdout, /claude_code \(Work\): ok/);
 });
 
-test("doctor explains Qwen relative settings, Antigravity wrapper-only, and Cursor exclusion", async (context) => {
+test("doctor explains Qwen relative settings and Antigravity wrapper-only", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-discovery-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   await mkdir(join(home, ".qwen"), { recursive: true });
@@ -2183,10 +2149,6 @@ test("doctor explains Qwen relative settings, Antigravity wrapper-only, and Curs
   assert.match(
     result.stdout,
     /only Antigravity CLI sessions launched through the Vibe Racing wrapper are counted/,
-  );
-  assert.match(
-    result.stdout,
-    /Cursor CLI:[\s\S]*authoritative token accounting unavailable; not counted/,
   );
 });
 
@@ -2714,7 +2676,7 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
   const home = await mkdtemp(join(tmpdir(), "viberacing-sequence-recovery-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const directory = join(home, ".viberacing");
-  const capture = join(directory, "captures", "cursor.jsonl");
+  const capture = join(directory, "captures", "antigravity.jsonl");
   await mkdir(join(directory, "captures"), { recursive: true });
   const today = new Date().toISOString().slice(0, 10);
   await writeFile(
@@ -2737,11 +2699,11 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
   await writeLocalSources(directory, [
     {
       clientSourceId,
-      agentId: "cursor",
+      agentId: "antigravity",
       dataPath: capture,
-      collectionMethod: "cursor_cli_capture",
+      collectionMethod: "antigravity_cli_capture",
       supportedSurface: "cli",
-      suggestedLabel: "Cursor",
+      suggestedLabel: "Antigravity",
     },
   ]);
   await writeFile(
@@ -2754,9 +2716,9 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
         {
           clientSourceId,
           sourceId,
-          agentId: "cursor",
-          accountLabel: "Cursor",
-          collectionMethod: "cursor_cli_capture",
+          agentId: "antigravity",
+          accountLabel: "Antigravity",
+          collectionMethod: "antigravity_cli_capture",
           lastAcceptedSyncSequence: "0",
         },
       ],
@@ -3529,49 +3491,23 @@ test("uninstall cleans later roots and retains failed-root metadata for an idemp
 });
 
 test(
-  "wrappers pass exact argv and preserve native output, exit status, and safe metadata",
+  "wrapper passes exact argv and preserves native output and safe metadata",
   { skip: process.platform === "win32" },
   async (context) => {
     const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-executable-"));
     context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
     const bin = join(home, "bin");
     await mkdir(bin, { recursive: true });
-    const cursorArgv = join(home, "cursor-argv.json");
     const antigravityArgv = join(home, "antigravity-argv.json");
-    const cursorExecutable = join(bin, "cursor-agent");
     const antigravityExecutable = join(bin, "agy");
-    await writeFile(
-      cursorExecutable,
-      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({type:"result",subtype:"success",result:"synthetic private response",session_id:"00000000-0000-4000-8000-000000000001"})+"\\n");\nprocess.stderr.write("native cursor stderr\\n");\nprocess.exitCode=7;\n`,
-    );
     await writeFile(
       antigravityExecutable,
       `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({type:"result",session_id:"safe-session",timestamp:new Date().toISOString(),prompt:"synthetic private prompt",response:"synthetic private response",usage:{input_tokens:1,output_tokens:2,cache_read_tokens:0,cache_write_tokens:0}})+"\\n");\n`,
     );
-    await chmod(cursorExecutable, 0o700);
     await chmod(antigravityExecutable, 0o700);
     const environment = connectorEnvironment(home, {
       PATH: `${bin}${delimiter}${process.env.PATH}`,
     });
-
-    await assert.rejects(
-      execFileAsync(process.execPath, [connectorPath, "run", "cursor", "--", "hello"], {
-        env: { ...environment, SYNTHETIC_ARGV_PATH: cursorArgv },
-      }),
-      (error) => {
-        assert.equal(error.code, 7);
-        assert.match(error.stdout, /synthetic private response/);
-        assert.match(error.stderr, /native cursor stderr/);
-        return true;
-      },
-    );
-    assert.deepEqual(JSON.parse(await readFile(cursorArgv, "utf8")), [
-      "--print",
-      "hello",
-      "--output-format",
-      "stream-json",
-    ]);
-    await assert.rejects(access(join(home, ".viberacing", "captures", "cursor.jsonl")));
 
     await execFileAsync(
       process.execPath,
@@ -3606,13 +3542,13 @@ test(
     context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
     const bin = join(home, "bin");
     await mkdir(bin, { recursive: true });
-    const executable = join(bin, "cursor-agent");
+    const executable = join(bin, "agy");
     await writeFile(
       executable,
       '#!/usr/bin/env node\nprocess.stdout.write("ready\\n");\nsetInterval(() => {}, 1000);\n',
     );
     await chmod(executable, 0o700);
-    const child = spawn(process.execPath, [connectorPath, "run", "cursor", "--", "hello"], {
+    const child = spawn(process.execPath, [connectorPath, "run", "antigravity", "--", "hello"], {
       env: connectorEnvironment(home, { PATH: `${bin}${delimiter}${process.env.PATH}` }),
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -3627,7 +3563,7 @@ test(
 );
 
 test(
-  "Antigravity and Cursor wrappers select source-specific profiles",
+  "Antigravity wrapper selects source-specific profiles",
   { skip: process.platform === "win32" },
   async (context) => {
     const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-profiles-"));
@@ -3638,12 +3574,7 @@ test(
       join(bin, "agy"),
       `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2))); process.stdout.write(JSON.stringify({type:"result",session_id:process.env.SYNTHETIC_SESSION_ID,timestamp:new Date().toISOString(),prompt:"private",response:"private",usage:{input_tokens:2,output_tokens:3}})+"\\n");\n`,
     );
-    await writeFile(
-      join(bin, "cursor-agent"),
-      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(process.env.SYNTHETIC_ARGV_PATH, JSON.stringify(process.argv.slice(2))); process.stdout.write(JSON.stringify({type:"result",session_id:"cursor-no-counters",result:"private"})+"\\n");\n`,
-    );
     await chmod(join(bin, "agy"), 0o700);
-    await chmod(join(bin, "cursor-agent"), 0o700);
     const environment = connectorEnvironment(home, {
       PATH: `${bin}${delimiter}${process.env.PATH}`,
     });
@@ -3700,57 +3631,5 @@ test(
     }
     assert.doesNotMatch(await readFile(antigravitySources[0].dataPath, "utf8"), /profile-1/);
     assert.doesNotMatch(await readFile(antigravitySources[1].dataPath, "utf8"), /profile-0/);
-
-    for (const name of ["Personal", "Work"])
-      await execFileAsync(
-        process.execPath,
-        [connectorPath, "source", "add", "--agent", "cursor", "--name", name],
-        { env: environment },
-      );
-    const allSources = await readLocalSources(join(home, ".viberacing"));
-    const cursorSources = allSources.filter((source) => source.agentId === "cursor");
-    await assert.rejects(
-      execFileAsync(process.execPath, [connectorPath, "run", "cursor", "--", "inspect"], {
-        env: environment,
-      }),
-      /Multiple cursor sources.*--source/,
-    );
-    const cursorArgv = join(home, "cursor-selected-argv.json");
-    await execFileAsync(
-      process.execPath,
-      [
-        connectorPath,
-        "run",
-        "cursor",
-        "--source",
-        cursorSources[0].clientSourceId,
-        "--",
-        "inspect",
-      ],
-      { env: { ...environment, SYNTHETIC_ARGV_PATH: cursorArgv } },
-    );
-    assert.deepEqual(JSON.parse(await readFile(cursorArgv, "utf8")), [
-      "--print",
-      "inspect",
-      "--output-format",
-      "stream-json",
-    ]);
-    await assert.rejects(access(cursorSources[0].dataPath));
-    await assert.rejects(
-      execFileAsync(
-        process.execPath,
-        [
-          connectorPath,
-          "run",
-          "cursor",
-          "--source",
-          antigravitySources[0].clientSourceId,
-          "--",
-          "inspect",
-        ],
-        { env: environment },
-      ),
-      /belongs to antigravity/,
-    );
   },
 );

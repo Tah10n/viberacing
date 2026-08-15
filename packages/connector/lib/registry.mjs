@@ -1,7 +1,6 @@
 import { antigravityAdapter } from "./adapters/antigravity.mjs";
 import { claudeAdapter } from "./adapters/claude.mjs";
 import { codexAdapter } from "./adapters/codex.mjs";
-import { cursorAdapter } from "./adapters/cursor.mjs";
 import { geminiAdapter } from "./adapters/gemini.mjs";
 import { kimiAdapter } from "./adapters/kimi.mjs";
 import { openCodeAdapter } from "./adapters/opencode.mjs";
@@ -23,7 +22,6 @@ export const adapters = Object.freeze([
   openCodeAdapter,
   kimiAdapter,
   qwenAdapter,
-  cursorAdapter,
   antigravityAdapter,
   geminiAdapter,
 ]);

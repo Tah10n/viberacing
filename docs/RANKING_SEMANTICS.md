@@ -43,9 +43,7 @@ sources immediately. An unchanged snapshot makes no request. The leaderboard is 
 advertised as real-time.
 
 Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
-Code, Qwen Code, Antigravity, and Gemini CLI. Cursor has a privacy-safe wrapper utility, but it
-persists no capture, is omitted from pairing, and is excluded from totals until its official
-structured output exposes authoritative counters.
+Code, Qwen Code, Antigravity, and Gemini CLI.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
 and run `viberacing sync`. To delete retained history, disconnect and explicitly delete the agent

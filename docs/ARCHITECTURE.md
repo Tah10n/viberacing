@@ -38,8 +38,7 @@ transaction. Separate Codex profiles are selected with source-specific `CODEX_HO
 the `account_max` rule prevents account-wide totals shared across computers from doubling. Capture
 sources use `captures/<clientSourceId>.jsonl`. Antigravity Personal and Work therefore have
 independent files and can map to independent accounts; the wrapper consumes `--source` locally when
-more than one profile exists. Cursor uses the same local selection path but produces no capture and
-is omitted from pairing while authoritative native counters are unavailable.
+more than one profile exists.
 
 ## Snapshot ingestion and ranking
 
@@ -111,9 +110,7 @@ only 35 days and atomically compact oversized source-specific files.
 
 Approval is serialized on the user row and caps each user at 20 active installations, 100 active
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
-additional computers cannot multiply the user-wide request budget. Cursor sources may remain visible
-for diagnostics, but uncounted snapshots are discarded server-side and never enter daily or weekly
-ranking rows.
+additional computers cannot multiply the user-wide request budget.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small

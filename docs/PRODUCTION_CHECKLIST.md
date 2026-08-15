@@ -42,10 +42,8 @@
   automatic-disable flag, and a lock timeout gets exactly one bounded deferred acquisition.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
-- Recheck the documented upstream versions before release. Do not enable exact Cursor ranking until
-  Cursor officially exposes authoritative counters; neither Cursor Desktop nor Antigravity Desktop
-  is supported.
-- Confirm public copy reports seven counted agents and explicitly excludes Cursor from exact totals.
+- Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
+- Confirm public copy reports seven counted agents.
 
 ## GitHub and npm manual controls
 

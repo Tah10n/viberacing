@@ -9,10 +9,8 @@ responses, code, paths, repositories, hostnames, provider identities, credential
 costs.
 
 Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Antigravity
-CLI, and Gemini CLI. Cursor CLI has a privacy-safe wrapper, but its current published structured
-output does not include authoritative token counters, so it is not presently counted. Cursor Desktop
-and Antigravity Desktop are not supported. See [agent support](docs/AGENT_SUPPORT.md) and
-[ranking semantics](docs/RANKING_SEMANTICS.md).
+CLI, and Gemini CLI. Antigravity Desktop is not supported. See
+[agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
 Supported lifecycle hooks mark only their owning local source dirty. One short-lived detached
 scheduler coalesces source events and sends at most about one automatic batch every two minutes; it
