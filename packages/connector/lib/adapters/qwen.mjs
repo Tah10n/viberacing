@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
-import { resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, join, posix, resolve, win32 } from "node:path";
 import {
   collectJsonl,
   componentEntry,
@@ -55,18 +55,79 @@ function qwenEventKey(line) {
   }
 }
 
-function resolvedRoot(value) {
-  if (value === "~") return homedir();
-  if (/^~[\\/]/.test(value ?? "")) return join(homedir(), value.slice(2));
-  return resolve(value);
+export function resolveQwenPath(value, { home = homedir(), platform = process.platform } = {}) {
+  const path = platform === "win32" ? win32 : posix;
+  if (value === "~") return home;
+  if (/^~[\\/]/.test(value ?? "")) return path.resolve(home, value.slice(2));
+  return path.isAbsolute(value) ? path.normalize(value) : null;
 }
 
-const runtimeRoot = process.env.QWEN_RUNTIME_DIR
-  ? resolvedRoot(process.env.QWEN_RUNTIME_DIR)
-  : process.env.QWEN_HOME
-    ? resolvedRoot(process.env.QWEN_HOME)
-    : join(homedir(), ".qwen");
-const defaultPaths = [join(runtimeRoot, "usage")];
+function qwenHome(environment, home, platform) {
+  if (!environment.QWEN_HOME) return (platform === "win32" ? win32 : posix).join(home, ".qwen");
+  return (
+    resolveQwenPath(environment.QWEN_HOME, { home, platform }) ?? resolve(environment.QWEN_HOME)
+  );
+}
+
+export async function qwenRuntimeRoot({
+  environment = process.env,
+  home = homedir(),
+  platform = process.platform,
+  diagnostics = [],
+} = {}) {
+  const path = platform === "win32" ? win32 : posix;
+  if (environment.QWEN_RUNTIME_DIR) {
+    const explicit =
+      resolveQwenPath(environment.QWEN_RUNTIME_DIR, { home, platform }) ??
+      resolve(environment.QWEN_RUNTIME_DIR);
+    return explicit;
+  }
+  const homeRoot = qwenHome(environment, home, platform);
+  try {
+    const settings = JSON.parse(await readFile(path.join(homeRoot, "settings.json"), "utf8"));
+    const configured = settings?.advanced?.runtimeOutputDir;
+    if (typeof configured === "string" && configured.trim()) {
+      const resolved = resolveQwenPath(configured.trim(), { home, platform });
+      if (resolved) return resolved;
+      diagnostics.push({
+        error:
+          "runtimeOutputDir is relative; add the resolved root explicitly with `viberacing source add --agent qwen_code --name <label> --data-dir <resolved-runtime-root>/usage`",
+      });
+      return null;
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") diagnostics.push({ error: "Qwen user settings are unreadable" });
+  }
+  return homeRoot;
+}
+
+export async function detectQwenSources(options = {}) {
+  const diagnostics = options.diagnostics ?? [];
+  const platform = options.platform ?? process.platform;
+  const root = await qwenRuntimeRoot({ ...options, diagnostics });
+  if (root === null) return [];
+  const path = platform === "win32" ? win32 : posix;
+  const dataPath = path.join(root, "usage");
+  return (
+    await diagnosePath({
+      dataPath,
+      collectionMethod: "qwen_stats_jsonl",
+      supportedSurface: "cli",
+    })
+  ).dataLocationAvailable
+    ? [
+        {
+          dataPath,
+          collectionMethod: "qwen_stats_jsonl",
+          supportedSurface: "cli",
+          suggestedLabel: "Qwen Code",
+        },
+      ]
+    : [];
+}
+
+const initialRuntimeRoot = await qwenRuntimeRoot();
+const defaultPaths = initialRuntimeRoot === null ? [] : [join(initialRuntimeRoot, "usage")];
 export const qwenAdapter = Object.freeze({
   id: "qwen_code",
   displayName: "Qwen Code",
@@ -75,26 +136,7 @@ export const qwenAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "usage stats file",
   defaultPaths,
-  detect: async () => {
-    const result = [];
-    for (const dataPath of defaultPaths)
-      if (
-        (
-          await diagnosePath({
-            dataPath,
-            collectionMethod: "qwen_stats_jsonl",
-            supportedSurface: "cli",
-          })
-        ).dataLocationAvailable
-      )
-        result.push({
-          dataPath,
-          collectionMethod: "qwen_stats_jsonl",
-          supportedSurface: "cli",
-          suggestedLabel: "Qwen Code",
-        });
-    return result;
-  },
+  detect: detectQwenSources,
   collect: (source, range, state) =>
     collectJsonl(
       source,
