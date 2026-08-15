@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/config";
 import { transaction } from "@/lib/db";
 import { problem, readBoundedForm, sameOrigin } from "@/lib/http";
+import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
   const current = await viewer();
   if (current === null) return problem(401, "unauthorized");
@@ -38,3 +39,5 @@ export async function POST(request: Request): Promise<Response> {
   });
   return NextResponse.redirect(new URL("/dashboard?left=1", publicOrigin()), 303);
 }
+
+export const POST = withRequestLogging("/api/leaderboard/leave", post);

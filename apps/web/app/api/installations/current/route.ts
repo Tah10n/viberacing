@@ -1,6 +1,7 @@
 import { digest } from "@/lib/crypto";
 import { problem } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
+import { withRequestLogging } from "@/lib/request-log";
 
 function bearer(request: Request): string | null {
   const authorization = request.headers.get("authorization");
@@ -9,7 +10,7 @@ function bearer(request: Request): string | null {
   return token.length >= 32 && token.length <= 128 ? token : null;
 }
 
-export async function GET(request: Request): Promise<Response> {
+async function get(request: Request): Promise<Response> {
   const token = bearer(request);
   if (!token) return problem(401, "unauthorized");
   const rows = await query<{
@@ -53,7 +54,7 @@ export async function GET(request: Request): Promise<Response> {
     : problem(401, "unauthorized");
 }
 
-export async function DELETE(request: Request): Promise<Response> {
+async function remove(request: Request): Promise<Response> {
   const token = bearer(request);
   if (!token) return problem(401, "unauthorized");
   const changed = await transaction(async (client) => {
@@ -73,3 +74,6 @@ export async function DELETE(request: Request): Promise<Response> {
   });
   return changed ? new Response(null, { status: 204 }) : problem(401, "unauthorized");
 }
+
+export const GET = withRequestLogging("/api/installations/current", get);
+export const DELETE = withRequestLogging("/api/installations/current", remove);

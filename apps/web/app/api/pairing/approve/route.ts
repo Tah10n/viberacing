@@ -4,9 +4,10 @@ import { agentRegistry, type SupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
-import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
+import { isUuid, markResponse, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { viewer } from "@/lib/session";
 import { rebuildAgentSummaries } from "@/lib/usage-summary";
+import { withRequestLogging } from "@/lib/request-log";
 
 interface InstallationRow {
   id: string;
@@ -54,7 +55,7 @@ function validLabel(value: string | null): string | null {
   return label.length >= 1 && label.length <= 40 ? label : null;
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
   const current = await viewer();
   if (current === null) return problem(401, "unauthorized");
@@ -234,13 +235,18 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (!(error instanceof ApprovalError)) throw error;
-    return NextResponse.redirect(
-      new URL(
-        `/connect?code=${encodeURIComponent(code)}&error=${error.code === "limit" ? "limit" : "expired"}`,
-        publicOrigin(),
+    return markResponse(
+      NextResponse.redirect(
+        new URL(
+          `/connect?code=${encodeURIComponent(code)}&error=${error.code === "limit" ? "limit" : "expired"}`,
+          publicOrigin(),
+        ),
+        303,
       ),
-      303,
+      error.code === "limit" ? "pairing_limit_reached" : "pairing_expired",
     );
   }
   return NextResponse.redirect(new URL("/dashboard?connected=1", publicOrigin()), 303);
 }
+
+export const POST = withRequestLogging("/api/pairing/approve", post);

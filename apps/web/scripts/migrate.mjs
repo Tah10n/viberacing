@@ -3,6 +3,39 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
+function safeToken(value, maximumLength = 96) {
+  return typeof value === "string" &&
+    value.length <= maximumLength &&
+    /^[A-Za-z0-9_.:-]+$/.test(value)
+    ? value
+    : undefined;
+}
+
+function log(level, event, fields = {}) {
+  process.stdout.write(
+    `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level,
+      service: "viberacing-migrate",
+      event,
+      ...fields,
+    })}\n`,
+  );
+}
+
+function safeErrorFields(error) {
+  const fields = {
+    errorType: error instanceof Error ? (safeToken(error.name) ?? "Error") : "UnknownError",
+  };
+  if (typeof error === "object" && error !== null) {
+    const code = safeToken(error.code, 32);
+    const severity = safeToken(error.severity, 32);
+    if (code !== undefined) fields.errorCode = code;
+    if (severity !== undefined) fields.errorSeverity = severity;
+  }
+  return fields;
+}
+
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required");
 
@@ -18,8 +51,12 @@ const client = new pg.Client({
   statement_timeout: 30_000,
   ssl: process.env.VIBERACING_DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
 });
-await client.connect();
+let appliedCount = 0;
+let connected = false;
 try {
+  await client.connect();
+  connected = true;
+  log("info", "migration_started", { availableMigrations: migrations.length });
   await client.query("SELECT pg_advisory_lock(1447641668)");
   const ledger = await client.query("SELECT to_regclass('public.schema_migrations') AS name");
   const applied = new Set();
@@ -35,13 +72,23 @@ try {
       await client.query(sql);
       await client.query("INSERT INTO schema_migrations (version) VALUES ($1)", [version]);
       await client.query("COMMIT");
-      process.stdout.write(`Applied ${version}\n`);
+      appliedCount += 1;
+      log("info", "migration_applied", { migrationVersion: version });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     }
   }
+  log("info", "migration_completed", { appliedMigrations: appliedCount });
+} catch (error) {
+  log("error", connected ? "migration_failed" : "database_connection_failed", {
+    ...safeErrorFields(error),
+    appliedMigrations: appliedCount,
+  });
+  process.exitCode = 1;
 } finally {
-  await client.query("SELECT pg_advisory_unlock(1447641668)").catch(() => {});
-  await client.end();
+  if (connected) {
+    await client.query("SELECT pg_advisory_unlock(1447641668)").catch(() => {});
+    await client.end().catch(() => {});
+  }
 }

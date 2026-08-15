@@ -8,11 +8,17 @@
   `https://domain.example/api/auth/github/callback`; Device Flow is disabled/not used.
 - Set `DATABASE_URL`, `VIBERACING_PUBLIC_ORIGIN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `VIBERACING_DATABASE_SSL`, `VIBERACING_MIN_CONNECTOR_VERSION=0.2.0`, and
-  `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML.
+  `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Set
+  `VIBERACING_LOG_LEVEL=info`.
 - Never set `VIBERACING_ALLOW_INSECURE_LOCAL` in Railway. It is a loopback-only local-preview flag.
 - Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports the latest
   required migration. Insert a synthetic later ledger row and confirm readiness remains healthy;
   remove the required row and confirm readiness returns 503.
+- Confirm Railway parses one-line JSON logs, an intentional rejected request has a searchable
+  `requestId`, `route`, `status`, and `outcome`, and a failed readiness check is logged at `error`.
+  Temporarily use `debug` to verify request-start correlation, then return production to `info`.
+- Inspect representative logs and confirm they contain no URL query, IP, headers, cookies, bodies,
+  handles, source IDs, token totals, credentials, model names, repository names, or local paths.
 
 ## Verification
 
