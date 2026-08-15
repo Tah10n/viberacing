@@ -112,7 +112,9 @@ jobs:
         run: |
           pnpm db:migrate
           pnpm db:migrate
-          test "$(psql "$DATABASE_URL" --tuples-only --no-align --command='SELECT count(*) FROM schema_migrations')" = "1"
+          expected_migrations="$(find apps/web/database -maxdepth 1 -type f -name '*.sql' | wc -l | tr -d ' ')"
+          applied_migrations="$(psql "$DATABASE_URL" --tuples-only --no-align --command='SELECT count(*) FROM schema_migrations')"
+          test "$applied_migrations" = "$expected_migrations"
       - name: Run server integration scenarios
         run: |
           node apps/web/.next/standalone/apps/web/server.js &
