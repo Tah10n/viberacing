@@ -13,6 +13,6 @@ describe("counted agent capabilities", () => {
       "antigravity",
       "gemini_cli",
     ]);
-    expect(agentRegistry.cursor.countsExactTokens).toBe(false);
+    expect(supportedAgents).toHaveLength(7);
   });
 });

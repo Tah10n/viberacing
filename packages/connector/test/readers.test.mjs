@@ -10,7 +10,6 @@ import {
   parseAntigravityLines,
   parseCodexUsage,
   codexProfileEnvironment,
-  parseCursorLines,
   parseGeminiRecords,
   parseKimiLines,
   parseKimiLegacyLines,
@@ -264,22 +263,6 @@ test("reads Qwen content-free stats using UTC timestamp instead of localDate", a
   ]);
 });
 
-test("does not count current Cursor terminal results without authoritative counters", async () => {
-  const lines = (await fixture("cursor.jsonl")).trim().split("\n");
-  assert.deepEqual(parseCursorLines(lines), []);
-  assert.equal(safeCaptureRecord("cursor", lines.at(-1)), null);
-  assert.equal(
-    safeCaptureRecord(
-      "cursor",
-      JSON.stringify({
-        id: "unrecognized-future-shape",
-        usage: { totalTokens: 10, inputTokens: 5, outputTokens: 5 },
-      }),
-    ),
-    null,
-  );
-});
-
 test("reads Antigravity CLI snake-case usage", async () => {
   const lines = (await fixture("antigravity.jsonl")).trim().split("\n");
   assert.deepEqual(parseAntigravityLines(lines), [
@@ -332,19 +315,10 @@ test("keeps exactly the 31 UTC dates accepted by ingestion", () => {
   assert.deepEqual(recentEntries(entries, new Date("2026-08-13T23:00:00Z")), entries.slice(1, 3));
 });
 
-test("all eight adapters expose the complete collection contract", () => {
+test("all seven adapters expose the complete collection contract", () => {
   assert.deepEqual(
     adapters.map((adapter) => adapter.id),
-    [
-      "codex",
-      "claude_code",
-      "opencode",
-      "kimi_code",
-      "qwen_code",
-      "cursor",
-      "antigravity",
-      "gemini_cli",
-    ],
+    ["codex", "claude_code", "opencode", "kimi_code", "qwen_code", "antigravity", "gemini_cli"],
   );
   for (const adapter of adapters) {
     assert.equal(typeof adapter.detect, "function");
@@ -361,7 +335,6 @@ test("malformed records never become usage", () => {
   assert.deepEqual(parseOpenCodeMessages([{ id: "x", data: "bad" }]), []);
   assert.deepEqual(parseKimiLines(["bad", "{}"]), []);
   assert.deepEqual(parseQwenLines(["bad", "{}"]), []);
-  assert.deepEqual(parseCursorLines(["bad", "{}"]), []);
   assert.deepEqual(parseAntigravityLines(["bad", "{}"]), []);
   assert.deepEqual(parseGeminiRecords([{}]), []);
 });
@@ -482,9 +455,7 @@ test("Codex rejects duplicate authoritative day buckets", async () => {
   );
 });
 
-test("capture adapters deduplicate events and aggregate multiple UTC days", async () => {
-  const cursor = (await fixture("cursor.jsonl")).trim().split("\n");
-  assert.deepEqual(parseCursorLines(cursor), []);
+test("capture adapter deduplicates events and aggregates multiple UTC days", async () => {
   const antigravity = (await fixture("antigravity.jsonl")).trim();
   const other = JSON.stringify({
     ...JSON.parse(antigravity),
@@ -564,10 +535,10 @@ test("JSONL collectors reuse unchanged state and resume at the last complete byt
 });
 
 test("collector limits are explicit partial results with diagnostics", async () => {
-  const adapter = adapterFor("cursor");
+  const adapter = adapterFor("antigravity");
   const source = {
     dataPath: join(tmpdir(), `missing-viberacing-${Date.now().toString()}.jsonl`),
-    collectionMethod: "cursor_cli_capture",
+    collectionMethod: "antigravity_cli_capture",
     supportedSurface: "cli",
   };
   const result = await adapter.collect(source, undefined, {});
@@ -575,7 +546,7 @@ test("collector limits are explicit partial results with diagnostics", async () 
   assert.equal(result.completeness, "partial");
   assert.deepEqual(result.warnings, ["collector_limits_or_unreadable_files"]);
   assert.equal(diagnostic.dataLocationAvailable, false);
-  assert.deepEqual(diagnostic.excluded, ["Cursor Desktop usage"]);
+  assert.deepEqual(diagnostic.excluded, ["Antigravity Desktop usage"]);
 });
 
 test("parses valid usage from an oversized JSONL record and marks the pass partial", async (context) => {
@@ -611,11 +582,7 @@ test("parses valid usage from an oversized JSONL record and marks the pass parti
   assert.ok(result.nextState.files[path].safeOffset > 1_000_000);
 });
 
-test("capture wrappers use current executables and required headless structured flags", () => {
-  assert.deepEqual(wrapperInvocation("cursor", ["hello"]), {
-    executable: "cursor-agent",
-    args: ["--print", "hello", "--output-format", "stream-json"],
-  });
+test("capture wrapper uses the current executable and required headless structured flags", () => {
   assert.deepEqual(
     wrapperInvocation("antigravity", ["-p", "hello", "--output-format=stream-json"]),
     {
@@ -623,4 +590,5 @@ test("capture wrappers use current executables and required headless structured 
       args: ["-p", "hello", "--output-format=stream-json"],
     },
   );
+  assert.throws(() => wrapperInvocation("unknown", ["hello"]), /Unsupported wrapper agent/);
 });

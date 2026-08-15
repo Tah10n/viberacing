@@ -11,12 +11,6 @@ const definitions = Object.freeze({
     darwinApps: ["ChatGPT.app", "Codex.app"],
     windowsApps: ["ChatGPT", "Codex"],
   },
-  cursor: {
-    command: "cursor-agent",
-    override: "VIBERACING_CURSOR_AGENT_BIN",
-    darwinApps: ["Cursor.app"],
-    windowsApps: ["Cursor"],
-  },
   antigravity: {
     command: "agy",
     override: "VIBERACING_ANTIGRAVITY_BIN",

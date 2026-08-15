@@ -66,7 +66,7 @@ CREATE TABLE agent_accounts (
   user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   agent_id varchar(32) NOT NULL CHECK (agent_id IN (
     'codex', 'claude_code', 'opencode', 'kimi_code',
-    'qwen_code', 'cursor', 'antigravity', 'gemini_cli'
+    'qwen_code', 'antigravity', 'gemini_cli'
   )),
   label varchar(40) NOT NULL CHECK (length(trim(label)) BETWEEN 1 AND 40),
   aggregation_mode varchar(16) NOT NULL CHECK (aggregation_mode IN ('account_max', 'source_sum')),
@@ -83,7 +83,7 @@ CREATE TABLE installation_sources (
   agent_account_id uuid,
   agent_id varchar(32) NOT NULL CHECK (agent_id IN (
     'codex', 'claude_code', 'opencode', 'kimi_code',
-    'qwen_code', 'cursor', 'antigravity', 'gemini_cli'
+    'qwen_code', 'antigravity', 'gemini_cli'
   )),
   client_source_id varchar(128) NOT NULL CHECK (length(client_source_id) BETWEEN 1 AND 128),
   collection_method varchar(40) NOT NULL,
@@ -145,7 +145,7 @@ CREATE TABLE weekly_agent_usage (
   user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   agent_id varchar(32) NOT NULL CHECK (agent_id IN (
     'codex', 'claude_code', 'opencode', 'kimi_code',
-    'qwen_code', 'cursor', 'antigravity', 'gemini_cli'
+    'qwen_code', 'antigravity', 'gemini_cli'
   )),
   tokens numeric(30,0) NOT NULL CHECK (tokens >= 0),
   updated_at timestamptz NOT NULL DEFAULT now(),

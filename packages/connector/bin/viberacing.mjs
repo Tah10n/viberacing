@@ -384,7 +384,7 @@ async function compactSuccessfulCaptures(config) {
   );
   for (const source of config.sources) {
     if (
-      !["cursor_cli_capture", "antigravity_cli_capture"].includes(source.collectionMethod) ||
+      source.collectionMethod !== "antigravity_cli_capture" ||
       typeof source.dataPath !== "string" ||
       pending.has(source.sourceId) ||
       state.quarantine?.[source.sourceId]
@@ -933,7 +933,6 @@ async function doctor() {
     opencode: "compatible OpenCode SQLite message store",
     kimi_code: "current or legacy wire records",
     qwen_code: "runtime usage directory",
-    cursor: "authoritative provider token counters",
     antigravity: "Vibe Racing wrapper capture",
     gemini_cli: "session JSONL records",
   };
@@ -942,11 +941,6 @@ async function doctor() {
     const configured = localSources.filter((source) => source.agentId === adapter.id);
     output(`${adapter.displayName}:`);
     output(`  Expected source type: ${expectedSources[adapter.id]}`);
-    if (adapter.id === "cursor") {
-      output(`  Status: ${configured.length ? "configured locally; " : ""}not counted`);
-      output("  Reason: Cursor CLI authoritative token accounting unavailable; not counted");
-      continue;
-    }
     if (adapter.id === "antigravity") {
       output(
         `  Status: wrapper-only${configured.length ? `; ${configured.length} capture source(s) configured` : ""}`,
@@ -1102,7 +1096,7 @@ async function sourceCommand() {
     const label = option("--name", option("--label"))?.trim();
     const adapter = adapterFor(agentId);
     const legacyKimi = arguments_.includes("--legacy");
-    const captureBased = ["cursor", "antigravity"].includes(agentId);
+    const captureBased = agentId === "antigravity";
     if (
       !adapter ||
       (!captureBased && !dataPath) ||
@@ -1124,14 +1118,6 @@ async function sourceCommand() {
       supportedSurface: adapter.supportedSurfaces[0],
       suggestedLabel: label,
     });
-    if (agentId === "cursor") {
-      output(
-        result.added
-          ? "Cursor wrapper profile saved locally. Authoritative token accounting is unavailable, so it will not be paired or counted."
-          : "That local Cursor wrapper profile was already configured; Cursor is not counted.",
-      );
-      return;
-    }
     output(
       result.added ? "Source saved locally." : "That local source was already configured.",
       "Run `viberacing connect` to approve it.",
@@ -1289,8 +1275,7 @@ try {
   } else if (command === "source" && arguments_[1] === "remove")
     await withLifecycleMutation(() => sourceCommand());
   else if (command === "source") await sourceCommand();
-  else if (command === "run" && ["cursor", "antigravity"].includes(arguments_[1]))
-    await wrap(arguments_[1]);
+  else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
   else if (command === "disconnect") {
     let remoteError;
     let localWarnings = 0;
@@ -1366,7 +1351,7 @@ try {
     }
   } else
     output(
-      "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor|antigravity [--source ID] -- …",
+      "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
     );
 } catch (error) {
   if (quiet) {

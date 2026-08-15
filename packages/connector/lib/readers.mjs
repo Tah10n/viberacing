@@ -1,7 +1,6 @@
 export { parseAntigravityLines } from "./adapters/antigravity.mjs";
 export { collectClaude, parseClaudeLines } from "./adapters/claude.mjs";
 export { codexProfileEnvironment, parseCodexUsage } from "./adapters/codex.mjs";
-export { parseCursorLines } from "./adapters/cursor.mjs";
 export { parseGeminiRecords } from "./adapters/gemini.mjs";
 export {
   kimiCollectionMethodForPath,
@@ -16,7 +15,8 @@ import { adapterFor } from "./registry.mjs";
 export { adapters, adapterFor, defaultSources, discoverSources } from "./registry.mjs";
 
 export function wrapperInvocation(agentId, passed) {
-  const executable = agentId === "cursor" ? "cursor-agent" : "agy";
+  if (agentId !== "antigravity") throw new Error("Unsupported wrapper agent");
+  const executable = "agy";
   const args = [...passed];
   const hasPrint = args.some((argument) => argument === "--print" || argument === "-p");
   const hasOutputFormat = args.some(

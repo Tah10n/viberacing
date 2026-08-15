@@ -10,7 +10,6 @@ token counters; Vibe Racing never estimates tokens from text.
 | OpenCode    | `$XDG_DATA_HOME/opencode/opencode[-channel].db` or `$OPENCODE_DB`; current SQLite `message.data.tokens`                                                            | CLI                   | every compatible channel database               | `source_sum`  | names must match `^opencode(?:-[A-Za-z0-9._-]+)?\.db$`; each candidate is opened read-only and must have `message(id,time_created,data)`. WAL/SHM, backups, arbitrary databases, and incompatible schemas are ignored. Documented manual `sync`; no supported global completion hook is assumed.                                                                                                      |
 | Kimi Code   | `$KIMI_CODE_HOME/sessions/**/agents/*/wire.jsonl` (default `~/.kimi-code`), current `usage.record.usage`; legacy `~/.kimi` uses `StatusUpdate.payload.token_usage` | CLI                   | current root plus explicitly added legacy roots | `source_sum`  | additive marked `Stop` hook in the selected root's `config.toml`; current `time` is milliseconds and camelCase counters follow the persisted `TokenUsage` type. Auto-discovery prefers current and falls back to legacy only when current is absent, preventing migrated sessions from being counted twice. Additional Python-format archives require explicit `source add ... --legacy`.             |
 | Qwen Code   | runtime `usage/token-usage-YYYY-MM.jsonl`; authoritative `totalTokens`                                                                                             | CLI                   | selected runtime root or explicitly added roots | `source_sum`  | root priority is `QWEN_RUNTIME_DIR`, user `advanced.runtimeOutputDir`, `QWEN_HOME`, then `~/.qwen`. Absolute and tilde settings are supported. A relative setting is not guessed from connector CWD and requires `source add`. Additive `SessionEnd` hook; UTC uses `timestamp`, not writer-local `localDate`.                                                                                        |
-| Cursor      | no currently documented authoritative counter in the terminal result                                                                                               | CLI wrapper utility   | local wrapper profiles only                     | not counted   | `viberacing run cursor [--source ID] -- …` invokes the CLI but never persists a usage capture and Cursor sources are not sent during pairing. Current official result schema has duration/session/request fields, not token usage. Cursor Desktop is excluded.                                                                                                                                        |
 | Antigravity | native terminal `result.usage`; exact input/output/cache counters                                                                                                  | wrapped CLI sessions  | source-specific Personal/Work captures          | `source_sum`  | only sessions launched with `viberacing run antigravity [--source ID] -- …` are counted. Earlier or directly launched `agy` sessions and Antigravity Desktop are not included. Official local transcripts contain private conversation data and there is no documented usage-only daily export; the official status-line surface exposes current conversation totals, not account-wide daily history. |
 | Gemini CLI  | `$GEMINI_CLI_HOME/.gemini/tmp/**/chats/session-*.jsonl` message `tokens`; authoritative total                                                                      | CLI                   | multiple project/profile roots                  | `source_sum`  | additive `SessionEnd` hook. Prompt count includes cached input, so cached is subtracted for component display; authoritative total wins. Verified against Gemini CLI 0.55.1 recording schema.                                                                                                                                                                                                         |
 
@@ -38,7 +37,6 @@ remain separate sources.
 ```bash
 viberacing source add --agent antigravity --name Personal
 viberacing source add --agent antigravity --name Work
-viberacing run cursor [--source <client-source-id>] -- <native cursor arguments>
 viberacing run antigravity [--source <client-source-id>] -- <native agy arguments>
 ```
 
@@ -49,13 +47,10 @@ only event ID, UTC date, and authoritative usage counters. The resolved executab
 only in local `sources.json` so portable installs continue working from later processes. It never
 stores the native stream, prompt, response, tool calls, path, model, or credential fields.
 Antigravity captures are incremental, records older than 35 days are removed after successful sync,
-and oversized files are atomically compacted. Cursor currently emits no documented authoritative
-counter and therefore produces no Vibe Racing capture even if an unrecognized object happens to
-contain a field named `usage`; its local wrapper profile is not paired. Neither desktop product has
-a supported exact local usage export. Every capture source defaults to
-`~/.viberacing/captures/<clientSourceId>.jsonl`; labels and agent IDs are not used as filenames. One
-matching source is selected automatically, while multiple profiles require `--source`. That option
-is never forwarded to `agy` or `cursor-agent`.
+and oversized files are atomically compacted. Antigravity Desktop has no supported exact local usage
+export. Every capture source defaults to `~/.viberacing/captures/<clientSourceId>.jsonl`; labels and
+agent IDs are not used as filenames. One matching source is selected automatically, while multiple
+profiles require `--source`. That option is never forwarded to `agy`.
 
 ## Sync behavior
 
@@ -63,7 +58,7 @@ Codex, Claude, Kimi, Qwen, and Gemini have current official lifecycle hooks. Eac
 stable local source ID and marks only that source dirty under a short file lock. The hook itself
 only discards stdin and starts/reuses one detached timer; it does not scan histories, start an App
 Server, read SQLite, or use the network. OpenCode is manual-sync only. Antigravity requires its
-wrapper. Cursor's wrapper is available but is counter-gated as described above.
+wrapper.
 
 Automatic attempts are debounced for 15 seconds, limited to one about every 120 seconds, and cannot
 be postponed past 120 seconds from the first dirty event. It drains pending uploads without
@@ -71,7 +66,7 @@ rescanning, then collects only active dirty sources; events for different source
 batch. The scheduler exits after its batch and there is no daemon, watcher, or polling loop. Manual
 sync and initial connect are immediate and collect all active sources. A first sync reads a bounded
 31-day UTC window; later file-backed syncs are incremental and an unchanged snapshot sends no HTTP
-request. Seven agents currently contribute exact counters; Cursor does not.
+request. Seven agents currently contribute exact counters.
 
 ## Upstream references
 
@@ -81,9 +76,7 @@ The implementation and synthetic fixtures were checked against primary sources:
 [OpenCode source](https://github.com/anomalyco/opencode),
 [Kimi Code sessions](https://www.kimi.com/code/docs/en/kimi-code-cli/guides/sessions.html),
 [Qwen Code telemetry](https://github.com/QwenLM/qwen-code/blob/main/docs/developers/development/telemetry.md),
-[Gemini CLI sessions](https://geminicli.com/docs/cli/session-management/),
-[Cursor CLI structured output](https://docs.cursor.com/en/cli/reference/output-format), and the
-[Antigravity CLI changelog](https://antigravity.google/changelog). Cursor's limitation follows from
-the fields present—and the usage fields absent—in its published terminal result. The exact Codex
-usage response was additionally validated against JSON Schema generated by the locally installed
+[Gemini CLI sessions](https://geminicli.com/docs/cli/session-management/), and the
+[Antigravity CLI changelog](https://antigravity.google/changelog). The exact Codex usage response
+was additionally validated against JSON Schema generated by the locally installed
 `codex app-server`.

@@ -364,7 +364,7 @@ async function withCaptureLock(path, callback) {
 
 export async function appendCapture(source, records) {
   if (
-    !new Set(["cursor", "antigravity"]).has(source?.agentId) ||
+    source?.agentId !== "antigravity" ||
     !sourceIdPattern.test(source?.clientSourceId ?? "") ||
     typeof source?.dataPath !== "string" ||
     !Array.isArray(records)

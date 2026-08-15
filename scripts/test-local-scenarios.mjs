@@ -63,7 +63,6 @@ const definitions = {
   claude_code: ["claude_jsonl", "cli"],
   opencode: ["opencode_sqlite", "cli"],
   kimi_code: ["kimi_wire_jsonl", "cli"],
-  cursor: ["cursor_cli_capture", "cli"],
 };
 
 function source(clientSourceId, agentId) {
@@ -259,31 +258,6 @@ try {
   console.log(
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
-
-  const cursorInstallation = { id: randomUUID(), secret: token() };
-  const cursor = await pair(cursorInstallation, [source("cursor-local", "cursor")]);
-  const cursorSource = cursor.sources[0];
-  const beforeCursor = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1",
-    [userId],
-  );
-  const cursorResponse = await usage(cursor.deviceToken, [
-    snapshot(cursorSource.sourceId, 1, [[today, 999_999]]),
-  ]);
-  check(cursorResponse.status === 200, "uncounted Cursor snapshot was not handled safely");
-  const afterCursor = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1",
-    [userId],
-  );
-  const cursorRows = await pool.query(
-    "SELECT count(*)::int AS count FROM daily_usage WHERE source_id = $1",
-    [cursorSource.sourceId],
-  );
-  check(
-    beforeCursor.rows[0].tokens === afterCursor.rows[0].tokens && cursorRows.rows[0].count === 0,
-    "Cursor changed the user's leaderboard total",
-  );
-  console.log("ok - uncounted Cursor snapshots never affect daily or weekly ranking totals");
 
   const target = byClient.get("codex-work").sourceId;
   const lockClient = await pool.connect();

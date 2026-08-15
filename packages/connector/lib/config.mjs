@@ -22,7 +22,7 @@ const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
-const captureAgents = new Set(["cursor", "antigravity"]);
+const captureAgents = new Set(["antigravity"]);
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

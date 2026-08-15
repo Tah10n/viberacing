@@ -4,7 +4,6 @@ export const supportedAgents = [
   "opencode",
   "kimi_code",
   "qwen_code",
-  "cursor",
   "antigravity",
   "gemini_cli",
 ] as const;
@@ -50,12 +49,6 @@ export const agentRegistry: Readonly<Record<SupportedAgent, AgentDefinition>> = 
     aggregationMode: "source_sum",
     countsExactTokens: true,
     methods: { qwen_stats_jsonl: ["cli"] },
-  },
-  cursor: {
-    displayName: "Cursor",
-    aggregationMode: "source_sum",
-    countsExactTokens: false,
-    methods: { cursor_cli_capture: ["cli"] },
   },
   antigravity: {
     displayName: "Antigravity",
