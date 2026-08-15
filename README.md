@@ -21,6 +21,10 @@ successful `connect` still collect every active source immediately. The first co
 to 31 UTC days, later JSONL reads resume from safe byte offsets, and an unchanged normalized
 snapshot causes no HTTP request.
 
+Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
+Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still
+recorded exactly and is collected by `viberacing sync` or the next supported lifecycle trigger.
+
 ## Local production preview
 
 Requirements: Node 24, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.
