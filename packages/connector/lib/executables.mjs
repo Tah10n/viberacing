@@ -1,4 +1,5 @@
 import { constants } from "node:fs";
+import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
@@ -129,4 +130,52 @@ export async function resolveAgentExecutable(agentId, options = {}) {
 
 export function executableOverride(agentId) {
   return definitions[agentId]?.override ?? null;
+}
+
+const commandMetaCharacters = /([()\][%!^"`<>&|;, *?])/g;
+
+function escapeCommand(value) {
+  return String(value).replace(commandMetaCharacters, "^$1");
+}
+
+function escapeCommandArgument(value, doubleEscape = false) {
+  let escaped = String(value);
+  escaped = escaped.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"');
+  escaped = escaped.replace(/(?=(\\+?)?)\1$/g, "$1$1");
+  escaped = `"${escaped}"`;
+  escaped = escaped.replace(commandMetaCharacters, "^$1");
+  return doubleEscape ? escaped.replace(commandMetaCharacters, "^$1") : escaped;
+}
+
+export function resolvedExecutableInvocation(
+  executablePath,
+  args,
+  { platform = process.platform, environment = process.env } = {},
+) {
+  if (platform !== "win32" || !/\.(?:cmd|bat)$/i.test(executablePath)) {
+    return { command: executablePath, args: [...args], windowsVerbatimArguments: false };
+  }
+  const commandShell =
+    environment.ComSpec ??
+    environment.COMSPEC ??
+    (environment.SystemRoot
+      ? win32.join(environment.SystemRoot, "System32", "cmd.exe")
+      : "cmd.exe");
+  const commandLine = [
+    escapeCommand(executablePath),
+    ...args.map((argument) => escapeCommandArgument(argument, /\.cmd$/i.test(executablePath))),
+  ].join(" ");
+  return {
+    command: commandShell,
+    args: ["/d", "/s", "/c", `"${commandLine}"`],
+    windowsVerbatimArguments: true,
+  };
+}
+
+export function spawnResolvedExecutable(executablePath, args, options = {}, runtime = {}) {
+  const invocation = resolvedExecutableInvocation(executablePath, args, runtime);
+  return spawn(invocation.command, invocation.args, {
+    ...options,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+  });
 }

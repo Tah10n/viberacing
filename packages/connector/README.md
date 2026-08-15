@@ -17,12 +17,17 @@ adapters search the current `PATH`, installed macOS applications, Windows applic
 WindowsApps, and common npm, pnpm, Bun, Volta, Homebrew, MacPorts, Scoop, Chocolatey, and system
 binary directories. Portable installations can set `VIBERACING_CODEX_BIN`,
 `VIBERACING_CURSOR_AGENT_BIN`, or `VIBERACING_ANTIGRAVITY_BIN` to an absolute executable path. One
-broken installed agent is reported as a detection warning and never hides the other healthy sources.
+resolved override is saved only in local `sources.json`, so later processes do not require the
+variable again. Windows npm `.cmd`/`.bat` shims are launched through `ComSpec` with escaped
+arguments. One broken installed agent is reported as a detection warning and never hides the other
+healthy sources.
 
 The browser approval maps every detected local source to a new or existing account. Re-running
 `connect` keeps the stable installation identity, rotates device authorization, refreshes the
-installed connector copy, and updates only Vibe Racing-owned hooks. The final token/config swap is
-serialized behind any active sync, so an older request cannot restore superseded authorization.
+installed connector copy, and updates only Vibe Racing-owned hooks. Hook reconciliation is
+best-effort per source: one damaged settings file is reported without blocking healthy hooks or the
+initial sync. The final token/config swap is serialized behind any active sync, so an older request
+cannot restore superseded authorization.
 
 ## Commands
 
@@ -33,6 +38,7 @@ viberacing doctor [--repair]
 viberacing accounts
 viberacing source list
 viberacing source add --agent opencode --name Work --data-dir <path>
+viberacing source add --agent kimi_code --name Archive --data-dir <path> --legacy
 viberacing source add --agent antigravity --name Personal
 viberacing source remove <client-source-id>
 viberacing disconnect
@@ -47,6 +53,13 @@ collection method, surface, and user-provided safe label are stored only in loca
 Pairing configuration contains the server mapping but never a path or path hash. Separate Codex
 accounts require separate `--data-dir` profile roots; each App Server launch gets that source's
 `CODEX_HOME`, so one profile is never collected twice as two local sources.
+
+Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
+add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
+root can be added with `source add ... --legacy` without re-enabling automatic double counting. On
+an approved migration, the server disconnects the superseded legacy mapping and removes its
+duplicated ranking rows before the current source performs its first sync. An abandoned pairing
+leaves both the local legacy source and its server history unchanged.
 
 Capture-based Cursor and Antigravity sources do not require `--data-dir`. Their default local path
 is `captures/<clientSourceId>.jsonl`, so Personal and Work accounts never share a capture file. A
@@ -98,9 +111,11 @@ remains occupied. Unchanged data sends no request.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
-removal. OpenCode queries only the UTC range. Successful Cursor/Antigravity capture syncs remove
-records older than 35 days and atomically compact large files. Cursor's current official result
-schema has no token-usage field, so its wrapper deliberately captures nothing unless an
-authoritative counter object appears; this is not a promise of current Cursor counting. Cursor
-Desktop and Antigravity Desktop are not included. Detailed versions, formulas, and limitations are
-in [AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).
+removal. Partial passes retain prior per-file contributions, and valid usage metadata in a JSONL
+record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode queries only the
+UTC range. Successful Cursor/Antigravity capture syncs remove records older than 35 days and
+atomically compact large files. Cursor's current official result schema has no token-usage field, so
+its wrapper deliberately captures nothing unless an authoritative counter object appears; this is
+not a promise of current Cursor counting. Cursor Desktop and Antigravity Desktop are not included.
+Detailed versions, formulas, and limitations are in
+[AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).

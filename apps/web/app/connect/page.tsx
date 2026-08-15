@@ -28,6 +28,10 @@ interface AccountRow {
   label: string;
 }
 
+interface SupersededSourceRow {
+  agent_id: string;
+}
+
 function agentLabel(agent: string): string {
   if (!isSupportedAgent(agent)) return agent;
   return agentRegistry[agent].countsExactTokens
@@ -60,6 +64,18 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
           `SELECT id::text, agent_id, suggested_label, supported_surface, agent_account_id::text
              FROM installation_sources
             WHERE installation_id = $1 AND pending_pairing_code_hash = $2
+              AND NOT pending_disconnect
+            ORDER BY created_at, id`,
+          [pairing.id, digest(code)],
+        );
+  const supersededSources =
+    pairing === undefined
+      ? []
+      : await query<SupersededSourceRow>(
+          `SELECT agent_id
+             FROM installation_sources
+            WHERE installation_id = $1 AND pending_pairing_code_hash = $2
+              AND pending_disconnect
             ORDER BY created_at, id`,
           [pairing.id, digest(code)],
         );
@@ -74,6 +90,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
           [current.id],
         );
   const returnPath = `/connect?code=${encodeURIComponent(code)}`;
+  const limitReached = params.error === "limit";
   return (
     <PageShell className="connect-page" width="narrow">
       <PageHeader
@@ -81,6 +98,15 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
         eyebrow="Pair connector"
         title="Approve this computer"
       />
+      {limitReached ? (
+        <Panel className="state-panel state-panel-error">
+          <p className="eyebrow">Account limit reached</p>
+          <h2>This pairing would exceed your connection limits</h2>
+          <p>
+            Remove an unused computer, source, or agent account, then approve this pairing again.
+          </p>
+        </Panel>
+      ) : null}
       {pairing === undefined || sources.length === 0 ? (
         <Panel className="state-panel state-panel-error">
           <p className="eyebrow">Connection expired</p>
@@ -106,6 +132,13 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
             Account-wide totals are deduplicated across computers. Machine-local histories are added
             together. Different accounts always add together.
           </p>
+          {supersededSources.length > 0 ? (
+            <p>
+              This connection replaces {supersededSources.length} migrated local source
+              {supersededSources.length === 1 ? "" : "s"}. Its duplicated usage history will be
+              removed after approval.
+            </p>
+          ) : null}
           {current === null ? (
             <a
               className="button"

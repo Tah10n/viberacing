@@ -72,4 +72,18 @@ describe("usage pre-auth rate limiting", () => {
     );
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "usage_sync", installationId, 30, 60);
   });
+
+  it("also caps ingestion by authenticated user across installations", async () => {
+    consumeRateLimitMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    queryMock.mockResolvedValue([{ id: installationId, user_id: "42" }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "usage_sync_user", "42", 120, 60);
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
 });

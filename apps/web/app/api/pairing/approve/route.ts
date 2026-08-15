@@ -12,6 +12,7 @@ interface InstallationRow {
   id: string;
   user_id: string | null;
   name: string | null;
+  status: string;
 }
 
 interface SourceRow {
@@ -21,7 +22,32 @@ interface SourceRow {
   suggested_label: string | null;
 }
 
-class ApprovalError extends Error {}
+interface SupersededSourceRow {
+  id: string;
+  agent_id: SupportedAgent;
+}
+
+class ApprovalError extends Error {
+  constructor(readonly code: "expired" | "ownership" | "sources" | "selection" | "limit") {
+    super(code);
+  }
+}
+
+const maximumActiveInstallationsPerUser = 20;
+const maximumActiveSourcesPerUser = 100;
+const maximumAgentAccountsPerUser = 100;
+
+export function exceedsPairingLimits(
+  counts: { installations: number; sources: number; accounts: number },
+  incomingSources: number,
+  newAccounts: number,
+): boolean {
+  return (
+    counts.installations >= maximumActiveInstallationsPerUser ||
+    counts.sources + incomingSources > maximumActiveSourcesPerUser ||
+    counts.accounts + newAccounts > maximumAgentAccountsPerUser
+  );
+}
 
 function validLabel(value: string | null): string | null {
   const label = value?.trim() ?? "";
@@ -46,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
     await transaction(async (client) => {
       await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
       const pending = await client.query<InstallationRow>(
-        `SELECT id::text, user_id::text, name
+        `SELECT id::text, user_id::text, name, status
            FROM installations
           WHERE pairing_code_hash = $1
             AND pairing_expires_at > now()
@@ -63,14 +89,50 @@ export async function POST(request: Request): Promise<Response> {
         `SELECT id::text, agent_id, agent_account_id::text, suggested_label
            FROM installation_sources
           WHERE installation_id = $1 AND pending_pairing_code_hash = $2
+            AND NOT pending_disconnect
           ORDER BY created_at, id
           FOR UPDATE`,
         [installation.id, digest(code)],
       );
       if (sources.rows.length === 0) throw new ApprovalError("sources");
+      const supersededSources = await client.query<SupersededSourceRow>(
+        `SELECT id::text, agent_id
+           FROM installation_sources
+          WHERE installation_id = $1 AND pending_pairing_code_hash = $2
+            AND pending_disconnect
+          ORDER BY created_at, id
+          FOR UPDATE`,
+        [installation.id, digest(code)],
+      );
+
+      const sourceIds = sources.rows.map((source) => source.id);
+      const supersededSourceIds = supersededSources.rows.map((source) => source.id);
+      const pairingSourceIds = [...sourceIds, ...supersededSourceIds];
+      const usage = await client.query<{
+        installations: number;
+        sources: number;
+        accounts: number;
+      }>(
+        `SELECT
+           (SELECT count(*)::int FROM installations
+             WHERE user_id = $1 AND status = 'active' AND id <> $2) AS installations,
+           (SELECT count(*)::int FROM installation_sources
+             WHERE user_id = $1 AND status = 'active'
+               AND NOT (id = ANY($3::uuid[]))) AS sources,
+           (SELECT count(*)::int FROM agent_accounts WHERE user_id = $1) AS accounts`,
+        [current.id, installation.id, pairingSourceIds],
+      );
+      const counts = usage.rows[0];
+      const newAccounts = sources.rows.filter(
+        (source) => form.get(`account_${source.id}`) === "new",
+      ).length;
+      if (counts === undefined || exceedsPairingLimits(counts, sources.rows.length, newAccounts)) {
+        throw new ApprovalError("limit");
+      }
 
       const assignments = new Map<string, string>();
       const summariesToRebuild = new Set<SupportedAgent>();
+      for (const source of supersededSources.rows) summariesToRebuild.add(source.agent_id);
       for (const source of sources.rows) {
         const selection = form.get(`account_${source.id}`);
         if (selection === null && source.agent_account_id !== null) {
@@ -152,6 +214,20 @@ export async function POST(request: Request): Promise<Response> {
           [source.id, current.id, assignments.get(source.id)],
         );
       }
+      if (supersededSourceIds.length > 0) {
+        await client.query("DELETE FROM daily_usage WHERE source_id = ANY($1::uuid[])", [
+          supersededSourceIds,
+        ]);
+        await client.query(
+          `UPDATE installation_sources
+              SET status = 'disconnected',
+                  pending_pairing_code_hash = NULL,
+                  pending_disconnect = false,
+                  updated_at = now()
+            WHERE id = ANY($1::uuid[])`,
+          [supersededSourceIds],
+        );
+      }
       for (const agentId of summariesToRebuild) {
         await rebuildAgentSummaries(client, current.id, agentId);
       }
@@ -159,7 +235,10 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     if (!(error instanceof ApprovalError)) throw error;
     return NextResponse.redirect(
-      new URL(`/connect?code=${encodeURIComponent(code)}&error=expired`, publicOrigin()),
+      new URL(
+        `/connect?code=${encodeURIComponent(code)}&error=${error.code === "limit" ? "limit" : "expired"}`,
+        publicOrigin(),
+      ),
       303,
     );
   }

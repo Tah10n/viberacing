@@ -32,8 +32,9 @@ Each source snapshot has a monotonic sequence and inclusive UTC range. A stale o
 is a no-op. The server exposes its last accepted sequence so a connector that lost local state
 continues at `server + 1`; one stale pending snapshot is repaired and retried once. A newer
 `complete` snapshot replaces values and deletes dates missing from the range; a newer `partial`
-snapshot changes present dates but preserves missing dates. Values may decrease. Only weeks touched
-by an accepted snapshot are rebuilt.
+snapshot preserves missing dates and cannot reduce a previously stored daily total. This protects an
+exact day when a bounded collector temporarily misses one file. A later complete correction may
+increase or decrease values. Only weeks touched by an accepted snapshot are rebuilt.
 
 Automatic scheduling changes delivery timing, not ranking semantics. Source-owned hooks coalesce
 events into at most about one batch every two minutes; only dirty sources are collected, while

@@ -25,6 +25,12 @@ expired browser approval cannot interrupt the current connector. Approval atomic
 staged mappings and rotates the device token; a transaction lock serializes reconnects. Usage
 authentication rechecks that token under the same installation row lock.
 
+Current Kimi discovery previews removal of a migrated legacy root without changing `sources.json`.
+The pairing carries only its opaque client source ID, and the approval page discloses the
+replacement. Approval atomically disconnects the superseded mapping, removes its duplicated daily
+rows, rebuilds the affected ranking summary, and then lets the connector persist the current local
+source. An abandoned pairing therefore leaves both local configuration and server history intact.
+
 Server storage separates `installations`, human-defined `agent_accounts`, and machine-local
 `installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
 Reassigning a source during pairing rebuilds only the affected user's agent summaries in that same
@@ -39,10 +45,11 @@ authoritative native counters.
 
 Every changed source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence.
 Complete snapshots replace values and delete missing dates; partial snapshots update only present
-dates. Values may decrease. The server validates canonical decimal strings, source ownership,
-body/range limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction. A
-failed collector can send only the allowlisted `collector_failed` diagnostic code for its mapped
-source; raw errors, content, and paths are never part of the protocol.
+dates and retain the greater prior total when a partial subtotal is lower. Complete corrections may
+decrease values. The server validates canonical decimal strings, source ownership, body/range
+limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction. A failed
+collector can send only the allowlisted `collector_failed` diagnostic code for its mapped source;
+raw errors, content, and paths are never part of the protocol.
 
 The server reports `lastAcceptedSyncSequence` during pairing, installation inspection, and usage
 responses. Connect, doctor, and sync reconcile the local value with the server maximum. A stale
@@ -101,6 +108,12 @@ doctor performs mutable remote reconciliation under the sync lock. Authorization
 hooks/token/automatic state, and HTTP 426 disables automatic attempts until a compatible reconnect
 or authenticated server response confirms the updated connector. Successful capture syncs retain
 only 35 days and atomically compact oversized source-specific files.
+
+Approval is serialized on the user row and caps each user at 20 active installations, 100 active
+sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
+additional computers cannot multiply the user-wide request budget. Cursor sources may remain visible
+for diagnostics, but uncounted snapshots are discarded server-side and never enter daily or weekly
+ranking rows.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small

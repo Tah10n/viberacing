@@ -204,8 +204,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             </pre>
             <CopyCommandButton command={command} />
             <p className="muted">
-              No provider keys, prompts, code, paths, repositories, model names, or costs are
-              uploaded.
+              Requires Node.js 24. No provider keys, prompts, code, paths, repositories, model
+              names, or costs are uploaded.
             </p>
           </div>
         </div>

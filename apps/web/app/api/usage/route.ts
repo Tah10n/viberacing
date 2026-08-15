@@ -1,4 +1,5 @@
 import { connectorProtocolVersion, maximumDailyTokens } from "@/lib/config";
+import { agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
@@ -285,6 +286,12 @@ export async function POST(request: Request): Promise<Response> {
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
+    if (!(await consumeRateLimit("usage_sync_user", installation.user_id, 120, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
     const rawBody = await readBoundedJson(request, 131_072);
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as UsageBody;
@@ -336,6 +343,31 @@ export async function POST(request: Request): Promise<Response> {
           throw new UsageError(400, "unsupported_source");
         }
         if (BigInt(snapshot.syncSequence) <= BigInt(source.last_accepted_sync_sequence)) continue;
+        if (
+          !isSupportedAgent(source.agent_id) ||
+          !agentRegistry[source.agent_id].countsExactTokens
+        ) {
+          await client.query("DELETE FROM daily_usage WHERE source_id = $1", [snapshot.sourceId]);
+          await client.query(
+            "DELETE FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = $2",
+            [source.user_id, source.agent_id],
+          );
+          await client.query(
+            `UPDATE installation_sources
+                SET last_accepted_sync_sequence = $2::numeric,
+                    last_successful_sync_at = now(),
+                    last_completeness = $3,
+                    last_error_summary = NULL,
+                    last_warning_summary = 'This agent does not expose exact countable tokens',
+                    updated_at = now()
+              WHERE id = $1`,
+            [snapshot.sourceId, snapshot.syncSequence, snapshot.completeness],
+          );
+          acceptedSnapshots += 1;
+          acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
+          acceptedSourceIds.add(snapshot.sourceId);
+          continue;
+        }
         const dates = snapshot.entries.map((entry) => entry.date);
         if (snapshot.completeness === "complete") {
           await client.query(
@@ -370,13 +402,34 @@ export async function POST(request: Request): Promise<Response> {
                  "reasoningTokens" text
                )
              ON CONFLICT (source_id, usage_date) DO UPDATE
-               SET total_tokens = EXCLUDED.total_tokens,
-                   input_tokens = EXCLUDED.input_tokens,
-                   output_tokens = EXCLUDED.output_tokens,
-                   cache_read_tokens = EXCLUDED.cache_read_tokens,
-                   cache_write_tokens = EXCLUDED.cache_write_tokens,
-                   reasoning_tokens = EXCLUDED.reasoning_tokens,
-                   completeness = EXCLUDED.completeness,
+               SET total_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.total_tokens ELSE EXCLUDED.total_tokens END,
+                   input_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.input_tokens ELSE EXCLUDED.input_tokens END,
+                   output_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.output_tokens ELSE EXCLUDED.output_tokens END,
+                   cache_read_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.cache_read_tokens ELSE EXCLUDED.cache_read_tokens END,
+                   cache_write_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.cache_write_tokens ELSE EXCLUDED.cache_write_tokens END,
+                   reasoning_tokens = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.reasoning_tokens ELSE EXCLUDED.reasoning_tokens END,
+                   completeness = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                     THEN daily_usage.completeness ELSE EXCLUDED.completeness END,
                    updated_at = now()`,
             [snapshot.sourceId, JSON.stringify(snapshot.entries), snapshot.completeness],
           );

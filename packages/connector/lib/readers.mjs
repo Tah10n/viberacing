@@ -3,7 +3,13 @@ export { collectClaude, parseClaudeLines } from "./adapters/claude.mjs";
 export { codexProfileEnvironment, parseCodexUsage } from "./adapters/codex.mjs";
 export { parseCursorLines } from "./adapters/cursor.mjs";
 export { parseGeminiRecords } from "./adapters/gemini.mjs";
-export { parseKimiLines } from "./adapters/kimi.mjs";
+export {
+  kimiCollectionMethodForPath,
+  kimiSourcePaths,
+  parseKimiCurrentLines,
+  parseKimiLegacyLines,
+  parseKimiLines,
+} from "./adapters/kimi.mjs";
 export { parseOpenCodeMessages } from "./adapters/opencode.mjs";
 export { parseQwenLines } from "./adapters/qwen.mjs";
 import { adapterFor } from "./registry.mjs";
