@@ -63,9 +63,9 @@ export function resolveQwenPath(value, { home = homedir(), platform = process.pl
   return path.isAbsolute(value) ? path.normalize(value) : null;
 }
 
-async function qwenEnvironmentFile(path) {
+async function qwenEnvironmentFile(path, requestedKeys) {
   try {
-    return parseQwenEnvironment(await readFile(path, "utf8"));
+    return parseQwenEnvironment(await readFile(path, "utf8"), requestedKeys);
   } catch (error) {
     if (error?.code === "ENOENT") return {};
     throw error;
@@ -110,6 +110,33 @@ function configuredValue(...values) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim();
 }
 
+function referencedEnvironmentKeys(value) {
+  const keys = new Set();
+  for (const match of value.matchAll(
+    /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g,
+  ))
+    keys.add(match[1] ?? match[2]);
+  return keys;
+}
+
+async function environmentWithReferencedKeys(context, configured, diagnostics) {
+  const keys = referencedEnvironmentKeys(configured);
+  if (keys.size === 0) return context.environment;
+  const environment = { ...context.environment };
+  for (const file of context.environmentFiles) {
+    let parsed;
+    try {
+      parsed = await qwenEnvironmentFile(file, keys);
+    } catch {
+      diagnostics.push({ error: "Qwen user environment settings are unreadable" });
+      continue;
+    }
+    for (const [key, value] of Object.entries(parsed))
+      if (!configuredValue(environment[key])) environment[key] = value;
+  }
+  return environment;
+}
+
 async function qwenEnvironmentContext({ environment, home, platform, diagnostics }) {
   const path = platform === "win32" ? win32 : posix;
   const defaultHome = path.join(home, ".qwen");
@@ -126,7 +153,7 @@ async function qwenEnvironmentContext({ environment, home, platform, diagnostics
         "QWEN_HOME",
       )
     : defaultHome;
-  if (hookConfigRoot === null) return { environment, hookConfigRoot };
+  if (hookConfigRoot === null) return { environment, environmentFiles: [], hookConfigRoot };
 
   const loaded = {};
   const loadWithoutOverride = async (file) => {
@@ -158,7 +185,7 @@ async function qwenEnvironmentContext({ environment, home, platform, diagnostics
       "QWEN_HOME",
     );
     if (discoveredRoot === null)
-      return { environment: bootstrappedEnvironment, hookConfigRoot: null };
+      return { environment: bootstrappedEnvironment, environmentFiles: [], hookConfigRoot: null };
     if (discoveredRoot !== hookConfigRoot) {
       hookConfigRoot = discoveredRoot;
       await loadWithoutOverride(path.join(hookConfigRoot, ".env"));
@@ -167,6 +194,7 @@ async function qwenEnvironmentContext({ environment, home, platform, diagnostics
 
   return {
     environment: { HOME: home, USERPROFILE: home, ...loaded, ...environment },
+    environmentFiles: [...new Set([path.join(hookConfigRoot, ".env"), path.join(home, ".env")])],
     hookConfigRoot,
   };
 }
@@ -193,8 +221,17 @@ export async function qwenSourceContext({
     );
     const configured = settings?.advanced?.runtimeOutputDir;
     if (typeof configured === "string" && configured.trim()) {
+      const configuredEnvironment = await environmentWithReferencedKeys(
+        context,
+        configured,
+        diagnostics,
+      );
       return {
-        runtimeRoot: resolveConfiguredPath(configured, pathContext, "runtimeOutputDir"),
+        runtimeRoot: resolveConfiguredPath(
+          configured,
+          { ...pathContext, environment: configuredEnvironment },
+          "runtimeOutputDir",
+        ),
         hookConfigRoot: context.hookConfigRoot,
       };
     }

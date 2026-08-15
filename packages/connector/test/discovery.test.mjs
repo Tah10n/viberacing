@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { detectOpenCodeSources, openCodeDataRoot } from "../lib/adapters/opencode.mjs";
 import { detectQwenSources, qwenRuntimeRoot, resolveQwenPath } from "../lib/adapters/qwen.mjs";
+import { parseQwenEnvironment } from "../lib/adapters/qwen-settings.mjs";
 import { canonicalPathKey } from "../lib/adapters/shared.mjs";
 import { claudeSourcePath, detectClaudeSources } from "../lib/adapters/claude.mjs";
 import { detectGeminiSources, geminiSourcePath } from "../lib/adapters/gemini.mjs";
@@ -156,6 +157,50 @@ test("loads QWEN_RUNTIME_DIR from the Qwen user environment file", async (contex
   await writeFile(join(qwenHome, ".env"), "QWEN_RUNTIME_DIR=\${HOME}/env-runtime\n");
 
   assert.equal(await qwenRuntimeRoot({ environment: {}, home }), runtime);
+});
+
+test("parses quoted Qwen runtime roots with dotenv inline comments", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-quoted-env-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const qwenHome = join(home, ".qwen");
+  const runtime = join(home, "qwen-runtime");
+  await mkdir(qwenHome, { recursive: true });
+
+  for (const quote of ['"', "'", "`"]) {
+    await writeFile(
+      join(qwenHome, ".env"),
+      `export QWEN_RUNTIME_DIR=${quote}\${HOME}/qwen-runtime${quote} # fast disk\n`,
+    );
+    assert.equal(await qwenRuntimeRoot({ environment: {}, home }), runtime);
+  }
+});
+
+test("loads only environment variables referenced by Qwen runtimeOutputDir", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-referenced-env-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const qwenHome = join(home, ".qwen");
+  const dataRoot = join(home, "qwen-data");
+  const runtime = join(dataRoot, "runtime");
+  await mkdir(join(runtime, "usage"), { recursive: true });
+  await mkdir(qwenHome, { recursive: true });
+  const environmentFile = `QWEN_DATA_ROOT=${dataRoot}\nOTHER_SECRET=private-value\n`;
+  await writeFile(join(qwenHome, ".env"), environmentFile);
+  await writeFile(
+    join(qwenHome, "settings.json"),
+    `{
+      // The referenced user variable is a supported Qwen fallback.
+      "advanced": { "runtimeOutputDir": "\${QWEN_DATA_ROOT}/runtime" }
+    }`,
+  );
+
+  const diagnostics = [];
+  const sources = await detectQwenSources({ environment: {}, home, diagnostics });
+  assert.equal(sources[0].dataPath, join(runtime, "usage"));
+  assert.doesNotMatch(JSON.stringify({ diagnostics, sources }), /private-value|OTHER_SECRET/);
+  assert.deepEqual(parseQwenEnvironment(environmentFile), {});
+  assert.deepEqual(parseQwenEnvironment(environmentFile, new Set(["QWEN_DATA_ROOT"])), {
+    QWEN_DATA_ROOT: dataRoot,
+  });
 });
 
 test("bootstraps a custom QWEN_HOME before loading its environment file", async (context) => {

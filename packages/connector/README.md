@@ -72,11 +72,13 @@ data root, plus `OPENCODE_DB` (absolute or relative to that root). Every candida
 compatible `message(id,time_created,data)` schema in read-only SQLite mode. Qwen chooses exactly one
 automatic runtime root in this order: `QWEN_RUNTIME_DIR`, `advanced.runtimeOutputDir` from the
 user-level settings, `QWEN_HOME`, then `~/.qwen`. Its JSONC settings support comments plus `$VAR`,
-`${VAR}`, and tilde expansion; only `QWEN_HOME` and `QWEN_RUNTIME_DIR` are read from the official
-user-level `.env` candidates. Relative values are not resolved from the connector's CWD; `doctor`
-prints the explicit `source add` command instead. The runtime root and Qwen config root are stored
-separately, so tokens come from `<runtime-root>/usage` while the additive `SessionEnd` hook always
-lives in `<QWEN_HOME>/settings.json`.
+`${VAR}`, and tilde expansion. `QWEN_HOME`, `QWEN_RUNTIME_DIR`, and only variables referenced by
+`runtimeOutputDir` are read from the official user-level `.env` candidates with dotenv-compatible
+quotes and inline comments; unrelated values are discarded. Relative values are not resolved from
+the connector's CWD; `doctor` prints the explicit `source add` command instead. The runtime root and
+Qwen config root are stored separately, so tokens come from `<runtime-root>/usage` while the
+additive `SessionEnd` hook always lives in `<QWEN_HOME>/settings.json`. Hook edits retain unknown
+settings and comments outside the changed `hooks` subtree.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
