@@ -1107,9 +1107,12 @@ async function sourceCommand() {
       throw new Error(
         "Usage: viberacing source add --agent AGENT --name NAME [--data-dir PATH] [--legacy]",
       );
+    const localMetadata =
+      typeof adapter.localSourceMetadata === "function" ? await adapter.localSourceMetadata() : {};
     const result = await addSource({
       agentId,
       dataPath,
+      ...localMetadata,
       collectionMethod: legacyKimi
         ? "kimi_legacy_wire_jsonl"
         : typeof adapter.collectionMethodForPath === "function" && dataPath

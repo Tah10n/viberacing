@@ -10,6 +10,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rm,
   stat,
   symlink,
   unlink,
@@ -294,6 +295,78 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
   }
 });
 
+test("keeps a manual Qwen hook root through reconnect and uninstall", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-hook-root-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const qwenHome = join(home, ".qwen");
+    const runtimeRoot = join(home, "qwen-runtime");
+    const usageRoot = join(runtimeRoot, "usage");
+    await mkdir(qwenHome, { recursive: true });
+    await mkdir(usageRoot, { recursive: true });
+    await writeFile(
+      join(qwenHome, "settings.json"),
+      `{
+        // Preserve this user comment.
+        "advanced": { "runtimeOutputDir": "${runtimeRoot}" },
+        "unknownSetting": { "keep": true }
+      }\n`,
+    );
+
+    await execFileAsync(
+      process.execPath,
+      [
+        connectorPath,
+        "source",
+        "add",
+        "--agent",
+        "qwen_code",
+        "--name",
+        "Work",
+        "--data-dir",
+        usageRoot,
+      ],
+      { env: connectorEnvironment(home, { PATH: "" }) },
+    );
+    let sources = await readLocalSources(join(home, ".viberacing"));
+    assert.equal(sources.length, 1);
+    assert.equal(sources[0].dataPath, usageRoot);
+    assert.equal(sources[0].hookConfigRoot, qwenHome);
+
+    const module = await import(`../lib/config.mjs?qwen-hook-root=${encodeURIComponent(home)}`);
+    await module.reconcileDetectedSources([
+      {
+        agentId: "qwen_code",
+        dataPath: usageRoot,
+        hookConfigRoot: qwenHome,
+        collectionMethod: "qwen_stats_jsonl",
+        supportedSurface: "cli",
+        suggestedLabel: "Qwen Code",
+      },
+    ]);
+    sources = await module.readSources();
+    assert.equal(sources[0].hookConfigRoot, qwenHome);
+    await module.installHooks(new URL("../bin/viberacing.mjs", import.meta.url), sources);
+    const installed = await readFile(join(qwenHome, "settings.json"), "utf8");
+    assert.match(installed, /Preserve this user comment/);
+    assert.match(installed, /"unknownSetting"[\s\S]*"keep": true/);
+    assert.match(installed, /viberacing-hook-v3:/);
+    assert.match(installed, /hook --source [0-9a-f-]+ --agent qwen_code/);
+    await assert.rejects(access(join(runtimeRoot, "settings.json")));
+    assert.deepEqual(await module.diagnoseHooks(sources), { qwen_code: "current" });
+
+    const removed = await module.removeHooks();
+    assert.equal(removed.failures.length, 0);
+    const cleaned = await readFile(join(qwenHome, "settings.json"), "utf8");
+    assert.match(cleaned, /Preserve this user comment/);
+    assert.match(cleaned, /"unknownSetting"[\s\S]*"keep": true/);
+    assert.doesNotMatch(cleaned, /viberacing-hook-v3:/);
+  } finally {
+    restoreEnvironment();
+  }
+});
+
 test("reports invalid existing hook settings instead of claiming success", async () => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-connector-invalid-settings-"));
   const restoreEnvironment = useModuleEnvironment(home);
@@ -324,6 +397,7 @@ test("reconciles healthy hooks when another source settings file is damaged", as
     const healthy = {
       ...source("qwen_code"),
       dataPath: join(home, "healthy-qwen", "usage"),
+      hookConfigRoot: join(home, "healthy-qwen"),
     };
     await mkdir(join(home, "broken-claude"), { recursive: true });
     await writeFile(join(home, "broken-claude", "settings.json"), "{not-json");
@@ -352,6 +426,7 @@ test("source-owned hooks reconcile profiles independently and upgrade legacy mar
       clientSourceId: "71717171-7171-4171-8171-717171717171",
       agentId: "qwen_code",
       dataPath: join(home, "qwen-personal"),
+      hookConfigRoot: join(home, "qwen-personal"),
       collectionMethod: "qwen_stats_jsonl",
       supportedSurface: "cli",
       suggestedLabel: "Personal",
@@ -360,6 +435,7 @@ test("source-owned hooks reconcile profiles independently and upgrade legacy mar
       ...first,
       clientSourceId: "72727272-7272-4272-8272-727272727272",
       dataPath: join(home, "qwen-work"),
+      hookConfigRoot: join(home, "qwen-work"),
       suggestedLabel: "Work",
     };
     for (const profile of [first, second]) {
@@ -1713,6 +1789,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
       agentId: "antigravity",
       dataPath: join(home, "private", "antigravity.jsonl"),
       executablePath: join(home, "private", "agy"),
+      hookConfigRoot: join(home, "private", "qwen-config"),
       collectionMethod: "antigravity_cli_capture",
       supportedSurface: "cli",
       suggestedLabel: "Antigravity",
@@ -1741,6 +1818,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "dataPath",
     "canonicalPath",
     "executablePath",
+    "hookConfigRoot",
     "prompt",
     "response",
     "model",
@@ -1886,6 +1964,7 @@ test("source removal is offline-safe and stops its local hook", async (context) 
     clientSourceId,
     agentId: "qwen_code",
     dataPath: root,
+    hookConfigRoot: root,
     collectionMethod: "qwen_stats_jsonl",
     supportedSurface: "cli",
     suggestedLabel: "Offline",
@@ -2373,6 +2452,7 @@ test("doctor removes a hook after dashboard-side source disconnect", async (cont
     sourceId,
     agentId: "qwen_code",
     dataPath: root,
+    hookConfigRoot: root,
     collectionMethod: "qwen_stats_jsonl",
     supportedSurface: "cli",
     suggestedLabel: "Dashboard",
@@ -2577,6 +2657,7 @@ test("remote reconciliation cannot restore retired runtime state from a stale sn
     sourceId: retiredSourceId,
     agentId: "qwen_code",
     dataPath: qwenRoot,
+    hookConfigRoot: qwenRoot,
     collectionMethod: "qwen_stats_jsonl",
     supportedSurface: "cli",
     suggestedLabel: "Retired",
@@ -3418,6 +3499,7 @@ test("uninstall cleans later roots and retains failed-root metadata for an idemp
       sourceId: "92929292-9292-4292-8292-929292929292",
       agentId: "qwen_code",
       dataPath: brokenRoot,
+      hookConfigRoot: brokenRoot,
       collectionMethod: "qwen_stats_jsonl",
       supportedSurface: "cli",
       suggestedLabel: "Broken first",

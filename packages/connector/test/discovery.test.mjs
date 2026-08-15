@@ -120,6 +120,56 @@ test("resolves Qwen runtime roots by environment, user settings, and fallback pr
   assert.equal(await qwenRuntimeRoot({ environment: {}, home }), join(home, "runtime-output"));
 });
 
+test("reads Qwen JSONC settings and expands environment variables", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-jsonc-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const qwenHome = join(home, ".qwen");
+  const runtime = join(home, "qwen-runtime");
+  await mkdir(join(runtime, "usage"), { recursive: true });
+  await mkdir(qwenHome, { recursive: true });
+  await writeFile(
+    join(qwenHome, "settings.json"),
+    `{
+      // Keep runtime data on a separate disk.
+      "advanced": { "runtimeOutputDir": "\${HOME}/qwen-runtime" }
+    }`,
+  );
+
+  assert.equal(await qwenRuntimeRoot({ environment: {}, home }), runtime);
+  assert.deepEqual(await detectQwenSources({ environment: {}, home }), [
+    {
+      dataPath: join(runtime, "usage"),
+      hookConfigRoot: qwenHome,
+      collectionMethod: "qwen_stats_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Qwen Code",
+    },
+  ]);
+});
+
+test("loads QWEN_RUNTIME_DIR from the Qwen user environment file", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-env-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const qwenHome = join(home, ".qwen");
+  const runtime = join(home, "env-runtime");
+  await mkdir(qwenHome, { recursive: true });
+  await writeFile(join(qwenHome, ".env"), "QWEN_RUNTIME_DIR=\${HOME}/env-runtime\n");
+
+  assert.equal(await qwenRuntimeRoot({ environment: {}, home }), runtime);
+});
+
+test("bootstraps a custom QWEN_HOME before loading its environment file", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-home-env-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const qwenHome = join(home, "custom-qwen");
+  const runtime = join(home, "custom-runtime");
+  await mkdir(qwenHome, { recursive: true });
+  await writeFile(join(home, ".env"), "QWEN_HOME=$HOME/custom-qwen\n");
+  await writeFile(join(qwenHome, ".env"), "QWEN_RUNTIME_DIR=$HOME/custom-runtime\n");
+
+  assert.equal(await qwenRuntimeRoot({ environment: {}, home }), runtime);
+});
+
 test("never resolves relative Qwen runtimeOutputDir against connector CWD", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-relative-"));
   context.after(() => rm(home, { force: true, recursive: true }));
@@ -133,6 +183,32 @@ test("never resolves relative Qwen runtimeOutputDir against connector CWD", asyn
   assert.match(diagnostics[0].error, /viberacing source add --agent qwen_code/);
   assert.doesNotMatch(diagnostics[0].error, new RegExp(process.cwd().replaceAll("\\", "\\\\")));
   assert.deepEqual(await detectQwenSources({ environment: {}, home, diagnostics: [] }), []);
+});
+
+test("never resolves relative Qwen environment roots against connector CWD", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-relative-env-"));
+  context.after(() => rm(home, { force: true, recursive: true }));
+  const runtimeDiagnostics = [];
+  assert.equal(
+    await qwenRuntimeRoot({
+      environment: { QWEN_RUNTIME_DIR: "relative-runtime" },
+      home,
+      diagnostics: runtimeDiagnostics,
+    }),
+    null,
+  );
+  assert.match(runtimeDiagnostics[0].error, /QWEN_RUNTIME_DIR is relative/);
+
+  const homeDiagnostics = [];
+  assert.equal(
+    await qwenRuntimeRoot({
+      environment: { QWEN_HOME: "relative-home" },
+      home,
+      diagnostics: homeDiagnostics,
+    }),
+    null,
+  );
+  assert.match(homeDiagnostics[0].error, /QWEN_HOME is relative/);
 });
 
 test("detects Qwen usage only at the selected runtime root", async (context) => {
@@ -149,6 +225,7 @@ test("detects Qwen usage only at the selected runtime root", async (context) => 
     sources.map((source) => source.dataPath),
     [join(selected, "usage")],
   );
+  assert.equal(sources[0].hookConfigRoot, join(home, ".qwen"));
 });
 
 test("canonical path keys use real paths and common case-insensitive platform semantics", async (context) => {
