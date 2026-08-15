@@ -4,6 +4,7 @@ import {
   collectJsonl,
   componentEntry,
   diagnosePath,
+  findFile,
   integer,
   mergeEntries,
   utcDay,
@@ -79,8 +80,29 @@ function geminiEventKey(line) {
   }
 }
 
-const geminiHome = process.env.GEMINI_CLI_HOME ? resolve(process.env.GEMINI_CLI_HOME) : homedir();
-const defaultPath = join(geminiHome, ".gemini", "tmp");
+export function geminiSourcePath(environment = process.env, home = homedir()) {
+  const geminiHome = environment.GEMINI_CLI_HOME ? resolve(environment.GEMINI_CLI_HOME) : home;
+  return join(geminiHome, ".gemini", "tmp");
+}
+
+export async function detectGeminiSources({ environment = process.env, home = homedir() } = {}) {
+  const dataPath = geminiSourcePath(environment, home);
+  return (await findFile(
+    dataPath,
+    (name) => name.startsWith("session-") && name.endsWith(".jsonl"),
+  ))
+    ? [
+        {
+          dataPath,
+          collectionMethod: "gemini_session_json",
+          supportedSurface: "cli",
+          suggestedLabel: "Gemini CLI",
+        },
+      ]
+    : [];
+}
+
+const defaultPath = geminiSourcePath();
 export const geminiAdapter = Object.freeze({
   id: "gemini_cli",
   displayName: "Gemini CLI",
@@ -89,23 +111,7 @@ export const geminiAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "SessionEnd hook",
   defaultPaths: [defaultPath],
-  detect: async () =>
-    (
-      await diagnosePath({
-        dataPath: defaultPath,
-        collectionMethod: "gemini_session_json",
-        supportedSurface: "cli",
-      })
-    ).dataLocationAvailable
-      ? [
-          {
-            dataPath: defaultPath,
-            collectionMethod: "gemini_session_json",
-            supportedSurface: "cli",
-            suggestedLabel: "Gemini CLI",
-          },
-        ]
-      : [],
+  detect: detectGeminiSources,
   collect: (source, range, state) =>
     collectJsonl(
       source,

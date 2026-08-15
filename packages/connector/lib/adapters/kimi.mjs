@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { collectJsonl, componentEntry, diagnosePath, mergeEntries, utcDay } from "./shared.mjs";
+import {
+  collectJsonl,
+  componentEntry,
+  diagnosePath,
+  findFile,
+  mergeEntries,
+  utcDay,
+} from "./shared.mjs";
 
 function currentRecord(line) {
   try {
@@ -109,6 +116,31 @@ export function kimiCollectionMethodForPath(dataPath, paths = kimiSourcePaths())
 
 const initialPaths = kimiSourcePaths();
 export const kimiDefaultPaths = [initialPaths.current, initialPaths.legacy];
+export async function detectKimiSources({ environment = process.env, home = homedir() } = {}) {
+  const paths = kimiSourcePaths(environment, home);
+  const current = {
+    dataPath: paths.current,
+    collectionMethod: "kimi_wire_jsonl",
+    supportedSurface: "cli",
+  };
+  if (await findFile(current.dataPath, (name) => name === "wire.jsonl"))
+    return [
+      {
+        ...current,
+        suggestedLabel: "Kimi Code",
+        supersedesDataPaths: environment.KIMI_SHARE_DIR ? [] : [paths.legacy],
+      },
+    ];
+  const legacy = {
+    dataPath: paths.legacy,
+    collectionMethod: "kimi_legacy_wire_jsonl",
+    supportedSurface: "cli",
+  };
+  return (await findFile(legacy.dataPath, (name) => name === "wire.jsonl"))
+    ? [{ ...legacy, suggestedLabel: "Kimi Code (legacy)" }]
+    : [];
+}
+
 export const kimiAdapter = Object.freeze({
   id: "kimi_code",
   displayName: "Kimi Code",
@@ -118,30 +150,7 @@ export const kimiAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "Stop hook",
   defaultPaths: kimiDefaultPaths,
-  detect: async () => {
-    const paths = kimiSourcePaths();
-    const current = {
-      dataPath: paths.current,
-      collectionMethod: "kimi_wire_jsonl",
-      supportedSurface: "cli",
-    };
-    if ((await diagnosePath(current)).dataLocationAvailable)
-      return [
-        {
-          ...current,
-          suggestedLabel: "Kimi Code",
-          supersedesDataPaths: process.env.KIMI_SHARE_DIR ? [] : [paths.legacy],
-        },
-      ];
-    const legacy = {
-      dataPath: paths.legacy,
-      collectionMethod: "kimi_legacy_wire_jsonl",
-      supportedSurface: "cli",
-    };
-    return (await diagnosePath(legacy)).dataLocationAvailable
-      ? [{ ...legacy, suggestedLabel: "Kimi Code (legacy)" }]
-      : [];
-  },
+  detect: detectKimiSources,
   collect: (source, range, state) => {
     const legacy =
       source.collectionMethod === "kimi_legacy_wire_jsonl" ||

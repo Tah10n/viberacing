@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import {
   componentEntry,
   diagnosePath,
+  findFile,
   jsonLinesChunk,
   mergeEntries,
   tailFingerprint,
@@ -130,10 +131,28 @@ export async function collectClaude(
   };
 }
 
-const claudeRoot = process.env.CLAUDE_CONFIG_DIR
-  ? resolve(process.env.CLAUDE_CONFIG_DIR)
-  : join(homedir(), ".claude");
-const defaultPath = join(claudeRoot, "projects");
+export function claudeSourcePath(environment = process.env, home = homedir()) {
+  const root = environment.CLAUDE_CONFIG_DIR
+    ? resolve(environment.CLAUDE_CONFIG_DIR)
+    : join(home, ".claude");
+  return join(root, "projects");
+}
+
+export async function detectClaudeSources({ environment = process.env, home = homedir() } = {}) {
+  const dataPath = claudeSourcePath(environment, home);
+  return (await findFile(dataPath, (name) => name.endsWith(".jsonl")))
+    ? [
+        {
+          dataPath,
+          collectionMethod: "claude_jsonl",
+          supportedSurface: "cli",
+          suggestedLabel: "Claude Code",
+        },
+      ]
+    : [];
+}
+
+const defaultPath = claudeSourcePath();
 export const claudeAdapter = Object.freeze({
   id: "claude_code",
   displayName: "Claude Code",
@@ -142,23 +161,7 @@ export const claudeAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "Stop hook",
   defaultPaths: [defaultPath],
-  detect: async () =>
-    (
-      await diagnosePath({
-        dataPath: defaultPath,
-        collectionMethod: "claude_jsonl",
-        supportedSurface: "cli",
-      })
-    ).dataLocationAvailable
-      ? [
-          {
-            dataPath: defaultPath,
-            collectionMethod: "claude_jsonl",
-            supportedSurface: "cli",
-            suggestedLabel: "Claude Code",
-          },
-        ]
-      : [],
+  detect: detectClaudeSources,
   collect: collectClaude,
   diagnose: (source) => diagnosePath(source),
 });
