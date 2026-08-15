@@ -1504,6 +1504,14 @@ test("an event arriving during manual sync survives for the next targeted batch"
       return true;
     }
   });
+  await waitFor(async () => {
+    try {
+      await access(join(installation.directory, "scheduler.lock"));
+      return false;
+    } catch {
+      return true;
+    }
+  });
 });
 
 test("automatic sync makes one bounded retry after its sync-lock wait expires", async (context) => {
