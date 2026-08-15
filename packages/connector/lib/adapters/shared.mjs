@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
-import { access, open, opendir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { access, open, opendir, realpath, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -81,6 +81,39 @@ export async function exists(path) {
   } catch {
     return false;
   }
+}
+
+export async function canonicalPathKey(
+  path,
+  { platform = process.platform, resolvePath = resolve, realpathPath = realpath } = {},
+) {
+  let canonical = resolvePath(path);
+  try {
+    canonical = await realpathPath(canonical);
+  } catch {}
+  return platform === "win32" || platform === "darwin" ? canonical.toLowerCase() : canonical;
+}
+
+export async function findFile(root, predicate, maximumEntries = 10_000) {
+  const queue = [root];
+  let visited = 0;
+  while (queue.length && visited < maximumEntries) {
+    let directory;
+    try {
+      directory = await opendir(queue.shift());
+    } catch {
+      continue;
+    }
+    for await (const entry of directory) {
+      visited += 1;
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) queue.push(join(directory.path, entry.name));
+      else if (entry.isFile() && predicate(entry.name, join(directory.path, entry.name)))
+        return true;
+      if (visited >= maximumEntries) break;
+    }
+  }
+  return false;
 }
 
 export async function walk(root, suffixes, maximum = 2_000) {

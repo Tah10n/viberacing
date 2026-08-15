@@ -13,6 +13,7 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { canonicalPathKey } from "./adapters/shared.mjs";
 
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
   ? resolve(process.env.VIBERACING_STATE_DIR)
@@ -164,7 +165,7 @@ export async function writeSources(sources) {
   );
   const roots = new Set();
   for (const source of normalized) {
-    const key = `${source.agentId}\0${process.platform === "win32" ? source.dataPath.toLowerCase() : source.dataPath}`;
+    const key = `${source.agentId}\0${await canonicalPathKey(source.dataPath)}`;
     if (roots.has(key)) throw new Error("That local source is already configured");
     roots.add(key);
   }
@@ -175,14 +176,16 @@ export async function writeSources(sources) {
 export async function addSource(source) {
   const sources = await readSources();
   const normalized = normalizedLocalSource(source);
-  const root =
-    process.platform === "win32" ? normalized.dataPath.toLowerCase() : normalized.dataPath;
-  const duplicate = sources.find(
-    (candidate) =>
+  const root = await canonicalPathKey(normalized.dataPath);
+  let duplicate;
+  for (const candidate of sources)
+    if (
       candidate.agentId === normalized.agentId &&
-      (process.platform === "win32" ? candidate.dataPath.toLowerCase() : candidate.dataPath) ===
-        root,
-  );
+      (await canonicalPathKey(candidate.dataPath)) === root
+    ) {
+      duplicate = candidate;
+      break;
+    }
   if (duplicate) return { source: duplicate, added: false };
   sources.push(normalized);
   await writeSources(sources);
@@ -204,11 +207,17 @@ export async function reconcileDetectedSources(detected, { persist = true } = {}
   let sources = await readSources();
   let changed = false;
   for (const candidate of detected) {
-    const superseded = new Set((candidate.supersedesDataPaths ?? []).map((path) => resolve(path)));
+    const superseded = new Set();
+    for (const path of candidate.supersedesDataPaths ?? [])
+      superseded.add(await canonicalPathKey(path));
     if (superseded.size === 0) continue;
-    const retained = sources.filter(
-      (source) => source.agentId !== candidate.agentId || !superseded.has(resolve(source.dataPath)),
-    );
+    const retained = [];
+    for (const source of sources)
+      if (
+        source.agentId !== candidate.agentId ||
+        !superseded.has(await canonicalPathKey(source.dataPath))
+      )
+        retained.push(source);
     if (retained.length !== sources.length) {
       sources = retained;
       changed = true;
@@ -216,13 +225,16 @@ export async function reconcileDetectedSources(detected, { persist = true } = {}
   }
   for (const candidate of detected) {
     const normalized = normalizedLocalSource(candidate);
-    const root =
-      process.platform === "win32" ? normalized.dataPath.toLowerCase() : normalized.dataPath;
-    const existing = sources.find(
-      (source) =>
+    const root = await canonicalPathKey(normalized.dataPath);
+    let existing;
+    for (const source of sources)
+      if (
         source.agentId === normalized.agentId &&
-        (process.platform === "win32" ? source.dataPath.toLowerCase() : source.dataPath) === root,
-    );
+        (await canonicalPathKey(source.dataPath)) === root
+      ) {
+        existing = source;
+        break;
+      }
     if (!existing) {
       sources.push(normalized);
       changed = true;

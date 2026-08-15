@@ -1,6 +1,9 @@
 import { homedir } from "node:os";
+import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
-import { componentEntry, diagnosePath, mergeEntries, utcDay } from "./shared.mjs";
+import { canonicalPathKey, componentEntry, diagnosePath, mergeEntries, utcDay } from "./shared.mjs";
+
+export const openCodeDatabasePattern = /^opencode(?:-[A-Za-z0-9._-]+)?\.db$/;
 
 export function parseOpenCodeMessages(rows) {
   const seen = new Set();
@@ -57,22 +60,103 @@ async function collect(source, range, state = {}) {
   }
 }
 
-const openCodeData = join(
-  process.env.XDG_DATA_HOME
-    ? resolve(process.env.XDG_DATA_HOME)
-    : join(homedir(), ".local", "share"),
-  "opencode",
-);
-const configuredDatabase = process.env.OPENCODE_DB
-  ? isAbsolute(process.env.OPENCODE_DB)
-    ? process.env.OPENCODE_DB
-    : join(openCodeData, process.env.OPENCODE_DB)
-  : null;
+export function openCodeDataRoot(environment = process.env, home = homedir()) {
+  return join(
+    environment.XDG_DATA_HOME ? resolve(environment.XDG_DATA_HOME) : join(home, ".local", "share"),
+    "opencode",
+  );
+}
+
+export async function isCompatibleOpenCodeDatabase(dataPath) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(dataPath, { readOnly: true });
+  try {
+    const table = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get("message");
+    if (table?.name !== "message") return false;
+    const columns = new Set(
+      database
+        .prepare("PRAGMA table_info(message)")
+        .all()
+        .map((column) => column.name),
+    );
+    return ["id", "time_created", "data"].every((column) => columns.has(column));
+  } finally {
+    database.close();
+  }
+}
+
+function databaseLabel(dataPath, configured) {
+  const name = dataPath.split(/[\\/]/).at(-1) ?? "";
+  const channel = name.match(/^opencode-(.+)\.db$/)?.[1];
+  if (channel) return `OpenCode ${channel}`;
+  return name === "opencode.db" ? "OpenCode" : configured ? "OpenCode configured" : "OpenCode";
+}
+
+function databaseOrder(left, right) {
+  const priority = (name) => (name === "opencode.db" ? 0 : name === "opencode-prod.db" ? 1 : 2);
+  return priority(left) - priority(right) || left.localeCompare(right);
+}
+
+export async function detectOpenCodeSources({
+  environment = process.env,
+  home = homedir(),
+  diagnostics = [],
+} = {}) {
+  const dataRoot = openCodeDataRoot(environment, home);
+  const configuredValue = environment.OPENCODE_DB?.trim();
+  const configuredPath = configuredValue
+    ? isAbsolute(configuredValue)
+      ? resolve(configuredValue)
+      : resolve(dataRoot, configuredValue)
+    : null;
+  let names = [];
+  try {
+    names = (await readdir(dataRoot)).filter((name) => openCodeDatabasePattern.test(name));
+  } catch (error) {
+    if (error?.code !== "ENOENT")
+      diagnostics.push({ error: "OpenCode data directory could not be enumerated" });
+  }
+  const candidates = [
+    ...(configuredPath ? [{ dataPath: configuredPath, configured: true }] : []),
+    ...names.sort(databaseOrder).map((name) => ({ dataPath: join(dataRoot, name) })),
+  ];
+  const seen = new Set();
+  const sources = [];
+  for (const candidate of candidates) {
+    const identity = await canonicalPathKey(candidate.dataPath);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    try {
+      if (!(await stat(candidate.dataPath)).isFile()) continue;
+    } catch {
+      continue;
+    }
+    let compatible = false;
+    try {
+      compatible = await isCompatibleOpenCodeDatabase(candidate.dataPath);
+    } catch {}
+    if (!compatible) {
+      const name = candidate.dataPath.split(/[\\/]/).at(-1) ?? "configured database";
+      diagnostics.push({ error: `Ignored ${name}: incompatible OpenCode SQLite schema` });
+      continue;
+    }
+    sources.push({
+      dataPath: candidate.dataPath,
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: databaseLabel(candidate.dataPath, candidate.configured),
+    });
+  }
+  return sources;
+}
+
+const initialDataRoot = openCodeDataRoot();
 const defaultPaths = [
-  ...(configuredDatabase ? [configuredDatabase] : []),
-  join(openCodeData, "opencode.db"),
-  join(openCodeData, "opencode-prod.db"),
-].filter((path, index, values) => values.indexOf(path) === index);
+  join(initialDataRoot, "opencode.db"),
+  join(initialDataRoot, "opencode-prod.db"),
+];
 export const openCodeAdapter = Object.freeze({
   id: "opencode",
   displayName: "OpenCode",
@@ -81,26 +165,19 @@ export const openCodeAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "manual sync",
   defaultPaths,
-  detect: async () => {
-    const result = [];
-    for (const dataPath of defaultPaths)
-      if (
-        (
-          await diagnosePath({
-            dataPath,
-            collectionMethod: "opencode_sqlite",
-            supportedSurface: "cli",
-          })
-        ).dataLocationAvailable
-      )
-        result.push({
-          dataPath,
-          collectionMethod: "opencode_sqlite",
-          supportedSurface: "cli",
-          suggestedLabel: "OpenCode",
-        });
-    return result;
-  },
+  detect: detectOpenCodeSources,
   collect,
-  diagnose: (source) => diagnosePath(source),
+  diagnose: async (source) => {
+    const diagnostic = await diagnosePath(source);
+    if (!diagnostic.dataLocationAvailable) return diagnostic;
+    try {
+      if (await isCompatibleOpenCodeDatabase(source.dataPath)) return diagnostic;
+    } catch {}
+    return {
+      ...diagnostic,
+      status: "error",
+      dataLocationAvailable: false,
+      error: "incompatible OpenCode SQLite schema",
+    };
+  },
 });
