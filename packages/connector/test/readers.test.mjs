@@ -34,6 +34,14 @@ test("projects authoritative Codex UTC buckets", async () => {
   ]);
 });
 
+test("treats Codex JSON-RPC and unsupported account usage responses as failures", () => {
+  assert.throws(
+    () => parseCodexUsage({ error: { message: "account usage unavailable" } }),
+    /usage request failed/,
+  );
+  assert.throws(() => parseCodexUsage({ result: {} }), /daily usage buckets/);
+});
+
 test("isolates each Codex App Server with its source-specific CODEX_HOME", () => {
   const work = join(tmpdir(), "synthetic-codex-work");
   const personal = join(tmpdir(), "synthetic-codex-personal");
@@ -260,6 +268,16 @@ test("does not count current Cursor terminal results without authoritative count
   const lines = (await fixture("cursor.jsonl")).trim().split("\n");
   assert.deepEqual(parseCursorLines(lines), []);
   assert.equal(safeCaptureRecord("cursor", lines.at(-1)), null);
+  assert.equal(
+    safeCaptureRecord(
+      "cursor",
+      JSON.stringify({
+        id: "unrecognized-future-shape",
+        usage: { totalTokens: 10, inputTokens: 5, outputTokens: 5 },
+      }),
+    ),
+    null,
+  );
 });
 
 test("reads Antigravity CLI snake-case usage", async () => {
