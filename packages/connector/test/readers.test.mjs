@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   collectClaude,
@@ -210,8 +210,8 @@ test("honors KIMI_CODE_HOME and keeps current and legacy roots distinct", () => 
       "/home/racer",
     ),
     {
-      current: "/portable/current/sessions",
-      legacy: "/portable/legacy/sessions",
+      current: join(resolve("/portable/current"), "sessions"),
+      legacy: join(resolve("/portable/legacy"), "sessions"),
     },
   );
 });
