@@ -78,7 +78,10 @@ quotes and inline comments; unrelated values are discarded. Relative values are 
 the connector's CWD; `doctor` prints the explicit `source add` command instead. The runtime root and
 Qwen config root are stored separately, so tokens come from `<runtime-root>/usage` while the
 additive `SessionEnd` hook always lives in `<QWEN_HOME>/settings.json`. Hook edits retain unknown
-settings and comments outside the changed `hooks` subtree.
+settings and comments outside the changed `hooks` subtree. In Qwen Code 0.21.12, that hook fires on
+interactive TUI exit and is wired into ACP, but the headless `qwen -p` runner does not emit
+`SessionEnd`. Headless runs still write exact usage records; run `viberacing sync`, or wait for the
+next supported lifecycle event, to collect them.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
@@ -103,9 +106,10 @@ usage unless the user separately runs `viberacing sync`. A successful compatible
 authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
-OpenCode uses its read-only SQLite store and a documented `sync`; Antigravity requires the opt-in
-`run` wrapper. Every installed hook contains its stable `clientSourceId` and a source-owned v3
-marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
+Qwen's trigger currently covers interactive TUI and ACP lifecycle events, not headless `qwen -p`
+exits. OpenCode uses its read-only SQLite store and a documented `sync`; Antigravity requires the
+opt-in `run` wrapper. Every installed hook contains its stable `clientSourceId` and a source-owned
+v3 marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
 one short-lived timer process, and return the provider's minimal response. Automatic collection
 first drains pending payloads and then scans only active dirty sources; events for other sources do
 not start Codex, open OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds,
