@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executableCandidates, resolveAgentExecutable } from "../lib/executables.mjs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  executableCandidates,
+  resolvedExecutableInvocation,
+  resolveAgentExecutable,
+  spawnResolvedExecutable,
+} from "../lib/executables.mjs";
 
 test("finds a bundled macOS Codex even when PATH does not contain it", async () => {
   const bundled = "/Applications/ChatGPT.app/Contents/Resources/codex";
@@ -79,3 +87,52 @@ test("uses common standalone locations for every executable-backed agent", () =>
   assert.ok(antigravity.includes("/home/racer/.local/bin/agy"));
   assert.ok(antigravity.includes("/snap/bin/agy"));
 });
+
+test("routes Windows command shims through ComSpec with escaped arguments", () => {
+  const invocation = resolvedExecutableInvocation(
+    "C:\\Users\\Racer Name\\AppData\\Roaming\\npm\\codex.cmd",
+    ["app-server", 'quoted "value"', "literal&pipe|redirect<value>"],
+    {
+      platform: "win32",
+      environment: { ComSpec: "C:\\Windows\\System32\\cmd.exe" },
+    },
+  );
+  assert.equal(invocation.command, "C:\\Windows\\System32\\cmd.exe");
+  assert.deepEqual(invocation.args.slice(0, 3), ["/d", "/s", "/c"]);
+  assert.equal(invocation.windowsVerbatimArguments, true);
+  assert.match(invocation.args[3], /codex\.cmd/);
+  assert.match(invocation.args[3], /\^&/);
+  assert.match(invocation.args[3], /\^\|/);
+  assert.match(invocation.args[3], /\^</);
+  assert.match(invocation.args[3], /\^>/);
+});
+
+test(
+  "executes Codex, Cursor, and Antigravity Windows npm shims with literal argv",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), "viberacing windows shims "));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    const target = join(directory, "capture-args.mjs");
+    await writeFile(target, "process.stdout.write(JSON.stringify(process.argv.slice(2)))\n");
+    const expected = ["app-server", "path with spaces", 'quoted "value"', "a&b", "c|d", "x<y>z"];
+    for (const name of ["codex.cmd", "cursor-agent.cmd", "agy.cmd"]) {
+      const shim = join(directory, name);
+      await writeFile(shim, `@echo off\r\n"${process.execPath}" "${target}" %*\r\n`);
+      const child = spawnResolvedExecutable(shim, expected, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => (stdout += chunk));
+      child.stderr.on("data", (chunk) => (stderr += chunk));
+      const code = await new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", resolve);
+      });
+      assert.equal(code, 0, stderr);
+      assert.deepEqual(JSON.parse(stdout), expected);
+    }
+  },
+);

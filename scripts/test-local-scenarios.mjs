@@ -62,6 +62,8 @@ const definitions = {
   codex: ["codex_app_server", "desktop"],
   claude_code: ["claude_jsonl", "cli"],
   opencode: ["opencode_sqlite", "cli"],
+  kimi_code: ["kimi_wire_jsonl", "cli"],
+  cursor: ["cursor_cli_capture", "cli"],
 };
 
 function source(clientSourceId, agentId) {
@@ -74,7 +76,7 @@ function source(clientSourceId, agentId) {
   };
 }
 
-async function beginPairing(installation, sources) {
+async function beginPairing(installation, sources, supersededClientSourceIds = []) {
   const response = await json(
     "/api/pairing/start",
     {
@@ -83,6 +85,7 @@ async function beginPairing(installation, sources) {
       installationId: installation.id,
       installationSecret: installation.secret,
       sources,
+      supersededClientSourceIds,
     },
     { "x-real-ip": `127.0.0.${Math.floor(Math.random() * 200) + 2}` },
   );
@@ -91,9 +94,9 @@ async function beginPairing(installation, sources) {
   return response.json();
 }
 
-async function approvePairing(pairing, selections) {
+async function submitPairingApproval(pairing, selections = {}) {
   const pending = await pool.query(
-    "SELECT id::text, client_source_id FROM installation_sources WHERE installation_id = $1 AND pending_pairing_code_hash = $2 ORDER BY created_at, id",
+    "SELECT id::text, client_source_id FROM installation_sources WHERE installation_id = $1 AND pending_pairing_code_hash = $2 AND NOT pending_disconnect ORDER BY created_at, id",
     [pairing.installationId, digest(pairing.code)],
   );
   const body = { code: pairing.code };
@@ -102,7 +105,11 @@ async function approvePairing(pairing, selections) {
     body[`account_${row.id}`] = selected;
     body[`label_${row.id}`] = `${row.client_source_id} account`;
   }
-  const approval = await form("/api/pairing/approve", body);
+  return { approval: await form("/api/pairing/approve", body), pending };
+}
+
+async function approvePairing(pairing, selections) {
+  const { approval, pending } = await submitPairingApproval(pairing, selections);
   check(approval.status === 303, `pairing approval failed: ${approval.status}`);
   const polled = await json("/api/pairing/poll", {
     installationId: pairing.installationId,
@@ -117,8 +124,11 @@ async function approvePairing(pairing, selections) {
   return result;
 }
 
-async function pair(installation, sources, selections = {}) {
-  return approvePairing(await beginPairing(installation, sources), selections);
+async function pair(installation, sources, selections = {}, supersededClientSourceIds = []) {
+  return approvePairing(
+    await beginPairing(installation, sources, supersededClientSourceIds),
+    selections,
+  );
 }
 
 async function usage(deviceToken, snapshots, sourceErrors = []) {
@@ -250,6 +260,31 @@ try {
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
 
+  const cursorInstallation = { id: randomUUID(), secret: token() };
+  const cursor = await pair(cursorInstallation, [source("cursor-local", "cursor")]);
+  const cursorSource = cursor.sources[0];
+  const beforeCursor = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1",
+    [userId],
+  );
+  const cursorResponse = await usage(cursor.deviceToken, [
+    snapshot(cursorSource.sourceId, 1, [[today, 999_999]]),
+  ]);
+  check(cursorResponse.status === 200, "uncounted Cursor snapshot was not handled safely");
+  const afterCursor = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1",
+    [userId],
+  );
+  const cursorRows = await pool.query(
+    "SELECT count(*)::int AS count FROM daily_usage WHERE source_id = $1",
+    [cursorSource.sourceId],
+  );
+  check(
+    beforeCursor.rows[0].tokens === afterCursor.rows[0].tokens && cursorRows.rows[0].count === 0,
+    "Cursor changed the user's leaderboard total",
+  );
+  console.log("ok - uncounted Cursor snapshots never affect daily or weekly ranking totals");
+
   const target = byClient.get("codex-work").sourceId;
   const lockClient = await pool.connect();
   const replacementDeviceToken = token();
@@ -349,8 +384,8 @@ try {
     [target],
   );
   check(
-    rows.rows.length === 2 && rows.rows[1].total_tokens === "25",
-    "partial snapshot deleted an absent date or failed to decrease",
+    rows.rows.length === 2 && rows.rows[1].total_tokens === "35",
+    "partial snapshot deleted an absent date or decreased a previously exact day",
   );
   response = await usage(first.deviceToken, [snapshot(target, 4, [[today, 20]])]);
   check(response.status === 200, "final complete correction failed");
@@ -509,6 +544,66 @@ try {
     "ok - reconnect preserves identity/history, rotates authorization, and immediately rebuilds reassigned summaries",
   );
 
+  const migratedKimiClientId = "kimi-legacy-migrated";
+  const withMigratedKimi = await pair(
+    firstInstallation,
+    [...reconnectSources, source(migratedKimiClientId, "kimi_code")],
+    reconnectAssignments,
+  );
+  const migratedKimi = withMigratedKimi.sources.find(
+    (item) => item.clientSourceId === migratedKimiClientId,
+  );
+  check(migratedKimi !== undefined, "migrated Kimi source was not paired");
+  response = await usage(withMigratedKimi.deviceToken, [
+    snapshot(migratedKimi.sourceId, 1, [[today, 41]]),
+  ]);
+  check(response.status === 200, "migrated Kimi usage was not accepted");
+  const abandonedKimiMigration = await beginPairing(firstInstallation, reconnectSources, [
+    migratedKimiClientId,
+  ]);
+  await pool.query(
+    "UPDATE installations SET pairing_expires_at = now() - interval '1 second' WHERE id = $1",
+    [firstInstallation.id],
+  );
+  response = await usage(withMigratedKimi.deviceToken, [
+    snapshot(migratedKimi.sourceId, 2, [[today, 43]]),
+  ]);
+  const activeLegacyKimi = await pool.query(
+    `SELECT s.status, d.total_tokens::text
+       FROM installation_sources s
+       JOIN daily_usage d ON d.source_id = s.id AND d.usage_date = $2
+      WHERE s.id = $1`,
+    [migratedKimi.sourceId, today],
+  );
+  check(
+    response.status === 200 &&
+      activeLegacyKimi.rows[0]?.status === "active" &&
+      activeLegacyKimi.rows[0]?.total_tokens === "43",
+    `abandoned Kimi migration changed the active legacy source (${abandonedKimiMigration.code})`,
+  );
+  const afterKimiMigration = await pair(firstInstallation, reconnectSources, reconnectAssignments, [
+    migratedKimiClientId,
+  ]);
+  const retiredKimi = await pool.query(
+    `SELECT s.status,
+            (SELECT count(*)::int FROM daily_usage d WHERE d.source_id = s.id) AS usage_rows
+       FROM installation_sources s
+      WHERE s.id = $1`,
+    [migratedKimi.sourceId],
+  );
+  const kimiSummary = await pool.query(
+    "SELECT count(*)::int AS count FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'kimi_code'",
+    [userId],
+  );
+  check(
+    afterKimiMigration.sources.length === reconnectSources.length &&
+      retiredKimi.rows[0]?.status === "disconnected" &&
+      retiredKimi.rows[0]?.usage_rows === 0 &&
+      kimiSummary.rows[0].count === 0,
+    "superseded Kimi source remained active or retained duplicated ranking history",
+  );
+  console.log("ok - approved Kimi migration retires the legacy mapping and duplicated history");
+
   const concurrent = await Promise.all([
     beginPairing(firstInstallation, reconnectSources),
     beginPairing(firstInstallation, reconnectSources),
@@ -552,6 +647,99 @@ try {
     "expired pairing was accepted",
   );
   console.log("ok - expired pairing is rejected");
+
+  const activeInstallationCount = await pool.query(
+    "SELECT count(*)::int AS count FROM installations WHERE user_id = $1 AND status = 'active'",
+    [userId],
+  );
+  const installationFillers = Array.from(
+    { length: 20 - activeInstallationCount.rows[0].count },
+    () => randomUUID(),
+  );
+  for (const [index, id] of installationFillers.entries())
+    await pool.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, $3, 'active', $4, $5, '0.2.1', 2)`,
+      [id, userId, `Limit computer ${index + 1}`, digest(token()), digest(token())],
+    );
+  const installationLimitPairing = await beginPairing({ id: randomUUID(), secret: token() }, [
+    source("installation-limit-source", "opencode"),
+  ]);
+  let limited = await submitPairingApproval(installationLimitPairing);
+  check(
+    limited.approval.headers.get("location")?.includes("error=limit"),
+    "active installation cap was not enforced",
+  );
+  await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+    [...installationFillers, installationLimitPairing.installationId],
+  ]);
+
+  const accountCount = await pool.query(
+    "SELECT count(*)::int AS count FROM agent_accounts WHERE user_id = $1",
+    [userId],
+  );
+  const accountFillers = Array.from({ length: 100 - accountCount.rows[0].count }, () =>
+    randomUUID(),
+  );
+  if (accountFillers.length > 0)
+    await pool.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+       SELECT id::uuid, $2, 'opencode', 'Limit account ' || ordinality, 'source_sum'
+         FROM unnest($1::text[]) WITH ORDINALITY AS filler(id, ordinality)`,
+      [accountFillers, userId],
+    );
+  const accountLimitPairing = await beginPairing({ id: randomUUID(), secret: token() }, [
+    source("account-limit-source", "opencode"),
+  ]);
+  limited = await submitPairingApproval(accountLimitPairing);
+  check(
+    limited.approval.headers.get("location")?.includes("error=limit"),
+    "agent account cap was not enforced",
+  );
+  await pool.query("DELETE FROM installations WHERE id = $1", [accountLimitPairing.installationId]);
+  if (accountFillers.length > 0)
+    await pool.query("DELETE FROM agent_accounts WHERE id = ANY($1::uuid[])", [accountFillers]);
+
+  const activeSourceCount = await pool.query(
+    "SELECT count(*)::int AS count FROM installation_sources WHERE user_id = $1 AND status = 'active'",
+    [userId],
+  );
+  const sourceFillers = Array.from({ length: 100 - activeSourceCount.rows[0].count }, () =>
+    randomUUID(),
+  );
+  if (sourceFillers.length > 0)
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'opencode', 'limit-source-' || ordinality,
+              'opencode_sqlite', 'cli', 'Limit source', 'active'
+         FROM unnest($1::text[]) WITH ORDINALITY AS filler(id, ordinality)`,
+      [
+        sourceFillers,
+        firstInstallation.id,
+        userId,
+        byClient.get("opencode-personal").agentAccountId,
+      ],
+    );
+  const sourceLimitPairing = await beginPairing({ id: randomUUID(), secret: token() }, [
+    source("source-limit-source", "opencode"),
+  ]);
+  limited = await submitPairingApproval(sourceLimitPairing, {
+    "source-limit-source": byClient.get("opencode-personal").agentAccountId,
+  });
+  check(
+    limited.approval.headers.get("location")?.includes("error=limit"),
+    "active source cap was not enforced",
+  );
+  await pool.query("DELETE FROM installations WHERE id = $1", [sourceLimitPairing.installationId]);
+  if (sourceFillers.length > 0)
+    await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
+      sourceFillers,
+    ]);
+  console.log("ok - per-user installation, source, and agent-account caps are transactional");
 
   const other = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -681,17 +869,21 @@ try {
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
   await pool.query(
-    "INSERT INTO schema_migrations (version) VALUES ('002_synthetic_future.sql') ON CONFLICT DO NOTHING",
+    "INSERT INTO schema_migrations (version) VALUES ('004_synthetic_future.sql') ON CONFLICT DO NOTHING",
   );
   check(
     (await fetch(`${appUrl}/ready`)).status === 200,
     "readiness rejected a later migration ledger row",
   );
-  await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
-  await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
+  await pool.query("DELETE FROM schema_migrations WHERE version = '004_synthetic_future.sql'");
+  await pool.query(
+    "DELETE FROM schema_migrations WHERE version = '003_pairing_superseded_sources.sql'",
+  );
   const missingExpectedSchema = await fetch(`${appUrl}/ready`);
   check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
-  await pool.query("INSERT INTO schema_migrations (version) VALUES ('001_initial.sql')");
+  await pool.query(
+    "INSERT INTO schema_migrations (version) VALUES ('003_pairing_superseded_sources.sql')",
+  );
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },

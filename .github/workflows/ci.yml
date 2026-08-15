@@ -76,7 +76,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17.6-bookworm@sha256:feff5b24fedd610975a1f5e743c51a4b360437f4dc3a11acf740dcd708f413f6
+        image: postgres:17.10-bookworm@sha256:9b18b78397054fce88a9552e9d5a3ad5bb7fd258c5b3cc1c5028e46373d6ea8f
         env:
           POSTGRES_DB: viberacing
           POSTGRES_PASSWORD: viberacing

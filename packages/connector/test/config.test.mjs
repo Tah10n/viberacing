@@ -40,6 +40,7 @@ function connectorEnvironment(home, extra = {}) {
     VIBERACING_STATE_DIR: join(home, ".viberacing"),
     CODEX_HOME: join(home, ".codex"),
     CLAUDE_CONFIG_DIR: join(home, ".claude"),
+    KIMI_CODE_HOME: join(home, ".kimi-code"),
     KIMI_SHARE_DIR: join(home, ".kimi"),
     QWEN_HOME: join(home, ".qwen"),
     GEMINI_CLI_HOME: home,
@@ -53,6 +54,7 @@ function useModuleEnvironment(home) {
     "VIBERACING_STATE_DIR",
     "CODEX_HOME",
     "CLAUDE_CONFIG_DIR",
+    "KIMI_CODE_HOME",
     "KIMI_SHARE_DIR",
     "QWEN_HOME",
     "GEMINI_CLI_HOME",
@@ -222,7 +224,7 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     const claude = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8"));
     const gemini = JSON.parse(await readFile(join(home, ".gemini", "settings.json"), "utf8"));
     const qwen = JSON.parse(await readFile(join(home, ".qwen", "settings.json"), "utf8"));
-    const kimi = await readFile(join(home, ".kimi", "config.toml"), "utf8");
+    const kimi = await readFile(join(home, ".kimi-code", "config.toml"), "utf8");
     assert.equal(codex.hooks.SessionEnd[0].hooks[0].command, "keep-me");
     const codexMarker = module.hookMarkerForSource(source("codex").clientSourceId);
     assert.equal(
@@ -282,7 +284,7 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     );
     assert.match(await readFile(join(home, ".codex", "hooks.json"), "utf8"), /keep-me/);
     assert.doesNotMatch(
-      await readFile(join(home, ".kimi", "config.toml"), "utf8"),
+      await readFile(join(home, ".kimi-code", "config.toml"), "utf8"),
       /viberacing-hook-v[23]/,
     );
   } finally {
@@ -302,6 +304,37 @@ test("reports invalid existing hook settings instead of claiming success", async
         source("claude_code"),
       ]),
       /Cannot read hook settings/,
+    );
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("reconciles healthy hooks when another source settings file is damaged", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-best-effort-hooks-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?best-effort=${encodeURIComponent(home)}`);
+    const broken = {
+      ...source("claude_code"),
+      dataPath: join(home, "broken-claude", "projects"),
+    };
+    const healthy = {
+      ...source("qwen_code"),
+      dataPath: join(home, "healthy-qwen", "usage"),
+    };
+    await mkdir(join(home, "broken-claude"), { recursive: true });
+    await writeFile(join(home, "broken-claude", "settings.json"), "{not-json");
+    const result = await module.reconcileHooks(
+      new URL("../bin/viberacing.mjs", import.meta.url),
+      [broken, healthy],
+      [broken, healthy],
+    );
+    assert.equal(result.failures.length, 1);
+    assert.equal(result.failures[0].clientSourceId, broken.clientSourceId);
+    assert.match(
+      await readFile(join(home, "healthy-qwen", "settings.json"), "utf8"),
+      /viberacing-hook-v3/,
     );
   } finally {
     restoreEnvironment();
@@ -457,6 +490,141 @@ test("keeps source UUIDs stable when detected path order changes", async () => {
       reordered.find((item) => item.dataPath === secondPath).clientSourceId,
       firstIds.get(secondPath),
     );
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("prefers the current Kimi root and removes the auto-added default legacy root", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-kimi-preference-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?kimi-preference=${encodeURIComponent(home)}`);
+    await module.writeSources([
+      {
+        clientSourceId: "81818181-8181-4181-8181-818181818181",
+        agentId: "kimi_code",
+        collectionMethod: "kimi_wire_jsonl",
+        dataPath: join(home, ".kimi", "sessions"),
+        suggestedLabel: "Kimi Code",
+        supportedSurface: "cli",
+      },
+      {
+        clientSourceId: "82828282-8282-4282-8282-828282828282",
+        agentId: "kimi_code",
+        collectionMethod: "kimi_legacy_wire_jsonl",
+        dataPath: join(home, "archived-kimi", "sessions"),
+        suggestedLabel: "Kimi archive",
+        supportedSurface: "cli",
+      },
+    ]);
+    const detected = [
+      {
+        agentId: "kimi_code",
+        collectionMethod: "kimi_wire_jsonl",
+        dataPath: join(home, ".kimi-code", "sessions"),
+        suggestedLabel: "Kimi Code",
+        supportedSurface: "cli",
+        supersedesDataPaths: [join(home, ".kimi", "sessions")],
+      },
+    ];
+    const preview = await module.reconcileDetectedSources(detected, { persist: false });
+    assert.deepEqual(
+      preview.map((source) => source.dataPath).sort(),
+      [join(home, ".kimi-code", "sessions"), join(home, "archived-kimi", "sessions")].sort(),
+    );
+    assert.deepEqual(
+      (await module.readSources()).map((source) => source.dataPath).sort(),
+      [join(home, ".kimi", "sessions"), join(home, "archived-kimi", "sessions")].sort(),
+    );
+    const sources = await module.reconcileDetectedSources(detected);
+    assert.deepEqual(
+      sources.map((source) => source.dataPath).sort(),
+      [join(home, ".kimi-code", "sessions"), join(home, "archived-kimi", "sessions")].sort(),
+    );
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("persists a resolved portable executable only in local source metadata", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-portable-executable-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(
+      `../lib/config.mjs?portable-executable=${encodeURIComponent(home)}`
+    );
+    const clientSourceId = "83838383-8383-4383-8383-838383838383";
+    await module.writeSources([
+      {
+        clientSourceId,
+        agentId: "codex",
+        collectionMethod: "codex_app_server",
+        dataPath: join(home, ".codex"),
+        suggestedLabel: "Codex",
+        supportedSurface: "desktop",
+      },
+    ]);
+    const portable = join(home, "portable", "codex");
+    assert.equal(await module.rememberSourceExecutable(clientSourceId, portable), true);
+    assert.equal((await module.readSources())[0].executablePath, portable);
+    await module.writeConfig({
+      version: 2,
+      origin: "https://example.test",
+      sources: [
+        {
+          clientSourceId,
+          sourceId: "84848484-8484-4484-8484-848484848484",
+          agentAccountId: "85858585-8585-4585-8585-858585858585",
+          agentId: "codex",
+          accountLabel: "Codex",
+          collectionMethod: "codex_app_server",
+        },
+      ],
+    });
+    assert.doesNotMatch(
+      await readFile(join(home, ".viberacing", "config.json"), "utf8"),
+      /portable/,
+    );
+    assert.equal((await module.readConfig()).sources[0].executablePath, portable);
+  } finally {
+    restoreEnvironment();
+  }
+});
+
+test("refreshes the executable path of an existing detected source", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-existing-executable-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(
+      `../lib/config.mjs?existing-executable=${encodeURIComponent(home)}`
+    );
+    const clientSourceId = "86868686-8686-4686-8686-868686868686";
+    const dataPath = join(home, ".codex");
+    await module.writeSources([
+      {
+        clientSourceId,
+        agentId: "codex",
+        collectionMethod: "codex_app_server",
+        dataPath,
+        suggestedLabel: "Codex",
+        supportedSurface: "desktop",
+      },
+    ]);
+    const executablePath = join(home, "portable", "codex");
+    const sources = await module.reconcileDetectedSources([
+      {
+        agentId: "codex",
+        collectionMethod: "codex_app_server",
+        dataPath,
+        executablePath,
+        suggestedLabel: "Codex",
+        supportedSurface: "desktop",
+      },
+    ]);
+    assert.equal(sources[0].clientSourceId, clientSourceId);
+    assert.equal(sources[0].executablePath, executablePath);
+    assert.equal((await module.readSources())[0].executablePath, executablePath);
   } finally {
     restoreEnvironment();
   }
@@ -1447,6 +1615,24 @@ test("requires an explicit safe label when adding a local data root", async (con
   const local = JSON.parse(await readFile(join(state, "sources.json"), "utf8"));
   assert.equal(local.sources[0].suggestedLabel, "Work");
   assert.match(local.sources[0].clientSourceId, /^[0-9a-f-]{36}$/);
+  await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "source",
+      "add",
+      "--agent",
+      "kimi_code",
+      "--name",
+      "Archive",
+      "--data-dir",
+      join(home, "archived-kimi"),
+      "--legacy",
+    ],
+    { env: environment },
+  );
+  const withLegacy = JSON.parse(await readFile(join(state, "sources.json"), "utf8"));
+  assert.equal(withLegacy.sources[1].collectionMethod, "kimi_legacy_wire_jsonl");
   await assert.rejects(access(join(state, "config.json")));
 });
 
@@ -1771,7 +1957,7 @@ test("quarantines a server-disconnected pending source without poisoning future 
   await assert.rejects(access(join(directory, "dirty.json")));
 });
 
-test("doctor collects Claude diagnostics with the required UTC range", async (context) => {
+test("doctor reports Claude availability without collecting usage", async (context) => {
   const sourceId = "55555555-5555-4555-8555-555555555555";
   const server = createServer((_request, response) => {
     response.writeHead(200, { "content-type": "application/json" });
@@ -1828,8 +2014,8 @@ test("doctor collects Claude diagnostics with the required UTC range", async (co
   const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
     env: connectorEnvironment(home, { PATH: "" }),
   });
-  assert.match(result.stdout, /claude_code \(Work\): ok/);
-  assert.doesNotMatch(result.stdout, /reading 'rangeStart'/);
+  assert.match(result.stdout, /claude_code diagnostics: ok/);
+  assert.doesNotMatch(result.stdout, /claude_code \(Work\): ok/);
 });
 
 test("doctor serializes remote reconciliation behind an active sync", async (context) => {

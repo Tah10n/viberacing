@@ -41,9 +41,9 @@ function codexRoot() {
 }
 
 function kimiRoot() {
-  return process.env.KIMI_SHARE_DIR
-    ? resolve(process.env.KIMI_SHARE_DIR)
-    : join(homedir(), ".kimi");
+  if (process.env.KIMI_CODE_HOME) return resolve(process.env.KIMI_CODE_HOME);
+  if (process.env.KIMI_SHARE_DIR) return resolve(process.env.KIMI_SHARE_DIR);
+  return join(homedir(), ".kimi-code");
 }
 
 function qwenRoot() {
@@ -113,7 +113,8 @@ function validLocalSource(source) {
     typeof source.suggestedLabel === "string" &&
     source.suggestedLabel.length >= 1 &&
     source.suggestedLabel.length <= 40 &&
-    typeof source.supportedSurface === "string"
+    typeof source.supportedSurface === "string" &&
+    (source.executablePath === undefined || typeof source.executablePath === "string")
   );
 }
 
@@ -135,6 +136,9 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
     dataPath: resolve(dataPath),
     suggestedLabel: label,
     supportedSurface: source.supportedSurface,
+    ...(typeof source.executablePath === "string"
+      ? { executablePath: resolve(source.executablePath) }
+      : {}),
   };
 }
 
@@ -185,9 +189,31 @@ export async function addSource(source) {
   return { source: normalized, added: true };
 }
 
-export async function reconcileDetectedSources(detected) {
+export async function rememberSourceExecutable(clientSourceId, executablePath) {
   const sources = await readSources();
+  const source = sources.find((candidate) => candidate.clientSourceId === clientSourceId);
+  if (!source) return false;
+  const resolvedPath = resolve(executablePath);
+  if (source.executablePath === resolvedPath) return false;
+  source.executablePath = resolvedPath;
+  await writeSources(sources);
+  return true;
+}
+
+export async function reconcileDetectedSources(detected, { persist = true } = {}) {
+  let sources = await readSources();
   let changed = false;
+  for (const candidate of detected) {
+    const superseded = new Set((candidate.supersedesDataPaths ?? []).map((path) => resolve(path)));
+    if (superseded.size === 0) continue;
+    const retained = sources.filter(
+      (source) => source.agentId !== candidate.agentId || !superseded.has(resolve(source.dataPath)),
+    );
+    if (retained.length !== sources.length) {
+      sources = retained;
+      changed = true;
+    }
+  }
   for (const candidate of detected) {
     const normalized = normalizedLocalSource(candidate);
     const root =
@@ -200,9 +226,15 @@ export async function reconcileDetectedSources(detected) {
     if (!existing) {
       sources.push(normalized);
       changed = true;
+    } else if (
+      normalized.executablePath !== undefined &&
+      existing.executablePath !== normalized.executablePath
+    ) {
+      existing.executablePath = normalized.executablePath;
+      changed = true;
     }
   }
-  if (changed) await writeSources(sources);
+  if (changed && persist) await writeSources(sources);
   return sources;
 }
 
@@ -523,15 +555,45 @@ export async function removeHookForSource(source, options = {}) {
 }
 
 export async function reconcileHooks(sourceUrl, activeSources, knownLocalSources = []) {
-  const installedScript = await installRuntime(sourceUrl);
+  const failures = [];
+  let installedScript;
+  try {
+    installedScript = await installRuntime(sourceUrl);
+  } catch (error) {
+    failures.push({
+      agentId: null,
+      clientSourceId: null,
+      path: stateDirectory,
+      message: error instanceof Error ? error.message : "Connector runtime installation failed",
+    });
+  }
   const activeIds = new Set(activeSources.map((source) => source.clientSourceId));
   for (const source of knownLocalSources)
     if (!activeIds.has(source.clientSourceId))
-      await removeHookForSource(source, { removeLegacy: true });
+      try {
+        await removeHookForSource(source, { removeLegacy: true });
+      } catch (error) {
+        failures.push({
+          agentId: source.agentId,
+          clientSourceId: source.clientSourceId,
+          path: hookRoot(source, source.agentId),
+          message: error instanceof Error ? error.message : "Hook cleanup failed",
+        });
+      }
   const result = {};
-  for (const source of activeSources)
-    result[source.clientSourceId] = await installHookForSource(source, installedScript);
-  return result;
+  if (installedScript)
+    for (const source of activeSources)
+      try {
+        result[source.clientSourceId] = await installHookForSource(source, installedScript);
+      } catch (error) {
+        failures.push({
+          agentId: source.agentId,
+          clientSourceId: source.clientSourceId,
+          path: hookRoot(source, source.agentId),
+          message: error instanceof Error ? error.message : "Hook installation failed",
+        });
+      }
+  return { hooks: result, failures };
 }
 
 export async function removeHooks() {

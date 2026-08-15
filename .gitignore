@@ -19,6 +19,8 @@ dist/
 .codex/
 .codex-log/
 .claude/
+.kimi/
+.kimi-code/
 .viberacing/
 .idea/
 .vscode/settings.json

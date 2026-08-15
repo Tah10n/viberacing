@@ -43,7 +43,7 @@ export const agentRegistry: Readonly<Record<SupportedAgent, AgentDefinition>> = 
     displayName: "Kimi Code",
     aggregationMode: "source_sum",
     countsExactTokens: true,
-    methods: { kimi_wire_jsonl: ["cli"] },
+    methods: { kimi_wire_jsonl: ["cli"], kimi_legacy_wire_jsonl: ["cli"] },
   },
   qwen_code: {
     displayName: "Qwen Code",

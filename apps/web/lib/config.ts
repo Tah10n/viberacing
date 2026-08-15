@@ -24,7 +24,7 @@ export function secureCookies(): boolean {
 }
 
 export const connectorProtocolVersion = 2;
-export const expectedSchemaVersion = "001_initial.sql";
+export const expectedSchemaVersion = "003_pairing_superseded_sources.sql";
 
 export function maximumDailyTokens(): bigint {
   const value = process.env.VIBERACING_MAX_DAILY_TOKENS ?? "9999999999999999";

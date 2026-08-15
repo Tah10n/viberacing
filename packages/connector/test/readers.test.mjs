@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,8 @@ import {
   parseCursorLines,
   parseGeminiRecords,
   parseKimiLines,
+  parseKimiLegacyLines,
+  kimiSourcePaths,
   parseOpenCodeMessages,
   parseQwenLines,
   adapters,
@@ -92,6 +94,40 @@ test("bounds cumulative Claude history reads and reports a partial snapshot", as
   assert.equal(Object.keys(result.nextState.files).length, 1);
 });
 
+test("keeps prior Claude contributions when a replaced file cannot be read", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-claude-read-failure-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "session.jsonl");
+  const record = (id, tokens) =>
+    `${JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-08-10T00:00:00Z",
+      message: {
+        id,
+        role: "assistant",
+        usage: {
+          input_tokens: tokens,
+          output_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          reasoning_tokens: 0,
+        },
+      },
+    })}\n`;
+  await writeFile(path, record("message-before-replacement", 20));
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await collectClaude({ dataPath: directory }, range, {});
+  await writeFile(path, record("message-after-replacement", 30));
+  const partial = await collectClaude({ dataPath: directory }, range, first.nextState, {
+    readChunk: async () => {
+      throw new Error("synthetic read failure");
+    },
+  });
+  assert.equal(partial.completeness, "partial");
+  assert.deepEqual(partial.entries, first.entries);
+  assert.deepEqual(partial.nextState, first.nextState);
+});
+
 test("reads OpenCode assistant usage and avoids cache double-counting", async () => {
   const rows = JSON.parse(await fixture("opencode.json"));
   assert.deepEqual(parseOpenCodeMessages(rows), [
@@ -107,7 +143,7 @@ test("reads OpenCode assistant usage and avoids cache double-counting", async ()
   ]);
 });
 
-test("reads Kimi wire usage with stable event deduplication", async () => {
+test("reads current Kimi usage records with millisecond UTC timestamps", async () => {
   const lines = (await fixture("kimi.jsonl")).trim().split("\n");
   assert.deepEqual(parseKimiLines([...lines, lines[1]]), [
     {
@@ -130,12 +166,7 @@ test("reads Kimi wire usage with stable event deduplication", async () => {
     },
   ]);
 
-  const nested = JSON.parse(lines[1]);
-  const direct = JSON.stringify({
-    ...nested.message,
-    timestamp: new Date(nested.timestamp * 1_000).toISOString(),
-  });
-  assert.deepEqual(parseKimiLines([direct]), [
+  assert.deepEqual(parseKimiLines([lines[1]]), [
     {
       date: "2026-08-10",
       totalTokens: "20",
@@ -146,6 +177,68 @@ test("reads Kimi wire usage with stable event deduplication", async () => {
       reasoningTokens: "0",
     },
   ]);
+});
+
+test("keeps the legacy Kimi StatusUpdate parser separate", async () => {
+  const lines = (await fixture("kimi-legacy.jsonl")).trim().split("\n");
+  assert.deepEqual(parseKimiLegacyLines([...lines, lines[1]]), [
+    {
+      date: "2026-08-10",
+      totalTokens: "20",
+      inputTokens: "10",
+      outputTokens: "5",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "2",
+      reasoningTokens: "0",
+    },
+    {
+      date: "2026-08-11",
+      totalTokens: "10",
+      inputTokens: "4",
+      outputTokens: "3",
+      cacheReadTokens: "2",
+      cacheWriteTokens: "1",
+      reasoningTokens: "0",
+    },
+  ]);
+});
+
+test("honors KIMI_CODE_HOME and keeps current and legacy roots distinct", () => {
+  assert.deepEqual(
+    kimiSourcePaths(
+      { KIMI_CODE_HOME: "/portable/current", KIMI_SHARE_DIR: "/portable/legacy" },
+      "/home/racer",
+    ),
+    {
+      current: "/portable/current/sessions",
+      legacy: "/portable/legacy/sessions",
+    },
+  );
+});
+
+test("collects current Kimi main-agent and subagent wire files", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-kimi-current-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const main = join(root, "wd_project_hash", "session-1", "agents", "main");
+  const subagent = join(root, "wd_project_hash", "session-1", "agents", "agent-0");
+  await mkdir(main, { recursive: true });
+  await mkdir(subagent, { recursive: true });
+  const lines = (await fixture("kimi.jsonl")).trim().split("\n");
+  await writeFile(join(main, "wire.jsonl"), `${lines[1]}\n`);
+  await writeFile(join(subagent, "wire.jsonl"), `${lines[2]}\n`);
+  const result = await adapterFor("kimi_code").collect(
+    { dataPath: root, collectionMethod: "kimi_wire_jsonl" },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+  );
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(
+    result.entries.map((entry) => [entry.date, entry.totalTokens]),
+    [
+      ["2026-08-10", "20"],
+      ["2026-08-11", "10"],
+    ],
+  );
 });
 
 test("reads Qwen content-free stats using UTC timestamp instead of localDate", async () => {
@@ -328,11 +421,8 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
   const parsedKimi = JSON.parse(kimi);
   const nextKimi = JSON.stringify({
     ...parsedKimi,
-    timestamp: parsedKimi.timestamp + 86_400,
-    message: {
-      ...parsedKimi.message,
-      payload: { ...parsedKimi.message.payload, message_id: "synthetic-kimi-message-3" },
-    },
+    time: parsedKimi.time + 86_400_000,
+    usage: { ...parsedKimi.usage, output: parsedKimi.usage.output + 1 },
   });
   assert.deepEqual(
     parseKimiLines([kimi, kimi, nextKimi]).map((entry) => entry.date),
@@ -468,6 +558,39 @@ test("collector limits are explicit partial results with diagnostics", async () 
   assert.deepEqual(result.warnings, ["collector_limits_or_unreadable_files"]);
   assert.equal(diagnostic.dataLocationAvailable, false);
   assert.deepEqual(diagnostic.excluded, ["Cursor Desktop usage"]);
+});
+
+test("parses valid usage from an oversized JSONL record and marks the pass partial", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-oversized-jsonl-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "antigravity.jsonl");
+  const record = {
+    id: "oversized-event",
+    date: "2026-08-10",
+    usage: {
+      date: "2026-08-10",
+      totalTokens: "20",
+      inputTokens: "10",
+      outputTokens: "5",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "2",
+      reasoningTokens: "0",
+    },
+    ignoredPadding: "x".repeat(1_000_001),
+  };
+  await writeFile(path, `${JSON.stringify(record)}\n`);
+  const result = await adapterFor("antigravity").collect(
+    { dataPath: path },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+  );
+  assert.equal(result.completeness, "partial");
+  assert.equal(result.entries[0]?.totalTokens, "20");
+  assert.deepEqual(result.warnings, [
+    "collector_limits_or_unreadable_files",
+    "oversized_jsonl_records",
+  ]);
+  assert.ok(result.nextState.files[path].safeOffset > 1_000_000);
 });
 
 test("capture wrappers use current executables and required headless structured flags", () => {

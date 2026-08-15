@@ -1,9 +1,12 @@
-import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { executableOverride, resolveAgentExecutable } from "../executables.mjs";
+import {
+  executableOverride,
+  resolveAgentExecutable,
+  spawnResolvedExecutable,
+} from "../executables.mjs";
 import { totalEntry } from "./shared.mjs";
 
 export function parseCodexUsage(payload) {
@@ -32,12 +35,12 @@ export function codexProfileEnvironment(source, environment = process.env) {
 }
 
 async function collect(source, _range, state = {}) {
-  const executable = await resolveAgentExecutable("codex");
+  const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
   if (!executable)
     throw new Error(
       `Codex executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride("codex")} to its absolute path`,
     );
-  const child = spawn(executable, ["app-server"], {
+  const child = spawnResolvedExecutable(executable, ["app-server"], {
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,
     env: codexProfileEnvironment(source),
@@ -109,10 +112,12 @@ export const codexAdapter = Object.freeze({
     } catch {
       return [];
     }
-    await collect({ dataPath }, {}, {});
+    const executablePath = await resolveAgentExecutable("codex");
+    if (executablePath === null) return [];
     return [
       {
         dataPath,
+        executablePath,
         collectionMethod: "codex_app_server",
         supportedSurface: "desktop",
         suggestedLabel: "Codex",
@@ -122,7 +127,9 @@ export const codexAdapter = Object.freeze({
   collect,
   diagnose: async (source) => {
     try {
-      await collect(source, {}, {});
+      await access(source.dataPath);
+      const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
+      if (executable === null) throw new Error("Codex executable is unavailable");
       return {
         status: "ok",
         collectionMethod: "codex_app_server",

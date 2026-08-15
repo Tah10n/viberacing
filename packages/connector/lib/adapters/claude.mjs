@@ -51,7 +51,7 @@ export async function collectClaude(
   source,
   range,
   state = {},
-  { maximumBytes = 100_000_000 } = {},
+  { maximumBytes = 100_000_000, readChunk = jsonLinesChunk, fingerprint = tailFingerprint } = {},
 ) {
   const discovered = await walk(source.dataPath, [".jsonl"], 10_000);
   const nextState = { files: { ...(state.files ?? {}) }, messages: { ...(state.messages ?? {}) } };
@@ -79,39 +79,42 @@ export async function collectClaude(
       try {
         appended =
           previous.tailFingerprint ===
-          (await tailFingerprint(file.path, previous.safeOffset ?? previous.size));
+          (await fingerprint(file.path, previous.safeOffset ?? previous.size));
       } catch {
         appended = false;
       }
     }
     const offset = appended ? (previous.safeOffset ?? previous.size) : 0;
-    if (!appended) {
-      for (const id of previous?.ids ?? []) delete nextState.messages[id];
-    }
     const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
-      const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      const chunk = await readChunk(file.path, offset, file.size);
+      if (chunk.oversizedLines > 0) partial = true;
+      const messages = {};
       for (const line of chunk.lines) {
         const value = contribution(line);
         if (value) {
-          nextState.messages[value.id] = value.entry;
+          messages[value.id] = value.entry;
           ids.add(value.id);
         }
       }
-      nextState.files[file.path] = {
+      const fileState = {
         size: file.size,
         modifiedAt: file.modifiedAt,
         ino: file.ino,
         safeOffset: chunk.safeOffset,
-        tailFingerprint: await tailFingerprint(file.path, chunk.safeOffset),
+        tailFingerprint: await fingerprint(file.path, chunk.safeOffset),
         ids: [...ids],
       };
+      if (!appended) for (const id of previous?.ids ?? []) delete nextState.messages[id];
+      Object.assign(nextState.messages, messages);
+      nextState.files[file.path] = fileState;
     } catch {
       partial = true;
     }
   }
   const activeFiles = new Set(discovered.files.map((file) => file.path));
   for (const [path, fileState] of Object.entries(nextState.files)) {
+    if (partial) break;
     if (!activeFiles.has(path)) {
       for (const id of fileState.ids ?? []) delete nextState.messages[id];
       delete nextState.files[path];

@@ -12,6 +12,7 @@ interface StartBody {
   installationId?: unknown;
   installationSecret?: unknown;
   sources?: unknown;
+  supersededClientSourceIds?: unknown;
 }
 
 interface PendingSource {
@@ -35,6 +36,7 @@ const bodyKeys = new Set([
   "installationId",
   "installationSecret",
   "sources",
+  "supersededClientSourceIds",
 ]);
 const sourceKeys = new Set([
   "clientSourceId",
@@ -77,6 +79,26 @@ function parseSources(value: unknown): PendingSource[] | null {
   return result;
 }
 
+function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 32) return null;
+  const result = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (
+      typeof candidate !== "string" ||
+      !identifierPattern.test(candidate) ||
+      activeIds.has(candidate) ||
+      seen.has(candidate)
+    ) {
+      return null;
+    }
+    seen.add(candidate);
+    result.push(candidate);
+  }
+  return result;
+}
+
 export async function POST(request: Request): Promise<Response> {
   if (!(await consumeRateLimit("pairing_start", clientAddress(request), 6, 60))) {
     return Response.json(
@@ -89,6 +111,11 @@ export async function POST(request: Request): Promise<Response> {
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as StartBody;
     const sources = parseSources(body.sources);
+    const sourceIds = new Set(sources?.map((source) => source.clientSourceId as string) ?? []);
+    const supersededClientSourceIds = parseSupersededSourceIds(
+      body.supersededClientSourceIds,
+      sourceIds,
+    );
     if (
       body.protocolVersion !== protocolVersion ||
       !versionPattern.test(
@@ -98,7 +125,8 @@ export async function POST(request: Request): Promise<Response> {
       typeof body.installationSecret !== "string" ||
       body.installationSecret.length < 32 ||
       body.installationSecret.length > 128 ||
-      sources === null
+      sources === null ||
+      supersededClientSourceIds === null
     ) {
       return problem(400, "invalid_request");
     }
@@ -166,7 +194,10 @@ export async function POST(request: Request): Promise<Response> {
         [installationId],
       );
       await client.query(
-        "UPDATE installation_sources SET pending_pairing_code_hash = NULL WHERE installation_id = $1 AND pending_pairing_code_hash IS NOT NULL",
+        `UPDATE installation_sources
+            SET pending_pairing_code_hash = NULL, pending_disconnect = false
+          WHERE installation_id = $1
+            AND (pending_pairing_code_hash IS NOT NULL OR pending_disconnect)`,
         [installationId],
       );
 
@@ -230,6 +261,18 @@ export async function POST(request: Request): Promise<Response> {
             typeof source.suggestedLabel === "string" ? source.suggestedLabel.trim() : null,
             pairingHash,
           ],
+        );
+      }
+      if (supersededClientSourceIds.length > 0) {
+        await client.query(
+          `UPDATE installation_sources
+              SET pending_pairing_code_hash = $2,
+                  pending_disconnect = true,
+                  updated_at = now()
+            WHERE installation_id = $1
+              AND client_source_id = ANY($3::text[])
+              AND status = 'active'`,
+          [installationId, pairingHash, supersededClientSourceIds],
         );
       }
       return "created";

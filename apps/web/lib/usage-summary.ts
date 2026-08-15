@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { agentRegistry, isSupportedAgent } from "./agents";
 
 export async function refreshAgentWeek(
   client: PoolClient,
@@ -10,6 +11,7 @@ export async function refreshAgentWeek(
     "DELETE FROM weekly_agent_usage WHERE week_start = $1::date AND user_id = $2 AND agent_id = $3",
     [weekStart, userId, agentId],
   );
+  if (!isSupportedAgent(agentId) || !agentRegistry[agentId].countsExactTokens) return;
   await client.query(
     `WITH account_daily AS (
        SELECT a.id,
@@ -38,6 +40,7 @@ export async function rebuildAgentSummaries(
     userId,
     agentId,
   ]);
+  if (!isSupportedAgent(agentId) || !agentRegistry[agentId].countsExactTokens) return;
   await client.query(
     `WITH account_daily AS (
        SELECT a.id,

@@ -145,7 +145,8 @@ export async function walk(root, suffixes, maximum = 2_000) {
 }
 
 export async function jsonLinesChunk(path, start = 0, size) {
-  if (size !== undefined && start >= size) return { lines: [], safeOffset: start };
+  if (size !== undefined && start >= size)
+    return { lines: [], safeOffset: start, oversizedLines: 0 };
   let contents = "";
   const stream = createReadStream(path, {
     encoding: "utf8",
@@ -154,11 +155,13 @@ export async function jsonLinesChunk(path, start = 0, size) {
   });
   for await (const chunk of stream) contents += chunk;
   const newline = contents.lastIndexOf("\n");
-  if (newline < 0) return { lines: [], safeOffset: start };
+  if (newline < 0) return { lines: [], safeOffset: start, oversizedLines: 0 };
   const complete = contents.slice(0, newline + 1);
+  const lines = complete.split(/\r?\n/).filter(Boolean);
   return {
-    lines: complete.split(/\r?\n/).filter((line) => Buffer.byteLength(line) <= 1_000_000),
+    lines,
     safeOffset: start + Buffer.byteLength(complete),
+    oversizedLines: lines.filter((line) => Buffer.byteLength(line) > 1_000_000).length,
   };
 }
 
@@ -191,10 +194,16 @@ export async function collectJsonl(
   const nextState = { files: {} };
   const entries = [];
   let incomplete = discovered.incomplete;
+  let oversized = false;
   let bytes = 0;
   for (const file of files) {
     if (bytes + file.size > 100_000_000) {
       incomplete = true;
+      const previous = state.files?.[file.path];
+      if (previous) {
+        nextState.files[file.path] = previous;
+        entries.push(...(previous.entries ?? []));
+      }
       continue;
     }
     bytes += file.size;
@@ -225,6 +234,10 @@ export async function collectJsonl(
     const offset = appended ? previous.safeOffset : 0;
     try {
       const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      if (chunk.oversizedLines > 0) {
+        incomplete = true;
+        oversized = true;
+      }
       const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
       const unseenLines = [];
       for (const line of chunk.lines) {
@@ -271,11 +284,20 @@ export async function collectJsonl(
       }
     }
   }
+  if (incomplete)
+    for (const [path, previous] of Object.entries(state.files ?? {}))
+      if (nextState.files[path] === undefined) {
+        nextState.files[path] = previous;
+        entries.push(...(previous.entries ?? []));
+      }
+  const warnings = [];
+  if (incomplete) warnings.push("collector_limits_or_unreadable_files");
+  if (oversized) warnings.push("oversized_jsonl_records");
   return {
     entries: mergeEntries(entries),
     completeness: incomplete ? "partial" : "complete",
     nextState,
-    warnings: incomplete ? ["collector_limits_or_unreadable_files"] : [],
+    warnings,
   };
 }
 

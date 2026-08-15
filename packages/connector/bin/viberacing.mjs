@@ -14,7 +14,11 @@ import {
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
-import { executableOverride, resolveAgentExecutable } from "../lib/executables.mjs";
+import {
+  executableOverride,
+  resolveAgentExecutable,
+  spawnResolvedExecutable,
+} from "../lib/executables.mjs";
 import {
   addSource,
   diagnoseHooks,
@@ -22,6 +26,7 @@ import {
   readConfig,
   readOrCreateInstallation,
   readSources,
+  rememberSourceExecutable,
   reconcileDetectedSources,
   removeConfig,
   removeHookForSource,
@@ -31,6 +36,7 @@ import {
   resetInstallation,
   stateDirectory,
   writeConfig,
+  writeSources,
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
@@ -169,7 +175,12 @@ async function connect() {
   const detected = discovery.sources;
   for (const diagnostic of discovery.diagnostics)
     process.stderr.write(`Vibe Racing warning: ${diagnostic.displayName}: ${diagnostic.error}.\n`);
-  const localSources = await reconcileDetectedSources(detected);
+  const sourcesBeforeDiscovery = await readSources();
+  const localSources = await reconcileDetectedSources(detected, { persist: false });
+  const localSourceIds = new Set(localSources.map((source) => source.clientSourceId));
+  const supersededClientSourceIds = sourcesBeforeDiscovery
+    .filter((source) => !localSourceIds.has(source.clientSourceId))
+    .map((source) => source.clientSourceId);
   const sources = new Map(localSources.map((source) => [source.clientSourceId, source]));
   if (localSources.length === 0)
     throw new Error(
@@ -186,6 +197,7 @@ async function connect() {
       installationId: installation.id,
       installationSecret: installation.secret,
       sources: [...sources.values()].map(publicSource),
+      supersededClientSourceIds,
     }),
   });
   output(`Open ${pairing.verificationUrl}`);
@@ -204,6 +216,7 @@ async function connect() {
     });
     if (result.status === "active") {
       const config = await withLifecycleMutation(async () => {
+        await writeSources(localSources);
         const currentLocalSources = await readSources();
         const localById = new Map(
           currentLocalSources.map((source) => [source.clientSourceId, source]),
@@ -222,7 +235,20 @@ async function connect() {
           protocol: result.protocol,
         };
         await writeConfig(nextConfig);
-        await reconcileHooks(import.meta.url, mapped, currentLocalSources);
+        const knownForHookCleanup = [
+          ...currentLocalSources,
+          ...sourcesBeforeDiscovery.filter(
+            (previous) =>
+              !currentLocalSources.some(
+                (current) => current.clientSourceId === previous.clientSourceId,
+              ),
+          ),
+        ];
+        const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup);
+        for (const failure of hooks.failures)
+          process.stderr.write(
+            `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.\n`,
+          );
         await confirmAutomaticCompatibility();
         return nextConfig;
       });
@@ -883,10 +909,15 @@ async function doctor() {
   try {
     let config = await readConfig();
     let state = await readState();
-    const range = snapshotRange();
     if (arguments_.includes("--repair")) {
-      await reconcileHooks(import.meta.url, config.sources, await readSources());
-      output("Installed connector copy and owned hooks repaired.");
+      const repaired = await reconcileHooks(import.meta.url, config.sources, await readSources());
+      output(
+        repaired.failures.length === 0
+          ? "Installed connector copy and owned hooks repaired."
+          : `Hook repair completed with ${repaired.failures.length} warning(s).`,
+      );
+      for (const failure of repaired.failures)
+        output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
     }
     const hooks = await diagnoseHooks(config.sources);
     for (const [agentId, status] of Object.entries(hooks)) output(`${agentId} hook: ${status}`);
@@ -959,14 +990,6 @@ async function doctor() {
         output(
           `${source.agentId} diagnostics: ${diagnostic.status}; method ${diagnostic.collectionMethod}; surfaces ${diagnostic.supportedSurfaces.join(",")}; data ${diagnostic.dataLocationAvailable === false ? "unavailable" : "available"}${diagnostic.excluded.length ? `; excluded ${diagnostic.excluded.join(", ")}` : ""}`,
         );
-        const result = await adapter.collect(
-          source,
-          range,
-          state.adapters?.[source.sourceId] ?? {},
-        );
-        output(
-          `${source.agentId} (${source.accountLabel}): ok, ${result.entries.length} UTC day(s), ${result.completeness}${result.warnings.length ? `; warnings ${result.warnings.join(", ")}` : ""}`,
-        );
       } catch (error) {
         output(`${source.agentId} (${source.accountLabel}): error, ${error.message}`);
       }
@@ -1007,13 +1030,26 @@ async function sourceCommand() {
     const dataPath = option("--data-dir", option("--path"));
     const label = option("--name", option("--label"))?.trim();
     const adapter = adapterFor(agentId);
+    const legacyKimi = arguments_.includes("--legacy");
     const captureBased = ["cursor", "antigravity"].includes(agentId);
-    if (!adapter || (!captureBased && !dataPath) || !label || label.length > 40)
-      throw new Error("Usage: viberacing source add --agent AGENT --name NAME [--data-dir PATH]");
+    if (
+      !adapter ||
+      (!captureBased && !dataPath) ||
+      !label ||
+      label.length > 40 ||
+      (legacyKimi && agentId !== "kimi_code")
+    )
+      throw new Error(
+        "Usage: viberacing source add --agent AGENT --name NAME [--data-dir PATH] [--legacy]",
+      );
     const result = await addSource({
       agentId,
       dataPath,
-      collectionMethod: adapter.collectionMethods[0],
+      collectionMethod: legacyKimi
+        ? "kimi_legacy_wire_jsonl"
+        : typeof adapter.collectionMethodForPath === "function" && dataPath
+          ? adapter.collectionMethodForPath(dataPath)
+          : adapter.collectionMethods[0],
       supportedSurface: adapter.supportedSurfaces[0],
       suggestedLabel: label,
     });
@@ -1066,7 +1102,7 @@ async function sourceCommand() {
     return;
   }
   throw new Error(
-    "Usage: viberacing source list | source add --agent AGENT --name NAME [--data-dir PATH] | source remove ID",
+    "Usage: viberacing source list | source add --agent AGENT --name NAME [--data-dir PATH] [--legacy] | source remove ID",
   );
 }
 
@@ -1112,12 +1148,14 @@ async function wrap(agentId) {
             .filter((_, index) => index !== sourceOption && index !== sourceOption + 1)
         : arguments_.slice(2);
   const { args } = wrapperInvocation(agentId, passed);
-  const executable = await resolveAgentExecutable(agentId);
+  const executable = source.executablePath ?? (await resolveAgentExecutable(agentId));
   if (!executable)
     throw new Error(
       `${adapterFor(agentId).displayName} executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride(agentId)} to its absolute path`,
     );
-  const child = spawn(executable, args, {
+  if (source.executablePath !== executable)
+    await rememberSourceExecutable(source.clientSourceId, executable);
+  const child = spawnResolvedExecutable(executable, args, {
     stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
   });

@@ -1,4 +1,4 @@
-{"type":"metadata","protocol_version":"1.7"}
-{"timestamp":1786363200,"message":{"type":"StatusUpdate","payload":{"context_usage":0.1,"context_tokens":20,"max_context_tokens":200,"token_usage":{"input_other":10,"output":5,"input_cache_read":3,"input_cache_creation":2},"message_id":"synthetic-kimi-message-1"}}}
-{"timestamp":1786449600,"message":{"type":"StatusUpdate","payload":{"token_usage":{"input_other":4,"output":3,"input_cache_read":2,"input_cache_creation":1},"message_id":"synthetic-kimi-message-2"}}}
-{"timestamp":"not-seconds","message":{"type":"StatusUpdate","payload":{"token_usage":{"input_other":999},"message_id":"malformed"}}}
+{"type":"metadata","protocol_version":"1.7","created_at":1786363199000}
+{"type":"usage.record","model":"synthetic-model","usage":{"inputOther":10,"output":5,"inputCacheRead":3,"inputCacheCreation":2},"time":1786363200000}
+{"type":"usage.record","model":"synthetic-model","usage":{"inputOther":4,"output":3,"inputCacheRead":2,"inputCacheCreation":1},"usageScope":"turn","time":1786449600000}
+{"type":"usage.record","model":"synthetic-model","usage":{"inputOther":999},"time":"not-milliseconds"}
