@@ -22,6 +22,10 @@ never derives network metadata from the local data-root path. Each capture profi
 random client source ID, not an account label, provider identity, or agent name. Multiple
 Antigravity accounts therefore remain in separate local files.
 
+Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
+by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value
+is saved in connector state, diagnostics, pairing, or sync payloads.
+
 Hook stdin can contain private provider context. The hook reads it to EOF only because provider
 contracts require that, then discards it without parsing, logging, or persistence. Hooks never scan
 history or access the network. Their dirty ledger contains only stable local source IDs, UTC event

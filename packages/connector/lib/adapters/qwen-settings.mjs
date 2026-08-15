@@ -1,21 +1,18 @@
 const qwenEnvironmentKeys = new Set(["QWEN_HOME", "QWEN_RUNTIME_DIR"]);
+const dotenvLine =
+  /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?$/gm;
 
-export function parseQwenEnvironment(contents) {
+export function parseQwenEnvironment(contents, requestedKeys = qwenEnvironmentKeys) {
   const values = {};
-  for (const rawLine of contents.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-    if (!match || !qwenEnvironmentKeys.has(match[1])) continue;
-    let value = match[2].trim();
-    if (
-      value.length >= 2 &&
-      ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'")))
-    )
-      value = value.slice(1, -1);
-    else value = value.replace(/\s+#.*$/, "").trim();
-    if (value) values[match[1]] = value;
+  const normalized = contents.replace(/\r\n?/g, "\n");
+  for (const match of normalized.matchAll(dotenvLine)) {
+    const key = match[1];
+    if (!requestedKeys.has(key)) continue;
+    let value = (match[2] ?? "").trim();
+    const quote = value[0];
+    if (["'", '"', "`"].includes(quote) && value.at(-1) === quote) value = value.slice(1, -1);
+    if (quote === '"') value = value.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    if (value) values[key] = value;
   }
   return values;
 }
