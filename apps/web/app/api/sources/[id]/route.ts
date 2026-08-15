@@ -1,8 +1,9 @@
 import { digest } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isUuid, problem } from "@/lib/http";
+import { withRequestLogging } from "@/lib/request-log";
 
-export async function DELETE(
+async function remove(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
@@ -24,3 +25,5 @@ export async function DELETE(
   });
   return changed ? new Response(null, { status: 204 }) : problem(404, "source_not_found");
 }
+
+export const DELETE = withRequestLogging("/api/sources/[id]", remove);

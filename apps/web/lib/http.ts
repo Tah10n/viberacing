@@ -1,6 +1,14 @@
 import { publicOrigin } from "./config";
+import type { LogFields } from "./log";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+interface ResponseLogMetadata {
+  outcome?: string;
+  cause?: unknown;
+  fields?: LogFields;
+}
+
+const responseMetadata = new WeakMap<Response, ResponseLogMetadata>();
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -15,8 +23,26 @@ export function sameOrigin(request: Request): boolean {
   return origin !== null && origin === publicOrigin().origin;
 }
 
-export function problem(status: number, message: string): Response {
-  return Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } });
+export function markResponse(response: Response, outcome: string, cause?: unknown): Response {
+  responseMetadata.set(response, cause === undefined ? { outcome } : { outcome, cause });
+  return response;
+}
+
+export function responseLogMetadata(response: Response): ResponseLogMetadata | undefined {
+  return responseMetadata.get(response);
+}
+
+export function annotateResponse(response: Response, fields: LogFields): Response {
+  responseMetadata.set(response, { fields });
+  return response;
+}
+
+export function problem(status: number, message: string, cause?: unknown): Response {
+  return markResponse(
+    Response.json({ error: message }, { status, headers: { "Cache-Control": "no-store" } }),
+    message,
+    cause,
+  );
 }
 
 async function readBoundedText(request: Request, maximumBytes: number): Promise<string> {

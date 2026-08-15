@@ -8,6 +8,7 @@ For live code reloading, first configure `apps/web/.env.local` as described in t
 run:
 
 ```bash
+npm install --global corepack@0.35.0
 corepack pnpm install --frozen-lockfile
 docker compose up -d
 corepack pnpm db:migrate

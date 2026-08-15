@@ -1,3 +1,5 @@
+import { configuredLogLevel } from "./log";
+
 const missing = (name: string): never => {
   throw new Error(`Missing required environment variable: ${name}`);
 };
@@ -75,4 +77,5 @@ export function validateRuntimeConfig(): void {
   }
   minimumConnectorVersion();
   maximumDailyTokens();
+  configuredLogLevel();
 }

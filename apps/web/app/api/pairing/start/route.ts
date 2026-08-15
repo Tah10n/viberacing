@@ -3,8 +3,9 @@ import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/con
 import { deviceTokenFromPollToken, digest, pairingCode, randomToken } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isSupportedAgent, isSupportedSource, type SupportedAgent } from "@/lib/agents";
-import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
+import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { withRequestLogging } from "@/lib/request-log";
 
 interface StartBody {
   protocolVersion?: unknown;
@@ -99,7 +100,7 @@ function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>
   return result;
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   if (!(await consumeRateLimit("pairing_start", clientAddress(request), 6, 60))) {
     return Response.json(
       { error: "rate_limited" },
@@ -286,19 +287,27 @@ export async function POST(request: Request): Promise<Response> {
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
-    return Response.json(
+    return annotateResponse(
+      Response.json(
+        {
+          installationId,
+          code,
+          pollToken,
+          verificationUrl: new URL(`/connect?code=${code}`, publicOrigin()).href,
+          expiresInSeconds: 600,
+        },
+        { status: 201, headers: { "Cache-Control": "no-store" } },
+      ),
       {
-        installationId,
-        code,
-        pollToken,
-        verificationUrl: new URL(`/connect?code=${code}`, publicOrigin()).href,
-        expiresInSeconds: 600,
+        sourcesReceived: sources.length,
+        supersededSourcesReceived: supersededClientSourceIds.length,
       },
-      { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     return error instanceof SyntaxError || error instanceof RangeError
       ? problem(400, "invalid_request")
-      : problem(500, "server_error");
+      : problem(500, "server_error", error);
   }
 }
+
+export const POST = withRequestLogging("/api/pairing/start", post);

@@ -204,7 +204,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             </pre>
             <CopyCommandButton command={command} />
             <p className="muted">
-              Requires Node.js 24. No provider keys, prompts, code, paths, repositories, model
+              Requires Node.js 26. No provider keys, prompts, code, paths, repositories, model
               names, or costs are uploaded.
             </p>
           </div>
@@ -289,33 +289,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                             {source.supported_surface}
                           </span>
                           {source.status === "active" ? (
-                            <>
-                              <SameOriginActionForm action="/api/sources/reassign">
-                                <input name="sourceId" type="hidden" value={source.id} />
-                                <select
-                                  aria-label="Move source to account"
-                                  defaultValue={account.id}
-                                  name="accountId"
-                                >
-                                  {accounts
-                                    .filter((candidate) => candidate.agent_id === account.agent_id)
-                                    .map((candidate) => (
-                                      <option key={candidate.id} value={candidate.id}>
-                                        {candidate.label}
-                                      </option>
-                                    ))}
-                                </select>
-                                <button className="text-button" type="submit">
-                                  Move
-                                </button>
-                              </SameOriginActionForm>
-                              <SameOriginActionForm action="/api/sources/disconnect">
-                                <input name="sourceId" type="hidden" value={source.id} />
-                                <button className="text-button danger-text" type="submit">
-                                  Disconnect source
-                                </button>
-                              </SameOriginActionForm>
-                            </>
+                            <SameOriginActionForm action="/api/sources/disconnect">
+                              <input name="sourceId" type="hidden" value={source.id} />
+                              <button className="text-button danger-text" type="submit">
+                                Disconnect source
+                              </button>
+                            </SameOriginActionForm>
                           ) : (
                             <Badge tone="neutral">Disconnected</Badge>
                           )}

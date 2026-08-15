@@ -1,7 +1,8 @@
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
-import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
+import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { withRequestLogging } from "@/lib/request-log";
 
 interface PollBody {
   installationId?: unknown;
@@ -24,7 +25,7 @@ interface SourceRow {
   last_accepted_sync_sequence: string;
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   try {
     const rawBody = await readBoundedJson(request, 2_048);
     if (!isRecord(rawBody)) return problem(400, "invalid_request");
@@ -63,9 +64,10 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     if (installation.status !== "active" || installation.pairing_pending) {
-      return Response.json(
-        { status: installation.pairing_pending ? "pending" : installation.status },
-        { headers: { "Cache-Control": "no-store" } },
+      const pairingStatus = installation.pairing_pending ? "pending" : installation.status;
+      return annotateResponse(
+        Response.json({ status: pairingStatus }, { headers: { "Cache-Control": "no-store" } }),
+        { pairingStatus },
       );
     }
     const deviceToken = deviceTokenFromPollToken(body.pollToken);
@@ -87,26 +89,31 @@ export async function POST(request: Request): Promise<Response> {
       [body.installationId, digest(deviceToken)],
     );
     if (mappings.length === 0) return problem(404, "pairing_not_found");
-    return Response.json(
-      {
-        status: "active",
-        deviceToken,
-        sources: mappings.map((source) => ({
-          clientSourceId: source.client_source_id,
-          sourceId: source.source_id,
-          agentAccountId: source.agent_account_id,
-          agentId: source.agent_id,
-          accountLabel: source.account_label,
-          collectionMethod: source.collection_method,
-          lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
-        })),
-        protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
-      },
-      { headers: { "Cache-Control": "no-store" } },
+    return annotateResponse(
+      Response.json(
+        {
+          status: "active",
+          deviceToken,
+          sources: mappings.map((source) => ({
+            clientSourceId: source.client_source_id,
+            sourceId: source.source_id,
+            agentAccountId: source.agent_account_id,
+            agentId: source.agent_id,
+            accountLabel: source.account_label,
+            collectionMethod: source.collection_method,
+            lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
+          })),
+          protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      ),
+      { pairingStatus: "active", mappingsReturned: mappings.length },
     );
   } catch (error) {
     return error instanceof SyntaxError || error instanceof RangeError
       ? problem(400, "invalid_request")
-      : problem(500, "server_error");
+      : problem(500, "server_error", error);
   }
 }
+
+export const POST = withRequestLogging("/api/pairing/poll", post);

@@ -148,7 +148,7 @@
 
 .source-row {
   display: grid;
-  grid-template-columns: minmax(14rem, 24rem) auto auto;
+  grid-template-columns: minmax(14rem, 24rem) auto;
   align-items: center;
   justify-content: start;
   gap: var(--space-3);
@@ -357,7 +357,15 @@ pre {
 }
 
 .account-actions .confirm-row {
+  align-items: center;
   margin: 0;
+}
+
+.account-actions .confirm-row input {
+  flex: 0 0 1.125rem;
+  min-height: 1.125rem;
+  margin: 0;
+  padding: 0;
 }
 
 .back-link {

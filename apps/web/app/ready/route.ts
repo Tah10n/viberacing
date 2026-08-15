@@ -1,9 +1,11 @@
 import { expectedSchemaVersion, validateRuntimeConfig } from "@/lib/config";
 import { query } from "@/lib/db";
+import { markResponse } from "@/lib/http";
+import { withRequestLogging } from "@/lib/request-log";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+async function get(): Promise<Response> {
   try {
     validateRuntimeConfig();
     const rows = await query<{
@@ -22,19 +24,28 @@ export async function GET(): Promise<Response> {
     );
     const schema = rows[0];
     if (schema === undefined || !schema.expected_version || !schema.required_tables) {
-      return Response.json(
-        { status: "not_ready", reason: "schema_version" },
-        { status: 503, headers: { "Cache-Control": "no-store" } },
+      return markResponse(
+        Response.json(
+          { status: "not_ready", reason: "schema_version" },
+          { status: 503, headers: { "Cache-Control": "no-store" } },
+        ),
+        "schema_version",
       );
     }
     return Response.json(
       { status: "ready", schemaVersion: expectedSchemaVersion },
       { headers: { "Cache-Control": "no-store" } },
     );
-  } catch {
-    return Response.json(
-      { status: "not_ready" },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+  } catch (error) {
+    return markResponse(
+      Response.json(
+        { status: "not_ready" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      ),
+      "readiness_check_failed",
+      error,
     );
   }
 }
+
+export const GET = withRequestLogging("/ready", get, { successLevel: "debug" });

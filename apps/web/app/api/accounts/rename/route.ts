@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
+import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
   const current = await viewer();
   if (!current) return problem(401, "unauthorized");
@@ -20,8 +21,11 @@ export async function POST(request: Request): Promise<Response> {
     if (changed.length === 0) return problem(404, "account_not_found");
     return NextResponse.redirect(new URL("/dashboard?updated=1", publicOrigin()), 303);
   } catch (error) {
-    return error instanceof RangeError
-      ? problem(413, "body_too_large")
-      : problem(400, "invalid_request");
+    if (error instanceof RangeError) return problem(413, "body_too_large");
+    return error instanceof SyntaxError
+      ? problem(400, "invalid_request")
+      : problem(500, "server_error", error);
   }
 }
+
+export const POST = withRequestLogging("/api/accounts/rename", post);

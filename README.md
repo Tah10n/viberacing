@@ -27,7 +27,8 @@ recorded exactly and is collected by `viberacing sync` or the next supported lif
 
 ## Local production preview
 
-Requirements: Node 24, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.
+Requirements: Node 26, Corepack 0.35, pnpm 11, Docker Compose, curl, and a GitHub OAuth app. Node 26
+does not bundle Corepack, so install it once with `npm install --global corepack@0.35.0`.
 
 1. Copy `.env.example` to `apps/web/.env.local` and add the OAuth client ID and secret.
 2. Configure the OAuth app homepage as `http://localhost:3000` and callback as
