@@ -14,6 +14,7 @@ import { canonicalPathKey } from "./adapters/shared.mjs";
  * @property {"cli" | "desktop"} supportedSurface
  * @property {string} suggestedLabel
  * @property {string} [executablePath]
+ * @property {string} [hookConfigRoot]
  */
 
 export const adapters = Object.freeze([

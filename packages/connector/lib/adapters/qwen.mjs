@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
-import { basename, join, posix, resolve, win32 } from "node:path";
+import { basename, join, posix, win32 } from "node:path";
+import { parseQwenEnvironment, parseQwenJsonc } from "./qwen-settings.mjs";
 import {
   collectJsonl,
   componentEntry,
@@ -62,52 +63,161 @@ export function resolveQwenPath(value, { home = homedir(), platform = process.pl
   return path.isAbsolute(value) ? path.normalize(value) : null;
 }
 
-function qwenHome(environment, home, platform) {
-  if (!environment.QWEN_HOME) return (platform === "win32" ? win32 : posix).join(home, ".qwen");
-  return (
-    resolveQwenPath(environment.QWEN_HOME, { home, platform }) ?? resolve(environment.QWEN_HOME)
-  );
+async function qwenEnvironmentFile(path) {
+  try {
+    return parseQwenEnvironment(await readFile(path, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
+  }
 }
 
-export async function qwenRuntimeRoot({
+function expandedPath(value, environment) {
+  const missing = new Set();
+  const expanded = value.replace(
+    /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g,
+    (_match, braced, plain) => {
+      const name = braced ?? plain;
+      const replacement = environment[name];
+      if (typeof replacement !== "string") {
+        missing.add(name);
+        return "";
+      }
+      return replacement;
+    },
+  );
+  return missing.size === 0 ? expanded : null;
+}
+
+function resolveConfiguredPath(value, context, label) {
+  const expanded = expandedPath(value.trim(), context.environment);
+  if (expanded === null) {
+    context.diagnostics.push({ error: `${label} contains an unresolved environment variable` });
+    return null;
+  }
+  const resolved = resolveQwenPath(expanded, context);
+  if (resolved) return resolved;
+  context.diagnostics.push({
+    error:
+      label === "QWEN_HOME"
+        ? "QWEN_HOME is relative; set an absolute QWEN_HOME before adding the token root explicitly"
+        : `${label} is relative; add the resolved root explicitly with \`viberacing source add --agent qwen_code --name <label> --data-dir <resolved-runtime-root>/usage\``,
+  });
+  return null;
+}
+
+function configuredValue(...values) {
+  return values.find((value) => typeof value === "string" && value.trim())?.trim();
+}
+
+async function qwenEnvironmentContext({ environment, home, platform, diagnostics }) {
+  const path = platform === "win32" ? win32 : posix;
+  const defaultHome = path.join(home, ".qwen");
+  const initialHome = configuredValue(environment.QWEN_HOME);
+  let hookConfigRoot = initialHome
+    ? resolveConfiguredPath(
+        initialHome,
+        {
+          home,
+          platform,
+          diagnostics,
+          environment: { HOME: home, USERPROFILE: home, ...environment },
+        },
+        "QWEN_HOME",
+      )
+    : defaultHome;
+  if (hookConfigRoot === null) return { environment, hookConfigRoot };
+
+  const loaded = {};
+  const loadWithoutOverride = async (file) => {
+    let parsed;
+    try {
+      parsed = await qwenEnvironmentFile(file);
+    } catch {
+      diagnostics.push({ error: "Qwen user environment settings are unreadable" });
+      return;
+    }
+    for (const [key, value] of Object.entries(parsed))
+      if (!configuredValue(environment[key], loaded[key])) loaded[key] = value;
+  };
+
+  await loadWithoutOverride(path.join(hookConfigRoot, ".env"));
+  if (!initialHome) await loadWithoutOverride(path.join(home, ".env"));
+
+  const bootstrappedEnvironment = {
+    HOME: home,
+    USERPROFILE: home,
+    ...loaded,
+    ...environment,
+  };
+  const discoveredHome = configuredValue(bootstrappedEnvironment.QWEN_HOME);
+  if (discoveredHome && !initialHome) {
+    const discoveredRoot = resolveConfiguredPath(
+      discoveredHome,
+      { home, platform, diagnostics, environment: bootstrappedEnvironment },
+      "QWEN_HOME",
+    );
+    if (discoveredRoot === null)
+      return { environment: bootstrappedEnvironment, hookConfigRoot: null };
+    if (discoveredRoot !== hookConfigRoot) {
+      hookConfigRoot = discoveredRoot;
+      await loadWithoutOverride(path.join(hookConfigRoot, ".env"));
+    }
+  }
+
+  return {
+    environment: { HOME: home, USERPROFILE: home, ...loaded, ...environment },
+    hookConfigRoot,
+  };
+}
+
+export async function qwenSourceContext({
   environment = process.env,
   home = homedir(),
   platform = process.platform,
   diagnostics = [],
 } = {}) {
   const path = platform === "win32" ? win32 : posix;
-  if (environment.QWEN_RUNTIME_DIR) {
-    const explicit =
-      resolveQwenPath(environment.QWEN_RUNTIME_DIR, { home, platform }) ??
-      resolve(environment.QWEN_RUNTIME_DIR);
-    return explicit;
-  }
-  const homeRoot = qwenHome(environment, home, platform);
+  const context = await qwenEnvironmentContext({ environment, home, platform, diagnostics });
+  const pathContext = { home, platform, diagnostics, environment: context.environment };
+  const runtimeOverride = context.environment.QWEN_RUNTIME_DIR;
+  if (runtimeOverride)
+    return {
+      runtimeRoot: resolveConfiguredPath(runtimeOverride, pathContext, "QWEN_RUNTIME_DIR"),
+      hookConfigRoot: context.hookConfigRoot,
+    };
+  if (context.hookConfigRoot === null) return { runtimeRoot: null, hookConfigRoot: null };
   try {
-    const settings = JSON.parse(await readFile(path.join(homeRoot, "settings.json"), "utf8"));
+    const settings = parseQwenJsonc(
+      await readFile(path.join(context.hookConfigRoot, "settings.json"), "utf8"),
+    );
     const configured = settings?.advanced?.runtimeOutputDir;
     if (typeof configured === "string" && configured.trim()) {
-      const resolved = resolveQwenPath(configured.trim(), { home, platform });
-      if (resolved) return resolved;
-      diagnostics.push({
-        error:
-          "runtimeOutputDir is relative; add the resolved root explicitly with `viberacing source add --agent qwen_code --name <label> --data-dir <resolved-runtime-root>/usage`",
-      });
-      return null;
+      return {
+        runtimeRoot: resolveConfiguredPath(configured, pathContext, "runtimeOutputDir"),
+        hookConfigRoot: context.hookConfigRoot,
+      };
     }
   } catch (error) {
-    if (error?.code !== "ENOENT") diagnostics.push({ error: "Qwen user settings are unreadable" });
+    if (error?.code !== "ENOENT") {
+      diagnostics.push({ error: "Qwen user settings are unreadable" });
+      return { runtimeRoot: null, hookConfigRoot: context.hookConfigRoot };
+    }
   }
-  return homeRoot;
+  return { runtimeRoot: context.hookConfigRoot, hookConfigRoot: context.hookConfigRoot };
+}
+
+export async function qwenRuntimeRoot(options = {}) {
+  return (await qwenSourceContext(options)).runtimeRoot;
 }
 
 export async function detectQwenSources(options = {}) {
   const diagnostics = options.diagnostics ?? [];
   const platform = options.platform ?? process.platform;
-  const root = await qwenRuntimeRoot({ ...options, diagnostics });
-  if (root === null) return [];
+  const { runtimeRoot, hookConfigRoot } = await qwenSourceContext({ ...options, diagnostics });
+  if (runtimeRoot === null || hookConfigRoot === null) return [];
   const path = platform === "win32" ? win32 : posix;
-  const dataPath = path.join(root, "usage");
+  const dataPath = path.join(runtimeRoot, "usage");
   return (
     await diagnosePath({
       dataPath,
@@ -118,6 +228,7 @@ export async function detectQwenSources(options = {}) {
     ? [
         {
           dataPath,
+          hookConfigRoot,
           collectionMethod: "qwen_stats_jsonl",
           supportedSurface: "cli",
           suggestedLabel: "Qwen Code",
@@ -136,6 +247,12 @@ export const qwenAdapter = Object.freeze({
   aggregationMode: "source_sum",
   trigger: "usage stats file",
   defaultPaths,
+  localSourceMetadata: async () => {
+    const { hookConfigRoot } = await qwenSourceContext();
+    if (hookConfigRoot === null)
+      throw new Error("Qwen hook config root is unresolved; set QWEN_HOME to an absolute path");
+    return { hookConfigRoot };
+  },
   detect: detectQwenSources,
   collect: (source, range, state) =>
     collectJsonl(

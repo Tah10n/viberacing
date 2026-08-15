@@ -11,9 +11,10 @@ import {
   unlink,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
+import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
 
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
   ? resolve(process.env.VIBERACING_STATE_DIR)
@@ -48,11 +49,11 @@ function kimiRoot() {
 }
 
 function qwenRoot() {
-  if (process.env.QWEN_HOME) {
-    if (process.env.QWEN_HOME === "~") return homedir();
-    if (/^~[\\/]/.test(process.env.QWEN_HOME))
-      return join(homedir(), process.env.QWEN_HOME.slice(2));
-    return resolve(process.env.QWEN_HOME);
+  const configured = process.env.QWEN_HOME?.trim();
+  if (configured) {
+    if (configured === "~") return homedir();
+    if (/^~[\\/]/.test(configured)) return join(homedir(), configured.slice(2));
+    if (isAbsolute(configured)) return resolve(configured);
   }
   return join(homedir(), ".qwen");
 }
@@ -115,7 +116,8 @@ function validLocalSource(source) {
     source.suggestedLabel.length >= 1 &&
     source.suggestedLabel.length <= 40 &&
     typeof source.supportedSurface === "string" &&
-    (source.executablePath === undefined || typeof source.executablePath === "string")
+    (source.executablePath === undefined || typeof source.executablePath === "string") &&
+    (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string")
   );
 }
 
@@ -139,6 +141,9 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
     supportedSurface: source.supportedSurface,
     ...(typeof source.executablePath === "string"
       ? { executablePath: resolve(source.executablePath) }
+      : {}),
+    ...(typeof source.hookConfigRoot === "string"
+      ? { hookConfigRoot: resolve(source.hookConfigRoot) }
       : {}),
   };
 }
@@ -186,7 +191,16 @@ export async function addSource(source) {
       duplicate = candidate;
       break;
     }
-  if (duplicate) return { source: duplicate, added: false };
+  if (duplicate) {
+    if (
+      normalized.hookConfigRoot !== undefined &&
+      duplicate.hookConfigRoot !== normalized.hookConfigRoot
+    ) {
+      duplicate.hookConfigRoot = normalized.hookConfigRoot;
+      await writeSources(sources);
+    }
+    return { source: duplicate, added: false };
+  }
   sources.push(normalized);
   await writeSources(sources);
   return { source: normalized, added: true };
@@ -238,12 +252,12 @@ export async function reconcileDetectedSources(detected, { persist = true } = {}
     if (!existing) {
       sources.push(normalized);
       changed = true;
-    } else if (
-      normalized.executablePath !== undefined &&
-      existing.executablePath !== normalized.executablePath
-    ) {
-      existing.executablePath = normalized.executablePath;
-      changed = true;
+    } else {
+      for (const key of ["executablePath", "hookConfigRoot"])
+        if (normalized[key] !== undefined && existing[key] !== normalized[key]) {
+          existing[key] = normalized[key];
+          changed = true;
+        }
     }
   }
   if (changed && persist) await writeSources(sources);
@@ -287,9 +301,10 @@ function ownsAnyHook(handler) {
   );
 }
 
-async function jsonHookStatus(path, event, expectedCommand, marker) {
+async function jsonHookStatus(path, event, expectedCommand, marker, options = {}) {
   try {
-    const settings = JSON.parse(await readFile(path, "utf8"));
+    const contents = await readFile(path, "utf8");
+    const settings = options.jsonc ? parseQwenJsonc(contents) : JSON.parse(contents);
     const groups = settings?.hooks?.[event];
     if (!Array.isArray(groups)) return "missing";
     const owned = groups.flatMap((group) => (Array.isArray(group?.hooks) ? group.hooks : []));
@@ -305,10 +320,12 @@ async function jsonHookStatus(path, event, expectedCommand, marker) {
 }
 
 async function updateHook(path, event, hook, options = {}) {
-  const { remove = false, markers = [], removeAll = false } = options;
+  const { remove = false, markers = [], removeAll = false, jsonc = false } = options;
   let settings = {};
+  let contents = "{}";
   try {
-    settings = JSON.parse(await readFile(path, "utf8"));
+    contents = await readFile(path, "utf8");
+    settings = jsonc ? parseQwenJsonc(contents) : JSON.parse(contents);
   } catch (error) {
     if (error?.code !== "ENOENT")
       throw new Error(`Cannot read hook settings at ${path}: ${error.message}`, { cause: error });
@@ -343,7 +360,9 @@ async function updateHook(path, event, hook, options = {}) {
     .filter((group) => !Array.isArray(group?.hooks) || group.hooks.length > 0);
   if (!remove) retained.push(hook);
   settings.hooks[event] = retained;
-  await atomicJson(path, settings);
+  if (jsonc)
+    await atomicText(path, setQwenJsoncProperty(contents, "hooks", settings.hooks).trimEnd());
+  else await atomicJson(path, settings);
   return true;
 }
 
@@ -451,7 +470,7 @@ export async function installHookForSource(source, installedScript) {
       join(hookRoot(source, source.agentId), "settings.json"),
       "SessionEnd",
       { hooks: [{ type: "command", command, timeout: 10_000 }] },
-      options,
+      source.agentId === "qwen_code" ? { ...options, jsonc: true } : options,
     );
   if (source.agentId === "kimi_code")
     return updateKimiHook(hookRoot(source, "kimi_code"), command, marker, {
@@ -469,11 +488,12 @@ export async function installHooks(sourceUrl, sources) {
 }
 
 function hookRoot(source, agentId) {
+  if (agentId === "qwen_code")
+    return typeof source?.hookConfigRoot === "string" ? resolve(source.hookConfigRoot) : qwenRoot();
   if (typeof source?.dataPath !== "string") {
     if (agentId === "codex") return codexRoot();
     if (agentId === "claude_code") return claudeRoot();
     if (agentId === "gemini_cli") return geminiRoot();
-    if (agentId === "qwen_code") return qwenRoot();
     return kimiRoot();
   }
   const dataPath = resolve(source.dataPath);
@@ -481,7 +501,6 @@ function hookRoot(source, agentId) {
   if (
     (agentId === "claude_code" && basename(dataPath) === "projects") ||
     (agentId === "gemini_cli" && basename(dataPath) === "tmp") ||
-    (agentId === "qwen_code" && basename(dataPath) === "usage") ||
     (agentId === "kimi_code" && basename(dataPath) === "sessions")
   )
     return dirname(dataPath);
@@ -512,6 +531,7 @@ export async function diagnoseHookForSource(source) {
       "SessionEnd",
       command,
       marker,
+      { jsonc: source.agentId === "qwen_code" },
     );
   if (source.agentId === "kimi_code") {
     try {
@@ -556,7 +576,12 @@ export async function removeHookForSource(source, options = {}) {
   if (source.agentId === "claude_code")
     return updateHook(join(root, "settings.json"), "Stop", null, hookOptions);
   if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
-    return updateHook(join(root, "settings.json"), "SessionEnd", null, hookOptions);
+    return updateHook(
+      join(root, "settings.json"),
+      "SessionEnd",
+      null,
+      source.agentId === "qwen_code" ? { ...hookOptions, jsonc: true } : hookOptions,
+    );
   if (source.agentId === "kimi_code")
     return updateKimiHook(root, "", marker, {
       remove: true,
@@ -653,6 +678,7 @@ export async function removeHooks() {
         await updateHook(join(root, "settings.json"), "SessionEnd", null, {
           remove: true,
           removeAll: true,
+          jsonc: source.agentId === "qwen_code",
         });
       else if (source.agentId === "kimi_code")
         await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });

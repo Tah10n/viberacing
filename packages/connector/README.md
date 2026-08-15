@@ -39,6 +39,7 @@ viberacing accounts
 viberacing source list
 viberacing source add --agent opencode --name Work --data-dir <path>
 viberacing source add --agent kimi_code --name Archive --data-dir <path> --legacy
+viberacing source add --agent qwen_code --name Work --data-dir <runtime-root>/usage
 viberacing source add --agent antigravity --name Personal
 viberacing source remove <client-source-id>
 viberacing disconnect
@@ -69,9 +70,13 @@ creates one default source when none exists.
 OpenCode enumerates only names matching `opencode.db` or `opencode-<channel>.db` inside the official
 data root, plus `OPENCODE_DB` (absolute or relative to that root). Every candidate must expose the
 compatible `message(id,time_created,data)` schema in read-only SQLite mode. Qwen chooses exactly one
-automatic runtime root in this order: `QWEN_RUNTIME_DIR`, absolute/tilde `advanced.runtimeOutputDir`
-from user settings, `QWEN_HOME`, then `~/.qwen`. Relative settings are not resolved from the
-connector's CWD; `doctor` prints the explicit `source add` command instead.
+automatic runtime root in this order: `QWEN_RUNTIME_DIR`, `advanced.runtimeOutputDir` from the
+user-level settings, `QWEN_HOME`, then `~/.qwen`. Its JSONC settings support comments plus `$VAR`,
+`${VAR}`, and tilde expansion; only `QWEN_HOME` and `QWEN_RUNTIME_DIR` are read from the official
+user-level `.env` candidates. Relative values are not resolved from the connector's CWD; `doctor`
+prints the explicit `source add` command instead. The runtime root and Qwen config root are stored
+separately, so tokens come from `<runtime-root>/usage` while the additive `SessionEnd` hook always
+lives in `<QWEN_HOME>/settings.json`.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
