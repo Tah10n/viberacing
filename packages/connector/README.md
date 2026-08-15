@@ -11,16 +11,16 @@ npx --yes --prefer-online --package https://viberacing.example/downloads/viberac
 Use the command shown by your Vibe Racing dashboard. The connector package is served by that same
 Vibe Racing origin, so a separate npm publication is not required.
 
-Discovery is independent of the directory where the command runs. Provider data comes from each
-agent's documented home/profile roots and supported environment overrides. Executable-backed
-adapters search the current `PATH`, installed macOS applications, Windows application roots and
-WindowsApps, and common npm, pnpm, Bun, Volta, Homebrew, MacPorts, Scoop, Chocolatey, and system
-binary directories. Portable installations can set `VIBERACING_CODEX_BIN`,
+Discovery is independent of the directory where the command runs. Provider data comes only from
+documented token-store roots, supported environment overrides, Qwen's user-level settings, and roots
+explicitly saved with `source add`. Finding an executable does not create a ranking source. When an
+exact source needs an executable, the resolver can use `PATH`, installed application roots, and
+common package-manager locations. Portable installations can set `VIBERACING_CODEX_BIN`,
 `VIBERACING_CURSOR_AGENT_BIN`, or `VIBERACING_ANTIGRAVITY_BIN` to an absolute executable path. One
 resolved override is saved only in local `sources.json`, so later processes do not require the
 variable again. Windows npm `.cmd`/`.bat` shims are launched through `ComSpec` with escaped
-arguments. One broken installed agent is reported as a detection warning and never hides the other
-healthy sources.
+arguments. One broken source adapter is reported as a detection warning and never hides other
+healthy sources. Discovery never scans the whole home directory or disk.
 
 The browser approval maps every detected local source to a new or existing account. Re-running
 `connect` keeps the stable installation identity, rotates device authorization, refreshes the
@@ -65,8 +65,16 @@ Capture-based Cursor and Antigravity sources do not require `--data-dir`. Their 
 is `captures/<clientSourceId>.jsonl`, so Personal and Work accounts never share a capture file. A
 wrapper selects its only matching source automatically; with multiple profiles, `--source` is
 required and is consumed by Vibe Racing rather than passed to the native CLI. The first wrapper run
-creates one default source when none exists. Cursor follows the same selection rules but writes no
-capture until its native output provides authoritative counters.
+creates one default source when none exists. Cursor follows the same local selection rules, but it
+never writes a capture and is never sent for pairing while the official CLI lacks authoritative
+token counters.
+
+OpenCode enumerates only names matching `opencode.db` or `opencode-<channel>.db` inside the official
+data root, plus `OPENCODE_DB` (absolute or relative to that root). Every candidate must expose the
+compatible `message(id,time_created,data)` schema in read-only SQLite mode. Qwen chooses exactly one
+automatic runtime root in this order: `QWEN_RUNTIME_DIR`, absolute/tilde `advanced.runtimeOutputDir`
+from user settings, `QWEN_HOME`, then `~/.qwen`. Relative settings are not resolved from the
+connector's CWD; `doctor` prints the explicit `source add` command instead.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
@@ -113,9 +121,9 @@ The first sync may read one bounded 31-day window. Subsequent JSONL collection s
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
 removal. Partial passes retain prior per-file contributions, and valid usage metadata in a JSONL
 record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode queries only the
-UTC range. Successful Cursor/Antigravity capture syncs remove records older than 35 days and
-atomically compact large files. Cursor's current official result schema has no token-usage field, so
-its wrapper deliberately captures nothing unless an authoritative counter object appears; this is
-not a promise of current Cursor counting. Cursor Desktop and Antigravity Desktop are not included.
-Detailed versions, formulas, and limitations are in
-[AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).
+UTC range. Successful Antigravity capture syncs remove records older than 35 days and atomically
+compact large files. Cursor's current official result schema has no token-usage field, so its
+wrapper deliberately captures nothing and its local profile is not paired. Only Antigravity CLI
+sessions launched through the Vibe Racing wrapper are counted; earlier/direct sessions, Cursor
+Desktop, and Antigravity Desktop are not included. Detailed versions, formulas, and limitations are
+in [AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).
