@@ -37,6 +37,14 @@ uncaught route/render failures, PostgreSQL pool failures, and migration failures
 health/readiness probes are `debug` to avoid burying application events in Railway health traffic;
 failed readiness probes remain `error`.
 
+Runtime configuration is validated before `server_started` is emitted. Invalid configuration logs
+`server_configuration_invalid` with a bounded `CONFIG_*` error code, flushes the record
+synchronously, and terminates startup. Next.js and dependency console output is normalized into
+`framework_console_*` records so their original messages and stack traces cannot bypass the privacy
+boundary. Recognized operational failures also include a bounded `diagnosticCode`, such as
+`CONNECTION_REFUSED`, `FETCH_FAILED`, or `NEXT_SERVER_ACTION_INVALID`; unknown messages remain
+content-free.
+
 Set `VIBERACING_LOG_LEVEL` to one of:
 
 - `info` (production default): completed application requests plus warnings and errors;
@@ -58,4 +66,5 @@ can contain those values. Operational diagnosis uses bounded outcome codes, erro
 route templates, timing, and request correlation instead.
 
 The pre-deploy migration command uses the same JSON format under the `viberacing-migrate` service
-name and reports connection, start, applied migration, completion, and failure events.
+name and reports configuration/discovery failures, connection, start, applied migration, completion,
+and execution failures.

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { configuredLogLevel, safeErrorFields, writeLog } from "./log";
+import {
+  configuredLogLevel,
+  installProductionConsoleGuard,
+  safeErrorFields,
+  writeLog,
+  writeRequiredError,
+} from "./log";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -42,7 +48,90 @@ describe("structured logging", () => {
   });
 
   it("rejects unsupported production log levels", () => {
-    vi.stubEnv("VIBERACING_LOG_LEVEL", "verbose");
-    expect(configuredLogLevel).toThrow(/VIBERACING_LOG_LEVEL/);
+    for (const invalid of ["verbose", "constructor", "__proto__"]) {
+      vi.stubEnv("VIBERACING_LOG_LEVEL", invalid);
+      expect(configuredLogLevel).toThrow(/VIBERACING_LOG_LEVEL/);
+    }
+  });
+
+  it("can report invalid logging configuration without consulting the invalid level", () => {
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "constructor");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    writeRequiredError("server_configuration_invalid", {
+      errorCode: "CONFIG_LOG_LEVEL_INVALID",
+    });
+
+    expect(output).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(output.mock.calls[0]?.[0]))).toMatchObject({
+      level: "error",
+      event: "server_configuration_invalid",
+      errorCode: "CONFIG_LOG_LEVEL_INVALID",
+    });
+  });
+
+  it("sanitizes framework console errors before they reach stderr", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreConsole = installProductionConsoleGuard();
+
+    try {
+      const frameworkError = Object.assign(
+        new Error("Bearer secret-value failed at /private/user/repository"),
+        { code: "ECONNREFUSED" },
+      );
+      const guardedError = globalThis.console.error;
+      guardedError("framework prefix", frameworkError);
+
+      expect(output).toHaveBeenCalledOnce();
+      const serialized = String(output.mock.calls[0]?.[0]);
+      const record = JSON.parse(serialized) as Record<string, unknown>;
+      expect(record).toMatchObject({
+        level: "error",
+        service: "viberacing-web",
+        event: "framework_console_error",
+        errorType: "Error",
+        errorCode: "ECONNREFUSED",
+      });
+      expect(serialized).not.toContain("secret-value");
+      expect(serialized).not.toContain("/private/user");
+      expect(serialized).not.toContain("stack");
+    } finally {
+      restoreConsole();
+    }
+  });
+
+  it("classifies known framework failures without retaining their messages", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreConsole = installProductionConsoleGuard();
+
+    try {
+      globalThis.console.error(
+        "connect ECONNREFUSED 127.0.0.1:5432 Bearer first-secret /private/database",
+      );
+      globalThis.console.error("TypeError: fetch failed with second-secret");
+
+      expect(output).toHaveBeenCalledTimes(2);
+      const first = JSON.parse(String(output.mock.calls[0]?.[0])) as Record<string, unknown>;
+      const second = JSON.parse(String(output.mock.calls[1]?.[0])) as Record<string, unknown>;
+      expect(first).toMatchObject({
+        event: "framework_console_error",
+        diagnosticCode: "CONNECTION_REFUSED",
+      });
+      expect(second).toMatchObject({
+        event: "framework_console_error",
+        diagnosticCode: "FETCH_FAILED",
+      });
+      const serialized = output.mock.calls.map(([record]) => String(record)).join("\n");
+      expect(serialized).not.toContain("first-secret");
+      expect(serialized).not.toContain("second-secret");
+      expect(serialized).not.toContain("127.0.0.1");
+      expect(serialized).not.toContain("/private/database");
+    } finally {
+      restoreConsole();
+    }
   });
 });

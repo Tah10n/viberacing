@@ -54,15 +54,25 @@
   min-width: 0;
   align-items: center;
   gap: clamp(var(--space-2), 1vw, var(--space-4));
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  font-weight: var(--meta-value-weight);
+  letter-spacing: normal;
+  line-height: var(--meta-line-height);
+  text-transform: uppercase;
   white-space: nowrap;
+}
+
+.user-score-line > * {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
 }
 
 .user-score-line a {
   overflow: hidden;
-  font-family: var(--font-display);
-  font-size: clamp(1.25rem, 1.5vw, 1.5rem);
-  font-weight: 600;
-  line-height: 1;
   text-overflow: ellipsis;
 }
 
@@ -75,38 +85,8 @@
   vertical-align: 0.35em;
 }
 
-.user-rank {
-  color: var(--color-action);
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 1.8vw, 1.875rem);
-  font-weight: 800;
-  line-height: 1;
-}
-
-.user-agent {
-  color: var(--color-info);
-  font-family: var(--font-display);
-  font-size: var(--text-body);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
 .user-score-line strong {
   margin-left: auto;
-  color: var(--color-action);
-  font-family: var(--font-display);
-  font-size: clamp(1.875rem, 2.25vw, 2.25rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.user-score-line small {
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .hero-guest {

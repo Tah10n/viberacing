@@ -1,7 +1,9 @@
 import { configuredLogLevel } from "./log";
 
 const missing = (name: string): never => {
-  throw new Error(`Missing required environment variable: ${name}`);
+  throw Object.assign(new Error(`Missing required environment variable: ${name}`), {
+    code: `CONFIG_${name}_MISSING`,
+  });
 };
 
 export function requiredEnv(name: string): string {
@@ -10,13 +12,24 @@ export function requiredEnv(name: string): string {
 }
 
 export function publicOrigin(): URL {
-  const url = new URL(process.env.VIBERACING_PUBLIC_ORIGIN ?? "http://localhost:3000");
+  let url: URL;
+  try {
+    url = new URL(process.env.VIBERACING_PUBLIC_ORIGIN ?? "http://localhost:3000");
+  } catch {
+    throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must be a valid origin"), {
+      code: "CONFIG_PUBLIC_ORIGIN_INVALID",
+    });
+  }
   if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
-    throw new Error("VIBERACING_PUBLIC_ORIGIN must be an origin without a path");
+    throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must be an origin without a path"), {
+      code: "CONFIG_PUBLIC_ORIGIN_PATH",
+    });
   }
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   if (url.protocol !== "https:" && (url.protocol !== "http:" || !loopback)) {
-    throw new Error("VIBERACING_PUBLIC_ORIGIN must use HTTPS except on localhost");
+    throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must use HTTPS except on localhost"), {
+      code: "CONFIG_PUBLIC_ORIGIN_HTTPS",
+    });
   }
   return url;
 }
@@ -31,7 +44,10 @@ export const expectedSchemaVersion = "003_pairing_superseded_sources.sql";
 export function maximumDailyTokens(): bigint {
   const value = process.env.VIBERACING_MAX_DAILY_TOKENS ?? "9999999999999999";
   if (!/^[1-9]\d{0,29}$/.test(value)) {
-    throw new Error("VIBERACING_MAX_DAILY_TOKENS must be a positive canonical decimal string");
+    throw Object.assign(
+      new Error("VIBERACING_MAX_DAILY_TOKENS must be a positive canonical decimal string"),
+      { code: "CONFIG_MAX_DAILY_TOKENS_INVALID" },
+    );
   }
   return BigInt(value);
 }
@@ -39,7 +55,9 @@ export function maximumDailyTokens(): bigint {
 export function minimumConnectorVersion(): string {
   const value = process.env.VIBERACING_MIN_CONNECTOR_VERSION?.trim() || "0.2.0";
   if (!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(value)) {
-    throw new Error("VIBERACING_MIN_CONNECTOR_VERSION must be a semantic version");
+    throw Object.assign(new Error("VIBERACING_MIN_CONNECTOR_VERSION must be a semantic version"), {
+      code: "CONFIG_MIN_CONNECTOR_VERSION_INVALID",
+    });
   }
   return value;
 }
@@ -67,13 +85,17 @@ export function validateRuntimeConfig(): void {
     process.env.VIBERACING_ALLOW_INSECURE_LOCAL === "true" &&
     ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
   if (process.env.NODE_ENV === "production" && origin.protocol !== "https:" && !localHttpAllowed) {
-    throw new Error("VIBERACING_PUBLIC_ORIGIN must use HTTPS in production");
+    throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must use HTTPS in production"), {
+      code: "CONFIG_PUBLIC_ORIGIN_PRODUCTION_HTTPS",
+    });
   }
   requiredEnv("GITHUB_CLIENT_ID");
   requiredEnv("GITHUB_CLIENT_SECRET");
   const tls = requiredEnv("VIBERACING_DATABASE_SSL");
   if (tls !== "true" && tls !== "false") {
-    throw new Error("VIBERACING_DATABASE_SSL must be true or false");
+    throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
+      code: "CONFIG_DATABASE_SSL_INVALID",
+    });
   }
   minimumConnectorVersion();
   maximumDailyTokens();
