@@ -80,6 +80,31 @@ describe("request logging", () => {
     );
   });
 
+  it("classifies an unhandled fetch failure without retaining its message", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "info");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = withRequestLogging("/api/example", () => {
+      throw new TypeError("fetch failed");
+    });
+
+    const response = await handler();
+
+    await expect(response.json()).resolves.toEqual({ error: "server_error" });
+    expect(response.status).toBe(500);
+    expect(output).toHaveBeenCalledOnce();
+    const serialized = String(output.mock.calls[0]?.[0]);
+    expect(JSON.parse(serialized)).toMatchObject({
+      level: "error",
+      event: "http_request_failed",
+      status: 500,
+      outcome: "server_error",
+      errorType: "TypeError",
+      diagnosticCode: "FETCH_FAILED",
+    });
+    expect(serialized).not.toContain("fetch failed");
+  });
+
   it("honors response-specific log levels for polling outcomes", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
