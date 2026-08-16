@@ -22,5 +22,6 @@ protocol or shared user-experience change must be documented with the connector 
    limitations.
 9. Verify the tag and release point at the intended commit.
 
-If the connector is later published to npm, use npm trusted publishing with provenance and verify
-the package contents with the existing `npm pack --dry-run` CI gate before publication.
+If the connector is later published to npm, use npm trusted publishing with provenance and run
+`corepack pnpm connector:package:check`. The command invokes `npm pack --dry-run` against
+`packages/connector`, the same package root and validation used by CI.

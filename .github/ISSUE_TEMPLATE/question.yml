@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Read the README, connector README, and agent support matrix, then search existing issues. Do not include credentials, tokens, prompts, responses, code, repository names, paths, raw logs, or real user data.
+        Read the README, connector README, and agent support matrix, then search existing issues.
+
+        Do not include credentials, tokens, prompts or responses, proprietary or private third-party source code, real repository names or local paths, unsanitized agent logs, hostnames, or real user data.
+
+        Sanitized excerpts from Vibe Racing, synthetic fixtures, redacted diagnostics, public stack traces, and example paths such as `/home/example/project` are allowed.
   - type: textarea
     id: question
     attributes:
@@ -36,5 +40,8 @@ body:
       options:
         - label: I searched the documentation and existing issues.
           required: true
-        - label: This question contains no private or security-sensitive data.
+        - label:
+            This question contains no credentials, tokens, proprietary or private code, real
+            repository names or paths, unsanitized logs, prompts or responses, hostnames, or real
+            user data.
           required: true

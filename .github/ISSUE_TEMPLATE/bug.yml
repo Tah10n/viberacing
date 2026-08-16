@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve Vibe Racing. Search existing issues first. Do not include credentials, tokens, prompts, responses, code, repository names, paths, raw logs, or real user data. Report vulnerabilities through the private Security Advisory link instead.
+        Thanks for helping improve Vibe Racing. Search existing issues first.
+
+        Do not include credentials, tokens, prompts or responses, proprietary or private third-party source code, real repository names or local paths, unsanitized agent logs, hostnames, or real user data.
+
+        Sanitized excerpts from Vibe Racing, synthetic fixtures, redacted diagnostics, public stack traces, and example paths such as `/home/example/project` are allowed. Report vulnerabilities through the private Security Advisory link instead.
   - type: textarea
     id: summary
     attributes:
@@ -67,8 +71,9 @@ body:
         - label: I searched existing issues and pull requests.
           required: true
         - label:
-            This report contains no credentials, tokens, private paths, raw agent logs, prompts,
-            responses, source code, or real user data.
+            This report contains no credentials, tokens, proprietary or private code, real
+            repository names or paths, unsanitized logs, prompts or responses, hostnames, or real
+            user data.
           required: true
         - label: This is not a security vulnerability.
           required: true

@@ -35,10 +35,12 @@ Use `corepack pnpm local:up` instead when testing the complete production image 
 4. Review the diff for secrets and private data.
 5. Complete the pull request template with concrete validation evidence.
 
-Never commit credentials, real user records, raw agent logs, prompts, responses, source code,
-repository names, local paths, database dumps, usage exports, or local screenshots. Use synthetic
-test data. `corepack pnpm privacy:check` verifies the repository boundary without printing secret
-values.
+Never commit credentials, tokens, prompts or responses, proprietary or private third-party source
+code, real repository names or local paths, unsanitized agent logs, hostnames, or real user data.
+
+Sanitized excerpts from Vibe Racing, synthetic fixtures, redacted diagnostics, public stack traces,
+and example paths such as `/home/example/project` are allowed. `corepack pnpm privacy:check`
+verifies the repository boundary without printing secret values.
 
 Security vulnerabilities belong in a private GitHub security advisory, not a public issue. See
 [SECURITY.md](SECURITY.md).

@@ -49,8 +49,13 @@ structured Railway log fields, incident filtering, levels, and the enforced priv
 
 ## Connector publication
 
-After configuring npm trusted publishing and inspecting
-`npm pack --dry-run --json ./packages/connector`:
+After configuring npm trusted publishing and running the same package-content gate used by CI:
+
+```bash
+corepack pnpm connector:package:check
+```
+
+Publish from the verified package root:
 
 ```bash
 corepack pnpm --filter @viberacing/connector publish --access public --provenance

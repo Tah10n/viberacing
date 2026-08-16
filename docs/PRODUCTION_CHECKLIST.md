@@ -26,8 +26,7 @@
 
 - Run `corepack pnpm verify`, `corepack pnpm db:migrate` twice on a clean PostgreSQL database,
   `corepack pnpm local:up`, and `corepack pnpm local:test`.
-- Run `corepack pnpm audit --prod --audit-level high` and
-  `npm pack --dry-run --json ./packages/connector`.
+- Run `corepack pnpm audit --prod --audit-level high` and `corepack pnpm connector:package:check`.
 - Confirm the production image runs as `node`, readiness succeeds, OAuth/pairing works, and an old
   device token fails after reconnect.
 - Confirm the connector matrix passes on Linux, macOS, and Windows using `VIBERACING_STATE_DIR`, and
@@ -59,8 +58,8 @@
   branch deletion.
 - Enable Dependabot security updates/alerts and secret scanning where the repository plan supports
   them.
-- Configure npm trusted publishing with provenance for `@viberacing/connector`; inspect the dry-run
-  tarball before the first publish.
+- Configure npm trusted publishing with provenance for `@viberacing/connector`; run
+  `corepack pnpm connector:package:check` against the package root before the first publish.
 - Publish only after the deployed server accepts protocol v2 and its minimum version policy matches
   the package.
 

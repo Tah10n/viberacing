@@ -18,8 +18,11 @@ existing issues and pull requests.
 Provide the smallest safe reproduction, expected and actual behavior, operating system, Node and
 pnpm versions, connector version, and relevant sanitized diagnostics. Use synthetic data.
 
-Never include credentials, device or pairing tokens, prompts, responses, source code, repositories,
-paths, hostnames, database exports, raw agent logs, or another person's usage data.
+Do not include credentials, tokens, prompts or responses, proprietary or private third-party source
+code, real repository names or local paths, unsanitized agent logs, hostnames, or real user data.
+
+Sanitized excerpts from Vibe Racing, synthetic fixtures, redacted diagnostics, public stack traces,
+and example paths such as `/home/example/project` are allowed.
 
 ## Scope
 
