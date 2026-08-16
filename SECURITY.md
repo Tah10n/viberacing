@@ -1,5 +1,12 @@
 # Security policy
 
+## Supported versions
+
+Security fixes are made on the default branch and released in the next connector or deployment
+update. Before the first authoritative GitHub Release, only the current default branch is supported.
+After releases begin, support covers the default branch and latest release; older commits and
+versions may not receive backports.
+
 ## Reporting a vulnerability
 
 Use GitHub's **Report a vulnerability** action to open a private security advisory. Do not disclose

@@ -128,7 +128,7 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level high
       - name: Verify connector package contents
-        run: npm pack --dry-run --json ./packages/connector
+        run: pnpm connector:package:check
       - name: Build production image
         run: docker build --tag viberacing:ci .
       - name: Verify production failure diagnostics are safe

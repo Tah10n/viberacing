@@ -13,6 +13,7 @@
   "scripts": {
     "audit": "corepack pnpm audit --audit-level high",
     "build": "corepack pnpm --filter @viberacing/web build",
+    "connector:package:check": "node scripts/check-connector-package.mjs",
     "db:migrate": "corepack pnpm --filter @viberacing/web db:migrate",
     "dev": "corepack pnpm --filter @viberacing/web dev",
     "format": "prettier --write .",
@@ -25,7 +26,7 @@
     "privacy:check": "node scripts/check-privacy.mjs",
     "test": "corepack pnpm --filter @viberacing/web test && corepack pnpm --filter @viberacing/connector test",
     "typecheck": "corepack pnpm --filter @viberacing/web typecheck",
-    "verify": "corepack pnpm run privacy:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
+    "verify": "corepack pnpm run privacy:check && corepack pnpm run connector:package:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
   },
   "devDependencies": {
     "prettier": "3.9.4"

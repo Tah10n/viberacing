@@ -1,5 +1,8 @@
 # Vibe Racing
 
+[![CI](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml/badge.svg)](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/Tah10n/viberacing)](LICENSE)
+
 Vibe Racing is a fast weekly leaderboard for exact, self-reported coding-agent token usage. One
 GitHub user can connect several computers, several agents, and several accounts of the same agent.
 
@@ -58,6 +61,7 @@ The local scenario creates and removes synthetic users. See [deployment](docs/DE
 [production checklist](docs/PRODUCTION_CHECKLIST.md) before inviting users.
 
 Reference: [Architecture](docs/ARCHITECTURE.md) · [Privacy](docs/PRIVACY.md) ·
-[Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+[Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) ·
+[Governance](GOVERNANCE.md) · [Changelog](CHANGELOG.md) · [Releasing](docs/RELEASING.md)
 
 Licensed under Apache-2.0.
