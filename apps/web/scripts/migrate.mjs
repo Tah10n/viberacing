@@ -36,26 +36,37 @@ function safeErrorFields(error) {
   return fields;
 }
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is required");
-
-const directory = resolve(dirname(fileURLToPath(import.meta.url)), "../database");
-const migrations = (await readdir(directory))
-  .filter((name) => /^\d{3}_[a-z0-9_]+\.sql$/.test(name))
-  .sort((left, right) => left.localeCompare(right));
-if (migrations.length === 0) throw new Error("No database migrations found");
-
-const client = new pg.Client({
-  connectionString,
-  connectionTimeoutMillis: 10_000,
-  statement_timeout: 30_000,
-  ssl: process.env.VIBERACING_DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
-});
 let appliedCount = 0;
 let connected = false;
+let client;
+let stage = "configuration";
 try {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw Object.assign(new Error("DATABASE_URL is required"), {
+      code: "CONFIG_DATABASE_URL_MISSING",
+    });
+  }
+  stage = "migration_discovery";
+  const directory = resolve(dirname(fileURLToPath(import.meta.url)), "../database");
+  const migrations = (await readdir(directory))
+    .filter((name) => /^\d{3}_[a-z0-9_]+\.sql$/.test(name))
+    .sort((left, right) => left.localeCompare(right));
+  if (migrations.length === 0) {
+    throw Object.assign(new Error("No database migrations found"), {
+      code: "MIGRATIONS_NOT_FOUND",
+    });
+  }
+  client = new pg.Client({
+    connectionString,
+    connectionTimeoutMillis: 10_000,
+    statement_timeout: 30_000,
+    ssl: process.env.VIBERACING_DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
+  });
+  stage = "database_connection";
   await client.connect();
   connected = true;
+  stage = "migration_execution";
   log("info", "migration_started", { availableMigrations: migrations.length });
   await client.query("SELECT pg_advisory_lock(1447641668)");
   const ledger = await client.query("SELECT to_regclass('public.schema_migrations') AS name");
@@ -81,13 +92,21 @@ try {
   }
   log("info", "migration_completed", { appliedMigrations: appliedCount });
 } catch (error) {
-  log("error", connected ? "migration_failed" : "database_connection_failed", {
+  const event =
+    stage === "configuration"
+      ? "migration_configuration_failed"
+      : stage === "migration_discovery"
+        ? "migration_initialization_failed"
+        : stage === "database_connection"
+          ? "database_connection_failed"
+          : "migration_failed";
+  log("error", event, {
     ...safeErrorFields(error),
     appliedMigrations: appliedCount,
   });
   process.exitCode = 1;
 } finally {
-  if (connected) {
+  if (connected && client !== undefined) {
     await client.query("SELECT pg_advisory_unlock(1447641668)").catch(() => {});
     await client.end().catch(() => {});
   }
