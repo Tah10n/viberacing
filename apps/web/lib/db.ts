@@ -1,18 +1,17 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
-import { databaseSslEnabled, requiredEnv } from "./config";
+import { databaseClientConfig } from "./config";
 import { logError, safeErrorFields } from "./log";
 
 const globalPool = globalThis as typeof globalThis & { viberacingPool?: Pool };
 
 function createPool(): Pool {
-  const useTls = databaseSslEnabled();
+  const connection = databaseClientConfig(process.env);
   const pool = new Pool({
-    connectionString: requiredEnv("DATABASE_URL"),
+    ...connection,
     max: 10,
     connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
     statement_timeout: 8_000,
-    ssl: useTls ? { rejectUnauthorized: true } : undefined,
   });
   pool.on("error", (error) => {
     logError("database_pool_error", safeErrorFields(error));

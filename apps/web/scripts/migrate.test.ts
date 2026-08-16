@@ -82,4 +82,57 @@ describe("migration diagnostics", () => {
       expect(result.stdout).not.toContain("127.0.0.1");
     },
   );
+
+  it.each([
+    ["true", "sslmode=disable"],
+    ["true", "sslmode=no-verify"],
+    ["false", "ssl=true"],
+    ["true", "sslcert=%2Fprivate%2Fclient.crt"],
+    ["true", "sslkey=%2Fprivate%2Fclient.key"],
+    ["true", "sslrootcert=%2Fprivate%2Froot.crt"],
+    ["true", "sslnegotiation=direct"],
+    ["true", "uselibpqcompat=true"],
+  ])("rejects DATABASE_URL TLS override before connecting", (tls, query) => {
+    const result = spawnSync(process.execPath, [resolve(process.cwd(), "scripts/migrate.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL: `postgresql://private:private@127.0.0.1:1/private?${query}`,
+        VIBERACING_DATABASE_SSL: tls,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    const lines = result.stdout.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? "")).toMatchObject({
+      event: "migration_configuration_failed",
+      errorCode: "CONFIG_DATABASE_URL_SSL_CONFLICT",
+      appliedMigrations: 0,
+    });
+    expect(result.stdout).not.toContain("private");
+    expect(result.stdout).not.toContain("sslmode");
+    expect(result.stdout).not.toContain("root.crt");
+  });
+
+  it("allows unrelated DATABASE_URL parameters before attempting a connection", () => {
+    const result = spawnSync(process.execPath, [resolve(process.cwd(), "scripts/migrate.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        DATABASE_URL:
+          "postgresql://private:private@127.0.0.1:1/private?application_name=viberacing",
+        VIBERACING_DATABASE_SSL: "false",
+        PGSSLMODE: "require",
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout.trim())).toMatchObject({
+      event: "database_connection_failed",
+      errorCode: "ECONNREFUSED",
+    });
+  });
 });

@@ -179,6 +179,29 @@ jobs:
             exit 1
           fi
 
+          conflicting_tls_log="$RUNNER_TEMP/viberacing-conflicting-database-tls.log"
+          if docker run --rm --network host \
+            --env DATABASE_URL="${DATABASE_URL}?sslmode=disable" \
+            --env VIBERACING_PUBLIC_ORIGIN=http://localhost:3012 \
+            --env VIBERACING_ALLOW_INSECURE_LOCAL=true \
+            --env VIBERACING_DATABASE_SSL=true \
+            --env VIBERACING_MIN_CONNECTOR_VERSION=0.2.0 \
+            --env VIBERACING_MAX_DAILY_TOKENS=9999999999999999 \
+            --env GITHUB_CLIENT_ID=synthetic-ci-client \
+            --env GITHUB_CLIENT_SECRET=synthetic-ci-secret \
+            --env PORT=3012 viberacing:ci >"$conflicting_tls_log" 2>&1; then
+            conflicting_tls_status=0
+          else
+            conflicting_tls_status=$?
+          fi
+          test "$conflicting_tls_status" -eq 1
+          test "$(grep -c '"event":"server_configuration_invalid"' "$conflicting_tls_log" || true)" -eq 1
+          grep --fixed-strings '"errorCode":"CONFIG_DATABASE_URL_SSL_CONFLICT"' "$conflicting_tls_log" >/dev/null
+          if grep --extended-regexp '"message"|"stack"|sslmode|Error:|/app/|server\.js:' "$conflicting_tls_log" >/dev/null; then
+            echo "Unsafe detail was present in the conflicting-TLS startup diagnostic"
+            exit 1
+          fi
+
           invalid_migration_tls_log="$RUNNER_TEMP/viberacing-invalid-migration-database-tls.log"
           if docker run --rm --network host \
             --env DATABASE_URL="$DATABASE_URL" \
@@ -193,6 +216,23 @@ jobs:
           grep --fixed-strings '"errorCode":"CONFIG_DATABASE_SSL_INVALID"' "$invalid_migration_tls_log" >/dev/null
           if grep --extended-regexp '"message"|"stack"|Error:|/app/|migrate\.mjs:' "$invalid_migration_tls_log" >/dev/null; then
             echo "Unsafe detail was present in the invalid-TLS migration diagnostic"
+            exit 1
+          fi
+
+          conflicting_migration_tls_log="$RUNNER_TEMP/viberacing-conflicting-migration-database-tls.log"
+          if docker run --rm --network host \
+            --env DATABASE_URL="${DATABASE_URL}?sslmode=no-verify" \
+            --env VIBERACING_DATABASE_SSL=true \
+            --entrypoint node viberacing:ci scripts/migrate.mjs >"$conflicting_migration_tls_log" 2>&1; then
+            conflicting_migration_tls_status=0
+          else
+            conflicting_migration_tls_status=$?
+          fi
+          test "$conflicting_migration_tls_status" -eq 1
+          test "$(grep -c '"event":"migration_configuration_failed"' "$conflicting_migration_tls_log" || true)" -eq 1
+          grep --fixed-strings '"errorCode":"CONFIG_DATABASE_URL_SSL_CONFLICT"' "$conflicting_migration_tls_log" >/dev/null
+          if grep --extended-regexp '"message"|"stack"|sslmode|Error:|/app/|migrate\.mjs:' "$conflicting_migration_tls_log" >/dev/null; then
+            echo "Unsafe detail was present in the conflicting-TLS migration diagnostic"
             exit 1
           fi
 
