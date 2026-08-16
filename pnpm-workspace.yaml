@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
 
-nodeVersion: 26.7.0
+nodeVersion: 24.18.0
 engineStrict: true
 autoInstallPeers: false
 strictPeerDependencies: true

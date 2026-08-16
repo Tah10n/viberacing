@@ -68,6 +68,7 @@ async function post(request: Request): Promise<Response> {
       return annotateResponse(
         Response.json({ status: pairingStatus }, { headers: { "Cache-Control": "no-store" } }),
         { pairingStatus },
+        pairingStatus === "pending" ? "debug" : "warn",
       );
     }
     const deviceToken = deviceTokenFromPollToken(body.pollToken);
@@ -108,6 +109,7 @@ async function post(request: Request): Promise<Response> {
         { headers: { "Cache-Control": "no-store" } },
       ),
       { pairingStatus: "active", mappingsReturned: mappings.length },
+      "info",
     );
   } catch (error) {
     return error instanceof SyntaxError || error instanceof RangeError

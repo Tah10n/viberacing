@@ -48,4 +48,14 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("-- viberacing connect --origin ${origin}");
     expect(dashboard).not.toContain("npx @viberacing/connector");
   });
+
+  it("offers source reassignment only when the same agent has another account", () => {
+    expect(dashboard).toContain("function hasReassignmentTarget");
+    expect(dashboard).toContain("candidate.agent_id === account.agent_id");
+    expect(dashboard).toContain("candidate.id !== account.id");
+    expect(dashboard).toContain("hasReassignmentTarget(accounts, account) ? (");
+    expect(dashboard).toContain('action="/api/sources/reassign"');
+    expect(dashboard).toContain('aria-label="Move source to account"');
+    expect(dashboard).toContain("<option key={candidate.id} value={candidate.id}>");
+  });
 });

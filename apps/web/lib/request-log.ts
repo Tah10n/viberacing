@@ -69,8 +69,10 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
       else if (response.status >= 400) logWarn("http_request_completed", fields);
       else if (metadata?.cause !== undefined || metadata?.outcome !== undefined) {
         logWarn("http_request_completed", fields);
-      } else if (options.successLevel === "debug") logDebug("http_request_completed", fields);
-      else logInfo("http_request_completed", fields);
+      } else if (metadata?.level === "warn") logWarn("http_request_completed", fields);
+      else if ((metadata?.level ?? options.successLevel) === "debug") {
+        logDebug("http_request_completed", fields);
+      } else logInfo("http_request_completed", fields);
       return response;
     } catch (error) {
       const fields: LogFields = {

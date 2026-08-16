@@ -148,7 +148,7 @@
 
 .source-row {
   display: grid;
-  grid-template-columns: minmax(14rem, 24rem) auto;
+  grid-template-columns: minmax(14rem, 24rem) repeat(2, max-content);
   align-items: center;
   justify-content: start;
   gap: var(--space-3);

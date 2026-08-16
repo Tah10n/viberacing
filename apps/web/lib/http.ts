@@ -6,6 +6,7 @@ interface ResponseLogMetadata {
   outcome?: string;
   cause?: unknown;
   fields?: LogFields;
+  level?: "debug" | "info" | "warn";
 }
 
 const responseMetadata = new WeakMap<Response, ResponseLogMetadata>();
@@ -32,8 +33,12 @@ export function responseLogMetadata(response: Response): ResponseLogMetadata | u
   return responseMetadata.get(response);
 }
 
-export function annotateResponse(response: Response, fields: LogFields): Response {
-  responseMetadata.set(response, { fields });
+export function annotateResponse(
+  response: Response,
+  fields: LogFields,
+  level?: "debug" | "info" | "warn",
+): Response {
+  responseMetadata.set(response, level === undefined ? { fields } : { fields, level });
   return response;
 }
 
