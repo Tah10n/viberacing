@@ -37,11 +37,31 @@ const diagnosticPatterns: readonly Readonly<{
   { code: "HEADERS_ALREADY_SENT", pattern: /headers already sent/i },
 ];
 
+function safeProperty(value: unknown, property: string): unknown {
+  if ((typeof value !== "object" || value === null) && typeof value !== "function") {
+    return undefined;
+  }
+  try {
+    return Reflect.get(value, property);
+  } catch {
+    return undefined;
+  }
+}
+
+function safeErrorType(value: unknown): string {
+  const name = safeToken(safeProperty(value, "name"));
+  if (name !== undefined) return name;
+  try {
+    return value instanceof Error ? "Error" : "UnknownError";
+  } catch {
+    return "UnknownError";
+  }
+}
+
 function recognizedDiagnosticCode(values: readonly unknown[]): string | undefined {
   for (const value of values) {
-    const text =
-      typeof value === "string" ? value : value instanceof Error ? value.message : undefined;
-    if (text === undefined) continue;
+    const text = typeof value === "string" ? value : safeProperty(value, "message");
+    if (typeof text !== "string") continue;
     const boundedText = text.slice(0, 4096);
     const match = diagnosticPatterns.find(({ pattern }) => pattern.test(boundedText));
     if (match !== undefined) return match.code;
@@ -85,18 +105,15 @@ export function configuredLogLevel(): LogLevel {
 
 export function safeErrorFields(error: unknown): LogFields {
   const fields: Record<string, LogScalar> = {
-    errorType: error instanceof Error ? (safeToken(error.name) ?? "Error") : "UnknownError",
+    errorType: safeErrorType(error),
     ...safeDiagnosticFields(error),
   };
-  if (typeof error === "object" && error !== null) {
-    const candidate = error as { code?: unknown; digest?: unknown; severity?: unknown };
-    const code = safeToken(candidate.code, 96);
-    const digest = safeToken(candidate.digest, 128);
-    const severity = safeToken(candidate.severity, 32);
-    if (code !== undefined) fields.errorCode = code;
-    if (digest !== undefined) fields.errorDigest = digest;
-    if (severity !== undefined) fields.errorSeverity = severity;
-  }
+  const code = safeToken(safeProperty(error, "code"), 96);
+  const digest = safeToken(safeProperty(error, "digest"), 128);
+  const severity = safeToken(safeProperty(error, "severity"), 32);
+  if (code !== undefined) fields.errorCode = code;
+  if (digest !== undefined) fields.errorDigest = digest;
+  if (severity !== undefined) fields.errorSeverity = severity;
   return fields;
 }
 
@@ -161,7 +178,8 @@ export function writeRequiredError(event: string, fields: LogFields = {}): void 
 
 function consoleErrorCandidate(arguments_: readonly unknown[]): unknown {
   return arguments_.find(
-    (argument) => argument instanceof Error || (typeof argument === "object" && argument !== null),
+    (argument) =>
+      (typeof argument === "object" && argument !== null) || typeof argument === "function",
   );
 }
 
@@ -170,13 +188,13 @@ function writeGuardedConsoleEvent(
   event: string,
   arguments_: readonly unknown[],
 ): void {
-  const candidate = consoleErrorCandidate(arguments_);
-  const fields: LogFields = {
-    consoleArguments: arguments_.length,
-    ...(candidate === undefined ? {} : safeErrorFields(candidate)),
-    ...safeDiagnosticFields(...arguments_),
-  };
   try {
+    const candidate = consoleErrorCandidate(arguments_);
+    const fields: LogFields = {
+      consoleArguments: arguments_.length,
+      ...(candidate === undefined ? {} : safeErrorFields(candidate)),
+      ...safeDiagnosticFields(...arguments_),
+    };
     writeLog(level, event, fields);
   } catch (error) {
     const fallback = serializedLogRecord("error", "logging_configuration_invalid", {

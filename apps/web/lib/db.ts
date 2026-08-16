@@ -1,11 +1,11 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
-import { requiredEnv } from "./config";
+import { databaseSslEnabled, requiredEnv } from "./config";
 import { logError, safeErrorFields } from "./log";
 
 const globalPool = globalThis as typeof globalThis & { viberacingPool?: Pool };
 
 function createPool(): Pool {
-  const useTls = process.env.VIBERACING_DATABASE_SSL === "true";
+  const useTls = databaseSslEnabled();
   const pool = new Pool({
     connectionString: requiredEnv("DATABASE_URL"),
     max: 10,

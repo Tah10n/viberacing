@@ -38,6 +38,15 @@ export function secureCookies(): boolean {
   return publicOrigin().protocol === "https:";
 }
 
+export function databaseSslEnabled(): boolean {
+  const value = requiredEnv("VIBERACING_DATABASE_SSL");
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
+    code: "CONFIG_DATABASE_SSL_INVALID",
+  });
+}
+
 export const connectorProtocolVersion = 2;
 export const expectedSchemaVersion = "003_pairing_superseded_sources.sql";
 
@@ -91,12 +100,7 @@ export function validateRuntimeConfig(): void {
   }
   requiredEnv("GITHUB_CLIENT_ID");
   requiredEnv("GITHUB_CLIENT_SECRET");
-  const tls = requiredEnv("VIBERACING_DATABASE_SSL");
-  if (tls !== "true" && tls !== "false") {
-    throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
-      code: "CONFIG_DATABASE_SSL_INVALID",
-    });
-  }
+  databaseSslEnabled();
   minimumConnectorVersion();
   maximumDailyTokens();
   configuredLogLevel();
