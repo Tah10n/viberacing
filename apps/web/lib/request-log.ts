@@ -1,0 +1,113 @@
+import { randomUUID } from "node:crypto";
+import { responseLogMetadata } from "./http";
+import { logDebug, logError, logInfo, logWarn, safeErrorFields, type LogFields } from "./log";
+
+interface RequestLoggingOptions {
+  successLevel?: "debug" | "info";
+}
+
+type RequestLogLevel = "debug" | "info" | "warn" | "error";
+
+function bestEffortLog(level: RequestLogLevel, event: string, fields: LogFields): void {
+  try {
+    if (level === "error") logError(event, fields);
+    else if (level === "warn") logWarn(event, fields);
+    else if (level === "debug") logDebug(event, fields);
+    else logInfo(event, fields);
+  } catch {
+    // Diagnostics must never change the HTTP response or escape the route error boundary.
+  }
+}
+
+function requestBytes(request: Request): number | undefined {
+  const header = request.headers.get("content-length");
+  if (header === null || !/^\d{1,9}$/.test(header)) return undefined;
+  const value = Number(header);
+  return Number.isSafeInteger(value) ? value : undefined;
+}
+
+function durationMilliseconds(startedAt: number): number {
+  return Math.round((performance.now() - startedAt) * 100) / 100;
+}
+
+export function withRequestLogging<Arguments extends readonly unknown[]>(
+  route: string,
+  handler: (...arguments_: Arguments) => Promise<Response> | Response,
+  options: RequestLoggingOptions = {},
+): (...arguments_: Arguments) => Promise<Response> {
+  return async (...arguments_) => {
+    const request =
+      arguments_[0] instanceof Request
+        ? arguments_[0]
+        : new Request(`http://viberacing.internal${route}`);
+    const startedAt = performance.now();
+    const requestId = randomUUID();
+    const bytes = requestBytes(request);
+    const base: LogFields = {
+      requestId,
+      method: request.method,
+      route,
+      ...(bytes === undefined ? {} : { requestBytes: bytes }),
+    };
+    bestEffortLog("debug", "http_request_started", base);
+    try {
+      const response = await handler(...arguments_);
+      const metadata = responseLogMetadata(response);
+      const defaultOutcome =
+        response.status === 401
+          ? "unauthorized"
+          : response.status === 403
+            ? "forbidden"
+            : response.status === 404
+              ? "not_found"
+              : response.status === 429
+                ? "rate_limited"
+                : undefined;
+      const fields: LogFields = {
+        ...(metadata?.fields ?? {}),
+        ...base,
+        status: response.status,
+        durationMs: durationMilliseconds(startedAt),
+        ...((metadata?.outcome ?? defaultOutcome) === undefined
+          ? {}
+          : { outcome: metadata?.outcome ?? defaultOutcome ?? "unknown" }),
+        ...(metadata?.cause === undefined ? {} : safeErrorFields(metadata.cause)),
+      };
+      try {
+        response.headers.set("X-Request-Id", requestId);
+      } catch {
+        // Some framework-owned responses use immutable headers; logging must never change behavior.
+      }
+      if (response.status >= 500) bestEffortLog("error", "http_request_completed", fields);
+      else if (response.status === 429 || metadata?.level === "warn") {
+        bestEffortLog("warn", "http_request_completed", fields);
+      } else if ([401, 403, 404].includes(response.status)) {
+        bestEffortLog("debug", "http_request_completed", fields);
+      } else if (response.status >= 400) bestEffortLog("warn", "http_request_completed", fields);
+      else if ((metadata?.level ?? options.successLevel) === "debug") {
+        bestEffortLog("debug", "http_request_completed", fields);
+      } else if (metadata?.level === "info")
+        bestEffortLog("info", "http_request_completed", fields);
+      else if (metadata?.cause !== undefined || metadata?.outcome !== undefined) {
+        bestEffortLog("warn", "http_request_completed", fields);
+      } else bestEffortLog("info", "http_request_completed", fields);
+      return response;
+    } catch (error) {
+      const fields: LogFields = {
+        ...base,
+        status: 500,
+        outcome: "server_error",
+        durationMs: durationMilliseconds(startedAt),
+        ...safeErrorFields(error),
+      };
+      bestEffortLog("error", "http_request_failed", fields);
+      return Response.json(
+        { error: "server_error" },
+        {
+          status: 500,
+          headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
+        },
+      );
+    }
+  };
+}

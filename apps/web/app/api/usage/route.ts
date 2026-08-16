@@ -3,9 +3,10 @@ import { agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
-import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
+import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { refreshAgentWeek } from "@/lib/usage-summary";
+import { withRequestLogging } from "@/lib/request-log";
 
 interface UsageBody {
   protocolVersion?: unknown;
@@ -259,7 +260,7 @@ function affectedWeeks(snapshot: ParsedSnapshot): Set<string> {
   return result;
 }
 
-export async function POST(request: Request): Promise<Response> {
+async function post(request: Request): Promise<Response> {
   const authorization = request.headers.get("authorization");
   if (authorization === null || !authorization.startsWith("Bearer ")) {
     return problem(401, "unauthorized");
@@ -279,7 +280,9 @@ export async function POST(request: Request): Promise<Response> {
       [digest(token)],
     );
     const installation = installations[0];
-    if (installation === undefined) return problem(401, "unauthorized");
+    if (installation === undefined) {
+      return annotateResponse(problem(401, "unauthorized"), {}, "warn");
+    }
     if (!(await consumeRateLimit("usage_sync", installation.id, 30, 60))) {
       return Response.json(
         { error: "rate_limited" },
@@ -495,11 +498,19 @@ export async function POST(request: Request): Promise<Response> {
         })),
       };
     });
-    return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+    return annotateResponse(Response.json(result, { headers: { "Cache-Control": "no-store" } }), {
+      snapshotsReceived: snapshots.length,
+      snapshotsAccepted: result.acceptedSnapshots,
+      snapshotsStale: result.staleSnapshots,
+      entriesAccepted: result.acceptedEntries,
+      sourceErrorsReceived: sourceErrors.length,
+    });
   } catch (error) {
     if (error instanceof UsageError) return problem(error.status, error.code);
     return error instanceof SyntaxError || error instanceof RangeError
       ? problem(400, "invalid_request")
-      : problem(500, "server_error");
+      : problem(500, "server_error", error);
   }
 }
+
+export const POST = withRequestLogging("/api/usage", post);

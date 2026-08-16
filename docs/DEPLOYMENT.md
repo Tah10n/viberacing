@@ -16,7 +16,12 @@
    VIBERACING_DATABASE_SSL=false
    VIBERACING_MIN_CONNECTOR_VERSION=0.2.0
    VIBERACING_MAX_DAILY_TOKENS=9999999999999999
+   VIBERACING_LOG_LEVEL=info
    ```
+
+   `VIBERACING_DATABASE_SSL` is the only database TLS switch. Do not add `ssl`, `sslmode`,
+   `sslcert`, `sslkey`, `sslrootcert`, `sslnegotiation`, or `uselibpqcompat` parameters to
+   `DATABASE_URL`; startup and migrations reject them to prevent conflicting TLS behavior.
 
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
@@ -39,7 +44,8 @@ sources immediately. Deployments should not describe the ranking as real-time.
 Production startup validates all required variables. The service refuses non-HTTPS remote origins, a
 missing latest required migration/table, or missing PostgreSQL connectivity; additional later
 migration ledger rows are valid. See the [production checklist](PRODUCTION_CHECKLIST.md) for
-backups, repository controls, and npm setup.
+backups, repository controls, and npm setup. See [production observability](OBSERVABILITY.md) for
+structured Railway log fields, incident filtering, levels, and the enforced privacy boundary.
 
 ## Connector publication
 

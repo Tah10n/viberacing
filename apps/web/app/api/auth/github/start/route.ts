@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { publicOrigin, requiredEnv, secureCookies } from "@/lib/config";
 import { randomToken } from "@/lib/crypto";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { withRequestLogging } from "@/lib/request-log";
 
 function safeNext(value: string | null): string {
   if (value === null || value.length > 500 || !value.startsWith("/")) return "/dashboard";
@@ -13,7 +14,7 @@ function safeNext(value: string | null): string {
     : "/dashboard";
 }
 
-export async function GET(request: Request): Promise<Response> {
+async function get(request: Request): Promise<Response> {
   if (!(await consumeRateLimit("oauth_start", clientAddress(request), 20, 60))) {
     return Response.json(
       { error: "rate_limited" },
@@ -47,3 +48,5 @@ export async function GET(request: Request): Promise<Response> {
   authorize.searchParams.set("state", state);
   return NextResponse.redirect(authorize);
 }
+
+export const GET = withRequestLogging("/api/auth/github/start", get);
