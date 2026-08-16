@@ -1,0 +1,40 @@
+name: Question
+description: Ask for setup or usage help not answered by the documentation.
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the README, connector README, and agent support matrix, then search existing issues. Do not include credentials, tokens, prompts, responses, code, repository names, paths, raw logs, or real user data.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What are you trying to accomplish, and where are you blocked?
+    validations:
+      required: true
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What you tried
+      description: Include relevant documentation and safe commands you already tried.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: OS, Node and pnpm versions, connector version
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I searched the documentation and existing issues.
+          required: true
+        - label: This question contains no private or security-sensitive data.
+          required: true

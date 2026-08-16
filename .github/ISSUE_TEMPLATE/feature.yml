@@ -1,0 +1,47 @@
+name: Feature request
+description: Propose a focused improvement within Vibe Racing's product and privacy scope.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem before proposing a solution. Vibe Racing deliberately remains one web service, one PostgreSQL database, and one local connector, and it never collects prompts, responses, code, repositories, paths, provider credentials, model names, or costs.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who has this problem, and what are they unable to do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the smallest useful behavior, not just an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include existing workarounds and why they are insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and security impact
+      description: What data and trust boundaries are affected? Write "None" only after checking.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Scope checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label: The proposal does not require collecting prohibited private data.
+          required: true

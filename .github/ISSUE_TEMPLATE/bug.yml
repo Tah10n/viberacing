@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible Vibe Racing defect using safe, synthetic data.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Vibe Racing. Search existing issues first. Do not include credentials, tokens, prompts, responses, code, repository names, paths, raw logs, or real user data. Report vulnerabilities through the private Security Advisory link instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what impact does it have?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Safe reproduction
+      description: Provide the smallest reproduction using synthetic data.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: connector-version
+    attributes:
+      label: Connector version
+      placeholder: 0.2.1 or not applicable
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Node version, pnpm version, and browser when relevant.
+      placeholder: macOS 15, Node 24.14.0, pnpm 11.7.0, Chrome 140
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include only diagnostics you have checked for prohibited private data.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety checks
+      options:
+        - label: I searched existing issues and pull requests.
+          required: true
+        - label:
+            This report contains no credentials, tokens, private paths, raw agent logs, prompts,
+            responses, source code, or real user data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
