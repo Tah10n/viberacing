@@ -20,6 +20,7 @@ function authFailed(stage: string, cause?: unknown): Response {
     NextResponse.redirect(new URL("/?auth=failed", publicOrigin())),
     `github_oauth_${stage}`,
     cause,
+    stage === "state_validation_failed" ? "debug" : undefined,
   );
 }
 

@@ -6,6 +6,19 @@ interface RequestLoggingOptions {
   successLevel?: "debug" | "info";
 }
 
+type RequestLogLevel = "debug" | "info" | "warn" | "error";
+
+function bestEffortLog(level: RequestLogLevel, event: string, fields: LogFields): void {
+  try {
+    if (level === "error") logError(event, fields);
+    else if (level === "warn") logWarn(event, fields);
+    else if (level === "debug") logDebug(event, fields);
+    else logInfo(event, fields);
+  } catch {
+    // Diagnostics must never change the HTTP response or escape the route error boundary.
+  }
+}
+
 function requestBytes(request: Request): number | undefined {
   const header = request.headers.get("content-length");
   if (header === null || !/^\d{1,9}$/.test(header)) return undefined;
@@ -36,7 +49,7 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
       route,
       ...(bytes === undefined ? {} : { requestBytes: bytes }),
     };
-    logDebug("http_request_started", base);
+    bestEffortLog("debug", "http_request_started", base);
     try {
       const response = await handler(...arguments_);
       const metadata = responseLogMetadata(response);
@@ -65,14 +78,19 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
       } catch {
         // Some framework-owned responses use immutable headers; logging must never change behavior.
       }
-      if (response.status >= 500) logError("http_request_completed", fields);
-      else if (response.status >= 400) logWarn("http_request_completed", fields);
-      else if (metadata?.cause !== undefined || metadata?.outcome !== undefined) {
-        logWarn("http_request_completed", fields);
-      } else if (metadata?.level === "warn") logWarn("http_request_completed", fields);
+      if (response.status >= 500) bestEffortLog("error", "http_request_completed", fields);
+      else if (response.status === 429 || metadata?.level === "warn") {
+        bestEffortLog("warn", "http_request_completed", fields);
+      } else if ([401, 403, 404].includes(response.status)) {
+        bestEffortLog("debug", "http_request_completed", fields);
+      } else if (response.status >= 400) bestEffortLog("warn", "http_request_completed", fields);
       else if ((metadata?.level ?? options.successLevel) === "debug") {
-        logDebug("http_request_completed", fields);
-      } else logInfo("http_request_completed", fields);
+        bestEffortLog("debug", "http_request_completed", fields);
+      } else if (metadata?.level === "info")
+        bestEffortLog("info", "http_request_completed", fields);
+      else if (metadata?.cause !== undefined || metadata?.outcome !== undefined) {
+        bestEffortLog("warn", "http_request_completed", fields);
+      } else bestEffortLog("info", "http_request_completed", fields);
       return response;
     } catch (error) {
       const fields: LogFields = {
@@ -82,7 +100,7 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
         durationMs: durationMilliseconds(startedAt),
         ...safeErrorFields(error),
       };
-      logError("http_request_failed", fields);
+      bestEffortLog("error", "http_request_failed", fields);
       return Response.json(
         { error: "server_error" },
         {

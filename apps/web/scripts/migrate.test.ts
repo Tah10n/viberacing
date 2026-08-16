@@ -26,4 +26,60 @@ describe("migration diagnostics", () => {
     expect(result.stdout).not.toContain("migrate.mjs:");
     expect(result.stdout).not.toContain("Node.js v");
   });
+
+  it.each([
+    [undefined, "CONFIG_VIBERACING_DATABASE_SSL_MISSING"],
+    ["", "CONFIG_VIBERACING_DATABASE_SSL_MISSING"],
+    ["tru", "CONFIG_DATABASE_SSL_INVALID"],
+    ["TRUE", "CONFIG_DATABASE_SSL_INVALID"],
+  ])("rejects TLS value %j before discovery or connection", (value, expectedCode) => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      DATABASE_URL: "postgresql://private:private@127.0.0.1:1/private",
+    };
+    if (value === undefined) delete env.VIBERACING_DATABASE_SSL;
+    else env.VIBERACING_DATABASE_SSL = value;
+
+    const result = spawnSync(process.execPath, [resolve(process.cwd(), "scripts/migrate.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env,
+    });
+
+    expect(result.status).toBe(1);
+    const lines = result.stdout.trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? "")).toMatchObject({
+      event: "migration_configuration_failed",
+      errorCode: expectedCode,
+      appliedMigrations: 0,
+    });
+    expect(result.stdout).not.toContain("private");
+  });
+
+  it.each(["false", "true", " true "])(
+    "accepts TLS value %j before attempting a connection",
+    (value) => {
+      const result = spawnSync(process.execPath, [resolve(process.cwd(), "scripts/migrate.mjs")], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          DATABASE_URL: "postgresql://private:private@127.0.0.1:1/private",
+          VIBERACING_DATABASE_SSL: value,
+        },
+      });
+
+      expect(result.status).toBe(1);
+      const lines = result.stdout.trim().split("\n");
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0] ?? "")).toMatchObject({
+        event: "database_connection_failed",
+        errorCode: "ECONNREFUSED",
+        appliedMigrations: 0,
+      });
+      expect(result.stdout).not.toContain("private");
+      expect(result.stdout).not.toContain("127.0.0.1");
+    },
+  );
 });

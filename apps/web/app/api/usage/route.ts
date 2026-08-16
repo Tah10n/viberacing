@@ -280,7 +280,9 @@ async function post(request: Request): Promise<Response> {
       [digest(token)],
     );
     const installation = installations[0];
-    if (installation === undefined) return problem(401, "unauthorized");
+    if (installation === undefined) {
+      return annotateResponse(problem(401, "unauthorized"), {}, "warn");
+    }
     if (!(await consumeRateLimit("usage_sync", installation.id, 30, 60))) {
       return Response.json(
         { error: "rate_limited" },

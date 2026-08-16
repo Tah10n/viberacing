@@ -47,6 +47,33 @@ describe("structured logging", () => {
     expect(serialized).not.toContain("stack");
   });
 
+  it("sanitizes malformed and hostile error objects without throwing", () => {
+    const nullMessage = new Error("replace-me");
+    Object.defineProperty(nullMessage, "message", { value: null });
+    const numericMessage = new Error("replace-me");
+    Object.defineProperty(numericMessage, "message", { value: 42 });
+    const throwingMessage = new Error("replace-me");
+    Object.defineProperty(throwingMessage, "message", {
+      get() {
+        throw new Error("secret message getter");
+      },
+    });
+    const throwingCode = new Proxy(new Error("fetch failed"), {
+      get(target, property, receiver): unknown {
+        if (property === "code") throw new Error("secret code getter");
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+
+    expect(safeErrorFields(nullMessage)).toEqual({ errorType: "Error" });
+    expect(safeErrorFields(numericMessage)).toEqual({ errorType: "Error" });
+    expect(safeErrorFields(throwingMessage)).toEqual({ errorType: "Error" });
+    expect(safeErrorFields(throwingCode)).toEqual({
+      errorType: "Error",
+      diagnosticCode: "FETCH_FAILED",
+    });
+  });
+
   it("rejects unsupported production log levels", () => {
     for (const invalid of ["verbose", "constructor", "__proto__"]) {
       vi.stubEnv("VIBERACING_LOG_LEVEL", invalid);
@@ -130,6 +157,36 @@ describe("structured logging", () => {
       expect(serialized).not.toContain("second-secret");
       expect(serialized).not.toContain("127.0.0.1");
       expect(serialized).not.toContain("/private/database");
+    } finally {
+      restoreConsole();
+    }
+  });
+
+  it("keeps the production console guard total for hostile objects", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restoreConsole = installProductionConsoleGuard();
+    const hostile = new Proxy(new Error("fetch failed"), {
+      get(target, property, receiver): unknown {
+        if (property === "code") throw new Error("secret code getter");
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+
+    try {
+      expect(() => {
+        globalThis.console.error(hostile);
+      }).not.toThrow();
+      expect(output).toHaveBeenCalledOnce();
+      const serialized = String(output.mock.calls[0]?.[0]);
+      expect(JSON.parse(serialized)).toMatchObject({
+        event: "framework_console_error",
+        errorType: "Error",
+        diagnosticCode: "FETCH_FAILED",
+      });
+      expect(serialized).not.toContain("fetch failed");
+      expect(serialized).not.toContain("secret code getter");
     } finally {
       restoreConsole();
     }

@@ -24,8 +24,19 @@ export function sameOrigin(request: Request): boolean {
   return origin !== null && origin === publicOrigin().origin;
 }
 
-export function markResponse(response: Response, outcome: string, cause?: unknown): Response {
-  responseMetadata.set(response, cause === undefined ? { outcome } : { outcome, cause });
+export function markResponse(
+  response: Response,
+  outcome: string,
+  cause?: unknown,
+  level?: "debug" | "info" | "warn",
+): Response {
+  const current = responseMetadata.get(response);
+  responseMetadata.set(response, {
+    ...current,
+    outcome,
+    ...(cause === undefined ? {} : { cause }),
+    ...(level === undefined ? {} : { level }),
+  });
   return response;
 }
 
@@ -38,7 +49,12 @@ export function annotateResponse(
   fields: LogFields,
   level?: "debug" | "info" | "warn",
 ): Response {
-  responseMetadata.set(response, level === undefined ? { fields } : { fields, level });
+  const current = responseMetadata.get(response);
+  responseMetadata.set(response, {
+    ...current,
+    fields: { ...current?.fields, ...fields },
+    ...(level === undefined ? {} : { level }),
+  });
   return response;
 }
 

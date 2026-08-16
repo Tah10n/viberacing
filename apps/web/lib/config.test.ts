@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { maximumDailyTokens, publicOrigin, secureCookies, validateRuntimeConfig } from "./config";
+import {
+  databaseSslEnabled,
+  maximumDailyTokens,
+  publicOrigin,
+  secureCookies,
+  validateRuntimeConfig,
+} from "./config";
 
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
 const originalDatabaseUrl = process.env.DATABASE_URL;
@@ -69,5 +75,27 @@ describe("public origin", () => {
       process.env.VIBERACING_MAX_DAILY_TOKENS = invalid;
       expect(() => maximumDailyTokens()).toThrow(/canonical decimal string/);
     }
+  });
+});
+
+describe("database TLS configuration", () => {
+  it.each([
+    ["false", false],
+    ["true", true],
+    [" true ", true],
+  ])("normalizes %j consistently", (value, expected) => {
+    process.env.VIBERACING_DATABASE_SSL = value;
+    expect(databaseSslEnabled()).toBe(expected);
+  });
+
+  it.each([
+    [undefined, "CONFIG_VIBERACING_DATABASE_SSL_MISSING"],
+    ["", "CONFIG_VIBERACING_DATABASE_SSL_MISSING"],
+    ["tru", "CONFIG_DATABASE_SSL_INVALID"],
+    ["TRUE", "CONFIG_DATABASE_SSL_INVALID"],
+  ])("rejects %j without falling back to plaintext", (value, expectedCode) => {
+    if (value === undefined) delete process.env.VIBERACING_DATABASE_SSL;
+    else process.env.VIBERACING_DATABASE_SSL = value;
+    expect(() => databaseSslEnabled()).toThrow(expect.objectContaining({ code: expectedCode }));
   });
 });

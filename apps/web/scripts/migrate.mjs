@@ -11,6 +11,44 @@ function safeToken(value, maximumLength = 96) {
     : undefined;
 }
 
+function safeProperty(value, property) {
+  if ((typeof value !== "object" || value === null) && typeof value !== "function") {
+    return undefined;
+  }
+  try {
+    return Reflect.get(value, property);
+  } catch {
+    return undefined;
+  }
+}
+
+function safeErrorType(value) {
+  const name = safeToken(safeProperty(value, "name"));
+  if (name !== undefined) return name;
+  try {
+    return value instanceof Error ? "Error" : "UnknownError";
+  } catch {
+    return "UnknownError";
+  }
+}
+
+function requiredEnv(name) {
+  const value = process.env[name]?.trim();
+  if (value !== undefined && value !== "") return value;
+  throw Object.assign(new Error(`${name} is required`), {
+    code: `CONFIG_${name}_MISSING`,
+  });
+}
+
+function databaseSslEnabled() {
+  const value = requiredEnv("VIBERACING_DATABASE_SSL");
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
+    code: "CONFIG_DATABASE_SSL_INVALID",
+  });
+}
+
 function log(level, event, fields = {}) {
   process.stdout.write(
     `${JSON.stringify({
@@ -25,14 +63,12 @@ function log(level, event, fields = {}) {
 
 function safeErrorFields(error) {
   const fields = {
-    errorType: error instanceof Error ? (safeToken(error.name) ?? "Error") : "UnknownError",
+    errorType: safeErrorType(error),
   };
-  if (typeof error === "object" && error !== null) {
-    const code = safeToken(error.code, 32);
-    const severity = safeToken(error.severity, 32);
-    if (code !== undefined) fields.errorCode = code;
-    if (severity !== undefined) fields.errorSeverity = severity;
-  }
+  const code = safeToken(safeProperty(error, "code"), 96);
+  const severity = safeToken(safeProperty(error, "severity"), 32);
+  if (code !== undefined) fields.errorCode = code;
+  if (severity !== undefined) fields.errorSeverity = severity;
   return fields;
 }
 
@@ -41,12 +77,8 @@ let connected = false;
 let client;
 let stage = "configuration";
 try {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw Object.assign(new Error("DATABASE_URL is required"), {
-      code: "CONFIG_DATABASE_URL_MISSING",
-    });
-  }
+  const connectionString = requiredEnv("DATABASE_URL");
+  const useTls = databaseSslEnabled();
   stage = "migration_discovery";
   const directory = resolve(dirname(fileURLToPath(import.meta.url)), "../database");
   const migrations = (await readdir(directory))
@@ -61,7 +93,7 @@ try {
     connectionString,
     connectionTimeoutMillis: 10_000,
     statement_timeout: 30_000,
-    ssl: process.env.VIBERACING_DATABASE_SSL === "true" ? { rejectUnauthorized: true } : undefined,
+    ssl: useTls ? { rejectUnauthorized: true } : undefined,
   });
   stage = "database_connection";
   await client.connect();

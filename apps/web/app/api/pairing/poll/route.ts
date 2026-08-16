@@ -56,7 +56,9 @@ async function post(request: Request): Promise<Response> {
       [body.installationId, digest(body.pollToken)],
     );
     const installation = rows[0];
-    if (installation === undefined) return problem(404, "pairing_not_found");
+    if (installation === undefined) {
+      return annotateResponse(problem(404, "pairing_not_found"), {}, "warn");
+    }
     if (!(await consumeRateLimit("pairing_poll", installation.id, 40, 60))) {
       return Response.json(
         { error: "rate_limited" },
@@ -89,7 +91,9 @@ async function post(request: Request): Promise<Response> {
         ORDER BY s.created_at, s.id`,
       [body.installationId, digest(deviceToken)],
     );
-    if (mappings.length === 0) return problem(404, "pairing_not_found");
+    if (mappings.length === 0) {
+      return annotateResponse(problem(404, "pairing_not_found"), {}, "warn");
+    }
     return annotateResponse(
       Response.json(
         {

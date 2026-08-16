@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { annotateResponse, problem } from "./http";
+import { annotateResponse, markResponse, problem } from "./http";
 import { withRequestLogging } from "./request-log";
+
+function throwUnknown(value: unknown): never {
+  throw value;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -105,6 +109,67 @@ describe("request logging", () => {
     expect(serialized).not.toContain("fetch failed");
   });
 
+  it("returns a correlated generic response for arbitrary and hostile thrown values", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "info");
+    const output = vi.spyOn(console, "error").mockImplementation(() => {});
+    const throwingMessage = new Error("replace-me");
+    Object.defineProperty(throwingMessage, "message", {
+      get() {
+        throw new Error("secret message getter");
+      },
+    });
+    const throwingCode = new Proxy(new Error("replace-me"), {
+      get(target, property, receiver): unknown {
+        if (property === "code") throw new Error("secret code getter");
+        return Reflect.get(target, property, receiver) as unknown;
+      },
+    });
+    const thrownValues: unknown[] = [
+      { privateReason: "secret arbitrary object" },
+      throwingMessage,
+      throwingCode,
+    ];
+
+    for (const thrownValue of thrownValues) {
+      output.mockClear();
+      const handler = withRequestLogging("/api/example", () => {
+        throwUnknown(thrownValue);
+      });
+
+      const response = await handler();
+
+      await expect(response.json()).resolves.toEqual({ error: "server_error" });
+      expect(response.status).toBe(500);
+      expect(response.headers.get("X-Request-Id")).toMatch(/^[0-9a-f-]{36}$/);
+      expect(output).toHaveBeenCalledOnce();
+      const serialized = String(output.mock.calls[0]?.[0]);
+      expect(serialized).not.toContain("secret");
+      expect(response.headers.get("X-Request-Id")).toBe(
+        (JSON.parse(serialized) as Record<string, unknown>).requestId,
+      );
+    }
+  });
+
+  it("never changes success or failure responses when logging configuration fails", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "invalid");
+    const handler = withRequestLogging("/api/example", () => Response.json({ status: "ok" }));
+
+    const response = await handler();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "ok" });
+    expect(response.headers.get("X-Request-Id")).toMatch(/^[0-9a-f-]{36}$/);
+
+    const failedResponse = await withRequestLogging("/api/example", () => {
+      throwUnknown({ privateReason: "secret arbitrary object" });
+    })();
+    expect(failedResponse.status).toBe(500);
+    await expect(failedResponse.json()).resolves.toEqual({ error: "server_error" });
+    expect(failedResponse.headers.get("X-Request-Id")).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("honors response-specific log levels for polling outcomes", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
@@ -134,5 +199,52 @@ describe("request logging", () => {
       pairingStatus: "revoked",
       status: 200,
     });
+  });
+
+  it("keeps routine unauthenticated responses at debug while preserving bounded warnings", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VIBERACING_LOG_LEVEL", "debug");
+    const standardOutput = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorOutput = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    for (const status of [401, 403, 404]) {
+      await withRequestLogging("/api/public", () => problem(status, "routine_rejection"))();
+    }
+    await withRequestLogging("/api/auth/github/callback", () =>
+      markResponse(
+        new Response(null, { status: 307 }),
+        "github_oauth_state_validation_failed",
+        undefined,
+        "debug",
+      ),
+    )();
+    await withRequestLogging("/api/public", () => new Response(null, { status: 429 }))();
+    await withRequestLogging("/api/pairing/poll", () =>
+      annotateResponse(problem(404, "pairing_not_found"), {}, "warn"),
+    )();
+
+    const completed = standardOutput.mock.calls
+      .map(([record]) => JSON.parse(String(record)) as Record<string, unknown>)
+      .filter((record) => record.event === "http_request_completed");
+    expect(completed).toHaveLength(4);
+    expect(completed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ level: "debug", status: 401, outcome: "routine_rejection" }),
+        expect.objectContaining({ level: "debug", status: 403, outcome: "routine_rejection" }),
+        expect.objectContaining({ level: "debug", status: 404, outcome: "routine_rejection" }),
+        expect.objectContaining({
+          level: "debug",
+          status: 307,
+          outcome: "github_oauth_state_validation_failed",
+        }),
+      ]),
+    );
+    const warnings = errorOutput.mock.calls.map(
+      ([record]) => JSON.parse(String(record)) as Record<string, unknown>,
+    );
+    expect(warnings).toEqual([
+      expect.objectContaining({ level: "warn", status: 429, outcome: "rate_limited" }),
+      expect.objectContaining({ level: "warn", status: 404, outcome: "pairing_not_found" }),
+    ]);
   });
 });
