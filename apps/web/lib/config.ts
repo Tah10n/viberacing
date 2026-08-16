@@ -1,4 +1,8 @@
 import { configuredLogLevel } from "./log";
+import {
+  databaseClientConfig,
+  databaseSslEnabled as resolveDatabaseSslEnabled,
+} from "../scripts/database-config.js";
 
 const missing = (name: string): never => {
   throw Object.assign(new Error(`Missing required environment variable: ${name}`), {
@@ -39,13 +43,10 @@ export function secureCookies(): boolean {
 }
 
 export function databaseSslEnabled(): boolean {
-  const value = requiredEnv("VIBERACING_DATABASE_SSL");
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
-    code: "CONFIG_DATABASE_SSL_INVALID",
-  });
+  return resolveDatabaseSslEnabled(process.env);
 }
+
+export { databaseClientConfig };
 
 export const connectorProtocolVersion = 2;
 export const expectedSchemaVersion = "003_pairing_superseded_sources.sql";
@@ -88,7 +89,7 @@ export function versionAtLeast(candidate: string, minimum: string): boolean {
 }
 
 export function validateRuntimeConfig(): void {
-  requiredEnv("DATABASE_URL");
+  databaseClientConfig(process.env);
   const origin = publicOrigin();
   const localHttpAllowed =
     process.env.VIBERACING_ALLOW_INSECURE_LOCAL === "true" &&
@@ -100,7 +101,6 @@ export function validateRuntimeConfig(): void {
   }
   requiredEnv("GITHUB_CLIENT_ID");
   requiredEnv("GITHUB_CLIENT_SECRET");
-  databaseSslEnabled();
   minimumConnectorVersion();
   maximumDailyTokens();
   configuredLogLevel();

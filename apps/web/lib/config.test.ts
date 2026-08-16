@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { Client } from "pg";
 import {
+  databaseClientConfig,
   databaseSslEnabled,
   maximumDailyTokens,
   publicOrigin,
@@ -10,6 +12,7 @@ import {
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalDatabaseSsl = process.env.VIBERACING_DATABASE_SSL;
+const originalPgSslMode = process.env.PGSSLMODE;
 const originalClientId = process.env.GITHUB_CLIENT_ID;
 const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
 const originalMaximumDailyTokens = process.env.VIBERACING_MAX_DAILY_TOKENS;
@@ -21,6 +24,8 @@ afterEach(() => {
   else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalDatabaseSsl === undefined) delete process.env.VIBERACING_DATABASE_SSL;
   else process.env.VIBERACING_DATABASE_SSL = originalDatabaseSsl;
+  if (originalPgSslMode === undefined) delete process.env.PGSSLMODE;
+  else process.env.PGSSLMODE = originalPgSslMode;
   if (originalClientId === undefined) delete process.env.GITHUB_CLIENT_ID;
   else process.env.GITHUB_CLIENT_ID = originalClientId;
   if (originalClientSecret === undefined) delete process.env.GITHUB_CLIENT_SECRET;
@@ -98,4 +103,54 @@ describe("database TLS configuration", () => {
     else process.env.VIBERACING_DATABASE_SSL = value;
     expect(() => databaseSslEnabled()).toThrow(expect.objectContaining({ code: expectedCode }));
   });
+
+  it.each([
+    ["true", "sslmode=disable"],
+    ["true", "sslmode=no-verify"],
+    ["false", "ssl=true"],
+    ["true", "sslcert=%2Fprivate%2Fclient.crt"],
+    ["true", "sslkey=%2Fprivate%2Fclient.key"],
+    ["true", "SSLROOTCERT=%2Fprivate%2Froot.crt"],
+    ["true", "sslnegotiation=direct"],
+    ["true", "uselibpqcompat=true"],
+  ])("rejects DATABASE_URL TLS override %s / %s", (tls, query) => {
+    process.env.VIBERACING_DATABASE_SSL = tls;
+    process.env.DATABASE_URL = `postgresql://private:private@example.invalid/viberacing?${query}`;
+    expect(() => databaseClientConfig(process.env)).toThrow(
+      expect.objectContaining({ code: "CONFIG_DATABASE_URL_SSL_CONFLICT" }),
+    );
+  });
+
+  it("passes explicit ssl=false to pg regardless of PGSSLMODE", () => {
+    process.env.VIBERACING_DATABASE_SSL = "false";
+    process.env.PGSSLMODE = "require";
+    process.env.DATABASE_URL =
+      "postgresql://example.invalid/viberacing?application_name=viberacing";
+    const config = databaseClientConfig(process.env);
+    expect(config).toMatchObject({ ssl: false });
+    const client = new Client(config);
+    const parameters = client as unknown as { connectionParameters: { ssl: unknown } };
+    expect(parameters.connectionParameters.ssl).toBe(false);
+  });
+
+  it("passes certificate-verifying TLS to pg and allows unrelated query parameters", () => {
+    process.env.VIBERACING_DATABASE_SSL = "true";
+    process.env.DATABASE_URL =
+      "postgresql://example.invalid/viberacing?application_name=viberacing";
+    const config = databaseClientConfig(process.env);
+    const client = new Client(config);
+    const parameters = client as unknown as { connectionParameters: { ssl: unknown } };
+    expect(parameters.connectionParameters.ssl).toEqual({ rejectUnauthorized: true });
+  });
+
+  it.each(["not a URL", "https://example.invalid/viberacing"])(
+    "rejects invalid PostgreSQL URL %j without exposing it as a code",
+    (value) => {
+      process.env.VIBERACING_DATABASE_SSL = "true";
+      process.env.DATABASE_URL = value;
+      expect(() => databaseClientConfig(process.env)).toThrow(
+        expect.objectContaining({ code: "CONFIG_DATABASE_URL_INVALID" }),
+      );
+    },
+  );
 });

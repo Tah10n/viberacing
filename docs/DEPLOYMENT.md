@@ -19,6 +19,10 @@
    VIBERACING_LOG_LEVEL=info
    ```
 
+   `VIBERACING_DATABASE_SSL` is the only database TLS switch. Do not add `ssl`, `sslmode`,
+   `sslcert`, `sslkey`, `sslrootcert`, `sslnegotiation`, or `uselibpqcompat` parameters to
+   `DATABASE_URL`; startup and migrations reject them to prevent conflicting TLS behavior.
+
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
 

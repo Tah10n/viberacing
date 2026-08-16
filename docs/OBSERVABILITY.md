@@ -32,10 +32,11 @@ Example:
 }
 ```
 
-`warn` records cover rejected requests and handled failures. `error` records cover 5xx responses,
-uncaught route/render failures, PostgreSQL pool failures, and migration failures. Successful
-health/readiness probes are `debug` to avoid burying application events in Railway health traffic;
-failed readiness probes remain `error`.
+Routine unauthenticated `401`/`403`/`404` responses and OAuth state mismatches are `debug`. Rate
+limits, confirmed token/pairing mismatches, and handled operational failures are `warn`. `error`
+records cover 5xx responses, uncaught route/render failures, PostgreSQL pool failures, and migration
+failures. Successful health/readiness probes are `debug` to avoid burying application events in
+Railway health traffic; failed readiness probes remain `error`.
 
 Runtime configuration is validated before `server_started` is emitted. Invalid configuration logs
 `server_configuration_invalid` with a bounded `CONFIG_*` error code, flushes the record

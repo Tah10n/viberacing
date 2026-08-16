@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { databaseClientConfig } from "./database-config.js";
 
 function safeToken(value, maximumLength = 96) {
   return typeof value === "string" &&
@@ -32,23 +33,6 @@ function safeErrorType(value) {
   }
 }
 
-function requiredEnv(name) {
-  const value = process.env[name]?.trim();
-  if (value !== undefined && value !== "") return value;
-  throw Object.assign(new Error(`${name} is required`), {
-    code: `CONFIG_${name}_MISSING`,
-  });
-}
-
-function databaseSslEnabled() {
-  const value = requiredEnv("VIBERACING_DATABASE_SSL");
-  if (value === "true") return true;
-  if (value === "false") return false;
-  throw Object.assign(new Error("VIBERACING_DATABASE_SSL must be true or false"), {
-    code: "CONFIG_DATABASE_SSL_INVALID",
-  });
-}
-
 function log(level, event, fields = {}) {
   process.stdout.write(
     `${JSON.stringify({
@@ -77,8 +61,7 @@ let connected = false;
 let client;
 let stage = "configuration";
 try {
-  const connectionString = requiredEnv("DATABASE_URL");
-  const useTls = databaseSslEnabled();
+  const connection = databaseClientConfig(process.env);
   stage = "migration_discovery";
   const directory = resolve(dirname(fileURLToPath(import.meta.url)), "../database");
   const migrations = (await readdir(directory))
@@ -90,10 +73,9 @@ try {
     });
   }
   client = new pg.Client({
-    connectionString,
+    ...connection,
     connectionTimeoutMillis: 10_000,
     statement_timeout: 30_000,
-    ssl: useTls ? { rejectUnauthorized: true } : undefined,
   });
   stage = "database_connection";
   await client.connect();
