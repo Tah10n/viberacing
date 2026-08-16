@@ -11,7 +11,7 @@ const logLevelOrder: Readonly<Record<LogLevel, number>> = {
   silent: 50,
 };
 
-const frameworkDiagnosticPatterns: readonly Readonly<{
+const diagnosticPatterns: readonly Readonly<{
   code: string;
   pattern: RegExp;
 }>[] = [
@@ -36,6 +36,18 @@ const frameworkDiagnosticPatterns: readonly Readonly<{
   { code: "FETCH_FAILED", pattern: /\bfetch failed\b/i },
   { code: "HEADERS_ALREADY_SENT", pattern: /headers already sent/i },
 ];
+
+function recognizedDiagnosticCode(values: readonly unknown[]): string | undefined {
+  for (const value of values) {
+    const text =
+      typeof value === "string" ? value : value instanceof Error ? value.message : undefined;
+    if (text === undefined) continue;
+    const boundedText = text.slice(0, 4096);
+    const match = diagnosticPatterns.find(({ pattern }) => pattern.test(boundedText));
+    if (match !== undefined) return match.code;
+  }
+  return undefined;
+}
 
 const consoleGuardStateKey = Symbol.for("viberacing.productionConsoleGuard");
 
@@ -74,6 +86,7 @@ export function configuredLogLevel(): LogLevel {
 export function safeErrorFields(error: unknown): LogFields {
   const fields: Record<string, LogScalar> = {
     errorType: error instanceof Error ? (safeToken(error.name) ?? "Error") : "UnknownError",
+    ...safeDiagnosticFields(error),
   };
   if (typeof error === "object" && error !== null) {
     const candidate = error as { code?: unknown; digest?: unknown; severity?: unknown };
@@ -85,6 +98,11 @@ export function safeErrorFields(error: unknown): LogFields {
     if (severity !== undefined) fields.errorSeverity = severity;
   }
   return fields;
+}
+
+export function safeDiagnosticFields(...values: readonly unknown[]): LogFields {
+  const diagnosticCode = recognizedDiagnosticCode(values);
+  return diagnosticCode === undefined ? {} : { diagnosticCode };
 }
 
 function shouldWrite(level: Exclude<LogLevel, "silent">): boolean {
@@ -147,33 +165,16 @@ function consoleErrorCandidate(arguments_: readonly unknown[]): unknown {
   );
 }
 
-function frameworkDiagnosticCode(arguments_: readonly unknown[]): string | undefined {
-  for (const argument of arguments_) {
-    const text =
-      typeof argument === "string"
-        ? argument
-        : argument instanceof Error
-          ? argument.message
-          : undefined;
-    if (text === undefined) continue;
-    const boundedText = text.slice(0, 4096);
-    const match = frameworkDiagnosticPatterns.find(({ pattern }) => pattern.test(boundedText));
-    if (match !== undefined) return match.code;
-  }
-  return undefined;
-}
-
 function writeGuardedConsoleEvent(
   level: Exclude<LogLevel, "silent">,
   event: string,
   arguments_: readonly unknown[],
 ): void {
   const candidate = consoleErrorCandidate(arguments_);
-  const diagnosticCode = frameworkDiagnosticCode(arguments_);
   const fields: LogFields = {
     consoleArguments: arguments_.length,
-    ...(diagnosticCode === undefined ? {} : { diagnosticCode }),
     ...(candidate === undefined ? {} : safeErrorFields(candidate)),
+    ...safeDiagnosticFields(...arguments_),
   };
   try {
     writeLog(level, event, fields);
