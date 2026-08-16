@@ -29,7 +29,7 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
-      - run: npm install --global corepack@0.35.0 && corepack enable
+      - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @viberacing/connector test
@@ -50,7 +50,7 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
-      - run: npm install --global corepack@0.35.0 && corepack enable
+      - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - name: Create synthetic local configuration
         run: |
@@ -103,7 +103,7 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
-      - run: npm install --global corepack@0.35.0 && corepack enable
+      - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Verify source, unit tests, and production build
@@ -131,6 +131,62 @@ jobs:
         run: npm pack --dry-run --json ./packages/connector
       - name: Build production image
         run: docker build --tag viberacing:ci .
+      - name: Verify production failure diagnostics are safe
+        run: |
+          invalid_log="$RUNNER_TEMP/viberacing-invalid-startup.log"
+          if docker run --rm --network host \
+            --env DATABASE_URL="$DATABASE_URL" \
+            --env VIBERACING_PUBLIC_ORIGIN=http://localhost:3012 \
+            --env VIBERACING_ALLOW_INSECURE_LOCAL=true \
+            --env VIBERACING_DATABASE_SSL=false \
+            --env VIBERACING_MIN_CONNECTOR_VERSION=0.2.0 \
+            --env VIBERACING_MAX_DAILY_TOKENS=9999999999999999 \
+            --env GITHUB_CLIENT_ID=synthetic-ci-client \
+            --env PORT=3012 viberacing:ci >"$invalid_log" 2>&1; then
+            invalid_status=0
+          else
+            invalid_status=$?
+          fi
+          test "$invalid_status" -eq 1
+          configuration_records="$(grep -c '"event":"server_configuration_invalid"' "$invalid_log" || true)"
+          test "$configuration_records" -eq 1
+          grep --fixed-strings '"errorCode":"CONFIG_GITHUB_CLIENT_SECRET_MISSING"' "$invalid_log" >/dev/null
+          if grep --extended-regexp '"message"|"stack"|Missing required|Error:|/app/|server\.js:' "$invalid_log" >/dev/null; then
+            echo "Unsafe detail was present in the invalid-startup diagnostic"
+            exit 1
+          fi
+
+          database_log="$RUNNER_TEMP/viberacing-database-unavailable.log"
+          docker run --detach --name viberacing-ci-database-unavailable --network host \
+            --env DATABASE_URL=postgresql://private-user:private-password@127.0.0.1:1/private-database \
+            --env VIBERACING_PUBLIC_ORIGIN=http://localhost:3012 \
+            --env VIBERACING_ALLOW_INSECURE_LOCAL=true \
+            --env VIBERACING_DATABASE_SSL=false \
+            --env VIBERACING_MIN_CONNECTOR_VERSION=0.2.0 \
+            --env VIBERACING_MAX_DAILY_TOKENS=9999999999999999 \
+            --env GITHUB_CLIENT_ID=synthetic-ci-client \
+            --env GITHUB_CLIENT_SECRET=private-client-secret \
+            --env PORT=3012 viberacing:ci
+          trap 'docker rm --force viberacing-ci-database-unavailable >/dev/null 2>&1 || true' EXIT
+          database_container_ready=false
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3012/health >/dev/null; then
+              database_container_ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$database_container_ready" = true
+          response_status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3012/)"
+          test "$response_status" = 500
+          docker logs viberacing-ci-database-unavailable >"$database_log" 2>&1
+          grep --fixed-strings '"event":"next_request_error"' "$database_log" >/dev/null
+          grep --fixed-strings '"diagnosticCode":"CONNECTION_REFUSED"' "$database_log" >/dev/null
+          grep --fixed-strings '"errorCode":"ECONNREFUSED"' "$database_log" >/dev/null
+          if grep --extended-regexp 'private-user|private-password|private-database|private-client-secret|127\.0\.0\.1:1|"message"|"stack"|/app/' "$database_log" >/dev/null; then
+            echo "Unsafe detail was present in the database-unavailable diagnostic"
+            exit 1
+          fi
       - name: Verify production container and readiness
         run: |
           test "$(docker image inspect viberacing:ci --format '{{.Config.User}}')" = "node"

@@ -1,7 +1,8 @@
 # Vibe Racing connector
 
-The Node 26 connector collects exact aggregate token counters from supported coding-agent sources
-and pairs them with Vibe Racing agent accounts. It never uploads raw sessions or local paths.
+The Node 24 LTS connector collects exact aggregate token counters from supported coding-agent
+sources and pairs them with Vibe Racing agent accounts. It never uploads raw sessions or local
+paths.
 
 ```bash
 npx --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- \

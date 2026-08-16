@@ -58,6 +58,13 @@ async function form(path, body) {
   });
 }
 
+async function authenticatedGet(path) {
+  return fetch(`${appUrl}${path}`, {
+    headers: { cookie: `vr_session=${sessionToken}` },
+    redirect: "manual",
+  });
+}
+
 const definitions = {
   codex: ["codex_app_server", "desktop"],
   claude_code: ["claude_jsonl", "cli"],
@@ -745,11 +752,36 @@ try {
 
   const personalAccount = byClient.get("codex-personal-a").agentAccountId;
   const workAccount = byClient.get("codex-work").agentAccountId;
+  const dashboardResponse = await authenticatedGet("/dashboard");
+  const dashboardHtml = await dashboardResponse.text();
+  const moveTargetLists = Array.from(
+    dashboardHtml.matchAll(
+      /<select[^>]*aria-label="Move source to account"[^>]*>([\s\S]*?)<\/select>/g,
+    ),
+    (match) => match[1],
+  );
+  check(
+    dashboardResponse.status === 200 &&
+      moveTargetLists.some(
+        (options) =>
+          options.includes(`value="${personalAccount}"`) &&
+          options.includes(`value="${workAccount}"`),
+      ),
+    "dashboard did not offer both Codex accounts as source targets",
+  );
   reassigned = await form("/api/sources/reassign", {
     sourceId: target,
     accountId: personalAccount,
   });
   check(reassigned.status === 303, "owned source could not be reassigned");
+  let reassignedSource = await pool.query(
+    "SELECT agent_account_id::text FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    reassignedSource.rows[0]?.agent_account_id === personalAccount,
+    "source reassignment was not persisted",
+  );
   let codexSummary = await pool.query(
     "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
     [userId],
@@ -757,6 +789,14 @@ try {
   check(codexSummary.rows[0]?.tokens === "100", "account_max was not rebuilt after reassign");
   reassigned = await form("/api/sources/reassign", { sourceId: target, accountId: workAccount });
   check(reassigned.status === 303, "source could not be moved back to its account");
+  reassignedSource = await pool.query(
+    "SELECT agent_account_id::text FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    reassignedSource.rows[0]?.agent_account_id === workAccount,
+    "source move back was not persisted",
+  );
   codexSummary = await pool.query(
     "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
     [userId],
