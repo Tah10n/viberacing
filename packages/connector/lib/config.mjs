@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
+  access,
   copyFile,
   cp,
   mkdir,
@@ -15,6 +16,9 @@ import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
 import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
+import { mergeStoredSourceMapping } from "./protocol.mjs";
+import { connectorVersion } from "./version.mjs";
+import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
   ? resolve(process.env.VIBERACING_STATE_DIR)
@@ -24,6 +28,12 @@ const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
+let stateDirectorySecurity;
+
+export function ensurePrivateStateDirectory() {
+  stateDirectorySecurity ??= secureWindowsStateDirectory(stateDirectory);
+  return stateDirectorySecurity;
+}
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -64,6 +74,7 @@ function geminiRoot() {
 }
 
 async function atomicJson(path, value) {
+  await ensurePrivateStateDirectory();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -72,6 +83,7 @@ async function atomicJson(path, value) {
 }
 
 export async function readConfig() {
+  await ensurePrivateStateDirectory();
   const value = JSON.parse(await readFile(configPath, "utf8"));
   if (value?.version !== 2 || typeof value.origin !== "string" || !Array.isArray(value.sources))
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
@@ -81,7 +93,7 @@ export async function readConfig() {
     sources: value.sources
       .map((mapping) => {
         const local = localById.get(mapping.clientSourceId);
-        return local ? { ...local, ...mapping } : null;
+        return local ? mergeStoredSourceMapping(local, mapping) : null;
       })
       .filter(Boolean),
   };
@@ -149,6 +161,7 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
 }
 
 export async function readSources() {
+  await ensurePrivateStateDirectory();
   try {
     const value = JSON.parse(await readFile(sourcesPath, "utf8"));
     if (
@@ -273,6 +286,7 @@ export async function removeSource(clientSourceId) {
 }
 
 export async function readOrCreateInstallation() {
+  await ensurePrivateStateDirectory();
   try {
     const value = JSON.parse(await readFile(installationPath, "utf8"));
     if (
@@ -415,30 +429,70 @@ async function atomicText(path, contents) {
   await chmod(path, 0o600);
 }
 
+const installedRuntimeFiles = [
+  "browser.mjs",
+  "config.mjs",
+  "executables.mjs",
+  "readers.mjs",
+  "registry.mjs",
+  "runtime.mjs",
+  "protocol.mjs",
+  "version.mjs",
+  "windows-security.mjs",
+];
+
+function installedRuntimeScript() {
+  return join(stateDirectory, "runtime", connectorVersion, "bin", "viberacing.mjs");
+}
+
+async function verifyInstalledRuntime(directory) {
+  await access(join(directory, "bin", "viberacing.mjs"));
+  await Promise.all(installedRuntimeFiles.map((name) => access(join(directory, "lib", name))));
+  await access(join(directory, "lib", "adapters", "codex.mjs"));
+}
+
 async function installRuntime(sourceUrl) {
   const sourceScript = fileURLToPath(sourceUrl);
   const sourceRoot = resolve(dirname(sourceScript), "..");
-  const installedScript = join(stateDirectory, "bin", "viberacing.mjs");
-  const installedLibrary = join(stateDirectory, "lib");
-  await mkdir(dirname(installedScript), { recursive: true, mode: 0o700 });
-  await mkdir(installedLibrary, { recursive: true, mode: 0o700 });
-  if (resolve(sourceScript) !== resolve(installedScript)) {
-    await copyFile(sourceScript, installedScript);
-    for (const name of [
-      "browser.mjs",
-      "config.mjs",
-      "executables.mjs",
-      "readers.mjs",
-      "registry.mjs",
-      "runtime.mjs",
-    ])
-      await copyFile(join(sourceRoot, "lib", name), join(installedLibrary, name));
-    await cp(join(sourceRoot, "lib", "adapters"), join(installedLibrary, "adapters"), {
+  const installedScript = installedRuntimeScript();
+  const installedDirectory = resolve(dirname(installedScript), "..");
+  if (resolve(sourceScript) === resolve(installedScript)) return installedScript;
+  try {
+    await verifyInstalledRuntime(installedDirectory);
+    return installedScript;
+  } catch {}
+
+  const runtimesDirectory = dirname(installedDirectory);
+  const stagingDirectory = join(
+    runtimesDirectory,
+    `.${connectorVersion}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  const stagingScript = join(stagingDirectory, "bin", "viberacing.mjs");
+  const stagingLibrary = join(stagingDirectory, "lib");
+  await mkdir(dirname(stagingScript), { recursive: true, mode: 0o700 });
+  await mkdir(stagingLibrary, { recursive: true, mode: 0o700 });
+  try {
+    for (const name of installedRuntimeFiles) {
+      await copyFile(join(sourceRoot, "lib", name), join(stagingLibrary, name));
+    }
+    await cp(join(sourceRoot, "lib", "adapters"), join(stagingLibrary, "adapters"), {
       recursive: true,
       force: true,
     });
+    await copyFile(sourceScript, stagingScript);
+    await chmod(stagingScript, 0o700);
+    await verifyInstalledRuntime(stagingDirectory);
+    await rename(stagingDirectory, installedDirectory);
+  } catch (error) {
+    try {
+      await verifyInstalledRuntime(installedDirectory);
+      return installedScript;
+    } catch {
+      throw error;
+    }
+  } finally {
+    await rm(stagingDirectory, { recursive: true, force: true });
   }
-  await chmod(installedScript, 0o700);
   return installedScript;
 }
 
@@ -508,7 +562,7 @@ function hookRoot(source, agentId) {
 }
 
 export async function diagnoseHookForSource(source) {
-  const installedScript = join(stateDirectory, "bin", "viberacing.mjs");
+  const installedScript = installedRuntimeScript();
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(installedScript, source);
   if (source.agentId === "codex")

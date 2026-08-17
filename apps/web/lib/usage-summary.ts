@@ -7,11 +7,13 @@ export async function refreshAgentWeek(
   agentId: string,
   weekStart: string,
 ): Promise<void> {
-  await client.query(
-    "DELETE FROM weekly_agent_usage WHERE week_start = $1::date AND user_id = $2 AND agent_id = $3",
-    [weekStart, userId, agentId],
-  );
-  if (!isSupportedAgent(agentId) || !agentRegistry[agentId].countsExactTokens) return;
+  if (!isSupportedAgent(agentId) || !agentRegistry[agentId].countsExactTokens) {
+    await client.query(
+      "DELETE FROM weekly_agent_usage WHERE week_start = $1::date AND user_id = $2 AND agent_id = $3",
+      [weekStart, userId, agentId],
+    );
+    return;
+  }
   await client.query(
     `WITH account_daily AS (
        SELECT a.id,
@@ -26,7 +28,22 @@ export async function refreshAgentWeek(
      )
      INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
      SELECT $1::date, $2, $3, sum(tokens) FROM account_daily
-     HAVING sum(tokens) IS NOT NULL`,
+     HAVING sum(tokens) IS NOT NULL
+     ON CONFLICT (week_start, user_id, agent_id) DO UPDATE
+       SET tokens = EXCLUDED.tokens, updated_at = now()`,
+    [weekStart, userId, agentId],
+  );
+  await client.query(
+    `DELETE FROM weekly_agent_usage w
+      WHERE w.week_start = $1::date AND w.user_id = $2 AND w.agent_id = $3
+        AND NOT EXISTS (
+          SELECT 1
+            FROM agent_accounts a
+            JOIN installation_sources s ON s.agent_account_id = a.id
+            JOIN daily_usage d ON d.source_id = s.id
+           WHERE a.user_id = $2 AND a.agent_id = $3
+             AND d.usage_date >= $1::date AND d.usage_date < $1::date + 7
+        )`,
     [weekStart, userId, agentId],
   );
 }

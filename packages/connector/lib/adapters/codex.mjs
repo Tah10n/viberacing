@@ -8,6 +8,7 @@ import {
   spawnResolvedExecutable,
 } from "../executables.mjs";
 import { totalEntry } from "./shared.mjs";
+import { connectorVersion } from "../version.mjs";
 
 export function parseCodexUsage(payload) {
   if (payload?.error)
@@ -72,7 +73,7 @@ async function collect(source, _range, state = {}) {
         clientInfo: {
           name: "viberacing_connector",
           title: "Vibe Racing Connector",
-          version: "0.2.1",
+          version: connectorVersion,
         },
       },
     });

@@ -15,6 +15,7 @@ async function post(request: Request): Promise<Response> {
     const accountId = form.get("accountId");
     if (!isUuid(accountId)) return problem(400, "invalid_request");
     const outcome = await transaction(async (client) => {
+      await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
       const account = await client.query<{ agent_id: string }>(
         "SELECT agent_id FROM agent_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE",
         [accountId, current.id],

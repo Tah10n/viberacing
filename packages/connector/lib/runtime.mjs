@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { stateDirectory } from "./config.mjs";
+import { ensurePrivateStateDirectory, stateDirectory } from "./config.mjs";
 
 const statePath = join(stateDirectory, "state.json");
 const lockPath = join(stateDirectory, "sync.lock");
@@ -69,7 +69,7 @@ function pendingPath(sourceId, kind = "snapshot") {
 }
 
 async function atomicJson(path, value) {
-  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  await ensurePrivateStateDirectory();
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
   await rename(temporary, path);
@@ -102,6 +102,7 @@ export function automaticDueAt(dirty, lastAutomaticSyncAt = 0, timings = automat
 }
 
 export async function readDirty() {
+  await ensurePrivateStateDirectory();
   try {
     return JSON.parse(await readFile(dirtyPath, "utf8"));
   } catch (error) {
@@ -111,7 +112,7 @@ export async function readDirty() {
 }
 
 async function withDirtyLock(callback) {
-  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  await ensurePrivateStateDirectory();
   const deadline = Date.now() + 5_000;
   let handle;
   for (;;) {
@@ -221,7 +222,7 @@ export async function clearDirtyForSources(clientSourceIds) {
 }
 
 async function acquireOwnedLock(path, options = {}) {
-  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  await ensurePrivateStateDirectory();
   const ownershipToken = randomUUID();
   const owner = `${process.pid}:${ownershipToken}\n`;
   const deadline = Date.now() + (options.waitMs ?? 0);
@@ -488,6 +489,7 @@ export async function clearQuarantine(sourceId) {
 }
 
 export async function readState() {
+  await ensurePrivateStateDirectory();
   try {
     return JSON.parse(await readFile(statePath, "utf8"));
   } catch (error) {
@@ -497,7 +499,7 @@ export async function readState() {
 }
 
 export async function writeState(value) {
-  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  await ensurePrivateStateDirectory();
   await atomicJson(statePath, value);
 }
 

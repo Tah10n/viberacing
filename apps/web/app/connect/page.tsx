@@ -186,6 +186,15 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
                           type="text"
                         />
                       </label>
+                      {isSupportedAgent(source.agent_id) &&
+                      agentRegistry[source.agent_id].aggregationMode === "account_max" &&
+                      compatible.length > 0 ? (
+                        <p className="muted">
+                          If this is the same provider account on another computer, select its
+                          existing account. Creating another account makes the totals additive and
+                          can double count account-wide usage.
+                        </p>
+                      ) : null}
                     </fieldset>
                   );
                 })}

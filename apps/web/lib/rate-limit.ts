@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+import { trustedProxyMode } from "./config";
 import { digest } from "./crypto";
 import { transaction } from "./db";
 
@@ -37,6 +39,8 @@ export async function consumeRateLimit(
 }
 
 export function clientAddress(request: Request): string {
+  if (trustedProxyMode() !== "railway") return "untrusted-forwarding-headers";
   // Railway's edge overwrites X-Real-IP with the address it observed.
-  return request.headers.get("x-real-ip")?.trim().slice(0, 128) || "unknown";
+  const value = request.headers.get("x-real-ip")?.trim() ?? "";
+  return isIP(value) !== 0 ? value : "missing-trusted-client-address";
 }

@@ -101,7 +101,15 @@ function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>
 }
 
 async function post(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("pairing_start", clientAddress(request), 6, 60))) {
+  if (!(await consumeRateLimit("pairing_start_global", "all", 2_000, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
+  }
+  const address = clientAddress(request);
+  const addressLimit = address === "untrusted-forwarding-headers" ? 2_000 : 6;
+  if (!(await consumeRateLimit("pairing_start", address, addressLimit, 60))) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -137,12 +145,20 @@ async function post(request: Request): Promise<Response> {
     const installationId = body.installationId;
     const installationSecret = body.installationSecret;
     const connectorVersion = body.connectorVersion as string;
+    const installationRateKey = `${installationId}\0${digest(installationSecret).toString("hex")}`;
+    if (!(await consumeRateLimit("pairing_installation", installationRateKey, 10, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
 
     const code = pairingCode();
     const pairingHash = digest(code);
     const pollToken = randomToken();
     const pendingDeviceHash = digest(deviceTokenFromPollToken(pollToken));
     const outcome = await transaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(1447641669)");
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [installationId]);
       await client.query(
         `DELETE FROM installations

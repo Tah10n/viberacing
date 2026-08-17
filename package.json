@@ -11,7 +11,7 @@
   },
   "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "audit": "corepack pnpm audit --audit-level high",
+    "audit": "corepack pnpm audit --audit-level moderate",
     "build": "corepack pnpm --filter @viberacing/web build",
     "connector:package:check": "node scripts/check-connector-package.mjs",
     "db:migrate": "corepack pnpm --filter @viberacing/web db:migrate",
@@ -19,14 +19,16 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "corepack pnpm --filter @viberacing/web lint",
+    "migrations:check": "node scripts/check-migrations.mjs",
     "local:down": "sh scripts/local-down.sh",
     "local:reset": "sh scripts/local-reset.sh",
     "local:test": "node --env-file=apps/web/.env.local scripts/test-local-scenarios.mjs",
     "local:up": "sh scripts/local-up.sh",
     "privacy:check": "node scripts/check-privacy.mjs",
     "test": "corepack pnpm --filter @viberacing/web test && corepack pnpm --filter @viberacing/connector test",
+    "test:e2e": "corepack pnpm db:migrate && corepack pnpm --filter @viberacing/web test:e2e",
     "typecheck": "corepack pnpm --filter @viberacing/web typecheck",
-    "verify": "corepack pnpm run privacy:check && corepack pnpm run connector:package:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
+    "verify": "corepack pnpm run privacy:check && corepack pnpm run migrations:check && corepack pnpm run connector:package:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
   },
   "devDependencies": {
     "prettier": "3.9.4"

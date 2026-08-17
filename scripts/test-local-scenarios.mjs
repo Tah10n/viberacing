@@ -266,6 +266,78 @@ try {
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
 
+  const previousWeek = dateOffset(-7);
+  const concurrentWeeklyUpdates = await Promise.all([
+    usage(first.deviceToken, [
+      snapshot(
+        byClient.get("claude-personal").sourceId,
+        2,
+        [[previousWeek, 31]],
+        "complete",
+        previousWeek,
+        previousWeek,
+      ),
+    ]),
+    usage(second.deviceToken, [
+      snapshot(
+        secondByClient.get("claude-work").sourceId,
+        2,
+        [[previousWeek, 23]],
+        "complete",
+        previousWeek,
+        previousWeek,
+      ),
+    ]),
+  ]);
+  const concurrentClaudeSummary = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND week_start = date_trunc('week', $2::date)::date",
+    [userId, previousWeek],
+  );
+  check(
+    concurrentWeeklyUpdates.every((item) => item.status === 200) &&
+      concurrentClaudeSummary.rows[0]?.tokens === "54",
+    `concurrent weekly summary update was lost: ${JSON.stringify({
+      statuses: concurrentWeeklyUpdates.map((item) => item.status),
+      summary: concurrentClaudeSummary.rows[0]?.tokens,
+    })}`,
+  );
+  console.log("ok - concurrent usage from two installations preserves the weekly summary");
+
+  const orderClient = await pool.connect();
+  let orderedUsage;
+  try {
+    await orderClient.query("BEGIN");
+    await orderClient.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [userId]);
+    orderedUsage = rawUsage(
+      first.deviceToken,
+      [],
+      [{ sourceId: byClient.get("claude-personal").sourceId, code: "collector_failed" }],
+    );
+    let waitingForUser = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await pool.query(
+        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%FROM users%' AND query LIKE '%FOR UPDATE%'",
+      );
+      if ((waiting.rows[0]?.count ?? 0) > 0) {
+        waitingForUser = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    check(waitingForUser, "usage did not acquire the user lock before child rows");
+    await orderClient.query("SET LOCAL lock_timeout = '1s'");
+    await orderClient.query("SELECT id FROM installations WHERE id = $1 FOR UPDATE", [
+      firstInstallation.id,
+    ]);
+    await orderClient.query("COMMIT");
+    check((await orderedUsage).status === 200, "ordered usage request failed after lock release");
+  } finally {
+    await orderClient.query("ROLLBACK").catch(() => {});
+    orderClient.release();
+    if (orderedUsage) await orderedUsage.catch(() => {});
+  }
+  console.log("ok - usage and browser mutations share user-first lock ordering");
+
   const target = byClient.get("codex-work").sourceId;
   const lockClient = await pool.connect();
   const replacementDeviceToken = token();
@@ -627,6 +699,7 @@ try {
       expiredApproval.headers.get("location")?.includes("error=expired"),
     "expired pairing was accepted",
   );
+  await pool.query("DELETE FROM installations WHERE id = $1", [expiredInstallation.id]);
   console.log("ok - expired pairing is rejected");
 
   const activeInstallationCount = await pool.query(
@@ -721,6 +794,67 @@ try {
       sourceFillers,
     ]);
   console.log("ok - per-user installation, source, and agent-account caps are transactional");
+
+  const pendingBeforeQuotaRace = await pool.query(
+    "SELECT count(*)::int AS count FROM installations WHERE status = 'pending' AND pairing_expires_at > now()",
+  );
+  check(
+    pendingBeforeQuotaRace.rows[0].count < 1_000,
+    "global pending quota was already full before the concurrency scenario",
+  );
+  const pendingQuotaIds = Array.from({ length: 999 - pendingBeforeQuotaRace.rows[0].count }, () =>
+    randomUUID(),
+  );
+  await pool.query(
+    `INSERT INTO installations
+       (id, status, installation_secret_hash, pairing_code_hash, poll_token_hash,
+        pending_device_token_hash, connector_version, protocol_version, pairing_expires_at)
+     SELECT id::uuid, 'pending',
+            decode(md5(id || ':secret') || md5(id || ':secret:2'), 'hex'),
+            decode(md5(id || ':pair') || md5(id || ':pair:2'), 'hex'),
+            decode(md5(id || ':poll') || md5(id || ':poll:2'), 'hex'),
+            decode(md5(id || ':device') || md5(id || ':device:2'), 'hex'),
+            '0.2.1', 2, now() + interval '10 minutes'
+       FROM unnest($1::text[]) AS pending(id)`,
+    [pendingQuotaIds],
+  );
+  const racingPairings = Array.from({ length: 20 }, (_, index) => ({
+    id: randomUUID(),
+    secret: token(),
+    clientSourceId: `quota-race-${index}`,
+  }));
+  try {
+    const quotaResponses = await Promise.all(
+      racingPairings.map((installation) =>
+        json("/api/pairing/start", {
+          protocolVersion: 2,
+          connectorVersion: "0.2.1",
+          installationId: installation.id,
+          installationSecret: installation.secret,
+          sources: [source(installation.clientSourceId, "opencode")],
+          supersededClientSourceIds: [],
+        }),
+      ),
+    );
+    const createdPairings = quotaResponses.filter((item) => item.status === 201).length;
+    const busyPairings = quotaResponses.filter((item) => item.status === 429).length;
+    const pendingAfterRace = await pool.query(
+      "SELECT count(*)::int AS count FROM installations WHERE status = 'pending'",
+    );
+    check(
+      createdPairings === 1 && busyPairings === 19 && pendingAfterRace.rows[0].count === 1_000,
+      `global pending quota raced: ${JSON.stringify({
+        createdPairings,
+        busyPairings,
+        pending: pendingAfterRace.rows[0].count,
+      })}`,
+    );
+  } finally {
+    await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+      [...pendingQuotaIds, ...racingPairings.map((item) => item.id)],
+    ]);
+  }
+  console.log("ok - concurrent pairing starts cannot exceed the global pending quota");
 
   const other = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -882,22 +1016,73 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
-  await pool.query(
-    "INSERT INTO schema_migrations (version) VALUES ('004_synthetic_future.sql') ON CONFLICT DO NOTHING",
+  const historicalSourceIds = Array.from({ length: 80 }, () => randomUUID());
+  try {
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'codex', 'historical-source-' || ordinality,
+              'codex_app_server', 'desktop', 'Historical source', 'disconnected'
+         FROM unnest($1::text[]) WITH ORDINALITY AS historical(id, ordinality)`,
+      [
+        historicalSourceIds,
+        firstInstallation.id,
+        userId,
+        byClient.get("codex-personal-a").agentAccountId,
+      ],
+    );
+    const boundedInstallation = await fetch(`${appUrl}/api/installations/current`, {
+      headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },
+    });
+    const boundedBody = await boundedInstallation.json();
+    const activeInstallationSources = await pool.query(
+      "SELECT count(*)::int AS count FROM installation_sources WHERE installation_id = $1 AND status = 'active'",
+      [firstInstallation.id],
+    );
+    check(
+      boundedInstallation.status === 200 &&
+        boundedBody.sources.length <= 64 &&
+        boundedBody.sources.filter((source) => source.status === "active").length ===
+          activeInstallationSources.rows[0].count,
+      "installation reconciliation response did not bound history while retaining active sources",
+    );
+  } finally {
+    await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
+      historicalSourceIds,
+    ]);
+  }
+  console.log("ok - installation reconciliation bounds disconnected history");
+  const originalRequiredMigration = await pool.query(
+    "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
   );
-  check(
-    (await fetch(`${appUrl}/ready`)).status === 200,
-    "readiness rejected a later migration ledger row",
-  );
-  await pool.query("DELETE FROM schema_migrations WHERE version = '004_synthetic_future.sql'");
-  await pool.query(
-    "DELETE FROM schema_migrations WHERE version = '003_pairing_superseded_sources.sql'",
-  );
-  const missingExpectedSchema = await fetch(`${appUrl}/ready`);
-  check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
-  await pool.query(
-    "INSERT INTO schema_migrations (version) VALUES ('003_pairing_superseded_sources.sql')",
-  );
+  try {
+    await pool.query(
+      "INSERT INTO schema_migrations (version, checksum) VALUES ('005_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+    );
+    check(
+      (await fetch(`${appUrl}/ready`)).status === 200,
+      "readiness rejected a later migration ledger row",
+    );
+    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'");
+    const missingExpectedSchema = await fetch(`${appUrl}/ready`);
+    check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
+  } finally {
+    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
+    const original = originalRequiredMigration.rows[0];
+    if (original) {
+      await pool.query(
+        `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
+         ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
+        [original.version, original.checksum],
+      );
+    } else {
+      await pool.query(
+        "DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
+      );
+    }
+  }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },

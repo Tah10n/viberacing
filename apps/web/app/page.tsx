@@ -101,9 +101,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </aside>
       </section>
       <section className="leaderboard" aria-labelledby="leaderboard-title">
-        <h2 className="sr-only" id="leaderboard-title">
-          Standings
-        </h2>
+        <div className="leaderboard-heading">
+          <div>
+            <h2 id="leaderboard-title">Weekly standings</h2>
+            <p>Community totals reported by local connectors; not proof of cost or productivity.</p>
+          </div>
+          <span className="badge">Self-reported</span>
+        </div>
         {rows.length === 0 ? (
           <div className="empty">
             <strong>

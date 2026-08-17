@@ -34,7 +34,14 @@ async function get(request: Request): Promise<Response> {
               'accountLabel', a.label
             ) ORDER BY s.created_at) FILTER (WHERE s.id IS NOT NULL), '[]'::jsonb) AS sources
        FROM installations i
-       LEFT JOIN installation_sources s ON s.installation_id = i.id
+       LEFT JOIN LATERAL (
+         SELECT candidate.*
+           FROM installation_sources candidate
+          WHERE candidate.installation_id = i.id
+          ORDER BY CASE WHEN candidate.status = 'active' THEN 0 ELSE 1 END,
+                   candidate.updated_at DESC, candidate.created_at DESC, candidate.id
+          LIMIT 64
+       ) s ON true
        LEFT JOIN agent_accounts a ON a.id = s.agent_account_id
       WHERE i.device_token_hash = $1 AND i.status = 'active'
       GROUP BY i.id`,

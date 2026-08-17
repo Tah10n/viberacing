@@ -28,6 +28,7 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "prepack": "node ../../scripts/generate-connector-version.mjs",
     "test": "node --test"
   }
 }

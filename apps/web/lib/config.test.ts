@@ -6,7 +6,9 @@ import {
   maximumDailyTokens,
   publicOrigin,
   secureCookies,
+  trustedProxyMode,
   validateRuntimeConfig,
+  versionAtLeast,
 } from "./config";
 
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
@@ -16,6 +18,7 @@ const originalPgSslMode = process.env.PGSSLMODE;
 const originalClientId = process.env.GITHUB_CLIENT_ID;
 const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
 const originalMaximumDailyTokens = process.env.VIBERACING_MAX_DAILY_TOKENS;
+const originalTrustProxy = process.env.VIBERACING_TRUST_PROXY;
 
 afterEach(() => {
   if (originalOrigin === undefined) delete process.env.VIBERACING_PUBLIC_ORIGIN;
@@ -32,6 +35,8 @@ afterEach(() => {
   else process.env.GITHUB_CLIENT_SECRET = originalClientSecret;
   if (originalMaximumDailyTokens === undefined) delete process.env.VIBERACING_MAX_DAILY_TOKENS;
   else process.env.VIBERACING_MAX_DAILY_TOKENS = originalMaximumDailyTokens;
+  if (originalTrustProxy === undefined) delete process.env.VIBERACING_TRUST_PROXY;
+  else process.env.VIBERACING_TRUST_PROXY = originalTrustProxy;
 });
 
 describe("public origin", () => {
@@ -80,6 +85,25 @@ describe("public origin", () => {
       process.env.VIBERACING_MAX_DAILY_TOKENS = invalid;
       expect(() => maximumDailyTokens()).toThrow(/canonical decimal string/);
     }
+  });
+
+  it("requires an explicit supported trusted-proxy mode", () => {
+    delete process.env.VIBERACING_TRUST_PROXY;
+    expect(trustedProxyMode()).toBe("none");
+    process.env.VIBERACING_TRUST_PROXY = "railway";
+    expect(trustedProxyMode()).toBe("railway");
+    process.env.VIBERACING_TRUST_PROXY = "true";
+    expect(() => trustedProxyMode()).toThrow(/none or railway/);
+  });
+
+  it("orders stable and prerelease connector versions by SemVer precedence", () => {
+    expect(versionAtLeast("0.2.0", "0.2.0")).toBe(true);
+    expect(versionAtLeast("0.2.1", "0.2.0")).toBe(true);
+    expect(versionAtLeast("0.2.0-alpha", "0.2.0")).toBe(false);
+    expect(versionAtLeast("0.2.0-alpha.2", "0.2.0-alpha.10")).toBe(false);
+    expect(versionAtLeast("0.2.0-beta", "0.2.0-alpha.10")).toBe(true);
+    expect(versionAtLeast("0.2.0-01", "0.2.0-alpha")).toBe(false);
+    expect(versionAtLeast("01.2.0", "0.2.0")).toBe(false);
   });
 });
 

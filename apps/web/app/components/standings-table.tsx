@@ -68,6 +68,7 @@ function RacerProfileDialog({ currentHandle, onClose, row }: RacerProfileDialogP
             <div>
               <span className="eyebrow">Racer profile</span>
               <h2 id="racer-profile-title">@{row.handle}</h2>
+              <Badge>Self-reported</Badge>
             </div>
             <button
               aria-label="Close racer profile"

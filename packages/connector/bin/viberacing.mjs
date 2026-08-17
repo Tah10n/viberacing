@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { connectorVersion } from "../lib/version.mjs";
+import { parseProtocolResponse } from "../lib/protocol.mjs";
 import {
   adapters,
   adapterFor,
@@ -71,7 +73,6 @@ import {
   writeState,
 } from "../lib/runtime.mjs";
 
-const connectorVersion = "0.2.1";
 const protocolVersion = 2;
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
@@ -130,7 +131,25 @@ function normalizedOrigin(value) {
   return url.origin;
 }
 
-async function request(origin, path, options = {}, attempts = 1) {
+function retryAfterMilliseconds(response) {
+  const value = response.headers.get("retry-after")?.trim();
+  if (!value) return null;
+  let milliseconds;
+  if (/^\d+$/.test(value)) milliseconds = Number(value) * 1_000;
+  else {
+    const date = Date.parse(value);
+    if (Number.isNaN(date)) return null;
+    milliseconds = Math.max(0, date - Date.now());
+  }
+  const maximum =
+    process.env.NODE_ENV === "test" &&
+    /^\d+$/.test(process.env.VIBERACING_TEST_MAX_RETRY_AFTER_MS ?? "")
+      ? Number(process.env.VIBERACING_TEST_MAX_RETRY_AFTER_MS)
+      : 300_000;
+  return Math.min(maximum, milliseconds);
+}
+
+async function request(origin, path, options = {}, attempts = 1, responseContext) {
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
@@ -139,22 +158,43 @@ async function request(origin, path, options = {}, attempts = 1) {
         signal: AbortSignal.timeout(15_000),
         redirect: "error",
       });
-      const payload = await response.json().catch(() => ({}));
+      let payload;
+      try {
+        payload = await parseProtocolResponse(response, responseContext);
+      } catch (error) {
+        if (
+          error?.code === "invalid_server_response" &&
+          (response.status >= 500 || response.status === 429)
+        ) {
+          error.status = response.status;
+          error.retryAfterMs = retryAfterMilliseconds(response);
+        }
+        throw error;
+      }
       if (!response.ok) {
         const error = new Error(
           `Vibe Racing returned ${response.status}: ${payload.error ?? "request failed"}`,
         );
         error.status = response.status;
         error.code = payload.error;
+        error.retryAfterMs = retryAfterMilliseconds(response);
         if (response.status < 500 && response.status !== 429) throw error;
         lastError = error;
       } else return payload;
     } catch (error) {
       lastError = error;
+      if (
+        error?.code === "invalid_server_response" &&
+        !(error?.status >= 500 || error?.status === 429)
+      )
+        throw error;
       if (error?.status && error.status < 500 && error.status !== 429) throw error;
     }
-    if (attempt + 1 < attempts)
-      await delay(Math.min(8_000, 500 * 2 ** attempt) + Math.floor(Math.random() * 250));
+    if (attempt + 1 < attempts) {
+      const retryAfter = Number.isFinite(lastError?.retryAfterMs) ? lastError.retryAfterMs : 0;
+      const backoff = Math.min(8_000, 500 * 2 ** attempt) + Math.floor(Math.random() * 250);
+      await delay(Math.max(retryAfter, backoff));
+    }
   }
   throw lastError;
 }
@@ -207,33 +247,69 @@ async function connect() {
       "No exact token source was found yet. Run a supported agent at least once, or add its token data root explicitly. Try `viberacing doctor` or `viberacing source add --agent <agent> --name <label> --data-dir <usage-root>`.",
     );
   const installation = await readOrCreateInstallation();
+  const pairingLocalSources = new Map(sources);
+  try {
+    const previousConfig = await readConfig();
+    if (previousConfig.origin === origin && previousConfig.installationId === installation.id) {
+      const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
+      for (const previous of previousConfig.sources) {
+        const local = localById.get(previous.clientSourceId);
+        if (
+          local &&
+          local.agentId === previous.agentId &&
+          local.collectionMethod === previous.collectionMethod
+        ) {
+          pairingLocalSources.set(previous.clientSourceId, {
+            ...local,
+            sourceId: previous.sourceId,
+          });
+        }
+      }
+    }
+  } catch {}
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
-  const pairing = await request(origin, "/api/pairing/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      protocolVersion,
-      connectorVersion,
-      installationId: installation.id,
-      installationSecret: installation.secret,
-      sources: [...sources.values()].map(publicSource),
-      supersededClientSourceIds,
-    }),
-  });
+  const pairing = await request(
+    origin,
+    "/api/pairing/start",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        protocolVersion,
+        connectorVersion,
+        installationId: installation.id,
+        installationSecret: installation.secret,
+        sources: [...sources.values()].map(publicSource),
+        supersededClientSourceIds,
+      }),
+    },
+    1,
+    { kind: "pairingStart", origin, installationId: installation.id },
+  );
   output(`Open ${pairing.verificationUrl}`);
   output(`Pairing code: ${pairing.code}`);
   openBrowser(pairing.verificationUrl);
   const deadline = Date.now() + pairing.expiresInSeconds * 1_000;
   while (Date.now() < deadline) {
     await delay(pairingPollIntervalMs);
-    const result = await request(origin, "/api/pairing/poll", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        installationId: pairing.installationId,
-        pollToken: pairing.pollToken,
-      }),
-    });
+    const result = await request(
+      origin,
+      "/api/pairing/poll",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          installationId: pairing.installationId,
+          pollToken: pairing.pollToken,
+        }),
+      },
+      1,
+      {
+        kind: "pairingPoll",
+        localSources: [...pairingLocalSources.values()],
+        requiredClientSourceIds: [...sources.keys()],
+      },
+    );
     if (result.status === "active") {
       const config = await withLifecycleMutation(async () => {
         await writeSources(localSources);
@@ -244,7 +320,18 @@ async function connect() {
         const mapped = result.sources.map((mapping) => {
           const local = localById.get(mapping.clientSourceId);
           if (!local) throw new Error("Paired source is no longer configured locally");
-          return { ...local, ...mapping };
+          if (
+            local.agentId !== mapping.agentId ||
+            local.collectionMethod !== mapping.collectionMethod
+          )
+            throw new Error("Paired source identity changed");
+          return {
+            ...local,
+            sourceId: mapping.sourceId,
+            agentAccountId: mapping.agentAccountId,
+            accountLabel: mapping.accountLabel,
+            lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence,
+          };
         });
         const nextConfig = {
           version: 2,
@@ -254,7 +341,6 @@ async function connect() {
           sources: mapped,
           protocol: result.protocol,
         };
-        await writeConfig(nextConfig);
         const knownForHookCleanup = [
           ...currentLocalSources,
           ...sourcesBeforeDiscovery.filter(
@@ -265,10 +351,15 @@ async function connect() {
           ),
         ];
         const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup);
+        const runtimeFailure = hooks.failures.find((failure) => failure.agentId === null);
+        if (runtimeFailure) {
+          throw new Error(`Connector runtime installation failed: ${runtimeFailure.message}`);
+        }
         for (const failure of hooks.failures)
           process.stderr.write(
             `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.\n`,
           );
+        await writeConfig(nextConfig);
         await confirmAutomaticCompatibility();
         return nextConfig;
       });
@@ -308,6 +399,13 @@ async function deliver(config, payload) {
       body: JSON.stringify(payload),
     },
     3,
+    {
+      kind: "usage",
+      sourceIds: [
+        ...(payload.snapshots ?? []).map((snapshot) => snapshot.sourceId),
+        ...(payload.sourceErrors ?? []).map((sourceError) => sourceError.sourceId),
+      ],
+    },
   );
 }
 
@@ -469,6 +567,10 @@ async function reconcileServerState(config, state) {
       "/api/installations/current",
       { headers: { Authorization: `Bearer ${config.deviceToken}` } },
       missing ? 3 : 1,
+      {
+        kind: "installation",
+        sourceIds: config.sources.map((source) => source.sourceId),
+      },
     );
   } catch (error) {
     if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
@@ -992,9 +1094,16 @@ async function doctor() {
         const lockedConfig = await readConfig();
         let remote;
         try {
-          remote = await request(lockedConfig.origin, "/api/installations/current", {
-            headers: { Authorization: `Bearer ${lockedConfig.deviceToken}` },
-          });
+          remote = await request(
+            lockedConfig.origin,
+            "/api/installations/current",
+            { headers: { Authorization: `Bearer ${lockedConfig.deviceToken}` } },
+            1,
+            {
+              kind: "installation",
+              sourceIds: lockedConfig.sources.map((source) => source.sourceId),
+            },
+          );
         } catch (error) {
           if (await lifecycleMutationActive()) return { status: "lifecycle" };
           if (error?.status === 401 || error?.status === 403) {
@@ -1147,10 +1256,16 @@ async function sourceCommand() {
     let remoteWarning = false;
     if (typeof mapping?.sourceId === "string") {
       try {
-        await request(config.origin, `/api/sources/${mapping.sourceId}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${config.deviceToken}` },
-        });
+        await request(
+          config.origin,
+          `/api/sources/${mapping.sourceId}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${config.deviceToken}` },
+          },
+          1,
+          { kind: "empty" },
+        );
       } catch (error) {
         if (error?.status !== 404) remoteWarning = true;
       }
@@ -1265,7 +1380,8 @@ async function wrap(agentId) {
 }
 
 try {
-  if (command === "connect") await connect();
+  if (command === "--version" || command === "version") output(connectorVersion);
+  else if (command === "connect") await connect();
   else if (command === "sync") {
     const result = await sync(await readConnectedConfig(), { waitMs: manualSyncLockWaitMs });
     if (result?.skipped) throw new Error("Another sync is already running.");
@@ -1285,10 +1401,16 @@ try {
     await withLifecycleMutation(async () => {
       try {
         const config = await readConfig();
-        await request(config.origin, "/api/installations/current", {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${config.deviceToken}` },
-        });
+        await request(
+          config.origin,
+          "/api/installations/current",
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${config.deviceToken}` },
+          },
+          1,
+          { kind: "empty" },
+        );
       } catch (error) {
         if (error?.code !== "ENOENT") remoteError = error;
       } finally {
@@ -1322,10 +1444,16 @@ try {
     const cleanup = await withLifecycleMutation(async () => {
       try {
         const config = await readConfig();
-        await request(config.origin, "/api/installations/current", {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${config.deviceToken}` },
-        });
+        await request(
+          config.origin,
+          "/api/installations/current",
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${config.deviceToken}` },
+          },
+          1,
+          { kind: "empty" },
+        );
       } catch {}
       const result = await removeHooks();
       if (result.failures.length === 0) await removeLocalState();
