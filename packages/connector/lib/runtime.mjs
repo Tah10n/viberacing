@@ -241,7 +241,7 @@ async function acquireOwnedLock(path, options = {}) {
       if (created) await unlink(path).catch(() => {});
       if (error?.code !== "EEXIST") throw error;
       const info = await stat(path).catch(() => null);
-      if (info && Date.now() - info.mtimeMs > staleMs) {
+      if ((info && Date.now() - info.mtimeMs > staleMs) || (await deadLockOwner(path))) {
         const stalePath = `${path}.stale.${ownershipToken}`;
         try {
           await rename(path, stalePath);
@@ -254,6 +254,20 @@ async function acquireOwnedLock(path, options = {}) {
       if (Date.now() >= deadline) return null;
       await delay(25);
     }
+  }
+}
+
+async function deadLockOwner(path) {
+  const owner = await readFile(path, "utf8").catch(() => null);
+  const match = typeof owner === "string" ? /^(\d+):[0-9a-f-]{36}\n$/i.exec(owner) : null;
+  if (!match) return false;
+  const pid = Number(match[1]);
+  if (!Number.isSafeInteger(pid) || pid < 1 || pid === process.pid) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error?.code === "ESRCH";
   }
 }
 
@@ -506,7 +520,8 @@ export async function writeState(value) {
 export async function lifecycleMutationActive() {
   const info = await stat(lifecycleMarkerPath).catch(() => null);
   if (!info) return false;
-  if (Date.now() - info.mtimeMs <= 10 * 60_000) return true;
+  if (Date.now() - info.mtimeMs <= 10 * 60_000 && !(await deadLockOwner(lifecycleMarkerPath)))
+    return true;
   await unlink(lifecycleMarkerPath).catch(() => {});
   return false;
 }

@@ -1017,6 +1017,7 @@ try {
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
   const historicalSourceIds = Array.from({ length: 80 }, () => randomUUID());
+  const exactSourceIds = Array.from({ length: 100 }, () => randomUUID());
   try {
     await pool.query(
       `INSERT INTO installation_sources
@@ -1047,12 +1048,65 @@ try {
           activeInstallationSources.rows[0].count,
       "installation reconciliation response did not bound history while retaining active sources",
     );
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'codex', 'exact-source-' || ordinality,
+              'codex_app_server', 'desktop', 'Exact source', 'active'
+         FROM unnest($1::text[]) WITH ORDINALITY AS exact_source(id, ordinality)`,
+      [
+        exactSourceIds,
+        firstInstallation.id,
+        userId,
+        byClient.get("codex-personal-a").agentAccountId,
+      ],
+    );
+    const exactReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: exactSourceIds }),
+    });
+    const exactBody = await exactReconciliation.json();
+    check(
+      exactReconciliation.status === 200 &&
+        exactBody.sources.length === 100 &&
+        exactBody.sources.every(
+          (source, index) =>
+            source.sourceId === exactSourceIds[index] &&
+            source.status === "active" &&
+            source.lastAcceptedSyncSequence === "0" &&
+            Object.keys(source).sort().join(",") === "lastAcceptedSyncSequence,sourceId,status",
+        ),
+      "exact reconciliation did not return all 100 compact active source states",
+    );
+    await pool.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      exactSourceIds[73],
+    ]);
+    const retiredReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: exactSourceIds }),
+    });
+    const retiredBody = await retiredReconciliation.json();
+    check(
+      retiredReconciliation.status === 200 &&
+        retiredBody.sources[73]?.sourceId === exactSourceIds[73] &&
+        retiredBody.sources[73]?.status === "disconnected",
+      "exact reconciliation did not explicitly retire a disconnected source",
+    );
   } finally {
     await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
-      historicalSourceIds,
+      [...historicalSourceIds, ...exactSourceIds],
     ]);
   }
-  console.log("ok - installation reconciliation bounds disconnected history");
+  console.log("ok - bounded dashboard history and exact reconciliation cover 100 active sources");
   const originalRequiredMigration = await pool.query(
     "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
   );

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mergeStoredSourceMapping, parseProtocolResponse } from "../lib/protocol.mjs";
+import { sanitizeTerminalText } from "../lib/terminal.mjs";
 
 const installationId = "11111111-1111-4111-8111-111111111111";
 const sourceId = "22222222-2222-4222-8222-222222222222";
@@ -80,6 +81,33 @@ test("rejects server attempts to add local paths, executables, or unknown mappin
       /invalid protocol response/,
     );
   }
+  await assert.rejects(
+    parseProtocolResponse(json(activePoll([mapping({ accountLabel: "Owned\u001b[2J" })])), {
+      kind: "pairingPoll",
+      localSources: [local],
+    }),
+    /invalid protocol response/,
+  );
+});
+
+test("protocol errors are snake_case and terminal output strips control characters", async () => {
+  assert.deepEqual(
+    await parseProtocolResponse(json({ error: "source_disconnected" }, 400), {
+      kind: "usage",
+      sourceIds: [sourceId],
+    }),
+    { error: "source_disconnected" },
+  );
+  for (const error of ["InvalidRequest", "invalid-request", "invalid__request", "bad\ncode"]) {
+    await assert.rejects(
+      parseProtocolResponse(json({ error }, 400), {
+        kind: "usage",
+        sourceIds: [sourceId],
+      }),
+      /invalid protocol response/,
+    );
+  }
+  assert.equal(sanitizeTerminalText("safe\u001b[2J\r\nnext"), "safe�[2J��next");
 });
 
 test("rejects agent substitution and non-exact pairing source sets", async () => {
@@ -123,6 +151,14 @@ test("pairing accepts a previously connected local source omitted from current d
     }),
     /invalid protocol response/,
   );
+  await assert.rejects(
+    parseProtocolResponse(json(activePoll([mapping()])), {
+      kind: "pairingPoll",
+      localSources: [local, retainedLocal],
+      requiredClientSourceIds: [local.clientSourceId, retainedLocal.clientSourceId],
+    }),
+    /invalid protocol response/,
+  );
 });
 
 test("rejects oversized, incomplete, and reconciliation responses without sources", async () => {
@@ -143,21 +179,12 @@ test("rejects oversized, incomplete, and reconciliation responses without source
     /invalid protocol response/,
   );
   await assert.rejects(
-    parseProtocolResponse(json({ status: "active", connectorVersion: "0.2.1", lastSyncAt: null }), {
-      kind: "installation",
-      sourceIds: [sourceId],
-    }),
+    parseProtocolResponse(json({}), { kind: "reconciliation", sourceIds: [sourceId] }),
     /invalid protocol response/,
   );
-  const installation = {
-    status: "active",
-    connectorVersion: "0.2.1",
-    lastSyncAt: null,
-    sources: [],
-  };
   await assert.rejects(
-    parseProtocolResponse(json(installation), {
-      kind: "installation",
+    parseProtocolResponse(json({ sources: [] }), {
+      kind: "reconciliation",
       sourceIds: [sourceId],
     }),
     /invalid protocol response/,
@@ -165,57 +192,47 @@ test("rejects oversized, incomplete, and reconciliation responses without source
   await assert.rejects(
     parseProtocolResponse(
       json({
-        ...installation,
         sources: [
           {
-            sourceId: "55555555-5555-4555-8555-555555555555",
-            agentId: "antigravity",
+            sourceId,
             status: "disconnected",
-            collectionMethod: "antigravity_cli_capture",
             lastAcceptedSyncSequence: "0",
-            lastSuccessfulSyncAt: null,
-            completeness: null,
-            warning: null,
-            error: null,
-            accountLabel: "Unexpected",
+            warning: "must not be part of reconciliation",
           },
         ],
       }),
-      { kind: "installation", sourceIds: [sourceId] },
+      { kind: "reconciliation", sourceIds: [sourceId] },
     ),
     /invalid protocol response/,
   );
 });
 
-test("installation reconciliation ignores unknown disconnected history", async () => {
-  const source = {
-    sourceId,
-    agentId: "antigravity",
-    status: "active",
-    collectionMethod: "antigravity_cli_capture",
-    lastAcceptedSyncSequence: "2",
-    lastSuccessfulSyncAt: null,
-    completeness: "complete",
-    warning: null,
-    error: null,
-    accountLabel: "Antigravity",
-  };
-  const historical = {
-    ...source,
-    sourceId: "55555555-5555-4555-8555-555555555555",
-    status: "disconnected",
-    accountLabel: "Historical",
-  };
-  const result = await parseProtocolResponse(
-    json({
-      status: "active",
-      connectorVersion: "0.2.1",
-      lastSyncAt: null,
-      sources: [source, historical],
-    }),
-    { kind: "installation", sourceIds: [sourceId] },
+test("compact reconciliation requires every requested source and supports 100 mappings", async () => {
+  const sourceIds = Array.from(
+    { length: 100 },
+    (_, index) =>
+      `22222222-2222-4222-8${index.toString().padStart(3, "0")}-${index
+        .toString()
+        .padStart(12, "0")}`,
   );
-  assert.deepEqual(result.sources, [source]);
+  const sources = sourceIds.map((id, index) => ({
+    sourceId: id,
+    status: index === 99 ? "disconnected" : "active",
+    lastAcceptedSyncSequence: String(index),
+  }));
+  const result = await parseProtocolResponse(json({ sources }), {
+    kind: "reconciliation",
+    sourceIds,
+  });
+  assert.equal(result.sources.length, 100);
+  assert.equal(result.sources.at(-1).status, "disconnected");
+  await assert.rejects(
+    parseProtocolResponse(json({ sources: sources.slice(0, -1) }), {
+      kind: "reconciliation",
+      sourceIds,
+    }),
+    /invalid protocol response/,
+  );
 });
 
 test("accepts only the expected verification origin, path, code, and web protocols", async () => {

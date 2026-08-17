@@ -17,6 +17,7 @@ import {
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
+import { sanitizeTerminalText } from "../lib/terminal.mjs";
 import {
   executableOverride,
   resolveAgentExecutable,
@@ -25,6 +26,7 @@ import {
 import {
   addSource,
   diagnoseHooks,
+  prepareRuntime,
   reconcileHooks,
   readConfig,
   readOrCreateInstallation,
@@ -107,8 +109,9 @@ const option = (name, fallback) => {
   return index >= 0 && arguments_[index + 1] ? arguments_[index + 1] : fallback;
 };
 const output = (...values) => {
-  if (!quiet) process.stdout.write(`${values.join(" ")}\n`);
+  if (!quiet) process.stdout.write(`${values.map(sanitizeTerminalText).join(" ")}\n`);
 };
+const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
 
 async function readConnectedConfig() {
   try {
@@ -233,7 +236,7 @@ async function connect() {
   const discovery = await discoverSources();
   const detected = discovery.sources;
   for (const diagnostic of discovery.diagnostics)
-    process.stderr.write(`Vibe Racing warning: ${diagnostic.displayName}: ${diagnostic.error}.\n`);
+    warning(`Vibe Racing warning: ${diagnostic.displayName}: ${diagnostic.error}.`);
   const sourcesBeforeDiscovery = await readSources();
   const localSources = await reconcileDetectedSources(detected, { persist: false });
   const localSourceIds = new Set(localSources.map((source) => source.clientSourceId));
@@ -246,6 +249,7 @@ async function connect() {
     throw new Error(
       "No exact token source was found yet. Run a supported agent at least once, or add its token data root explicitly. Try `viberacing doctor` or `viberacing source add --agent <agent> --name <label> --data-dir <usage-root>`.",
     );
+  const installedRuntime = await prepareRuntime(import.meta.url);
   const installation = await readOrCreateInstallation();
   const pairingLocalSources = new Map(sources);
   try {
@@ -307,16 +311,12 @@ async function connect() {
       {
         kind: "pairingPoll",
         localSources: [...pairingLocalSources.values()],
-        requiredClientSourceIds: [...sources.keys()],
+        requiredClientSourceIds: [...pairingLocalSources.keys()],
       },
     );
     if (result.status === "active") {
       const config = await withLifecycleMutation(async () => {
-        await writeSources(localSources);
-        const currentLocalSources = await readSources();
-        const localById = new Map(
-          currentLocalSources.map((source) => [source.clientSourceId, source]),
-        );
+        const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
         const mapped = result.sources.map((mapping) => {
           const local = localById.get(mapping.clientSourceId);
           if (!local) throw new Error("Paired source is no longer configured locally");
@@ -341,6 +341,23 @@ async function connect() {
           sources: mapped,
           protocol: result.protocol,
         };
+        await writeConfig(
+          nextConfig,
+          process.env.NODE_ENV === "test" &&
+            process.env.VIBERACING_TEST_FAIL_CONNECTION_CONFIG_COMMIT === "1"
+            ? {
+                beforeRename() {
+                  throw new Error("Synthetic connection config commit failure");
+                },
+              }
+            : undefined,
+        );
+        const currentLocalSources = await writeSources(localSources);
+        if (
+          process.env.NODE_ENV === "test" &&
+          process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONNECTION_COMMIT === "1"
+        )
+          process.exit(86);
         const knownForHookCleanup = [
           ...currentLocalSources,
           ...sourcesBeforeDiscovery.filter(
@@ -350,16 +367,13 @@ async function connect() {
               ),
           ),
         ];
-        const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup);
-        const runtimeFailure = hooks.failures.find((failure) => failure.agentId === null);
-        if (runtimeFailure) {
-          throw new Error(`Connector runtime installation failed: ${runtimeFailure.message}`);
-        }
+        const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup, {
+          installedScript: installedRuntime,
+        });
         for (const failure of hooks.failures)
-          process.stderr.write(
-            `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.\n`,
+          warning(
+            `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.`,
           );
-        await writeConfig(nextConfig);
         await confirmAutomaticCompatibility();
         return nextConfig;
       });
@@ -443,8 +457,8 @@ async function retireMappedSources(config, sourceIds) {
     try {
       await removeHookForSource(source, { removeLegacy: true });
     } catch (error) {
-      process.stderr.write(
-        `Vibe Racing warning: hook cleanup failed for disconnected ${source.agentId} source: ${error.message}\n`,
+      warning(
+        `Vibe Racing warning: hook cleanup failed for disconnected ${source.agentId} source: ${error.message}`,
       );
     }
   await clearDirtyForSources(mappings.map((source) => source.clientSourceId));
@@ -454,14 +468,28 @@ async function retireMappedSources(config, sourceIds) {
   return mappings;
 }
 
-async function reconcileRemoteSources(config, remoteSources) {
-  const active = new Set(
-    (remoteSources ?? [])
-      .filter((source) => source.status === "active")
-      .map((source) => source.sourceId),
+async function requestReconciliation(config, attempts = 1) {
+  const sourceIds = config.sources.map((source) => source.sourceId);
+  return request(
+    config.origin,
+    "/api/installations/current",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.deviceToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds }),
+    },
+    attempts,
+    { kind: "reconciliation", sourceIds },
   );
-  const retired = config.sources
-    .filter((source) => typeof source.sourceId === "string" && !active.has(source.sourceId))
+}
+
+async function reconcileRemoteSources(config, remoteSources) {
+  const configured = new Set(config.sources.map((source) => source.sourceId));
+  const retired = (remoteSources ?? [])
+    .filter((source) => source.status === "disconnected" && configured.has(source.sourceId))
     .map((source) => source.sourceId);
   if (retired.length > 0) await retireMappedSources(config, retired);
 }
@@ -562,16 +590,7 @@ async function reconcileServerState(config, state) {
     return state;
   let remote;
   try {
-    remote = await request(
-      config.origin,
-      "/api/installations/current",
-      { headers: { Authorization: `Bearer ${config.deviceToken}` } },
-      missing ? 3 : 1,
-      {
-        kind: "installation",
-        sourceIds: config.sources.map((source) => source.sourceId),
-      },
-    );
+    remote = await requestReconciliation(config, missing ? 3 : 1);
   } catch (error) {
     if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
       await lifecycleFailure(error);
@@ -879,8 +898,7 @@ async function sync(providedConfig, options = {}) {
         if (failures.length === 0 && syncSources.length > 0)
           await compactSuccessfulCaptures({ ...config, sources: syncSources });
         output("No usage changes; no request was sent.");
-        if (failures.length)
-          process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
+        if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
         return { accepted, failures, unchanged: true };
       }
       const payload = { protocolVersion, snapshots, sourceErrors };
@@ -899,8 +917,7 @@ async function sync(providedConfig, options = {}) {
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
       if (failures.length === 0)
         await compactSuccessfulCaptures({ ...config, sources: syncSources });
-      if (failures.length)
-        process.stderr.write(`Vibe Racing partial sync: ${failures.join("; ")}\n`);
+      if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       return { accepted, failures };
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
@@ -1094,16 +1111,7 @@ async function doctor() {
         const lockedConfig = await readConfig();
         let remote;
         try {
-          remote = await request(
-            lockedConfig.origin,
-            "/api/installations/current",
-            { headers: { Authorization: `Bearer ${lockedConfig.deviceToken}` } },
-            1,
-            {
-              kind: "installation",
-              sourceIds: lockedConfig.sources.map((source) => source.sourceId),
-            },
-          );
+          remote = await requestReconciliation(lockedConfig);
         } catch (error) {
           if (await lifecycleMutationActive()) return { status: "lifecycle" };
           if (error?.status === 401 || error?.status === 403) {
@@ -1151,11 +1159,14 @@ async function doctor() {
       config = reconciliation.config;
       state = reconciliation.state;
       const { remote } = reconciliation;
-      output(`Pairing status: ${remote.status}; server last sync: ${remote.lastSyncAt ?? "never"}`);
-      for (const source of remote.sources ?? [])
+      output("Pairing status: active");
+      const localById = new Map(config.sources.map((source) => [source.sourceId, source]));
+      for (const source of remote.sources ?? []) {
+        const local = localById.get(source.sourceId);
         output(
-          `${source.agentId}/${source.collectionMethod}: ${source.status}, ${source.completeness ?? "not synced"}${source.warning ? `, warning: ${source.warning}` : ""}${source.error ? `, error: ${source.error}` : ""}`,
+          `${local?.agentId ?? "source"}/${local?.collectionMethod ?? source.sourceId}: ${source.status}, sequence ${source.lastAcceptedSyncSequence}`,
         );
+      }
     }
     for (const source of config.sources) {
       const adapter = adapterFor(source.agentId);
@@ -1279,8 +1290,8 @@ async function sourceCommand() {
     await removeSource(id);
     output("Source disconnected and removed locally.");
     if (remoteWarning)
-      process.stderr.write(
-        "Vibe Racing warning: remote source disconnect could not be confirmed; its local hook and automatic state were removed.\n",
+      warning(
+        "Vibe Racing warning: remote source disconnect could not be confirmed; its local hook and automatic state were removed.",
       );
     return;
   }
@@ -1419,12 +1430,12 @@ try {
     });
     output("Installation disconnected locally; provider histories were not changed.");
     if (remoteError)
-      process.stderr.write(
-        "Vibe Racing warning: remote revoke could not be confirmed; the local token and hooks were removed.\n",
+      warning(
+        "Vibe Racing warning: remote revoke could not be confirmed; the local token and hooks were removed.",
       );
     if (localWarnings)
-      process.stderr.write(
-        "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.\n",
+      warning(
+        "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.",
       );
   } else if (command === "reset-installation") {
     const cleanup = await withLifecycleMutation(async () => {
@@ -1437,8 +1448,8 @@ try {
       "Installation identity reset. The prior server installation must be disconnected separately if still active.",
     );
     if (cleanup.failures.length > 0)
-      process.stderr.write(
-        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned; local source metadata was retained.\n`,
+      warning(
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned; local source metadata was retained.`,
       );
   } else if (command === "uninstall") {
     const cleanup = await withLifecycleMutation(async () => {
@@ -1471,13 +1482,11 @@ try {
       output(
         "Vibe Racing network access and secrets were removed; cleanup metadata and runtime were retained for retry.",
       );
-      process.stderr.write(
-        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned. Fix the reported provider settings and run \`viberacing uninstall\` again.\n`,
+      warning(
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned. Fix the reported provider settings and run \`viberacing uninstall\` again.`,
       );
       for (const failure of cleanup.failures)
-        process.stderr.write(
-          `- ${failure.agentId ?? "sources"}: ${failure.path} (${failure.message})\n`,
-        );
+        warning(`- ${failure.agentId ?? "sources"}: ${failure.path} (${failure.message})`);
       process.exitCode = 1;
     }
   } else
@@ -1495,8 +1504,6 @@ try {
     ).catch(() => {});
   }
   if (!quiet)
-    process.stderr.write(
-      `Vibe Racing: ${error instanceof Error ? error.message : "unexpected error"}\n`,
-    );
+    warning(`Vibe Racing: ${error instanceof Error ? error.message : "unexpected error"}`);
   process.exitCode = 1;
 }

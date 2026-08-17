@@ -38,11 +38,11 @@ describe("dashboard connection flow", () => {
 
   it("installs the connector package from the same Vibe Racing origin", () => {
     const connector = source("../../lib/connector.ts");
-    const connectorVersion = source("../../../../packages/connector/package.json").match(
-      /"version":\s*"([^"]+)"/,
-    )?.[1];
-    if (!connectorVersion) throw new Error("Connector package version is missing");
-    expect(connector).toContain(`export const bundledConnectorVersion = "${connectorVersion}"`);
+    expect(connector).toContain(
+      'import connectorPackage from "../../../packages/connector/package.json"',
+    );
+    expect(connector).toContain("export const bundledConnectorVersion = connectorPackage.version");
+    expect(connector).not.toMatch(/bundledConnectorVersion\s*=\s*["']\d+\.\d+\.\d+/);
     expect(dashboard).toContain("${origin}/downloads/${connectorArchiveName()}");
     expect(dashboard).toContain("npx --yes --prefer-online --package");
     expect(dashboard).toContain("-- viberacing connect --origin ${origin}");

@@ -4,7 +4,14 @@ import { agentRegistry, type SupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
-import { isUuid, markResponse, problem, readBoundedForm, sameOrigin } from "@/lib/http";
+import {
+  isSafeDisplayText,
+  isUuid,
+  markResponse,
+  problem,
+  readBoundedForm,
+  sameOrigin,
+} from "@/lib/http";
 import { viewer } from "@/lib/session";
 import { rebuildAgentSummaries } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
@@ -52,7 +59,7 @@ export function exceedsPairingLimits(
 
 function validLabel(value: string | null): string | null {
   const label = value?.trim() ?? "";
-  return label.length >= 1 && label.length <= 40 ? label : null;
+  return isSafeDisplayText(label, 40) ? label : null;
 }
 
 async function post(request: Request): Promise<Response> {

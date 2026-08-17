@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
 import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
 import { mergeStoredSourceMapping } from "./protocol.mjs";
+import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
@@ -73,13 +74,18 @@ function geminiRoot() {
   return join(home, ".gemini");
 }
 
-async function atomicJson(path, value) {
+async function atomicJson(path, value, { beforeRename } = {}) {
   await ensurePrivateStateDirectory();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-  await rename(temporary, path);
-  await chmod(path, 0o600);
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    await beforeRename?.(temporary, path);
+    await rename(temporary, path);
+    await chmod(path, 0o600);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 export async function readConfig() {
@@ -99,19 +105,23 @@ export async function readConfig() {
   };
 }
 
-export async function writeConfig(config) {
-  await atomicJson(configPath, {
-    ...config,
-    sources: (config.sources ?? []).map((source) => ({
-      clientSourceId: source.clientSourceId,
-      sourceId: source.sourceId,
-      agentAccountId: source.agentAccountId,
-      agentId: source.agentId,
-      accountLabel: source.accountLabel,
-      collectionMethod: source.collectionMethod,
-      lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
-    })),
-  });
+export async function writeConfig(config, options) {
+  await atomicJson(
+    configPath,
+    {
+      ...config,
+      sources: (config.sources ?? []).map((source) => ({
+        clientSourceId: source.clientSourceId,
+        sourceId: source.sourceId,
+        agentAccountId: source.agentAccountId,
+        agentId: source.agentId,
+        accountLabel: source.accountLabel,
+        collectionMethod: source.collectionMethod,
+        lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
+      })),
+    },
+    options,
+  );
 }
 
 function validLocalSource(source) {
@@ -127,6 +137,7 @@ function validLocalSource(source) {
     typeof source.suggestedLabel === "string" &&
     source.suggestedLabel.length >= 1 &&
     source.suggestedLabel.length <= 40 &&
+    !hasTerminalControlCharacters(source.suggestedLabel) &&
     typeof source.supportedSurface === "string" &&
     (source.executablePath === undefined || typeof source.executablePath === "string") &&
     (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string")
@@ -141,7 +152,7 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
       : captureAgents.has(source.agentId)
         ? join(stateDirectory, "captures", `${clientSourceId}.jsonl`)
         : null;
-  if (!label || label.length > 40 || dataPath === null) {
+  if (!label || label.length > 40 || hasTerminalControlCharacters(label) || dataPath === null) {
     throw new Error("Local source requires a safe label and data directory");
   }
   return {
@@ -437,6 +448,7 @@ const installedRuntimeFiles = [
   "registry.mjs",
   "runtime.mjs",
   "protocol.mjs",
+  "terminal.mjs",
   "version.mjs",
   "windows-security.mjs",
 ];
@@ -494,6 +506,10 @@ async function installRuntime(sourceUrl) {
     await rm(stagingDirectory, { recursive: true, force: true });
   }
   return installedScript;
+}
+
+export function prepareRuntime(sourceUrl) {
+  return installRuntime(sourceUrl);
 }
 
 function sourceHookCommand(installedScript, source) {
@@ -645,18 +661,25 @@ export async function removeHookForSource(source, options = {}) {
   return false;
 }
 
-export async function reconcileHooks(sourceUrl, activeSources, knownLocalSources = []) {
+export async function reconcileHooks(
+  sourceUrl,
+  activeSources,
+  knownLocalSources = [],
+  { installedScript: preparedScript } = {},
+) {
   const failures = [];
-  let installedScript;
-  try {
-    installedScript = await installRuntime(sourceUrl);
-  } catch (error) {
-    failures.push({
-      agentId: null,
-      clientSourceId: null,
-      path: stateDirectory,
-      message: error instanceof Error ? error.message : "Connector runtime installation failed",
-    });
+  let installedScript = preparedScript;
+  if (!installedScript) {
+    try {
+      installedScript = await prepareRuntime(sourceUrl);
+    } catch (error) {
+      failures.push({
+        agentId: null,
+        clientSourceId: null,
+        path: stateDirectory,
+        message: error instanceof Error ? error.message : "Connector runtime installation failed",
+      });
+    }
   }
   const activeIds = new Set(activeSources.map((source) => source.clientSourceId));
   for (const source of knownLocalSources)

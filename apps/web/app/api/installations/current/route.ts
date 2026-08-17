@@ -1,5 +1,5 @@
 import { digest } from "@/lib/crypto";
-import { problem } from "@/lib/http";
+import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
 import { withRequestLogging } from "@/lib/request-log";
 
@@ -61,6 +61,60 @@ async function get(request: Request): Promise<Response> {
     : problem(401, "unauthorized");
 }
 
+async function post(request: Request): Promise<Response> {
+  const token = bearer(request);
+  if (!token) return problem(401, "unauthorized");
+  try {
+    const body = await readBoundedJson(request, 8_192);
+    if (
+      !isRecord(body) ||
+      Object.keys(body).length !== 1 ||
+      !Array.isArray(body.sourceIds) ||
+      body.sourceIds.length > 100 ||
+      !body.sourceIds.every(isUuid) ||
+      new Set(body.sourceIds).size !== body.sourceIds.length
+    ) {
+      return problem(400, "invalid_request");
+    }
+    const installations = await query<{ id: string }>(
+      "SELECT id::text FROM installations WHERE device_token_hash = $1 AND status = 'active' LIMIT 1",
+      [digest(token)],
+    );
+    const installation = installations[0];
+    if (!installation) return problem(401, "unauthorized");
+    const sourceIds = body.sourceIds;
+    const rows = await query<{
+      source_id: string;
+      status: "active" | "disconnected";
+      last_accepted_sync_sequence: string;
+    }>(
+      `SELECT requested.source_id::text,
+              CASE WHEN source.status = 'active' THEN 'active' ELSE 'disconnected' END AS status,
+              coalesce(source.last_accepted_sync_sequence, 0)::text AS last_accepted_sync_sequence
+         FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(source_id, position)
+         LEFT JOIN installation_sources source
+           ON source.id = requested.source_id
+          AND source.installation_id = $1
+        ORDER BY requested.position`,
+      [installation.id, sourceIds],
+    );
+    return Response.json(
+      {
+        sources: rows.map((source) => ({
+          sourceId: source.source_id,
+          status: source.status,
+          lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
+        })),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    return error instanceof SyntaxError || error instanceof RangeError
+      ? problem(400, "invalid_request")
+      : problem(500, "server_error", error);
+  }
+}
+
 async function remove(request: Request): Promise<Response> {
   const token = bearer(request);
   if (!token) return problem(401, "unauthorized");
@@ -83,4 +137,5 @@ async function remove(request: Request): Promise<Response> {
 }
 
 export const GET = withRequestLogging("/api/installations/current", get);
+export const POST = withRequestLogging("/api/installations/current", post);
 export const DELETE = withRequestLogging("/api/installations/current", remove);

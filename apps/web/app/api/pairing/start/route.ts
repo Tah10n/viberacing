@@ -3,7 +3,14 @@ import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/con
 import { deviceTokenFromPollToken, digest, pairingCode, randomToken } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isSupportedAgent, isSupportedSource, type SupportedAgent } from "@/lib/agents";
-import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
+import {
+  annotateResponse,
+  isRecord,
+  isSafeDisplayText,
+  isUuid,
+  problem,
+  readBoundedJson,
+} from "@/lib/http";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
@@ -66,10 +73,7 @@ function parseSources(value: unknown): PendingSource[] | null {
       typeof source.collectionMethod !== "string" ||
       (source.supportedSurface !== "cli" && source.supportedSurface !== "desktop") ||
       !isSupportedSource(source.agentId, source.collectionMethod, source.supportedSurface) ||
-      (source.suggestedLabel !== undefined &&
-        (typeof source.suggestedLabel !== "string" ||
-          source.suggestedLabel.trim().length < 1 ||
-          source.suggestedLabel.trim().length > 40)) ||
+      (source.suggestedLabel !== undefined && !isSafeDisplayText(source.suggestedLabel, 40)) ||
       seen.has(source.clientSourceId as string)
     ) {
       return null;

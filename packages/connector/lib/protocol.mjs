@@ -1,9 +1,10 @@
+import { hasTerminalControlCharacters } from "./terminal.mjs";
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
 const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/;
-const semverPattern =
-  /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const errorCodePattern = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const responseLimit = 65_536;
 
 function record(value) {
@@ -25,18 +26,16 @@ function invalid(message = "Vibe Racing returned an invalid protocol response") 
 }
 
 function safeText(value, maximum = 500, minimum = 0) {
-  return typeof value === "string" && value.length >= minimum && value.length <= maximum;
+  return (
+    typeof value === "string" &&
+    value.length >= minimum &&
+    value.length <= maximum &&
+    !hasTerminalControlCharacters(value)
+  );
 }
 
 function safeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
-}
-
-function safeTimestamp(value) {
-  if (value === null) return true;
-  if (typeof value !== "string" || value.length > 40) return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString() === value;
 }
 
 function safeVerificationUrl(value, origin, code) {
@@ -202,65 +201,25 @@ function parsePairingPoll(value, context) {
   return { status: "active", deviceToken: value.deviceToken, sources, protocol: value.protocol };
 }
 
-const installationSourceKeys = new Set([
-  "sourceId",
-  "agentId",
-  "status",
-  "collectionMethod",
-  "lastAcceptedSyncSequence",
-  "lastSuccessfulSyncAt",
-  "completeness",
-  "warning",
-  "error",
-  "accountLabel",
-]);
-
-function nullableText(value, maximum = 500) {
-  return value === null || safeText(value, maximum);
-}
-
-function parseInstallation(value, context) {
-  const keys = new Set(["status", "connectorVersion", "lastSyncAt", "sources"]);
-  if (
-    !requiredExactKeys(value, keys) ||
-    value.status !== "active" ||
-    !semverPattern.test(value.connectorVersion) ||
-    !safeTimestamp(value.lastSyncAt) ||
-    !Array.isArray(value.sources) ||
-    value.sources.length > 64
-  )
+function parseReconciliation(value, context) {
+  if (!requiredExactKeys(value, new Set(["sources"])) || !Array.isArray(value.sources))
     throw invalid();
-  const activeIds = new Set(context.sourceIds ?? []);
+  const expected = new Set(context.sourceIds ?? []);
+  if (expected.size > 100 || value.sources.length !== expected.size) throw invalid();
   const seen = new Set();
-  const matched = new Set();
-  const sources = value.sources
-    .map((source) => {
-      if (
-        !requiredExactKeys(source, installationSourceKeys) ||
-        !uuidPattern.test(source.sourceId) ||
-        seen.has(source.sourceId) ||
-        !identifierPattern.test(source.agentId) ||
-        !identifierPattern.test(source.collectionMethod) ||
-        !["active", "disconnected"].includes(source.status) ||
-        !decimalPattern.test(source.lastAcceptedSyncSequence) ||
-        !safeTimestamp(source.lastSuccessfulSyncAt) ||
-        ![null, "complete", "partial"].includes(source.completeness) ||
-        !nullableText(source.warning) ||
-        !nullableText(source.error) ||
-        !safeText(source.accountLabel, 40, 1)
-      )
-        throw invalid();
-      seen.add(source.sourceId);
-      if (!activeIds.has(source.sourceId)) {
-        if (source.status !== "disconnected") throw invalid();
-        return null;
-      }
-      matched.add(source.sourceId);
-      return source;
-    })
-    .filter(Boolean);
-  if (matched.size !== activeIds.size) throw invalid();
-  return { ...value, sources };
+  for (const source of value.sources) {
+    if (
+      !requiredExactKeys(source, new Set(["sourceId", "status", "lastAcceptedSyncSequence"])) ||
+      !expected.has(source.sourceId) ||
+      seen.has(source.sourceId) ||
+      !["active", "disconnected"].includes(source.status) ||
+      !decimalPattern.test(source.lastAcceptedSyncSequence)
+    )
+      throw invalid();
+    seen.add(source.sourceId);
+  }
+  if ([...expected].some((sourceId) => !seen.has(sourceId))) throw invalid();
+  return value;
 }
 
 function parseUsage(value, context) {
@@ -327,13 +286,17 @@ export async function parseProtocolResponse(response, context) {
   }
   const value = parseJsonBody(response, body);
   if (!response.ok) {
-    if (!requiredExactKeys(value, new Set(["error"])) || !safeText(value.error, 128, 1))
+    if (
+      !requiredExactKeys(value, new Set(["error"])) ||
+      !safeText(value.error, 128, 1) ||
+      !errorCodePattern.test(value.error)
+    )
       throw invalid();
     return { error: value.error };
   }
   if (context.kind === "pairingStart") return parsePairingStart(value, context);
   if (context.kind === "pairingPoll") return parsePairingPoll(value, context);
-  if (context.kind === "installation") return parseInstallation(value, context);
+  if (context.kind === "reconciliation") return parseReconciliation(value, context);
   if (context.kind === "usage") return parseUsage(value, context);
   throw invalid();
 }

@@ -9,7 +9,7 @@ const packageRoot = "packages/connector";
 const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
 execFileSync(
   process.execPath,
-  [resolve(root, "scripts/generate-connector-version.mjs"), "--check"],
+  [resolve(root, packageRoot, "scripts/generate-version.mjs"), "--check"],
   {
     cwd: root,
   },
@@ -56,8 +56,16 @@ if (results.length !== 1 || !Array.isArray(results[0]?.files)) {
 
 const paths = results[0].files.map(({ path }) => path.replaceAll("\\", "/"));
 const files = new Set(paths);
-const requiredFiles = ["LICENSE", "README.md", "package.json", "bin/viberacing.mjs"];
-requiredFiles.push("lib/protocol.mjs", "lib/version.mjs");
+const requiredFiles = [
+  "LICENSE",
+  "README.md",
+  "package.json",
+  "bin/viberacing.mjs",
+  "lib/protocol.mjs",
+  "lib/terminal.mjs",
+  "lib/version.mjs",
+  "scripts/generate-version.mjs",
+];
 
 const expectedTarball = `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`;
 if (results[0].filename !== expectedTarball) {

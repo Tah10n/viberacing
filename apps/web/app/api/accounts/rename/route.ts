@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
-import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
+import { isSafeDisplayText, isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
 
@@ -13,7 +13,7 @@ async function post(request: Request): Promise<Response> {
     const form = await readBoundedForm(request);
     const accountId = form.get("accountId");
     const label = form.get("label")?.trim();
-    if (!isUuid(accountId) || !label || label.length > 40) return problem(400, "invalid_request");
+    if (!isUuid(accountId) || !isSafeDisplayText(label, 40)) return problem(400, "invalid_request");
     const changed = await query<{ id: string }>(
       "UPDATE agent_accounts SET label = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id::text",
       [label, accountId, current.id],
