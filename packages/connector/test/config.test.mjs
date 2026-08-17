@@ -4740,6 +4740,57 @@ test("disconnected commands are clear and disconnect remains idempotent", async 
   assert.equal(result.stderr, "");
 });
 
+test("disconnect warns when a pending pairing cancellation cannot be confirmed without config", async (context) => {
+  let cancellationRequests = 0;
+  const server = createServer((request) => {
+    if (request.url === "/api/pairing/cancel" && request.method === "POST") {
+      cancellationRequests += 1;
+      request.socket.destroy();
+      return;
+    }
+    request.socket.destroy();
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-unconfirmed-pairing-cancel-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    join(directory, "connect-attempt.json"),
+    `${JSON.stringify({
+      version: 1,
+      attemptId: randomUUID(),
+      installationId: randomUUID(),
+      sourceRegistryRevision: randomUUID(),
+      origin: `http://127.0.0.1:${address.port}`,
+      startedAt: new Date().toISOString(),
+      pollToken: "unconfirmed_pairing_poll_token_long_enough",
+    })}\n`,
+  );
+
+  const environment = connectorEnvironment(home);
+  const result = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: environment,
+  });
+  assert.match(result.stdout, /Installation disconnected locally/);
+  assert.match(result.stderr, /remote pairing cancellation could not be confirmed/i);
+  assert.equal(cancellationRequests, 1);
+  await assert.rejects(access(join(directory, "connect-attempt.json")));
+  await assert.rejects(access(join(directory, "config.json")));
+
+  const repeated = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: environment,
+  });
+  assert.equal(repeated.stderr, "");
+  assert.equal(cancellationRequests, 1);
+});
+
 test("uninstall removes v2 and source-owned hooks from remembered custom roots", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-custom-roots-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));

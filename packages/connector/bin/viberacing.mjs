@@ -235,7 +235,7 @@ async function cancelPairingAttempt(attempt) {
     typeof attempt?.installationId !== "string" ||
     typeof attempt?.pollToken !== "string"
   )
-    return false;
+    return { status: "not_needed" };
   try {
     await request(
       attempt.origin,
@@ -251,15 +251,15 @@ async function cancelPairingAttempt(attempt) {
       1,
       { kind: "empty" },
     );
-    return true;
-  } catch {
-    return false;
+    return { status: "confirmed" };
+  } catch (error) {
+    return { status: "unconfirmed", error };
   }
 }
 
 async function invalidateAndCancelConnectAttempt() {
   const attempt = await invalidateConnectAttempt();
-  return { attempt, cancelled: await cancelPairingAttempt(attempt) };
+  return { attempt, cancellation: await cancelPairingAttempt(attempt) };
 }
 
 function publicSource(source) {
@@ -345,7 +345,7 @@ async function connect() {
   const installation = await readOrCreateInstallation();
   const abandonedAttempt = await invalidateAndCancelConnectAttempt();
   const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id, {
-    clearAfterCancelledAttempt: abandonedAttempt.cancelled,
+    clearAfterCancelledAttempt: abandonedAttempt.cancellation.status === "confirmed",
   });
   const pairingLocalSources = new Map(sources);
   if (previousConfig !== null) {
@@ -1524,9 +1524,11 @@ try {
   else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
   else if (command === "disconnect") {
     let remoteError;
+    let remotePairingCancellationUnconfirmed = false;
     let localWarnings = 0;
     await withLifecycleMutation(async () => {
       const pending = await invalidateAndCancelConnectAttempt();
+      remotePairingCancellationUnconfirmed = pending.cancellation.status === "unconfirmed";
       try {
         const config = await readConfig();
         await request(
@@ -1541,13 +1543,18 @@ try {
         );
       } catch (error) {
         const cancelledRotatedToken =
-          pending.cancelled && (error?.status === 401 || error?.status === 403);
+          pending.cancellation.status === "confirmed" &&
+          (error?.status === 401 || error?.status === 403);
         if (error?.code !== "ENOENT" && !cancelledRotatedToken) remoteError = error;
       } finally {
         localWarnings = await disableLocalConnection(true);
       }
     });
     output("Installation disconnected locally; provider histories were not changed.");
+    if (remotePairingCancellationUnconfirmed)
+      warning(
+        "Vibe Racing warning: remote pairing cancellation could not be confirmed; the local connection attempt was invalidated.",
+      );
     if (remoteError)
       warning(
         "Vibe Racing warning: remote revoke could not be confirmed; the local token and hooks were removed.",
