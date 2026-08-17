@@ -419,7 +419,12 @@ try {
     "same sequence was not idempotent",
   );
   const currentInstallation = await fetch(`${appUrl}/api/installations/current`, {
-    headers: { authorization: `Bearer ${first.deviceToken}` },
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${first.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ sourceIds: [target] }),
   });
   const currentInstallationBody = await currentInstallation.json();
   check(
@@ -1033,20 +1038,12 @@ try {
         byClient.get("codex-personal-a").agentAccountId,
       ],
     );
-    const boundedInstallation = await fetch(`${appUrl}/api/installations/current`, {
+    const removedDetailedInstallation = await fetch(`${appUrl}/api/installations/current`, {
       headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },
     });
-    const boundedBody = await boundedInstallation.json();
-    const activeInstallationSources = await pool.query(
-      "SELECT count(*)::int AS count FROM installation_sources WHERE installation_id = $1 AND status = 'active'",
-      [firstInstallation.id],
-    );
     check(
-      boundedInstallation.status === 200 &&
-        boundedBody.sources.length <= 64 &&
-        boundedBody.sources.filter((source) => source.status === "active").length ===
-          activeInstallationSources.rows[0].count,
-      "installation reconciliation response did not bound history while retaining active sources",
+      removedDetailedInstallation.status === 405,
+      "unused detailed installation GET contract is still exposed",
     );
     await pool.query(
       `INSERT INTO installation_sources
@@ -1101,12 +1098,71 @@ try {
         retiredBody.sources[73]?.status === "disconnected",
       "exact reconciliation did not explicitly retire a disconnected source",
     );
+
+    await pool.query(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         'reconciliation_global', $1,
+         to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+         10000,
+         to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+      [digest("all")],
+    );
+    let limitedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: [exactSourceIds[0]] }),
+    });
+    check(
+      limitedReconciliation.status === 429 &&
+        limitedReconciliation.headers.get("retry-after") === "60",
+      "global reconciliation rate limit did not return Retry-After",
+    );
+    await pool.query("DELETE FROM rate_limit_buckets WHERE scope = 'reconciliation_global'");
+    await pool.query(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         'reconciliation_installation', $1,
+         to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+         60,
+         to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+      [digest(firstInstallation.id)],
+    );
+    limitedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: [exactSourceIds[0]] }),
+    });
+    check(
+      limitedReconciliation.status === 429 &&
+        limitedReconciliation.headers.get("retry-after") === "60",
+      "per-installation reconciliation rate limit did not return Retry-After",
+    );
   } finally {
+    await pool.query(
+      "DELETE FROM rate_limit_buckets WHERE scope IN ('reconciliation_global', 'reconciliation_installation')",
+    );
     await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
       [...historicalSourceIds, ...exactSourceIds],
     ]);
   }
-  console.log("ok - bounded dashboard history and exact reconciliation cover 100 active sources");
+  console.log(
+    "ok - compact exact reconciliation covers 100 active sources, large history, and both rate limits",
+  );
   const originalRequiredMigration = await pool.query(
     "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
   );

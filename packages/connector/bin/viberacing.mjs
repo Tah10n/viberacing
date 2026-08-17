@@ -17,6 +17,7 @@ import {
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
+import { disableLocalConnection } from "../lib/connection-lifecycle.mjs";
 import { sanitizeTerminalText } from "../lib/terminal.mjs";
 import {
   executableOverride,
@@ -34,7 +35,6 @@ import {
   readSources,
   rememberSourceExecutable,
   reconcileDetectedSources,
-  removeConfig,
   removeHookForSource,
   removeHooks,
   removeLocalState,
@@ -42,6 +42,7 @@ import {
   resetInstallation,
   stateDirectory,
   writeConfig,
+  withConnectionConfig,
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
@@ -52,7 +53,6 @@ import {
   clearAutomaticState,
   clearDirty,
   clearDirtyForSources,
-  clearPendingPayloads,
   clearQuarantine,
   markDirty,
   dirtyClaims,
@@ -230,6 +230,34 @@ async function exactPairingSources(sources) {
   return result;
 }
 
+async function reconcilePreviousConnectionBeforePairing(origin, installationId) {
+  return withLifecycleMutation(async () => {
+    let previousConfig;
+    try {
+      previousConfig = await readConfig();
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+    if (previousConfig.origin !== origin || previousConfig.installationId !== installationId)
+      return null;
+    let remote;
+    try {
+      remote = await requestReconciliation(previousConfig);
+    } catch (error) {
+      if (error?.status === 401 || error?.status === 403) {
+        throw new Error(
+          "Existing installation authorization cannot be reconciled; run `viberacing disconnect` before reconnecting",
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+    await reconcileRemoteSources(previousConfig, remote.sources, { allowDuringLifecycle: true });
+    return previousConfig;
+  });
+}
+
 async function connect() {
   const origin = normalizedOrigin(option("--origin", "https://viberacing.com"));
   output("Detecting supported agent sources…");
@@ -251,26 +279,24 @@ async function connect() {
     );
   const installedRuntime = await prepareRuntime(import.meta.url);
   const installation = await readOrCreateInstallation();
+  const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id);
   const pairingLocalSources = new Map(sources);
-  try {
-    const previousConfig = await readConfig();
-    if (previousConfig.origin === origin && previousConfig.installationId === installation.id) {
-      const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
-      for (const previous of previousConfig.sources) {
-        const local = localById.get(previous.clientSourceId);
-        if (
-          local &&
-          local.agentId === previous.agentId &&
-          local.collectionMethod === previous.collectionMethod
-        ) {
-          pairingLocalSources.set(previous.clientSourceId, {
-            ...local,
-            sourceId: previous.sourceId,
-          });
-        }
+  if (previousConfig !== null) {
+    const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
+    for (const previous of previousConfig.sources) {
+      const local = localById.get(previous.clientSourceId);
+      if (
+        local &&
+        local.agentId === previous.agentId &&
+        local.collectionMethod === previous.collectionMethod
+      ) {
+        pairingLocalSources.set(previous.clientSourceId, {
+          ...local,
+          sourceId: previous.sourceId,
+        });
       }
     }
-  } catch {}
+  }
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
   const pairing = await request(
     origin,
@@ -445,8 +471,8 @@ async function forgetSourceState(sourceIds) {
   await writeState(state);
 }
 
-async function retireMappedSources(config, sourceIds) {
-  if (await lifecycleMutationActive())
+async function retireMappedSources(config, sourceIds, options = {}) {
+  if (!options.allowDuringLifecycle && (await lifecycleMutationActive()))
     throw new Error("Source retirement stopped by a local lifecycle operation");
   const retired = new Set(sourceIds);
   const mappings = config.sources.filter((source) => retired.has(source.sourceId));
@@ -483,21 +509,12 @@ async function requestReconciliation(config, attempts = 1) {
   );
 }
 
-async function reconcileRemoteSources(config, remoteSources) {
+async function reconcileRemoteSources(config, remoteSources, options = {}) {
   const configured = new Set(config.sources.map((source) => source.sourceId));
   const retired = (remoteSources ?? [])
     .filter((source) => source.status === "disconnected" && configured.has(source.sourceId))
     .map((source) => source.sourceId);
-  if (retired.length > 0) await retireMappedSources(config, retired);
-}
-
-async function disableLocalConnection(clearPending = false) {
-  const operations = [removeHooks(), removeConfig(), clearAutomaticState()];
-  if (clearPending) operations.push(clearPendingPayloads());
-  const results = await Promise.allSettled(operations);
-  if (results[1].status === "rejected") throw results[1].reason;
-  const hookFailures = results[0].status === "fulfilled" ? results[0].value.failures.length : 1;
-  return hookFailures + results.slice(1).filter((result) => result.status === "rejected").length;
+  if (retired.length > 0) await retireMappedSources(config, retired, options);
 }
 
 async function compactSuccessfulCaptures(config) {
@@ -953,17 +970,28 @@ async function hook() {
     }
     const clientSourceId = option("--source");
     const agentId = option("--agent");
-    const config = await readConfig();
-    const active = config.sources.some(
-      (source) =>
-        source.clientSourceId === clientSourceId &&
-        source.agentId === agentId &&
-        typeof source.sourceId === "string",
+    if (await lifecycleMutationActive())
+      throw new Error("Provider hook stopped by a local lifecycle operation");
+    await withConnectionConfig(
+      async (config) => {
+        const active = config.sources.some(
+          (source) =>
+            source.clientSourceId === clientSourceId &&
+            source.agentId === agentId &&
+            typeof source.sourceId === "string",
+        );
+        if (active) {
+          await markDirty(clientSourceId);
+          await launchAutomaticScheduler();
+        }
+      },
+      {
+        beforeRecovery: async () => {
+          if (await lifecycleMutationActive())
+            throw new Error("Provider hook stopped by a local lifecycle operation");
+        },
+      },
     );
-    if (active) {
-      await markDirty(clientSourceId);
-      await launchAutomaticScheduler();
-    }
   } catch {
     // Provider hooks are fail-open: local scheduling failures must never affect the agent.
   }

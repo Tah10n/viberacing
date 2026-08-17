@@ -142,7 +142,7 @@ jobs:
       - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Enforce append-only published migrations
+      - name: Enforce append-only and monotonic published migrations
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -152,6 +152,20 @@ jobs:
             printf 'Published migrations are append-only:\n%s\n' "$changed" >&2
             exit 1
           fi
+          base_max="$(git ls-tree -r --name-only "$BASE_SHA" -- apps/web/database \
+            | sed -n 's#^apps/web/database/\([0-9][0-9][0-9]\)_[a-z0-9_]*\.sql$#\1#p' \
+            | sort | tail -n 1)"
+          while IFS= read -r added; do
+            test -n "$added" || continue
+            name="${added##*/}"
+            number="${name%%_*}"
+            if test -n "$base_max" && test "$number" -le "$base_max"; then
+              echo "Added migration $name must be numbered above base maximum $base_max" >&2
+              exit 1
+            fi
+          done <<EOF
+          $(git diff --diff-filter=A --name-only "$BASE_SHA" HEAD -- 'apps/web/database/*.sql')
+          EOF
       - name: Verify source, unit tests, and production build
         run: pnpm verify
       - name: Migrate an empty database twice

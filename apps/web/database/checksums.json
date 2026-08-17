@@ -1,6 +1,5 @@
 {
   "001_initial.sql": "3411129219157bc20ea92aa820340ec19ea288ad0c7b71ddb790a0aa42629bf0",
-  "002_remove_uncounted_usage.sql": "04c1f30a84d39a83798b54b2f1e19768353ff2e1100b58fb3b6f9b1c4f886ba9",
   "003_pairing_superseded_sources.sql": "93eee9892f5f40e87592aaaaf1fe0b117233cd9041c76e05e9e04ac40ed3c5ac",
-  "004_integrity_hardening.sql": "f6ab26ea54124b588de92c5a40fb0a4f6e166fee0bee6bce73c07f0a9c790722"
+  "004_integrity_hardening.sql": "62730172e34a03fc3dcdb5cba4bcab64b2a36a40870cc32e20de9978f73a3f3b"
 }

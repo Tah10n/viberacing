@@ -26,6 +26,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
+const connectionStateChildPath = fileURLToPath(
+  new URL("../test-support/connection-state-child.mjs", import.meta.url),
+);
 
 const sourceIds = new Map();
 function source(agentId) {
@@ -434,6 +437,181 @@ test("recovers a connection commit interrupted before the source registry is pub
   } finally {
     restoreEnvironment();
     await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("disconnect wins both connection-state lock orders and provider hooks cannot resurrect state", async () => {
+  for (const order of ["recovery-first", "disconnect-first"]) {
+    const home = await mkdtemp(join(tmpdir(), `viberacing-connection-race-${order}-`));
+    const restoreEnvironment = useModuleEnvironment(home);
+    const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+    const directory = join(home, ".viberacing");
+    const barrier = join(home, `connection-${order}`);
+    const disconnectBarrier = `${barrier}-disconnect`;
+    const clientSourceId = "88888888-8888-4888-8888-888888888888";
+    const sourceId = "89898989-8989-4989-8989-898989898989";
+    const deviceToken = `device_token_that_must_not_survive_${order}_race`;
+    const hookRoot = join(home, ".claude");
+    const localSource = {
+      clientSourceId,
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: hookRoot,
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+      hookConfigRoot: hookRoot,
+    };
+    let recovery;
+    let disconnect;
+    try {
+      const module = await import(
+        `../lib/config.mjs?connection-race=${order}-${encodeURIComponent(home)}`
+      );
+      await mkdir(hookRoot, { recursive: true });
+      await module.writeSources([localSource]);
+      await writeFile(
+        join(hookRoot, "settings.json"),
+        `${JSON.stringify({
+          hooks: {
+            Stop: [
+              {
+                hooks: [
+                  {
+                    type: "command",
+                    command: `node hook ${module.hookMarkerForSource(clientSourceId)}`,
+                  },
+                ],
+              },
+            ],
+          },
+        })}\n`,
+      );
+      await assert.rejects(
+        module.commitConnectionState(
+          {
+            version: 2,
+            origin: "https://viberacing.example",
+            installationId: "87878787-8787-4787-8787-878787878787",
+            deviceToken,
+            sources: [
+              {
+                ...localSource,
+                sourceId,
+                agentAccountId: "86868686-8686-4686-8686-868686868686",
+                accountLabel: "Personal",
+                lastAcceptedSyncSequence: "7",
+              },
+            ],
+            protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+          },
+          [localSource],
+          {
+            afterConfigCommit() {
+              throw new Error("Synthetic interrupted connection commit");
+            },
+          },
+        ),
+        /Synthetic interrupted connection commit/,
+      );
+      await mkdir(join(directory, "pending"), { recursive: true });
+      await writeFile(join(directory, "pending", `${sourceId}.json`), '{"pending":true}\n');
+      await writeFile(join(directory, "dirty.json"), '{"version":2,"sources":{}}\n');
+      await writeFile(
+        join(directory, "scheduler.lock"),
+        `${process.pid}:99999999-9999-4999-8999-999999999999\n`,
+      );
+      restoreEnvironment();
+
+      const spawnStateChild = (action, pause, barrierPath = barrier) => {
+        const child = spawn(process.execPath, [connectionStateChildPath, action], {
+          env: {
+            ...environment,
+            ...(pause
+              ? {
+                  VIBERACING_TEST_CONNECTION_STATE_PAUSE: pause,
+                  VIBERACING_TEST_CONNECTION_STATE_BARRIER: barrierPath,
+                }
+              : {}),
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stderr = "";
+        child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+        return {
+          child,
+          result: once(child, "close").then(([code]) => ({ code, stderr })),
+        };
+      };
+
+      if (order === "recovery-first") {
+        recovery = spawnStateChild("recover", "recovery_after_read");
+        await waitFor(() =>
+          access(`${barrier}.ready`)
+            .then(() => true)
+            .catch(() => false),
+        );
+        disconnect = spawnStateChild("disconnect-local", "remove_after_lock", disconnectBarrier);
+        await waitFor(() =>
+          access(join(directory, "lifecycle.lock"))
+            .then(() => true)
+            .catch(() => false),
+        );
+        await writeFile(`${barrier}.continue`, "continue\n");
+        await waitFor(() =>
+          access(`${disconnectBarrier}.ready`)
+            .then(() => true)
+            .catch(() => false),
+        );
+      } else {
+        disconnect = spawnStateChild("disconnect-local", "remove_after_lock");
+        await waitFor(() =>
+          access(`${barrier}.ready`)
+            .then(() => true)
+            .catch(() => false),
+        );
+        recovery = spawnStateChild("recover-optional");
+        await delay(50);
+        assert.equal(recovery.child.exitCode, null, "recovery did not wait for disconnect lock");
+      }
+
+      const hook = await runWithInput(
+        ["hook", "--source", clientSourceId, "--agent", "claude_code"],
+        environment,
+        '{"private":"discarded"}',
+      );
+      assert.equal(hook.code, 0);
+      await writeFile(
+        `${order === "recovery-first" ? disconnectBarrier : barrier}.continue`,
+        "continue\n",
+      );
+      const [recoveryResult, disconnectResult] = await Promise.all([
+        recovery.result,
+        disconnect.result,
+      ]);
+      assert.deepEqual(recoveryResult, { code: 0, stderr: "" });
+      assert.deepEqual(disconnectResult, { code: 0, stderr: "" });
+
+      for (const name of [
+        "config.json",
+        "connection-commit.json",
+        "connection-state.lock",
+        "dirty.json",
+        "scheduler.lock",
+        "lifecycle.lock",
+        "lifecycle-revoking.lock",
+      ])
+        await assert.rejects(access(join(directory, name)));
+      assert.deepEqual(
+        (await readdir(join(directory, "pending"))).filter((name) => name.endsWith(".json")),
+        [],
+      );
+      assert.doesNotMatch(await readFile(join(hookRoot, "settings.json"), "utf8"), /viberacing/);
+    } finally {
+      restoreEnvironment();
+      recovery?.child.kill();
+      disconnect?.child.kill();
+      await rm(home, { recursive: true, force: true });
+    }
   }
 });
 
@@ -2193,6 +2371,223 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
     env: environment,
   });
   assert.match(await readFile(hookPath, "utf8"), /viberacing-hook-v3/);
+});
+
+test("reconnect retires only an explicitly disconnected unavailable source before pairing", async (context) => {
+  let mode = "malformed";
+  let pairingStarts = 0;
+  let pairingBody;
+  const installationId = "74747474-7474-4474-8474-747474747474";
+  const retiredClientSourceId = "75757575-7575-4575-8575-757575757575";
+  const activeClientSourceId = "76767676-7676-4676-8676-767676767676";
+  const retiredSourceId = "77777777-7777-4777-8777-777777777777";
+  const activeSourceId = "78787878-7878-4878-8878-787878787878";
+  const activeMapping = {
+    clientSourceId: activeClientSourceId,
+    sourceId: activeSourceId,
+    agentAccountId: "79797979-7979-4979-8979-797979797979",
+    agentId: "antigravity",
+    accountLabel: "Available",
+    collectionMethod: "antigravity_cli_capture",
+    lastAcceptedSyncSequence: "3",
+  };
+  const retiredMapping = {
+    clientSourceId: retiredClientSourceId,
+    sourceId: retiredSourceId,
+    agentAccountId: "80808080-8080-4080-8080-808080808080",
+    agentId: "claude_code",
+    accountLabel: "Unavailable",
+    collectionMethod: "claude_jsonl",
+    lastAcceptedSyncSequence: "2",
+  };
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        if (mode === "malformed") {
+          response.end(JSON.stringify(reconciliationResponse([activeMapping])));
+          return;
+        }
+        if (mode === "transient") {
+          response.statusCode = 503;
+          response.end(JSON.stringify({ error: "server_error" }));
+          return;
+        }
+        if (mode === "unauthorized") {
+          response.statusCode = 401;
+          response.end(JSON.stringify({ error: "unauthorized" }));
+          return;
+        }
+        response.end(
+          JSON.stringify(
+            reconciliationResponse([
+              { ...retiredMapping, status: "disconnected" },
+              { ...activeMapping, status: "active" },
+            ]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/start") {
+        pairingStarts += 1;
+        pairingBody = body;
+        response.statusCode = 201;
+        response.end(
+          JSON.stringify({
+            installationId,
+            code: "ABCDEFGH",
+            pollToken: "dashboard_disconnect_poll_token_long_enough",
+            verificationUrl: `http://${request.headers.host}/connect?code=ABCDEFGH`,
+            expiresInSeconds: 30,
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/poll") {
+        response.end(
+          JSON.stringify({
+            status: "active",
+            deviceToken: "dashboard_disconnect_device_token_long_enough",
+            protocol: {
+              version: 2,
+              snapshotDays: 31,
+              maximumSources: 32,
+              maximumEntries: 1_024,
+            },
+            sources: [activeMapping],
+          }),
+        );
+        return;
+      }
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const origin = `http://127.0.0.1:${address.port}`;
+  const home = await mkdtemp(join(tmpdir(), "viberacing-dashboard-disconnect-reconnect-"));
+  context.after(() => rm(home, { recursive: true }));
+  const directory = join(home, ".viberacing");
+  const capture = join(directory, "captures", `${activeClientSourceId}.jsonl`);
+  const hookRoot = join(home, ".claude");
+  await mkdir(join(directory, "captures"), { recursive: true });
+  await mkdir(hookRoot, { recursive: true });
+  await writeFile(capture, "");
+  await writeLocalSources(directory, [
+    {
+      clientSourceId: retiredClientSourceId,
+      agentId: "claude_code",
+      dataPath: join(hookRoot, "projects"),
+      hookConfigRoot: hookRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Unavailable",
+    },
+    {
+      clientSourceId: activeClientSourceId,
+      agentId: "antigravity",
+      dataPath: capture,
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Available",
+    },
+  ]);
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: installationId,
+      secret: "dashboard_disconnect_installation_secret_long_enough",
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin,
+      installationId,
+      deviceToken: "dashboard_disconnect_previous_token_long_enough",
+      sources: [retiredMapping, activeMapping],
+      protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [retiredSourceId]: "2", [activeSourceId]: "3" },
+    })}\n`,
+  );
+  await writeFile(
+    join(hookRoot, "settings.json"),
+    `${JSON.stringify({
+      hooks: {
+        Stop: [
+          { hooks: [{ command: "keep-foreign" }] },
+          {
+            hooks: [
+              {
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${retiredClientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    })}\n`,
+  );
+  const configBefore = await readFile(join(directory, "config.json"));
+  const hookBefore = await readFile(join(hookRoot, "settings.json"));
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    PATH: "",
+    VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+  });
+
+  for (const failure of [
+    ["malformed", /invalid protocol response/],
+    ["transient", /server_error/],
+    [
+      "unauthorized",
+      /Existing installation authorization cannot be reconciled; run `viberacing disconnect`/,
+    ],
+  ]) {
+    mode = failure[0];
+    await assert.rejects(
+      execFileAsync(process.execPath, [connectorPath, "connect", "--origin", origin], {
+        env: environment,
+      }),
+      failure[1],
+    );
+    assert.deepEqual(await readFile(join(directory, "config.json")), configBefore);
+    assert.deepEqual(await readFile(join(hookRoot, "settings.json")), hookBefore);
+    assert.equal(pairingStarts, 0);
+  }
+
+  mode = "disconnected";
+  await execFileAsync(process.execPath, [connectorPath, "connect", "--origin", origin], {
+    env: environment,
+  });
+  assert.equal(pairingStarts, 1);
+  assert.deepEqual(
+    pairingBody.sources.map((source) => source.clientSourceId),
+    [activeClientSourceId],
+  );
+  const connected = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(connected.deviceToken, "dashboard_disconnect_device_token_long_enough");
+  assert.deepEqual(
+    connected.sources.map((source) => source.sourceId),
+    [activeSourceId],
+  );
+  const hook = await readFile(join(hookRoot, "settings.json"), "utf8");
+  assert.match(hook, /keep-foreign/);
+  assert.doesNotMatch(hook, new RegExp(retiredClientSourceId));
 });
 
 test("hostile pairing response cannot change config, hooks, or local paths", async (context) => {

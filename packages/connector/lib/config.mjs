@@ -13,9 +13,11 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
 import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
+import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { mergeStoredSourceMapping } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { connectorVersion } from "./version.mjs";
@@ -28,6 +30,7 @@ const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
+const connectionStateLockPath = join(stateDirectory, "connection-state.lock");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
 let stateDirectorySecurity;
@@ -89,6 +92,42 @@ async function atomicJson(path, value, { beforeRename } = {}) {
   }
 }
 
+async function waitForTestConnectionBarrier(stage) {
+  if (
+    process.env.NODE_ENV !== "test" ||
+    process.env.VIBERACING_TEST_CONNECTION_STATE_PAUSE !== stage ||
+    !process.env.VIBERACING_TEST_CONNECTION_STATE_BARRIER
+  )
+    return;
+  const barrier = resolve(process.env.VIBERACING_TEST_CONNECTION_STATE_BARRIER);
+  const ready = `${barrier}.ready`;
+  const continued = `${barrier}.continue`;
+  await writeFile(ready, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      await access(continued);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (Date.now() >= deadline) throw new Error("Timed out at connection-state test barrier");
+    await delay(10);
+  }
+}
+
+export async function withConnectionStateLock(callback) {
+  await ensurePrivateStateDirectory();
+  const waitMs = process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  const lock = await acquireOwnedLock(connectionStateLockPath, { waitMs });
+  if (!lock) throw new Error("Timed out waiting for connector connection state");
+  try {
+    return await callback();
+  } finally {
+    await releaseOwnedLock(lock);
+  }
+}
+
 function serializedConfig(config) {
   if (config === null || typeof config !== "object" || Array.isArray(config))
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
@@ -138,7 +177,7 @@ function validateCommittedConfig(config, sources) {
     throw new Error("Interrupted connector connection state is invalid");
 }
 
-async function recoverConnectionCommit() {
+async function recoverConnectionCommitUnlocked() {
   let commit;
   try {
     commit = JSON.parse(await readFile(connectionCommitPath, "utf8"));
@@ -146,6 +185,7 @@ async function recoverConnectionCommit() {
     if (error?.code === "ENOENT") return false;
     throw new Error("Interrupted connector connection state is unreadable", { cause: error });
   }
+  await waitForTestConnectionBarrier("recovery_after_read");
   if (
     commit?.version !== 1 ||
     commit.sources?.version !== 1 ||
@@ -163,13 +203,29 @@ async function recoverConnectionCommit() {
   return true;
 }
 
-export async function readConfig() {
-  await ensurePrivateStateDirectory();
-  await recoverConnectionCommit();
+async function readSourcesUnlocked() {
+  try {
+    const value = JSON.parse(await readFile(sourcesPath, "utf8"));
+    if (
+      value?.version !== 1 ||
+      !Array.isArray(value.sources) ||
+      !value.sources.every(validLocalSource)
+    )
+      throw new Error("Local source configuration is unsupported");
+    return value.sources.map((source) => normalizedLocalSource(source, source.clientSourceId));
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function readConfigUnlocked() {
   const value = JSON.parse(await readFile(configPath, "utf8"));
   if (value?.version !== 2 || typeof value.origin !== "string" || !Array.isArray(value.sources))
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
-  const localById = new Map((await readSources()).map((source) => [source.clientSourceId, source]));
+  const localById = new Map(
+    (await readSourcesUnlocked()).map((source) => [source.clientSourceId, source]),
+  );
   return {
     ...value,
     sources: value.sources
@@ -181,9 +237,23 @@ export async function readConfig() {
   };
 }
 
+export async function withConnectionConfig(callback, options = {}) {
+  return withConnectionStateLock(async () => {
+    await options.beforeRecovery?.();
+    await recoverConnectionCommitUnlocked();
+    return callback(await readConfigUnlocked());
+  });
+}
+
+export async function readConfig(options = {}) {
+  return withConnectionConfig((config) => config, options);
+}
+
 export async function writeConfig(config, options) {
-  await recoverConnectionCommit();
-  await atomicJson(configPath, serializedConfig(config), options);
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    await atomicJson(configPath, serializedConfig(config), options);
+  });
 }
 
 function validLocalSource(source) {
@@ -234,47 +304,41 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
 }
 
 export async function readSources() {
-  await ensurePrivateStateDirectory();
-  await recoverConnectionCommit();
-  try {
-    const value = JSON.parse(await readFile(sourcesPath, "utf8"));
-    if (
-      value?.version !== 1 ||
-      !Array.isArray(value.sources) ||
-      !value.sources.every(validLocalSource)
-    )
-      throw new Error("Local source configuration is unsupported");
-    return value.sources.map((source) => normalizedLocalSource(source, source.clientSourceId));
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    return readSourcesUnlocked();
+  });
 }
 
 export async function writeSources(sources) {
-  await recoverConnectionCommit();
-  const normalized = await normalizedSources(sources);
-  await atomicJson(sourcesPath, { version: 1, sources: normalized });
-  return normalized;
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const normalized = await normalizedSources(sources);
+    await atomicJson(sourcesPath, { version: 1, sources: normalized });
+    return normalized;
+  });
 }
 
 export async function commitConnectionState(config, sources, options = {}) {
-  const normalized = await normalizedSources(sources);
-  const storedConfig = serializedConfig(config);
-  validateCommittedConfig(storedConfig, normalized);
-  await options.beforeCommit?.();
-  await atomicJson(connectionCommitPath, {
-    version: 1,
-    config: storedConfig,
-    sources: { version: 1, sources: normalized },
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const normalized = await normalizedSources(sources);
+    const storedConfig = serializedConfig(config);
+    validateCommittedConfig(storedConfig, normalized);
+    await options.beforeCommit?.();
+    await atomicJson(connectionCommitPath, {
+      version: 1,
+      config: storedConfig,
+      sources: { version: 1, sources: normalized },
+    });
+    await atomicJson(configPath, storedConfig);
+    await options.afterConfigCommit?.();
+    await atomicJson(sourcesPath, { version: 1, sources: normalized });
+    await unlink(connectionCommitPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+    return normalized;
   });
-  await atomicJson(configPath, storedConfig);
-  await options.afterConfigCommit?.();
-  await atomicJson(sourcesPath, { version: 1, sources: normalized });
-  await unlink(connectionCommitPath).catch((error) => {
-    if (error?.code !== "ENOENT") throw error;
-  });
-  return normalized;
 }
 
 export async function addSource(source) {
@@ -852,12 +916,15 @@ export async function removeHooks() {
 }
 
 export async function removeConfig() {
-  for (const path of [configPath, connectionCommitPath])
-    try {
-      await unlink(path);
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
+  return withConnectionStateLock(async () => {
+    await waitForTestConnectionBarrier("remove_after_lock");
+    for (const path of [configPath, connectionCommitPath])
+      try {
+        await unlink(path);
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+  });
 }
 
 export async function resetInstallation() {
