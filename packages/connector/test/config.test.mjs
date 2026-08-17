@@ -2408,7 +2408,7 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
     child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
     return {
       child,
-      result: once(child, "close").then(([code]) => ({ code, stderr })),
+      result: once(child, "close").then(([code, signal]) => ({ code, signal, stderr })),
     };
   };
   const runBarrierRace = async (stage, lifecycleArguments = ["disconnect"]) => {
@@ -2500,9 +2500,19 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
   await writePreviousConnection();
   serverState = "active";
   nextPairingState = "active";
-  const interrupted = spawnConnect({ VIBERACING_TEST_INTERRUPT_AFTER_ACTIVE_POLL: "1" });
+  const interruptionBarrier = join(home, `connect-interruption-${randomUUID()}`);
+  const interrupted = spawnConnect({
+    VIBERACING_TEST_CONNECT_PAUSE: "after_active_poll",
+    VIBERACING_TEST_CONNECT_BARRIER: interruptionBarrier,
+  });
+  await waitFor(() =>
+    access(`${interruptionBarrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  assert.equal(interrupted.child.kill("SIGKILL"), true);
   const interruptedResult = await interrupted.result;
-  assert.equal(interruptedResult.code, 87);
+  assert.ok(interruptedResult.signal !== null || interruptedResult.code !== 0);
   await access(join(directory, "connect-attempt.json"));
   nextPairingState = "pending";
   const restartedResult = await runBarrierRace("after_pairing_start");

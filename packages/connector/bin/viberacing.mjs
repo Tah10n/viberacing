@@ -419,11 +419,6 @@ async function connect() {
         },
       );
       if (result.status === "active") {
-        if (
-          process.env.NODE_ENV === "test" &&
-          process.env.VIBERACING_TEST_INTERRUPT_AFTER_ACTIVE_POLL === "1"
-        )
-          process.exit(87);
         await waitForTestConnectBarrier("after_active_poll");
         const config = await withLifecycleMutation(async () => {
           const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
