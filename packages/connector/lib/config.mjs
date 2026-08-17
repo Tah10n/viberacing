@@ -27,6 +27,7 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
+const connectionCommitPath = join(stateDirectory, "connection-commit.json");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
 let stateDirectorySecurity;
@@ -88,8 +89,83 @@ async function atomicJson(path, value, { beforeRename } = {}) {
   }
 }
 
+function serializedConfig(config) {
+  if (config === null || typeof config !== "object" || Array.isArray(config))
+    throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
+  return {
+    ...config,
+    sources: (config.sources ?? []).map((source) => ({
+      clientSourceId: source.clientSourceId,
+      sourceId: source.sourceId,
+      agentAccountId: source.agentAccountId,
+      agentId: source.agentId,
+      accountLabel: source.accountLabel,
+      collectionMethod: source.collectionMethod,
+      lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
+    })),
+  };
+}
+
+async function normalizedSources(sources) {
+  if (!Array.isArray(sources)) throw new Error("Local source configuration is unsupported");
+  const normalized = sources.map((source) =>
+    normalizedLocalSource(source, source.clientSourceId ?? randomUUID()),
+  );
+  const roots = new Set();
+  for (const source of normalized) {
+    if (!validLocalSource(source)) throw new Error("Local source configuration is unsupported");
+    const key = `${source.agentId}\0${await canonicalPathKey(source.dataPath)}`;
+    if (roots.has(key)) throw new Error("That local source is already configured");
+    roots.add(key);
+  }
+  return normalized;
+}
+
+function validateCommittedConfig(config, sources) {
+  if (config?.version !== 2 || typeof config.origin !== "string" || !Array.isArray(config.sources))
+    throw new Error("Interrupted connector connection state is invalid");
+  const localById = new Map(sources.map((source) => [source.clientSourceId, source]));
+  const mappedIds = new Set();
+  if (
+    config.sources.some((mapping) => {
+      const local = localById.get(mapping?.clientSourceId);
+      if (!local || mappedIds.has(mapping.clientSourceId)) return true;
+      mappedIds.add(mapping.clientSourceId);
+      mergeStoredSourceMapping(local, mapping);
+      return false;
+    })
+  )
+    throw new Error("Interrupted connector connection state is invalid");
+}
+
+async function recoverConnectionCommit() {
+  let commit;
+  try {
+    commit = JSON.parse(await readFile(connectionCommitPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw new Error("Interrupted connector connection state is unreadable", { cause: error });
+  }
+  if (
+    commit?.version !== 1 ||
+    commit.sources?.version !== 1 ||
+    !Array.isArray(commit.sources.sources)
+  )
+    throw new Error("Interrupted connector connection state is invalid");
+  const sources = await normalizedSources(commit.sources.sources);
+  const config = serializedConfig(commit.config);
+  validateCommittedConfig(config, sources);
+  await atomicJson(configPath, config);
+  await atomicJson(sourcesPath, { version: 1, sources });
+  await unlink(connectionCommitPath).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
+  return true;
+}
+
 export async function readConfig() {
   await ensurePrivateStateDirectory();
+  await recoverConnectionCommit();
   const value = JSON.parse(await readFile(configPath, "utf8"));
   if (value?.version !== 2 || typeof value.origin !== "string" || !Array.isArray(value.sources))
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
@@ -106,22 +182,8 @@ export async function readConfig() {
 }
 
 export async function writeConfig(config, options) {
-  await atomicJson(
-    configPath,
-    {
-      ...config,
-      sources: (config.sources ?? []).map((source) => ({
-        clientSourceId: source.clientSourceId,
-        sourceId: source.sourceId,
-        agentAccountId: source.agentAccountId,
-        agentId: source.agentId,
-        accountLabel: source.accountLabel,
-        collectionMethod: source.collectionMethod,
-        lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
-      })),
-    },
-    options,
-  );
+  await recoverConnectionCommit();
+  await atomicJson(configPath, serializedConfig(config), options);
 }
 
 function validLocalSource(source) {
@@ -173,6 +235,7 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
 
 export async function readSources() {
   await ensurePrivateStateDirectory();
+  await recoverConnectionCommit();
   try {
     const value = JSON.parse(await readFile(sourcesPath, "utf8"));
     if (
@@ -189,16 +252,28 @@ export async function readSources() {
 }
 
 export async function writeSources(sources) {
-  const normalized = sources.map((source) =>
-    normalizedLocalSource(source, source.clientSourceId ?? randomUUID()),
-  );
-  const roots = new Set();
-  for (const source of normalized) {
-    const key = `${source.agentId}\0${await canonicalPathKey(source.dataPath)}`;
-    if (roots.has(key)) throw new Error("That local source is already configured");
-    roots.add(key);
-  }
+  await recoverConnectionCommit();
+  const normalized = await normalizedSources(sources);
   await atomicJson(sourcesPath, { version: 1, sources: normalized });
+  return normalized;
+}
+
+export async function commitConnectionState(config, sources, options = {}) {
+  const normalized = await normalizedSources(sources);
+  const storedConfig = serializedConfig(config);
+  validateCommittedConfig(storedConfig, normalized);
+  await options.beforeCommit?.();
+  await atomicJson(connectionCommitPath, {
+    version: 1,
+    config: storedConfig,
+    sources: { version: 1, sources: normalized },
+  });
+  await atomicJson(configPath, storedConfig);
+  await options.afterConfigCommit?.();
+  await atomicJson(sourcesPath, { version: 1, sources: normalized });
+  await unlink(connectionCommitPath).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
   return normalized;
 }
 
@@ -777,11 +852,12 @@ export async function removeHooks() {
 }
 
 export async function removeConfig() {
-  try {
-    await unlink(configPath);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+  for (const path of [configPath, connectionCommitPath])
+    try {
+      await unlink(path);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
 }
 
 export async function resetInstallation() {

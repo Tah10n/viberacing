@@ -25,6 +25,7 @@ import {
 } from "../lib/executables.mjs";
 import {
   addSource,
+  commitConnectionState,
   diagnoseHooks,
   prepareRuntime,
   reconcileHooks,
@@ -41,7 +42,6 @@ import {
   resetInstallation,
   stateDirectory,
   writeConfig,
-  writeSources,
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
@@ -341,23 +341,20 @@ async function connect() {
           sources: mapped,
           protocol: result.protocol,
         };
-        await writeConfig(
-          nextConfig,
-          process.env.NODE_ENV === "test" &&
+        const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
+          beforeCommit:
+            process.env.NODE_ENV === "test" &&
             process.env.VIBERACING_TEST_FAIL_CONNECTION_CONFIG_COMMIT === "1"
-            ? {
-                beforeRename() {
+              ? () => {
                   throw new Error("Synthetic connection config commit failure");
-                },
-              }
-            : undefined,
-        );
-        const currentLocalSources = await writeSources(localSources);
-        if (
-          process.env.NODE_ENV === "test" &&
-          process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONNECTION_COMMIT === "1"
-        )
-          process.exit(86);
+                }
+              : undefined,
+          afterConfigCommit:
+            process.env.NODE_ENV === "test" &&
+            process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONNECTION_COMMIT === "1"
+              ? () => process.exit(86)
+              : undefined,
+        });
         const knownForHookCleanup = [
           ...currentLocalSources,
           ...sourcesBeforeDiscovery.filter(

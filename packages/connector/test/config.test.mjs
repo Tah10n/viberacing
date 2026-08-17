@@ -347,6 +347,96 @@ test("rejects an incomplete runtime before pairing-compatible staging completes"
   }
 });
 
+test("recovers a connection commit interrupted before the source registry is published", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-connection-commit-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?connection-commit=${encodeURIComponent(home)}`);
+    const directory = join(home, ".viberacing");
+    const localSource = {
+      clientSourceId: "84848484-8484-4484-8484-848484848484",
+      agentId: "codex",
+      collectionMethod: "codex_app_server",
+      dataPath: join(home, ".codex"),
+      suggestedLabel: "Codex",
+      supportedSurface: "desktop",
+    };
+    const mappedSource = {
+      ...localSource,
+      sourceId: "85858585-8585-4585-8585-858585858585",
+      agentAccountId: "86868686-8686-4686-8686-868686868686",
+      accountLabel: "Personal",
+      lastAcceptedSyncSequence: "7",
+    };
+    await assert.rejects(
+      module.commitConnectionState(
+        {
+          version: 2,
+          origin: "https://viberacing.example",
+          installationId: "87878787-8787-4787-8787-878787878787",
+          deviceToken: "recoverable_device_token_that_is_long_enough",
+          sources: [mappedSource],
+          protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+        },
+        [localSource],
+        {
+          afterConfigCommit() {
+            throw new Error("Synthetic interruption between connection files");
+          },
+        },
+      ),
+      /Synthetic interruption between connection files/,
+    );
+    await access(join(directory, "config.json"));
+    await access(join(directory, "connection-commit.json"));
+    await assert.rejects(access(join(directory, "sources.json")));
+
+    const recovered = await module.readConfig();
+    assert.equal(recovered.deviceToken, "recoverable_device_token_that_is_long_enough");
+    assert.deepEqual(
+      recovered.sources.map((source) => ({
+        clientSourceId: source.clientSourceId,
+        sourceId: source.sourceId,
+        dataPath: source.dataPath,
+      })),
+      [
+        {
+          clientSourceId: localSource.clientSourceId,
+          sourceId: mappedSource.sourceId,
+          dataPath: localSource.dataPath,
+        },
+      ],
+    );
+    assert.deepEqual(await module.readSources(), [localSource]);
+    await assert.rejects(access(join(directory, "connection-commit.json")));
+
+    await assert.rejects(
+      module.commitConnectionState(
+        {
+          ...recovered,
+          deviceToken: "token_that_must_not_be_restored_after_disconnect",
+        },
+        [localSource],
+        {
+          afterConfigCommit() {
+            throw new Error("Synthetic interruption before explicit disconnect");
+          },
+        },
+      ),
+      /Synthetic interruption before explicit disconnect/,
+    );
+    await access(join(directory, "connection-commit.json"));
+    await module.removeConfig();
+    await assert.rejects(access(join(directory, "config.json")));
+    await assert.rejects(access(join(directory, "connection-commit.json")));
+    await assert.rejects(module.readConfig(), { code: "ENOENT" });
+    assert.deepEqual(await module.readSources(), [localSource]);
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("keeps a manual Qwen hook root through reconnect and uninstall", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-qwen-hook-root-"));
   context.after(() => rm(home, { force: true, recursive: true }));
@@ -2071,10 +2161,12 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
     JSON.parse(await readFile(join(directory, "config.json"), "utf8")).deviceToken,
     "retained_device_token_that_is_long_enough_12",
   );
+  await access(join(directory, "connection-commit.json"));
   assert.deepEqual(await readFile(hookPath), hookBefore);
   await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: environment,
   });
+  await assert.rejects(access(join(directory, "connection-commit.json")));
   assert.match(await readFile(hookPath, "utf8"), /viberacing-hook-v3/);
 
   await writeFile(hookPath, "{invalid-json");
