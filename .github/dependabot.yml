@@ -14,16 +14,40 @@ updates:
         applies-to: security-updates
         patterns:
           - "*"
+      next-stack:
+        applies-to: version-updates
+        patterns:
+          - next
+          - "@next/eslint-plugin-next"
+        update-types:
+          - minor
+          - patch
+      react-stack:
+        applies-to: version-updates
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - minor
+          - patch
       production-minor-and-patch:
+        applies-to: version-updates
         dependency-type: production
         update-types:
           - minor
           - patch
       development-minor-and-patch:
+        applies-to: version-updates
         dependency-type: development
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: docker
     directory: /
@@ -39,11 +63,16 @@ updates:
         patterns:
           - "*"
       minor-and-patch:
+        applies-to: version-updates
         patterns:
           - "*"
         update-types:
           - minor
           - patch
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
@@ -59,6 +88,7 @@ updates:
         patterns:
           - "*"
       minor-and-patch:
+        applies-to: version-updates
         patterns:
           - "*"
         update-types:
