@@ -26,13 +26,17 @@ import {
 } from "../lib/executables.mjs";
 import {
   addSource,
+  beginConnectAttempt,
+  clearConnectAttempt,
   commitConnectionState,
   diagnoseHooks,
+  invalidateConnectAttempt,
   prepareRuntime,
   reconcileHooks,
   readConfig,
   readOrCreateInstallation,
   readSources,
+  recordConnectAttemptPairing,
   rememberSourceExecutable,
   reconcileDetectedSources,
   removeHookForSource,
@@ -112,6 +116,28 @@ const output = (...values) => {
   if (!quiet) process.stdout.write(`${values.map(sanitizeTerminalText).join(" ")}\n`);
 };
 const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
+
+async function waitForTestConnectBarrier(stage) {
+  if (
+    process.env.NODE_ENV !== "test" ||
+    process.env.VIBERACING_TEST_CONNECT_PAUSE !== stage ||
+    !process.env.VIBERACING_TEST_CONNECT_BARRIER
+  )
+    return;
+  const barrier = process.env.VIBERACING_TEST_CONNECT_BARRIER;
+  await writeFile(`${barrier}.ready`, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      await readFile(`${barrier}.continue`);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await delay(10);
+  }
+  throw new Error("Timed out at connect test barrier");
+}
 
 async function readConnectedConfig() {
   try {
@@ -202,6 +228,40 @@ async function request(origin, path, options = {}, attempts = 1, responseContext
   throw lastError;
 }
 
+async function cancelPairingAttempt(attempt) {
+  if (
+    attempt === null ||
+    typeof attempt?.origin !== "string" ||
+    typeof attempt?.installationId !== "string" ||
+    typeof attempt?.pollToken !== "string"
+  )
+    return false;
+  try {
+    await request(
+      attempt.origin,
+      "/api/pairing/cancel",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          installationId: attempt.installationId,
+          pollToken: attempt.pollToken,
+        }),
+      },
+      1,
+      { kind: "empty" },
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function invalidateAndCancelConnectAttempt() {
+  const attempt = await invalidateConnectAttempt();
+  return { attempt, cancelled: await cancelPairingAttempt(attempt) };
+}
+
 function publicSource(source) {
   return {
     clientSourceId: source.clientSourceId,
@@ -230,7 +290,7 @@ async function exactPairingSources(sources) {
   return result;
 }
 
-async function reconcilePreviousConnectionBeforePairing(origin, installationId) {
+async function reconcilePreviousConnectionBeforePairing(origin, installationId, options = {}) {
   return withLifecycleMutation(async () => {
     let previousConfig;
     try {
@@ -246,6 +306,10 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId) 
       remote = await requestReconciliation(previousConfig);
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) {
+        if (options.clearAfterCancelledAttempt) {
+          await disableLocalConnection();
+          return null;
+        }
         throw new Error(
           "Existing installation authorization cannot be reconciled; run `viberacing disconnect` before reconnecting",
           { cause: error },
@@ -279,7 +343,10 @@ async function connect() {
     );
   const installedRuntime = await prepareRuntime(import.meta.url);
   const installation = await readOrCreateInstallation();
-  const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id);
+  const abandonedAttempt = await invalidateAndCancelConnectAttempt();
+  const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id, {
+    clearAfterCancelledAttempt: abandonedAttempt.cancelled,
+  });
   const pairingLocalSources = new Map(sources);
   if (previousConfig !== null) {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
@@ -298,116 +365,143 @@ async function connect() {
     }
   }
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
-  const pairing = await request(
+  const initialAttempt = await beginConnectAttempt({
+    installationId: installation.id,
     origin,
-    "/api/pairing/start",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        protocolVersion,
-        connectorVersion,
-        installationId: installation.id,
-        installationSecret: installation.secret,
-        sources: [...sources.values()].map(publicSource),
-        supersededClientSourceIds,
-      }),
-    },
-    1,
-    { kind: "pairingStart", origin, installationId: installation.id },
-  );
-  output(`Open ${pairing.verificationUrl}`);
-  output(`Pairing code: ${pairing.code}`);
-  openBrowser(pairing.verificationUrl);
-  const deadline = Date.now() + pairing.expiresInSeconds * 1_000;
-  while (Date.now() < deadline) {
-    await delay(pairingPollIntervalMs);
-    const result = await request(
+    expectedSources: sourcesBeforeDiscovery,
+  });
+  let attempt = initialAttempt;
+  let pairing;
+  let committed = false;
+  try {
+    pairing = await request(
       origin,
-      "/api/pairing/poll",
+      "/api/pairing/start",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          installationId: pairing.installationId,
-          pollToken: pairing.pollToken,
+          protocolVersion,
+          connectorVersion,
+          installationId: installation.id,
+          installationSecret: installation.secret,
+          sources: [...sources.values()].map(publicSource),
+          supersededClientSourceIds,
         }),
       },
       1,
-      {
-        kind: "pairingPoll",
-        localSources: [...pairingLocalSources.values()],
-        requiredClientSourceIds: [...pairingLocalSources.keys()],
-      },
+      { kind: "pairingStart", origin, installationId: installation.id },
     );
-    if (result.status === "active") {
-      const config = await withLifecycleMutation(async () => {
-        const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
-        const mapped = result.sources.map((mapping) => {
-          const local = localById.get(mapping.clientSourceId);
-          if (!local) throw new Error("Paired source is no longer configured locally");
-          if (
-            local.agentId !== mapping.agentId ||
-            local.collectionMethod !== mapping.collectionMethod
-          )
-            throw new Error("Paired source identity changed");
-          return {
-            ...local,
-            sourceId: mapping.sourceId,
-            agentAccountId: mapping.agentAccountId,
-            accountLabel: mapping.accountLabel,
-            lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence,
+    attempt = await recordConnectAttemptPairing(initialAttempt, pairing.pollToken);
+    await waitForTestConnectBarrier("after_pairing_start");
+    output(`Open ${pairing.verificationUrl}`);
+    output(`Pairing code: ${pairing.code}`);
+    openBrowser(pairing.verificationUrl);
+    const deadline = Date.now() + pairing.expiresInSeconds * 1_000;
+    while (Date.now() < deadline) {
+      await delay(pairingPollIntervalMs);
+      const result = await request(
+        origin,
+        "/api/pairing/poll",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            installationId: pairing.installationId,
+            pollToken: pairing.pollToken,
+          }),
+        },
+        1,
+        {
+          kind: "pairingPoll",
+          localSources: [...pairingLocalSources.values()],
+          requiredClientSourceIds: [...pairingLocalSources.keys()],
+        },
+      );
+      if (result.status === "active") {
+        if (
+          process.env.NODE_ENV === "test" &&
+          process.env.VIBERACING_TEST_INTERRUPT_AFTER_ACTIVE_POLL === "1"
+        )
+          process.exit(87);
+        await waitForTestConnectBarrier("after_active_poll");
+        const config = await withLifecycleMutation(async () => {
+          const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
+          const mapped = result.sources.map((mapping) => {
+            const local = localById.get(mapping.clientSourceId);
+            if (!local) throw new Error("Paired source is no longer configured locally");
+            if (
+              local.agentId !== mapping.agentId ||
+              local.collectionMethod !== mapping.collectionMethod
+            )
+              throw new Error("Paired source identity changed");
+            return {
+              ...local,
+              sourceId: mapping.sourceId,
+              agentAccountId: mapping.agentAccountId,
+              accountLabel: mapping.accountLabel,
+              lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence,
+            };
+          });
+          const nextConfig = {
+            version: 2,
+            origin,
+            installationId: pairing.installationId,
+            deviceToken: result.deviceToken,
+            sources: mapped,
+            protocol: result.protocol,
           };
+          const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
+            connectAttempt: attempt,
+            beforeCommit:
+              process.env.NODE_ENV === "test" &&
+              process.env.VIBERACING_TEST_FAIL_CONNECTION_CONFIG_COMMIT === "1"
+                ? () => {
+                    throw new Error("Synthetic connection config commit failure");
+                  }
+                : undefined,
+            afterConfigCommit:
+              process.env.NODE_ENV === "test" &&
+              process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONNECTION_COMMIT === "1"
+                ? () => process.exit(86)
+                : undefined,
+          });
+          const knownForHookCleanup = [
+            ...currentLocalSources,
+            ...sourcesBeforeDiscovery.filter(
+              (previous) =>
+                !currentLocalSources.some(
+                  (current) => current.clientSourceId === previous.clientSourceId,
+                ),
+            ),
+          ];
+          const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup, {
+            installedScript: installedRuntime,
+          });
+          for (const failure of hooks.failures)
+            warning(
+              `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.`,
+            );
+          await confirmAutomaticCompatibility();
+          return nextConfig;
         });
-        const nextConfig = {
-          version: 2,
-          origin,
-          installationId: pairing.installationId,
-          deviceToken: result.deviceToken,
-          sources: mapped,
-          protocol: result.protocol,
-        };
-        const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
-          beforeCommit:
-            process.env.NODE_ENV === "test" &&
-            process.env.VIBERACING_TEST_FAIL_CONNECTION_CONFIG_COMMIT === "1"
-              ? () => {
-                  throw new Error("Synthetic connection config commit failure");
-                }
-              : undefined,
-          afterConfigCommit:
-            process.env.NODE_ENV === "test" &&
-            process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONNECTION_COMMIT === "1"
-              ? () => process.exit(86)
-              : undefined,
-        });
-        const knownForHookCleanup = [
-          ...currentLocalSources,
-          ...sourcesBeforeDiscovery.filter(
-            (previous) =>
-              !currentLocalSources.some(
-                (current) => current.clientSourceId === previous.clientSourceId,
-              ),
-          ),
-        ];
-        const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup, {
-          installedScript: installedRuntime,
-        });
-        for (const failure of hooks.failures)
-          warning(
-            `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.`,
-          );
-        await confirmAutomaticCompatibility();
-        return nextConfig;
-      });
-      output("Connected. Exact aggregate sync is active.");
-      const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
-      if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
-      return;
+        committed = true;
+        output("Connected. Exact aggregate sync is active.");
+        const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
+        if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
+        return;
+      }
+      if (result.status !== "pending") throw new Error("Pairing was revoked");
     }
-    if (result.status !== "pending") throw new Error("Pairing was revoked");
+    throw new Error("Pairing expired");
+  } finally {
+    if (!committed) {
+      await cancelPairingAttempt(
+        pairing === undefined ? attempt : { ...attempt, pollToken: pairing.pollToken },
+      );
+      await clearConnectAttempt(attempt).catch(() => {});
+    }
   }
-  throw new Error("Pairing expired");
 }
 
 function snapshotRange(now = new Date()) {
@@ -1252,6 +1346,7 @@ async function sourceCommand() {
       throw new Error(
         "Usage: viberacing source add --agent AGENT --name NAME [--data-dir PATH] [--legacy]",
       );
+    await invalidateAndCancelConnectAttempt();
     const localMetadata =
       typeof adapter.localSourceMetadata === "function" ? await adapter.localSourceMetadata() : {};
     const result = await addSource({
@@ -1279,6 +1374,7 @@ async function sourceCommand() {
       output("Source is already absent locally.");
       return;
     }
+    await invalidateAndCancelConnectAttempt();
     let config;
     try {
       config = await readConfig();
@@ -1427,7 +1523,7 @@ try {
   else if (command === "accounts") {
     const config = await readConnectedConfig();
     for (const source of config.sources) output(`${source.agentId}: ${source.accountLabel}`);
-  } else if (command === "source" && arguments_[1] === "remove")
+  } else if (command === "source" && (arguments_[1] === "add" || arguments_[1] === "remove"))
     await withLifecycleMutation(() => sourceCommand());
   else if (command === "source") await sourceCommand();
   else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
@@ -1435,6 +1531,7 @@ try {
     let remoteError;
     let localWarnings = 0;
     await withLifecycleMutation(async () => {
+      const pending = await invalidateAndCancelConnectAttempt();
       try {
         const config = await readConfig();
         await request(
@@ -1448,7 +1545,9 @@ try {
           { kind: "empty" },
         );
       } catch (error) {
-        if (error?.code !== "ENOENT") remoteError = error;
+        const cancelledRotatedToken =
+          pending.cancelled && (error?.status === 401 || error?.status === 403);
+        if (error?.code !== "ENOENT" && !cancelledRotatedToken) remoteError = error;
       } finally {
         localWarnings = await disableLocalConnection(true);
       }
@@ -1464,6 +1563,7 @@ try {
       );
   } else if (command === "reset-installation") {
     const cleanup = await withLifecycleMutation(async () => {
+      await invalidateAndCancelConnectAttempt();
       const result = await removeHooks();
       await resetInstallation();
       await clearAutomaticState();
@@ -1478,6 +1578,7 @@ try {
       );
   } else if (command === "uninstall") {
     const cleanup = await withLifecycleMutation(async () => {
+      await invalidateAndCancelConnectAttempt();
       try {
         const config = await readConfig();
         await request(

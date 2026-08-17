@@ -30,6 +30,7 @@ const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
+const connectAttemptPath = join(stateDirectory, "connect-attempt.json");
 const connectionStateLockPath = join(stateDirectory, "connection-state.lock");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
@@ -177,6 +178,102 @@ function validateCommittedConfig(config, sources) {
     throw new Error("Interrupted connector connection state is invalid");
 }
 
+function validConnectAttemptOrigin(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.origin === value &&
+      (url.protocol === "https:" ||
+        (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function validConnectAttempt(value) {
+  return (
+    value?.version === 1 &&
+    sourceIdPattern.test(value.attemptId) &&
+    sourceIdPattern.test(value.installationId) &&
+    sourceIdPattern.test(value.sourceRegistryRevision) &&
+    validConnectAttemptOrigin(value.origin) &&
+    typeof value.startedAt === "string" &&
+    Number.isFinite(Date.parse(value.startedAt)) &&
+    (value.pollToken === undefined ||
+      (typeof value.pollToken === "string" &&
+        value.pollToken.length >= 32 &&
+        value.pollToken.length <= 128 &&
+        /^[A-Za-z0-9_-]+$/.test(value.pollToken)))
+  );
+}
+
+function sameConnectAttempt(current, expected) {
+  return (
+    validConnectAttempt(current) &&
+    validConnectAttempt(expected) &&
+    current.attemptId === expected.attemptId &&
+    current.installationId === expected.installationId &&
+    current.sourceRegistryRevision === expected.sourceRegistryRevision &&
+    current.origin === expected.origin &&
+    current.pollToken === expected.pollToken
+  );
+}
+
+async function readConnectAttemptUnlocked() {
+  try {
+    const value = JSON.parse(await readFile(connectAttemptPath, "utf8"));
+    if (!validConnectAttempt(value)) throw new Error("Local connection attempt is invalid");
+    return value;
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function invalidateConnectAttemptUnlocked() {
+  let attempt = null;
+  try {
+    attempt = await readConnectAttemptUnlocked();
+  } catch {
+    // Destructive lifecycle operations must still remove a corrupt local capability.
+  }
+  await unlink(connectAttemptPath).catch((error) => {
+    if (error?.code !== "ENOENT") throw error;
+  });
+  return attempt;
+}
+
+async function readInstallationUnlocked() {
+  try {
+    const value = JSON.parse(await readFile(installationPath, "utf8"));
+    if (
+      value?.version === 1 &&
+      sourceIdPattern.test(value.id) &&
+      typeof value.secret === "string" &&
+      value.secret.length >= 32 &&
+      value.secret.length <= 128
+    )
+      return value;
+    throw new Error("Local installation identity is invalid");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function assertCurrentConnectAttemptUnlocked(expected) {
+  const current = await readConnectAttemptUnlocked();
+  const installation = await readInstallationUnlocked();
+  if (!sameConnectAttempt(current, expected) || installation?.id !== expected.installationId) {
+    const error = new Error("Connection attempt was superseded by a local lifecycle change");
+    error.code = "connect_attempt_stale";
+    throw error;
+  }
+  return current;
+}
+
 async function recoverConnectionCommitUnlocked() {
   let commit;
   try {
@@ -195,11 +292,21 @@ async function recoverConnectionCommitUnlocked() {
   const sources = await normalizedSources(commit.sources.sources);
   const config = serializedConfig(commit.config);
   validateCommittedConfig(config, sources);
+  if (commit.connectAttempt !== undefined) {
+    try {
+      await assertCurrentConnectAttemptUnlocked(commit.connectAttempt);
+    } catch (error) {
+      await unlink(connectionCommitPath).catch(() => {});
+      await unlink(configPath).catch(() => {});
+      throw error;
+    }
+  }
   await atomicJson(configPath, config);
   await atomicJson(sourcesPath, { version: 1, sources });
   await unlink(connectionCommitPath).catch((error) => {
     if (error?.code !== "ENOENT") throw error;
   });
+  if (commit.connectAttempt !== undefined) await invalidateConnectAttemptUnlocked();
   return true;
 }
 
@@ -252,6 +359,7 @@ export async function readConfig(options = {}) {
 export async function writeConfig(config, options) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
+    await invalidateConnectAttemptUnlocked();
     await atomicJson(configPath, serializedConfig(config), options);
   });
 }
@@ -313,21 +421,95 @@ export async function readSources() {
 export async function writeSources(sources) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
-    const normalized = await normalizedSources(sources);
-    await atomicJson(sourcesPath, { version: 1, sources: normalized });
-    return normalized;
+    return writeSourcesUnlocked(sources);
+  });
+}
+
+async function writeSourcesUnlocked(sources) {
+  const normalized = await normalizedSources(sources);
+  await invalidateConnectAttemptUnlocked();
+  await atomicJson(sourcesPath, { version: 1, sources: normalized });
+  return normalized;
+}
+
+export async function beginConnectAttempt({ installationId, origin, expectedSources }) {
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const installation = await readInstallationUnlocked();
+    if (installation?.id !== installationId) {
+      const error = new Error("Installation identity changed while preparing the connection");
+      error.code = "connect_attempt_stale";
+      throw error;
+    }
+    const currentSources = await readSourcesUnlocked();
+    const expected = await normalizedSources(expectedSources);
+    if (JSON.stringify(currentSources) !== JSON.stringify(expected)) {
+      const error = new Error("Local source registry changed while preparing the connection");
+      error.code = "connect_attempt_stale";
+      throw error;
+    }
+    const attempt = {
+      version: 1,
+      attemptId: randomUUID(),
+      installationId,
+      sourceRegistryRevision: randomUUID(),
+      origin,
+      startedAt: new Date().toISOString(),
+    };
+    await atomicJson(connectAttemptPath, attempt);
+    return attempt;
+  });
+}
+
+export async function recordConnectAttemptPairing(attempt, pollToken) {
+  return withConnectionStateLock(async () => {
+    const current = await assertCurrentConnectAttemptUnlocked(attempt);
+    const next = { ...current, pollToken };
+    if (!validConnectAttempt(next)) throw new Error("Pairing returned an invalid poll token");
+    await atomicJson(connectAttemptPath, next);
+    return next;
+  });
+}
+
+export async function readConnectAttempt() {
+  return withConnectionStateLock(() => readConnectAttemptUnlocked());
+}
+
+export async function invalidateConnectAttempt() {
+  return withConnectionStateLock(() => invalidateConnectAttemptUnlocked());
+}
+
+export async function clearConnectAttempt(attempt) {
+  try {
+    await access(connectAttemptPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  return withConnectionStateLock(async () => {
+    const current = await readConnectAttemptUnlocked();
+    if (!sameConnectAttempt(current, attempt)) return false;
+    await unlink(connectAttemptPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+    return true;
   });
 }
 
 export async function commitConnectionState(config, sources, options = {}) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
+    const connectAttempt =
+      options.connectAttempt === undefined
+        ? undefined
+        : await assertCurrentConnectAttemptUnlocked(options.connectAttempt);
     const normalized = await normalizedSources(sources);
     const storedConfig = serializedConfig(config);
     validateCommittedConfig(storedConfig, normalized);
     await options.beforeCommit?.();
     await atomicJson(connectionCommitPath, {
       version: 1,
+      ...(connectAttempt === undefined ? {} : { connectAttempt }),
       config: storedConfig,
       sources: { version: 1, sources: normalized },
     });
@@ -337,120 +519,127 @@ export async function commitConnectionState(config, sources, options = {}) {
     await unlink(connectionCommitPath).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
     });
+    if (connectAttempt !== undefined) await invalidateConnectAttemptUnlocked();
     return normalized;
   });
 }
 
 export async function addSource(source) {
-  const sources = await readSources();
-  const normalized = normalizedLocalSource(source);
-  const root = await canonicalPathKey(normalized.dataPath);
-  let duplicate;
-  for (const candidate of sources)
-    if (
-      candidate.agentId === normalized.agentId &&
-      (await canonicalPathKey(candidate.dataPath)) === root
-    ) {
-      duplicate = candidate;
-      break;
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const sources = await readSourcesUnlocked();
+    const normalized = normalizedLocalSource(source);
+    const root = await canonicalPathKey(normalized.dataPath);
+    let duplicate;
+    for (const candidate of sources)
+      if (
+        candidate.agentId === normalized.agentId &&
+        (await canonicalPathKey(candidate.dataPath)) === root
+      ) {
+        duplicate = candidate;
+        break;
+      }
+    if (duplicate) {
+      if (
+        normalized.hookConfigRoot !== undefined &&
+        duplicate.hookConfigRoot !== normalized.hookConfigRoot
+      ) {
+        duplicate.hookConfigRoot = normalized.hookConfigRoot;
+        await writeSourcesUnlocked(sources);
+      }
+      return { source: duplicate, added: false };
     }
-  if (duplicate) {
-    if (
-      normalized.hookConfigRoot !== undefined &&
-      duplicate.hookConfigRoot !== normalized.hookConfigRoot
-    ) {
-      duplicate.hookConfigRoot = normalized.hookConfigRoot;
-      await writeSources(sources);
-    }
-    return { source: duplicate, added: false };
-  }
-  sources.push(normalized);
-  await writeSources(sources);
-  return { source: normalized, added: true };
+    sources.push(normalized);
+    await writeSourcesUnlocked(sources);
+    return { source: normalized, added: true };
+  });
 }
 
 export async function rememberSourceExecutable(clientSourceId, executablePath) {
-  const sources = await readSources();
-  const source = sources.find((candidate) => candidate.clientSourceId === clientSourceId);
-  if (!source) return false;
-  const resolvedPath = resolve(executablePath);
-  if (source.executablePath === resolvedPath) return false;
-  source.executablePath = resolvedPath;
-  await writeSources(sources);
-  return true;
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const sources = await readSourcesUnlocked();
+    const source = sources.find((candidate) => candidate.clientSourceId === clientSourceId);
+    if (!source) return false;
+    const resolvedPath = resolve(executablePath);
+    if (source.executablePath === resolvedPath) return false;
+    source.executablePath = resolvedPath;
+    await writeSourcesUnlocked(sources);
+    return true;
+  });
 }
 
 export async function reconcileDetectedSources(detected, { persist = true } = {}) {
-  let sources = await readSources();
-  let changed = false;
-  for (const candidate of detected) {
-    const superseded = new Set();
-    for (const path of candidate.supersedesDataPaths ?? [])
-      superseded.add(await canonicalPathKey(path));
-    if (superseded.size === 0) continue;
-    const retained = [];
-    for (const source of sources)
-      if (
-        source.agentId !== candidate.agentId ||
-        !superseded.has(await canonicalPathKey(source.dataPath))
-      )
-        retained.push(source);
-    if (retained.length !== sources.length) {
-      sources = retained;
-      changed = true;
-    }
-  }
-  for (const candidate of detected) {
-    const normalized = normalizedLocalSource(candidate);
-    const root = await canonicalPathKey(normalized.dataPath);
-    let existing;
-    for (const source of sources)
-      if (
-        source.agentId === normalized.agentId &&
-        (await canonicalPathKey(source.dataPath)) === root
-      ) {
-        existing = source;
-        break;
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    let sources = await readSourcesUnlocked();
+    let changed = false;
+    for (const candidate of detected) {
+      const superseded = new Set();
+      for (const path of candidate.supersedesDataPaths ?? [])
+        superseded.add(await canonicalPathKey(path));
+      if (superseded.size === 0) continue;
+      const retained = [];
+      for (const source of sources)
+        if (
+          source.agentId !== candidate.agentId ||
+          !superseded.has(await canonicalPathKey(source.dataPath))
+        )
+          retained.push(source);
+      if (retained.length !== sources.length) {
+        sources = retained;
+        changed = true;
       }
-    if (!existing) {
-      sources.push(normalized);
-      changed = true;
-    } else {
-      for (const key of ["executablePath", "hookConfigRoot"])
-        if (normalized[key] !== undefined && existing[key] !== normalized[key]) {
-          existing[key] = normalized[key];
-          changed = true;
-        }
     }
-  }
-  if (changed && persist) await writeSources(sources);
-  return sources;
+    for (const candidate of detected) {
+      const normalized = normalizedLocalSource(candidate);
+      const root = await canonicalPathKey(normalized.dataPath);
+      let existing;
+      for (const source of sources)
+        if (
+          source.agentId === normalized.agentId &&
+          (await canonicalPathKey(source.dataPath)) === root
+        ) {
+          existing = source;
+          break;
+        }
+      if (!existing) {
+        sources.push(normalized);
+        changed = true;
+      } else {
+        for (const key of ["executablePath", "hookConfigRoot"])
+          if (normalized[key] !== undefined && existing[key] !== normalized[key]) {
+            existing[key] = normalized[key];
+            changed = true;
+          }
+      }
+    }
+    if (changed && persist) await writeSourcesUnlocked(sources);
+    return sources;
+  });
 }
 
 export async function removeSource(clientSourceId) {
-  const sources = await readSources();
-  const removed = sources.find((source) => source.clientSourceId === clientSourceId);
-  if (!removed) return null;
-  await writeSources(sources.filter((source) => source.clientSourceId !== clientSourceId));
-  return removed;
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const sources = await readSourcesUnlocked();
+    const removed = sources.find((source) => source.clientSourceId === clientSourceId);
+    if (!removed) return null;
+    await writeSourcesUnlocked(
+      sources.filter((source) => source.clientSourceId !== clientSourceId),
+    );
+    return removed;
+  });
 }
 
 export async function readOrCreateInstallation() {
-  await ensurePrivateStateDirectory();
-  try {
-    const value = JSON.parse(await readFile(installationPath, "utf8"));
-    if (
-      typeof value.id === "string" &&
-      typeof value.secret === "string" &&
-      value.secret.length >= 32
-    )
-      return value;
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  const value = { version: 1, id: randomUUID(), secret: randomBytes(32).toString("base64url") };
-  await atomicJson(installationPath, value);
-  return value;
+  return withConnectionStateLock(async () => {
+    const current = await readInstallationUnlocked();
+    if (current !== null) return current;
+    const value = { version: 1, id: randomUUID(), secret: randomBytes(32).toString("base64url") };
+    await atomicJson(installationPath, value);
+    return value;
+  });
 }
 
 function ownsHook(handler, marker) {
@@ -917,26 +1106,32 @@ export async function removeHooks() {
   return { cleaned, failures };
 }
 
+async function removeConfigUnlocked() {
+  const attempt = await invalidateConnectAttemptUnlocked();
+  await waitForTestConnectionBarrier("remove_after_lock");
+  for (const path of [configPath, connectionCommitPath])
+    try {
+      await unlink(path);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  return attempt;
+}
+
 export async function removeConfig() {
-  return withConnectionStateLock(async () => {
-    await waitForTestConnectionBarrier("remove_after_lock");
-    for (const path of [configPath, connectionCommitPath])
+  return withConnectionStateLock(() => removeConfigUnlocked());
+}
+
+export async function resetInstallation() {
+  await withConnectionStateLock(async () => {
+    await removeConfigUnlocked();
+    for (const path of [installationPath, join(stateDirectory, "state.json")])
       try {
         await unlink(path);
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
       }
   });
-}
-
-export async function resetInstallation() {
-  await removeConfig();
-  for (const path of [installationPath, join(stateDirectory, "state.json")])
-    try {
-      await unlink(path);
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
   await rm(join(stateDirectory, "pending"), { recursive: true, force: true });
 }
 

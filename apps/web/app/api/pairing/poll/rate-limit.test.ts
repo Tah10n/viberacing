@@ -83,4 +83,15 @@ describe("pairing poll pre-auth rate limiting", () => {
     await expect(response.json()).resolves.toEqual({ status: "pending" });
     expect(queryMock).toHaveBeenCalledOnce();
   });
+
+  it("reports revoked before inconsistent pending fields", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId, status: "revoked", pairing_pending: true }]);
+
+    const response = await POST(request("revoked-poll-token-that-is-long-enough"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "revoked" });
+    expect(queryMock).toHaveBeenCalledOnce();
+  });
 });

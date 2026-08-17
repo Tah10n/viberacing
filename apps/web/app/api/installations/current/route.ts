@@ -84,16 +84,33 @@ async function remove(request: Request): Promise<Response> {
   const changed = await transaction(async (client) => {
     const result = await client.query<{ id: string }>(
       `UPDATE installations
-          SET status = 'revoked', device_token_hash = NULL, revoked_at = now(), updated_at = now()
+          SET status = 'revoked',
+              device_token_hash = NULL,
+              pairing_code_hash = NULL,
+              poll_token_hash = NULL,
+              pending_device_token_hash = NULL,
+              pairing_expires_at = NULL,
+              revoked_at = now(),
+              updated_at = now()
         WHERE device_token_hash = $1 AND status = 'active'
         RETURNING id::text`,
       [digest(token)],
     );
-    if (result.rows[0])
+    if (result.rows[0]) {
       await client.query(
-        "UPDATE installation_sources SET status = 'disconnected', updated_at = now() WHERE installation_id = $1 AND status = 'active'",
+        "DELETE FROM installation_sources WHERE installation_id = $1 AND status = 'pending'",
         [result.rows[0].id],
       );
+      await client.query(
+        `UPDATE installation_sources
+            SET status = CASE WHEN status = 'active' THEN 'disconnected' ELSE status END,
+                pending_pairing_code_hash = NULL,
+                pending_disconnect = false,
+                updated_at = now()
+          WHERE installation_id = $1`,
+        [result.rows[0].id],
+      );
+    }
     return result.rowCount === 1;
   });
   return changed ? new Response(null, { status: 204 }) : problem(401, "unauthorized");

@@ -84,7 +84,7 @@ async function post(request: Request): Promise<Response> {
            FROM installations
           WHERE pairing_code_hash = $1
             AND pairing_expires_at > now()
-            AND status IN ('pending', 'active', 'revoked')
+            AND status IN ('pending', 'active')
           FOR UPDATE`,
         [digest(code)],
       );

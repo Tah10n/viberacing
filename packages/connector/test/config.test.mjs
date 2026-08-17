@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   access,
@@ -447,6 +448,95 @@ test("recovers a connection commit interrupted before the source registry is pub
     await assert.rejects(access(join(directory, "connection-commit.json")));
     await assert.rejects(module.readConfig(), { code: "ENOENT" });
     assert.deepEqual(await module.readSources(), [localSource]);
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("source and installation mutations invalidate a pending connect generation", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-connect-generation-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?connect-generation=${encodeURIComponent(home)}`);
+    const directory = join(home, ".viberacing");
+    const installationId = "81818181-8181-4181-8181-818181818181";
+    const localSource = {
+      clientSourceId: "82828282-8282-4282-8282-828282828282",
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: join(home, ".claude"),
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+    };
+    const mappedSource = {
+      ...localSource,
+      sourceId: "83838383-8383-4383-8383-838383838383",
+      agentAccountId: "84848484-8484-4484-8484-848484848484",
+      accountLabel: "Claude",
+      lastAcceptedSyncSequence: "0",
+    };
+    const nextConfig = {
+      version: 2,
+      origin: "https://viberacing.example",
+      installationId,
+      deviceToken: "generation_device_token_that_is_long_enough",
+      sources: [mappedSource],
+      protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+    };
+    await module.writeSources([localSource]);
+    await writeFile(
+      join(directory, "installation.json"),
+      `${JSON.stringify({
+        version: 1,
+        id: installationId,
+        secret: "generation_installation_secret_that_is_long_enough",
+      })}\n`,
+    );
+
+    const addedAttempt = await module.beginConnectAttempt({
+      installationId,
+      origin: nextConfig.origin,
+      expectedSources: [localSource],
+    });
+    const addedSource = {
+      clientSourceId: "85858585-8585-4585-8585-858585858585",
+      agentId: "kimi_code",
+      collectionMethod: "kimi_wire_jsonl",
+      dataPath: join(home, ".kimi-code"),
+      suggestedLabel: "Kimi",
+      supportedSurface: "cli",
+    };
+    await module.addSource(addedSource);
+    await assert.rejects(
+      module.commitConnectionState(nextConfig, [localSource], { connectAttempt: addedAttempt }),
+      { code: "connect_attempt_stale" },
+    );
+
+    const sourcesWithAddition = await module.readSources();
+    const removedAttempt = await module.beginConnectAttempt({
+      installationId,
+      origin: nextConfig.origin,
+      expectedSources: sourcesWithAddition,
+    });
+    await module.removeSource(addedSource.clientSourceId);
+    await assert.rejects(
+      module.commitConnectionState(nextConfig, [localSource], { connectAttempt: removedAttempt }),
+      { code: "connect_attempt_stale" },
+    );
+
+    const resetAttempt = await module.beginConnectAttempt({
+      installationId,
+      origin: nextConfig.origin,
+      expectedSources: [localSource],
+    });
+    await module.resetInstallation();
+    await assert.rejects(
+      module.commitConnectionState(nextConfig, [localSource], { connectAttempt: resetAttempt }),
+      { code: "connect_attempt_stale" },
+    );
+    await assert.rejects(access(join(directory, "connect-attempt.json")));
+    await assert.rejects(access(join(directory, "config.json")));
   } finally {
     restoreEnvironment();
     await rm(home, { recursive: true, force: true });
@@ -2097,6 +2187,11 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
+      if (request.url === "/api/pairing/cancel") {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
       if (request.url === "/api/pairing/poll") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ status: "pending" }));
@@ -2174,6 +2269,269 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "credentials",
   ])
     assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
+});
+
+test("later disconnect defeats pending, active-polled, and interrupted connect attempts", async (context) => {
+  const installationId = "19191919-1919-4191-8191-191919191919";
+  const clientSourceId = "20202020-2020-4202-8202-202020202020";
+  const sourceId = "21212121-2121-4212-8212-212121212121";
+  const mapping = {
+    clientSourceId,
+    sourceId,
+    agentAccountId: "22222222-2222-4222-8222-222222222222",
+    agentId: "antigravity",
+    accountLabel: "Antigravity",
+    collectionMethod: "antigravity_cli_capture",
+    lastAcceptedSyncSequence: "0",
+  };
+  let serverState = "pending";
+  let nextPairingState = "pending";
+  let cancellations = 0;
+  let deletes = 0;
+  let deleteFailure = false;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      if (request.url === "/api/installations/current" && request.method === "POST") {
+        const status = serverState === "revoked" ? 401 : 200;
+        response.writeHead(status, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify(
+            status === 401 ? { error: "unauthorized" } : reconciliationResponse([mapping]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current" && request.method === "DELETE") {
+        deletes += 1;
+        const status = deleteFailure ? 503 : serverState === "revoked" ? 401 : 204;
+        if (!deleteFailure) serverState = "revoked";
+        response.writeHead(status, status === 204 ? {} : { "content-type": "application/json" });
+        response.end(
+          status === 204
+            ? undefined
+            : JSON.stringify({ error: status === 401 ? "unauthorized" : "server_error" }),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/start") {
+        serverState = nextPairingState;
+        response.writeHead(201, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            installationId,
+            code: "RACETEST",
+            pollToken: "race_poll_token_that_is_long_enough_123456",
+            verificationUrl: `http://${request.headers.host}/connect?code=RACETEST`,
+            expiresInSeconds: 30,
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/cancel") {
+        cancellations += 1;
+        serverState = "revoked";
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      if (request.url === "/api/pairing/poll") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify(
+            serverState === "active"
+              ? {
+                  status: "active",
+                  deviceToken: "race_replacement_device_token_that_is_long_enough",
+                  sources: [mapping],
+                  protocol: {
+                    version: 2,
+                    snapshotDays: 31,
+                    maximumSources: 32,
+                    maximumEntries: 1_024,
+                  },
+                }
+              : { status: serverState },
+          ),
+        );
+        return;
+      }
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const origin = `http://127.0.0.1:${address.port}`;
+  const home = await mkdtemp(join(tmpdir(), "viberacing-connect-disconnect-race-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const capture = join(directory, "captures", `${clientSourceId}.jsonl`);
+  await mkdir(join(directory, "captures"), { recursive: true });
+  await writeFile(capture, "");
+  const localSource = {
+    clientSourceId,
+    agentId: "antigravity",
+    dataPath: capture,
+    collectionMethod: "antigravity_cli_capture",
+    supportedSurface: "cli",
+    suggestedLabel: "Antigravity",
+  };
+  await writeLocalSources(directory, [localSource]);
+  const writeInstallationIdentity = () =>
+    writeFile(
+      join(directory, "installation.json"),
+      `${JSON.stringify({
+        version: 1,
+        id: installationId,
+        secret: "race_installation_secret_that_is_long_enough",
+      })}\n`,
+    );
+  await writeInstallationIdentity();
+  const baseEnvironment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    PATH: "",
+    VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+  });
+  const spawnConnect = (extra = {}) => {
+    const child = spawn(process.execPath, [connectorPath, "connect", "--origin", origin], {
+      env: { ...baseEnvironment, ...extra },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    return {
+      child,
+      result: once(child, "close").then(([code]) => ({ code, stderr })),
+    };
+  };
+  const runBarrierRace = async (stage, lifecycleArguments = ["disconnect"]) => {
+    const barrier = join(home, `connect-${stage}-${randomUUID()}`);
+    const connect = spawnConnect({
+      VIBERACING_TEST_CONNECT_PAUSE: stage,
+      VIBERACING_TEST_CONNECT_BARRIER: barrier,
+    });
+    await waitFor(() =>
+      access(`${barrier}.ready`)
+        .then(() => true)
+        .catch(() => false),
+    );
+    await execFileAsync(process.execPath, [connectorPath, ...lifecycleArguments], {
+      env: baseEnvironment,
+    });
+    await writeFile(`${barrier}.continue`, "continue\n");
+    return connect.result;
+  };
+
+  const pendingResult = await runBarrierRace("after_pairing_start");
+  assert.equal(pendingResult.code, 1);
+  assert.match(pendingResult.stderr, /Pairing was revoked/);
+  await assert.rejects(access(join(directory, "config.json")));
+  await assert.rejects(access(join(directory, "connect-attempt.json")));
+
+  const resetResult = await runBarrierRace("after_pairing_start", ["reset-installation"]);
+  assert.equal(resetResult.code, 1);
+  await assert.rejects(access(join(directory, "installation.json")));
+  await assert.rejects(access(join(directory, "config.json")));
+  await writeInstallationIdentity();
+
+  const addedPath = join(home, "added-claude");
+  const addResult = await runBarrierRace("after_pairing_start", [
+    "source",
+    "add",
+    "--agent",
+    "claude_code",
+    "--name",
+    "Added during pairing",
+    "--data-dir",
+    addedPath,
+  ]);
+  assert.equal(addResult.code, 1);
+  const addedSource = (await readLocalSources(directory)).find(
+    (source) => source.dataPath === addedPath,
+  );
+  assert.ok(addedSource);
+  await assert.rejects(access(join(directory, "config.json")));
+
+  const removeResult = await runBarrierRace("after_pairing_start", [
+    "source",
+    "remove",
+    addedSource.clientSourceId,
+  ]);
+  assert.equal(removeResult.code, 1);
+  assert.equal(
+    (await readLocalSources(directory)).some(
+      (source) => source.clientSourceId === addedSource.clientSourceId,
+    ),
+    false,
+  );
+  await assert.rejects(access(join(directory, "config.json")));
+
+  const writePreviousConnection = async () => {
+    await writeLocalSources(directory, [localSource]);
+    await writeFile(
+      join(directory, "config.json"),
+      `${JSON.stringify({
+        version: 2,
+        origin,
+        installationId,
+        deviceToken: "race_previous_device_token_that_is_long_enough",
+        sources: [mapping],
+        protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+      })}\n`,
+    );
+  };
+  await writePreviousConnection();
+  serverState = "active";
+  nextPairingState = "active";
+  const activeResult = await runBarrierRace("after_active_poll");
+  assert.equal(activeResult.code, 1);
+  assert.match(activeResult.stderr, /superseded by a local lifecycle change/);
+  await assert.rejects(access(join(directory, "config.json")));
+  await assert.rejects(access(join(directory, "connection-commit.json")));
+  await assert.rejects(access(join(directory, "connect-attempt.json")));
+
+  await writePreviousConnection();
+  serverState = "active";
+  nextPairingState = "active";
+  const interrupted = spawnConnect({ VIBERACING_TEST_INTERRUPT_AFTER_ACTIVE_POLL: "1" });
+  const interruptedResult = await interrupted.result;
+  assert.equal(interruptedResult.code, 87);
+  await access(join(directory, "connect-attempt.json"));
+  nextPairingState = "pending";
+  const restartedResult = await runBarrierRace("after_pairing_start");
+  assert.equal(restartedResult.code, 1);
+  await assert.rejects(access(join(directory, "config.json")));
+  await assert.rejects(access(join(directory, "connect-attempt.json")));
+  await assert.rejects(access(join(directory, "dirty.json")));
+  assert.ok(cancellations >= 6);
+  assert.ok(deletes >= 1);
+
+  await writePreviousConnection();
+  await writeFile(
+    join(directory, "connect-attempt.json"),
+    `${JSON.stringify({
+      version: 1,
+      attemptId: randomUUID(),
+      installationId,
+      sourceRegistryRevision: randomUUID(),
+      origin,
+      startedAt: new Date().toISOString(),
+      pollToken: "race_poll_token_that_is_long_enough_123456",
+    })}\n`,
+  );
+  serverState = "active";
+  deleteFailure = true;
+  const uncertainDisconnect = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: baseEnvironment,
+  });
+  assert.match(uncertainDisconnect.stderr, /remote revoke could not be confirmed/);
 });
 
 test("reconnect rejects omission and retains a temporarily unavailable source", async (context) => {

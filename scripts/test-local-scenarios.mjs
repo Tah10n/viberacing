@@ -137,6 +137,13 @@ async function pair(installation, sources, selections = {}, supersededClientSour
   );
 }
 
+async function cancelPairing(pairing) {
+  return json("/api/pairing/cancel", {
+    installationId: pairing.installationId,
+    pollToken: pairing.pollToken,
+  });
+}
+
 async function usage(deviceToken, snapshots, sourceErrors = []) {
   return json(
     "/api/usage",
@@ -1163,6 +1170,127 @@ try {
   console.log(
     "ok - compact exact reconciliation covers 100 active sources, large history, and both rate limits",
   );
+
+  const cancellationInstallation = { id: randomUUID(), secret: token() };
+  const cancellationSource = source("pairing-cancellation-source", "codex");
+  const cancelledInitial = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(cancelledInitial)).status === 204,
+    "initial pairing was not cancelled",
+  );
+  check(
+    (await cancelPairing(cancelledInitial)).status === 204,
+    "repeated initial pairing cancellation was not idempotent",
+  );
+  check(
+    (await submitPairingApproval(cancelledInitial)).approval.status === 303,
+    "cancelled initial pairing was approved",
+  );
+  check(
+    (
+      await json("/api/pairing/poll", {
+        installationId: cancelledInitial.installationId,
+        pollToken: cancelledInitial.pollToken,
+      })
+    ).status === 404,
+    "cancelled initial pairing remained pollable",
+  );
+  const initialCancellationState = await pool.query(
+    `SELECT status,
+            pairing_code_hash IS NULL AS pairing_cleared,
+            poll_token_hash IS NULL AS poll_cleared,
+            pending_device_token_hash IS NULL AS pending_token_cleared,
+            pairing_expires_at IS NULL AS expiry_cleared,
+            (SELECT count(*)::int FROM installation_sources WHERE installation_id = installations.id) AS sources
+       FROM installations WHERE id = $1`,
+    [cancellationInstallation.id],
+  );
+  check(
+    initialCancellationState.rows[0]?.status === "revoked" &&
+      initialCancellationState.rows[0]?.pairing_cleared &&
+      initialCancellationState.rows[0]?.poll_cleared &&
+      initialCancellationState.rows[0]?.pending_token_cleared &&
+      initialCancellationState.rows[0]?.expiry_cleared &&
+      initialCancellationState.rows[0]?.sources === 0,
+    "initial cancellation retained pairing capability or pending sources",
+  );
+
+  const supersededAttempt = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const currentAttempt = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(supersededAttempt)).status === 204,
+    "superseded pairing cancellation was not idempotent",
+  );
+  const currentConnection = await approvePairing(currentAttempt);
+  const cancelledReconnect = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(cancelledReconnect)).status === 204,
+    "active reconnect pairing was not cancelled",
+  );
+  check(
+    (
+      await usage(currentConnection.deviceToken, [
+        snapshot(currentConnection.sources[0].sourceId, 1, [[today, 1]]),
+      ])
+    ).status === 200,
+    "cancelling a pending reconnect revoked the previous active token",
+  );
+  check(
+    (await submitPairingApproval(cancelledReconnect)).approval.status === 303,
+    "cancelled reconnect was approved",
+  );
+  const pendingReconnect = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const disconnectDuringPairing = await fetch(`${appUrl}/api/installations/current`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${currentConnection.deviceToken}` },
+  });
+  check(disconnectDuringPairing.status === 204, "disconnect did not cancel pending reconnect");
+  check(
+    (await submitPairingApproval(pendingReconnect)).approval.status === 303,
+    "revoked reconnect was approved",
+  );
+  check(
+    (
+      await json("/api/pairing/poll", {
+        installationId: pendingReconnect.installationId,
+        pollToken: pendingReconnect.pollToken,
+      })
+    ).status === 404,
+    "revoked reconnect remained pollable",
+  );
+  const revokedPairingState = await pool.query(
+    `SELECT count(*) FILTER (WHERE status = 'pending')::int AS pending_sources,
+            count(*) FILTER (
+              WHERE pending_pairing_code_hash IS NOT NULL OR pending_disconnect
+            )::int AS pending_markers
+       FROM installation_sources WHERE installation_id = $1`,
+    [cancellationInstallation.id],
+  );
+  check(
+    revokedPairingState.rows[0]?.pending_sources === 0 &&
+      revokedPairingState.rows[0]?.pending_markers === 0,
+    "disconnect retained pending-only sources or pairing markers",
+  );
+
+  const restoredConnection = await pair(cancellationInstallation, [cancellationSource]);
+  const approvedReplacement = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const replacementConnection = await approvePairing(approvedReplacement);
+  const staleTokenDisconnect = await fetch(`${appUrl}/api/installations/current`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${restoredConnection.deviceToken}` },
+  });
+  check(staleTokenDisconnect.status === 401, "rotated device token unexpectedly remained active");
+  check(
+    (await cancelPairing(approvedReplacement)).status === 204 &&
+      (await cancelPairing(approvedReplacement)).status === 204,
+    "approved pairing cancellation was not idempotent",
+  );
+  check(
+    (await usage(replacementConnection.deviceToken, [])).status === 401,
+    "approved replacement token survived exact-attempt cancellation",
+  );
+  console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
+
   const originalRequiredMigration = await pool.query(
     "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
   );

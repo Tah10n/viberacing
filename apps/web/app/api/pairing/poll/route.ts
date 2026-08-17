@@ -73,6 +73,13 @@ async function post(request: Request): Promise<Response> {
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
+    if (installation.status === "revoked") {
+      return annotateResponse(
+        Response.json({ status: "revoked" }, { headers: { "Cache-Control": "no-store" } }),
+        { pairingStatus: "revoked" },
+        "warn",
+      );
+    }
     if (installation.status !== "active" || installation.pairing_pending) {
       const pairingStatus = installation.pairing_pending ? "pending" : installation.status;
       return annotateResponse(
