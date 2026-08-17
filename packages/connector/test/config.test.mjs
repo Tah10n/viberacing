@@ -23,6 +23,7 @@ import { delimiter, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { connectorVersion } from "../lib/version.mjs";
 
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
@@ -248,17 +249,27 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       source("qwen_code"),
       source("kimi_code"),
     ]);
-    const installedLibrary = join(home, ".viberacing", "runtime", "0.2.1", "lib");
+    const installedRuntime = join(home, ".viberacing", "runtime", connectorVersion);
+    const installedLibrary = join(installedRuntime, "lib");
     for (const name of [
       "browser.mjs",
+      "connection-lifecycle.mjs",
       "config.mjs",
       "executables.mjs",
+      "owned-lock.mjs",
       "readers.mjs",
       "registry.mjs",
       "runtime.mjs",
     ])
       await access(join(installedLibrary, name));
     await access(join(installedLibrary, "adapters", "codex.mjs"));
+    const stagedVersion = await execFileAsync(
+      process.execPath,
+      [join(installedRuntime, "bin", "viberacing.mjs"), "--version"],
+      { env: connectorEnvironment(home) },
+    );
+    assert.equal(stagedVersion.stdout, `${connectorVersion}\n`);
+    assert.equal(stagedVersion.stderr, "");
     const codex = JSON.parse(await readFile(join(home, ".codex", "hooks.json"), "utf8"));
     const claude = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8"));
     const gemini = JSON.parse(await readFile(join(home, ".gemini", "settings.json"), "utf8"));
@@ -312,7 +323,9 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     );
     assert.equal((await module.diagnoseHooks([source("claude_code")])).claude_code, "outdated");
     await module.installHooks(
-      pathToFileURL(join(home, ".viberacing", "runtime", "0.2.1", "bin", "viberacing.mjs")),
+      pathToFileURL(
+        join(home, ".viberacing", "runtime", connectorVersion, "bin", "viberacing.mjs"),
+      ),
       [source("codex")],
     );
     await module.removeHooks();
@@ -341,7 +354,7 @@ test("rejects an incomplete runtime before pairing-compatible staging completes"
     const module = await import(`../lib/config.mjs?staging=${encodeURIComponent(home)}`);
     await assert.rejects(module.prepareRuntime(pathToFileURL(brokenScript)));
     await assert.rejects(
-      access(join(home, ".viberacing", "runtime", "0.2.1", "bin", "viberacing.mjs")),
+      access(join(home, ".viberacing", "runtime", connectorVersion, "bin", "viberacing.mjs")),
     );
     assert.deepEqual(await readdir(join(home, ".viberacing", "runtime")), []);
   } finally {

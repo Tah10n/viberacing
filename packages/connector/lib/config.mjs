@@ -581,8 +581,10 @@ async function atomicText(path, contents) {
 
 const installedRuntimeFiles = [
   "browser.mjs",
+  "connection-lifecycle.mjs",
   "config.mjs",
   "executables.mjs",
+  "owned-lock.mjs",
   "readers.mjs",
   "registry.mjs",
   "runtime.mjs",
