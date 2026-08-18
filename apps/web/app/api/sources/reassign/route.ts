@@ -16,6 +16,7 @@ async function post(request: Request): Promise<Response> {
     const accountId = form.get("accountId");
     if (!isUuid(sourceId) || !isUuid(accountId)) return problem(400, "invalid_request");
     const changed = await transaction(async (client) => {
+      await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
       const result = await client.query<{ agent_id: string }>(
         `UPDATE installation_sources s
             SET agent_account_id = a.id, updated_at = now()

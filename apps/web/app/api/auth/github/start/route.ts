@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { publicOrigin, requiredEnv, secureCookies } from "@/lib/config";
+import { githubWebOrigin, publicOrigin, requiredEnv, secureCookies } from "@/lib/config";
 import { randomToken } from "@/lib/crypto";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
@@ -15,7 +15,15 @@ function safeNext(value: string | null): string {
 }
 
 async function get(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("oauth_start", clientAddress(request), 20, 60))) {
+  if (!(await consumeRateLimit("oauth_start_global", "all", 500, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
+  }
+  const address = clientAddress(request);
+  const addressLimit = address === "untrusted-forwarding-headers" ? 500 : 20;
+  if (!(await consumeRateLimit("oauth_start", address, addressLimit, 60))) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -41,7 +49,7 @@ async function get(request: Request): Promise<Response> {
   });
 
   const callback = new URL("/api/auth/github/callback", publicOrigin());
-  const authorize = new URL("https://github.com/login/oauth/authorize");
+  const authorize = new URL("/login/oauth/authorize", githubWebOrigin());
   authorize.searchParams.set("client_id", requiredEnv("GITHUB_CLIENT_ID"));
   authorize.searchParams.set("redirect_uri", callback.href);
   authorize.searchParams.set("scope", "read:user");

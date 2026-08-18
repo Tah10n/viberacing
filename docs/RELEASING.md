@@ -12,7 +12,8 @@ protocol or shared user-experience change must be documented with the connector 
 
 1. Start from an up-to-date `main` with no unrelated changes.
 2. Choose the connector version from the actual compatibility impact.
-3. Update `packages/connector/package.json` and `CHANGELOG.md` in a focused pull request.
+3. Update `packages/connector/package.json` and `CHANGELOG.md` in a focused pull request, then run
+   `corepack pnpm --filter @viberacing/connector prepack` to regenerate the single version module.
 4. Run `corepack pnpm verify`.
 5. Run `corepack pnpm local:up`, `corepack pnpm local:test`, and `corepack pnpm local:down` when
    Docker is available.

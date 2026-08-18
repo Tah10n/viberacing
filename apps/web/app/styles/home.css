@@ -163,6 +163,30 @@
   padding: var(--space-5) var(--space-6) 0;
 }
 
+.leaderboard-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.leaderboard-heading h2,
+.leaderboard-heading p {
+  margin: 0;
+}
+
+.leaderboard-heading h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.leaderboard-heading p {
+  margin-top: var(--space-1);
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+}
+
 .table-scroll {
   max-height: calc(100vh - 23.25rem);
   overflow: auto;

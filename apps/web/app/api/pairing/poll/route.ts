@@ -27,6 +27,12 @@ interface SourceRow {
 
 async function post(request: Request): Promise<Response> {
   try {
+    if (!(await consumeRateLimit("pairing_poll_global", "all", 10_000, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
     const rawBody = await readBoundedJson(request, 2_048);
     if (!isRecord(rawBody)) return problem(400, "invalid_request");
     const body = rawBody as PollBody;
@@ -38,7 +44,9 @@ async function post(request: Request): Promise<Response> {
     ) {
       return problem(400, "invalid_request");
     }
-    if (!(await consumeRateLimit("pairing_poll_pre_auth", clientAddress(request), 120, 60))) {
+    const address = clientAddress(request);
+    const addressLimit = address === "untrusted-forwarding-headers" ? 10_000 : 120;
+    if (!(await consumeRateLimit("pairing_poll_pre_auth", address, addressLimit, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -63,6 +71,13 @@ async function post(request: Request): Promise<Response> {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
+    if (installation.status === "revoked") {
+      return annotateResponse(
+        Response.json({ status: "revoked" }, { headers: { "Cache-Control": "no-store" } }),
+        { pairingStatus: "revoked" },
+        "warn",
       );
     }
     if (installation.status !== "active" || installation.pairing_pending) {

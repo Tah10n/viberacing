@@ -9,8 +9,8 @@
 - Set `DATABASE_URL`, `VIBERACING_PUBLIC_ORIGIN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `VIBERACING_DATABASE_SSL`, `VIBERACING_MIN_CONNECTOR_VERSION=0.2.0`, and
   `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Set
-  `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of `DATABASE_URL` so
-  `VIBERACING_DATABASE_SSL` remains the only database TLS switch.
+  `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of
+  `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch.
 - Never set `VIBERACING_ALLOW_INSECURE_LOCAL` in Railway. It is a loopback-only local-preview flag.
 - Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports the latest
   required migration. Insert a synthetic later ledger row and confirm readiness remains healthy;
@@ -26,7 +26,8 @@
 
 - Run `corepack pnpm verify`, `corepack pnpm db:migrate` twice on a clean PostgreSQL database,
   `corepack pnpm local:up`, and `corepack pnpm local:test`.
-- Run `corepack pnpm audit --prod --audit-level high` and `corepack pnpm connector:package:check`.
+- Run `corepack pnpm audit --prod --audit-level moderate`, `corepack pnpm migrations:check`, and
+  `corepack pnpm connector:package:check`.
 - Confirm the production image runs as `node`, readiness succeeds, OAuth/pairing works, and an old
   device token fails after reconnect.
 - Confirm the connector matrix passes on Linux, macOS, and Windows using `VIBERACING_STATE_DIR`, and
@@ -58,6 +59,9 @@
   branch deletion.
 - Enable Dependabot security updates/alerts and secret scanning where the repository plan supports
   them.
+- At the start of each calendar quarter, review ignored npm and Node major updates, record the
+  compatibility/test decision in an issue, and schedule accepted upgrades instead of leaving the
+  major-version ignore indefinitely unaudited.
 - Configure npm trusted publishing with provenance for `@viberacing/connector`; run
   `corepack pnpm connector:package:check` against the package root before the first publish.
 - Publish only after the deployed server accepts protocol v2 and its minimum version policy matches

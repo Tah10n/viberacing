@@ -2,6 +2,14 @@ import { publicOrigin } from "./config";
 import type { LogFields } from "./log";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function hasTerminalControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) return true;
+  }
+  return false;
+}
 interface ResponseLogMetadata {
   outcome?: string;
   cause?: unknown;
@@ -17,6 +25,15 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && uuidPattern.test(value);
+}
+
+export function isSafeDisplayText(value: unknown, maximum: number): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length >= 1 &&
+    value.trim().length <= maximum &&
+    !hasTerminalControlCharacter(value)
+  );
 }
 
 export function sameOrigin(request: Request): boolean {

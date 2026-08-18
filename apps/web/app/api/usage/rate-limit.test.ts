@@ -43,8 +43,8 @@ describe("usage pre-auth rate limiting", () => {
     const response = await POST(request("attacker-controlled-random-token-0001"));
 
     expect(response.status).toBe(401);
-    expect(consumeRateLimitMock).toHaveBeenCalledTimes(1);
-    expect(consumeRateLimitMock.mock.calls[0]?.slice(0, 2)).toEqual([
+    expect(consumeRateLimitMock).toHaveBeenCalledTimes(2);
+    expect(consumeRateLimitMock.mock.calls[1]?.slice(0, 2)).toEqual([
       "usage_pre_auth",
       "203.0.113.9",
     ]);
@@ -57,24 +57,29 @@ describe("usage pre-auth rate limiting", () => {
   });
 
   it("keys the authenticated quota by the server-side installation id", async () => {
-    consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    consumeRateLimitMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
     queryMock.mockResolvedValue([{ id: installationId, user_id: "1" }]);
 
     const response = await POST(request());
 
     expect(response.status).toBe(429);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(1, "usage_global", "all", 10_000, 60);
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
-      1,
+      2,
       "usage_pre_auth",
       "203.0.113.9",
       120,
       60,
     );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "usage_sync", installationId, 30, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "usage_sync", installationId, 30, 60);
   });
 
   it("also caps ingestion by authenticated user across installations", async () => {
     consumeRateLimitMock
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
@@ -83,7 +88,7 @@ describe("usage pre-auth rate limiting", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(429);
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "usage_sync_user", "42", 120, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(4, "usage_sync_user", "42", 120, 60);
     expect(transactionMock).not.toHaveBeenCalled();
   });
 });

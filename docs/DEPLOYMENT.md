@@ -16,6 +16,7 @@
    VIBERACING_DATABASE_SSL=false
    VIBERACING_MIN_CONNECTOR_VERSION=0.2.0
    VIBERACING_MAX_DAILY_TOKENS=9999999999999999
+   VIBERACING_TRUST_PROXY=railway
    VIBERACING_LOG_LEVEL=info
    ```
 
@@ -25,6 +26,11 @@
 
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
+
+   `VIBERACING_TRUST_PROXY=railway` is specific to Railway's edge, which overwrites `X-Real-IP`.
+   Keep the default `none` for direct traffic and do not enable this mode behind an untrusted or
+   pass-through proxy. Self-hosted deployments need an equivalent trusted edge before a future proxy
+   mode can be added.
 
    Keep `VIBERACING_MAX_DAILY_TOKENS` quoted in YAML-based deployment definitions. Exponential
    notation, surrounding whitespace, leading zeroes, and fractional values are rejected so token

@@ -36,8 +36,9 @@ describe("pairing poll pre-auth rate limiting", () => {
     const response = await POST(request("attacker-controlled-random-poll-token-01"));
 
     expect(response.status).toBe(404);
-    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
-    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+    expect(consumeRateLimitMock).toHaveBeenCalledTimes(2);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      2,
       "pairing_poll_pre_auth",
       "203.0.113.10",
       120,
@@ -46,7 +47,10 @@ describe("pairing poll pre-auth rate limiting", () => {
   });
 
   it("keys the authenticated poll quota by the server-side installation id", async () => {
-    consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    consumeRateLimitMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
     queryMock.mockResolvedValue([{ id: installationId, status: "pending", pairing_pending: true }]);
 
     const response = await POST(request("synthetic-poll-token-that-is-long-enough"));
@@ -54,12 +58,19 @@ describe("pairing poll pre-auth rate limiting", () => {
     expect(response.status).toBe(429);
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
       1,
+      "pairing_poll_global",
+      "all",
+      10_000,
+      60,
+    );
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      2,
       "pairing_poll_pre_auth",
       "203.0.113.10",
       120,
       60,
     );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "pairing_poll", installationId, 40, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "pairing_poll", installationId, 40, 60);
   });
 
   it("keeps an active installation pending until its replacement token is approved", async () => {
@@ -70,6 +81,17 @@ describe("pairing poll pre-auth rate limiting", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ status: "pending" });
+    expect(queryMock).toHaveBeenCalledOnce();
+  });
+
+  it("reports revoked before inconsistent pending fields", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId, status: "revoked", pairing_pending: true }]);
+
+    const response = await POST(request("revoked-poll-token-that-is-long-enough"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "revoked" });
     expect(queryMock).toHaveBeenCalledOnce();
   });
 });

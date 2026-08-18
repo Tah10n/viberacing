@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { publicOrigin, requiredEnv } from "@/lib/config";
+import { githubApiOrigin, githubWebOrigin, publicOrigin, requiredEnv } from "@/lib/config";
 import { randomToken, secretEqual } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { markResponse } from "@/lib/http";
@@ -56,16 +56,19 @@ async function get(request: Request): Promise<Response> {
 
   let tokenResult: { ok: boolean; body: unknown };
   try {
-    tokenResult = await githubRequest("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: requiredEnv("GITHUB_CLIENT_ID"),
-        client_secret: requiredEnv("GITHUB_CLIENT_SECRET"),
-        code,
-        redirect_uri: new URL("/api/auth/github/callback", publicOrigin()).href,
-      }),
-    });
+    tokenResult = await githubRequest(
+      new URL("/login/oauth/access_token", githubWebOrigin()).href,
+      {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_id: requiredEnv("GITHUB_CLIENT_ID"),
+          client_secret: requiredEnv("GITHUB_CLIENT_SECRET"),
+          code,
+          redirect_uri: new URL("/api/auth/github/callback", publicOrigin()).href,
+        }),
+      },
+    );
   } catch (error) {
     return authFailed("token_request_failed", error);
   }
@@ -76,7 +79,7 @@ async function get(request: Request): Promise<Response> {
 
   let profileResult: { ok: boolean; body: unknown };
   try {
-    profileResult = await githubRequest("https://api.github.com/user", {
+    profileResult = await githubRequest(new URL("/user", githubApiOrigin()).href, {
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token.access_token}`,

@@ -137,6 +137,13 @@ async function pair(installation, sources, selections = {}, supersededClientSour
   );
 }
 
+async function cancelPairing(pairing) {
+  return json("/api/pairing/cancel", {
+    installationId: pairing.installationId,
+    pollToken: pairing.pollToken,
+  });
+}
+
 async function usage(deviceToken, snapshots, sourceErrors = []) {
   return json(
     "/api/usage",
@@ -266,6 +273,78 @@ try {
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
 
+  const previousWeek = dateOffset(-7);
+  const concurrentWeeklyUpdates = await Promise.all([
+    usage(first.deviceToken, [
+      snapshot(
+        byClient.get("claude-personal").sourceId,
+        2,
+        [[previousWeek, 31]],
+        "complete",
+        previousWeek,
+        previousWeek,
+      ),
+    ]),
+    usage(second.deviceToken, [
+      snapshot(
+        secondByClient.get("claude-work").sourceId,
+        2,
+        [[previousWeek, 23]],
+        "complete",
+        previousWeek,
+        previousWeek,
+      ),
+    ]),
+  ]);
+  const concurrentClaudeSummary = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND week_start = date_trunc('week', $2::date)::date",
+    [userId, previousWeek],
+  );
+  check(
+    concurrentWeeklyUpdates.every((item) => item.status === 200) &&
+      concurrentClaudeSummary.rows[0]?.tokens === "54",
+    `concurrent weekly summary update was lost: ${JSON.stringify({
+      statuses: concurrentWeeklyUpdates.map((item) => item.status),
+      summary: concurrentClaudeSummary.rows[0]?.tokens,
+    })}`,
+  );
+  console.log("ok - concurrent usage from two installations preserves the weekly summary");
+
+  const orderClient = await pool.connect();
+  let orderedUsage;
+  try {
+    await orderClient.query("BEGIN");
+    await orderClient.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [userId]);
+    orderedUsage = rawUsage(
+      first.deviceToken,
+      [],
+      [{ sourceId: byClient.get("claude-personal").sourceId, code: "collector_failed" }],
+    );
+    let waitingForUser = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await pool.query(
+        "SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query LIKE '%FROM users%' AND query LIKE '%FOR UPDATE%'",
+      );
+      if ((waiting.rows[0]?.count ?? 0) > 0) {
+        waitingForUser = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    check(waitingForUser, "usage did not acquire the user lock before child rows");
+    await orderClient.query("SET LOCAL lock_timeout = '1s'");
+    await orderClient.query("SELECT id FROM installations WHERE id = $1 FOR UPDATE", [
+      firstInstallation.id,
+    ]);
+    await orderClient.query("COMMIT");
+    check((await orderedUsage).status === 200, "ordered usage request failed after lock release");
+  } finally {
+    await orderClient.query("ROLLBACK").catch(() => {});
+    orderClient.release();
+    if (orderedUsage) await orderedUsage.catch(() => {});
+  }
+  console.log("ok - usage and browser mutations share user-first lock ordering");
+
   const target = byClient.get("codex-work").sourceId;
   const lockClient = await pool.connect();
   const replacementDeviceToken = token();
@@ -347,7 +426,12 @@ try {
     "same sequence was not idempotent",
   );
   const currentInstallation = await fetch(`${appUrl}/api/installations/current`, {
-    headers: { authorization: `Bearer ${first.deviceToken}` },
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${first.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ sourceIds: [target] }),
   });
   const currentInstallationBody = await currentInstallation.json();
   check(
@@ -627,6 +711,7 @@ try {
       expiredApproval.headers.get("location")?.includes("error=expired"),
     "expired pairing was accepted",
   );
+  await pool.query("DELETE FROM installations WHERE id = $1", [expiredInstallation.id]);
   console.log("ok - expired pairing is rejected");
 
   const activeInstallationCount = await pool.query(
@@ -721,6 +806,67 @@ try {
       sourceFillers,
     ]);
   console.log("ok - per-user installation, source, and agent-account caps are transactional");
+
+  const pendingBeforeQuotaRace = await pool.query(
+    "SELECT count(*)::int AS count FROM installations WHERE status = 'pending' AND pairing_expires_at > now()",
+  );
+  check(
+    pendingBeforeQuotaRace.rows[0].count < 1_000,
+    "global pending quota was already full before the concurrency scenario",
+  );
+  const pendingQuotaIds = Array.from({ length: 999 - pendingBeforeQuotaRace.rows[0].count }, () =>
+    randomUUID(),
+  );
+  await pool.query(
+    `INSERT INTO installations
+       (id, status, installation_secret_hash, pairing_code_hash, poll_token_hash,
+        pending_device_token_hash, connector_version, protocol_version, pairing_expires_at)
+     SELECT id::uuid, 'pending',
+            decode(md5(id || ':secret') || md5(id || ':secret:2'), 'hex'),
+            decode(md5(id || ':pair') || md5(id || ':pair:2'), 'hex'),
+            decode(md5(id || ':poll') || md5(id || ':poll:2'), 'hex'),
+            decode(md5(id || ':device') || md5(id || ':device:2'), 'hex'),
+            '0.2.1', 2, now() + interval '10 minutes'
+       FROM unnest($1::text[]) AS pending(id)`,
+    [pendingQuotaIds],
+  );
+  const racingPairings = Array.from({ length: 20 }, (_, index) => ({
+    id: randomUUID(),
+    secret: token(),
+    clientSourceId: `quota-race-${index}`,
+  }));
+  try {
+    const quotaResponses = await Promise.all(
+      racingPairings.map((installation) =>
+        json("/api/pairing/start", {
+          protocolVersion: 2,
+          connectorVersion: "0.2.1",
+          installationId: installation.id,
+          installationSecret: installation.secret,
+          sources: [source(installation.clientSourceId, "opencode")],
+          supersededClientSourceIds: [],
+        }),
+      ),
+    );
+    const createdPairings = quotaResponses.filter((item) => item.status === 201).length;
+    const busyPairings = quotaResponses.filter((item) => item.status === 429).length;
+    const pendingAfterRace = await pool.query(
+      "SELECT count(*)::int AS count FROM installations WHERE status = 'pending'",
+    );
+    check(
+      createdPairings === 1 && busyPairings === 19 && pendingAfterRace.rows[0].count === 1_000,
+      `global pending quota raced: ${JSON.stringify({
+        createdPairings,
+        busyPairings,
+        pending: pendingAfterRace.rows[0].count,
+      })}`,
+    );
+  } finally {
+    await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+      [...pendingQuotaIds, ...racingPairings.map((item) => item.id)],
+    ]);
+  }
+  console.log("ok - concurrent pairing starts cannot exceed the global pending quota");
 
   const other = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -882,22 +1028,299 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
-  await pool.query(
-    "INSERT INTO schema_migrations (version) VALUES ('004_synthetic_future.sql') ON CONFLICT DO NOTHING",
+  const historicalSourceIds = Array.from({ length: 80 }, () => randomUUID());
+  const exactSourceIds = Array.from({ length: 100 }, () => randomUUID());
+  try {
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'codex', 'historical-source-' || ordinality,
+              'codex_app_server', 'desktop', 'Historical source', 'disconnected'
+         FROM unnest($1::text[]) WITH ORDINALITY AS historical(id, ordinality)`,
+      [
+        historicalSourceIds,
+        firstInstallation.id,
+        userId,
+        byClient.get("codex-personal-a").agentAccountId,
+      ],
+    );
+    const removedDetailedInstallation = await fetch(`${appUrl}/api/installations/current`, {
+      headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },
+    });
+    check(
+      removedDetailedInstallation.status === 405,
+      "unused detailed installation GET contract is still exposed",
+    );
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'codex', 'exact-source-' || ordinality,
+              'codex_app_server', 'desktop', 'Exact source', 'active'
+         FROM unnest($1::text[]) WITH ORDINALITY AS exact_source(id, ordinality)`,
+      [
+        exactSourceIds,
+        firstInstallation.id,
+        userId,
+        byClient.get("codex-personal-a").agentAccountId,
+      ],
+    );
+    const exactReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: exactSourceIds }),
+    });
+    const exactBody = await exactReconciliation.json();
+    check(
+      exactReconciliation.status === 200 &&
+        exactBody.sources.length === 100 &&
+        exactBody.sources.every(
+          (source, index) =>
+            source.sourceId === exactSourceIds[index] &&
+            source.status === "active" &&
+            source.lastAcceptedSyncSequence === "0" &&
+            Object.keys(source).sort().join(",") === "lastAcceptedSyncSequence,sourceId,status",
+        ),
+      "exact reconciliation did not return all 100 compact active source states",
+    );
+    await pool.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      exactSourceIds[73],
+    ]);
+    const retiredReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: exactSourceIds }),
+    });
+    const retiredBody = await retiredReconciliation.json();
+    check(
+      retiredReconciliation.status === 200 &&
+        retiredBody.sources[73]?.sourceId === exactSourceIds[73] &&
+        retiredBody.sources[73]?.status === "disconnected",
+      "exact reconciliation did not explicitly retire a disconnected source",
+    );
+
+    await pool.query(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         'reconciliation_global', $1,
+         to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+         10000,
+         to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+      [digest("all")],
+    );
+    let limitedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: [exactSourceIds[0]] }),
+    });
+    check(
+      limitedReconciliation.status === 429 &&
+        limitedReconciliation.headers.get("retry-after") === "60",
+      "global reconciliation rate limit did not return Retry-After",
+    );
+    await pool.query("DELETE FROM rate_limit_buckets WHERE scope = 'reconciliation_global'");
+    await pool.query(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         'reconciliation_installation', $1,
+         to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+         60,
+         to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+      [digest(firstInstallation.id)],
+    );
+    limitedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${finalReconnect.deviceToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ sourceIds: [exactSourceIds[0]] }),
+    });
+    check(
+      limitedReconciliation.status === 429 &&
+        limitedReconciliation.headers.get("retry-after") === "60",
+      "per-installation reconciliation rate limit did not return Retry-After",
+    );
+  } finally {
+    await pool.query(
+      "DELETE FROM rate_limit_buckets WHERE scope IN ('reconciliation_global', 'reconciliation_installation')",
+    );
+    await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
+      [...historicalSourceIds, ...exactSourceIds],
+    ]);
+  }
+  console.log(
+    "ok - compact exact reconciliation covers 100 active sources, large history, and both rate limits",
+  );
+
+  const cancellationInstallation = { id: randomUUID(), secret: token() };
+  const cancellationSource = source("pairing-cancellation-source", "codex");
+  const cancelledInitial = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(cancelledInitial)).status === 204,
+    "initial pairing was not cancelled",
   );
   check(
-    (await fetch(`${appUrl}/ready`)).status === 200,
-    "readiness rejected a later migration ledger row",
+    (await cancelPairing(cancelledInitial)).status === 204,
+    "repeated initial pairing cancellation was not idempotent",
   );
-  await pool.query("DELETE FROM schema_migrations WHERE version = '004_synthetic_future.sql'");
-  await pool.query(
-    "DELETE FROM schema_migrations WHERE version = '003_pairing_superseded_sources.sql'",
+  check(
+    (await submitPairingApproval(cancelledInitial)).approval.status === 303,
+    "cancelled initial pairing was approved",
   );
-  const missingExpectedSchema = await fetch(`${appUrl}/ready`);
-  check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
-  await pool.query(
-    "INSERT INTO schema_migrations (version) VALUES ('003_pairing_superseded_sources.sql')",
+  check(
+    (
+      await json("/api/pairing/poll", {
+        installationId: cancelledInitial.installationId,
+        pollToken: cancelledInitial.pollToken,
+      })
+    ).status === 404,
+    "cancelled initial pairing remained pollable",
   );
+  const initialCancellationState = await pool.query(
+    `SELECT status,
+            pairing_code_hash IS NULL AS pairing_cleared,
+            poll_token_hash IS NULL AS poll_cleared,
+            pending_device_token_hash IS NULL AS pending_token_cleared,
+            pairing_expires_at IS NULL AS expiry_cleared,
+            (SELECT count(*)::int FROM installation_sources WHERE installation_id = installations.id) AS sources
+       FROM installations WHERE id = $1`,
+    [cancellationInstallation.id],
+  );
+  check(
+    initialCancellationState.rows[0]?.status === "revoked" &&
+      initialCancellationState.rows[0]?.pairing_cleared &&
+      initialCancellationState.rows[0]?.poll_cleared &&
+      initialCancellationState.rows[0]?.pending_token_cleared &&
+      initialCancellationState.rows[0]?.expiry_cleared &&
+      initialCancellationState.rows[0]?.sources === 0,
+    "initial cancellation retained pairing capability or pending sources",
+  );
+
+  const supersededAttempt = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const currentAttempt = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(supersededAttempt)).status === 204,
+    "superseded pairing cancellation was not idempotent",
+  );
+  const currentConnection = await approvePairing(currentAttempt);
+  const cancelledReconnect = await beginPairing(cancellationInstallation, [cancellationSource]);
+  check(
+    (await cancelPairing(cancelledReconnect)).status === 204,
+    "active reconnect pairing was not cancelled",
+  );
+  check(
+    (
+      await usage(currentConnection.deviceToken, [
+        snapshot(currentConnection.sources[0].sourceId, 1, [[today, 1]]),
+      ])
+    ).status === 200,
+    "cancelling a pending reconnect revoked the previous active token",
+  );
+  check(
+    (await submitPairingApproval(cancelledReconnect)).approval.status === 303,
+    "cancelled reconnect was approved",
+  );
+  const pendingReconnect = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const disconnectDuringPairing = await fetch(`${appUrl}/api/installations/current`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${currentConnection.deviceToken}` },
+  });
+  check(disconnectDuringPairing.status === 204, "disconnect did not cancel pending reconnect");
+  check(
+    (await submitPairingApproval(pendingReconnect)).approval.status === 303,
+    "revoked reconnect was approved",
+  );
+  check(
+    (
+      await json("/api/pairing/poll", {
+        installationId: pendingReconnect.installationId,
+        pollToken: pendingReconnect.pollToken,
+      })
+    ).status === 404,
+    "revoked reconnect remained pollable",
+  );
+  const revokedPairingState = await pool.query(
+    `SELECT count(*) FILTER (WHERE status = 'pending')::int AS pending_sources,
+            count(*) FILTER (
+              WHERE pending_pairing_code_hash IS NOT NULL OR pending_disconnect
+            )::int AS pending_markers
+       FROM installation_sources WHERE installation_id = $1`,
+    [cancellationInstallation.id],
+  );
+  check(
+    revokedPairingState.rows[0]?.pending_sources === 0 &&
+      revokedPairingState.rows[0]?.pending_markers === 0,
+    "disconnect retained pending-only sources or pairing markers",
+  );
+
+  const restoredConnection = await pair(cancellationInstallation, [cancellationSource]);
+  const approvedReplacement = await beginPairing(cancellationInstallation, [cancellationSource]);
+  const replacementConnection = await approvePairing(approvedReplacement);
+  const staleTokenDisconnect = await fetch(`${appUrl}/api/installations/current`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${restoredConnection.deviceToken}` },
+  });
+  check(staleTokenDisconnect.status === 401, "rotated device token unexpectedly remained active");
+  check(
+    (await cancelPairing(approvedReplacement)).status === 204 &&
+      (await cancelPairing(approvedReplacement)).status === 204,
+    "approved pairing cancellation was not idempotent",
+  );
+  check(
+    (await usage(replacementConnection.deviceToken, [])).status === 401,
+    "approved replacement token survived exact-attempt cancellation",
+  );
+  console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
+
+  const originalRequiredMigration = await pool.query(
+    "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
+  );
+  try {
+    await pool.query(
+      "INSERT INTO schema_migrations (version, checksum) VALUES ('005_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+    );
+    check(
+      (await fetch(`${appUrl}/ready`)).status === 200,
+      "readiness rejected a later migration ledger row",
+    );
+    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'");
+    const missingExpectedSchema = await fetch(`${appUrl}/ready`);
+    check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
+  } finally {
+    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
+    const original = originalRequiredMigration.rows[0];
+    if (original) {
+      await pool.query(
+        `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
+         ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
+        [original.version, original.checksum],
+      );
+    } else {
+      await pool.query(
+        "DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
+      );
+    }
+  }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",
     headers: { authorization: `Bearer ${finalReconnect.deviceToken}` },

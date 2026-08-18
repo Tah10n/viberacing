@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRecord, isUuid, readBoundedForm, readBoundedJson } from "./http";
+import { isRecord, isSafeDisplayText, isUuid, readBoundedForm, readBoundedJson } from "./http";
 
 describe("request value validation", () => {
   it("accepts plain objects but rejects null and arrays", () => {
@@ -11,6 +11,12 @@ describe("request value validation", () => {
   it("accepts canonical UUIDs only", () => {
     expect(isUuid("616e2e21-d41f-48cf-8b2e-38ad1b90faba")).toBe(true);
     expect(isUuid("not-a-uuid")).toBe(false);
+  });
+
+  it("rejects terminal control characters in display text", () => {
+    expect(isSafeDisplayText("Safe label", 40)).toBe(true);
+    expect(isSafeDisplayText("Unsafe\u001b[2J label", 40)).toBe(false);
+    expect(isSafeDisplayText("line\nbreak", 40)).toBe(false);
   });
 });
 

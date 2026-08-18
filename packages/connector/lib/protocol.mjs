@@ -1,0 +1,302 @@
+import { hasTerminalControlCharacters } from "./terminal.mjs";
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
+const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/;
+const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const errorCodePattern = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const responseLimit = 65_536;
+
+function record(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function exactKeys(value, keys) {
+  return record(value) && Object.keys(value).every((key) => keys.has(key));
+}
+
+function requiredExactKeys(value, keys) {
+  return exactKeys(value, keys) && [...keys].every((key) => Object.hasOwn(value, key));
+}
+
+function invalid(message = "Vibe Racing returned an invalid protocol response") {
+  const error = new Error(message);
+  error.code = "invalid_server_response";
+  return error;
+}
+
+function safeText(value, maximum = 500, minimum = 0) {
+  return (
+    typeof value === "string" &&
+    value.length >= minimum &&
+    value.length <= maximum &&
+    !hasTerminalControlCharacters(value)
+  );
+}
+
+function safeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function safeVerificationUrl(value, origin, code) {
+  if (typeof value !== "string" || value.length > 2_048) return false;
+  try {
+    const url = new URL(value);
+    if (url.origin !== origin || url.pathname !== "/connect" || url.hash !== "") return false;
+    if (
+      url.protocol !== "https:" &&
+      !(url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+    )
+      return false;
+    return (
+      [...url.searchParams.keys()].every((key) => key === "code") &&
+      url.searchParams.getAll("code").length === 1 &&
+      url.searchParams.get("code") === code
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function readLimitedBody(response) {
+  const declared = response.headers.get("content-length");
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > responseLimit)) {
+    await response.body?.cancel().catch(() => {});
+    throw invalid("Vibe Racing response body is too large");
+  }
+  if (response.body === null) return Buffer.alloc(0);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > responseLimit) {
+        await reader.cancel().catch(() => {});
+        throw invalid("Vibe Racing response body is too large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(
+    chunks.map((chunk) => Buffer.from(chunk)),
+    length,
+  );
+}
+
+function parseJsonBody(response, body) {
+  const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") throw invalid("Vibe Racing returned non-JSON content");
+  if (body.length === 0) throw invalid("Vibe Racing returned an empty JSON response");
+  try {
+    return JSON.parse(body.toString("utf8"));
+  } catch {
+    throw invalid("Vibe Racing returned malformed JSON");
+  }
+}
+
+function parsePairingStart(value, context) {
+  const keys = new Set([
+    "installationId",
+    "code",
+    "pollToken",
+    "verificationUrl",
+    "expiresInSeconds",
+  ]);
+  if (
+    !requiredExactKeys(value, keys) ||
+    value.installationId !== context.installationId ||
+    !uuidPattern.test(value.installationId) ||
+    typeof value.code !== "string" ||
+    !/^[A-Z2-9]{8}$/.test(value.code) ||
+    !tokenPattern.test(value.pollToken) ||
+    !Number.isSafeInteger(value.expiresInSeconds) ||
+    value.expiresInSeconds < 1 ||
+    value.expiresInSeconds > 900 ||
+    !safeVerificationUrl(value.verificationUrl, context.origin, value.code)
+  )
+    throw invalid();
+  return value;
+}
+
+const mappingKeys = new Set([
+  "clientSourceId",
+  "sourceId",
+  "agentAccountId",
+  "agentId",
+  "accountLabel",
+  "collectionMethod",
+  "lastAcceptedSyncSequence",
+]);
+
+function parseMapping(value, local) {
+  if (
+    !requiredExactKeys(value, mappingKeys) ||
+    value.clientSourceId !== local.clientSourceId ||
+    !identifierPattern.test(value.clientSourceId) ||
+    !uuidPattern.test(value.sourceId) ||
+    !uuidPattern.test(value.agentAccountId) ||
+    value.agentId !== local.agentId ||
+    value.collectionMethod !== local.collectionMethod ||
+    (typeof local.sourceId === "string" && value.sourceId !== local.sourceId) ||
+    !safeText(value.accountLabel, 40, 1) ||
+    !decimalPattern.test(value.lastAcceptedSyncSequence)
+  )
+    throw invalid();
+  return {
+    ...local,
+    sourceId: value.sourceId,
+    agentAccountId: value.agentAccountId,
+    accountLabel: value.accountLabel,
+    lastAcceptedSyncSequence: value.lastAcceptedSyncSequence,
+  };
+}
+
+function parsePairingPoll(value, context) {
+  if (
+    requiredExactKeys(value, new Set(["status"])) &&
+    ["pending", "revoked"].includes(value.status)
+  )
+    return value;
+  const keys = new Set(["status", "deviceToken", "sources", "protocol"]);
+  if (
+    !requiredExactKeys(value, keys) ||
+    value.status !== "active" ||
+    !tokenPattern.test(value.deviceToken) ||
+    !Array.isArray(value.sources) ||
+    !requiredExactKeys(
+      value.protocol,
+      new Set(["version", "snapshotDays", "maximumSources", "maximumEntries"]),
+    ) ||
+    value.protocol.version !== 2 ||
+    value.protocol.snapshotDays !== 31 ||
+    value.protocol.maximumSources !== 32 ||
+    value.protocol.maximumEntries !== 1_024
+  )
+    throw invalid();
+  const localById = new Map(context.localSources.map((source) => [source.clientSourceId, source]));
+  const requiredClientSourceIds = new Set(
+    context.requiredClientSourceIds ?? context.localSources.map((source) => source.clientSourceId),
+  );
+  if (
+    value.sources.length > localById.size ||
+    [...requiredClientSourceIds].some((clientSourceId) => !localById.has(clientSourceId))
+  )
+    throw invalid();
+  const seen = new Set();
+  const sources = value.sources.map((mapping) => {
+    const clientSourceId = record(mapping) ? mapping.clientSourceId : undefined;
+    const local = typeof clientSourceId === "string" ? localById.get(clientSourceId) : undefined;
+    if (local === undefined || seen.has(clientSourceId)) throw invalid();
+    seen.add(clientSourceId);
+    return parseMapping(mapping, local);
+  });
+  if ([...requiredClientSourceIds].some((clientSourceId) => !seen.has(clientSourceId))) {
+    throw invalid();
+  }
+  return { status: "active", deviceToken: value.deviceToken, sources, protocol: value.protocol };
+}
+
+function parseReconciliation(value, context) {
+  if (!requiredExactKeys(value, new Set(["sources"])) || !Array.isArray(value.sources))
+    throw invalid();
+  const expected = new Set(context.sourceIds ?? []);
+  if (expected.size > 100 || value.sources.length !== expected.size) throw invalid();
+  const seen = new Set();
+  for (const source of value.sources) {
+    if (
+      !requiredExactKeys(source, new Set(["sourceId", "status", "lastAcceptedSyncSequence"])) ||
+      !expected.has(source.sourceId) ||
+      seen.has(source.sourceId) ||
+      !["active", "disconnected"].includes(source.status) ||
+      !decimalPattern.test(source.lastAcceptedSyncSequence)
+    )
+      throw invalid();
+    seen.add(source.sourceId);
+  }
+  if ([...expected].some((sourceId) => !seen.has(sourceId))) throw invalid();
+  return value;
+}
+
+function parseUsage(value, context) {
+  const keys = new Set([
+    "acceptedEntries",
+    "acceptedSnapshots",
+    "acceptedSourceErrors",
+    "staleSnapshots",
+    "sourceSequences",
+  ]);
+  if (
+    !requiredExactKeys(value, keys) ||
+    !safeInteger(value.acceptedEntries) ||
+    !safeInteger(value.acceptedSnapshots) ||
+    !safeInteger(value.acceptedSourceErrors) ||
+    !safeInteger(value.staleSnapshots) ||
+    !Array.isArray(value.sourceSequences)
+  )
+    throw invalid();
+  const expected = new Set(context.sourceIds);
+  if (value.sourceSequences.length !== expected.size) throw invalid();
+  const seen = new Set();
+  for (const sequence of value.sourceSequences) {
+    if (
+      !requiredExactKeys(sequence, new Set(["sourceId", "lastAcceptedSyncSequence", "accepted"])) ||
+      !expected.has(sequence.sourceId) ||
+      seen.has(sequence.sourceId) ||
+      !decimalPattern.test(sequence.lastAcceptedSyncSequence) ||
+      typeof sequence.accepted !== "boolean"
+    )
+      throw invalid();
+    seen.add(sequence.sourceId);
+  }
+  return value;
+}
+
+export function mergeStoredSourceMapping(local, mapping) {
+  if (!record(mapping) || mapping.clientSourceId !== local.clientSourceId)
+    throw invalid("Connector configuration contains an invalid source mapping");
+  if (mapping.agentId !== local.agentId || mapping.collectionMethod !== local.collectionMethod)
+    throw invalid("Connector configuration source identity changed");
+  if (
+    !uuidPattern.test(mapping.sourceId) ||
+    !safeText(mapping.accountLabel, 40, 1) ||
+    !decimalPattern.test(mapping.lastAcceptedSyncSequence ?? "0")
+  )
+    throw invalid("Connector configuration contains an invalid source mapping");
+  if (mapping.agentAccountId !== undefined && !uuidPattern.test(mapping.agentAccountId))
+    throw invalid("Connector configuration contains an invalid account mapping");
+  return {
+    ...local,
+    sourceId: mapping.sourceId,
+    ...(mapping.agentAccountId === undefined ? {} : { agentAccountId: mapping.agentAccountId }),
+    accountLabel: mapping.accountLabel,
+    lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence ?? "0",
+  };
+}
+
+export async function parseProtocolResponse(response, context) {
+  const body = await readLimitedBody(response);
+  if (response.status === 204) {
+    if (body.length !== 0 || context.kind !== "empty") throw invalid();
+    return null;
+  }
+  const value = parseJsonBody(response, body);
+  if (!response.ok) {
+    if (
+      !requiredExactKeys(value, new Set(["error"])) ||
+      !safeText(value.error, 128, 1) ||
+      !errorCodePattern.test(value.error)
+    )
+      throw invalid();
+    return { error: value.error };
+  }
+  if (context.kind === "pairingStart") return parsePairingStart(value, context);
+  if (context.kind === "pairingPoll") return parsePairingPoll(value, context);
+  if (context.kind === "reconciliation") return parseReconciliation(value, context);
+  if (context.kind === "usage") return parseUsage(value, context);
+  throw invalid();
+}

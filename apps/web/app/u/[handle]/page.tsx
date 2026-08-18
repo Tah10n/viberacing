@@ -25,7 +25,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
         Back to standings
       </Link>
       <PageHeader
-        description={`Weekly performance · ${currentWeekLabel()}`}
+        description={`Self-reported weekly usage · ${currentWeekLabel()}`}
         eyebrow="Racer profile"
         title={`@${profile.handle}`}
       />

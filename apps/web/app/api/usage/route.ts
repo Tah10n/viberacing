@@ -268,7 +268,15 @@ async function post(request: Request): Promise<Response> {
   const token = authorization.slice(7);
   if (token.length < 32 || token.length > 128) return problem(401, "unauthorized");
   try {
-    if (!(await consumeRateLimit("usage_pre_auth", clientAddress(request), 120, 60))) {
+    if (!(await consumeRateLimit("usage_global", "all", 10_000, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
+    const address = clientAddress(request);
+    const addressLimit = address === "untrusted-forwarding-headers" ? 10_000 : 120;
+    if (!(await consumeRateLimit("usage_pre_auth", address, addressLimit, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -315,6 +323,11 @@ async function post(request: Request): Promise<Response> {
       return problem(400, "invalid_request");
     }
     const result = await transaction(async (client) => {
+      const lockedUser = await client.query<{ id: string }>(
+        "SELECT id::text FROM users WHERE id = $1 FOR UPDATE",
+        [installation.user_id],
+      );
+      if (lockedUser.rows[0] === undefined) throw new UsageError(401, "unauthorized");
       const active = await client.query<InstallationRow>(
         `SELECT id::text, user_id::text FROM installations
           WHERE id = $1 AND device_token_hash = $2 AND status = 'active'
@@ -322,7 +335,9 @@ async function post(request: Request): Promise<Response> {
         [installation.id, digest(token)],
       );
       const lockedInstallation = active.rows[0];
-      if (lockedInstallation === undefined) throw new UsageError(401, "unauthorized");
+      if (lockedInstallation === undefined || lockedInstallation.user_id !== installation.user_id) {
+        throw new UsageError(401, "unauthorized");
+      }
       const sources = await client.query<SourceRow>(
         `SELECT id::text, user_id::text, agent_id, last_accepted_sync_sequence::text
            FROM installation_sources
@@ -473,7 +488,7 @@ async function post(request: Request): Promise<Response> {
           [sourceError.sourceId],
         );
       }
-      for (const summary of summaries) {
+      for (const summary of [...summaries].sort()) {
         const [userId, agentId, week] = summary.split("\0");
         if (userId === undefined || agentId === undefined || week === undefined) {
           throw new Error("Invalid internal summary key");

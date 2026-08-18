@@ -19,6 +19,7 @@
   "files": [
     "bin",
     "lib",
+    "scripts",
     "README.md"
   ],
   "publishConfig": {
@@ -28,6 +29,7 @@
     "node": ">=24.14.0 <25"
   },
   "scripts": {
+    "prepack": "node scripts/generate-version.mjs",
     "test": "node --test"
   }
 }

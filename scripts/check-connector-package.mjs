@@ -6,6 +6,31 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = "packages/connector";
+const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
+execFileSync(
+  process.execPath,
+  [resolve(root, packageRoot, "scripts/generate-version.mjs"), "--check"],
+  {
+    cwd: root,
+  },
+);
+const cliVersion = execFileSync(
+  process.execPath,
+  [resolve(root, packageRoot, "bin/viberacing.mjs"), "--version"],
+  { cwd: root, encoding: "utf8" },
+).trim();
+if (cliVersion !== packageJson.version) {
+  throw new Error("Connector CLI version does not match package.json");
+}
+for (const relativePath of ["bin/viberacing.mjs", "lib/adapters/codex.mjs"]) {
+  const source = readFileSync(resolve(root, packageRoot, relativePath), "utf8");
+  if (
+    !source.includes("connectorVersion") ||
+    /[\"'](?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?[\"']/.test(source)
+  ) {
+    throw new Error(`${relativePath} must use the generated connector version`);
+  }
+}
 const repositoryLicense = readFileSync(resolve(root, "LICENSE"));
 const packageLicense = readFileSync(resolve(root, packageRoot, "LICENSE"));
 if (!repositoryLicense.equals(packageLicense)) {
@@ -31,7 +56,21 @@ if (results.length !== 1 || !Array.isArray(results[0]?.files)) {
 
 const paths = results[0].files.map(({ path }) => path.replaceAll("\\", "/"));
 const files = new Set(paths);
-const requiredFiles = ["LICENSE", "README.md", "package.json", "bin/viberacing.mjs"];
+const requiredFiles = [
+  "LICENSE",
+  "README.md",
+  "package.json",
+  "bin/viberacing.mjs",
+  "lib/protocol.mjs",
+  "lib/terminal.mjs",
+  "lib/version.mjs",
+  "scripts/generate-version.mjs",
+];
+
+const expectedTarball = `${packageJson.name.replace(/^@/, "").replaceAll("/", "-")}-${packageJson.version}.tgz`;
+if (results[0].filename !== expectedTarball) {
+  throw new Error(`Connector tarball name does not match package version: ${results[0].filename}`);
+}
 
 for (const required of requiredFiles) {
   if (!files.has(required)) {
