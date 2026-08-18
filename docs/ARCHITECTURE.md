@@ -112,9 +112,15 @@ only 35 days and atomically compact oversized source-specific files.
 
 Approval is serialized on the user row and caps each user at 20 active installations, 100 active
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
-additional computers cannot multiply the user-wide request budget.
+additional computers cannot multiply the user-wide request budget. Browser login is also serialized
+per user, rotates the current browser token, and retains at most ten active 30-day sessions per
+user.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small
 opportunistic cleanup batches remove expired sessions/pairings, rate-limit buckets, old empty
 revoked installations, and orphaned empty accounts.
+
+HTML responses use a fresh request nonce for framework scripts and styles. The production CSP never
+allows unsafe inline script or style execution; development permits only the eval support required
+by React diagnostics. API, health, readiness, and static-asset responses do not need an HTML CSP.

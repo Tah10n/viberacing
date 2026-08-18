@@ -1,5 +1,6 @@
 CREATE TABLE schema_migrations (
   version varchar(128) PRIMARY KEY,
+  checksum char(64) NOT NULL CHECK (checksum ~ '^[0-9a-f]{64}$'),
   applied_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -94,6 +95,7 @@ CREATE TABLE installation_sources (
   pending_pairing_code_hash bytea CHECK (
     pending_pairing_code_hash IS NULL OR octet_length(pending_pairing_code_hash) = 32
   ),
+  pending_disconnect boolean NOT NULL DEFAULT false,
   status varchar(16) NOT NULL CHECK (status IN ('pending', 'active', 'disconnected')),
   last_successful_sync_at timestamptz,
   last_error_summary varchar(500),
@@ -147,7 +149,7 @@ CREATE TABLE weekly_agent_usage (
     'codex', 'claude_code', 'opencode', 'kimi_code',
     'qwen_code', 'antigravity', 'gemini_cli'
   )),
-  tokens numeric(30,0) NOT NULL CHECK (tokens >= 0),
+  tokens numeric NOT NULL CHECK (tokens >= 0),
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (week_start, user_id, agent_id)
 );

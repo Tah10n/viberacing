@@ -4,8 +4,10 @@ import { githubApiOrigin, githubWebOrigin, publicOrigin, requiredEnv } from "@/l
 import { randomToken, secretEqual } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { markResponse } from "@/lib/http";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 import { createSession } from "@/lib/session";
+import { safeReturnPath } from "../return-path";
 
 interface UserRow {
   id: string;
@@ -37,12 +39,26 @@ async function githubRequest(
 }
 
 async function get(request: Request): Promise<Response> {
+  if (!(await consumeRateLimit("oauth_callback_global", "all", 500, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
+  }
+  const address = clientAddress(request);
+  const addressLimit = address === "untrusted-forwarding-headers" ? 500 : 20;
+  if (!(await consumeRateLimit("oauth_callback", address, addressLimit, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
+  }
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieStore = await cookies();
   const expectedState = cookieStore.get("vr_oauth_state")?.value;
-  const next = cookieStore.get("vr_oauth_next")?.value ?? "/dashboard";
+  const next = safeReturnPath(cookieStore.get("vr_oauth_next")?.value ?? null, publicOrigin());
   cookieStore.delete("vr_oauth_state");
   cookieStore.delete("vr_oauth_next");
   if (

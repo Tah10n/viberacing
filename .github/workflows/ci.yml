@@ -146,26 +146,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          changed="$(git diff --diff-filter=MDR --name-only "$BASE_SHA" HEAD -- 'apps/web/database/*.sql')"
-          if [ -n "$changed" ]; then
-            printf 'Published migrations are append-only:\n%s\n' "$changed" >&2
-            exit 1
-          fi
-          base_max="$(git ls-tree -r --name-only "$BASE_SHA" -- apps/web/database \
-            | sed -n 's#^apps/web/database/\([0-9][0-9][0-9]\)_[a-z0-9_]*\.sql$#\1#p' \
-            | sort | tail -n 1)"
-          while IFS= read -r added; do
-            test -n "$added" || continue
-            name="${added##*/}"
-            number="${name%%_*}"
-            if test -n "$base_max" && test "$number" -le "$base_max"; then
-              echo "Added migration $name must be numbered above base maximum $base_max" >&2
-              exit 1
-            fi
-          done <<EOF
-          $(git diff --diff-filter=A --name-only "$BASE_SHA" HEAD -- 'apps/web/database/*.sql')
-          EOF
+        run: node scripts/check-migration-history.mjs "$BASE_SHA" HEAD
       - name: Verify source, unit tests, and production build
         run: pnpm verify
       - name: Migrate an empty database twice
@@ -177,24 +158,26 @@ jobs:
           test "$applied_migrations" = "$expected_migrations"
       - name: Reject a modified applied migration checksum
         run: |
-          expected_checksum="$(node -e "process.stdout.write(require('./apps/web/database/checksums.json')['003_pairing_superseded_sources.sql'])")"
-          psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = repeat('f', 64) WHERE version = '003_pairing_superseded_sources.sql'"
+          expected_checksum="$(node -e "process.stdout.write(require('./apps/web/database/checksums.json')['001_initial.sql'])")"
+          psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = repeat('f', 64) WHERE version = '001_initial.sql'"
           if pnpm db:migrate; then
             echo "Migration runner accepted a modified applied checksum" >&2
             exit 1
           fi
-          psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = '$expected_checksum' WHERE version = '003_pairing_superseded_sources.sql'"
+          psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = '$expected_checksum' WHERE version = '001_initial.sql'"
           pnpm db:migrate
-      - name: Resume checksum upgrade and tolerate future rollback rows
+      - name: Reject the unsupported pre-baseline ledger and tolerate future rollback rows
         run: |
-          expected_checksum="$(node -e "process.stdout.write(require('./apps/web/database/checksums.json')['001_initial.sql'])")"
           psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = repeat('0', 64) WHERE version = '001_initial.sql'"
+          if pnpm db:migrate; then
+            echo "Migration runner accepted an unsupported pre-baseline checksum" >&2
+            exit 1
+          fi
+          expected_checksum="$(node -e "process.stdout.write(require('./apps/web/database/checksums.json')['001_initial.sql'])")"
+          psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = '$expected_checksum' WHERE version = '001_initial.sql'"
+          psql "$DATABASE_URL" --command="INSERT INTO schema_migrations (version, checksum) VALUES ('002_synthetic_future.sql', repeat('f', 64))"
           pnpm db:migrate
-          repaired_checksum="$(psql "$DATABASE_URL" --tuples-only --no-align --command="SELECT checksum FROM schema_migrations WHERE version = '001_initial.sql'")"
-          test "$repaired_checksum" = "$expected_checksum"
-          psql "$DATABASE_URL" --command="INSERT INTO schema_migrations (version, checksum) VALUES ('005_synthetic_future.sql', repeat('f', 64))"
-          pnpm db:migrate
-          psql "$DATABASE_URL" --command="DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'"
+          psql "$DATABASE_URL" --command="DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'"
       - name: Run server integration scenarios
         run: |
           node apps/web/.next/standalone/apps/web/server.js &

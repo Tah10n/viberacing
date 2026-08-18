@@ -8,6 +8,11 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Changed
+
+- Squashed the unreleased database history into the first locked pre-production baseline. Databases
+  created from earlier commits are unsupported and must be recreated before deployment.
+
 ### Added
 
 - Open-source contribution, support, governance, issue, pull request, conduct, and release policies.

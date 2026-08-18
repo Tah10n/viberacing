@@ -5,6 +5,7 @@ import { query, transaction } from "./db";
 
 const cookieName = "vr_session";
 const sessionSeconds = 60 * 60 * 24 * 30;
+const maximumActiveSessionsPerUser = 10;
 
 export interface Viewer {
   readonly id: string;
@@ -34,6 +35,7 @@ export async function createSession(userId: string): Promise<void> {
   const store = await cookies();
   const previous = store.get(cookieName)?.value;
   await transaction(async (client) => {
+    await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [userId]);
     await client.query(
       `DELETE FROM sessions WHERE token_hash IN (
          SELECT token_hash FROM sessions WHERE expires_at <= now() LIMIT 100
@@ -62,6 +64,15 @@ export async function createSession(userId: string): Promise<void> {
     if (previous !== undefined) {
       await client.query("DELETE FROM sessions WHERE token_hash = $1", [digest(previous)]);
     }
+    await client.query(
+      `DELETE FROM sessions WHERE token_hash IN (
+         SELECT token_hash FROM sessions
+          WHERE user_id = $1
+          ORDER BY created_at DESC, token_hash
+          OFFSET $2
+       )`,
+      [userId, maximumActiveSessionsPerUser - 1],
+    );
     await client.query(
       "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, now() + interval '30 days')",
       [digest(token), userId],

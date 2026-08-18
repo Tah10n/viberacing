@@ -87,11 +87,9 @@ export async function isCompatibleOpenCodeDatabase(dataPath) {
   }
 }
 
-function databaseLabel(dataPath, configured) {
-  const name = dataPath.split(/[\\/]/).at(-1) ?? "";
-  const channel = name.match(/^opencode-(.+)\.db$/)?.[1];
-  if (channel) return `OpenCode ${channel}`;
-  return name === "opencode.db" ? "OpenCode" : configured ? "OpenCode configured" : "OpenCode";
+function databaseLabel(configured, position) {
+  if (configured) return "OpenCode configured";
+  return position === 1 ? "OpenCode" : `OpenCode profile ${position}`;
 }
 
 function databaseOrder(left, right) {
@@ -146,7 +144,7 @@ export async function detectOpenCodeSources({
       dataPath: candidate.dataPath,
       collectionMethod: "opencode_sqlite",
       supportedSurface: "cli",
-      suggestedLabel: databaseLabel(candidate.dataPath, candidate.configured),
+      suggestedLabel: databaseLabel(candidate.configured === true, sources.length + 1),
     });
   }
   return sources;

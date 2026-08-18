@@ -4,15 +4,7 @@ import { githubWebOrigin, publicOrigin, requiredEnv, secureCookies } from "@/lib
 import { randomToken } from "@/lib/crypto";
 import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
-
-function safeNext(value: string | null): string {
-  if (value === null || value.length > 500 || !value.startsWith("/")) return "/dashboard";
-  const base = publicOrigin();
-  const target = new URL(value, base);
-  return target.origin === base.origin
-    ? `${target.pathname}${target.search}${target.hash}`
-    : "/dashboard";
-}
+import { safeReturnPath } from "../return-path";
 
 async function get(request: Request): Promise<Response> {
   if (!(await consumeRateLimit("oauth_start_global", "all", 500, 60))) {
@@ -30,7 +22,7 @@ async function get(request: Request): Promise<Response> {
     );
   }
   const state = randomToken();
-  const next = safeNext(new URL(request.url).searchParams.get("next"));
+  const next = safeReturnPath(new URL(request.url).searchParams.get("next"), publicOrigin());
   const cookieStore = await cookies();
   const secure = secureCookies();
   cookieStore.set("vr_oauth_state", state, {

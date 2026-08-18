@@ -4,12 +4,14 @@ Vibe Racing sends only the data needed to compute a self-reported ranking.
 
 During pairing the connector sends protocol/connector versions, a random installation identity and
 proof, opaque client source IDs, agent IDs, allowlisted collection methods, supported surface, and a
-neutral suggested label. Random source IDs remain stable in local `sources.json`; normalized local
-data roots, executable paths, hook config roots, and their hashes are never copied into pairing
-config or requests. During sync it sends a server source ID, sequence, UTC range, complete/partial
-status, UTC dates, aggregate total tokens, and optional aggregate input/output/cache/reasoning
-counters. If collection fails, it may instead send the fixed `collector_failed` diagnostic code and
-source ID; exception messages are kept local.
+neutral agent/profile label. Automatically discovered labels contain only the agent name and, when
+needed, a neutral profile ordinal; they never contain a provider filename or path component. Random
+source IDs remain stable in local `sources.json`; normalized local data roots, executable paths,
+hook config roots, and their hashes are never copied into pairing config or requests. During sync it
+sends a server source ID, sequence, UTC range, complete/partial status, UTC dates, aggregate total
+tokens, and optional aggregate input/output/cache/reasoning counters. If collection fails, it may
+instead send the fixed `collector_failed` diagnostic code and source ID; exception messages are kept
+local.
 
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
