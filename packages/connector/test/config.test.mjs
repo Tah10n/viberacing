@@ -147,6 +147,7 @@ async function writeCaptureInstallation(home, origin, options = {}) {
     `${JSON.stringify({
       version: 2,
       origin,
+      ...(options.installationId === undefined ? {} : { installationId: options.installationId }),
       deviceToken: "synthetic-device-token-that-is-long-enough",
       sources: [
         {
@@ -4789,6 +4790,120 @@ test("disconnect warns when a pending pairing cancellation cannot be confirmed w
   });
   assert.equal(repeated.stderr, "");
   assert.equal(cancellationRequests, 1);
+});
+
+test("successful installation revoke confirms only the matching failed pairing cancellation", async (context) => {
+  let cancellationRequests = 0;
+  let revocationRequests = 0;
+  const server = createServer((request, response) => {
+    if (request.url === "/api/pairing/cancel" && request.method === "POST") {
+      cancellationRequests += 1;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "server_error" }));
+      return;
+    }
+    if (request.url === "/api/installations/current" && request.method === "DELETE") {
+      revocationRequests += 1;
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    response.writeHead(404, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "not_found" }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const alternateServer = createServer((request, response) => {
+    if (request.url === "/api/pairing/cancel" && request.method === "POST") {
+      cancellationRequests += 1;
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "server_error" }));
+      return;
+    }
+    response.writeHead(404, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "not_found" }));
+  });
+  alternateServer.listen(0, "127.0.0.1");
+  await once(alternateServer, "listening");
+  context.after(() => alternateServer.close());
+  const alternateAddress = alternateServer.address();
+  assert.notEqual(alternateAddress, null);
+  assert.equal(typeof alternateAddress, "object");
+
+  const origin = `http://127.0.0.1:${address.port}`;
+  const alternateOrigin = `http://127.0.0.1:${alternateAddress.port}`;
+  const runScenario = async ({
+    name,
+    configInstallationId,
+    attemptInstallationId,
+    attemptOrigin = origin,
+    warns,
+  }) => {
+    const home = await mkdtemp(join(tmpdir(), `viberacing-pairing-cancel-${name}-`));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const { directory } = await writeCaptureInstallation(
+      home,
+      origin,
+      configInstallationId === undefined ? {} : { installationId: configInstallationId },
+    );
+    await writeFile(
+      join(directory, "connect-attempt.json"),
+      `${JSON.stringify({
+        version: 1,
+        attemptId: randomUUID(),
+        installationId: attemptInstallationId,
+        sourceRegistryRevision: randomUUID(),
+        origin: attemptOrigin,
+        startedAt: new Date().toISOString(),
+        pollToken: `${name}_fallback_pairing_poll_token_long_enough`,
+      })}\n`,
+    );
+
+    const result = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+      env: connectorEnvironment(home),
+    });
+    assert.match(result.stdout, /Installation disconnected locally/);
+    if (warns) assert.match(result.stderr, /remote pairing cancellation could not be confirmed/i);
+    else assert.doesNotMatch(result.stderr, /remote pairing cancellation could not be confirmed/i);
+    assert.doesNotMatch(result.stderr, /remote revoke could not be confirmed/i);
+    await assert.rejects(access(join(directory, "connect-attempt.json")));
+    await assert.rejects(access(join(directory, "config.json")));
+  };
+
+  const matchingInstallationId = randomUUID();
+  await runScenario({
+    name: "matching",
+    configInstallationId: matchingInstallationId,
+    attemptInstallationId: matchingInstallationId,
+    warns: false,
+  });
+  await runScenario({
+    name: "mismatched",
+    configInstallationId: randomUUID(),
+    attemptInstallationId: randomUUID(),
+    warns: true,
+  });
+  const originMismatchInstallationId = randomUUID();
+  await runScenario({
+    name: "origin-mismatched",
+    configInstallationId: originMismatchInstallationId,
+    attemptInstallationId: originMismatchInstallationId,
+    attemptOrigin: alternateOrigin,
+    warns: true,
+  });
+  await runScenario({
+    name: "legacy",
+    configInstallationId: undefined,
+    attemptInstallationId: randomUUID(),
+    warns: true,
+  });
+  assert.equal(cancellationRequests, 4);
+  assert.equal(revocationRequests, 4);
 });
 
 test("uninstall removes v2 and source-owned hooks from remembered custom roots", async (context) => {

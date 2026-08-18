@@ -34,16 +34,19 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   );
   assert.equal(calls[0][2].shell, undefined);
 
+  let accessDeniedCalls = 0;
   await assert.rejects(
     ensurePrivateStateDirectory("C:\\shared\\viberacing", {
       platform: "win32",
       environment: { SystemRoot: "C:\\Windows" },
       run: async () => {
+        accessDeniedCalls += 1;
         throw new Error("access denied");
       },
     }),
     /cannot enforce an owner-only Windows ACL/,
   );
+  assert.equal(accessDeniedCalls, 1);
   await assert.rejects(
     ensurePrivateStateDirectory("C:\\shared\\viberacing", {
       platform: "win32",
@@ -52,6 +55,42 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
     }),
     /cannot enforce an owner-only Windows ACL/,
   );
+});
+
+test("Windows ACL retries one killed timeout and remains fail-closed after a second", async () => {
+  const timeoutError = () => {
+    const error = new Error("PowerShell timed out");
+    error.code = null;
+    error.killed = true;
+    error.signal = "SIGTERM";
+    return error;
+  };
+  const recoveredCalls = [];
+  await ensurePrivateStateDirectory("C:\\Users\\racer\\retry-state", {
+    platform: "win32",
+    environment: { SystemRoot: "C:\\Windows" },
+    run: async (...arguments_) => {
+      recoveredCalls.push(arguments_);
+      if (recoveredCalls.length === 1) throw timeoutError();
+    },
+  });
+  assert.equal(recoveredCalls.length, 2);
+  assert.deepEqual(recoveredCalls[1], recoveredCalls[0]);
+  assert.equal(recoveredCalls[0][2].timeout, 15_000);
+
+  let exhaustedCalls = 0;
+  await assert.rejects(
+    ensurePrivateStateDirectory("C:\\Users\\racer\\failed-state", {
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows" },
+      run: async () => {
+        exhaustedCalls += 1;
+        throw timeoutError();
+      },
+    }),
+    /cannot enforce an owner-only Windows ACL/,
+  );
+  assert.equal(exhaustedCalls, 2);
 });
 
 test(

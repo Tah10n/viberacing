@@ -1541,6 +1541,11 @@ try {
           1,
           { kind: "empty" },
         );
+        if (
+          pending.attempt?.origin === config.origin &&
+          pending.attempt.installationId === config.installationId
+        )
+          remotePairingCancellationUnconfirmed = false;
       } catch (error) {
         const cancelledRotatedToken =
           pending.cancellation.status === "confirmed" &&

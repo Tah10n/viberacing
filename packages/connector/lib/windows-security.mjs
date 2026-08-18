@@ -27,6 +27,10 @@ const encodedSecureDirectoryScript = Buffer.from(secureDirectoryScript, "utf16le
   "base64",
 );
 
+function timedOutWindowsProcess(error) {
+  return error?.killed === true && error?.signal === "SIGTERM";
+}
+
 export async function ensurePrivateStateDirectory(
   directory,
   { platform = process.platform, run = execFileAsync, environment = process.env } = {},
@@ -50,15 +54,24 @@ export async function ensurePrivateStateDirectory(
       "v1.0",
       "powershell.exe",
     );
-    await run(
-      powershell,
-      ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedSecureDirectoryScript],
-      {
-        env: { ...environment, [stateDirectoryEnvironmentVariable]: directory },
-        windowsHide: true,
-        timeout: 15_000,
-      },
-    );
+    const arguments_ = [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      encodedSecureDirectoryScript,
+    ];
+    const options = {
+      env: { ...environment, [stateDirectoryEnvironmentVariable]: directory },
+      windowsHide: true,
+      timeout: 15_000,
+    };
+    try {
+      await run(powershell, arguments_, options);
+    } catch (error) {
+      if (!timedOutWindowsProcess(error)) throw error;
+      await run(powershell, arguments_, options);
+    }
   } catch (error) {
     throw new Error(
       "Vibe Racing cannot enforce an owner-only Windows ACL on its state directory; choose a private VIBERACING_STATE_DIR",
