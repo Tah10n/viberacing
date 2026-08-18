@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -87,4 +87,42 @@ test("an established baseline rejects a lower-numbered new migration", async (t)
   await writeFile(join(cwd, "apps/web/database/000_old.sql"), "SELECT 0;\n");
   const head = await commit(cwd, "add old migration");
   await assert.rejects(checkMigrationHistory({ cwd, base, head }), /above base maximum 001/);
+});
+
+test("an established baseline rejects duplicate new migration numbers", async (t) => {
+  const { cwd, base } = await lockedRepository();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  await writeFile(join(cwd, "apps/web/database/002_first.sql"), "SELECT 2;\n");
+  await writeFile(join(cwd, "apps/web/database/002_second.sql"), "SELECT 3;\n");
+  const head = await commit(cwd, "add duplicate migration numbers");
+  await assert.rejects(
+    checkMigrationHistory({ cwd, base, head }),
+    /Duplicate migration number 002/,
+  );
+});
+
+test("an established baseline rejects gaps in new migration numbers", async (t) => {
+  const { cwd, base } = await lockedRepository();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  await writeFile(join(cwd, "apps/web/database/003_later.sql"), "SELECT 3;\n");
+  const head = await commit(cwd, "skip a migration number");
+  await assert.rejects(checkMigrationHistory({ cwd, base, head }), /expected 002, found 003/);
+});
+
+test("an established baseline accepts multiple sequential new migrations", async (t) => {
+  const { cwd, base } = await lockedRepository();
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  await writeFile(join(cwd, "apps/web/database/002_first.sql"), "SELECT 2;\n");
+  await writeFile(join(cwd, "apps/web/database/003_second.sql"), "SELECT 3;\n");
+  const head = await commit(cwd, "add sequential migrations");
+  await assert.doesNotReject(checkMigrationHistory({ cwd, base, head }));
+});
+
+test("the production workflow checks migration history on pull requests and main pushes", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  assert.match(
+    workflow,
+    /BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/,
+  );
+  assert.doesNotMatch(workflow, /if: github\.event_name == 'pull_request'/);
 });

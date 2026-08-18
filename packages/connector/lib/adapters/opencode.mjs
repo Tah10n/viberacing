@@ -92,6 +92,14 @@ function databaseLabel(configured, position) {
   return position === 1 ? "OpenCode" : `OpenCode profile ${position}`;
 }
 
+function legacyDatabaseLabel(dataPath, configured) {
+  const name = dataPath.split(/[\\/]/).at(-1) ?? "";
+  const channel = name.match(/^opencode-(.+)\.db$/)?.[1];
+  if (channel) return `OpenCode ${channel}`;
+  if (name === "opencode.db") return "OpenCode";
+  return configured ? "OpenCode configured" : "OpenCode";
+}
+
 function databaseOrder(left, right) {
   const priority = (name) => (name === "opencode.db" ? 0 : name === "opencode-prod.db" ? 1 : 2);
   return priority(left) - priority(right) || left.localeCompare(right);
@@ -140,11 +148,15 @@ export async function detectOpenCodeSources({
       diagnostics.push({ error: `Ignored ${name}: incompatible OpenCode SQLite schema` });
       continue;
     }
+    const configured = candidate.configured === true;
+    const suggestedLabel = databaseLabel(configured, sources.length + 1);
+    const legacyAutoSuggestedLabel = legacyDatabaseLabel(candidate.dataPath, configured);
     sources.push({
       dataPath: candidate.dataPath,
       collectionMethod: "opencode_sqlite",
       supportedSurface: "cli",
-      suggestedLabel: databaseLabel(candidate.configured === true, sources.length + 1),
+      suggestedLabel,
+      ...(legacyAutoSuggestedLabel === suggestedLabel ? {} : { legacyAutoSuggestedLabel }),
     });
   }
   return sources;

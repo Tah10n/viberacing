@@ -39,15 +39,11 @@ async function githubRequest(
 }
 
 async function get(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("oauth_callback_global", "all", 500, 60))) {
-    return Response.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-    );
-  }
   const address = clientAddress(request);
-  const addressLimit = address === "untrusted-forwarding-headers" ? 500 : 20;
-  if (!(await consumeRateLimit("oauth_callback", address, addressLimit, 60))) {
+  if (
+    address !== "untrusted-forwarding-headers" &&
+    !(await consumeRateLimit("oauth_callback", address, 20, 60))
+  ) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -68,6 +64,12 @@ async function get(request: Request): Promise<Response> {
     !secretEqual(state, expectedState)
   ) {
     return authFailed("state_validation_failed");
+  }
+  if (!(await consumeRateLimit("oauth_callback_global", "all", 500, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
   }
 
   let tokenResult: { ok: boolean; body: unknown };

@@ -41,6 +41,51 @@ async function changedPaths(cwd, base, head, diffFilter, pathspec) {
   return output === "" ? [] : output.split("\n");
 }
 
+async function databaseTree(cwd, revision) {
+  const output = await git(cwd, [
+    "ls-tree",
+    "-r",
+    "--name-only",
+    revision,
+    "--",
+    "apps/web/database",
+  ]);
+  return output === "" ? [] : output.split("\n");
+}
+
+function migrationEntries(paths) {
+  const entries = paths
+    .filter((path) => path.endsWith(".sql"))
+    .map((path) => {
+      const match = migrationPattern.exec(path);
+      if (match === null) throw new Error(`Invalid migration filename: ${path}`);
+      return { number: Number(match[1]), path };
+    })
+    .sort((left, right) => left.number - right.number || left.path.localeCompare(right.path));
+  const byNumber = new Map();
+  for (const entry of entries) {
+    const previous = byNumber.get(entry.number);
+    if (previous !== undefined) {
+      throw new Error(
+        `Duplicate migration number ${String(entry.number).padStart(3, "0")}: ${previous}, ${entry.path}`,
+      );
+    }
+    byNumber.set(entry.number, entry.path);
+  }
+  return entries;
+}
+
+function requireSequentialMigrations(entries) {
+  for (const [index, entry] of entries.entries()) {
+    const expected = index + 1;
+    if (entry.number !== expected) {
+      throw new Error(
+        `Migration numbers must be sequential without gaps: expected ${String(expected).padStart(3, "0")}, found ${String(entry.number).padStart(3, "0")}`,
+      );
+    }
+  }
+}
+
 export async function checkMigrationHistory({ cwd = process.cwd(), base, head = "HEAD" }) {
   await requireCommit(cwd, base);
   await requireCommit(cwd, head);
@@ -50,7 +95,9 @@ export async function checkMigrationHistory({ cwd = process.cwd(), base, head = 
   if (!headHasBaseline) {
     throw new Error(`The locked database baseline marker must exist at ${baselinePath}`);
   }
+  const headMigrations = migrationEntries(await databaseTree(cwd, head));
   if (!baseHasBaseline) {
+    requireSequentialMigrations(headMigrations);
     return "Established the first locked pre-production database baseline.";
   }
 
@@ -69,19 +116,7 @@ export async function checkMigrationHistory({ cwd = process.cwd(), base, head = 
     throw new Error(`Published migrations are append-only: ${publishedChanges.join(", ")}`);
   }
 
-  const baseTree = await git(cwd, [
-    "ls-tree",
-    "-r",
-    "--name-only",
-    base,
-    "--",
-    "apps/web/database",
-  ]);
-  const baseNumbers = baseTree
-    .split("\n")
-    .map((path) => migrationPattern.exec(path)?.[1])
-    .filter((number) => number !== undefined)
-    .map(Number);
+  const baseNumbers = migrationEntries(await databaseTree(cwd, base)).map((entry) => entry.number);
   const baseMaximum = baseNumbers.length === 0 ? undefined : Math.max(...baseNumbers);
   for (const path of addedMigrations) {
     const match = migrationPattern.exec(path);
@@ -93,6 +128,7 @@ export async function checkMigrationHistory({ cwd = process.cwd(), base, head = 
       );
     }
   }
+  requireSequentialMigrations(headMigrations);
 
   return `Migration history passed: ${addedMigrations.length} new append-only migration(s).`;
 }

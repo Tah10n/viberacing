@@ -50,6 +50,10 @@ test("enumerates every compatible official OpenCode channel database", async (co
     sources.map((source) => source.suggestedLabel),
     ["OpenCode", "OpenCode profile 2", "OpenCode profile 3", "OpenCode profile 4"],
   );
+  assert.deepEqual(
+    sources.map((source) => source.legacyAutoSuggestedLabel),
+    [undefined, "OpenCode prod", "OpenCode custom-channel", "OpenCode dev"],
+  );
   assert.equal(diagnostics.length, 2);
   assert.ok(
     diagnostics.every((diagnostic) => /incompatible OpenCode SQLite schema/.test(diagnostic.error)),

@@ -15,7 +15,7 @@ import {
 import { viewer } from "@/lib/session";
 import { rebuildAgentSummaries } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
 
 interface InstallationRow {
   id: string;
@@ -65,7 +65,11 @@ function validLabel(value: string | null): string | null {
 
 async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
-  if (!(await consumeRateLimit("pairing_approve_global", "all", 2_000, 60))) {
+  const address = clientAddress(request);
+  if (
+    address !== "untrusted-forwarding-headers" &&
+    !(await consumeRateLimit("pairing_approve_pre_auth", address, 60, 60))
+  ) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -74,6 +78,12 @@ async function post(request: Request): Promise<Response> {
   const current = await viewer();
   if (current === null) return problem(401, "unauthorized");
   if (!(await consumeRateLimit("pairing_approve_user", current.id, 20, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
+  }
+  if (!(await consumeRateLimit("pairing_approve_global", "all", 2_000, 60))) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },

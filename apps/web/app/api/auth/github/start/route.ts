@@ -7,15 +7,11 @@ import { withRequestLogging } from "@/lib/request-log";
 import { safeReturnPath } from "../return-path";
 
 async function get(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("oauth_start_global", "all", 500, 60))) {
-    return Response.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-    );
-  }
   const address = clientAddress(request);
-  const addressLimit = address === "untrusted-forwarding-headers" ? 500 : 20;
-  if (!(await consumeRateLimit("oauth_start", address, addressLimit, 60))) {
+  if (
+    address !== "untrusted-forwarding-headers" &&
+    !(await consumeRateLimit("oauth_start", address, 20, 60))
+  ) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },

@@ -13,6 +13,7 @@ import { canonicalPathKey } from "./adapters/shared.mjs";
  * @property {string} collectionMethod
  * @property {"cli" | "desktop"} supportedSurface
  * @property {string} suggestedLabel
+ * @property {string} [legacyAutoSuggestedLabel]
  * @property {string} [executablePath]
  * @property {string} [hookConfigRoot]
  */
@@ -56,7 +57,9 @@ export async function discoverSources(availableAdapters = adapters) {
           typeof normalized.dataPath !== "string" ||
           typeof normalized.collectionMethod !== "string" ||
           !["cli", "desktop"].includes(normalized.supportedSurface) ||
-          typeof normalized.suggestedLabel !== "string"
+          typeof normalized.suggestedLabel !== "string" ||
+          (normalized.legacyAutoSuggestedLabel !== undefined &&
+            typeof normalized.legacyAutoSuggestedLabel !== "string")
         )
           throw new Error("adapter returned an invalid detected source");
         const identity = `${adapter.id}\0${await canonicalPathKey(normalized.dataPath)}`;

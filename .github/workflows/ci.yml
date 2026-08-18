@@ -143,9 +143,8 @@ jobs:
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Enforce append-only and monotonic published migrations
-        if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/check-migration-history.mjs "$BASE_SHA" HEAD
       - name: Verify source, unit tests, and production build
         run: pnpm verify

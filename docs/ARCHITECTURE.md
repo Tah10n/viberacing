@@ -114,7 +114,9 @@ Approval is serialized on the user row and caps each user at 20 active installat
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
 additional computers cannot multiply the user-wide request budget. Browser login is also serialized
 per user, rotates the current browser token, and retains at most ten active 30-day sessions per
-user.
+user. OAuth and pairing apply pre-authentication limits only when the deployment exposes a trusted
+client address; shared global buckets are reached only after OAuth state or browser-session and
+per-user validation, so anonymous traffic cannot consume the authenticated work budget.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small
