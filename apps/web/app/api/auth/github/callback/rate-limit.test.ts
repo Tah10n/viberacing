@@ -1,9 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { consumeRateLimitMock, cookieDeleteMock, cookieGetMock } = vi.hoisted(() => ({
+const {
+  consumeRateLimitMock,
+  cookieDeleteMock,
+  cookieGetMock,
+  createSessionMock,
+  fetchMock,
+  transactionMock,
+} = vi.hoisted(() => ({
   consumeRateLimitMock: vi.fn(),
   cookieDeleteMock: vi.fn(),
   cookieGetMock: vi.fn(),
+  createSessionMock: vi.fn(),
+  fetchMock: vi.fn(),
+  transactionMock: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -19,6 +29,8 @@ vi.mock("@/lib/rate-limit", () => ({
   clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
   consumeRateLimit: consumeRateLimitMock,
 }));
+vi.mock("@/lib/db", () => ({ transaction: transactionMock }));
+vi.mock("@/lib/session", () => ({ createSession: createSessionMock }));
 
 import { GET } from "./route";
 
@@ -33,6 +45,10 @@ describe("OAuth callback rate limiting", () => {
     consumeRateLimitMock.mockReset();
     cookieDeleteMock.mockReset();
     cookieGetMock.mockReset();
+    createSessionMock.mockReset();
+    fetchMock.mockReset();
+    transactionMock.mockReset();
+    vi.unstubAllGlobals();
   });
 
   it("applies the trusted client quota before reading OAuth state", async () => {
@@ -58,13 +74,54 @@ describe("OAuth callback rate limiting", () => {
     expect(consumeRateLimitMock).not.toHaveBeenCalledWith("oauth_callback_global", "all", 500, 60);
   });
 
-  it("applies the global quota only after constant-time state validation", async () => {
+  it("does not consume the global quota when a matching state carries an invalid OAuth code", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    cookieGetMock.mockImplementation((name: string) =>
+      name === "vr_oauth_state" ? { value: "matching-state" } : undefined,
+    );
+    fetchMock.mockResolvedValue(Response.json({ error: "bad_verification_code" }, { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await GET(request("?code=forged-code&state=matching-state"));
+
+    expect(response.status).toBe(307);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(new URL(fetchMock.mock.calls[0]?.[0] as string).pathname).toBe(
+      "/login/oauth/access_token",
+    );
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(consumeRateLimitMock).not.toHaveBeenCalledWith("oauth_callback_global", "all", 500, 60);
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("does not consume the global quota for an invalid successful token response", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    cookieGetMock.mockImplementation((name: string) =>
+      name === "vr_oauth_state" ? { value: "matching-state" } : undefined,
+    );
+    fetchMock.mockResolvedValue(Response.json({ access_token: "" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await GET(request("?code=forged-code&state=matching-state"));
+
+    expect(response.status).toBe(307);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(consumeRateLimitMock).not.toHaveBeenCalledWith("oauth_callback_global", "all", 500, 60);
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("applies the global quota after token validation and before profile or database work", async () => {
     consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     cookieGetMock.mockImplementation((name: string) =>
       name === "vr_oauth_state" ? { value: "matching-state" } : undefined,
     );
+    fetchMock.mockResolvedValue(Response.json({ access_token: "validated-access-token" }));
+    vi.stubGlobal("fetch", fetchMock);
 
-    const response = await GET(request("?code=synthetic&state=matching-state"));
+    const response = await GET(request("?code=valid-code&state=matching-state"));
 
     expect(response.status).toBe(429);
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
@@ -74,5 +131,47 @@ describe("OAuth callback rate limiting", () => {
       500,
       60,
     );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY,
+    );
+    expect(new URL(fetchMock.mock.calls[0]?.[0] as string).pathname).toBe(
+      "/login/oauth/access_token",
+    );
+    expect(transactionMock).not.toHaveBeenCalled();
+    expect(createSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("continues to profile and session work only after the global quota succeeds", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    cookieGetMock.mockImplementation((name: string) =>
+      name === "vr_oauth_state" ? { value: "matching-state" } : undefined,
+    );
+    fetchMock
+      .mockResolvedValueOnce(Response.json({ access_token: "validated-access-token" }))
+      .mockResolvedValueOnce(Response.json({ id: 42, login: "octocat" }));
+    transactionMock.mockResolvedValue({ id: "user-id" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await GET(request("?code=valid-code&state=matching-state"));
+
+    expect(response.status).toBe(307);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      2,
+      "oauth_callback_global",
+      "all",
+      500,
+      60,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY).toBeLessThan(
+      consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY,
+    );
+    expect(
+      consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.POSITIVE_INFINITY,
+    ).toBeLessThan(fetchMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY);
+    expect(new URL(fetchMock.mock.calls[1]?.[0] as string).pathname).toBe("/user");
+    expect(transactionMock).toHaveBeenCalledOnce();
+    expect(createSessionMock).toHaveBeenCalledWith("user-id");
   });
 });

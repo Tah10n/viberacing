@@ -65,13 +65,6 @@ async function get(request: Request): Promise<Response> {
   ) {
     return authFailed("state_validation_failed");
   }
-  if (!(await consumeRateLimit("oauth_callback_global", "all", 500, 60))) {
-    return Response.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-    );
-  }
-
   let tokenResult: { ok: boolean; body: unknown };
   try {
     tokenResult = await githubRequest(
@@ -91,8 +84,19 @@ async function get(request: Request): Promise<Response> {
     return authFailed("token_request_failed", error);
   }
   const token = tokenResult.body;
-  if (!tokenResult.ok || !isRecord(token) || typeof token.access_token !== "string") {
+  if (
+    !tokenResult.ok ||
+    !isRecord(token) ||
+    typeof token.access_token !== "string" ||
+    token.access_token.length === 0
+  ) {
     return authFailed("token_response_invalid");
+  }
+  if (!(await consumeRateLimit("oauth_callback_global", "all", 500, 60))) {
+    return Response.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+    );
   }
 
   let profileResult: { ok: boolean; body: unknown };
