@@ -36,17 +36,16 @@ describe("dashboard connection flow", () => {
     expect(component).toContain("Copy failed — select the command above.");
   });
 
-  it("installs the connector package from the same Vibe Racing origin", () => {
+  it("installs an exact provenance-backed connector package version", () => {
     const connector = source("../../lib/connector.ts");
     expect(connector).toContain(
       'import connectorPackage from "../../../packages/connector/package.json"',
     );
     expect(connector).toContain("export const bundledConnectorVersion = connectorPackage.version");
     expect(connector).not.toMatch(/bundledConnectorVersion\s*=\s*["']\d+\.\d+\.\d+/);
-    expect(dashboard).toContain("${origin}/downloads/${connectorArchiveName()}");
-    expect(dashboard).toContain("npx --yes --prefer-online --package");
-    expect(dashboard).toContain("-- viberacing connect --origin ${origin}");
-    expect(dashboard).not.toContain("npx @viberacing/connector");
+    expect(dashboard).toContain("npx --yes @viberacing/connector@${bundledConnectorVersion}");
+    expect(dashboard).toContain("connect --origin ${origin}");
+    expect(dashboard).not.toContain("${origin}/downloads/${connectorArchiveName()}");
   });
 
   it("offers source reassignment only when the same agent has another account", () => {

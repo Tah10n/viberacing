@@ -132,7 +132,7 @@ function escapeCommand(value) {
   return String(value).replace(commandMetaCharacters, "^$1");
 }
 
-function escapeCommandArgument(value, doubleEscape = false) {
+export function quoteWindowsCommandArgument(value, doubleEscape = false) {
   let escaped = String(value);
   escaped = escaped.replace(/(?=(\\+?)?)\1"/g, '$1$1\\"');
   escaped = escaped.replace(/(?=(\\+?)?)\1$/g, "$1$1");
@@ -157,7 +157,9 @@ export function resolvedExecutableInvocation(
       : "cmd.exe");
   const commandLine = [
     escapeCommand(executablePath),
-    ...args.map((argument) => escapeCommandArgument(argument, /\.cmd$/i.test(executablePath))),
+    ...args.map((argument) =>
+      quoteWindowsCommandArgument(argument, /\.cmd$/i.test(executablePath)),
+    ),
   ].join(" ");
   return {
     command: commandShell,

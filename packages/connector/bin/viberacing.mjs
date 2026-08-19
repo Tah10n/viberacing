@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { connectorVersion } from "../lib/version.mjs";
 import { parseProtocolResponse } from "../lib/protocol.mjs";
+import { normalizeOrigin } from "../lib/origin.mjs";
 import {
   adapters,
   adapterFor,
@@ -149,15 +150,6 @@ async function readConnectedConfig() {
       );
     throw error;
   }
-}
-
-function normalizedOrigin(value) {
-  const url = new URL(value);
-  if (url.pathname !== "/" || url.search || url.hash || !["https:", "http:"].includes(url.protocol))
-    throw new Error("--origin must be an HTTP(S) origin");
-  if (url.protocol === "http:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname))
-    throw new Error("Non-local origins must use HTTPS");
-  return url.origin;
 }
 
 function retryAfterMilliseconds(response) {
@@ -323,7 +315,7 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId, 
 }
 
 async function connect() {
-  const origin = normalizedOrigin(option("--origin", "https://viberacing.com"));
+  const origin = normalizeOrigin(option("--origin", "https://viberacing.com"), "--origin");
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
   const detected = discovery.sources;

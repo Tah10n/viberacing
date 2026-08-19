@@ -777,7 +777,7 @@ test("keeps a manual Qwen hook root through reconnect and uninstall", async (con
     assert.match(installed, /Preserve this user comment/);
     assert.match(installed, /"unknownSetting"[\s\S]*"keep": true/);
     assert.match(installed, /viberacing-hook-v3:/);
-    assert.match(installed, /hook --source [0-9a-f-]+ --agent qwen_code/);
+    assert.match(installed, /'hook' '--source' '[0-9a-f-]+' '--agent' 'qwen_code'/);
     await assert.rejects(access(join(runtimeRoot, "settings.json")));
     assert.deepEqual(await module.diagnoseHooks(sources), { qwen_code: "current" });
 
@@ -896,9 +896,9 @@ test("source-owned hooks reconcile profiles independently and upgrade legacy mar
     const firstSettings = await readFile(join(first.dataPath, "settings.json"), "utf8");
     const secondSettings = await readFile(join(second.dataPath, "settings.json"), "utf8");
     assert.match(firstSettings, new RegExp(module.hookMarkerForSource(first.clientSourceId)));
-    assert.match(firstSettings, new RegExp(`--source ${first.clientSourceId}`));
+    assert.match(firstSettings, new RegExp(`--source' '${first.clientSourceId}`));
     assert.match(secondSettings, new RegExp(module.hookMarkerForSource(second.clientSourceId)));
-    assert.match(secondSettings, new RegExp(`--source ${second.clientSourceId}`));
+    assert.match(secondSettings, new RegExp(`--source' '${second.clientSourceId}`));
     assert.doesNotMatch(firstSettings, /viberacing-hook-v2/);
     assert.match(firstSettings, /keep-foreign-hook/);
 
@@ -1400,7 +1400,7 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
     const { stateDirectory } = await import("../lib/config.mjs");
     const staleLock = join(stateDirectory, "scheduler.lock");
     const staleOwner = "stale-owner";
-    await writeFile(staleLock, `1:${staleOwner}\n`);
+    await writeFile(staleLock, `99999999:${staleOwner}\n`);
     const staleTime = new Date(Date.now() - 11 * 60_000);
     await utimes(staleLock, staleTime, staleTime);
     const replacementScheduler = await runtime.claimScheduler();

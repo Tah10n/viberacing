@@ -74,5 +74,10 @@ corepack pnpm --filter @viberacing/connector publish --access public --provenanc
 Users connect with:
 
 ```bash
-npx @viberacing/connector connect --origin https://your-domain.example
+npx --yes @viberacing/connector@0.2.1 connect --origin https://your-domain.example
 ```
+
+Keep the displayed version exact. The website-hosted connector tarball is a preview/CI artifact, not
+the production installation source. Publishing is an operator action: configure npm trusted
+publishing for the release workflow, retain `--provenance`, verify the package-content gate, and
+publish only the reviewed version/tag. This repository workflow does not publish automatically.

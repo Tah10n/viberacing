@@ -2,18 +2,31 @@ import { randomUUID } from "node:crypto";
 import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
-export async function deadLockOwner(path) {
+async function lockOwnerState(path) {
   const owner = await readFile(path, "utf8").catch(() => null);
   const match = typeof owner === "string" ? /^(\d+):[0-9a-f-]{36}\n$/i.exec(owner) : null;
-  if (!match) return false;
+  if (!match) return { kind: "malformed", owner };
   const pid = Number(match[1]);
-  if (!Number.isSafeInteger(pid) || pid < 1 || pid === process.pid) return false;
+  if (!Number.isSafeInteger(pid) || pid < 1) return { kind: "malformed", owner };
+  if (pid === process.pid) return { kind: "live", owner, pid };
   try {
     process.kill(pid, 0);
-    return false;
+    return { kind: "live", owner, pid };
   } catch (error) {
-    return error?.code === "ESRCH";
+    return { kind: error?.code === "ESRCH" ? "dead" : "live", owner, pid };
   }
+}
+
+export async function deadLockOwner(path) {
+  return (await lockOwnerState(path)).kind === "dead";
+}
+
+export async function ownedLockActive(path, staleMs = 10 * 60_000) {
+  const info = await stat(path).catch(() => null);
+  if (!info) return false;
+  const state = await lockOwnerState(path);
+  if (state.kind === "live") return true;
+  return state.kind !== "dead" && Date.now() - info.mtimeMs <= staleMs;
 }
 
 export async function acquireOwnedLock(path, options = {}) {
@@ -32,10 +45,14 @@ export async function acquireOwnedLock(path, options = {}) {
       return { path, owner, ownershipToken };
     } catch (error) {
       await handle?.close().catch(() => {});
-      if (created) await unlink(path).catch(() => {});
+      if (created) await releaseOwnedLock({ path, owner, ownershipToken }).catch(() => {});
       if (error?.code !== "EEXIST") throw error;
       const info = await stat(path).catch(() => null);
-      if ((info && Date.now() - info.mtimeMs > staleMs) || (await deadLockOwner(path))) {
+      const state = info ? await lockOwnerState(path) : null;
+      if (
+        state?.kind === "dead" ||
+        (state?.kind === "malformed" && Date.now() - info.mtimeMs > staleMs)
+      ) {
         const stalePath = `${path}.stale.${ownershipToken}`;
         try {
           await rename(path, stalePath);

@@ -27,6 +27,8 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   const decoded = Buffer.from(calls[0][1].at(-1), "base64").toString("utf16le");
   assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_TARGET/);
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
+  assert.match(decoded, /ReparsePoint/);
+  assert.match(decoded, /Get-ChildItem -LiteralPath \$path -Force -Recurse/);
   assert.doesNotMatch(decoded, /C:\\Users\\racer|\.viberacing/);
   assert.equal(
     calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_TARGET,

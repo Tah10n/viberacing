@@ -1,6 +1,6 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { connectorArchiveName } from "@/lib/connector";
+import { bundledConnectorVersion } from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { DangerActionForm } from "../components/danger-action-form";
@@ -136,7 +136,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     ),
   ]);
   const origin = publicOrigin().origin;
-  const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
+  const command = `npx --yes @viberacing/connector@${bundledConnectorVersion} connect --origin ${origin}`;
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."

@@ -3,8 +3,10 @@ import {
   access,
   copyFile,
   cp,
+  lstat,
   mkdir,
   readFile,
+  readdir,
   rename,
   rm,
   writeFile,
@@ -12,12 +14,14 @@ import {
   unlink,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
 import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
+import { quoteWindowsCommandArgument } from "./executables.mjs";
 import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
+import { normalizeOrigin } from "./origin.mjs";
 import { mergeStoredSourceMapping } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { connectorVersion } from "./version.mjs";
@@ -36,8 +40,66 @@ export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
 let stateDirectorySecurity;
 
+function isInstalledRuntimeExecutable(path) {
+  const parts = relative(stateDirectory, path).split(/[\\/]/);
+  return (
+    parts.length === 4 &&
+    parts[0] === "runtime" &&
+    parts[1] !== "" &&
+    parts[1] !== "." &&
+    parts[1] !== ".." &&
+    parts[2] === "bin" &&
+    parts[3] === "viberacing.mjs"
+  );
+}
+
+async function securePosixStateTree(path) {
+  let info;
+  try {
+    info = await lstat(path);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    await mkdir(path, { recursive: true, mode: 0o700 });
+    info = await lstat(path);
+  }
+  if (!info.isDirectory() || info.isSymbolicLink())
+    throw new Error("Vibe Racing state path must be a real directory");
+  if (
+    typeof process.getuid === "function" &&
+    typeof info.uid === "number" &&
+    info.uid !== process.getuid()
+  )
+    throw new Error("Vibe Racing state path must be owned by the current user");
+  await chmod(path, 0o700);
+  const verified = await lstat(path);
+  if (!verified.isDirectory() || verified.isSymbolicLink() || (verified.mode & 0o077) !== 0)
+    throw new Error("Vibe Racing cannot enforce a private state directory");
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    const childInfo = await lstat(child);
+    if (childInfo.isSymbolicLink())
+      throw new Error(`Vibe Racing state contains a symbolic link: ${entry.name}`);
+    if (
+      typeof process.getuid === "function" &&
+      typeof childInfo.uid === "number" &&
+      childInfo.uid !== process.getuid()
+    )
+      throw new Error(`Vibe Racing state contains an entry owned by another user: ${entry.name}`);
+    if (childInfo.isDirectory()) await securePosixStateTree(child);
+    else if (childInfo.isFile()) {
+      await chmod(child, isInstalledRuntimeExecutable(child) ? 0o700 : 0o600);
+      const checked = await lstat(child);
+      if (!checked.isFile() || checked.isSymbolicLink() || (checked.mode & 0o077) !== 0)
+        throw new Error(`Vibe Racing cannot secure state file: ${entry.name}`);
+    } else throw new Error(`Vibe Racing state contains an unsupported entry: ${entry.name}`);
+  }
+}
+
 export function ensurePrivateStateDirectory() {
-  stateDirectorySecurity ??= secureWindowsStateDirectory(stateDirectory);
+  stateDirectorySecurity ??=
+    process.platform === "win32"
+      ? secureWindowsStateDirectory(stateDirectory)
+      : securePosixStateTree(stateDirectory);
   return stateDirectorySecurity;
 }
 const sourceIdPattern =
@@ -134,6 +196,7 @@ function serializedConfig(config) {
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
   return {
     ...config,
+    origin: normalizeOrigin(config.origin, "Stored connector origin"),
     sources: (config.sources ?? []).map((source) => ({
       clientSourceId: source.clientSourceId,
       sourceId: source.sourceId,
@@ -162,8 +225,9 @@ async function normalizedSources(sources) {
 }
 
 function validateCommittedConfig(config, sources) {
-  if (config?.version !== 2 || typeof config.origin !== "string" || !Array.isArray(config.sources))
+  if (config?.version !== 2 || !Array.isArray(config.sources))
     throw new Error("Interrupted connector connection state is invalid");
+  config.origin = normalizeOrigin(config.origin, "Stored connector origin");
   const localById = new Map(sources.map((source) => [source.clientSourceId, source]));
   const mappedIds = new Set();
   if (
@@ -179,14 +243,8 @@ function validateCommittedConfig(config, sources) {
 }
 
 function validConnectAttemptOrigin(value) {
-  if (typeof value !== "string") return false;
   try {
-    const url = new URL(value);
-    return (
-      url.origin === value &&
-      (url.protocol === "https:" ||
-        (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))
-    );
+    return normalizeOrigin(value) === value;
   } catch {
     return false;
   }
@@ -328,8 +386,9 @@ async function readSourcesUnlocked() {
 
 async function readConfigUnlocked() {
   const value = JSON.parse(await readFile(configPath, "utf8"));
-  if (value?.version !== 2 || typeof value.origin !== "string" || !Array.isArray(value.sources))
+  if (value?.version !== 2 || !Array.isArray(value.sources))
     throw new Error("Connector configuration is unsupported; run `viberacing connect` again");
+  value.origin = normalizeOrigin(value.origin, "Stored connector origin");
   const localById = new Map(
     (await readSourcesUnlocked()).map((source) => [source.clientSourceId, source]),
   );
@@ -453,7 +512,7 @@ export async function beginConnectAttempt({ installationId, origin, expectedSour
       attemptId: randomUUID(),
       installationId,
       sourceRegistryRevision: randomUUID(),
-      origin,
+      origin: normalizeOrigin(origin),
       startedAt: new Date().toISOString(),
     };
     await atomicJson(connectAttemptPath, attempt);
@@ -782,6 +841,7 @@ const installedRuntimeFiles = [
   "config.mjs",
   "executables.mjs",
   "owned-lock.mjs",
+  "origin.mjs",
   "readers.mjs",
   "registry.mjs",
   "runtime.mjs",
@@ -802,6 +862,7 @@ async function verifyInstalledRuntime(directory) {
 }
 
 async function installRuntime(sourceUrl) {
+  await ensurePrivateStateDirectory();
   const sourceScript = fileURLToPath(sourceUrl);
   const sourceRoot = resolve(dirname(sourceScript), "..");
   const installedScript = installedRuntimeScript();
@@ -850,9 +911,31 @@ export function prepareRuntime(sourceUrl) {
   return installRuntime(sourceUrl);
 }
 
-function sourceHookCommand(installedScript, source) {
+export function hookCommandForPlatform(installedScript, source, platform = process.platform) {
   const marker = hookMarkerForSource(source.clientSourceId);
-  return `\"${process.execPath}\" \"${installedScript}\" hook --source ${source.clientSourceId} --agent ${source.agentId} ${marker}`;
+  const values = [
+    process.execPath,
+    installedScript,
+    "hook",
+    "--source",
+    source.clientSourceId,
+    "--agent",
+    source.agentId,
+    marker,
+  ];
+  const command = values.map((value) => quoteHookArgument(value, platform)).join(" ");
+  return platform === "win32" ? `"${command}"` : command;
+}
+
+function sourceHookCommand(installedScript, source) {
+  return hookCommandForPlatform(installedScript, source);
+}
+
+export function quoteHookArgument(value, platform = process.platform) {
+  if (typeof value !== "string" || /[\0\r\n]/.test(value))
+    throw new Error("Hook arguments cannot contain NUL or newlines");
+  if (platform === "win32") return quoteWindowsCommandArgument(value);
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 export async function installHookForSource(source, installedScript) {

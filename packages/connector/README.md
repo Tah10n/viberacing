@@ -5,12 +5,11 @@ sources and pairs them with Vibe Racing agent accounts. It never uploads raw ses
 paths.
 
 ```bash
-npx --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- \
-  viberacing connect --origin https://viberacing.example
+npx --yes @viberacing/connector@0.2.1 connect --origin https://viberacing.example
 ```
 
-Use the command shown by your Vibe Racing dashboard. The connector package is served by that same
-Vibe Racing origin, so a separate npm publication is not required.
+Use the exact-version command shown by your Vibe Racing dashboard. Website-hosted tarballs are only
+for local preview and CI validation; production installation uses the provenance-backed npm package.
 
 Discovery is independent of the directory where the command runs. Provider data comes only from
 documented token-store roots, supported environment overrides, Qwen's user-level settings, and roots
