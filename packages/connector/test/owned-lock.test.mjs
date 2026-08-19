@@ -5,14 +5,13 @@ import { once } from "node:events";
 import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { acquireOwnedLock, releaseOwnedLock } from "../lib/owned-lock.mjs";
 
 test("owned locks preserve live owners and recover dead or old malformed owners", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-lock-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "state.lock");
-  const moduleUrl = pathToFileURL(new URL("../lib/owned-lock.mjs", import.meta.url).pathname).href;
+  const moduleUrl = new URL("../lib/owned-lock.mjs", import.meta.url).href;
   const child = spawn(
     process.execPath,
     [
@@ -23,14 +22,23 @@ test("owned locks preserve live owners and recover dead or old malformed owners"
     ],
     { stdio: ["pipe", "pipe", "inherit"] },
   );
-  await once(child.stdout, "data");
+  context.after(() => {
+    if (child.exitCode === null) child.kill();
+  });
+  const childPid = child.pid;
+  const childExit = once(child, "exit");
+  const startup = await Promise.race([
+    once(child.stdout, "data").then(() => ({ ready: true })),
+    childExit.then(([code, signal]) => ({ ready: false, code, signal })),
+  ]);
+  assert.deepEqual(startup, { ready: true });
   const old = new Date(Date.now() - 60 * 60_000);
   await utimes(path, old, old);
   assert.equal(await acquireOwnedLock(path, { waitMs: 25, staleMs: 1 }), null);
   child.stdin.end("continue\n");
-  await once(child, "exit");
+  assert.deepEqual(await childExit, [0, null]);
 
-  await writeFile(path, `99999999:11111111-1111-4111-8111-111111111111\n`);
+  await writeFile(path, `${childPid}:11111111-1111-4111-8111-111111111111\n`);
   const recoveredDead = await acquireOwnedLock(path);
   assert.ok(recoveredDead);
   await releaseOwnedLock(recoveredDead);

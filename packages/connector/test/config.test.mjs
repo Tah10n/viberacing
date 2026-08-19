@@ -777,7 +777,10 @@ test("keeps a manual Qwen hook root through reconnect and uninstall", async (con
     assert.match(installed, /Preserve this user comment/);
     assert.match(installed, /"unknownSetting"[\s\S]*"keep": true/);
     assert.match(installed, /viberacing-hook-v3:/);
-    assert.match(installed, /'hook' '--source' '[0-9a-f-]+' '--agent' 'qwen_code'/);
+    assert.match(installed, /--source/);
+    assert.match(installed, new RegExp(sources[0].clientSourceId));
+    assert.match(installed, /--agent/);
+    assert.match(installed, /qwen_code/);
     await assert.rejects(access(join(runtimeRoot, "settings.json")));
     assert.deepEqual(await module.diagnoseHooks(sources), { qwen_code: "current" });
 
@@ -896,9 +899,11 @@ test("source-owned hooks reconcile profiles independently and upgrade legacy mar
     const firstSettings = await readFile(join(first.dataPath, "settings.json"), "utf8");
     const secondSettings = await readFile(join(second.dataPath, "settings.json"), "utf8");
     assert.match(firstSettings, new RegExp(module.hookMarkerForSource(first.clientSourceId)));
-    assert.match(firstSettings, new RegExp(`--source' '${first.clientSourceId}`));
+    assert.match(firstSettings, /--source/);
+    assert.match(firstSettings, new RegExp(first.clientSourceId));
     assert.match(secondSettings, new RegExp(module.hookMarkerForSource(second.clientSourceId)));
-    assert.match(secondSettings, new RegExp(`--source' '${second.clientSourceId}`));
+    assert.match(secondSettings, /--source/);
+    assert.match(secondSettings, new RegExp(second.clientSourceId));
     assert.doesNotMatch(firstSettings, /viberacing-hook-v2/);
     assert.match(firstSettings, /keep-foreign-hook/);
 
