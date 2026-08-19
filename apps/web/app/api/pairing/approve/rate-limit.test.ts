@@ -9,7 +9,11 @@ const { consumeRateLimitMock, transactionMock, viewerMock } = vi.hoisted(() => (
 vi.mock("@/lib/config", () => ({ publicOrigin: () => new URL("https://viberacing.example") }));
 vi.mock("@/lib/db", () => ({ transaction: transactionMock }));
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
+  clientAddress: (request: Request) => ({
+    trusted: true,
+    key: request.headers.get("x-real-ip") ?? "unknown",
+  }),
+  clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
   consumeRateLimit: consumeRateLimitMock,
 }));
 vi.mock("@/lib/session", () => ({ viewer: viewerMock }));

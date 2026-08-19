@@ -19,6 +19,9 @@ const originalClientId = process.env.GITHUB_CLIENT_ID;
 const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
 const originalMaximumDailyTokens = process.env.VIBERACING_MAX_DAILY_TOKENS;
 const originalTrustProxy = process.env.VIBERACING_TRUST_PROXY;
+const originalNodeEnv = process.env.NODE_ENV;
+const originalAllowInsecureLocal = process.env.VIBERACING_ALLOW_INSECURE_LOCAL;
+const mutableEnv = process.env as Record<string, string | undefined>;
 
 afterEach(() => {
   if (originalOrigin === undefined) delete process.env.VIBERACING_PUBLIC_ORIGIN;
@@ -37,6 +40,9 @@ afterEach(() => {
   else process.env.VIBERACING_MAX_DAILY_TOKENS = originalMaximumDailyTokens;
   if (originalTrustProxy === undefined) delete process.env.VIBERACING_TRUST_PROXY;
   else process.env.VIBERACING_TRUST_PROXY = originalTrustProxy;
+  mutableEnv.NODE_ENV = originalNodeEnv;
+  if (originalAllowInsecureLocal === undefined) delete process.env.VIBERACING_ALLOW_INSECURE_LOCAL;
+  else process.env.VIBERACING_ALLOW_INSECURE_LOCAL = originalAllowInsecureLocal;
 });
 
 describe("public origin", () => {
@@ -92,8 +98,42 @@ describe("public origin", () => {
     expect(trustedProxyMode()).toBe("none");
     process.env.VIBERACING_TRUST_PROXY = "railway";
     expect(trustedProxyMode()).toBe("railway");
+    process.env.VIBERACING_TRUST_PROXY = "trusted-x-real-ip";
+    expect(trustedProxyMode()).toBe("trusted-x-real-ip");
     process.env.VIBERACING_TRUST_PROXY = "true";
-    expect(() => trustedProxyMode()).toThrow(/none or railway/);
+    expect(() => trustedProxyMode()).toThrow(/none, railway, or trusted-x-real-ip/);
+  });
+
+  it("rejects proxy-disabled public deployments while preserving local preview and tests", () => {
+    mutableEnv.NODE_ENV = "production";
+    process.env.DATABASE_URL = "postgresql://example.invalid/viberacing";
+    process.env.VIBERACING_DATABASE_SSL = "true";
+    process.env.GITHUB_CLIENT_ID = "synthetic-client";
+    process.env.GITHUB_CLIENT_SECRET = "synthetic-secret";
+    process.env.VIBERACING_TRUST_PROXY = "none";
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    expect(() => {
+      validateRuntimeConfig();
+    }).toThrow(expect.objectContaining({ code: "CONFIG_TRUST_PROXY_REQUIRED" }));
+
+    mutableEnv.NODE_ENV = "development";
+    expect(() => {
+      validateRuntimeConfig();
+    }).toThrow(expect.objectContaining({ code: "CONFIG_TRUST_PROXY_REQUIRED" }));
+
+    mutableEnv.NODE_ENV = "production";
+    process.env.VIBERACING_PUBLIC_ORIGIN = "http://localhost:3000";
+    process.env.VIBERACING_ALLOW_INSECURE_LOCAL = "true";
+    expect(() => {
+      validateRuntimeConfig();
+    }).not.toThrow();
+
+    mutableEnv.NODE_ENV = "test";
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    delete process.env.VIBERACING_ALLOW_INSECURE_LOCAL;
+    expect(() => {
+      validateRuntimeConfig();
+    }).not.toThrow();
   });
 
   it("orders stable and prerelease connector versions by SemVer precedence", () => {

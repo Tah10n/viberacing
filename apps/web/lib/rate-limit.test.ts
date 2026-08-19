@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clientAddress, consumeRateLimit } from "./rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "./rate-limit";
 
 describe("database-backed rate limits", () => {
   const originalTrustProxy = process.env.VIBERACING_TRUST_PROXY;
@@ -25,7 +25,7 @@ describe("database-backed rate limits", () => {
         "x-real-ip": "203.0.113.9",
       },
     });
-    expect(clientAddress(request)).toBe("203.0.113.9");
+    expect(clientAddress(request)).toEqual({ trusted: true, key: "203.0.113.9" });
   });
 
   it("ignores forwarding headers unless the matching proxy is explicitly trusted", () => {
@@ -33,12 +33,55 @@ describe("database-backed rate limits", () => {
     const request = new Request("https://viberacing.example", {
       headers: { "x-real-ip": "203.0.113.9" },
     });
-    expect(clientAddress(request)).toBe("untrusted-forwarding-headers");
+    expect(clientAddress(request)).toEqual({
+      trusted: false,
+      key: "untrusted:proxy_disabled",
+      reason: "proxy_disabled",
+    });
 
     process.env.VIBERACING_TRUST_PROXY = "railway";
     const malformed = new Request("https://viberacing.example", {
       headers: { "x-real-ip": "attacker-controlled" },
     });
-    expect(clientAddress(malformed)).toBe("missing-trusted-client-address");
+    expect(clientAddress(malformed)).toEqual({
+      trusted: false,
+      key: "untrusted:invalid_header",
+      reason: "invalid_header",
+    });
+  });
+
+  it("distinguishes a missing trusted header and accepts the self-host proxy mode", () => {
+    process.env.VIBERACING_TRUST_PROXY = "trusted-x-real-ip";
+    expect(clientAddress(new Request("https://viberacing.example"))).toEqual({
+      trusted: false,
+      key: "untrusted:missing_header",
+      reason: "missing_header",
+    });
+    expect(
+      clientAddress(
+        new Request("https://viberacing.example", {
+          headers: { "X-Real-IP": "2001:db8::1", "X-Forwarded-For": "spoofed" },
+        }),
+      ),
+    ).toEqual({ trusted: true, key: "2001:db8::1" });
+  });
+
+  it("keeps local preview usable while bounding invalid trusted headers", () => {
+    expect(
+      clientAdmissionLimit(
+        { trusted: false, key: "local", reason: "proxy_disabled" },
+        120,
+        10_000,
+        20,
+      ),
+    ).toBe(10_000);
+    expect(
+      clientAdmissionLimit(
+        { trusted: false, key: "invalid", reason: "invalid_header" },
+        120,
+        10_000,
+        20,
+      ),
+    ).toBe(20);
   });
 });

@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { consumeRateLimitMock, transactionMock } = vi.hoisted(() => ({
+const { consumeRateLimitMock, queryMock, transactionMock } = vi.hoisted(() => ({
   consumeRateLimitMock: vi.fn(),
+  queryMock: vi.fn(),
   transactionMock: vi.fn(),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
+  clientAddress: (request: Request) => ({
+    trusted: true,
+    key: request.headers.get("x-real-ip") ?? "unknown",
+  }),
+  clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
   consumeRateLimit: consumeRateLimitMock,
 }));
-vi.mock("@/lib/db", () => ({ transaction: transactionMock }));
+vi.mock("@/lib/db", () => ({ query: queryMock, transaction: transactionMock }));
 
 import { POST } from "./route";
 
@@ -27,11 +32,12 @@ function request(body: unknown = { installationId, pollToken }): Request {
 describe("pairing cancellation boundaries", () => {
   afterEach(() => {
     consumeRateLimitMock.mockReset();
+    queryMock.mockReset();
     transactionMock.mockReset();
   });
 
-  it("applies global and address quotas before the transaction", async () => {
-    consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  it("rejects the client before parsing, authentication, or global quota", async () => {
+    consumeRateLimitMock.mockResolvedValue(false);
 
     const response = await POST(request());
 
@@ -39,23 +45,18 @@ describe("pairing cancellation boundaries", () => {
     expect(response.headers.get("retry-after")).toBe("60");
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
       1,
-      "pairing_cancel_global",
-      "all",
-      10_000,
-      60,
-    );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
-      2,
       "pairing_cancel_pre_auth",
       "203.0.113.20",
       120,
       60,
     );
+    expect(queryMock).not.toHaveBeenCalled();
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
   it("rejects extra fields before accessing pairing state", async () => {
     consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([]);
 
     const response = await POST(request({ installationId, pollToken, path: "/private" }));
 
@@ -64,8 +65,47 @@ describe("pairing cancellation boundaries", () => {
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
+  it("does not spend authenticated or global quota for an invalid capability", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(204);
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects the global valid-operation quota before mutation", async () => {
+    consumeRateLimitMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      2,
+      "pairing_cancel",
+      installationId,
+      20,
+      60,
+    );
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      3,
+      "pairing_cancel_global",
+      "all",
+      10_000,
+      60,
+    );
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it("is idempotent when the exact attempt no longer exists", async () => {
     consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
     const query = vi.fn().mockResolvedValue({ rows: [] });
     transactionMock.mockImplementation(
       (callback: (client: { query: typeof query }) => Promise<unknown>) => callback({ query }),

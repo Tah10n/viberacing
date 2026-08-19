@@ -7,7 +7,11 @@ const { consumeRateLimitMock, queryMock, transactionMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
+  clientAddress: (request: Request) => ({
+    trusted: true,
+    key: request.headers.get("x-real-ip") ?? "unknown",
+  }),
+  clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
   consumeRateLimit: consumeRateLimitMock,
 }));
 vi.mock("@/lib/db", () => ({ query: queryMock, transaction: transactionMock }));
@@ -43,8 +47,8 @@ describe("usage pre-auth rate limiting", () => {
     const response = await POST(request("attacker-controlled-random-token-0001"));
 
     expect(response.status).toBe(401);
-    expect(consumeRateLimitMock).toHaveBeenCalledTimes(2);
-    expect(consumeRateLimitMock.mock.calls[1]?.slice(0, 2)).toEqual([
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(consumeRateLimitMock.mock.calls[0]?.slice(0, 2)).toEqual([
       "usage_pre_auth",
       "203.0.113.9",
     ]);
@@ -57,27 +61,40 @@ describe("usage pre-auth rate limiting", () => {
   });
 
   it("keys the authenticated quota by the server-side installation id", async () => {
-    consumeRateLimitMock
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
+    consumeRateLimitMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     queryMock.mockResolvedValue([{ id: installationId, user_id: "1" }]);
 
     const response = await POST(request());
 
     expect(response.status).toBe(429);
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(1, "usage_global", "all", 10_000, 60);
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
-      2,
+      1,
       "usage_pre_auth",
       "203.0.113.9",
       120,
       60,
     );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "usage_sync", installationId, 30, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "usage_sync", installationId, 30, 60);
+    expect(queryMock.mock.invocationCallOrder[0]).toBeLessThan(
+      consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY,
+    );
   });
 
   it("also caps ingestion by authenticated user across installations", async () => {
+    consumeRateLimitMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    queryMock.mockResolvedValue([{ id: installationId, user_id: "42" }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "usage_sync_user", "42", 120, 60);
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared quota only after installation and user quotas", async () => {
     consumeRateLimitMock
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -88,7 +105,10 @@ describe("usage pre-auth rate limiting", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(429);
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(4, "usage_sync_user", "42", 120, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(4, "usage_global", "all", 10_000, 60);
     expect(transactionMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock.mock.invocationCallOrder[2]).toBeLessThan(
+      consumeRateLimitMock.mock.invocationCallOrder[3] ?? Number.NEGATIVE_INFINITY,
+    );
   });
 });

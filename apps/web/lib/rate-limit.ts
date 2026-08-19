@@ -38,9 +38,36 @@ export async function consumeRateLimit(
   });
 }
 
-export function clientAddress(request: Request): string {
-  if (trustedProxyMode() !== "railway") return "untrusted-forwarding-headers";
-  // Railway's edge overwrites X-Real-IP with the address it observed.
-  const value = request.headers.get("x-real-ip")?.trim() ?? "";
-  return isIP(value) !== 0 ? value : "missing-trusted-client-address";
+export type ClientAddress =
+  | { trusted: true; key: string }
+  | {
+      trusted: false;
+      key: string;
+      reason: "proxy_disabled" | "missing_header" | "invalid_header";
+    };
+
+export function clientAddress(request: Request): ClientAddress {
+  const mode = trustedProxyMode();
+  if (mode === "none") {
+    return { trusted: false, key: "untrusted:proxy_disabled", reason: "proxy_disabled" };
+  }
+  // Both supported proxy modes require the edge proxy to overwrite X-Real-IP.
+  const raw = request.headers.get("x-real-ip");
+  if (raw === null || raw.trim() === "") {
+    return { trusted: false, key: "untrusted:missing_header", reason: "missing_header" };
+  }
+  const value = raw.trim();
+  return isIP(value) !== 0
+    ? { trusted: true, key: value }
+    : { trusted: false, key: "untrusted:invalid_header", reason: "invalid_header" };
+}
+
+export function clientAdmissionLimit(
+  address: ClientAddress,
+  trustedLimit: number,
+  localPreviewLimit: number,
+  invalidHeaderLimit: number,
+): number {
+  if (address.trusted) return trustedLimit;
+  return address.reason === "proxy_disabled" ? localPreviewLimit : invalidHeaderLimit;
 }

@@ -39,7 +39,7 @@ let userId;
 async function json(path, body, headers = {}) {
   return fetch(`${appUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...headers },
+    headers: { "content-type": "application/json", "x-real-ip": "127.0.0.2", ...headers },
     body: JSON.stringify(body),
     redirect: "manual",
   });
@@ -53,6 +53,7 @@ async function form(path, body) {
       cookie: `vr_session=${sessionToken}`,
       origin: browserOrigin,
       "content-type": "application/x-www-form-urlencoded",
+      "x-real-ip": "127.0.0.3",
     },
     body: new URLSearchParams(body),
   });
@@ -213,6 +214,73 @@ try {
   );
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
+
+  const isolatedClientAddress = "203.0.113.99";
+  const isolatedInstallation = { id: randomUUID(), secret: token() };
+  const survivingInstallation = { id: randomUUID(), secret: token() };
+  try {
+    await pool.query(
+      `INSERT INTO rate_limit_buckets
+         (scope, key_hash, window_started_at, request_count, expires_at)
+       VALUES (
+         'pairing_start', $1,
+         to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+         6,
+         to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+       )
+       ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+         SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+      [digest(isolatedClientAddress)],
+    );
+    const globalBefore = await pool.query(
+      `SELECT coalesce(sum(request_count), 0)::int AS count
+         FROM rate_limit_buckets
+        WHERE scope = 'pairing_start_global' AND expires_at > now()`,
+    );
+    const rejected = await json(
+      "/api/pairing/start",
+      {
+        protocolVersion: 2,
+        connectorVersion: "0.2.0",
+        installationId: isolatedInstallation.id,
+        installationSecret: isolatedInstallation.secret,
+        sources: [source("isolated-client-source", "codex")],
+        supersededClientSourceIds: [],
+      },
+      { "x-real-ip": isolatedClientAddress },
+    );
+    const globalAfter = await pool.query(
+      `SELECT coalesce(sum(request_count), 0)::int AS count
+         FROM rate_limit_buckets
+        WHERE scope = 'pairing_start_global' AND expires_at > now()`,
+    );
+    const surviving = await json(
+      "/api/pairing/start",
+      {
+        protocolVersion: 2,
+        connectorVersion: "0.2.0",
+        installationId: survivingInstallation.id,
+        installationSecret: survivingInstallation.secret,
+        sources: [source("surviving-client-source", "codex")],
+        supersededClientSourceIds: [],
+      },
+      { "x-real-ip": "203.0.113.100" },
+    );
+    check(
+      rejected.status === 429 &&
+        globalAfter.rows[0].count === globalBefore.rows[0].count &&
+        surviving.status === 201,
+      "client admission did not isolate the shared pairing quota",
+    );
+  } finally {
+    await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+      [isolatedInstallation.id, survivingInstallation.id],
+    ]);
+    await pool.query(
+      "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'pairing_start_global')",
+    );
+  }
+  console.log("ok - exhausted client admission does not spend shared pairing quota");
 
   const firstInstallation = { id: randomUUID(), secret: token() };
   const first = await pair(firstInstallation, [

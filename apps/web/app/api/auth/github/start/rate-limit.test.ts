@@ -15,8 +15,18 @@ vi.mock("@/lib/config", () => ({
   secureCookies: () => true,
 }));
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) =>
-    request.headers.get("x-real-ip") ?? "untrusted-forwarding-headers",
+  clientAddress: (request: Request) => {
+    const key = request.headers.get("x-real-ip");
+    return key
+      ? { trusted: true, key }
+      : { trusted: false, key: "untrusted:missing_header", reason: "missing_header" };
+  },
+  clientAdmissionLimit: (
+    address: { trusted: boolean; reason?: string },
+    trusted: number,
+    local: number,
+    invalid: number,
+  ) => (address.trusted ? trusted : address.reason === "proxy_disabled" ? local : invalid),
   consumeRateLimit: consumeRateLimitMock,
 }));
 
@@ -42,13 +52,19 @@ describe("OAuth start rate limiting", () => {
     expect(cookieSetMock).not.toHaveBeenCalled();
   });
 
-  it("does not collapse untrusted forwarding headers into a global pre-auth bucket", async () => {
+  it("fails closed into a small bucket when the trusted address is unavailable", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
     const response = await GET(
       new Request("https://viberacing.example/api/auth/github/start?next=/dashboard"),
     );
 
     expect(response.status).toBe(307);
-    expect(consumeRateLimitMock).not.toHaveBeenCalled();
+    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+      "oauth_start",
+      "untrusted:missing_header",
+      5,
+      60,
+    );
     expect(cookieSetMock).toHaveBeenCalledTimes(2);
   });
 });

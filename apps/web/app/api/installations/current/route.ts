@@ -1,7 +1,7 @@
 import { digest } from "@/lib/crypto";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 function bearer(request: Request): string | null {
@@ -22,6 +22,26 @@ async function post(request: Request): Promise<Response> {
   const token = bearer(request);
   if (!token) return problem(401, "unauthorized");
   try {
+    const address = clientAddress(request);
+    if (
+      !(await consumeRateLimit(
+        "reconciliation_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 120, 10_000, 20),
+        60,
+      ))
+    ) {
+      return rateLimited();
+    }
+    const installations = await query<{ id: string }>(
+      "SELECT id::text FROM installations WHERE device_token_hash = $1 AND status = 'active' LIMIT 1",
+      [digest(token)],
+    );
+    const installation = installations[0];
+    if (!installation) return problem(401, "unauthorized");
+    if (!(await consumeRateLimit("reconciliation_installation", installation.id, 60, 60))) {
+      return rateLimited();
+    }
     if (!(await consumeRateLimit("reconciliation_global", "all", 10_000, 60))) {
       return rateLimited();
     }
@@ -35,15 +55,6 @@ async function post(request: Request): Promise<Response> {
       new Set(body.sourceIds).size !== body.sourceIds.length
     ) {
       return problem(400, "invalid_request");
-    }
-    const installations = await query<{ id: string }>(
-      "SELECT id::text FROM installations WHERE device_token_hash = $1 AND status = 'active' LIMIT 1",
-      [digest(token)],
-    );
-    const installation = installations[0];
-    if (!installation) return problem(401, "unauthorized");
-    if (!(await consumeRateLimit("reconciliation_installation", installation.id, 60, 60))) {
-      return rateLimited();
     }
     const sourceIds = body.sourceIds;
     const rows = await query<{
@@ -81,9 +92,30 @@ async function post(request: Request): Promise<Response> {
 async function remove(request: Request): Promise<Response> {
   const token = bearer(request);
   if (!token) return problem(401, "unauthorized");
-  const changed = await transaction(async (client) => {
-    const result = await client.query<{ id: string }>(
-      `UPDATE installations
+  try {
+    const address = clientAddress(request);
+    if (
+      !(await consumeRateLimit(
+        "installation_delete_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 30, 2_000, 10),
+        60,
+      ))
+    ) {
+      return rateLimited();
+    }
+    const installations = await query<{ id: string }>(
+      "SELECT id::text FROM installations WHERE device_token_hash = $1 AND status = 'active' LIMIT 1",
+      [digest(token)],
+    );
+    const installation = installations[0];
+    if (!installation) return problem(401, "unauthorized");
+    if (!(await consumeRateLimit("installation_delete", installation.id, 5, 300))) {
+      return rateLimited();
+    }
+    await transaction(async (client) => {
+      const result = await client.query<{ id: string }>(
+        `UPDATE installations
           SET status = 'revoked',
               device_token_hash = NULL,
               pairing_code_hash = NULL,
@@ -92,28 +124,30 @@ async function remove(request: Request): Promise<Response> {
               pairing_expires_at = NULL,
               revoked_at = now(),
               updated_at = now()
-        WHERE device_token_hash = $1 AND status = 'active'
+        WHERE id = $1 AND device_token_hash = $2 AND status = 'active'
         RETURNING id::text`,
-      [digest(token)],
-    );
-    if (result.rows[0]) {
-      await client.query(
-        "DELETE FROM installation_sources WHERE installation_id = $1 AND status = 'pending'",
-        [result.rows[0].id],
+        [installation.id, digest(token)],
       );
-      await client.query(
-        `UPDATE installation_sources
+      if (result.rows[0]) {
+        await client.query(
+          "DELETE FROM installation_sources WHERE installation_id = $1 AND status = 'pending'",
+          [result.rows[0].id],
+        );
+        await client.query(
+          `UPDATE installation_sources
             SET status = CASE WHEN status = 'active' THEN 'disconnected' ELSE status END,
                 pending_pairing_code_hash = NULL,
                 pending_disconnect = false,
                 updated_at = now()
           WHERE installation_id = $1`,
-        [result.rows[0].id],
-      );
-    }
-    return result.rowCount === 1;
-  });
-  return changed ? new Response(null, { status: 204 }) : problem(401, "unauthorized");
+          [result.rows[0].id],
+        );
+      }
+    });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return problem(500, "server_error", error);
+  }
 }
 
 export const POST = withRequestLogging("/api/installations/current", post);

@@ -4,7 +4,7 @@ import { githubApiOrigin, githubWebOrigin, publicOrigin, requiredEnv } from "@/l
 import { randomToken, secretEqual } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { markResponse } from "@/lib/http";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 import { createSession } from "@/lib/session";
 import { safeReturnPath } from "../return-path";
@@ -41,8 +41,12 @@ async function githubRequest(
 async function get(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
-    address !== "untrusted-forwarding-headers" &&
-    !(await consumeRateLimit("oauth_callback", address, 20, 60))
+    !(await consumeRateLimit(
+      "oauth_callback",
+      address.key,
+      clientAdmissionLimit(address, 20, 2_000, 5),
+      60,
+    ))
   ) {
     return Response.json(
       { error: "rate_limited" },

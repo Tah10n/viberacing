@@ -6,7 +6,11 @@ const { consumeRateLimitMock, queryMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
+  clientAddress: (request: Request) => ({
+    trusted: true,
+    key: request.headers.get("x-real-ip") ?? "unknown",
+  }),
+  clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
   consumeRateLimit: consumeRateLimitMock,
 }));
 vi.mock("@/lib/db", () => ({ query: queryMock }));
@@ -36,14 +40,39 @@ describe("pairing poll pre-auth rate limiting", () => {
     const response = await POST(request("attacker-controlled-random-poll-token-01"));
 
     expect(response.status).toBe(404);
-    expect(consumeRateLimitMock).toHaveBeenCalledTimes(2);
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
-      2,
+      1,
       "pairing_poll_pre_auth",
       "203.0.113.10",
       120,
       60,
     );
+  });
+
+  it("rejects the client before reading the request body", async () => {
+    consumeRateLimitMock.mockResolvedValue(false);
+    const incoming = request("synthetic-poll-token-that-is-long-enough");
+
+    const response = await POST(incoming);
+
+    expect(response.status).toBe(429);
+    expect(incoming.bodyUsed).toBe(false);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("does not spend authenticated or shared quota on malformed input", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    const malformed = new Request("https://viberacing.example/api/pairing/poll", {
+      method: "POST",
+      body: "{}",
+    });
+
+    const response = await POST(malformed);
+
+    expect(response.status).toBe(400);
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(queryMock).not.toHaveBeenCalled();
   });
 
   it("keys the authenticated poll quota by the server-side installation id", async () => {
@@ -58,19 +87,22 @@ describe("pairing poll pre-auth rate limiting", () => {
     expect(response.status).toBe(429);
     expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
       1,
-      "pairing_poll_global",
-      "all",
-      10_000,
-      60,
-    );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
-      2,
       "pairing_poll_pre_auth",
       "203.0.113.10",
       120,
       60,
     );
-    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(3, "pairing_poll", installationId, 40, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(2, "pairing_poll", installationId, 40, 60);
+    expect(consumeRateLimitMock).toHaveBeenNthCalledWith(
+      3,
+      "pairing_poll_global",
+      "all",
+      10_000,
+      60,
+    );
+    expect(queryMock.mock.invocationCallOrder[0]).toBeLessThan(
+      consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY,
+    );
   });
 
   it("keeps an active installation pending until its replacement token is approved", async () => {

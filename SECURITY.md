@@ -37,6 +37,13 @@ device, and session capabilities are stored only as SHA-256 hashes. The server a
 for an active source belonging to the authenticated installation and enforces body/range/count/
 numeric limits plus PostgreSQL-backed rate limits.
 
+Public production also requires a trusted client-address boundary. Railway deployments use the
+edge-overwritten `X-Real-IP`; self-hosted deployments must use a reverse proxy that removes the
+client value and overwrites that header before selecting `trusted-x-real-ip`. Missing or invalid
+trusted headers are rate-limited in a bounded fail-closed bucket. Direct `none` mode is restricted
+to loopback preview and tests, and the application deliberately does not interpret arbitrary
+`X-Forwarded-For` chains.
+
 Production requires an explicit HTTPS origin and starts as a non-root user with CSP, frame,
 referrer, content-type, permissions, and cross-origin isolation headers. The only insecure-origin
 escape hatch accepts loopback and is reserved for the documented local production preview.

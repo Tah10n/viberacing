@@ -1,7 +1,7 @@
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface PollBody {
@@ -27,7 +27,15 @@ interface SourceRow {
 
 async function post(request: Request): Promise<Response> {
   try {
-    if (!(await consumeRateLimit("pairing_poll_global", "all", 10_000, 60))) {
+    const address = clientAddress(request);
+    if (
+      !(await consumeRateLimit(
+        "pairing_poll_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 120, 10_000, 20),
+        60,
+      ))
+    ) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -43,14 +51,6 @@ async function post(request: Request): Promise<Response> {
       body.pollToken.length > 128
     ) {
       return problem(400, "invalid_request");
-    }
-    const address = clientAddress(request);
-    const addressLimit = address === "untrusted-forwarding-headers" ? 10_000 : 120;
-    if (!(await consumeRateLimit("pairing_poll_pre_auth", address, addressLimit, 60))) {
-      return Response.json(
-        { error: "rate_limited" },
-        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-      );
     }
     const rows = await query<PollRow>(
       `SELECT id::text,
@@ -68,6 +68,12 @@ async function post(request: Request): Promise<Response> {
       return annotateResponse(problem(404, "pairing_not_found"), {}, "warn");
     }
     if (!(await consumeRateLimit("pairing_poll", installation.id, 40, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
+    if (!(await consumeRateLimit("pairing_poll_global", "all", 10_000, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
