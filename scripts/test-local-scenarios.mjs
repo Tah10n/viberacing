@@ -1292,22 +1292,22 @@ try {
   console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
 
   const originalRequiredMigration = await pool.query(
-    "SELECT version, checksum FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
+    "SELECT version, checksum FROM schema_migrations WHERE version = '001_initial.sql'",
   );
   try {
     await pool.query(
-      "INSERT INTO schema_migrations (version, checksum) VALUES ('005_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+      "INSERT INTO schema_migrations (version, checksum) VALUES ('002_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
     );
     check(
       (await fetch(`${appUrl}/ready`)).status === 200,
       "readiness rejected a later migration ledger row",
     );
-    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
-    await pool.query("DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
     const missingExpectedSchema = await fetch(`${appUrl}/ready`);
     check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
   } finally {
-    await pool.query("DELETE FROM schema_migrations WHERE version = '005_synthetic_future.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
     const original = originalRequiredMigration.rows[0];
     if (original) {
       await pool.query(
@@ -1316,9 +1316,7 @@ try {
         [original.version, original.checksum],
       );
     } else {
-      await pool.query(
-        "DELETE FROM schema_migrations WHERE version = '004_integrity_hardening.sql'",
-      );
+      await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
     }
   }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {

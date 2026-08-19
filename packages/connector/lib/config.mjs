@@ -607,6 +607,14 @@ export async function reconcileDetectedSources(detected, { persist = true } = {}
         sources.push(normalized);
         changed = true;
       } else {
+        if (
+          typeof candidate.legacyAutoSuggestedLabel === "string" &&
+          existing.suggestedLabel === candidate.legacyAutoSuggestedLabel &&
+          existing.suggestedLabel !== normalized.suggestedLabel
+        ) {
+          existing.suggestedLabel = normalized.suggestedLabel;
+          changed = true;
+        }
         for (const key of ["executablePath", "hookConfigRoot"])
           if (normalized[key] !== undefined && existing[key] !== normalized[key]) {
             existing[key] = normalized[key];

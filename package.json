@@ -19,7 +19,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "corepack pnpm --filter @viberacing/web lint",
-    "migrations:check": "node scripts/check-migrations.mjs",
+    "migrations:check": "node scripts/check-migrations.mjs && node --test scripts/check-migration-history.test.mjs",
     "local:down": "sh scripts/local-down.sh",
     "local:reset": "sh scripts/local-reset.sh",
     "local:test": "node --env-file=apps/web/.env.local scripts/test-local-scenarios.mjs",

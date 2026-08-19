@@ -81,7 +81,6 @@ try {
     migrationChecksums.set(version, createHash("sha256").update(sql).digest("hex"));
   }
   const latestMigration = migrations.at(-1);
-  const checksumUpgradeVersion = "004_integrity_hardening.sql";
   client = new pg.Client({
     ...connection,
     connectionTimeoutMillis: 10_000,
@@ -95,7 +94,6 @@ try {
   await client.query("SELECT pg_advisory_lock(1447641668)");
   const ledger = await client.query("SELECT to_regclass('public.schema_migrations') AS name");
   const applied = new Map();
-  let checksumColumn = false;
   if (ledger.rows[0]?.name) {
     const checksumColumnResult = await client.query(
       `SELECT EXISTS (
@@ -104,12 +102,12 @@ try {
             AND column_name = 'checksum'
        ) AS present`,
     );
-    checksumColumn = checksumColumnResult.rows[0]?.present === true;
-    const rows = await client.query(
-      checksumColumn
-        ? "SELECT version, checksum FROM schema_migrations"
-        : "SELECT version, NULL::text AS checksum FROM schema_migrations",
-    );
+    if (checksumColumnResult.rows[0]?.present !== true) {
+      throw Object.assign(new Error("Database predates the supported baseline"), {
+        code: "MIGRATION_BASELINE_REQUIRED",
+      });
+    }
+    const rows = await client.query("SELECT version, checksum FROM schema_migrations");
     const knownRows = rows.rows.filter((row) => migrationChecksums.has(row.version));
     const unknownRows = rows.rows.filter((row) => !migrationChecksums.has(row.version));
     if (
@@ -130,44 +128,11 @@ try {
         },
       );
     }
-    const zeroChecksumVersions = knownRows
-      .filter((row) => /^0{64}$/.test(row.checksum ?? ""))
-      .map((row) => row.version);
-    const checksumUpgradeIsApplied =
-      applied.get(checksumUpgradeVersion) === migrationChecksums.get(checksumUpgradeVersion);
-    const resumableChecksumUpgrade =
-      checksumColumn &&
-      zeroChecksumVersions.length > 0 &&
-      checksumUpgradeIsApplied &&
-      zeroChecksumVersions.every((version) => version.localeCompare(checksumUpgradeVersion) < 0);
-    for (const row of rows.rows) {
-      if (!migrationChecksums.has(row.version)) continue;
-      const expected = migrationChecksums.get(row.version);
-      if (
-        row.checksum !== null &&
-        ((!resumableChecksumUpgrade && /^0{64}$/.test(row.checksum)) ||
-          (!/^0{64}$/.test(row.checksum) && row.checksum !== expected))
-      ) {
+    for (const row of knownRows) {
+      if (row.checksum !== migrationChecksums.get(row.version)) {
         throw Object.assign(new Error("Applied migration checksum does not match"), {
           code: "MIGRATION_CHECKSUM_MISMATCH",
         });
-      }
-    }
-    if (resumableChecksumUpgrade) {
-      await client.query("BEGIN");
-      try {
-        for (const version of zeroChecksumVersions) {
-          const checksum = migrationChecksums.get(version);
-          await client.query(
-            "UPDATE schema_migrations SET checksum = $2 WHERE version = $1 AND checksum = repeat('0', 64)",
-            [version, checksum],
-          );
-          applied.set(version, checksum);
-        }
-        await client.query("COMMIT");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
       }
     }
   }
@@ -178,33 +143,12 @@ try {
     await client.query("BEGIN");
     try {
       await client.query(sql);
-      const checksumColumnResult = await client.query(
-        `SELECT EXISTS (
-           SELECT 1 FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = 'schema_migrations'
-              AND column_name = 'checksum'
-         ) AS present`,
-      );
-      checksumColumn = checksumColumnResult.rows[0]?.present === true;
-      if (checksumColumn) {
-        for (const [appliedVersion, appliedChecksum] of applied) {
-          if (appliedChecksum !== null) continue;
-          const expected = migrationChecksums.get(appliedVersion);
-          await client.query(
-            "UPDATE schema_migrations SET checksum = $2 WHERE version = $1 AND checksum = repeat('0', 64)",
-            [appliedVersion, expected],
-          );
-          applied.set(appliedVersion, expected);
-        }
-        await client.query("INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)", [
-          version,
-          checksum,
-        ]);
-      } else {
-        await client.query("INSERT INTO schema_migrations (version) VALUES ($1)", [version]);
-      }
+      await client.query("INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)", [
+        version,
+        checksum,
+      ]);
       await client.query("COMMIT");
-      applied.set(version, checksumColumn ? checksum : null);
+      applied.set(version, checksum);
       appliedCount += 1;
       log("info", "migration_applied", { migrationVersion: version });
     } catch (error) {
@@ -212,16 +156,14 @@ try {
       throw error;
     }
   }
-  if (checksumColumn) {
-    const verified = await client.query("SELECT version, checksum FROM schema_migrations");
-    for (const row of verified.rows) {
-      const expected = migrationChecksums.get(row.version);
-      if (expected === undefined && row.version.localeCompare(latestMigration) > 0) continue;
-      if (expected === row.checksum) continue;
-      throw Object.assign(new Error("Applied migration checksum does not match"), {
-        code: "MIGRATION_CHECKSUM_MISMATCH",
-      });
-    }
+  const verified = await client.query("SELECT version, checksum FROM schema_migrations");
+  for (const row of verified.rows) {
+    const expected = migrationChecksums.get(row.version);
+    if (expected === undefined && row.version.localeCompare(latestMigration) > 0) continue;
+    if (expected === row.checksum) continue;
+    throw Object.assign(new Error("Applied migration checksum does not match"), {
+      code: "MIGRATION_CHECKSUM_MISMATCH",
+    });
   }
   log("info", "migration_completed", { appliedMigrations: appliedCount });
 } catch (error) {

@@ -21,6 +21,7 @@ import {
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -1033,6 +1034,63 @@ test("keeps source UUIDs stable when detected path order changes", async () => {
     );
   } finally {
     restoreEnvironment();
+  }
+});
+
+test("migrates only legacy auto-generated OpenCode labels", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-label-migration-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?opencode-labels=${encodeURIComponent(home)}`);
+    const legacyPath = join(home, "opencode-custom-channel.db");
+    const customPath = join(home, "opencode-personal.db");
+    await module.writeSources([
+      {
+        clientSourceId: "51515151-5151-4151-8151-515151515151",
+        agentId: "opencode",
+        collectionMethod: "opencode_sqlite",
+        dataPath: legacyPath,
+        suggestedLabel: "OpenCode custom-channel",
+        supportedSurface: "cli",
+      },
+      {
+        clientSourceId: "52525252-5252-4252-8252-525252525252",
+        agentId: "opencode",
+        collectionMethod: "opencode_sqlite",
+        dataPath: customPath,
+        suggestedLabel: "My private profile",
+        supportedSurface: "cli",
+      },
+    ]);
+
+    const reconciled = await module.reconcileDetectedSources([
+      {
+        agentId: "opencode",
+        collectionMethod: "opencode_sqlite",
+        dataPath: legacyPath,
+        suggestedLabel: "OpenCode profile 2",
+        legacyAutoSuggestedLabel: "OpenCode custom-channel",
+        supportedSurface: "cli",
+      },
+      {
+        agentId: "opencode",
+        collectionMethod: "opencode_sqlite",
+        dataPath: customPath,
+        suggestedLabel: "OpenCode profile 3",
+        legacyAutoSuggestedLabel: "OpenCode personal",
+        supportedSurface: "cli",
+      },
+    ]);
+
+    assert.equal(reconciled[0].suggestedLabel, "OpenCode profile 2");
+    assert.equal(reconciled[1].suggestedLabel, "My private profile");
+    assert.deepEqual(
+      (await module.readSources()).map((source) => source.suggestedLabel),
+      ["OpenCode profile 2", "My private profile"],
+    );
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
   }
 });
 
@@ -2270,6 +2328,112 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "credentials",
   ])
     assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
+});
+
+test("connect replaces a legacy OpenCode filename label before pairing and local commit", async (context) => {
+  let pairingBody;
+  const sourceId = "53535353-5353-4353-8353-535353535353";
+  const accountId = "54545454-5454-4454-8454-545454545454";
+  const mapping = () => {
+    const paired = pairingBody.sources[0];
+    return {
+      clientSourceId: paired.clientSourceId,
+      sourceId,
+      agentAccountId: accountId,
+      agentId: "opencode",
+      accountLabel: paired.suggestedLabel,
+      collectionMethod: "opencode_sqlite",
+      lastAcceptedSyncSequence: "0",
+    };
+  };
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/pairing/start") {
+        pairingBody = body;
+        response.statusCode = 201;
+        response.end(
+          JSON.stringify({
+            installationId: body.installationId,
+            code: "ABCDEFGH",
+            pollToken: "opencode_label_poll_token_that_is_long_enough",
+            verificationUrl: `http://${request.headers.host}/connect?code=ABCDEFGH`,
+            expiresInSeconds: 30,
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current") {
+        response.end(JSON.stringify(reconciliationResponse([mapping()])));
+        return;
+      }
+      if (request.url === "/api/pairing/poll") {
+        response.end(
+          JSON.stringify({
+            status: "active",
+            deviceToken: "opencode_label_device_token_that_is_long_enough",
+            protocol: {
+              version: 2,
+              snapshotDays: 31,
+              maximumSources: 32,
+              maximumEntries: 1_024,
+            },
+            sources: [mapping()],
+          }),
+        );
+        return;
+      }
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-label-connect-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const dataRoot = join(home, ".local", "share", "opencode");
+  const databasePath = join(dataRoot, "opencode-custom-channel.db");
+  await mkdir(dataRoot, { recursive: true });
+  const database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE message (id TEXT, time_created INTEGER, data TEXT)");
+  database.close();
+  await mkdir(directory, { recursive: true });
+  await writeLocalSources(directory, [
+    {
+      clientSourceId: "55555555-5555-4555-8555-555555555555",
+      agentId: "opencode",
+      dataPath: databasePath,
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode custom-channel",
+    },
+  ]);
+
+  await execFileAsync(
+    process.execPath,
+    [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
+    {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        PATH: "",
+        VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+      }),
+    },
+  );
+
+  assert.equal(pairingBody.sources[0].suggestedLabel, "OpenCode");
+  assert.equal(JSON.stringify(pairingBody).includes("custom-channel"), false);
+  assert.equal((await readLocalSources(directory))[0].suggestedLabel, "OpenCode");
+  const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(JSON.stringify(config).includes("custom-channel"), false);
 });
 
 test("later disconnect defeats pending, active-polled, and interrupted connect attempts", async (context) => {

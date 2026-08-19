@@ -48,7 +48,11 @@ test("enumerates every compatible official OpenCode channel database", async (co
   );
   assert.deepEqual(
     sources.map((source) => source.suggestedLabel),
-    ["OpenCode", "OpenCode prod", "OpenCode custom-channel", "OpenCode dev"],
+    ["OpenCode", "OpenCode profile 2", "OpenCode profile 3", "OpenCode profile 4"],
+  );
+  assert.deepEqual(
+    sources.map((source) => source.legacyAutoSuggestedLabel),
+    [undefined, "OpenCode prod", "OpenCode custom-channel", "OpenCode dev"],
   );
   assert.equal(diagnostics.length, 2);
   assert.ok(

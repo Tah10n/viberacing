@@ -82,7 +82,7 @@ export function databaseSslEnabled(): boolean {
 export { databaseClientConfig };
 
 export const connectorProtocolVersion = 2;
-export const expectedSchemaVersion = "004_integrity_hardening.sql";
+export const expectedSchemaVersion = "001_initial.sql";
 
 export function trustedProxyMode(): "none" | "railway" {
   const value = process.env.VIBERACING_TRUST_PROXY?.trim() || "none";
