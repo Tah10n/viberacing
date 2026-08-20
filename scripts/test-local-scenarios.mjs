@@ -34,12 +34,21 @@ const tomorrow = tomorrowDate.toISOString().slice(0, 10);
 const sessionToken = token();
 const handle = `local-test-${randomBytes(5).toString("hex")}`;
 const githubId = 800_000_000_000_000_000n + BigInt(`0x${randomBytes(7).toString("hex")}`);
+const trustedProxyScenario = process.env.VIBERACING_TEST_TRUSTED_PROXY === "true";
 let userId;
+
+function syntheticEdgeHeader(address) {
+  return trustedProxyScenario ? { "x-real-ip": address } : {};
+}
 
 async function json(path, body, headers = {}) {
   return fetch(`${appUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json", "x-real-ip": "127.0.0.2", ...headers },
+    headers: {
+      "content-type": "application/json",
+      ...syntheticEdgeHeader("127.0.0.2"),
+      ...headers,
+    },
     body: JSON.stringify(body),
     redirect: "manual",
   });
@@ -53,7 +62,7 @@ async function form(path, body) {
       cookie: `vr_session=${sessionToken}`,
       origin: browserOrigin,
       "content-type": "application/x-www-form-urlencoded",
-      "x-real-ip": "127.0.0.3",
+      ...syntheticEdgeHeader("127.0.0.3"),
     },
     body: new URLSearchParams(body),
   });
@@ -94,7 +103,7 @@ async function beginPairing(installation, sources, supersededClientSourceIds = [
       sources,
       supersededClientSourceIds,
     },
-    { "x-real-ip": `127.0.0.${Math.floor(Math.random() * 200) + 2}` },
+    syntheticEdgeHeader(`127.0.0.${Math.floor(Math.random() * 200) + 2}`),
   );
   if (response.status !== 201)
     throw new Error(`pairing start failed: ${response.status} ${await response.text()}`);
@@ -215,12 +224,33 @@ try {
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
 
-  const isolatedClientAddress = "203.0.113.99";
-  const isolatedInstallation = { id: randomUUID(), secret: token() };
-  const survivingInstallation = { id: randomUUID(), secret: token() };
-  try {
-    await pool.query(
-      `INSERT INTO rate_limit_buckets
+  if (!trustedProxyScenario) {
+    const directInstallation = { id: randomUUID(), secret: token() };
+    const directPairing = await beginPairing(directInstallation, [
+      source("direct-local-poll-source", "codex"),
+    ]);
+    for (let attempt = 0; attempt < 21; attempt += 1) {
+      const response = await json("/api/pairing/poll", {
+        installationId: directPairing.installationId,
+        pollToken: directPairing.pollToken,
+      });
+      check(response.status === 200, `direct local pairing poll ${attempt + 1} failed`);
+      check((await response.json()).status === "pending", "direct local pairing stopped pending");
+    }
+    check(
+      (await cancelPairing(directPairing)).status === 204,
+      "direct local pairing cleanup failed",
+    );
+    console.log("ok - direct local connector can poll more than 20 times without X-Real-IP");
+  }
+
+  if (trustedProxyScenario) {
+    const isolatedClientAddress = "203.0.113.99";
+    const isolatedInstallation = { id: randomUUID(), secret: token() };
+    const survivingInstallation = { id: randomUUID(), secret: token() };
+    try {
+      await pool.query(
+        `INSERT INTO rate_limit_buckets
          (scope, key_hash, window_started_at, request_count, expires_at)
        VALUES (
          'pairing_start', $1,
@@ -230,57 +260,58 @@ try {
        )
        ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
          SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
-      [digest(isolatedClientAddress)],
-    );
-    const globalBefore = await pool.query(
-      `SELECT coalesce(sum(request_count), 0)::int AS count
+        [digest(isolatedClientAddress)],
+      );
+      const globalBefore = await pool.query(
+        `SELECT coalesce(sum(request_count), 0)::int AS count
          FROM rate_limit_buckets
         WHERE scope = 'pairing_start_global' AND expires_at > now()`,
-    );
-    const rejected = await json(
-      "/api/pairing/start",
-      {
-        protocolVersion: 2,
-        connectorVersion: "0.2.0",
-        installationId: isolatedInstallation.id,
-        installationSecret: isolatedInstallation.secret,
-        sources: [source("isolated-client-source", "codex")],
-        supersededClientSourceIds: [],
-      },
-      { "x-real-ip": isolatedClientAddress },
-    );
-    const globalAfter = await pool.query(
-      `SELECT coalesce(sum(request_count), 0)::int AS count
+      );
+      const rejected = await json(
+        "/api/pairing/start",
+        {
+          protocolVersion: 2,
+          connectorVersion: "0.2.0",
+          installationId: isolatedInstallation.id,
+          installationSecret: isolatedInstallation.secret,
+          sources: [source("isolated-client-source", "codex")],
+          supersededClientSourceIds: [],
+        },
+        { "x-real-ip": isolatedClientAddress },
+      );
+      const globalAfter = await pool.query(
+        `SELECT coalesce(sum(request_count), 0)::int AS count
          FROM rate_limit_buckets
         WHERE scope = 'pairing_start_global' AND expires_at > now()`,
-    );
-    const surviving = await json(
-      "/api/pairing/start",
-      {
-        protocolVersion: 2,
-        connectorVersion: "0.2.0",
-        installationId: survivingInstallation.id,
-        installationSecret: survivingInstallation.secret,
-        sources: [source("surviving-client-source", "codex")],
-        supersededClientSourceIds: [],
-      },
-      { "x-real-ip": "203.0.113.100" },
-    );
-    check(
-      rejected.status === 429 &&
-        globalAfter.rows[0].count === globalBefore.rows[0].count &&
-        surviving.status === 201,
-      "client admission did not isolate the shared pairing quota",
-    );
-  } finally {
-    await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
-      [isolatedInstallation.id, survivingInstallation.id],
-    ]);
-    await pool.query(
-      "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'pairing_start_global')",
-    );
+      );
+      const surviving = await json(
+        "/api/pairing/start",
+        {
+          protocolVersion: 2,
+          connectorVersion: "0.2.0",
+          installationId: survivingInstallation.id,
+          installationSecret: survivingInstallation.secret,
+          sources: [source("surviving-client-source", "codex")],
+          supersededClientSourceIds: [],
+        },
+        { "x-real-ip": "203.0.113.100" },
+      );
+      check(
+        rejected.status === 429 &&
+          globalAfter.rows[0].count === globalBefore.rows[0].count &&
+          surviving.status === 201,
+        "client admission did not isolate the shared pairing quota",
+      );
+    } finally {
+      await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+        [isolatedInstallation.id, survivingInstallation.id],
+      ]);
+      await pool.query(
+        "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'pairing_start_global')",
+      );
+    }
+    console.log("ok - exhausted client admission does not spend shared pairing quota");
   }
-  console.log("ok - exhausted client admission does not spend shared pairing quota");
 
   const firstInstallation = { id: randomUUID(), secret: token() };
   const first = await pair(firstInstallation, [

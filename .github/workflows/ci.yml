@@ -65,8 +65,12 @@ jobs:
             'VIBERACING_MAX_DAILY_TOKENS=9999999999999999' > apps/web/.env.local
       - name: Start the documented Compose stack
         run: corepack pnpm local:up
-      - name: Verify local readiness
-        run: curl --fail --silent http://127.0.0.1:3011/ready
+      - name: Verify direct local mode and connector scenarios
+        run: |
+          test "$(docker compose exec -T web printenv VIBERACING_TRUST_PROXY)" = "none"
+          curl --fail --silent http://127.0.0.1:3011/ready
+          pnpm install --frozen-lockfile --ignore-scripts
+          corepack pnpm local:test
       - name: Stop the local stack
         if: always()
         run: corepack pnpm local:down
@@ -126,6 +130,7 @@ jobs:
       VIBERACING_DATABASE_SSL: "false"
       VIBERACING_ALLOW_INSECURE_LOCAL: "true"
       VIBERACING_TRUST_PROXY: "trusted-x-real-ip"
+      VIBERACING_TEST_TRUSTED_PROXY: "true"
       VIBERACING_MIN_CONNECTOR_VERSION: 0.2.0
       VIBERACING_MAX_DAILY_TOKENS: "9999999999999999"
       GITHUB_CLIENT_ID: synthetic-ci-client
