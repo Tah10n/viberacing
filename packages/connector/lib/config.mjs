@@ -74,6 +74,14 @@ const legacyCollectionMethods = new Set([
   "qwen_code\0qwen_stats_jsonl",
 ]);
 
+function isStateMigrationArtifact(relativePath) {
+  return (
+    /^\.viberacing-state\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i.test(
+      relativePath,
+    ) || markerTemporaryPattern.test(relativePath)
+  );
+}
+
 function isInstalledRuntimeExecutable(path) {
   const parts = relative(stateDirectory, path).split(/[\\/]/);
   return (
@@ -214,8 +222,28 @@ function migrationSnapshot(paths) {
   return paths
     .slice(1)
     .map((path) => relative(stateDirectory, path))
-    .filter((path) => !/^\.viberacing-state\.lock(?:\.|$)/i.test(path))
+    .filter((path) => !isStateMigrationArtifact(path))
     .sort();
+}
+
+function substantiveStatePaths(paths) {
+  return paths.filter(
+    (path) => path === stateDirectory || !isStateMigrationArtifact(relative(stateDirectory, path)),
+  );
+}
+
+async function removeOrphanedStateMigrationArtifacts() {
+  for (const entry of await readdir(stateDirectory, { withFileTypes: true })) {
+    if (
+      !entry.isFile() ||
+      entry.name === ".viberacing-state.lock" ||
+      !isStateMigrationArtifact(entry.name)
+    )
+      continue;
+    await unlink(join(stateDirectory, entry.name)).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
 }
 
 async function waitForTestStateMigrationBarrier(stage) {
@@ -369,12 +397,13 @@ async function secureStateDirectory() {
   if (marked) return secureStatePaths(marked);
 
   const preflightPaths = await inspectOwnedStateTree(stateDirectory);
-  const nonempty = preflightPaths.length > 1;
+  const substantivePreflightPaths = substantiveStatePaths(preflightPaths);
+  const nonempty = substantivePreflightPaths.length > 1;
   if (nonempty && stateDirectory !== defaultStateDirectory)
     throw new Error("A nonempty custom Vibe Racing state directory requires a valid marker");
   if (nonempty && !(await validLegacyStateEvidence()))
     throw new Error("Unmarked legacy Vibe Racing state has no valid identity or source registry");
-  const preflightSnapshot = migrationSnapshot(preflightPaths);
+  const preflightSnapshot = migrationSnapshot(substantivePreflightPaths);
   await waitForTestStateMigrationBarrier("after_preflight");
   await secureStatePaths([stateDirectory]);
   const migrationLock = await acquireOwnedLock(stateMigrationLockPath, {
@@ -382,9 +411,11 @@ async function secureStateDirectory() {
   });
   if (!migrationLock) throw new Error("Timed out waiting for Vibe Racing state migration");
   try {
+    await waitForTestStateMigrationBarrier("after_migration_lock");
+    await removeOrphanedStateMigrationArtifacts();
     const alreadyMarked = await markedStatePaths();
     if (alreadyMarked) return secureStatePaths(alreadyMarked);
-    const legacyPaths = await inspectOwnedStateTree(stateDirectory);
+    const legacyPaths = substantiveStatePaths(await inspectOwnedStateTree(stateDirectory));
     if (JSON.stringify(migrationSnapshot(legacyPaths)) !== JSON.stringify(preflightSnapshot))
       throw new Error("Vibe Racing state changed during migration");
     if (nonempty && !(await validLegacyStateEvidence()))
@@ -715,10 +746,26 @@ export async function readConfig(options = {}) {
 
 export async function connectedStateExists() {
   try {
-    const info = await lstat(configPath);
-    return info.isFile() && !info.isSymbolicLink() && info.nlink === 1;
+    const [rootInfo, markerInfo, configInfo] = await Promise.all([
+      lstat(stateDirectory),
+      lstat(stateMarkerPath),
+      lstat(configPath),
+    ]);
+    if (
+      !rootInfo.isDirectory() ||
+      rootInfo.isSymbolicLink() ||
+      !markerInfo.isFile() ||
+      markerInfo.isSymbolicLink() ||
+      markerInfo.nlink !== 1 ||
+      !configInfo.isFile() ||
+      configInfo.isSymbolicLink() ||
+      configInfo.nlink !== 1
+    )
+      return false;
+    const marker = JSON.parse(await readFile(stateMarkerPath, "utf8"));
+    return marker?.format === 1 && Object.keys(marker).length === 1;
   } catch (error) {
-    if (error?.code === "ENOENT") return false;
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
     throw error;
   }
 }

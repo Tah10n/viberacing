@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   access,
@@ -9,6 +10,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   rm,
   symlink,
   writeFile,
@@ -22,6 +24,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
 const configUrl = new URL("../lib/config.mjs", import.meta.url).href;
+const ensureStateScript = `import { ensurePrivateStateDirectory } from ${JSON.stringify(configUrl)}; await ensurePrivateStateDirectory();`;
 
 test(
   "POSIX state security migrates only recognized legacy state and writes its marker",
@@ -287,6 +290,147 @@ test("legacy migration locks the root before accepting a final unchanged tree", 
   await assert.rejects(access(join(state, ".viberacing-state")), { code: "ENOENT" });
   assert.equal(await readFile(injectedRuntime, "utf8"), "throw new Error('must never run');\n");
   if (process.platform !== "win32") assert.equal((await lstat(state)).mode & 0o777, 0o700);
+});
+
+test("state initialization recovers after its migration-lock owner is terminated", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-migration-crash-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+
+  for (const kind of ["default", "custom"]) {
+    const state = join(root, kind === "default" ? `${kind}-home/.viberacing` : `${kind}-state`);
+    const barrier = join(root, `${kind}-migration`);
+    await mkdir(state, { recursive: true, mode: 0o777 });
+    if (process.platform !== "win32") await chmod(state, 0o777);
+    const environment = {
+      ...process.env,
+      HOME: join(root, `${kind}-home`),
+      USERPROFILE: join(root, `${kind}-home`),
+      NODE_ENV: "test",
+      VIBERACING_TEST_STATE_MIGRATION_PAUSE: "after_migration_lock",
+      VIBERACING_TEST_STATE_MIGRATION_BARRIER: barrier,
+    };
+    if (kind === "custom") environment.VIBERACING_STATE_DIR = state;
+    else delete environment.VIBERACING_STATE_DIR;
+
+    const first = spawn(process.execPath, ["--input-type=module", "--eval", ensureStateScript], {
+      env: environment,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    for (let attempts = 0; attempts < 250; attempts += 1) {
+      try {
+        await access(`${barrier}.ready`);
+        break;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        if (attempts === 249) throw new Error(`${kind} migration lock barrier was not reached`);
+        await delay(20);
+      }
+    }
+    assert.match(
+      await readFile(join(state, ".viberacing-state.lock"), "utf8"),
+      new RegExp(`^${first.pid}:[0-9a-f-]{36}\\n$`, "i"),
+    );
+    first.kill("SIGKILL");
+    await once(first, "close");
+
+    const recoveryEnvironment = { ...environment };
+    delete recoveryEnvironment.VIBERACING_TEST_STATE_MIGRATION_PAUSE;
+    delete recoveryEnvironment.VIBERACING_TEST_STATE_MIGRATION_BARRIER;
+    await execFileAsync(process.execPath, ["--input-type=module", "--eval", ensureStateScript], {
+      env: recoveryEnvironment,
+    });
+
+    assert.deepEqual(JSON.parse(await readFile(join(state, ".viberacing-state"), "utf8")), {
+      format: 1,
+    });
+    if (process.platform !== "win32") {
+      assert.equal((await lstat(state)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(state, ".viberacing-state"))).mode & 0o777, 0o600);
+    }
+    assert.deepEqual(
+      (await readdir(state)).filter(
+        (name) =>
+          /^\.viberacing-state\.lock(?:\.|$)/i.test(name) ||
+          /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i.test(name),
+      ),
+      [],
+    );
+  }
+});
+
+test("orphaned migration artifacts do not make custom state substantive", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-marker-temporary-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const state = join(root, "state");
+  const temporary = `.viberacing-state.12345.${randomUUID()}.tmp`;
+  const auxiliary = [
+    ".viberacing-state.lock.recovery",
+    `.viberacing-state.lock.stale.${randomUUID()}`,
+    `.viberacing-state.lock.recovery.stale.${randomUUID()}`,
+  ];
+  await mkdir(state, { mode: 0o777 });
+  await writeFile(join(state, temporary), "orphaned\n", { mode: 0o600 });
+  await Promise.all(
+    auxiliary.map((name) => writeFile(join(state, name), "orphaned\n", { mode: 0o600 })),
+  );
+  await execFileAsync(process.execPath, ["--input-type=module", "--eval", ensureStateScript], {
+    env: { ...process.env, NODE_ENV: "test", VIBERACING_STATE_DIR: state },
+  });
+  assert.deepEqual(JSON.parse(await readFile(join(state, ".viberacing-state"), "utf8")), {
+    format: 1,
+  });
+  await assert.rejects(access(join(state, temporary)), { code: "ENOENT" });
+  for (const name of auxiliary)
+    await assert.rejects(access(join(state, name)), { code: "ENOENT" }, name);
+});
+
+test("a live state migration lock is not displaced by another initializer", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-live-migration-lock-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const state = join(root, "state");
+  const barrier = join(root, "migration");
+  await mkdir(state);
+  const environment = {
+    ...process.env,
+    NODE_ENV: "test",
+    VIBERACING_STATE_DIR: state,
+    VIBERACING_TEST_STATE_MIGRATION_PAUSE: "after_migration_lock",
+    VIBERACING_TEST_STATE_MIGRATION_BARRIER: barrier,
+  };
+  const first = spawn(process.execPath, ["--input-type=module", "--eval", ensureStateScript], {
+    env: environment,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  context.after(() => first.kill());
+  for (let attempts = 0; attempts < 250; attempts += 1) {
+    try {
+      await access(`${barrier}.ready`);
+      break;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      if (attempts === 249) throw new Error("Live migration lock barrier was not reached");
+      await delay(20);
+    }
+  }
+  const liveOwner = await readFile(join(state, ".viberacing-state.lock"), "utf8");
+  const secondEnvironment = { ...environment };
+  delete secondEnvironment.VIBERACING_TEST_STATE_MIGRATION_PAUSE;
+  delete secondEnvironment.VIBERACING_TEST_STATE_MIGRATION_BARRIER;
+  const second = spawn(process.execPath, ["--input-type=module", "--eval", ensureStateScript], {
+    env: secondEnvironment,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  context.after(() => second.kill());
+  await delay(100);
+  assert.equal(second.exitCode, null);
+  assert.equal(await readFile(join(state, ".viberacing-state.lock"), "utf8"), liveOwner);
+  await writeFile(`${barrier}.continue`, "continue\n");
+  const [[firstCode], [secondCode]] = await Promise.all([
+    once(first, "close"),
+    once(second, "close"),
+  ]);
+  assert.equal(firstCode, 0);
+  assert.equal(secondCode, 0);
 });
 
 test("stored connector origins fail closed before configuration is returned", async (context) => {
