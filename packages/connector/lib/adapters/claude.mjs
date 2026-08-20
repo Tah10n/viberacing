@@ -55,7 +55,10 @@ export async function collectClaude(
   { maximumBytes = 100_000_000, readChunk = jsonLinesChunk, fingerprint = tailFingerprint } = {},
 ) {
   const discovered = await walk(source.dataPath, [".jsonl"], 10_000);
-  const nextState = { files: { ...(state.files ?? {}) }, messages: { ...(state.messages ?? {}) } };
+  const nextState = {
+    files: { ...(state.files ?? {}) },
+    messages: Object.assign(Object.create(null), state.messages ?? {}),
+  };
   let partial = discovered.incomplete;
   let bytes = 0;
   for (const file of discovered.files) {
@@ -90,10 +93,10 @@ export async function collectClaude(
     try {
       const chunk = await readChunk(file.path, offset, file.size);
       if (chunk.oversizedLines > 0) partial = true;
-      const messages = {};
+      const messages = Object.create(null);
       for (const line of chunk.lines) {
         const value = contribution(line);
-        if (value) {
+        if (value && !ids.has(value.id)) {
           messages[value.id] = value.entry;
           ids.add(value.id);
         }

@@ -2,18 +2,38 @@ import { randomUUID } from "node:crypto";
 import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
-export async function deadLockOwner(path) {
+async function lockOwnerState(path) {
   const owner = await readFile(path, "utf8").catch(() => null);
   const match = typeof owner === "string" ? /^(\d+):[0-9a-f-]{36}\n$/i.exec(owner) : null;
-  if (!match) return false;
+  if (!match) return { kind: "malformed", owner };
   const pid = Number(match[1]);
-  if (!Number.isSafeInteger(pid) || pid < 1 || pid === process.pid) return false;
+  if (!Number.isSafeInteger(pid) || pid < 1) return { kind: "malformed", owner };
+  if (pid === process.pid) return { kind: "live", owner, pid };
   try {
     process.kill(pid, 0);
-    return false;
+    return { kind: "live", owner, pid };
   } catch (error) {
-    return error?.code === "ESRCH";
+    return { kind: error?.code === "ESRCH" ? "dead" : "live", owner, pid };
   }
+}
+
+export async function deadLockOwner(path) {
+  return (await lockOwnerState(path)).kind === "dead";
+}
+
+export async function ownedLockActive(path, staleMs = 10 * 60_000) {
+  const info = await stat(path).catch(() => null);
+  if (!info) return false;
+  const state = await lockOwnerState(path);
+  if (state.kind === "live") return true;
+  return state.kind !== "dead" && Date.now() - info.mtimeMs <= staleMs;
+}
+
+function existingLockContention(error, info) {
+  return (
+    error?.code === "EEXIST" ||
+    (info !== null && process.platform === "win32" && ["EACCES", "EPERM"].includes(error?.code))
+  );
 }
 
 export async function acquireOwnedLock(path, options = {}) {
@@ -21,27 +41,111 @@ export async function acquireOwnedLock(path, options = {}) {
   const owner = `${process.pid}:${ownershipToken}\n`;
   const deadline = Date.now() + (options.waitMs ?? 0);
   const staleMs = options.staleMs ?? 10 * 60_000;
+  const openFile = options.openFile ?? open;
+  const unlinkFile = options.unlinkFile ?? unlink;
+  let missingContentionRetryAvailable = true;
   for (;;) {
     let handle;
     let created = false;
     try {
-      handle = await open(path, "wx", 0o600);
+      handle = await openFile(path, "wx", 0o600);
       created = true;
       await handle.writeFile(owner);
       await handle.close();
       return { path, owner, ownershipToken };
     } catch (error) {
       await handle?.close().catch(() => {});
-      if (created) await unlink(path).catch(() => {});
-      if (error?.code !== "EEXIST") throw error;
+      if (created)
+        await unlinkFile(path).catch((unlinkError) => {
+          if (unlinkError?.code !== "ENOENT") throw unlinkError;
+        });
       const info = await stat(path).catch(() => null);
-      if ((info && Date.now() - info.mtimeMs > staleMs) || (await deadLockOwner(path))) {
-        const stalePath = `${path}.stale.${ownershipToken}`;
+      if (!existingLockContention(error, info)) throw error;
+      if (error?.code === "EEXIST" && info === null && missingContentionRetryAvailable) {
+        missingContentionRetryAvailable = false;
+        continue;
+      }
+      const state = info ? await lockOwnerState(path) : null;
+      if (
+        state?.kind === "dead" ||
+        (state?.kind === "malformed" && Date.now() - info.mtimeMs > staleMs)
+      ) {
+        await options.onRecoveryCandidate?.();
+        const recoveryPath = `${path}.recovery`;
+        const recoveryToken = randomUUID();
+        const recoveryOwner = `${process.pid}:${recoveryToken}\n`;
+        let recoveryAcquired = false;
+        let missingRecoveryContentionRetryAvailable = true;
+        while (!recoveryAcquired) {
+          let recoveryHandle;
+          let recoveryCreated = false;
+          try {
+            recoveryHandle = await openFile(recoveryPath, "wx", 0o600);
+            recoveryCreated = true;
+            await recoveryHandle.writeFile(recoveryOwner);
+            await recoveryHandle.close();
+            recoveryAcquired = true;
+          } catch (recoveryError) {
+            await recoveryHandle?.close().catch(() => {});
+            if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
+            const recoveryInfo = await stat(recoveryPath).catch(() => null);
+            if (!existingLockContention(recoveryError, recoveryInfo)) throw recoveryError;
+            if (
+              recoveryError?.code === "EEXIST" &&
+              recoveryInfo === null &&
+              missingRecoveryContentionRetryAvailable
+            ) {
+              missingRecoveryContentionRetryAvailable = false;
+              continue;
+            }
+            const recoveryState = recoveryInfo ? await lockOwnerState(recoveryPath) : null;
+            if (
+              recoveryState?.kind === "dead" ||
+              (recoveryState?.kind === "malformed" && Date.now() - recoveryInfo.mtimeMs > staleMs)
+            ) {
+              const abandonedRecovery = `${recoveryPath}.stale.${ownershipToken}`;
+              try {
+                await rename(recoveryPath, abandonedRecovery);
+                const abandonedOwner = await readFile(abandonedRecovery, "utf8").catch(() => null);
+                if (abandonedOwner !== recoveryState.owner) {
+                  await rename(abandonedRecovery, recoveryPath).catch((restoreError) => {
+                    if (restoreError?.code !== "EEXIST" && restoreError?.code !== "ENOENT")
+                      throw restoreError;
+                  });
+                } else await unlinkFile(abandonedRecovery).catch(() => {});
+              } catch (renameError) {
+                if (renameError?.code !== "ENOENT") throw renameError;
+              }
+              continue;
+            }
+            if (Date.now() >= deadline) return null;
+            await delay(25);
+          }
+        }
+        const recoveryLock = {
+          path: recoveryPath,
+          owner: recoveryOwner,
+          ownershipToken: recoveryToken,
+        };
         try {
-          await rename(path, stalePath);
-          await unlink(stalePath).catch(() => {});
-        } catch (renameError) {
-          if (renameError?.code !== "ENOENT") throw renameError;
+          await options.onRecoveryGuardAcquired?.();
+          if ((await readFile(recoveryPath, "utf8").catch(() => null)) !== recoveryOwner) continue;
+          const currentInfo = await stat(path).catch(() => null);
+          const currentState = currentInfo ? await lockOwnerState(path) : null;
+          if (
+            currentState?.kind === "dead" ||
+            (currentState?.kind === "malformed" && Date.now() - currentInfo.mtimeMs > staleMs)
+          ) {
+            const stalePath = `${path}.stale.${ownershipToken}`;
+            try {
+              await rename(path, stalePath);
+              await unlinkFile(stalePath).catch(() => {});
+            } catch (renameError) {
+              if (renameError?.code !== "ENOENT") throw renameError;
+            }
+          }
+        } finally {
+          await releaseOwnedLock(recoveryLock);
         }
         continue;
       }

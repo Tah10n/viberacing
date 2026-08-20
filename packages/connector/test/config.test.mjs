@@ -111,6 +111,8 @@ function useModuleEnvironment(home) {
 }
 
 async function writeLocalSources(directory, sources) {
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(join(directory, "sources.json"), `${JSON.stringify({ version: 1, sources })}\n`);
 }
 
@@ -125,6 +127,7 @@ async function writeCaptureInstallation(home, origin, options = {}) {
   const sourceId = options.sourceId ?? "89898989-8989-4989-8989-898989898989";
   const date = new Date().toISOString().slice(0, 10);
   await mkdir(join(directory, "captures"), { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(
     capture,
     `${JSON.stringify({
@@ -172,6 +175,7 @@ async function writeCaptureInstallation(home, origin, options = {}) {
 async function writeMappedInstallation(home, origin, sources) {
   const directory = join(home, ".viberacing");
   await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeLocalSources(
     directory,
     sources.map(({ sourceId: _sourceId, accountLabel: _accountLabel, ...source }) => source),
@@ -213,7 +217,7 @@ async function runWithInput(arguments_, environment, input) {
   child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
   child.stdin.end(input);
   const [code] = await once(child, "close");
-  return { code, stdout, stderr };
+  return { code, stdout, stderr, pid: child.pid };
 }
 
 async function waitFor(predicate, timeoutMs = 5_000) {
@@ -621,10 +625,6 @@ test("disconnect wins both connection-state lock orders and provider hooks canno
       await mkdir(join(directory, "pending"), { recursive: true });
       await writeFile(join(directory, "pending", `${sourceId}.json`), '{"pending":true}\n');
       await writeFile(join(directory, "dirty.json"), '{"version":2,"sources":{}}\n');
-      await writeFile(
-        join(directory, "scheduler.lock"),
-        `${process.pid}:99999999-9999-4999-8999-999999999999\n`,
-      );
       restoreEnvironment();
 
       const spawnStateChild = (action, pause, barrierPath = barrier) => {
@@ -705,7 +705,7 @@ test("disconnect wins both connection-state lock orders and provider hooks canno
         "lifecycle.lock",
         "lifecycle-revoking.lock",
       ])
-        await assert.rejects(access(join(directory, name)));
+        await assert.rejects(access(join(directory, name)), undefined, name);
       assert.deepEqual(
         (await readdir(join(directory, "pending"))).filter((name) => name.endsWith(".json")),
         [],
@@ -777,7 +777,10 @@ test("keeps a manual Qwen hook root through reconnect and uninstall", async (con
     assert.match(installed, /Preserve this user comment/);
     assert.match(installed, /"unknownSetting"[\s\S]*"keep": true/);
     assert.match(installed, /viberacing-hook-v3:/);
-    assert.match(installed, /hook --source [0-9a-f-]+ --agent qwen_code/);
+    assert.match(installed, /--source/);
+    assert.match(installed, new RegExp(sources[0].clientSourceId));
+    assert.match(installed, /--agent/);
+    assert.match(installed, /qwen_code/);
     await assert.rejects(access(join(runtimeRoot, "settings.json")));
     assert.deepEqual(await module.diagnoseHooks(sources), { qwen_code: "current" });
 
@@ -896,9 +899,11 @@ test("source-owned hooks reconcile profiles independently and upgrade legacy mar
     const firstSettings = await readFile(join(first.dataPath, "settings.json"), "utf8");
     const secondSettings = await readFile(join(second.dataPath, "settings.json"), "utf8");
     assert.match(firstSettings, new RegExp(module.hookMarkerForSource(first.clientSourceId)));
-    assert.match(firstSettings, new RegExp(`--source ${first.clientSourceId}`));
+    assert.match(firstSettings, /--source/);
+    assert.match(firstSettings, new RegExp(first.clientSourceId));
     assert.match(secondSettings, new RegExp(module.hookMarkerForSource(second.clientSourceId)));
-    assert.match(secondSettings, new RegExp(`--source ${second.clientSourceId}`));
+    assert.match(secondSettings, /--source/);
+    assert.match(secondSettings, new RegExp(second.clientSourceId));
     assert.doesNotMatch(firstSettings, /viberacing-hook-v2/);
     assert.match(firstSettings, /keep-foreign-hook/);
 
@@ -1395,19 +1400,22 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
     const firstScheduler = await runtime.claimScheduler();
     assert.equal(typeof firstScheduler.ownershipToken, "string");
     assert.equal(await runtime.claimScheduler(), false);
-    assert.equal(await runtime.ownsScheduler(firstScheduler.ownershipToken), true);
-    assert.equal(await runtime.releaseScheduler(firstScheduler.ownershipToken), true);
+    assert.equal(await runtime.ownsScheduler(firstScheduler), true);
+    assert.equal(await runtime.releaseScheduler(firstScheduler), true);
     const { stateDirectory } = await import("../lib/config.mjs");
     const staleLock = join(stateDirectory, "scheduler.lock");
     const staleOwner = "stale-owner";
-    await writeFile(staleLock, `1:${staleOwner}\n`);
+    await writeFile(staleLock, `99999999:${staleOwner}\n`);
     const staleTime = new Date(Date.now() - 11 * 60_000);
     await utimes(staleLock, staleTime, staleTime);
     const replacementScheduler = await runtime.claimScheduler();
     assert.equal(typeof replacementScheduler.ownershipToken, "string");
-    assert.equal(await runtime.releaseScheduler(staleOwner), false);
-    assert.equal(await runtime.ownsScheduler(replacementScheduler.ownershipToken), true);
-    await runtime.releaseScheduler(replacementScheduler.ownershipToken);
+    assert.equal(
+      await runtime.releaseScheduler({ ...replacementScheduler, owner: staleOwner }),
+      false,
+    );
+    assert.equal(await runtime.ownsScheduler(replacementScheduler), true);
+    await runtime.releaseScheduler(replacementScheduler);
   } finally {
     restoreEnvironment();
   }
@@ -1491,6 +1499,189 @@ test("hook discards stdin, emits only contract JSON, and fails open", async (con
   assert.equal(await readFile(blockedState, "utf8"), "not a directory");
 });
 
+test("a provider hook that receives EOF after uninstall does not recreate state", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-late-hook-uninstall-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const clientSourceId = "91919191-9191-4191-8191-919191919191";
+  const sourceId = "92929292-9292-4292-8292-929292929292";
+  const claudeRoot = join(home, ".claude");
+  const directory = await writeMappedInstallation(home, "http://127.0.0.1:9", [
+    {
+      clientSourceId,
+      sourceId,
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: claudeRoot,
+      hookConfigRoot: claudeRoot,
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+    },
+  ]);
+  const ready = join(home, "hook.ready");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_HOOK_READY: ready,
+  });
+  const hook = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", clientSourceId, "--agent", "claude_code"],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  context.after(() => hook.kill());
+  let stdout = "";
+  let stderr = "";
+  hook.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+  hook.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  await waitFor(() =>
+    access(ready)
+      .then(() => true)
+      .catch(() => false),
+  );
+
+  const uninstall = await execFileAsync(process.execPath, [connectorPath, "uninstall"], {
+    env: environment,
+  });
+  assert.match(uninstall.stdout, /local state removed/);
+  await assert.rejects(access(directory), { code: "ENOENT" });
+
+  hook.stdin.end('{"private":"must never be logged"}\n');
+  const [code] = await once(hook, "close");
+  assert.equal(code, 0);
+  assert.equal(stdout, "");
+  assert.equal(stderr, "");
+  await assert.rejects(access(directory), { code: "ENOENT" });
+  for (const name of [
+    ".viberacing-state",
+    "scheduler.lock",
+    "scheduler-launch.lock",
+    "lifecycle.lock",
+    "lifecycle-revoking.lock",
+    "connection-state.lock",
+  ])
+    await assert.rejects(access(join(directory, name)), { code: "ENOENT" }, name);
+  assert.deepEqual(
+    (await readdir(home)).filter((name) => /(?:\.recovery|\.stale\.)/i.test(name)),
+    [],
+  );
+});
+
+test("claiming the scheduler launch gate does not initialize missing state", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-missing-launch-state-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const runtimeUrl = pathToFileURL(
+    fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url)),
+  ).href;
+  const result = await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { claimSchedulerLaunch } from ${JSON.stringify(runtimeUrl)}; process.stdout.write(String(await claimSchedulerLaunch({ waitMs: 0 })));`,
+    ],
+    { env: connectorEnvironment(home, { NODE_ENV: "test" }) },
+  );
+  assert.equal(result.stdout, "null");
+  assert.equal(result.stderr, "");
+  await assert.rejects(access(directory), { code: "ENOENT" });
+});
+
+test("the detached scheduler child owns its lock and later launchers exit", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-scheduler-owner-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const trace = join(home, "scheduler-processes.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+
+  const firstHook = await runWithInput(hookArguments, environment, "{}");
+  assert.equal(firstHook.code, 0);
+  await waitFor(async () => (await readFile(trace, "utf8").catch(() => "")).includes("acquired:"));
+  const firstOwner = await readFile(join(installation.directory, "scheduler.lock"), "utf8");
+  const ownerPid = Number(firstOwner.split(":", 1)[0]);
+  assert.notEqual(ownerPid, firstHook.pid);
+  process.kill(ownerPid, 0);
+
+  const secondHook = await runWithInput(hookArguments, environment, "{}");
+  assert.equal(secondHook.code, 0);
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("lost:"));
+  assert.equal(await readFile(join(installation.directory, "scheduler.lock"), "utf8"), firstOwner);
+  const lostPid = Number(
+    (await readFile(trace, "utf8"))
+      .trim()
+      .split("\n")
+      .find((line) => line.startsWith("lost:"))
+      .split(":", 2)[1],
+  );
+  await waitFor(() => {
+    try {
+      process.kill(lostPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
+
+  await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { clearAutomaticState } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url))).href)}; await clearAutomaticState();`,
+    ],
+    { env: environment },
+  );
+  await assert.rejects(access(join(installation.directory, "scheduler.lock")));
+  assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
+});
+
+test("uninstall waits for a scheduler child paused before lock acquisition", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-scheduler-launch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "scheduler-claim");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+  });
+  const hook = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  hook.stdin.end("{}\n");
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+
+  const uninstall = execFileAsync(process.execPath, [connectorPath, "uninstall"], {
+    env: environment,
+  });
+  await waitFor(() =>
+    access(join(installation.directory, "lifecycle.lock"))
+      .then(() => true)
+      .catch(() => false),
+  );
+  await writeFile(`${barrier}.continue`, "continue\n");
+  const [hookCode] = await once(hook, "close");
+  assert.equal(hookCode, 0);
+  const uninstallResult = await uninstall;
+  assert.match(uninstallResult.stdout, /local state removed/);
+  await delay(100);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+  assert.deepEqual(
+    (await readdir(home)).filter((name) => /(?:scheduler.*\.lock|recovery)/i.test(name)),
+    [],
+  );
+});
+
 test("real hooks coalesce into one batch and preserve an event arriving during sync", async (context) => {
   const bodies = [];
   const requestTimes = [];
@@ -1552,7 +1743,14 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
       ),
     ),
   );
-  assert.ok(hookResults.every((result) => result.code === 0 && result.stdout === ""));
+  for (const [index, result] of hookResults.entries()) {
+    assert.equal(
+      result.code,
+      0,
+      `hook ${index} failed: stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    );
+    assert.equal(result.stdout, "", `hook ${index} unexpectedly wrote to stdout`);
+  }
   await firstRequest;
   const firstAutomaticSyncAt = JSON.parse(
     await readFile(join(installation.directory, "state.json"), "utf8"),
@@ -1897,9 +2095,9 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
-    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "50,200,150",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
-  await Promise.all(
+  const hookResults = await Promise.all(
     sources
       .slice(0, 2)
       .map((source) =>
@@ -1910,7 +2108,16 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
         ),
       ),
   );
-  await waitFor(() => bodies.length === 1);
+  assert.deepEqual(
+    hookResults.map((result) => result.code),
+    [0, 0],
+  );
+  const dirty = JSON.parse(await readFile(join(directory, "dirty.json"), "utf8"));
+  assert.deepEqual(
+    new Set(Object.keys(dirty.sources)),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+  await waitFor(() => bodies.length === 1, 10_000);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
@@ -1925,6 +2132,130 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
       return false;
     } catch {
       return true;
+    }
+  });
+});
+
+test("a hook persists its event while another hook holds the scheduler launch gate", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-hook-busy-launch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const fixtureRoot = fileURLToPath(new URL("fixtures", import.meta.url));
+  const sources = [
+    {
+      clientSourceId: "70707070-7070-4070-8070-707070707070",
+      sourceId: "77777777-7070-4070-8070-707070707070",
+      agentId: "claude_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Claude",
+    },
+    {
+      clientSourceId: "80808080-8080-4080-8080-808080808080",
+      sourceId: "88888888-8080-4080-8080-808080808080",
+      agentId: "kimi_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "kimi_wire_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Kimi",
+    },
+    {
+      clientSourceId: "90909090-9090-4090-8090-909090909090",
+      sourceId: "99999999-9090-4090-8090-909090909090",
+      agentId: "opencode",
+      dataPath: join(home, "must-not-open.db"),
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+    },
+  ];
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+  const barrier = join(home, "scheduler-claim");
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "25,150,100",
+  });
+  const first = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", sources[0].clientSourceId, "--agent", sources[0].agentId],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  const firstClose = once(first, "close");
+  context.after(() => first.kill("SIGKILL"));
+  let firstStdout = "";
+  let firstStderr = "";
+  first.stdout.setEncoding("utf8").on("data", (chunk) => (firstStdout += chunk));
+  first.stderr.setEncoding("utf8").on("data", (chunk) => (firstStderr += chunk));
+  first.stdin.end("{}\n");
+  let schedulerPid;
+  await waitFor(async () => {
+    const value = await readFile(`${barrier}.ready`, "utf8").catch(() => "");
+    const candidate = Number(value.trim());
+    if (!Number.isSafeInteger(candidate) || candidate < 1) return false;
+    schedulerPid = candidate;
+    return true;
+  });
+  assert.ok(Number.isSafeInteger(schedulerPid) && schedulerPid > 0);
+
+  const second = await runWithInput(
+    ["hook", "--source", sources[1].clientSourceId, "--agent", sources[1].agentId],
+    environment,
+    "{}",
+  );
+  assert.equal(second.code, 0);
+  assert.equal(second.stdout, "");
+  assert.equal(second.stderr, "");
+  const dirty = JSON.parse(await readFile(join(directory, "dirty.json"), "utf8"));
+  assert.deepEqual(
+    new Set(Object.keys(dirty.sources)),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  const [firstCode] = await firstClose;
+  assert.equal(firstCode, 0);
+  assert.equal(firstStdout, "");
+  assert.equal(firstStderr, "");
+  await waitFor(() => bodies.length === 1);
+  assert.deepEqual(
+    new Set((await readFile(trace, "utf8")).trim().split("\n")),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+  assert.deepEqual(
+    new Set(bodies[0].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set(sources.slice(0, 2).map((source) => source.sourceId)),
+  );
+  await waitFor(() => {
+    try {
+      process.kill(schedulerPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
     }
   });
 });
@@ -1955,7 +2286,11 @@ test("manual sync collects every active source and clears only its prior dirty g
     clientSourceId: `${index + 7}0707070-7070-4070-8070-70707070707${index}`,
     sourceId: `${index + 8}0808080-8080-4080-8080-80808080808${index}`,
     agentId: "antigravity",
-    dataPath: join(directory, "captures", `${index}.jsonl`),
+    dataPath: join(
+      directory,
+      "captures",
+      `${index + 7}0707070-7070-4070-8070-70707070707${index}.jsonl`,
+    ),
     collectionMethod: "antigravity_cli_capture",
     supportedSurface: "cli",
     suggestedLabel: `Antigravity ${index}`,
@@ -4148,7 +4483,8 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
   const home = await mkdtemp(join(tmpdir(), "viberacing-sequence-recovery-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const directory = join(home, ".viberacing");
-  const capture = join(directory, "captures", "antigravity.jsonl");
+  const clientSourceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const capture = join(directory, "captures", `${clientSourceId}.jsonl`);
   await mkdir(join(directory, "captures"), { recursive: true });
   const today = new Date().toISOString().slice(0, 10);
   await writeFile(
@@ -4167,7 +4503,6 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
       },
     })}\n`,
   );
-  const clientSourceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
   await writeLocalSources(directory, [
     {
       clientSourceId,
@@ -4926,6 +5261,7 @@ test("disconnect warns when a pending pairing cancellation cannot be confirmed w
   context.after(() => rm(home, { recursive: true, force: true }));
   const directory = join(home, ".viberacing");
   await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(
     join(directory, "connect-attempt.json"),
     `${JSON.stringify({
@@ -5250,6 +5586,110 @@ test(
 );
 
 test(
+  "Antigravity wrapper waits for a busy launch gate before persisting capture and dirty state",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-busy-launch-"));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9", {
+      eventId: "initial-capture",
+    });
+    const bin = join(home, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = join(bin, "agy");
+    await writeFile(
+      executable,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({type:"result",session_id:"gate-wait-record",timestamp:new Date().toISOString(),usage:{input_tokens:4,output_tokens:5}})+"\\n");
+`,
+    );
+    await chmod(executable, 0o700);
+
+    const holderBarrier = join(home, "launch-holder");
+    const wrapperReady = join(home, "wrapper-capture-ready");
+    const schedulerTrace = join(home, "scheduler-trace.log");
+    const environment = connectorEnvironment(home, {
+      NODE_ENV: "test",
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      VIBERACING_TEST_WRAPPER_CAPTURE_READY: wrapperReady,
+      VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
+      VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+    });
+    const runtimeUrl = pathToFileURL(
+      fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url)),
+    ).href;
+    const holderScript = `
+      import { readFile, writeFile } from "node:fs/promises";
+      import { setTimeout as delay } from "node:timers/promises";
+      import { claimSchedulerLaunch, releaseSchedulerLaunch } from ${JSON.stringify(runtimeUrl)};
+      const gate = await claimSchedulerLaunch({ waitMs: 0 });
+      if (!gate) throw new Error("launch gate unavailable");
+      await writeFile(${JSON.stringify(`${holderBarrier}.ready`)}, "ready\\n");
+      for (;;) {
+        try {
+          await readFile(${JSON.stringify(`${holderBarrier}.continue`)});
+          break;
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+        await delay(10);
+      }
+      await releaseSchedulerLaunch(gate);
+    `;
+    const holder = spawn(process.execPath, ["--input-type=module", "--eval", holderScript], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    context.after(() => holder.kill("SIGKILL"));
+    await waitFor(() =>
+      access(`${holderBarrier}.ready`)
+        .then(() => true)
+        .catch(() => false),
+    );
+
+    const wrapper = spawn(process.execPath, [connectorPath, "run", "antigravity", "--", "review"], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    context.after(() => wrapper.kill("SIGKILL"));
+    let wrapperStdout = "";
+    let wrapperStderr = "";
+    wrapper.stdout.setEncoding("utf8").on("data", (chunk) => (wrapperStdout += chunk));
+    wrapper.stderr.setEncoding("utf8").on("data", (chunk) => (wrapperStderr += chunk));
+    await waitFor(() =>
+      access(wrapperReady)
+        .then(() => true)
+        .catch(() => false),
+    );
+    assert.doesNotMatch(await readFile(installation.capture, "utf8"), /gate-wait-record/);
+
+    await writeFile(`${holderBarrier}.continue`, "continue\n");
+    const [holderCode] = await once(holder, "close");
+    assert.equal(holderCode, 0);
+    const [wrapperCode] = await once(wrapper, "close");
+    assert.equal(wrapperCode, 0);
+    assert.equal(wrapperStderr, "");
+    assert.match(wrapperStdout, /gate-wait-record/);
+    assert.match(await readFile(installation.capture, "utf8"), /gate-wait-record/);
+    const dirty = JSON.parse(await readFile(join(installation.directory, "dirty.json"), "utf8"));
+    assert.equal(typeof dirty.sources[installation.clientSourceId]?.generation, "string");
+    await waitFor(async () =>
+      (await readFile(schedulerTrace, "utf8").catch(() => "")).includes("acquired:"),
+    );
+
+    await execFileAsync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `import { clearAutomaticState } from ${JSON.stringify(runtimeUrl)}; await clearAutomaticState();`,
+      ],
+      { env: environment },
+    );
+  },
+);
+
+test(
   "wrapper forwards SIGINT to the native executable",
   { skip: process.platform === "win32" },
   async (context) => {
@@ -5274,6 +5714,54 @@ test(
     const [code, signal] = await once(child, "close");
     assert.equal(code, null);
     assert.equal(signal, "SIGINT");
+  },
+);
+
+test(
+  "a wrapper finishing after uninstall cannot recreate local state",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-stale-wrapper-"));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const bin = join(home, "bin");
+    const barrier = join(home, "wrapper-finish");
+    await mkdir(bin, { recursive: true });
+    const executable = join(bin, "agy");
+    await writeFile(
+      executable,
+      `#!/usr/bin/env node
+import { existsSync, writeFileSync } from "node:fs";
+writeFileSync(process.env.SYNTHETIC_WRAPPER_BARRIER + ".ready", "ready\\n");
+while (!existsSync(process.env.SYNTHETIC_WRAPPER_BARRIER + ".continue")) await new Promise((resolve) => setTimeout(resolve, 10));
+process.stdout.write(JSON.stringify({type:"result",session_id:"stale-wrapper",timestamp:new Date().toISOString(),usage:{input_tokens:1,output_tokens:2}})+"\\n");
+`,
+    );
+    await chmod(executable, 0o700);
+    const environment = connectorEnvironment(home, {
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      SYNTHETIC_WRAPPER_BARRIER: barrier,
+    });
+    await execFileAsync(
+      process.execPath,
+      [connectorPath, "source", "add", "--agent", "antigravity", "--name", "Local"],
+      { env: environment },
+    );
+    const wrapper = spawn(process.execPath, [connectorPath, "run", "antigravity", "--", "review"], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    await waitFor(() =>
+      access(`${barrier}.ready`)
+        .then(() => true)
+        .catch(() => false),
+    );
+    await execFileAsync(process.execPath, [connectorPath, "uninstall"], { env: environment });
+    await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
+    await writeFile(`${barrier}.continue`, "continue\n");
+    const [code] = await once(wrapper, "close");
+    assert.equal(code, 0);
+    await delay(100);
+    await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
   },
 );
 

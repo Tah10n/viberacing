@@ -8,6 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { connectorVersion } from "../lib/version.mjs";
 import { parseProtocolResponse } from "../lib/protocol.mjs";
+import { normalizeOrigin } from "../lib/origin.mjs";
 import {
   adapters,
   adapterFor,
@@ -29,8 +30,11 @@ import {
   beginConnectAttempt,
   clearConnectAttempt,
   commitConnectionState,
+  connectedStateExists,
+  connectedSourceMappingExists,
   diagnoseHooks,
   invalidateConnectAttempt,
+  localSourceRegistryContains,
   prepareRuntime,
   reconcileHooks,
   readConfig,
@@ -53,12 +57,14 @@ import {
   configuredAutomaticSyncTimings,
   appendCapture,
   claimScheduler,
+  claimSchedulerLaunch,
   compactCapture,
   clearAutomaticState,
   clearDirty,
   clearDirtyForSources,
   clearQuarantine,
   markDirty,
+  markDirtyIfConnected,
   dirtyClaims,
   dirtyEntries,
   lifecycleMutationActive,
@@ -70,6 +76,7 @@ import {
   readPending,
   readState,
   releaseScheduler,
+  releaseSchedulerLaunch,
   mergePendingPayloads,
   removePending,
   removePendingForSource,
@@ -149,15 +156,6 @@ async function readConnectedConfig() {
       );
     throw error;
   }
-}
-
-function normalizedOrigin(value) {
-  const url = new URL(value);
-  if (url.pathname !== "/" || url.search || url.hash || !["https:", "http:"].includes(url.protocol))
-    throw new Error("--origin must be an HTTP(S) origin");
-  if (url.protocol === "http:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname))
-    throw new Error("Non-local origins must use HTTPS");
-  return url.origin;
 }
 
 function retryAfterMilliseconds(response) {
@@ -323,7 +321,7 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId, 
 }
 
 async function connect() {
-  const origin = normalizedOrigin(option("--origin", "https://viberacing.com"));
+  const origin = normalizeOrigin(option("--origin", "https://viberacing.com"), "--origin");
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
   const detected = discovery.sources;
@@ -1027,60 +1025,96 @@ async function sync(providedConfig, options = {}) {
   );
 }
 
-async function launchAutomaticScheduler() {
-  const state = await readState();
-  if (state.automaticDisabledReason) return false;
-  const scheduler = await claimScheduler();
-  if (!scheduler) return false;
-  const child = spawn(
-    process.execPath,
-    [
-      fileURLToPath(import.meta.url),
-      "auto-sync",
-      "--quiet",
-      "--scheduler-owner",
-      scheduler.ownershipToken,
-    ],
-    {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    },
+async function launchAutomaticScheduler(existingLaunch) {
+  if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+  const launch = existingLaunch ?? (await claimSchedulerLaunch());
+  if (!launch) return false;
+  const ownsLaunch = existingLaunch === undefined;
+  try {
+    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+    const state = await readState();
+    if (state.automaticDisabledReason) return false;
+    const child = spawn(
+      process.execPath,
+      [fileURLToPath(import.meta.url), "auto-sync", "--quiet"],
+      {
+        detached: true,
+        stdio: ["ignore", "ignore", "ignore", "ipc"],
+        windowsHide: true,
+      },
+    );
+    const status = await new Promise((resolve) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      const timeout = setTimeout(
+        () => {
+          child.kill();
+          finish("lost");
+        },
+        process.env.NODE_ENV === "test" ? 5_000 : 2_000,
+      );
+      child.once("message", (message) =>
+        finish(message?.type === "viberacing-scheduler" ? message.status : "lost"),
+      );
+      child.once("error", () => finish("lost"));
+      child.once("exit", () => finish("lost"));
+    });
+    child.unref();
+    return status === "acquired";
+  } finally {
+    if (ownsLaunch) await releaseSchedulerLaunch(launch);
+  }
+}
+
+async function waitForTestSchedulerClaimBarrier() {
+  if (process.env.NODE_ENV !== "test" || !process.env.VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER)
+    return;
+  const barrier = process.env.VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER;
+  await writeFile(`${barrier}.ready`, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      await readFile(`${barrier}.continue`);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await delay(10);
+  }
+  throw new Error("Timed out at scheduler claim test barrier");
+}
+
+async function sendSchedulerHandshake(status) {
+  if (typeof process.send !== "function") return;
+  await new Promise((resolve) =>
+    process.send({ type: "viberacing-scheduler", status }, () => resolve()),
   );
-  child.on("error", () => releaseScheduler(scheduler.ownershipToken).catch(() => {}));
-  child.unref();
-  return true;
+  process.disconnect?.();
 }
 
 async function hook() {
   try {
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_HOOK_READY)
+      await writeFile(process.env.VIBERACING_TEST_HOOK_READY, `${process.pid}\n`, { mode: 0o600 });
     for await (const _chunk of process.stdin) {
       // Hook input can contain private agent context. Discard it without parsing or logging.
     }
     const clientSourceId = option("--source");
     const agentId = option("--agent");
-    if (await lifecycleMutationActive())
-      throw new Error("Provider hook stopped by a local lifecycle operation");
-    await withConnectionConfig(
-      async (config) => {
-        const active = config.sources.some(
-          (source) =>
-            source.clientSourceId === clientSourceId &&
-            source.agentId === agentId &&
-            typeof source.sourceId === "string",
-        );
-        if (active) {
-          await markDirty(clientSourceId);
-          await launchAutomaticScheduler();
+    if (await markDirtyIfConnected(clientSourceId, agentId)) {
+      const launch = await claimSchedulerLaunch({ waitMs: 0 });
+      if (launch)
+        try {
+          await launchAutomaticScheduler(launch);
+        } finally {
+          await releaseSchedulerLaunch(launch);
         }
-      },
-      {
-        beforeRecovery: async () => {
-          if (await lifecycleMutationActive())
-            throw new Error("Provider hook stopped by a local lifecycle operation");
-        },
-      },
-    );
+    }
   } catch {
     // Provider hooks are fail-open: local scheduling failures must never affect the agent.
   }
@@ -1089,20 +1123,40 @@ async function hook() {
 }
 
 async function automaticSync() {
-  const schedulerOwner = option("--scheduler-owner");
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
+  await waitForTestSchedulerClaimBarrier();
+  if (await lifecycleMutationActive()) {
+    await sendSchedulerHandshake("lost");
+    return;
+  }
+  const scheduler = await claimScheduler();
+  if (!scheduler) {
+    await sendSchedulerHandshake("lost");
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+      await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `lost:${process.pid}\n`);
+    return;
+  }
+  await sendSchedulerHandshake("acquired");
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `acquired:${process.pid}\n`);
   let attemptedClaims = {};
   let attempted = false;
   let deferredLockRetryAvailable = true;
   try {
     for (;;) {
-      if (!(await ownsScheduler(schedulerOwner))) return;
+      if (!(await ownsScheduler(scheduler))) return;
       const dirty = await readDirty();
       if (!dirty) return;
       let state = await readState();
       const dueAt = automaticDueAt(dirty, state.lastAutomaticSyncAt ?? 0, automaticTimings);
       const waitMs = Math.max(0, dueAt - Date.now());
-      if (waitMs > 0) await delay(waitMs);
-      if (!(await ownsScheduler(schedulerOwner))) return;
+      const waitDeadline = Date.now() + waitMs;
+      while (Date.now() < waitDeadline) {
+        await delay(Math.min(50, waitDeadline - Date.now()));
+        if (!(await ownsScheduler(scheduler)) || !(await readDirty())) return;
+      }
+      if (!(await ownsScheduler(scheduler))) return;
       const current = await readDirty();
       if (!current) return;
       state = await readState();
@@ -1134,7 +1188,9 @@ async function automaticSync() {
     }
   } finally {
     if (attempted) await clearDirty(attemptedClaims).catch(() => {});
-    await releaseScheduler(schedulerOwner);
+    await releaseScheduler(scheduler);
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+      await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `released:${process.pid}\n`);
     const remaining = dirtyEntries(await readDirty().catch(() => null));
     const hasNewGeneration =
       attempted &&
@@ -1492,15 +1548,28 @@ async function wrap(agentId) {
   if (outcome.error) throw outcome.error;
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
-  if (safe.length) {
-    await appendCapture(source, safe);
-    try {
-      const config = await readConfig();
-      if (config.sources.some((mapping) => mapping.clientSourceId === source.clientSourceId)) {
-        await markDirty(source.clientSourceId);
-        await launchAutomaticScheduler();
+  if (safe.length && (await localSourceRegistryContains(source.clientSourceId))) {
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_WRAPPER_CAPTURE_READY)
+      await writeFile(process.env.VIBERACING_TEST_WRAPPER_CAPTURE_READY, `${process.pid}\n`, {
+        mode: 0o600,
+      });
+    const launch = await claimSchedulerLaunch({ waitMs: 5_000 });
+    if (launch)
+      try {
+        if (
+          !(await lifecycleMutationActive()) &&
+          (await localSourceRegistryContains(source.clientSourceId))
+        ) {
+          await appendCapture(source, safe);
+          if (await connectedSourceMappingExists(source.clientSourceId)) {
+            await markDirty(source.clientSourceId);
+            await launchAutomaticScheduler(launch);
+          }
+        }
+      } catch {
+      } finally {
+        await releaseSchedulerLaunch(launch);
       }
-    } catch {}
   }
   if (outcome.signal) process.kill(process.pid, outcome.signal);
   else process.exitCode = outcome.code ?? 1;
@@ -1600,7 +1669,8 @@ try {
         );
       } catch {}
       const result = await removeHooks();
-      if (result.failures.length === 0) await removeLocalState();
+      if (result.failures.length === 0)
+        await clearAutomaticState({ afterStopped: removeLocalState });
       else {
         await resetInstallation();
         await clearAutomaticState();
