@@ -23,6 +23,7 @@ const quarantineDirectory = join(pendingDirectory, "quarantine");
 const dirtyPath = join(stateDirectory, "dirty.json");
 const dirtyLockPath = join(stateDirectory, "dirty.lock");
 const schedulerLockPath = join(stateDirectory, "scheduler.lock");
+const schedulerLaunchLockPath = join(stateDirectory, "scheduler-launch.lock");
 const lifecycleLockPath = join(stateDirectory, "lifecycle.lock");
 const lifecycleMarkerPath = join(stateDirectory, "lifecycle-revoking.lock");
 export const automaticSyncTimings = Object.freeze({
@@ -213,6 +214,15 @@ export async function claimScheduler() {
   return (await acquireRuntimeOwnedLock(schedulerLockPath)) ?? false;
 }
 
+export function claimSchedulerLaunch(options = {}) {
+  return acquireOwnedLock(schedulerLaunchLockPath, options);
+}
+
+export function releaseSchedulerLaunch(launch) {
+  if (launch?.path !== schedulerLaunchLockPath) return false;
+  return releaseOwnedLock(launch);
+}
+
 export async function ownsScheduler(scheduler) {
   if (!scheduler?.owner || scheduler.path !== schedulerLockPath) return false;
   const owner = await readFile(schedulerLockPath, "utf8").catch(() => null);
@@ -224,20 +234,28 @@ export function releaseScheduler(scheduler) {
   return releaseOwnedLock(scheduler);
 }
 
-export async function clearAutomaticState() {
-  await withDirtyLock(() =>
-    unlink(dirtyPath).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
-    }),
-  );
-  const deadline = Date.now() + (process.env.NODE_ENV === "test" ? 5_000 : 60_000);
-  for (;;) {
-    const schedulerOwner = await readFile(schedulerLockPath, "utf8").catch(() => null);
-    if (schedulerOwner === null || schedulerOwner.startsWith(`${process.pid}:`)) return;
-    if (!(await ownedLockActive(schedulerLockPath))) return;
-    if (Date.now() >= deadline)
-      throw new Error("Timed out waiting for the automatic scheduler to stop");
-    await delay(25);
+export async function clearAutomaticState(options = {}) {
+  const waitMs = process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  const launchGate = await acquireOwnedLock(schedulerLaunchLockPath, { waitMs });
+  if (!launchGate) throw new Error("Timed out waiting for an automatic scheduler launch");
+  try {
+    await withDirtyLock(() =>
+      unlink(dirtyPath).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      }),
+    );
+    const deadline = Date.now() + waitMs;
+    for (;;) {
+      const schedulerOwner = await readFile(schedulerLockPath, "utf8").catch(() => null);
+      if (schedulerOwner === null || schedulerOwner.startsWith(`${process.pid}:`)) break;
+      if (!(await ownedLockActive(schedulerLockPath))) break;
+      if (Date.now() >= deadline)
+        throw new Error("Timed out waiting for the automatic scheduler to stop");
+      await delay(25);
+    }
+    await options.afterStopped?.();
+  } finally {
+    await releaseOwnedLock(launchGate);
   }
 }
 

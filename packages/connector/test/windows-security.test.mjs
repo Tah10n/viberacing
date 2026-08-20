@@ -132,7 +132,7 @@ test(
       "$fileAcl=[IO.File]::GetAccessControl($file).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All)",
       "[PSCustomObject]@{ Directory=$directoryAcl; File=$fileAcl } | ConvertTo-Json -Compress",
     ].join("; ");
-    const snapshot = async () =>
+    const snapshot = async (targetDirectory, targetFile) =>
       (
         await execFileAsync(
           powershell,
@@ -146,15 +146,15 @@ test(
           {
             env: {
               ...process.env,
-              VIBERACING_TEST_ACL_DIRECTORY: directory,
-              VIBERACING_TEST_ACL_FILE: unrelated,
+              VIBERACING_TEST_ACL_DIRECTORY: targetDirectory,
+              VIBERACING_TEST_ACL_FILE: targetFile,
             },
             windowsHide: true,
             timeout: 15_000,
           },
         )
       ).stdout.trim();
-    const before = await snapshot();
+    const before = await snapshot(directory, unrelated);
     const previousStateDirectory = process.env.VIBERACING_STATE_DIR;
     process.env.VIBERACING_STATE_DIR = directory;
     try {
@@ -166,7 +166,24 @@ test(
       if (previousStateDirectory === undefined) delete process.env.VIBERACING_STATE_DIR;
       else process.env.VIBERACING_STATE_DIR = previousStateDirectory;
     }
-    assert.equal(await snapshot(), before);
+    assert.equal(await snapshot(directory, unrelated), before);
+
+    const foreignDirectory = join(root, "foreign-config");
+    const foreignConfig = join(foreignDirectory, "config.json");
+    await mkdir(foreignDirectory);
+    await writeFile(foreignConfig, '{"version":2,"owner":"other-tool"}\n');
+    const foreignBefore = await snapshot(foreignDirectory, foreignConfig);
+    process.env.VIBERACING_STATE_DIR = foreignDirectory;
+    try {
+      const config = await import(
+        `../lib/config.mjs?windows-foreign-config=${encodeURIComponent(foreignDirectory)}`
+      );
+      await assert.rejects(config.ensurePrivateStateDirectory(), /custom.*marker/i);
+    } finally {
+      if (previousStateDirectory === undefined) delete process.env.VIBERACING_STATE_DIR;
+      else process.env.VIBERACING_STATE_DIR = previousStateDirectory;
+    }
+    assert.equal(await snapshot(foreignDirectory, foreignConfig), foreignBefore);
   },
 );
 
@@ -181,6 +198,7 @@ test(
 
     await mkdir(directory, { recursive: true });
     await writeFile(existingCapability, '{"deviceToken":"synthetic"}\n');
+    await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
     const permissiveScript = [
       "$ErrorActionPreference='Stop'",
       "$path=$env:VIBERACING_WINDOWS_STATE_ACL_TARGET",

@@ -30,8 +30,11 @@ import {
   beginConnectAttempt,
   clearConnectAttempt,
   commitConnectionState,
+  connectedStateExists,
+  connectedSourceMappingExists,
   diagnoseHooks,
   invalidateConnectAttempt,
+  localSourceRegistryContains,
   prepareRuntime,
   reconcileHooks,
   readConfig,
@@ -54,6 +57,7 @@ import {
   configuredAutomaticSyncTimings,
   appendCapture,
   claimScheduler,
+  claimSchedulerLaunch,
   compactCapture,
   clearAutomaticState,
   clearDirty,
@@ -71,6 +75,7 @@ import {
   readPending,
   readState,
   releaseScheduler,
+  releaseSchedulerLaunch,
   mergePendingPayloads,
   removePending,
   removePendingForSource,
@@ -1019,17 +1024,76 @@ async function sync(providedConfig, options = {}) {
   );
 }
 
-async function launchAutomaticScheduler() {
-  const state = await readState();
-  if (state.automaticDisabledReason) return false;
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "auto-sync", "--quiet"], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.on("error", () => {});
-  child.unref();
-  return true;
+async function launchAutomaticScheduler(existingLaunch) {
+  if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+  const launch = existingLaunch ?? (await claimSchedulerLaunch());
+  if (!launch) return false;
+  const ownsLaunch = existingLaunch === undefined;
+  try {
+    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+    const state = await readState();
+    if (state.automaticDisabledReason) return false;
+    const child = spawn(
+      process.execPath,
+      [fileURLToPath(import.meta.url), "auto-sync", "--quiet"],
+      {
+        detached: true,
+        stdio: ["ignore", "ignore", "ignore", "ipc"],
+        windowsHide: true,
+      },
+    );
+    const status = await new Promise((resolve) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(value);
+      };
+      const timeout = setTimeout(
+        () => {
+          child.kill();
+          finish("lost");
+        },
+        process.env.NODE_ENV === "test" ? 5_000 : 2_000,
+      );
+      child.once("message", (message) =>
+        finish(message?.type === "viberacing-scheduler" ? message.status : "lost"),
+      );
+      child.once("error", () => finish("lost"));
+      child.once("exit", () => finish("lost"));
+    });
+    child.unref();
+    return status === "acquired";
+  } finally {
+    if (ownsLaunch) await releaseSchedulerLaunch(launch);
+  }
+}
+
+async function waitForTestSchedulerClaimBarrier() {
+  if (process.env.NODE_ENV !== "test" || !process.env.VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER)
+    return;
+  const barrier = process.env.VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER;
+  await writeFile(`${barrier}.ready`, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      await readFile(`${barrier}.continue`);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    await delay(10);
+  }
+  throw new Error("Timed out at scheduler claim test barrier");
+}
+
+async function sendSchedulerHandshake(status) {
+  if (typeof process.send !== "function") return;
+  await new Promise((resolve) =>
+    process.send({ type: "viberacing-scheduler", status }, () => resolve()),
+  );
+  process.disconnect?.();
 }
 
 async function hook() {
@@ -1071,12 +1135,19 @@ async function hook() {
 async function automaticSync() {
   if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
     await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
+  await waitForTestSchedulerClaimBarrier();
+  if (await lifecycleMutationActive()) {
+    await sendSchedulerHandshake("lost");
+    return;
+  }
   const scheduler = await claimScheduler();
   if (!scheduler) {
+    await sendSchedulerHandshake("lost");
     if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
       await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `lost:${process.pid}\n`);
     return;
   }
+  await sendSchedulerHandshake("acquired");
   if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
     await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `acquired:${process.pid}\n`);
   let attemptedClaims = {};
@@ -1487,15 +1558,24 @@ async function wrap(agentId) {
   if (outcome.error) throw outcome.error;
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
-  if (safe.length) {
-    await appendCapture(source, safe);
-    try {
-      const config = await readConfig();
-      if (config.sources.some((mapping) => mapping.clientSourceId === source.clientSourceId)) {
-        await markDirty(source.clientSourceId);
-        await launchAutomaticScheduler();
+  if (safe.length && (await localSourceRegistryContains(source.clientSourceId))) {
+    const launch = await claimSchedulerLaunch();
+    if (launch)
+      try {
+        if (
+          !(await lifecycleMutationActive()) &&
+          (await localSourceRegistryContains(source.clientSourceId))
+        ) {
+          await appendCapture(source, safe);
+          if (await connectedSourceMappingExists(source.clientSourceId)) {
+            await markDirty(source.clientSourceId);
+            await launchAutomaticScheduler(launch);
+          }
+        }
+      } catch {
+      } finally {
+        await releaseSchedulerLaunch(launch);
       }
-    } catch {}
   }
   if (outcome.signal) process.kill(process.pid, outcome.signal);
   else process.exitCode = outcome.code ?? 1;
@@ -1595,7 +1675,8 @@ try {
         );
       } catch {}
       const result = await removeHooks();
-      if (result.failures.length === 0) await removeLocalState();
+      if (result.failures.length === 0)
+        await clearAutomaticState({ afterStopped: removeLocalState });
       else {
         await resetInstallation();
         await clearAutomaticState();

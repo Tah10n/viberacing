@@ -29,9 +29,10 @@ import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
+const defaultStateDirectory = join(homedir(), ".viberacing");
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
   ? resolve(process.env.VIBERACING_STATE_DIR)
-  : join(homedir(), ".viberacing");
+  : defaultStateDirectory;
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
@@ -55,13 +56,23 @@ const stateFiles = new Set([
 ]);
 const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin"]);
 const ownedLockPattern =
-  /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
+  /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
   /^(?:config|installation|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const legacyCollectionMethods = new Set([
+  "antigravity\0antigravity_cli_capture",
+  "claude_code\0claude_jsonl",
+  "codex\0codex_app_server",
+  "gemini_cli\0gemini_session_json",
+  "kimi_code\0kimi_wire_jsonl",
+  "kimi_code\0kimi_legacy_wire_jsonl",
+  "opencode\0opencode_sqlite",
+  "qwen_code\0qwen_stats_jsonl",
+]);
 
 function isInstalledRuntimeExecutable(path) {
   const parts = relative(stateDirectory, path).split(/[\\/]/);
@@ -169,6 +180,64 @@ async function inspectOwnedStateTree(path, paths = [stateDirectory]) {
     if (info.isDirectory()) await inspectOwnedStateTree(child, paths);
   }
   return paths;
+}
+
+async function validLegacyStateEvidence() {
+  try {
+    const installation = JSON.parse(await readFile(installationPath, "utf8"));
+    if (
+      installation?.version === 1 &&
+      sourceIdPattern.test(installation.id) &&
+      typeof installation.secret === "string" &&
+      /^[A-Za-z0-9_-]{32,128}$/.test(installation.secret)
+    )
+      return true;
+  } catch {}
+  try {
+    const sources = JSON.parse(await readFile(sourcesPath, "utf8"));
+    if (
+      sources?.version === 1 &&
+      Array.isArray(sources.sources) &&
+      sources.sources.length > 0 &&
+      sources.sources.every(
+        (source) =>
+          validLocalSource(source) &&
+          legacyCollectionMethods.has(`${source.agentId}\0${source.collectionMethod}`),
+      )
+    )
+      return true;
+  } catch {}
+  return false;
+}
+
+function migrationSnapshot(paths) {
+  return paths
+    .slice(1)
+    .map((path) => relative(stateDirectory, path))
+    .filter((path) => !/^\.viberacing-state\.lock(?:\.|$)/i.test(path))
+    .sort();
+}
+
+async function waitForTestStateMigrationBarrier(stage) {
+  if (
+    process.env.NODE_ENV !== "test" ||
+    process.env.VIBERACING_TEST_STATE_MIGRATION_PAUSE !== stage ||
+    !process.env.VIBERACING_TEST_STATE_MIGRATION_BARRIER
+  )
+    return;
+  const barrier = resolve(process.env.VIBERACING_TEST_STATE_MIGRATION_BARRIER);
+  await writeFile(`${barrier}.ready`, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      await access(`${barrier}.continue`);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (Date.now() >= deadline) throw new Error("Timed out at state migration test barrier");
+    await delay(10);
+  }
 }
 
 async function stateRoot() {
@@ -299,7 +368,15 @@ async function secureStateDirectory() {
   const marked = await markedStatePaths();
   if (marked) return secureStatePaths(marked);
 
-  await inspectOwnedStateTree(stateDirectory);
+  const preflightPaths = await inspectOwnedStateTree(stateDirectory);
+  const nonempty = preflightPaths.length > 1;
+  if (nonempty && stateDirectory !== defaultStateDirectory)
+    throw new Error("A nonempty custom Vibe Racing state directory requires a valid marker");
+  if (nonempty && !(await validLegacyStateEvidence()))
+    throw new Error("Unmarked legacy Vibe Racing state has no valid identity or source registry");
+  const preflightSnapshot = migrationSnapshot(preflightPaths);
+  await waitForTestStateMigrationBarrier("after_preflight");
+  await secureStatePaths([stateDirectory]);
   const migrationLock = await acquireOwnedLock(stateMigrationLockPath, {
     waitMs: process.env.NODE_ENV === "test" ? 5_000 : 60_000,
   });
@@ -308,7 +385,13 @@ async function secureStateDirectory() {
     const alreadyMarked = await markedStatePaths();
     if (alreadyMarked) return secureStatePaths(alreadyMarked);
     const legacyPaths = await inspectOwnedStateTree(stateDirectory);
+    if (JSON.stringify(migrationSnapshot(legacyPaths)) !== JSON.stringify(preflightSnapshot))
+      throw new Error("Vibe Racing state changed during migration");
+    if (nonempty && !(await validLegacyStateEvidence()))
+      throw new Error("Legacy Vibe Racing state changed during migration");
     await secureStatePaths(legacyPaths);
+    if (nonempty && !(await validLegacyStateEvidence()))
+      throw new Error("Legacy Vibe Racing state changed while being secured");
     await writeStateMarker();
   } finally {
     await releaseOwnedLock(migrationLock);
@@ -628,6 +711,44 @@ export async function withConnectionConfig(callback, options = {}) {
 
 export async function readConfig(options = {}) {
   return withConnectionConfig((config) => config, options);
+}
+
+export async function connectedStateExists() {
+  try {
+    const info = await lstat(configPath);
+    return info.isFile() && !info.isSymbolicLink() && info.nlink === 1;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+export async function localSourceRegistryContains(clientSourceId) {
+  try {
+    const value = JSON.parse(await readFile(sourcesPath, "utf8"));
+    return (
+      value?.version === 1 &&
+      Array.isArray(value.sources) &&
+      value.sources.some((source) => source?.clientSourceId === clientSourceId)
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
+    throw error;
+  }
+}
+
+export async function connectedSourceMappingExists(clientSourceId) {
+  try {
+    const value = JSON.parse(await readFile(configPath, "utf8"));
+    return (
+      value?.version === 2 &&
+      Array.isArray(value.sources) &&
+      value.sources.some((source) => source?.clientSourceId === clientSourceId)
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
+    throw error;
+  }
 }
 
 export async function writeConfig(config, options) {

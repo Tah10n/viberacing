@@ -111,6 +111,8 @@ function useModuleEnvironment(home) {
 }
 
 async function writeLocalSources(directory, sources) {
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(join(directory, "sources.json"), `${JSON.stringify({ version: 1, sources })}\n`);
 }
 
@@ -125,6 +127,7 @@ async function writeCaptureInstallation(home, origin, options = {}) {
   const sourceId = options.sourceId ?? "89898989-8989-4989-8989-898989898989";
   const date = new Date().toISOString().slice(0, 10);
   await mkdir(join(directory, "captures"), { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(
     capture,
     `${JSON.stringify({
@@ -172,6 +175,7 @@ async function writeCaptureInstallation(home, origin, options = {}) {
 async function writeMappedInstallation(home, origin, sources) {
   const directory = join(home, ".viberacing");
   await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeLocalSources(
     directory,
     sources.map(({ sourceId: _sourceId, accountLabel: _accountLabel, ...source }) => source),
@@ -1546,6 +1550,49 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   );
   await assert.rejects(access(join(installation.directory, "scheduler.lock")));
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
+});
+
+test("uninstall waits for a scheduler child paused before lock acquisition", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-scheduler-launch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "scheduler-claim");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+  });
+  const hook = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  hook.stdin.end("{}\n");
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+
+  const uninstall = execFileAsync(process.execPath, [connectorPath, "uninstall"], {
+    env: environment,
+  });
+  await waitFor(() =>
+    access(join(installation.directory, "lifecycle.lock"))
+      .then(() => true)
+      .catch(() => false),
+  );
+  await writeFile(`${barrier}.continue`, "continue\n");
+  const [hookCode] = await once(hook, "close");
+  assert.equal(hookCode, 0);
+  const uninstallResult = await uninstall;
+  assert.match(uninstallResult.stdout, /local state removed/);
+  await delay(100);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+  assert.deepEqual(
+    (await readdir(home)).filter((name) => /(?:scheduler.*\.lock|recovery)/i.test(name)),
+    [],
+  );
 });
 
 test("real hooks coalesce into one batch and preserve an event arriving during sync", async (context) => {
@@ -4994,6 +5041,7 @@ test("disconnect warns when a pending pairing cancellation cannot be confirmed w
   context.after(() => rm(home, { recursive: true, force: true }));
   const directory = join(home, ".viberacing");
   await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeFile(
     join(directory, "connect-attempt.json"),
     `${JSON.stringify({
@@ -5342,6 +5390,54 @@ test(
     const [code, signal] = await once(child, "close");
     assert.equal(code, null);
     assert.equal(signal, "SIGINT");
+  },
+);
+
+test(
+  "a wrapper finishing after uninstall cannot recreate local state",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-stale-wrapper-"));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const bin = join(home, "bin");
+    const barrier = join(home, "wrapper-finish");
+    await mkdir(bin, { recursive: true });
+    const executable = join(bin, "agy");
+    await writeFile(
+      executable,
+      `#!/usr/bin/env node
+import { existsSync, writeFileSync } from "node:fs";
+writeFileSync(process.env.SYNTHETIC_WRAPPER_BARRIER + ".ready", "ready\\n");
+while (!existsSync(process.env.SYNTHETIC_WRAPPER_BARRIER + ".continue")) await new Promise((resolve) => setTimeout(resolve, 10));
+process.stdout.write(JSON.stringify({type:"result",session_id:"stale-wrapper",timestamp:new Date().toISOString(),usage:{input_tokens:1,output_tokens:2}})+"\\n");
+`,
+    );
+    await chmod(executable, 0o700);
+    const environment = connectorEnvironment(home, {
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      SYNTHETIC_WRAPPER_BARRIER: barrier,
+    });
+    await execFileAsync(
+      process.execPath,
+      [connectorPath, "source", "add", "--agent", "antigravity", "--name", "Local"],
+      { env: environment },
+    );
+    const wrapper = spawn(process.execPath, [connectorPath, "run", "antigravity", "--", "review"], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    await waitFor(() =>
+      access(`${barrier}.ready`)
+        .then(() => true)
+        .catch(() => false),
+    );
+    await execFileAsync(process.execPath, [connectorPath, "uninstall"], { env: environment });
+    await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
+    await writeFile(`${barrier}.continue`, "continue\n");
+    const [code] = await once(wrapper, "close");
+    assert.equal(code, 0);
+    await delay(100);
+    await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
   },
 );
 
