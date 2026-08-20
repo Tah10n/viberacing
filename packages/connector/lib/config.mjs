@@ -36,31 +36,147 @@ const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
 const connectAttemptPath = join(stateDirectory, "connect-attempt.json");
 const connectionStateLockPath = join(stateDirectory, "connection-state.lock");
+const stateMarkerPath = join(stateDirectory, ".viberacing-state");
+const stateMigrationLockPath = join(stateDirectory, ".viberacing-state.lock");
 export const legacyHookMarker = "--viberacing-hook-id=viberacing-hook-v2";
 const captureAgents = new Set(["antigravity"]);
 let stateDirectorySecurity;
 
+const stateFiles = new Set([
+  "config.json",
+  "installation.json",
+  "sources.json",
+  "connection-commit.json",
+  "connect-attempt.json",
+  "state.json",
+  "dirty.json",
+]);
+const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin"]);
+const ownedLockPattern =
+  /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
+const stateTemporaryPattern =
+  /^(?:config|installation|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
+const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
+const sourceIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
 function isInstalledRuntimeExecutable(path) {
   const parts = relative(stateDirectory, path).split(/[\\/]/);
   return (
-    parts.length === 4 &&
-    parts[0] === "runtime" &&
-    parts[1] !== "" &&
-    parts[1] !== "." &&
-    parts[1] !== ".." &&
-    parts[2] === "bin" &&
-    parts[3] === "viberacing.mjs"
+    (parts.length === 4 &&
+      parts[0] === "runtime" &&
+      parts[1] !== "" &&
+      parts[1] !== "." &&
+      parts[1] !== ".." &&
+      parts[2] === "bin" &&
+      parts[3] === "viberacing.mjs") ||
+    (parts.length === 2 && parts[0] === "bin" && parts[1] === "viberacing.mjs")
   );
 }
 
-async function securePosixStateTree(path) {
+function ownedStatePath(path, info) {
+  const parts = relative(stateDirectory, path).split(/[\\/]/);
+  const [top] = parts;
+  if (parts.length === 1) {
+    if (top === ".viberacing-state") return info.isFile();
+    if (stateFiles.has(top)) return info.isFile();
+    if (stateDirectories.has(top)) return info.isDirectory();
+    return (
+      (ownedLockPattern.test(top) ||
+        stateTemporaryPattern.test(top) ||
+        markerTemporaryPattern.test(top)) &&
+      info.isFile()
+    );
+  }
+  if (top === "pending") {
+    if (parts.length === 2 && parts[1] === "quarantine") return info.isDirectory();
+    const pendingName = parts.at(-1);
+    const pendingBase = pendingName.replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "");
+    if (parts.length === 2)
+      return /^(?:[0-9a-f-]{36})(?:\.error)?\.json$/i.test(pendingBase) && info.isFile();
+    if (parts.length === 3 && parts[1] === "quarantine")
+      return /^(?:[0-9a-f-]{36})\.json$/i.test(pendingBase) && info.isFile();
+    return false;
+  }
+  if (top === "captures" && parts.length === 2) {
+    const captureName = parts[1];
+    const base = captureName
+      .replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "")
+      .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "");
+    return (
+      sourceIdPattern.test(base.replace(/\.jsonl$/i, "")) && /\.jsonl$/i.test(base) && info.isFile()
+    );
+  }
+  if (top === "runtime") {
+    const version = parts[1];
+    const stagingPattern = /^\.\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\.\d+\.[0-9a-f-]{36}\.tmp$/i;
+    if (!runtimeVersionPattern.test(version) && !stagingPattern.test(version)) return false;
+    if (parts.length === 2) return info.isDirectory();
+    if (parts.length === 3) return (parts[2] === "bin" || parts[2] === "lib") && info.isDirectory();
+    if (parts.length === 4 && parts[2] === "bin")
+      return parts[3] === "viberacing.mjs" && info.isFile();
+    if (parts.length === 4 && parts[2] === "lib")
+      return parts[3] === "adapters"
+        ? info.isDirectory()
+        : installedRuntimeFiles.includes(parts[3]) && info.isFile();
+    if (parts.length === 5 && parts[2] === "lib" && parts[3] === "adapters")
+      return installedRuntimeAdapterFiles.has(parts[4]) && info.isFile();
+    return false;
+  }
+  if (top === "bin") return parts.length === 2 && parts[1] === "viberacing.mjs" && info.isFile();
+  return top === "logs" && parts.length === 2 && parts[1] === "last-error.log" && info.isFile();
+}
+
+function ownedTopLevelName(name) {
+  return (
+    name === ".viberacing-state" ||
+    stateFiles.has(name) ||
+    stateDirectories.has(name) ||
+    ownedLockPattern.test(name) ||
+    stateTemporaryPattern.test(name) ||
+    markerTemporaryPattern.test(name)
+  );
+}
+
+async function inspectOwnedStateTree(path, paths = [stateDirectory]) {
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    const info = await lstat(child);
+    if (
+      info.isSymbolicLink() ||
+      (!info.isDirectory() && !info.isFile()) ||
+      (info.isFile() && info.nlink !== 1)
+    )
+      throw new Error(
+        `Vibe Racing state contains an unsupported entry: ${relative(stateDirectory, child)}`,
+      );
+    if (!ownedStatePath(child, info))
+      throw new Error(
+        `Vibe Racing state contains an unrelated entry: ${relative(stateDirectory, child)}`,
+      );
+    if (
+      typeof process.getuid === "function" &&
+      typeof info.uid === "number" &&
+      info.uid !== process.getuid()
+    )
+      throw new Error(
+        `Vibe Racing state contains an entry owned by another user: ${relative(stateDirectory, child)}`,
+      );
+    paths.push(child);
+    if (info.isDirectory()) await inspectOwnedStateTree(child, paths);
+  }
+  return paths;
+}
+
+async function stateRoot() {
   let info;
   try {
-    info = await lstat(path);
+    info = await lstat(stateDirectory);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
-    await mkdir(path, { recursive: true, mode: 0o700 });
-    info = await lstat(path);
+    await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+    info = await lstat(stateDirectory);
   }
   if (!info.isDirectory() || info.isSymbolicLink())
     throw new Error("Vibe Racing state path must be a real directory");
@@ -70,40 +186,120 @@ async function securePosixStateTree(path) {
     info.uid !== process.getuid()
   )
     throw new Error("Vibe Racing state path must be owned by the current user");
-  await chmod(path, 0o700);
-  const verified = await lstat(path);
-  if (!verified.isDirectory() || verified.isSymbolicLink() || (verified.mode & 0o077) !== 0)
-    throw new Error("Vibe Racing cannot enforce a private state directory");
-  for (const entry of await readdir(path, { withFileTypes: true })) {
-    const child = join(path, entry.name);
-    const childInfo = await lstat(child);
-    if (childInfo.isSymbolicLink())
-      throw new Error(`Vibe Racing state contains a symbolic link: ${entry.name}`);
+  return info;
+}
+
+async function markedStatePaths() {
+  let markerInfo;
+  try {
+    markerInfo = await lstat(stateMarkerPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (
+    markerInfo.isSymbolicLink() ||
+    !markerInfo.isFile() ||
+    markerInfo.nlink !== 1 ||
+    (typeof process.getuid === "function" &&
+      typeof markerInfo.uid === "number" &&
+      markerInfo.uid !== process.getuid())
+  )
+    throw new Error("Vibe Racing state marker is not a private regular file");
+  let marker;
+  try {
+    marker = JSON.parse(await readFile(stateMarkerPath, "utf8"));
+  } catch (error) {
+    throw new Error("Vibe Racing state marker is invalid", { cause: error });
+  }
+  if (marker?.format !== 1 || Object.keys(marker).length !== 1)
+    throw new Error("Vibe Racing state marker is invalid");
+  const paths = [stateDirectory, stateMarkerPath];
+  for (const entry of await readdir(stateDirectory, { withFileTypes: true })) {
+    if (entry.name === ".viberacing-state") continue;
+    const child = join(stateDirectory, entry.name);
+    const info = await lstat(child);
+    if (!ownedTopLevelName(entry.name)) continue;
+    if (
+      info.isSymbolicLink() ||
+      (info.isFile() && info.nlink !== 1) ||
+      !ownedStatePath(child, info)
+    )
+      throw new Error(`Vibe Racing state contains an unsafe owned entry: ${entry.name}`);
+    paths.push(child);
+  }
+  return paths;
+}
+
+async function secureStatePaths(paths) {
+  if (process.platform === "win32") return secureWindowsStateDirectory(stateDirectory, { paths });
+  for (const path of paths) {
+    let info;
+    try {
+      info = await lstat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    if (
+      info.isSymbolicLink() ||
+      (!info.isDirectory() && !info.isFile()) ||
+      (info.isFile() && info.nlink !== 1)
+    )
+      throw new Error(
+        `Vibe Racing state contains an unsupported entry: ${relative(stateDirectory, path)}`,
+      );
     if (
       typeof process.getuid === "function" &&
-      typeof childInfo.uid === "number" &&
-      childInfo.uid !== process.getuid()
+      typeof info.uid === "number" &&
+      info.uid !== process.getuid()
     )
-      throw new Error(`Vibe Racing state contains an entry owned by another user: ${entry.name}`);
-    if (childInfo.isDirectory()) await securePosixStateTree(child);
-    else if (childInfo.isFile()) {
-      await chmod(child, isInstalledRuntimeExecutable(child) ? 0o700 : 0o600);
-      const checked = await lstat(child);
-      if (!checked.isFile() || checked.isSymbolicLink() || (checked.mode & 0o077) !== 0)
-        throw new Error(`Vibe Racing cannot secure state file: ${entry.name}`);
-    } else throw new Error(`Vibe Racing state contains an unsupported entry: ${entry.name}`);
+      throw new Error(
+        `Vibe Racing state contains an entry owned by another user: ${relative(stateDirectory, path)}`,
+      );
+    await chmod(path, info.isDirectory() || isInstalledRuntimeExecutable(path) ? 0o700 : 0o600);
+    const checked = await lstat(path);
+    if ((checked.mode & 0o077) !== 0)
+      throw new Error(`Vibe Racing cannot secure state entry: ${relative(stateDirectory, path)}`);
+  }
+}
+
+async function writeStateMarker() {
+  const temporary = `${stateMarkerPath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, '{"format":1}\n', { mode: 0o600 });
+    await rename(temporary, stateMarkerPath);
+    if (process.platform !== "win32") await chmod(stateMarkerPath, 0o600);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
+async function secureStateDirectory() {
+  await stateRoot();
+  const marked = await markedStatePaths();
+  if (marked) return secureStatePaths(marked);
+
+  await inspectOwnedStateTree(stateDirectory);
+  const migrationLock = await acquireOwnedLock(stateMigrationLockPath, {
+    waitMs: process.env.NODE_ENV === "test" ? 5_000 : 60_000,
+  });
+  if (!migrationLock) throw new Error("Timed out waiting for Vibe Racing state migration");
+  try {
+    const alreadyMarked = await markedStatePaths();
+    if (alreadyMarked) return secureStatePaths(alreadyMarked);
+    const legacyPaths = await inspectOwnedStateTree(stateDirectory);
+    await secureStatePaths(legacyPaths);
+    await writeStateMarker();
+  } finally {
+    await releaseOwnedLock(migrationLock);
   }
 }
 
 export function ensurePrivateStateDirectory() {
-  stateDirectorySecurity ??=
-    process.platform === "win32"
-      ? secureWindowsStateDirectory(stateDirectory)
-      : securePosixStateTree(stateDirectory);
+  stateDirectorySecurity ??= secureStateDirectory();
   return stateDirectorySecurity;
 }
-const sourceIdPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function hookMarkerForSource(clientSourceId) {
   if (!sourceIdPattern.test(clientSourceId)) throw new Error("Invalid hook source id");
@@ -850,6 +1046,17 @@ const installedRuntimeFiles = [
   "version.mjs",
   "windows-security.mjs",
 ];
+const installedRuntimeAdapterFiles = new Set([
+  "antigravity.mjs",
+  "claude.mjs",
+  "codex.mjs",
+  "gemini.mjs",
+  "kimi.mjs",
+  "opencode.mjs",
+  "qwen-settings.mjs",
+  "qwen.mjs",
+  "shared.mjs",
+]);
 
 function installedRuntimeScript() {
   return join(stateDirectory, "runtime", connectorVersion, "bin", "viberacing.mjs");

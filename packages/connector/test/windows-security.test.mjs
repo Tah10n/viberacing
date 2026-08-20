@@ -25,19 +25,20 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
     "-EncodedCommand",
   ]);
   const decoded = Buffer.from(calls[0][1].at(-1), "base64").toString("utf16le");
-  assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_TARGET/);
+  assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_PATHS/);
+  assert.match(decoded, /ConvertFrom-Json/);
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
   assert.match(decoded, /ReparsePoint/);
   assert.match(decoded, /foreach \(\$entry in \$items\)/);
   assert.match(decoded, /Security\.AccessControl\.FileSecurity/);
   assert.match(decoded, /\[IO\.File\]::SetAccessControl/);
   assert.match(decoded, /\[IO\.File\]::GetAccessControl/);
+  assert.doesNotMatch(decoded, /Get-ChildItem/);
   assert.doesNotMatch(decoded, /};\s*else\b/);
   assert.doesNotMatch(decoded, /C:\\Users\\racer|\.viberacing/);
-  assert.equal(
-    calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_TARGET,
+  assert.deepEqual(JSON.parse(calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_PATHS), [
     "C:\\Users\\racer\\.viberacing",
-  );
+  ]);
   assert.equal(calls[0][2].shell, undefined);
 
   let accessDeniedCalls = 0;
@@ -100,16 +101,78 @@ test("Windows ACL retries one killed timeout and remains fail-closed after a sec
 });
 
 test(
+  "Windows rejects unrelated state without changing its ACL",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const root = await mkdtemp(join(tmpdir(), "viberacing-windows-unrelated-"));
+    const directory = join(root, "project");
+    const unrelated = join(directory, "unrelated-tool.exe");
+    context.after(() => rm(root, { force: true, recursive: true }));
+    await mkdir(directory);
+    await writeFile(unrelated, "unrelated executable");
+    const powershell = win32.join(
+      process.env.SystemRoot,
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    const aclSnapshotScript = [
+      "$ErrorActionPreference='Stop'",
+      "$directory=$env:VIBERACING_TEST_ACL_DIRECTORY",
+      "$file=$env:VIBERACING_TEST_ACL_FILE",
+      "$directoryAcl=[IO.Directory]::GetAccessControl($directory).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All)",
+      "$fileAcl=[IO.File]::GetAccessControl($file).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All)",
+      "[PSCustomObject]@{ Directory=$directoryAcl; File=$fileAcl } | ConvertTo-Json -Compress",
+    ].join("; ");
+    const snapshot = async () =>
+      (
+        await execFileAsync(
+          powershell,
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            Buffer.from(aclSnapshotScript, "utf16le").toString("base64"),
+          ],
+          {
+            env: {
+              ...process.env,
+              VIBERACING_TEST_ACL_DIRECTORY: directory,
+              VIBERACING_TEST_ACL_FILE: unrelated,
+            },
+            windowsHide: true,
+            timeout: 15_000,
+          },
+        )
+      ).stdout.trim();
+    const before = await snapshot();
+    const previousStateDirectory = process.env.VIBERACING_STATE_DIR;
+    process.env.VIBERACING_STATE_DIR = directory;
+    try {
+      const config = await import(
+        `../lib/config.mjs?windows-unrelated=${encodeURIComponent(directory)}`
+      );
+      await assert.rejects(config.ensurePrivateStateDirectory(), /unrelated-tool\.exe/);
+    } finally {
+      if (previousStateDirectory === undefined) delete process.env.VIBERACING_STATE_DIR;
+      else process.env.VIBERACING_STATE_DIR = previousStateDirectory;
+    }
+    assert.equal(await snapshot(), before);
+  },
+);
+
+test(
   "Windows creates an owner-only state directory that remains readable and writable",
   { skip: process.platform !== "win32" },
   async (context) => {
     const root = await mkdtemp(join(tmpdir(), "viberacing-windows-acl-"));
     const directory = join(root, "state & literal ' path");
-    const nested = join(directory, "existing");
-    const existingCapability = join(nested, "config.json");
+    const existingCapability = join(directory, "config.json");
     context.after(() => rm(root, { force: true, recursive: true }));
 
-    await mkdir(nested, { recursive: true });
+    await mkdir(directory, { recursive: true });
     await writeFile(existingCapability, '{"deviceToken":"synthetic"}\n');
     const permissiveScript = [
       "$ErrorActionPreference='Stop'",

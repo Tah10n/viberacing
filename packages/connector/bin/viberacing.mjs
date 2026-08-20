@@ -1022,24 +1022,12 @@ async function sync(providedConfig, options = {}) {
 async function launchAutomaticScheduler() {
   const state = await readState();
   if (state.automaticDisabledReason) return false;
-  const scheduler = await claimScheduler();
-  if (!scheduler) return false;
-  const child = spawn(
-    process.execPath,
-    [
-      fileURLToPath(import.meta.url),
-      "auto-sync",
-      "--quiet",
-      "--scheduler-owner",
-      scheduler.ownershipToken,
-    ],
-    {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    },
-  );
-  child.on("error", () => releaseScheduler(scheduler.ownershipToken).catch(() => {}));
+  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), "auto-sync", "--quiet"], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.on("error", () => {});
   child.unref();
   return true;
 }
@@ -1081,20 +1069,33 @@ async function hook() {
 }
 
 async function automaticSync() {
-  const schedulerOwner = option("--scheduler-owner");
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
+  const scheduler = await claimScheduler();
+  if (!scheduler) {
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+      await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `lost:${process.pid}\n`);
+    return;
+  }
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `acquired:${process.pid}\n`);
   let attemptedClaims = {};
   let attempted = false;
   let deferredLockRetryAvailable = true;
   try {
     for (;;) {
-      if (!(await ownsScheduler(schedulerOwner))) return;
+      if (!(await ownsScheduler(scheduler))) return;
       const dirty = await readDirty();
       if (!dirty) return;
       let state = await readState();
       const dueAt = automaticDueAt(dirty, state.lastAutomaticSyncAt ?? 0, automaticTimings);
       const waitMs = Math.max(0, dueAt - Date.now());
-      if (waitMs > 0) await delay(waitMs);
-      if (!(await ownsScheduler(schedulerOwner))) return;
+      const waitDeadline = Date.now() + waitMs;
+      while (Date.now() < waitDeadline) {
+        await delay(Math.min(50, waitDeadline - Date.now()));
+        if (!(await ownsScheduler(scheduler)) || !(await readDirty())) return;
+      }
+      if (!(await ownsScheduler(scheduler))) return;
       const current = await readDirty();
       if (!current) return;
       state = await readState();
@@ -1126,7 +1127,9 @@ async function automaticSync() {
     }
   } finally {
     if (attempted) await clearDirty(attemptedClaims).catch(() => {});
-    await releaseScheduler(schedulerOwner);
+    await releaseScheduler(scheduler);
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
+      await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `released:${process.pid}\n`);
     const remaining = dirtyEntries(await readDirty().catch(() => null));
     const hasNewGeneration =
       attempted &&

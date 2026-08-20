@@ -4,20 +4,20 @@ import { win32 } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const stateDirectoryEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_TARGET";
+const statePathsEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_PATHS";
 const secureDirectoryScript = [
   "$ErrorActionPreference='Stop'",
-  `$path=$env:${stateDirectoryEnvironmentVariable}`,
-  "if ([string]::IsNullOrWhiteSpace($path)) { throw 'Missing state directory target' }",
-  "if ([IO.Directory]::Exists($path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'State directory is a reparse point' }",
-  "if ([IO.File]::Exists($path)) { throw 'State directory target is a file' }",
-  "[IO.Directory]::CreateDirectory($path) | Out-Null",
-  "$item=Get-Item -LiteralPath $path -Force",
-  "if (-not $item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'State directory is not a real directory' }",
-  "$descendants=@(Get-ChildItem -LiteralPath $path -Force -Recurse)",
-  "if (@($descendants | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -ne 0) { throw 'State directory contains a reparse point' }",
+  `$pathValues=$env:${statePathsEnvironmentVariable}`,
+  "if ([string]::IsNullOrWhiteSpace($pathValues)) { throw 'Missing state paths' }",
+  "$paths=@(ConvertFrom-Json -InputObject $pathValues)",
+  "if ($paths.Count -eq 0) { throw 'Missing state paths' }",
+  "if ([IO.Directory]::Exists($paths[0]) -and ((Get-Item -LiteralPath $paths[0] -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'State directory is a reparse point' }",
+  "if ([IO.File]::Exists($paths[0])) { throw 'State directory target is a file' }",
+  "[IO.Directory]::CreateDirectory($paths[0]) | Out-Null",
+  "$items=@($paths | ForEach-Object { Get-Item -LiteralPath $_ -Force })",
+  "if (-not $items[0].PSIsContainer) { throw 'State directory is not a real directory' }",
+  "if (@($items | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -ne 0) { throw 'State paths contain a reparse point' }",
   "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
-  "$items=@($item)+$descendants",
   "foreach ($entry in $items) {",
   "  if ($entry.PSIsContainer) { $acl=New-Object Security.AccessControl.DirectorySecurity; $rule=New-Object Security.AccessControl.FileSystemAccessRule($identity.User,'FullControl','ContainerInherit,ObjectInherit','None','Allow') } else { $acl=New-Object Security.AccessControl.FileSecurity; $rule=New-Object Security.AccessControl.FileSystemAccessRule($identity.User,'FullControl','None','None','Allow') }",
   "  $acl.SetOwner($identity.User)",
@@ -25,7 +25,7 @@ const secureDirectoryScript = [
   "  [void]$acl.AddAccessRule($rule)",
   "  if ($entry.PSIsContainer) { [IO.Directory]::SetAccessControl($entry.FullName,$acl) } else { [IO.File]::SetAccessControl($entry.FullName,$acl) }",
   "}",
-  "$verifiedItems=@(Get-Item -LiteralPath $path -Force)+@(Get-ChildItem -LiteralPath $path -Force -Recurse)",
+  "$verifiedItems=@($paths | ForEach-Object { Get-Item -LiteralPath $_ -Force })",
   "if ($verifiedItems.Count -ne $items.Count) { throw 'State directory changed during ACL verification' }",
   "foreach ($entry in $verifiedItems) {",
   "  if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'State entry changed into a reparse point' }",
@@ -46,7 +46,12 @@ function timedOutWindowsProcess(error) {
 
 export async function ensurePrivateStateDirectory(
   directory,
-  { platform = process.platform, run = execFileAsync, environment = process.env } = {},
+  {
+    platform = process.platform,
+    run = execFileAsync,
+    environment = process.env,
+    paths = [directory],
+  } = {},
 ) {
   if (platform !== "win32") {
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -59,6 +64,19 @@ export async function ensurePrivateStateDirectory(
     }
     if (typeof directory !== "string" || !win32.isAbsolute(directory)) {
       throw new Error("The Windows state directory must be absolute");
+    }
+    const normalizedDirectory = win32.resolve(directory);
+    const normalizedPaths = [...new Set(paths.map((path) => win32.resolve(path)))];
+    if (
+      normalizedPaths.length === 0 ||
+      normalizedPaths[0] !== normalizedDirectory ||
+      normalizedPaths.some(
+        (path) =>
+          path !== normalizedDirectory &&
+          !win32.relative(normalizedDirectory, path).match(/^(?!\.\.(?:\\|$))(?![A-Za-z]:)/),
+      )
+    ) {
+      throw new Error("Windows state ACL paths must stay within the state directory");
     }
     const powershell = win32.join(
       systemRoot,
@@ -75,7 +93,7 @@ export async function ensurePrivateStateDirectory(
       encodedSecureDirectoryScript,
     ];
     const options = {
-      env: { ...environment, [stateDirectoryEnvironmentVariable]: directory },
+      env: { ...environment, [statePathsEnvironmentVariable]: JSON.stringify(normalizedPaths) },
       windowsHide: true,
       timeout: 15_000,
     };

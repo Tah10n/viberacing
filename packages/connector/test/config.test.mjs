@@ -213,7 +213,7 @@ async function runWithInput(arguments_, environment, input) {
   child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
   child.stdin.end(input);
   const [code] = await once(child, "close");
-  return { code, stdout, stderr };
+  return { code, stdout, stderr, pid: child.pid };
 }
 
 async function waitFor(predicate, timeoutMs = 5_000) {
@@ -621,10 +621,6 @@ test("disconnect wins both connection-state lock orders and provider hooks canno
       await mkdir(join(directory, "pending"), { recursive: true });
       await writeFile(join(directory, "pending", `${sourceId}.json`), '{"pending":true}\n');
       await writeFile(join(directory, "dirty.json"), '{"version":2,"sources":{}}\n');
-      await writeFile(
-        join(directory, "scheduler.lock"),
-        `${process.pid}:99999999-9999-4999-8999-999999999999\n`,
-      );
       restoreEnvironment();
 
       const spawnStateChild = (action, pause, barrierPath = barrier) => {
@@ -705,7 +701,7 @@ test("disconnect wins both connection-state lock orders and provider hooks canno
         "lifecycle.lock",
         "lifecycle-revoking.lock",
       ])
-        await assert.rejects(access(join(directory, name)));
+        await assert.rejects(access(join(directory, name)), undefined, name);
       assert.deepEqual(
         (await readdir(join(directory, "pending"))).filter((name) => name.endsWith(".json")),
         [],
@@ -1400,8 +1396,8 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
     const firstScheduler = await runtime.claimScheduler();
     assert.equal(typeof firstScheduler.ownershipToken, "string");
     assert.equal(await runtime.claimScheduler(), false);
-    assert.equal(await runtime.ownsScheduler(firstScheduler.ownershipToken), true);
-    assert.equal(await runtime.releaseScheduler(firstScheduler.ownershipToken), true);
+    assert.equal(await runtime.ownsScheduler(firstScheduler), true);
+    assert.equal(await runtime.releaseScheduler(firstScheduler), true);
     const { stateDirectory } = await import("../lib/config.mjs");
     const staleLock = join(stateDirectory, "scheduler.lock");
     const staleOwner = "stale-owner";
@@ -1410,9 +1406,12 @@ test("coalesces dirty events with debounce, cooldown, and a bounded maximum dela
     await utimes(staleLock, staleTime, staleTime);
     const replacementScheduler = await runtime.claimScheduler();
     assert.equal(typeof replacementScheduler.ownershipToken, "string");
-    assert.equal(await runtime.releaseScheduler(staleOwner), false);
-    assert.equal(await runtime.ownsScheduler(replacementScheduler.ownershipToken), true);
-    await runtime.releaseScheduler(replacementScheduler.ownershipToken);
+    assert.equal(
+      await runtime.releaseScheduler({ ...replacementScheduler, owner: staleOwner }),
+      false,
+    );
+    assert.equal(await runtime.ownsScheduler(replacementScheduler), true);
+    await runtime.releaseScheduler(replacementScheduler);
   } finally {
     restoreEnvironment();
   }
@@ -1494,6 +1493,59 @@ test("hook discards stdin, emits only contract JSON, and fails open", async (con
   assert.equal(result.stdout, "{}\n");
   assert.equal(result.stderr, "");
   assert.equal(await readFile(blockedState, "utf8"), "not a directory");
+});
+
+test("the detached scheduler child owns its lock and later launchers exit", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-scheduler-owner-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const trace = join(home, "scheduler-processes.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+
+  const firstHook = await runWithInput(hookArguments, environment, "{}");
+  assert.equal(firstHook.code, 0);
+  await waitFor(async () => (await readFile(trace, "utf8").catch(() => "")).includes("acquired:"));
+  const firstOwner = await readFile(join(installation.directory, "scheduler.lock"), "utf8");
+  const ownerPid = Number(firstOwner.split(":", 1)[0]);
+  assert.notEqual(ownerPid, firstHook.pid);
+  process.kill(ownerPid, 0);
+
+  const secondHook = await runWithInput(hookArguments, environment, "{}");
+  assert.equal(secondHook.code, 0);
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("lost:"));
+  assert.equal(await readFile(join(installation.directory, "scheduler.lock"), "utf8"), firstOwner);
+  const lostPid = Number(
+    (await readFile(trace, "utf8"))
+      .trim()
+      .split("\n")
+      .find((line) => line.startsWith("lost:"))
+      .split(":", 2)[1],
+  );
+  await waitFor(() => {
+    try {
+      process.kill(lostPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
+
+  await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { clearAutomaticState } from ${JSON.stringify(pathToFileURL(fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url))).href)}; await clearAutomaticState();`,
+    ],
+    { env: environment },
+  );
+  await assert.rejects(access(join(installation.directory, "scheduler.lock")));
+  assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
 });
 
 test("real hooks coalesce into one batch and preserve an event arriving during sync", async (context) => {
@@ -1960,7 +2012,11 @@ test("manual sync collects every active source and clears only its prior dirty g
     clientSourceId: `${index + 7}0707070-7070-4070-8070-70707070707${index}`,
     sourceId: `${index + 8}0808080-8080-4080-8080-80808080808${index}`,
     agentId: "antigravity",
-    dataPath: join(directory, "captures", `${index}.jsonl`),
+    dataPath: join(
+      directory,
+      "captures",
+      `${index + 7}0707070-7070-4070-8070-70707070707${index}.jsonl`,
+    ),
     collectionMethod: "antigravity_cli_capture",
     supportedSurface: "cli",
     suggestedLabel: `Antigravity ${index}`,
@@ -4153,7 +4209,8 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
   const home = await mkdtemp(join(tmpdir(), "viberacing-sequence-recovery-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const directory = join(home, ".viberacing");
-  const capture = join(directory, "captures", "antigravity.jsonl");
+  const clientSourceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const capture = join(directory, "captures", `${clientSourceId}.jsonl`);
   await mkdir(join(directory, "captures"), { recursive: true });
   const today = new Date().toISOString().slice(0, 10);
   await writeFile(
@@ -4172,7 +4229,6 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
       },
     })}\n`,
   );
-  const clientSourceId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
   await writeLocalSources(directory, [
     {
       clientSourceId,

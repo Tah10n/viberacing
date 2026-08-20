@@ -62,20 +62,44 @@ export async function acquireOwnedLock(path, options = {}) {
         const recoveryPath = `${path}.recovery`;
         const recoveryToken = randomUUID();
         const recoveryOwner = `${process.pid}:${recoveryToken}\n`;
-        let recoveryHandle;
-        let recoveryCreated = false;
-        try {
-          recoveryHandle = await openFile(recoveryPath, "wx", 0o600);
-          recoveryCreated = true;
-          await recoveryHandle.writeFile(recoveryOwner);
-          await recoveryHandle.close();
-        } catch (recoveryError) {
-          await recoveryHandle?.close().catch(() => {});
-          if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
-          if (recoveryError?.code !== "EEXIST") throw recoveryError;
-          if (Date.now() >= deadline) return null;
-          await delay(25);
-          continue;
+        let recoveryAcquired = false;
+        while (!recoveryAcquired) {
+          let recoveryHandle;
+          let recoveryCreated = false;
+          try {
+            recoveryHandle = await openFile(recoveryPath, "wx", 0o600);
+            recoveryCreated = true;
+            await recoveryHandle.writeFile(recoveryOwner);
+            await recoveryHandle.close();
+            recoveryAcquired = true;
+          } catch (recoveryError) {
+            await recoveryHandle?.close().catch(() => {});
+            if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
+            if (recoveryError?.code !== "EEXIST") throw recoveryError;
+            const recoveryInfo = await stat(recoveryPath).catch(() => null);
+            const recoveryState = recoveryInfo ? await lockOwnerState(recoveryPath) : null;
+            if (
+              recoveryState?.kind === "dead" ||
+              (recoveryState?.kind === "malformed" && Date.now() - recoveryInfo.mtimeMs > staleMs)
+            ) {
+              const abandonedRecovery = `${recoveryPath}.stale.${ownershipToken}`;
+              try {
+                await rename(recoveryPath, abandonedRecovery);
+                const abandonedOwner = await readFile(abandonedRecovery, "utf8").catch(() => null);
+                if (abandonedOwner !== recoveryState.owner) {
+                  await rename(abandonedRecovery, recoveryPath).catch((restoreError) => {
+                    if (restoreError?.code !== "EEXIST" && restoreError?.code !== "ENOENT")
+                      throw restoreError;
+                  });
+                } else await unlinkFile(abandonedRecovery).catch(() => {});
+              } catch (renameError) {
+                if (renameError?.code !== "ENOENT") throw renameError;
+              }
+              continue;
+            }
+            if (Date.now() >= deadline) return null;
+            await delay(25);
+          }
         }
         const recoveryLock = {
           path: recoveryPath,
@@ -83,6 +107,8 @@ export async function acquireOwnedLock(path, options = {}) {
           ownershipToken: recoveryToken,
         };
         try {
+          await options.onRecoveryGuardAcquired?.();
+          if ((await readFile(recoveryPath, "utf8").catch(() => null)) !== recoveryOwner) continue;
           const currentInfo = await stat(path).catch(() => null);
           const currentState = currentInfo ? await lockOwnerState(path) : null;
           if (

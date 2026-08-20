@@ -12,6 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { ensurePrivateStateDirectory, stateDirectory, withConnectionStateLock } from "./config.mjs";
 import { acquireOwnedLock, ownedLockActive, releaseOwnedLock } from "./owned-lock.mjs";
 
@@ -212,17 +213,15 @@ export async function claimScheduler() {
   return (await acquireRuntimeOwnedLock(schedulerLockPath)) ?? false;
 }
 
-export async function ownsScheduler(ownershipToken) {
-  if (typeof ownershipToken !== "string" || ownershipToken.length === 0) return false;
+export async function ownsScheduler(scheduler) {
+  if (!scheduler?.owner || scheduler.path !== schedulerLockPath) return false;
   const owner = await readFile(schedulerLockPath, "utf8").catch(() => null);
-  return owner?.endsWith(`:${ownershipToken}\n`) === true;
+  return owner === scheduler.owner;
 }
 
-export async function releaseScheduler(ownershipToken) {
-  if (typeof ownershipToken !== "string" || ownershipToken.length === 0) return false;
-  const owner = await readFile(schedulerLockPath, "utf8").catch(() => null);
-  if (owner?.endsWith(`:${ownershipToken}\n`) !== true) return false;
-  return releaseOwnedLock({ path: schedulerLockPath, owner, ownershipToken });
+export function releaseScheduler(scheduler) {
+  if (scheduler?.path !== schedulerLockPath) return false;
+  return releaseOwnedLock(scheduler);
 }
 
 export async function clearAutomaticState() {
@@ -231,8 +230,15 @@ export async function clearAutomaticState() {
       if (error?.code !== "ENOENT") throw error;
     }),
   );
-  const schedulerOwner = await readFile(schedulerLockPath, "utf8").catch(() => null);
-  if (schedulerOwner) await releaseOwnedLock({ path: schedulerLockPath, owner: schedulerOwner });
+  const deadline = Date.now() + (process.env.NODE_ENV === "test" ? 5_000 : 60_000);
+  for (;;) {
+    const schedulerOwner = await readFile(schedulerLockPath, "utf8").catch(() => null);
+    if (schedulerOwner === null || schedulerOwner.startsWith(`${process.pid}:`)) return;
+    if (!(await ownedLockActive(schedulerLockPath))) return;
+    if (Date.now() >= deadline)
+      throw new Error("Timed out waiting for the automatic scheduler to stop");
+    await delay(25);
+  }
 }
 
 export async function clearPendingPayloads() {

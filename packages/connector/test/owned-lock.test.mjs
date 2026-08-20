@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, open, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acquireOwnedLock, releaseOwnedLock } from "../lib/owned-lock.mjs";
@@ -110,4 +110,35 @@ test("an initial owner-write failure removes the exclusively created malformed l
     /injected owner write failure/,
   );
   await assert.rejects(stat(path), { code: "ENOENT" });
+});
+
+test("stale recovery survives a process crash while holding the recovery guard", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-recovery-crash-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "state.lock");
+  await writeFile(path, "99999999:33333333-3333-4333-8333-333333333333\n");
+
+  const moduleUrl = new URL("../lib/owned-lock.mjs", import.meta.url).href;
+  const child = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { acquireOwnedLock } from ${JSON.stringify(moduleUrl)}; await acquireOwnedLock(process.argv[1], { waitMs: 5000, onRecoveryGuardAcquired: async () => { process.stdout.write("ready\\n"); await new Promise((resolve) => process.stdin.once("data", resolve)); } });`,
+      path,
+    ],
+    { stdio: ["pipe", "pipe", "inherit"] },
+  );
+  context.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+  });
+  await once(child.stdout, "data");
+  assert.match(await readFile(`${path}.recovery`, "utf8"), new RegExp(`^${child.pid}:`));
+  child.kill();
+  await once(child, "exit");
+
+  const recovered = await acquireOwnedLock(path, { waitMs: 1_000 });
+  assert.ok(recovered);
+  assert.equal(await releaseOwnedLock(recovered), true);
+  assert.deepEqual(await readdir(directory), []);
 });
