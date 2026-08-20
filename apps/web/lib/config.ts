@@ -84,12 +84,17 @@ export { databaseClientConfig };
 export const connectorProtocolVersion = 2;
 export const expectedSchemaVersion = "001_initial.sql";
 
-export function trustedProxyMode(): "none" | "railway" {
+export type TrustedProxyMode = "none" | "railway" | "trusted-x-real-ip";
+
+export function trustedProxyMode(): TrustedProxyMode {
   const value = process.env.VIBERACING_TRUST_PROXY?.trim() || "none";
-  if (value !== "none" && value !== "railway") {
-    throw Object.assign(new Error("VIBERACING_TRUST_PROXY must be none or railway"), {
-      code: "CONFIG_TRUST_PROXY_INVALID",
-    });
+  if (value !== "none" && value !== "railway" && value !== "trusted-x-real-ip") {
+    throw Object.assign(
+      new Error("VIBERACING_TRUST_PROXY must be none, railway, or trusted-x-real-ip"),
+      {
+        code: "CONFIG_TRUST_PROXY_INVALID",
+      },
+    );
   }
   return value;
 }
@@ -176,7 +181,16 @@ export function validateRuntimeConfig(): void {
   requiredEnv("GITHUB_CLIENT_SECRET");
   minimumConnectorVersion();
   maximumDailyTokens();
-  trustedProxyMode();
+  const proxyMode = trustedProxyMode();
+  const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+  if (process.env.NODE_ENV !== "test" && !loopback && proxyMode === "none") {
+    throw Object.assign(
+      new Error(
+        "Public deployment requires VIBERACING_TRUST_PROXY=railway or trusted-x-real-ip behind a reverse proxy that overwrites X-Real-IP",
+      ),
+      { code: "CONFIG_TRUST_PROXY_REQUIRED" },
+    );
+  }
   githubWebOrigin();
   githubApiOrigin();
   configuredLogLevel();

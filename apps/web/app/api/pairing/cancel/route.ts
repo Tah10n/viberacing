@@ -1,7 +1,7 @@
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
-import { transaction } from "@/lib/db";
+import { query, transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface CancelBody {
@@ -23,12 +23,15 @@ function rateLimited(): Response {
 }
 
 async function post(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("pairing_cancel_global", "all", 10_000, 60))) {
-    return rateLimited();
-  }
   const address = clientAddress(request);
-  const addressLimit = address === "untrusted-forwarding-headers" ? 10_000 : 120;
-  if (!(await consumeRateLimit("pairing_cancel_pre_auth", address, addressLimit, 60))) {
+  if (
+    !(await consumeRateLimit(
+      "pairing_cancel_pre_auth",
+      address.key,
+      clientAdmissionLimit(address, 120, 10_000, 20),
+      60,
+    ))
+  ) {
     return rateLimited();
   }
   try {
@@ -49,6 +52,19 @@ async function post(request: Request): Promise<Response> {
       installationId,
       pollToken,
     };
+    const authenticated = await query<{ id: string }>(
+      `SELECT id::text FROM installations
+        WHERE id = $1 AND poll_token_hash = $2 LIMIT 1`,
+      [body.installationId, digest(body.pollToken)],
+    );
+    const installation = authenticated[0];
+    if (installation === undefined) return new Response(null, { status: 204 });
+    if (!(await consumeRateLimit("pairing_cancel", installation.id, 20, 60))) {
+      return rateLimited();
+    }
+    if (!(await consumeRateLimit("pairing_cancel_global", "all", 10_000, 60))) {
+      return rateLimited();
+    }
     await transaction(async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
         body.installationId,

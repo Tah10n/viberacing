@@ -11,6 +11,10 @@
   `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Set
   `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of
   `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch.
+- For public self-hosting, use `VIBERACING_TRUST_PROXY=trusted-x-real-ip` only behind a reverse
+  proxy that strips the incoming `X-Real-IP` and overwrites it with the observed client address. Do
+  not forward or trust arbitrary `X-Forwarded-For` chains. Public production startup must fail when
+  the mode is `none`; retain `none` only for loopback preview and tests.
 - Never set `VIBERACING_ALLOW_INSECURE_LOCAL` in Railway. It is a loopback-only local-preview flag.
 - Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports the latest
   required migration. Insert a synthetic later ledger row and confirm readiness remains healthy;
@@ -30,6 +34,9 @@
   `corepack pnpm connector:package:check`.
 - Confirm the production image runs as `node`, readiness succeeds, OAuth/pairing works, and an old
   device token fails after reconnect.
+- Confirm startup rejects a public production origin with `VIBERACING_TRUST_PROXY=none`, while the
+  documented loopback preview still starts. Send malformed and missing `X-Real-IP` through a trusted
+  mode and confirm both remain in a bounded fail-closed admission bucket.
 - Confirm the connector matrix passes on Linux, macOS, and Windows using `VIBERACING_STATE_DIR`, and
   that the production job reaches migration, integration, audit, package, image, non-root, and
   readiness stages.

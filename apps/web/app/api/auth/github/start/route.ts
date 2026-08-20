@@ -2,15 +2,19 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { githubWebOrigin, publicOrigin, requiredEnv, secureCookies } from "@/lib/config";
 import { randomToken } from "@/lib/crypto";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 import { safeReturnPath } from "../return-path";
 
 async function get(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
-    address !== "untrusted-forwarding-headers" &&
-    !(await consumeRateLimit("oauth_start", address, 20, 60))
+    !(await consumeRateLimit(
+      "oauth_start",
+      address.key,
+      clientAdmissionLimit(address, 20, 2_000, 5),
+      60,
+    ))
   ) {
     return Response.json(
       { error: "rate_limited" },

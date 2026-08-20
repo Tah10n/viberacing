@@ -11,7 +11,7 @@ import {
   problem,
   readBoundedJson,
 } from "@/lib/http";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface StartBody {
@@ -105,15 +105,15 @@ function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>
 }
 
 async function post(request: Request): Promise<Response> {
-  if (!(await consumeRateLimit("pairing_start_global", "all", 2_000, 60))) {
-    return Response.json(
-      { error: "rate_limited" },
-      { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-    );
-  }
   const address = clientAddress(request);
-  const addressLimit = address === "untrusted-forwarding-headers" ? 2_000 : 6;
-  if (!(await consumeRateLimit("pairing_start", address, addressLimit, 60))) {
+  if (
+    !(await consumeRateLimit(
+      "pairing_start",
+      address.key,
+      clientAdmissionLimit(address, 6, 2_000, 3),
+      60,
+    ))
+  ) {
     return Response.json(
       { error: "rate_limited" },
       { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -151,6 +151,12 @@ async function post(request: Request): Promise<Response> {
     const connectorVersion = body.connectorVersion as string;
     const installationRateKey = `${installationId}\0${digest(installationSecret).toString("hex")}`;
     if (!(await consumeRateLimit("pairing_installation", installationRateKey, 10, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
+    if (!(await consumeRateLimit("pairing_start_global", "all", 2_000, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },

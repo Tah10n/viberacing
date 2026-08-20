@@ -23,6 +23,8 @@ services:
       DATABASE_URL: postgresql://viberacing:viberacing@db:5432/viberacing
       VIBERACING_DATABASE_SSL: "false"
       VIBERACING_ALLOW_INSECURE_LOCAL: "true"
+      # Direct local traffic has no header-overwriting edge; trusted modes are tested separately.
+      VIBERACING_TRUST_PROXY: none
     env_file:
       - apps/web/.env.local
     depends_on:

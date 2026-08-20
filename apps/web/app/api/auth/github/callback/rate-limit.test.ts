@@ -26,7 +26,11 @@ vi.mock("@/lib/config", () => ({
   requiredEnv: () => "synthetic",
 }));
 vi.mock("@/lib/rate-limit", () => ({
-  clientAddress: (request: Request) => request.headers.get("x-real-ip") ?? "unknown",
+  clientAddress: (request: Request) => ({
+    trusted: true,
+    key: request.headers.get("x-real-ip") ?? "unknown",
+  }),
+  clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
   consumeRateLimit: consumeRateLimitMock,
 }));
 vi.mock("@/lib/db", () => ({ transaction: transactionMock }));

@@ -27,10 +27,13 @@
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
 
-   `VIBERACING_TRUST_PROXY=railway` is specific to Railway's edge, which overwrites `X-Real-IP`.
-   Keep the default `none` for direct traffic and do not enable this mode behind an untrusted or
-   pass-through proxy. Self-hosted deployments need an equivalent trusted edge before a future proxy
-   mode can be added.
+   `VIBERACING_TRUST_PROXY=railway` is specific to Railway's edge, which overwrites `X-Real-IP`. A
+   public self-hosted deployment must instead set `VIBERACING_TRUST_PROXY=trusted-x-real-ip` and run
+   behind a reverse proxy that removes any client-supplied `X-Real-IP` and sets exactly one value
+   from the network peer it observed. Never enable either mode behind an untrusted or pass-through
+   proxy. `none` ignores forwarding headers and is accepted only for loopback/local preview and
+   tests; startup rejects it for a public production origin. Arbitrary `X-Forwarded-For` chains are
+   not supported.
 
    Keep `VIBERACING_MAX_DAILY_TOKENS` quoted in YAML-based deployment definitions. Exponential
    notation, surrounding whitespace, leading zeroes, and fractional values are rejected so token
@@ -48,10 +51,11 @@ pending aggregates and collect only dirty sources. Manual sync and first connect
 sources immediately. Deployments should not describe the ranking as real-time.
 
 Production startup validates all required variables. The service refuses non-HTTPS remote origins, a
-missing latest required migration/table, or missing PostgreSQL connectivity; additional later
-migration ledger rows are valid. See the [production checklist](PRODUCTION_CHECKLIST.md) for
-backups, repository controls, and npm setup. See [production observability](OBSERVABILITY.md) for
-structured Railway log fields, incident filtering, levels, and the enforced privacy boundary.
+public origin without Railway or a trusted `X-Real-IP`-overwriting reverse proxy, a missing latest
+required migration/table, or missing PostgreSQL connectivity; additional later migration ledger rows
+are valid. See the [production checklist](PRODUCTION_CHECKLIST.md) for backups, repository controls,
+and npm setup. See [production observability](OBSERVABILITY.md) for structured Railway log fields,
+incident filtering, levels, and the enforced privacy boundary.
 
 ## Connector publication
 

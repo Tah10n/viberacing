@@ -15,7 +15,7 @@ import {
 import { viewer } from "@/lib/session";
 import { rebuildAgentSummaries } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 
 interface InstallationRow {
   id: string;
@@ -67,8 +67,12 @@ async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
   const address = clientAddress(request);
   if (
-    address !== "untrusted-forwarding-headers" &&
-    !(await consumeRateLimit("pairing_approve_pre_auth", address, 60, 60))
+    !(await consumeRateLimit(
+      "pairing_approve_pre_auth",
+      address.key,
+      clientAdmissionLimit(address, 60, 2_000, 10),
+      60,
+    ))
   ) {
     return Response.json(
       { error: "rate_limited" },

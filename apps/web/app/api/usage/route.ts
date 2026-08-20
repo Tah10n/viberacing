@@ -4,7 +4,7 @@ import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { refreshAgentWeek } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
 
@@ -268,15 +268,15 @@ async function post(request: Request): Promise<Response> {
   const token = authorization.slice(7);
   if (token.length < 32 || token.length > 128) return problem(401, "unauthorized");
   try {
-    if (!(await consumeRateLimit("usage_global", "all", 10_000, 60))) {
-      return Response.json(
-        { error: "rate_limited" },
-        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
-      );
-    }
     const address = clientAddress(request);
-    const addressLimit = address === "untrusted-forwarding-headers" ? 10_000 : 120;
-    if (!(await consumeRateLimit("usage_pre_auth", address, addressLimit, 60))) {
+    if (
+      !(await consumeRateLimit(
+        "usage_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 120, 10_000, 20),
+        60,
+      ))
+    ) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
@@ -298,6 +298,12 @@ async function post(request: Request): Promise<Response> {
       );
     }
     if (!(await consumeRateLimit("usage_sync_user", installation.user_id, 120, 60))) {
+      return Response.json(
+        { error: "rate_limited" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
+      );
+    }
+    if (!(await consumeRateLimit("usage_global", "all", 10_000, 60))) {
       return Response.json(
         { error: "rate_limited" },
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
