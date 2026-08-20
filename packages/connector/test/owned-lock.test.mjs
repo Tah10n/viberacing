@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { acquireOwnedLock, releaseOwnedLock } from "../lib/owned-lock.mjs";
@@ -39,8 +39,26 @@ test("owned locks preserve live owners and recover dead or old malformed owners"
   assert.deepEqual(await childExit, [0, null]);
 
   await writeFile(path, `${childPid}:11111111-1111-4111-8111-111111111111\n`);
+  let recoveryObserved;
+  const recoveryObservedPromise = new Promise((resolve) => {
+    recoveryObserved = resolve;
+  });
+  let continueRecovery;
+  const continueRecoveryPromise = new Promise((resolve) => {
+    continueRecovery = resolve;
+  });
+  const staleContender = acquireOwnedLock(path, {
+    onRecoveryCandidate: async () => {
+      recoveryObserved();
+      await continueRecoveryPromise;
+    },
+  });
+  await recoveryObservedPromise;
   const recoveredDead = await acquireOwnedLock(path);
   assert.ok(recoveredDead);
+  continueRecovery();
+  assert.equal(await staleContender, null);
+  assert.equal(await readFile(path, "utf8"), recoveredDead.owner);
   await releaseOwnedLock(recoveredDead);
 
   await writeFile(path, "malformed\n");
@@ -69,5 +87,27 @@ test("release requires the exact owner and callbacks can release after failure",
   } finally {
     assert.equal(await releaseOwnedLock(final), true);
   }
+  await assert.rejects(stat(path), { code: "ENOENT" });
+});
+
+test("an initial owner-write failure removes the exclusively created malformed lock", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-write-failure-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "state.lock");
+
+  await assert.rejects(
+    acquireOwnedLock(path, {
+      openFile: async (...arguments_) => {
+        const handle = await open(...arguments_);
+        return {
+          close: () => handle.close(),
+          writeFile: async () => {
+            throw new Error("injected owner write failure");
+          },
+        };
+      },
+    }),
+    /injected owner write failure/,
+  );
   await assert.rejects(stat(path), { code: "ENOENT" });
 });

@@ -23,8 +23,6 @@ protocol or shared user-experience change must be documented with the connector 
    limitations.
 9. Verify the tag and release point at the intended commit.
 
-Publish the connector through npm trusted publishing with provenance after running
+If the connector is later published to npm, use npm trusted publishing with provenance and run
 `corepack pnpm connector:package:check`. The command invokes `npm pack --dry-run` against
-`packages/connector`, the same package root and validation used by CI. Production documentation and
-the dashboard must use `@viberacing/connector@<exact-version>`; hosted tarballs remain limited to
-local preview and CI. Publication is a deliberate operator step after the reviewed tag exists.
+`packages/connector`, the same package root and validation used by CI.

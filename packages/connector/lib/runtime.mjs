@@ -420,11 +420,8 @@ export async function writeState(value) {
   await atomicJson(statePath, value);
 }
 
-export async function lifecycleMutationActive() {
-  if (await ownedLockActive(lifecycleMarkerPath)) return true;
-  const owner = await readFile(lifecycleMarkerPath, "utf8").catch(() => null);
-  if (owner) await releaseOwnedLock({ path: lifecycleMarkerPath, owner });
-  return false;
+export function lifecycleMutationActive(activeCheck = ownedLockActive) {
+  return activeCheck(lifecycleMarkerPath);
 }
 
 export async function withSyncLock(callback, options = {}) {
@@ -447,20 +444,17 @@ export async function withLifecycleMutation(callback, options = {}) {
   const waitMs = options.waitMs ?? 60_000;
   const lifecycleLock = await acquireRuntimeOwnedLock(lifecycleLockPath, { waitMs });
   if (!lifecycleLock) throw new Error("Timed out waiting for another lifecycle operation");
-  let markerWritten = false;
+  let markerLock;
   try {
-    await withConnectionStateLock(() =>
-      writeFile(lifecycleMarkerPath, lifecycleLock.owner, { mode: 0o600 }),
+    markerLock = await withConnectionStateLock(() =>
+      acquireRuntimeOwnedLock(lifecycleMarkerPath, { waitMs }),
     );
-    markerWritten = true;
+    if (!markerLock) throw new Error("Timed out waiting for a lifecycle marker");
     const result = await withSyncLock(callback, { waitMs, allowDuringLifecycle: true });
     if (result?.skipped) throw new Error("Timed out waiting for active sync to finish");
     return result;
   } finally {
-    if (markerWritten) {
-      const markerOwner = await readFile(lifecycleMarkerPath, "utf8").catch(() => null);
-      if (markerOwner === lifecycleLock.owner) await unlink(lifecycleMarkerPath).catch(() => {});
-    }
+    await releaseOwnedLock(markerLock);
     await releaseOwnedLock(lifecycleLock);
   }
 }

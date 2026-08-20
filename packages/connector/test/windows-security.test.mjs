@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { promisify } from "node:util";
@@ -28,7 +28,10 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_TARGET/);
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
   assert.match(decoded, /ReparsePoint/);
-  assert.match(decoded, /Get-ChildItem -LiteralPath \$path -Force -Recurse/);
+  assert.match(decoded, /foreach \(\$entry in \$items\)/);
+  assert.match(decoded, /Security\.AccessControl\.FileSecurity/);
+  assert.match(decoded, /\[IO\.File\]::SetAccessControl/);
+  assert.match(decoded, /\[IO\.File\]::GetAccessControl/);
   assert.doesNotMatch(decoded, /C:\\Users\\racer|\.viberacing/);
   assert.equal(
     calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_TARGET,
@@ -101,7 +104,46 @@ test(
   async (context) => {
     const root = await mkdtemp(join(tmpdir(), "viberacing-windows-acl-"));
     const directory = join(root, "state & literal ' path");
+    const nested = join(directory, "existing");
+    const existingCapability = join(nested, "config.json");
     context.after(() => rm(root, { force: true, recursive: true }));
+
+    await mkdir(nested, { recursive: true });
+    await writeFile(existingCapability, '{"deviceToken":"synthetic"}\n');
+    const permissiveScript = [
+      "$ErrorActionPreference='Stop'",
+      "$path=$env:VIBERACING_WINDOWS_STATE_ACL_TARGET",
+      "$identity=[Security.Principal.WindowsIdentity]::GetCurrent().User",
+      "$users=New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')",
+      "$acl=New-Object Security.AccessControl.FileSecurity",
+      "$acl.SetOwner($identity)",
+      "$acl.SetAccessRuleProtection($true,$false)",
+      "[void]$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($identity,'FullControl','Allow')))",
+      "[void]$acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($users,'ReadAndExecute','Allow')))",
+      "[IO.File]::SetAccessControl($path,$acl)",
+    ].join("; ");
+    const powershell = win32.join(
+      process.env.SystemRoot,
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    await execFileAsync(
+      powershell,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-EncodedCommand",
+        Buffer.from(permissiveScript, "utf16le").toString("base64"),
+      ],
+      {
+        env: { ...process.env, VIBERACING_WINDOWS_STATE_ACL_TARGET: existingCapability },
+        windowsHide: true,
+        timeout: 15_000,
+      },
+    );
 
     const previousStateDirectory = process.env.VIBERACING_STATE_DIR;
     process.env.VIBERACING_STATE_DIR = directory;
@@ -132,13 +174,6 @@ test(
       "$rules=@($acl.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier]))",
       "[PSCustomObject]@{ Protected=$acl.AreAccessRulesProtected; Owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value; Current=$identity; RuleCount=$rules.Count; RuleIdentity=$rules[0].IdentityReference.Value; RuleType=$rules[0].AccessControlType.ToString(); Rights=$rules[0].FileSystemRights.ToString() } | ConvertTo-Json -Compress",
     ].join("; ");
-    const powershell = win32.join(
-      process.env.SystemRoot,
-      "System32",
-      "WindowsPowerShell",
-      "v1.0",
-      "powershell.exe",
-    );
     const result = await execFileAsync(
       powershell,
       [
@@ -161,5 +196,34 @@ test(
     assert.equal(acl.RuleIdentity, acl.Current);
     assert.equal(acl.RuleType, "Allow");
     assert.match(acl.Rights, /FullControl/);
+
+    const fileResult = await execFileAsync(
+      powershell,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-EncodedCommand",
+        Buffer.from(
+          script.replace(
+            "$acl=[IO.Directory]::GetAccessControl($path)",
+            "$acl=[IO.File]::GetAccessControl($path)",
+          ),
+          "utf16le",
+        ).toString("base64"),
+      ],
+      {
+        env: { ...process.env, VIBERACING_WINDOWS_STATE_ACL_TARGET: existingCapability },
+        windowsHide: true,
+        timeout: 15_000,
+      },
+    );
+    const fileAcl = JSON.parse(fileResult.stdout.trim());
+    assert.equal(fileAcl.Protected, true);
+    assert.equal(fileAcl.Owner, fileAcl.Current);
+    assert.equal(fileAcl.RuleCount, 1);
+    assert.equal(fileAcl.RuleIdentity, fileAcl.Current);
+    assert.equal(fileAcl.RuleType, "Allow");
+    assert.match(fileAcl.Rights, /FullControl/);
   },
 );

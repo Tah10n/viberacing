@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -83,3 +83,53 @@ test("hook argument encoders reject control bytes and preserve shell metacharact
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test(
+  "Windows cmd.exe executes generated hook arguments literally",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const root = await mkdtemp(join(tmpdir(), "viberacing-windows-hook-"));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const state = join(root, "state %VIBERACING_HOOK_INJECT% ! ^ & (literal)");
+    const script = join(state, "runtime", "literal hook.mjs");
+    const output = join(root, "argv.json");
+    const marker = join(root, "injected-marker");
+    await mkdir(join(state, "runtime"), { recursive: true });
+    await writeFile(
+      script,
+      `import { writeFile } from "node:fs/promises"; await writeFile(process.env.VIBERACING_HOOK_ARGV_OUTPUT, JSON.stringify(process.argv.slice(2)));\n`,
+    );
+
+    const config = await import(
+      `../lib/config.mjs?windows-hook-execution=${encodeURIComponent(root)}`
+    );
+    const source = {
+      clientSourceId: "45454545-4545-4454-8454-454545454545",
+      agentId: "codex",
+    };
+    const command = config.hookCommandForPlatform(script, source, "win32");
+    const commandShell =
+      process.env.ComSpec ??
+      process.env.COMSPEC ??
+      win32.join(process.env.SystemRoot, "System32", "cmd.exe");
+    await execFileAsync(commandShell, ["/d", "/s", "/c", command], {
+      env: {
+        ...process.env,
+        VIBERACING_HOOK_ARGV_OUTPUT: output,
+        VIBERACING_HOOK_INJECT: `& type nul > "${marker}" &`,
+      },
+      windowsHide: true,
+      windowsVerbatimArguments: true,
+    });
+
+    assert.deepEqual(JSON.parse(await readFile(output, "utf8")), [
+      "hook",
+      "--source",
+      source.clientSourceId,
+      "--agent",
+      source.agentId,
+      `--viberacing-hook-id=viberacing-hook-v3:${source.clientSourceId}`,
+    ]);
+    await assert.rejects(access(marker), { code: "ENOENT" });
+  },
+);

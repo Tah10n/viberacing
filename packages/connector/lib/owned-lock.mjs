@@ -34,18 +34,23 @@ export async function acquireOwnedLock(path, options = {}) {
   const owner = `${process.pid}:${ownershipToken}\n`;
   const deadline = Date.now() + (options.waitMs ?? 0);
   const staleMs = options.staleMs ?? 10 * 60_000;
+  const openFile = options.openFile ?? open;
+  const unlinkFile = options.unlinkFile ?? unlink;
   for (;;) {
     let handle;
     let created = false;
     try {
-      handle = await open(path, "wx", 0o600);
+      handle = await openFile(path, "wx", 0o600);
       created = true;
       await handle.writeFile(owner);
       await handle.close();
       return { path, owner, ownershipToken };
     } catch (error) {
       await handle?.close().catch(() => {});
-      if (created) await releaseOwnedLock({ path, owner, ownershipToken }).catch(() => {});
+      if (created)
+        await unlinkFile(path).catch((unlinkError) => {
+          if (unlinkError?.code !== "ENOENT") throw unlinkError;
+        });
       if (error?.code !== "EEXIST") throw error;
       const info = await stat(path).catch(() => null);
       const state = info ? await lockOwnerState(path) : null;
@@ -53,12 +58,47 @@ export async function acquireOwnedLock(path, options = {}) {
         state?.kind === "dead" ||
         (state?.kind === "malformed" && Date.now() - info.mtimeMs > staleMs)
       ) {
-        const stalePath = `${path}.stale.${ownershipToken}`;
+        await options.onRecoveryCandidate?.();
+        const recoveryPath = `${path}.recovery`;
+        const recoveryToken = randomUUID();
+        const recoveryOwner = `${process.pid}:${recoveryToken}\n`;
+        let recoveryHandle;
+        let recoveryCreated = false;
         try {
-          await rename(path, stalePath);
-          await unlink(stalePath).catch(() => {});
-        } catch (renameError) {
-          if (renameError?.code !== "ENOENT") throw renameError;
+          recoveryHandle = await openFile(recoveryPath, "wx", 0o600);
+          recoveryCreated = true;
+          await recoveryHandle.writeFile(recoveryOwner);
+          await recoveryHandle.close();
+        } catch (recoveryError) {
+          await recoveryHandle?.close().catch(() => {});
+          if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
+          if (recoveryError?.code !== "EEXIST") throw recoveryError;
+          if (Date.now() >= deadline) return null;
+          await delay(25);
+          continue;
+        }
+        const recoveryLock = {
+          path: recoveryPath,
+          owner: recoveryOwner,
+          ownershipToken: recoveryToken,
+        };
+        try {
+          const currentInfo = await stat(path).catch(() => null);
+          const currentState = currentInfo ? await lockOwnerState(path) : null;
+          if (
+            currentState?.kind === "dead" ||
+            (currentState?.kind === "malformed" && Date.now() - currentInfo.mtimeMs > staleMs)
+          ) {
+            const stalePath = `${path}.stale.${ownershipToken}`;
+            try {
+              await rename(path, stalePath);
+              await unlinkFile(stalePath).catch(() => {});
+            } catch (renameError) {
+              if (renameError?.code !== "ENOENT") throw renameError;
+            }
+          }
+        } finally {
+          await releaseOwnedLock(recoveryLock);
         }
         continue;
       }
