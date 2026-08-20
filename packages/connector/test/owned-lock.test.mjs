@@ -90,6 +90,27 @@ test("release requires the exact owner and callbacks can release after failure",
   await assert.rejects(stat(path), { code: "ENOENT" });
 });
 
+test("an EEXIST race retries when the competing lock disappears before inspection", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-lock-race-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "state.lock");
+  let attempts = 0;
+  const racedOpen = async (...arguments_) => {
+    attempts += 1;
+    if (attempts === 1) {
+      const error = new Error("injected disappearing lock race");
+      error.code = "EEXIST";
+      throw error;
+    }
+    return open(...arguments_);
+  };
+
+  const lock = await acquireOwnedLock(path, { waitMs: 1_000, openFile: racedOpen });
+  assert.ok(lock);
+  assert.equal(attempts, 2);
+  assert.equal(await releaseOwnedLock(lock), true);
+});
+
 test(
   "Windows access errors on an existing lock remain bounded contention",
   { skip: process.platform !== "win32" },

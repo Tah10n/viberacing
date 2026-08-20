@@ -31,9 +31,8 @@ export async function ownedLockActive(path, staleMs = 10 * 60_000) {
 
 function existingLockContention(error, info) {
   return (
-    info !== null &&
-    (error?.code === "EEXIST" ||
-      (process.platform === "win32" && ["EACCES", "EPERM"].includes(error?.code)))
+    error?.code === "EEXIST" ||
+    (info !== null && process.platform === "win32" && ["EACCES", "EPERM"].includes(error?.code))
   );
 }
 
