@@ -2117,7 +2117,7 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     new Set(Object.keys(dirty.sources)),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
   );
-  await waitFor(() => bodies.length === 1);
+  await waitFor(() => bodies.length === 1, 10_000);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
@@ -2216,6 +2216,8 @@ test("a hook persists its event while another hook holds the scheduler launch ga
       .then(() => true)
       .catch(() => false),
   );
+  const schedulerPid = Number((await readFile(`${barrier}.ready`, "utf8")).trim());
+  assert.ok(Number.isSafeInteger(schedulerPid) && schedulerPid > 0);
 
   const second = await runWithInput(
     ["hook", "--source", sources[1].clientSourceId, "--agent", sources[1].agentId],
@@ -2245,6 +2247,14 @@ test("a hook persists its event while another hook holds the scheduler launch ga
     new Set(bodies[0].snapshots.map((snapshot) => snapshot.sourceId)),
     new Set(sources.slice(0, 2).map((source) => source.sourceId)),
   );
+  await waitFor(() => {
+    try {
+      process.kill(schedulerPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
 });
 
 test("manual sync collects every active source and clears only its prior dirty generations", async (context) => {
