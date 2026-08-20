@@ -90,7 +90,7 @@ test("release requires the exact owner and callbacks can release after failure",
   await assert.rejects(stat(path), { code: "ENOENT" });
 });
 
-test("an EEXIST race retries when the competing lock disappears before inspection", async (context) => {
+test("a nonblocking EEXIST race retries once when the competing lock disappears", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-lock-race-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const path = join(directory, "state.lock");
@@ -105,10 +105,49 @@ test("an EEXIST race retries when the competing lock disappears before inspectio
     return open(...arguments_);
   };
 
-  const lock = await acquireOwnedLock(path, { waitMs: 1_000, openFile: racedOpen });
+  const lock = await acquireOwnedLock(path, { openFile: racedOpen });
   assert.ok(lock);
   assert.equal(attempts, 2);
   assert.equal(await releaseOwnedLock(lock), true);
+
+  let persistentAttempts = 0;
+  const persistentRace = await acquireOwnedLock(path, {
+    openFile: async () => {
+      persistentAttempts += 1;
+      const error = new Error("injected persistent disappearing lock race");
+      error.code = "EEXIST";
+      throw error;
+    },
+  });
+  assert.equal(persistentRace, null);
+  assert.equal(persistentAttempts, 2);
+});
+
+test("stale recovery retries a disappearing nonblocking recovery guard", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-recovery-race-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "state.lock");
+  await writeFile(path, "99999999:33333333-3333-4333-8333-333333333333\n");
+  let recoveryAttempts = 0;
+
+  const lock = await acquireOwnedLock(path, {
+    openFile: async (...arguments_) => {
+      if (arguments_[0] === `${path}.recovery`) {
+        recoveryAttempts += 1;
+        if (recoveryAttempts === 1) {
+          const error = new Error("injected disappearing recovery guard race");
+          error.code = "EEXIST";
+          throw error;
+        }
+      }
+      return open(...arguments_);
+    },
+  });
+
+  assert.ok(lock);
+  assert.equal(recoveryAttempts, 2);
+  assert.equal(await releaseOwnedLock(lock), true);
+  assert.deepEqual(await readdir(directory), []);
 });
 
 test(

@@ -43,6 +43,7 @@ export async function acquireOwnedLock(path, options = {}) {
   const staleMs = options.staleMs ?? 10 * 60_000;
   const openFile = options.openFile ?? open;
   const unlinkFile = options.unlinkFile ?? unlink;
+  let missingContentionRetryAvailable = true;
   for (;;) {
     let handle;
     let created = false;
@@ -60,6 +61,10 @@ export async function acquireOwnedLock(path, options = {}) {
         });
       const info = await stat(path).catch(() => null);
       if (!existingLockContention(error, info)) throw error;
+      if (error?.code === "EEXIST" && info === null && missingContentionRetryAvailable) {
+        missingContentionRetryAvailable = false;
+        continue;
+      }
       const state = info ? await lockOwnerState(path) : null;
       if (
         state?.kind === "dead" ||
@@ -70,6 +75,7 @@ export async function acquireOwnedLock(path, options = {}) {
         const recoveryToken = randomUUID();
         const recoveryOwner = `${process.pid}:${recoveryToken}\n`;
         let recoveryAcquired = false;
+        let missingRecoveryContentionRetryAvailable = true;
         while (!recoveryAcquired) {
           let recoveryHandle;
           let recoveryCreated = false;
@@ -84,6 +90,14 @@ export async function acquireOwnedLock(path, options = {}) {
             if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
             const recoveryInfo = await stat(recoveryPath).catch(() => null);
             if (!existingLockContention(recoveryError, recoveryInfo)) throw recoveryError;
+            if (
+              recoveryError?.code === "EEXIST" &&
+              recoveryInfo === null &&
+              missingRecoveryContentionRetryAvailable
+            ) {
+              missingRecoveryContentionRetryAvailable = false;
+              continue;
+            }
             const recoveryState = recoveryInfo ? await lockOwnerState(recoveryPath) : null;
             if (
               recoveryState?.kind === "dead" ||
