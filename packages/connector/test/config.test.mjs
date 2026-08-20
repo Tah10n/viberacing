@@ -2205,6 +2205,7 @@ test("a hook persists its event while another hook holds the scheduler launch ga
     [connectorPath, "hook", "--source", sources[0].clientSourceId, "--agent", sources[0].agentId],
     { env: environment, stdio: ["pipe", "pipe", "pipe"] },
   );
+  const firstClose = once(first, "close");
   context.after(() => first.kill("SIGKILL"));
   let firstStdout = "";
   let firstStderr = "";
@@ -2236,7 +2237,7 @@ test("a hook persists its event while another hook holds the scheduler launch ga
   );
 
   await writeFile(`${barrier}.continue`, "continue\n");
-  const [firstCode] = await once(first, "close");
+  const [firstCode] = await firstClose;
   assert.equal(firstCode, 0);
   assert.equal(firstStdout, "");
   assert.equal(firstStderr, "");
