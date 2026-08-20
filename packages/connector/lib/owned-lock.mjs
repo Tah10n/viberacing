@@ -29,6 +29,14 @@ export async function ownedLockActive(path, staleMs = 10 * 60_000) {
   return state.kind !== "dead" && Date.now() - info.mtimeMs <= staleMs;
 }
 
+function existingLockContention(error, info) {
+  return (
+    info !== null &&
+    (error?.code === "EEXIST" ||
+      (process.platform === "win32" && ["EACCES", "EPERM"].includes(error?.code)))
+  );
+}
+
 export async function acquireOwnedLock(path, options = {}) {
   const ownershipToken = randomUUID();
   const owner = `${process.pid}:${ownershipToken}\n`;
@@ -51,8 +59,8 @@ export async function acquireOwnedLock(path, options = {}) {
         await unlinkFile(path).catch((unlinkError) => {
           if (unlinkError?.code !== "ENOENT") throw unlinkError;
         });
-      if (error?.code !== "EEXIST") throw error;
       const info = await stat(path).catch(() => null);
+      if (!existingLockContention(error, info)) throw error;
       const state = info ? await lockOwnerState(path) : null;
       if (
         state?.kind === "dead" ||
@@ -75,8 +83,8 @@ export async function acquireOwnedLock(path, options = {}) {
           } catch (recoveryError) {
             await recoveryHandle?.close().catch(() => {});
             if (recoveryCreated) await unlinkFile(recoveryPath).catch(() => {});
-            if (recoveryError?.code !== "EEXIST") throw recoveryError;
             const recoveryInfo = await stat(recoveryPath).catch(() => null);
+            if (!existingLockContention(recoveryError, recoveryInfo)) throw recoveryError;
             const recoveryState = recoveryInfo ? await lockOwnerState(recoveryPath) : null;
             if (
               recoveryState?.kind === "dead" ||

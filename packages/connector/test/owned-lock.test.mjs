@@ -90,6 +90,27 @@ test("release requires the exact owner and callbacks can release after failure",
   await assert.rejects(stat(path), { code: "ENOENT" });
 });
 
+test(
+  "Windows access errors on an existing lock remain bounded contention",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-windows-contention-"));
+    context.after(() => rm(directory, { recursive: true, force: true }));
+    const path = join(directory, "state.lock");
+    await writeFile(path, `${process.pid}:11111111-1111-4111-8111-111111111111\n`);
+
+    const deniedOpen = async () => {
+      const error = new Error("injected Windows sharing violation");
+      error.code = "EPERM";
+      throw error;
+    };
+    assert.equal(await acquireOwnedLock(path, { openFile: deniedOpen }), null);
+
+    await rm(path);
+    await assert.rejects(acquireOwnedLock(path, { openFile: deniedOpen }), { code: "EPERM" });
+  },
+);
+
 test("an initial owner-write failure removes the exclusively created malformed lock", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-owned-write-failure-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
