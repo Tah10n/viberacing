@@ -2097,12 +2097,26 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
-  for (const source of sources.slice(0, 2))
-    await runWithInput(
-      ["hook", "--source", source.clientSourceId, "--agent", source.agentId],
-      environment,
-      "{}",
-    );
+  const hookResults = await Promise.all(
+    sources
+      .slice(0, 2)
+      .map((source) =>
+        runWithInput(
+          ["hook", "--source", source.clientSourceId, "--agent", source.agentId],
+          environment,
+          "{}",
+        ),
+      ),
+  );
+  assert.deepEqual(
+    hookResults.map((result) => result.code),
+    [0, 0],
+  );
+  const dirty = JSON.parse(await readFile(join(directory, "dirty.json"), "utf8"));
+  assert.deepEqual(
+    new Set(Object.keys(dirty.sources)),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
   await waitFor(() => bodies.length === 1);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
@@ -2120,6 +2134,117 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
       return true;
     }
   });
+});
+
+test("a hook persists its event while another hook holds the scheduler launch gate", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-hook-busy-launch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const fixtureRoot = fileURLToPath(new URL("fixtures", import.meta.url));
+  const sources = [
+    {
+      clientSourceId: "70707070-7070-4070-8070-707070707070",
+      sourceId: "77777777-7070-4070-8070-707070707070",
+      agentId: "claude_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "claude_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Claude",
+    },
+    {
+      clientSourceId: "80808080-8080-4080-8080-808080808080",
+      sourceId: "88888888-8080-4080-8080-808080808080",
+      agentId: "kimi_code",
+      dataPath: fixtureRoot,
+      collectionMethod: "kimi_wire_jsonl",
+      supportedSurface: "cli",
+      suggestedLabel: "Kimi",
+    },
+    {
+      clientSourceId: "90909090-9090-4090-8090-909090909090",
+      sourceId: "99999999-9090-4090-8090-909090909090",
+      agentId: "opencode",
+      dataPath: join(home, "must-not-open.db"),
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+    },
+  ];
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+  const barrier = join(home, "scheduler-claim");
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "25,150,100",
+  });
+  const first = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", sources[0].clientSourceId, "--agent", sources[0].agentId],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  context.after(() => first.kill("SIGKILL"));
+  let firstStdout = "";
+  let firstStderr = "";
+  first.stdout.setEncoding("utf8").on("data", (chunk) => (firstStdout += chunk));
+  first.stderr.setEncoding("utf8").on("data", (chunk) => (firstStderr += chunk));
+  first.stdin.end("{}\n");
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+
+  const second = await runWithInput(
+    ["hook", "--source", sources[1].clientSourceId, "--agent", sources[1].agentId],
+    environment,
+    "{}",
+  );
+  assert.equal(second.code, 0);
+  assert.equal(second.stdout, "");
+  assert.equal(second.stderr, "");
+  const dirty = JSON.parse(await readFile(join(directory, "dirty.json"), "utf8"));
+  assert.deepEqual(
+    new Set(Object.keys(dirty.sources)),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  const [firstCode] = await once(first, "close");
+  assert.equal(firstCode, 0);
+  assert.equal(firstStdout, "");
+  assert.equal(firstStderr, "");
+  await waitFor(() => bodies.length === 1);
+  assert.deepEqual(
+    new Set((await readFile(trace, "utf8")).trim().split("\n")),
+    new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
+  );
+  assert.deepEqual(
+    new Set(bodies[0].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set(sources.slice(0, 2).map((source) => source.sourceId)),
+  );
 });
 
 test("manual sync collects every active source and clears only its prior dirty generations", async (context) => {
@@ -5444,6 +5569,110 @@ test(
     assert.match(capture, /safe-session/);
     assert.doesNotMatch(capture, /prompt|response|synthetic private/);
     await execFileAsync(process.execPath, [connectorPath, "disconnect"], { env: environment });
+  },
+);
+
+test(
+  "Antigravity wrapper waits for a busy launch gate before persisting capture and dirty state",
+  { skip: process.platform === "win32" },
+  async (context) => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-wrapper-busy-launch-"));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9", {
+      eventId: "initial-capture",
+    });
+    const bin = join(home, "bin");
+    await mkdir(bin, { recursive: true });
+    const executable = join(bin, "agy");
+    await writeFile(
+      executable,
+      `#!/usr/bin/env node
+process.stdout.write(JSON.stringify({type:"result",session_id:"gate-wait-record",timestamp:new Date().toISOString(),usage:{input_tokens:4,output_tokens:5}})+"\\n");
+`,
+    );
+    await chmod(executable, 0o700);
+
+    const holderBarrier = join(home, "launch-holder");
+    const wrapperReady = join(home, "wrapper-capture-ready");
+    const schedulerTrace = join(home, "scheduler-trace.log");
+    const environment = connectorEnvironment(home, {
+      NODE_ENV: "test",
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      VIBERACING_TEST_WRAPPER_CAPTURE_READY: wrapperReady,
+      VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
+      VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5000,5000,5000",
+    });
+    const runtimeUrl = pathToFileURL(
+      fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url)),
+    ).href;
+    const holderScript = `
+      import { readFile, writeFile } from "node:fs/promises";
+      import { setTimeout as delay } from "node:timers/promises";
+      import { claimSchedulerLaunch, releaseSchedulerLaunch } from ${JSON.stringify(runtimeUrl)};
+      const gate = await claimSchedulerLaunch({ waitMs: 0 });
+      if (!gate) throw new Error("launch gate unavailable");
+      await writeFile(${JSON.stringify(`${holderBarrier}.ready`)}, "ready\\n");
+      for (;;) {
+        try {
+          await readFile(${JSON.stringify(`${holderBarrier}.continue`)});
+          break;
+        } catch (error) {
+          if (error?.code !== "ENOENT") throw error;
+        }
+        await delay(10);
+      }
+      await releaseSchedulerLaunch(gate);
+    `;
+    const holder = spawn(process.execPath, ["--input-type=module", "--eval", holderScript], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    context.after(() => holder.kill("SIGKILL"));
+    await waitFor(() =>
+      access(`${holderBarrier}.ready`)
+        .then(() => true)
+        .catch(() => false),
+    );
+
+    const wrapper = spawn(process.execPath, [connectorPath, "run", "antigravity", "--", "review"], {
+      env: environment,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    context.after(() => wrapper.kill("SIGKILL"));
+    let wrapperStdout = "";
+    let wrapperStderr = "";
+    wrapper.stdout.setEncoding("utf8").on("data", (chunk) => (wrapperStdout += chunk));
+    wrapper.stderr.setEncoding("utf8").on("data", (chunk) => (wrapperStderr += chunk));
+    await waitFor(() =>
+      access(wrapperReady)
+        .then(() => true)
+        .catch(() => false),
+    );
+    assert.doesNotMatch(await readFile(installation.capture, "utf8"), /gate-wait-record/);
+
+    await writeFile(`${holderBarrier}.continue`, "continue\n");
+    const [holderCode] = await once(holder, "close");
+    assert.equal(holderCode, 0);
+    const [wrapperCode] = await once(wrapper, "close");
+    assert.equal(wrapperCode, 0);
+    assert.equal(wrapperStderr, "");
+    assert.match(wrapperStdout, /gate-wait-record/);
+    assert.match(await readFile(installation.capture, "utf8"), /gate-wait-record/);
+    const dirty = JSON.parse(await readFile(join(installation.directory, "dirty.json"), "utf8"));
+    assert.equal(typeof dirty.sources[installation.clientSourceId]?.generation, "string");
+    await waitFor(async () =>
+      (await readFile(schedulerTrace, "utf8").catch(() => "")).includes("acquired:"),
+    );
+
+    await execFileAsync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `import { clearAutomaticState } from ${JSON.stringify(runtimeUrl)}; await clearAutomaticState();`,
+      ],
+      { env: environment },
+    );
   },
 );
 

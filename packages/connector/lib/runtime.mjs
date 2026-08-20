@@ -13,7 +13,13 @@ import {
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { ensurePrivateStateDirectory, stateDirectory, withConnectionStateLock } from "./config.mjs";
+import {
+  connectedSourceMappingMatches,
+  connectedStateExists,
+  ensurePrivateStateDirectory,
+  stateDirectory,
+  withConnectionStateLock,
+} from "./config.mjs";
 import { acquireOwnedLock, ownedLockActive, releaseOwnedLock } from "./owned-lock.mjs";
 
 const statePath = join(stateDirectory, "state.json");
@@ -77,6 +83,12 @@ async function atomicJson(path, value) {
   await rename(temporary, path);
 }
 
+async function atomicJsonExisting(path, value) {
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
+  await rename(temporary, path);
+}
+
 export function dirtyEntries(dirty) {
   if (dirty?.version !== 2 || dirty.sources === null || typeof dirty.sources !== "object")
     return [];
@@ -123,23 +135,63 @@ async function withDirtyLock(callback) {
   }
 }
 
+async function withExistingDirtyLock(callback) {
+  let lock;
+  try {
+    lock = await acquireOwnedLock(dirtyLockPath, { waitMs: 5_000, staleMs: 60_000 });
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  if (!lock) throw new Error("Timed out waiting for dirty state lock");
+  try {
+    return await callback();
+  } finally {
+    await releaseOwnedLock(lock);
+  }
+}
+
+async function writeDirtyEntry(clientSourceId, now, existingOnly = false) {
+  let previous;
+  if (existingOnly) {
+    try {
+      previous = JSON.parse(await readFile(dirtyPath, "utf8"));
+    } catch (error) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+      previous = null;
+    }
+  } else previous = await readDirty().catch(() => null);
+  const previousEntry = dirtyEntries(previous).find(([id]) => id === clientSourceId)?.[1];
+  const timestamp = now.toISOString();
+  const dirty =
+    previous?.version === 2 && previous.sources && typeof previous.sources === "object"
+      ? previous
+      : { version: 2, sources: {} };
+  dirty.sources[clientSourceId] = {
+    dirtySince: previousEntry?.dirtySince ?? timestamp,
+    lastEventAt: timestamp,
+    generation: randomUUID(),
+  };
+  if (existingOnly) await atomicJsonExisting(dirtyPath, dirty);
+  else await atomicJson(dirtyPath, dirty);
+  return dirty;
+}
+
 export async function markDirty(clientSourceId, now = new Date()) {
   if (!sourceIdPattern.test(clientSourceId)) throw new Error("Invalid dirty source id");
-  return withDirtyLock(async () => {
-    const previous = await readDirty().catch(() => null);
-    const previousEntry = dirtyEntries(previous).find(([id]) => id === clientSourceId)?.[1];
-    const timestamp = now.toISOString();
-    const dirty =
-      previous?.version === 2 && previous.sources && typeof previous.sources === "object"
-        ? previous
-        : { version: 2, sources: {} };
-    dirty.sources[clientSourceId] = {
-      dirtySince: previousEntry?.dirtySince ?? timestamp,
-      lastEventAt: timestamp,
-      generation: randomUUID(),
-    };
-    await atomicJson(dirtyPath, dirty);
-    return dirty;
+  return withDirtyLock(() => writeDirtyEntry(clientSourceId, now));
+}
+
+export async function markDirtyIfConnected(clientSourceId, agentId, now = new Date()) {
+  if (!sourceIdPattern.test(clientSourceId)) throw new Error("Invalid dirty source id");
+  if (typeof agentId !== "string" || agentId.length === 0)
+    throw new Error("Invalid dirty agent id");
+  if (!(await connectedStateExists())) return false;
+  return withExistingDirtyLock(async () => {
+    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+    if (!(await connectedSourceMappingMatches(clientSourceId, agentId))) return false;
+    await writeDirtyEntry(clientSourceId, now, true);
+    return true;
   });
 }
 

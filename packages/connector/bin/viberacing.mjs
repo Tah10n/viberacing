@@ -64,6 +64,7 @@ import {
   clearDirtyForSources,
   clearQuarantine,
   markDirty,
+  markDirtyIfConnected,
   dirtyClaims,
   dirtyEntries,
   lifecycleMutationActive,
@@ -1105,36 +1106,11 @@ async function hook() {
     }
     const clientSourceId = option("--source");
     const agentId = option("--agent");
-    if (await connectedStateExists()) {
+    if (await markDirtyIfConnected(clientSourceId, agentId)) {
       const launch = await claimSchedulerLaunch({ waitMs: 0 });
       if (launch)
         try {
-          if (await lifecycleMutationActive())
-            throw new Error("Provider hook stopped by a local lifecycle operation");
-          if (!(await connectedStateExists()))
-            throw new Error("Provider hook stopped because connector state was removed");
-          await withConnectionConfig(
-            async (config) => {
-              const active = config.sources.some(
-                (source) =>
-                  source.clientSourceId === clientSourceId &&
-                  source.agentId === agentId &&
-                  typeof source.sourceId === "string",
-              );
-              if (active) {
-                await markDirty(clientSourceId);
-                await launchAutomaticScheduler(launch);
-              }
-            },
-            {
-              beforeRecovery: async () => {
-                if (await lifecycleMutationActive())
-                  throw new Error("Provider hook stopped by a local lifecycle operation");
-                if (!(await connectedStateExists()))
-                  throw new Error("Provider hook stopped because connector state was removed");
-              },
-            },
-          );
+          await launchAutomaticScheduler(launch);
         } finally {
           await releaseSchedulerLaunch(launch);
         }
@@ -1573,7 +1549,11 @@ async function wrap(agentId) {
   process.removeListener("SIGINT", forwardInt);
   process.removeListener("SIGTERM", forwardTerm);
   if (safe.length && (await localSourceRegistryContains(source.clientSourceId))) {
-    const launch = await claimSchedulerLaunch();
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_WRAPPER_CAPTURE_READY)
+      await writeFile(process.env.VIBERACING_TEST_WRAPPER_CAPTURE_READY, `${process.pid}\n`, {
+        mode: 0o600,
+      });
+    const launch = await claimSchedulerLaunch({ waitMs: 5_000 });
     if (launch)
       try {
         if (

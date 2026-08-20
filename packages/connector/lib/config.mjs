@@ -798,6 +798,21 @@ export async function connectedSourceMappingExists(clientSourceId) {
   }
 }
 
+export async function connectedSourceMappingMatches(clientSourceId, agentId) {
+  try {
+    const config = await readConfigUnlocked();
+    return config.sources.some(
+      (source) =>
+        source.clientSourceId === clientSourceId &&
+        source.agentId === agentId &&
+        typeof source.sourceId === "string",
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
+    throw error;
+  }
+}
+
 export async function writeConfig(config, options) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
