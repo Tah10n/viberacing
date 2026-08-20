@@ -214,8 +214,13 @@ export async function claimScheduler() {
   return (await acquireRuntimeOwnedLock(schedulerLockPath)) ?? false;
 }
 
-export function claimSchedulerLaunch(options = {}) {
-  return acquireOwnedLock(schedulerLaunchLockPath, options);
+export async function claimSchedulerLaunch(options = {}) {
+  try {
+    return await acquireOwnedLock(schedulerLaunchLockPath, options);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 export function releaseSchedulerLaunch(launch) {

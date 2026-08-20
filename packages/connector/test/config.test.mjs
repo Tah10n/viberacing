@@ -1499,6 +1499,93 @@ test("hook discards stdin, emits only contract JSON, and fails open", async (con
   assert.equal(await readFile(blockedState, "utf8"), "not a directory");
 });
 
+test("a provider hook that receives EOF after uninstall does not recreate state", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-late-hook-uninstall-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const clientSourceId = "91919191-9191-4191-8191-919191919191";
+  const sourceId = "92929292-9292-4292-8292-929292929292";
+  const claudeRoot = join(home, ".claude");
+  const directory = await writeMappedInstallation(home, "http://127.0.0.1:9", [
+    {
+      clientSourceId,
+      sourceId,
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: claudeRoot,
+      hookConfigRoot: claudeRoot,
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+    },
+  ]);
+  const ready = join(home, "hook.ready");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_HOOK_READY: ready,
+  });
+  const hook = spawn(
+    process.execPath,
+    [connectorPath, "hook", "--source", clientSourceId, "--agent", "claude_code"],
+    { env: environment, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  context.after(() => hook.kill());
+  let stdout = "";
+  let stderr = "";
+  hook.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+  hook.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  await waitFor(() =>
+    access(ready)
+      .then(() => true)
+      .catch(() => false),
+  );
+
+  const uninstall = await execFileAsync(process.execPath, [connectorPath, "uninstall"], {
+    env: environment,
+  });
+  assert.match(uninstall.stdout, /local state removed/);
+  await assert.rejects(access(directory), { code: "ENOENT" });
+
+  hook.stdin.end('{"private":"must never be logged"}\n');
+  const [code] = await once(hook, "close");
+  assert.equal(code, 0);
+  assert.equal(stdout, "");
+  assert.equal(stderr, "");
+  await assert.rejects(access(directory), { code: "ENOENT" });
+  for (const name of [
+    ".viberacing-state",
+    "scheduler.lock",
+    "scheduler-launch.lock",
+    "lifecycle.lock",
+    "lifecycle-revoking.lock",
+    "connection-state.lock",
+  ])
+    await assert.rejects(access(join(directory, name)), { code: "ENOENT" }, name);
+  assert.deepEqual(
+    (await readdir(home)).filter((name) => /(?:\.recovery|\.stale\.)/i.test(name)),
+    [],
+  );
+});
+
+test("claiming the scheduler launch gate does not initialize missing state", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-missing-launch-state-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const runtimeUrl = pathToFileURL(
+    fileURLToPath(new URL("../lib/runtime.mjs", import.meta.url)),
+  ).href;
+  const result = await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { claimSchedulerLaunch } from ${JSON.stringify(runtimeUrl)}; process.stdout.write(String(await claimSchedulerLaunch({ waitMs: 0 })));`,
+    ],
+    { env: connectorEnvironment(home, { NODE_ENV: "test" }) },
+  );
+  assert.equal(result.stdout, "null");
+  assert.equal(result.stderr, "");
+  await assert.rejects(access(directory), { code: "ENOENT" });
+});
+
 test("the detached scheduler child owns its lock and later launchers exit", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-scheduler-owner-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
@@ -2010,17 +2097,12 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
-  await Promise.all(
-    sources
-      .slice(0, 2)
-      .map((source) =>
-        runWithInput(
-          ["hook", "--source", source.clientSourceId, "--agent", source.agentId],
-          environment,
-          "{}",
-        ),
-      ),
-  );
+  for (const source of sources.slice(0, 2))
+    await runWithInput(
+      ["hook", "--source", source.clientSourceId, "--agent", source.agentId],
+      environment,
+      "{}",
+    );
   await waitFor(() => bodies.length === 1);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),

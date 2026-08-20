@@ -1098,33 +1098,47 @@ async function sendSchedulerHandshake(status) {
 
 async function hook() {
   try {
+    if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_HOOK_READY)
+      await writeFile(process.env.VIBERACING_TEST_HOOK_READY, `${process.pid}\n`, { mode: 0o600 });
     for await (const _chunk of process.stdin) {
       // Hook input can contain private agent context. Discard it without parsing or logging.
     }
     const clientSourceId = option("--source");
     const agentId = option("--agent");
-    if (await lifecycleMutationActive())
-      throw new Error("Provider hook stopped by a local lifecycle operation");
-    await withConnectionConfig(
-      async (config) => {
-        const active = config.sources.some(
-          (source) =>
-            source.clientSourceId === clientSourceId &&
-            source.agentId === agentId &&
-            typeof source.sourceId === "string",
-        );
-        if (active) {
-          await markDirty(clientSourceId);
-          await launchAutomaticScheduler();
-        }
-      },
-      {
-        beforeRecovery: async () => {
+    if (await connectedStateExists()) {
+      const launch = await claimSchedulerLaunch({ waitMs: 0 });
+      if (launch)
+        try {
           if (await lifecycleMutationActive())
             throw new Error("Provider hook stopped by a local lifecycle operation");
-        },
-      },
-    );
+          if (!(await connectedStateExists()))
+            throw new Error("Provider hook stopped because connector state was removed");
+          await withConnectionConfig(
+            async (config) => {
+              const active = config.sources.some(
+                (source) =>
+                  source.clientSourceId === clientSourceId &&
+                  source.agentId === agentId &&
+                  typeof source.sourceId === "string",
+              );
+              if (active) {
+                await markDirty(clientSourceId);
+                await launchAutomaticScheduler(launch);
+              }
+            },
+            {
+              beforeRecovery: async () => {
+                if (await lifecycleMutationActive())
+                  throw new Error("Provider hook stopped by a local lifecycle operation");
+                if (!(await connectedStateExists()))
+                  throw new Error("Provider hook stopped because connector state was removed");
+              },
+            },
+          );
+        } finally {
+          await releaseSchedulerLaunch(launch);
+        }
+    }
   } catch {
     // Provider hooks are fail-open: local scheduling failures must never affect the agent.
   }
