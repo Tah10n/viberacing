@@ -28,7 +28,8 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_ROOT/);
   assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_PATHS/);
   assert.match(decoded, /ConvertFrom-Json/);
-  assert.match(decoded, /ForEach-Object \{ \[string\]\$_ \}/);
+  assert.match(decoded, /foreach \(\$value in \$decodedPaths\)/);
+  assert.match(decoded, /\$paths \+= \[string\]\$value/);
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
   assert.match(decoded, /ReparsePoint/);
   assert.match(decoded, /foreach \(\$entry in \$items\)/);
