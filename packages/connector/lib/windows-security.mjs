@@ -4,16 +4,20 @@ import { win32 } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
+const stateRootEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_ROOT";
 const statePathsEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_PATHS";
 const secureDirectoryScript = [
   "$ErrorActionPreference='Stop'",
+  `$root=$env:${stateRootEnvironmentVariable}`,
   `$pathValues=$env:${statePathsEnvironmentVariable}`,
+  "if ([string]::IsNullOrWhiteSpace($root)) { throw 'Missing state root' }",
   "if ([string]::IsNullOrWhiteSpace($pathValues)) { throw 'Missing state paths' }",
-  "$paths=@(ConvertFrom-Json -InputObject $pathValues)",
+  "$paths=@(ConvertFrom-Json -InputObject $pathValues | ForEach-Object { [string]$_ })",
   "if ($paths.Count -eq 0) { throw 'Missing state paths' }",
-  "if ([IO.Directory]::Exists($paths[0]) -and ((Get-Item -LiteralPath $paths[0] -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'State directory is a reparse point' }",
-  "if ([IO.File]::Exists($paths[0])) { throw 'State directory target is a file' }",
-  "[IO.Directory]::CreateDirectory($paths[0]) | Out-Null",
+  "if ($paths[0] -ne $root) { throw 'State paths do not start with the state root' }",
+  "if ([IO.Directory]::Exists($root) -and ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'State directory is a reparse point' }",
+  "if ([IO.File]::Exists($root)) { throw 'State directory target is a file' }",
+  "[IO.Directory]::CreateDirectory($root) | Out-Null",
   "$items=@($paths | ForEach-Object { Get-Item -LiteralPath $_ -Force })",
   "if (-not $items[0].PSIsContainer) { throw 'State directory is not a real directory' }",
   "if (@($items | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count -ne 0) { throw 'State paths contain a reparse point' }",
@@ -93,7 +97,11 @@ export async function ensurePrivateStateDirectory(
       encodedSecureDirectoryScript,
     ];
     const options = {
-      env: { ...environment, [statePathsEnvironmentVariable]: JSON.stringify(normalizedPaths) },
+      env: {
+        ...environment,
+        [stateRootEnvironmentVariable]: normalizedDirectory,
+        [statePathsEnvironmentVariable]: JSON.stringify(normalizedPaths),
+      },
       windowsHide: true,
       timeout: 15_000,
     };

@@ -25,8 +25,10 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
     "-EncodedCommand",
   ]);
   const decoded = Buffer.from(calls[0][1].at(-1), "base64").toString("utf16le");
+  assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_ROOT/);
   assert.match(decoded, /\$env:VIBERACING_WINDOWS_STATE_ACL_PATHS/);
   assert.match(decoded, /ConvertFrom-Json/);
+  assert.match(decoded, /ForEach-Object \{ \[string\]\$_ \}/);
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
   assert.match(decoded, /ReparsePoint/);
   assert.match(decoded, /foreach \(\$entry in \$items\)/);
@@ -36,6 +38,7 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   assert.doesNotMatch(decoded, /Get-ChildItem/);
   assert.doesNotMatch(decoded, /};\s*else\b/);
   assert.doesNotMatch(decoded, /C:\\Users\\racer|\.viberacing/);
+  assert.equal(calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_ROOT, "C:\\Users\\racer\\.viberacing");
   assert.deepEqual(JSON.parse(calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_PATHS), [
     "C:\\Users\\racer\\.viberacing",
   ]);
