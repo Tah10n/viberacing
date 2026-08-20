@@ -33,10 +33,13 @@ test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
   assert.match(decoded, /ReparsePoint/);
   assert.match(decoded, /foreach \(\$entry in \$items\)/);
+  assert.match(decoded, /Get-Item .* -ErrorAction SilentlyContinue/);
+  assert.match(decoded, /Test-Path -LiteralPath \$entry\.FullName/);
   assert.match(decoded, /Security\.AccessControl\.FileSecurity/);
   assert.match(decoded, /\[IO\.File\]::SetAccessControl/);
   assert.match(decoded, /\[IO\.File\]::GetAccessControl/);
   assert.doesNotMatch(decoded, /Get-ChildItem/);
+  assert.doesNotMatch(decoded, /State directory changed during ACL verification/);
   assert.doesNotMatch(decoded, /};\s*else\b/);
   assert.doesNotMatch(decoded, /C:\\Users\\racer|\.viberacing/);
   assert.equal(calls[0][2].env.VIBERACING_WINDOWS_STATE_ACL_ROOT, "C:\\Users\\racer\\.viberacing");

@@ -1609,7 +1609,14 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
       ),
     ),
   );
-  assert.ok(hookResults.every((result) => result.code === 0 && result.stdout === ""));
+  for (const [index, result] of hookResults.entries()) {
+    assert.equal(
+      result.code,
+      0,
+      `hook ${index} failed: stdout=${JSON.stringify(result.stdout)} stderr=${JSON.stringify(result.stderr)}`,
+    );
+    assert.equal(result.stdout, "", `hook ${index} unexpectedly wrote to stdout`);
+  }
   await firstRequest;
   const firstAutomaticSyncAt = JSON.parse(
     await readFile(join(installation.directory, "state.json"), "utf8"),
@@ -1954,7 +1961,7 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
-    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "50,200,150",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
   await Promise.all(
     sources

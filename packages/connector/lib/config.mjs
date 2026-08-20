@@ -1,6 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import {
   access,
+  chmod,
   copyFile,
   cp,
   lstat,
@@ -10,7 +12,7 @@ import {
   rename,
   rm,
   writeFile,
-  chmod,
+  open,
   unlink,
 } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -234,33 +236,50 @@ async function markedStatePaths() {
 async function secureStatePaths(paths) {
   if (process.platform === "win32") return secureWindowsStateDirectory(stateDirectory, { paths });
   for (const path of paths) {
-    let info;
+    let handle;
     try {
-      info = await lstat(path);
+      handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
     } catch (error) {
-      if (error?.code === "ENOENT") continue;
+      if (error?.code === "ENOENT" && path !== stateDirectory) continue;
+      if (error?.code === "ELOOP")
+        throw new Error(
+          `Vibe Racing state contains an unsupported entry: ${relative(stateDirectory, path)}`,
+          { cause: error },
+        );
       throw error;
     }
-    if (
-      info.isSymbolicLink() ||
-      (!info.isDirectory() && !info.isFile()) ||
-      (info.isFile() && info.nlink !== 1)
-    )
-      throw new Error(
-        `Vibe Racing state contains an unsupported entry: ${relative(stateDirectory, path)}`,
-      );
-    if (
-      typeof process.getuid === "function" &&
-      typeof info.uid === "number" &&
-      info.uid !== process.getuid()
-    )
-      throw new Error(
-        `Vibe Racing state contains an entry owned by another user: ${relative(stateDirectory, path)}`,
-      );
-    await chmod(path, info.isDirectory() || isInstalledRuntimeExecutable(path) ? 0o700 : 0o600);
-    const checked = await lstat(path);
-    if ((checked.mode & 0o077) !== 0)
-      throw new Error(`Vibe Racing cannot secure state entry: ${relative(stateDirectory, path)}`);
+    try {
+      const info = await handle.stat();
+      if ((!info.isDirectory() && !info.isFile()) || (info.isFile() && info.nlink !== 1))
+        throw new Error(
+          `Vibe Racing state contains an unsupported entry: ${relative(stateDirectory, path)}`,
+        );
+      if (
+        typeof process.getuid === "function" &&
+        typeof info.uid === "number" &&
+        info.uid !== process.getuid()
+      )
+        throw new Error(
+          `Vibe Racing state contains an entry owned by another user: ${relative(stateDirectory, path)}`,
+        );
+      await handle.chmod(info.isDirectory() || isInstalledRuntimeExecutable(path) ? 0o700 : 0o600);
+      const checked = await handle.stat();
+      if ((checked.mode & 0o077) !== 0)
+        throw new Error(`Vibe Racing cannot secure state entry: ${relative(stateDirectory, path)}`);
+      let current;
+      try {
+        current = await lstat(path);
+      } catch (error) {
+        if (error?.code === "ENOENT" && path !== stateDirectory) continue;
+        throw error;
+      }
+      if (current.dev !== checked.dev || current.ino !== checked.ino)
+        throw new Error(
+          `Vibe Racing state entry changed while securing: ${relative(stateDirectory, path)}`,
+        );
+    } finally {
+      await handle.close();
+    }
   }
 }
 
