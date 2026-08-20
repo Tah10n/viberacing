@@ -2211,12 +2211,14 @@ test("a hook persists its event while another hook holds the scheduler launch ga
   first.stdout.setEncoding("utf8").on("data", (chunk) => (firstStdout += chunk));
   first.stderr.setEncoding("utf8").on("data", (chunk) => (firstStderr += chunk));
   first.stdin.end("{}\n");
-  await waitFor(() =>
-    access(`${barrier}.ready`)
-      .then(() => true)
-      .catch(() => false),
-  );
-  const schedulerPid = Number((await readFile(`${barrier}.ready`, "utf8")).trim());
+  let schedulerPid;
+  await waitFor(async () => {
+    const value = await readFile(`${barrier}.ready`, "utf8").catch(() => "");
+    const candidate = Number(value.trim());
+    if (!Number.isSafeInteger(candidate) || candidate < 1) return false;
+    schedulerPid = candidate;
+    return true;
+  });
   assert.ok(Number.isSafeInteger(schedulerPid) && schedulerPid > 0);
 
   const second = await runWithInput(
