@@ -40,6 +40,7 @@ describe("HTML security proxy", () => {
     "/_next/static/chunks/app.js",
     "/_next/image",
     "/favicon.ico",
+    "/favicon.svg",
     "/health",
     "/ready",
   ])("skips CSP for the non-HTML path %s", (path) => {

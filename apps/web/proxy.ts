@@ -17,7 +17,7 @@ export const config = {
   matcher: [
     {
       source:
-        "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico(?:/|$)|health(?:/|$)|ready(?:/|$)).*)",
+        "/((?!api(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.(?:ico|svg)(?:/|$)|health(?:/|$)|ready(?:/|$)).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },
