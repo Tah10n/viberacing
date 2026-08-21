@@ -40,6 +40,151 @@
   text-transform: uppercase;
 }
 
+.usage-chart {
+  margin: 0;
+  border: 0.0625rem solid var(--color-line-strong);
+  padding: var(--space-5);
+  background: var(--color-track-raised);
+}
+
+.usage-chart-plot {
+  display: grid;
+  height: 14rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.usage-chart-day {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: 1.25rem minmax(0, 1fr) 2rem;
+  gap: var(--space-2);
+}
+
+.usage-chart-value,
+.usage-chart-day time {
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  line-height: var(--meta-line-height);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.usage-chart-value {
+  overflow: hidden;
+  color: var(--color-info);
+  font-weight: var(--meta-label-weight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-chart-track {
+  position: relative;
+  min-height: 8rem;
+  background: var(--color-line-soft);
+}
+
+.usage-chart-bar {
+  position: absolute;
+  right: 20%;
+  bottom: 0;
+  left: 20%;
+  height: 0;
+  background: var(--color-action);
+}
+
+.usage-chart-bar-level-1 {
+  height: 5%;
+}
+
+.usage-chart-bar-level-2 {
+  height: 10%;
+}
+
+.usage-chart-bar-level-3 {
+  height: 15%;
+}
+
+.usage-chart-bar-level-4 {
+  height: 20%;
+}
+
+.usage-chart-bar-level-5 {
+  height: 25%;
+}
+
+.usage-chart-bar-level-6 {
+  height: 30%;
+}
+
+.usage-chart-bar-level-7 {
+  height: 35%;
+}
+
+.usage-chart-bar-level-8 {
+  height: 40%;
+}
+
+.usage-chart-bar-level-9 {
+  height: 45%;
+}
+
+.usage-chart-bar-level-10 {
+  height: 50%;
+}
+
+.usage-chart-bar-level-11 {
+  height: 55%;
+}
+
+.usage-chart-bar-level-12 {
+  height: 60%;
+}
+
+.usage-chart-bar-level-13 {
+  height: 65%;
+}
+
+.usage-chart-bar-level-14 {
+  height: 70%;
+}
+
+.usage-chart-bar-level-15 {
+  height: 75%;
+}
+
+.usage-chart-bar-level-16 {
+  height: 80%;
+}
+
+.usage-chart-bar-level-17 {
+  height: 85%;
+}
+
+.usage-chart-bar-level-18 {
+  height: 90%;
+}
+
+.usage-chart-bar-level-19 {
+  height: 95%;
+}
+
+.usage-chart-bar-level-20 {
+  height: 100%;
+}
+
+.usage-chart-day time {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  color: var(--color-muted);
+}
+
+.usage-chart-day time strong {
+  color: var(--color-ink);
+}
+
 .dashboard-section {
   margin-bottom: var(--space-5);
 }
@@ -170,6 +315,37 @@
   color: var(--color-muted-strong);
   font-family: var(--font-mono);
   font-size: var(--meta-font-size);
+}
+
+.token-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.token-breakdown > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.token-breakdown dt,
+.token-breakdown dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  line-height: var(--meta-line-height);
+  text-transform: uppercase;
+}
+
+.token-breakdown dt {
+  color: var(--color-muted);
+}
+
+.token-breakdown dd {
+  color: var(--color-info);
+  font-weight: var(--meta-label-weight);
 }
 
 .connect-disclosure {
@@ -381,6 +557,17 @@ pre {
   min-height: 1.125rem;
   margin: 0;
   padding: 0;
+}
+
+.account-actions .account-delete-form {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.account-delete-form .action-form-error {
+  grid-column: 1 / -1;
 }
 
 .back-link {

@@ -90,7 +90,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <span className="meta-label">Privacy</span>
             <div className="hero-privacy-copy">
               <p>
-                <b>Collects</b> Agent · UTC date · aggregate token total
+                <b>Collects</b> Agent · UTC date · aggregate token counters
               </p>
               <p>
                 <b>Never collects</b> Prompts · responses · code · transcripts · repos · paths ·

@@ -7,6 +7,7 @@ import "./styles.css";
 export const metadata: Metadata = {
   title: "Vibe Racing — weekly AI coding token leaderboard",
   description: "A privacy-first community leaderboard for tokens used in Codex and Claude Code.",
+  icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }] },
 };
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {

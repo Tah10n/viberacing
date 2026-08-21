@@ -9,7 +9,7 @@ import { AccountControls, BrowserSyncProvider } from "../components/account-cont
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
-import { currentWeekStart, formatCompactTokens } from "@/lib/leaderboard";
+import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
 
 interface DashboardProps {
@@ -29,6 +29,10 @@ interface AccountRow {
   label: string;
   aggregation_mode: "account_max" | "source_sum";
   tokens: string;
+  input_tokens: string | null;
+  output_tokens: string | null;
+  cache_tokens: string | null;
+  reasoning_tokens: string | null;
   source_count: number;
   installation_count: number;
   last_sync_at: Date | null;
@@ -53,6 +57,32 @@ interface DedupEventRow {
   installation_name: string;
   target_label: string;
 }
+
+interface DailyUsageRow {
+  usage_date: string;
+  tokens: string;
+}
+
+interface UsageChartDay {
+  date: string;
+  day: string;
+  fullLabel: string;
+  level: number;
+  tokens: string;
+  weekday: string;
+}
+
+const usageChartLevels = 20n;
+const weekdayFormatter = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  timeZone: "UTC",
+});
+const fullDayFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+  weekday: "long",
+});
 
 function agentLabel(agent: string): string {
   return isSupportedAgent(agent) ? agentNames[agent] : agent;
@@ -87,6 +117,59 @@ function hasReassignmentTarget(accounts: readonly AccountRow[], account: Account
   );
 }
 
+function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
+  if (
+    account.input_tokens === null ||
+    account.output_tokens === null ||
+    account.cache_tokens === null ||
+    account.reasoning_tokens === null
+  )
+    return null;
+  const counters = [
+    ["Input", account.input_tokens],
+    ["Output", account.output_tokens],
+    ["Cached", account.cache_tokens],
+    ["Reasoning", account.reasoning_tokens],
+  ] as const;
+  return (
+    <dl aria-label="Weekly token breakdown" className="token-breakdown">
+      {counters.map(([label, tokens]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd title={`${formatExactTokens(tokens)} tokens`}>{formatCompactTokens(tokens)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function usageChartDays(weekStart: string, usage: readonly DailyUsageRow[]): UsageChartDay[] {
+  const totals = new Map(usage.map((entry) => [entry.usage_date, entry.tokens]));
+  const start = new Date(`${weekStart}T00:00:00.000Z`);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const dateKey = date.toISOString().slice(0, 10);
+    return {
+      date: dateKey,
+      day: date.getUTCDate().toString(),
+      fullLabel: fullDayFormatter.format(date),
+      tokens: totals.get(dateKey) ?? "0",
+      weekday: weekdayFormatter.format(date),
+    };
+  });
+  const maximum = days.reduce((value, day) => {
+    const tokens = BigInt(day.tokens);
+    return tokens > value ? tokens : value;
+  }, 0n);
+  return days.map((day) => {
+    const tokens = BigInt(day.tokens);
+    const rounded = maximum === 0n ? 0n : (tokens * usageChartLevels + maximum / 2n) / maximum;
+    const level = tokens === 0n ? 0n : rounded > 0n ? rounded : 1n;
+    return { ...day, level: Number(level) };
+  });
+}
+
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
   const [current, params, browserInstallationId] = await Promise.all([
@@ -95,7 +178,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     localInstallationId(),
   ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
-  const [installations, accounts, sources, dedupEvents] = await Promise.all([
+  const weekStart = currentWeekStart();
+  const [installations, accounts, sources, dedupEvents, dailyUsage] = await Promise.all([
     query<InstallationRow>(
       `SELECT i.id::text, i.name, i.last_sync_at, count(s.id)::int AS source_count
          FROM installations i
@@ -112,6 +196,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               a.label,
               a.aggregation_mode,
               coalesce(usage.tokens, 0)::text AS tokens,
+              usage.input_tokens::text AS input_tokens,
+              usage.output_tokens::text AS output_tokens,
+              usage.cache_tokens::text AS cache_tokens,
+              usage.reasoning_tokens::text AS reasoning_tokens,
               count(s.id)::int AS source_count,
               count(DISTINCT s.installation_id)::int AS installation_count,
               max(s.last_successful_sync_at) AS last_sync_at,
@@ -123,23 +211,48 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
            ON s.agent_account_id = a.id AND s.status = 'active'
          LEFT JOIN installations installation ON installation.id = s.installation_id
          LEFT JOIN LATERAL (
-           SELECT sum(day.tokens) AS tokens
+           SELECT sum(day.tokens) AS tokens,
+                  CASE WHEN a.aggregation_mode = 'source_sum'
+                         AND bool_and(day.components_complete)
+                       THEN sum(day.input_tokens) END AS input_tokens,
+                  CASE WHEN a.aggregation_mode = 'source_sum'
+                         AND bool_and(day.components_complete)
+                       THEN sum(day.output_tokens) END AS output_tokens,
+                  CASE WHEN a.aggregation_mode = 'source_sum'
+                         AND bool_and(day.components_complete)
+                       THEN sum(day.cache_read_tokens + day.cache_write_tokens) END AS cache_tokens,
+                  CASE WHEN a.aggregation_mode = 'source_sum'
+                         AND bool_and(day.components_complete)
+                       THEN sum(day.reasoning_tokens) END AS reasoning_tokens
              FROM (
-               SELECT CASE a.aggregation_mode
+               SELECT d.usage_date,
+                      CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(d.total_tokens)
                         ELSE sum(d.total_tokens)
-                      END AS tokens
+                      END AS tokens,
+                      sum(d.input_tokens) AS input_tokens,
+                      sum(d.output_tokens) AS output_tokens,
+                      sum(d.cache_read_tokens) AS cache_read_tokens,
+                      sum(d.cache_write_tokens) AS cache_write_tokens,
+                      sum(d.reasoning_tokens) AS reasoning_tokens,
+                      bool_and(d.input_tokens IS NOT NULL
+                        AND d.output_tokens IS NOT NULL
+                        AND d.cache_read_tokens IS NOT NULL
+                        AND d.cache_write_tokens IS NOT NULL
+                        AND d.reasoning_tokens IS NOT NULL) AS components_complete
                  FROM installation_sources source_usage
                  JOIN daily_usage d ON d.source_id = source_usage.id
                 WHERE source_usage.agent_account_id = a.id
+                  AND source_usage.user_id = a.user_id
                   AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
                 GROUP BY d.usage_date
              ) day
          ) usage ON true
         WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
-        GROUP BY a.id, usage.tokens
+        GROUP BY a.id, usage.tokens, usage.input_tokens, usage.output_tokens,
+                 usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-      [current.id, currentWeekStart(), browserInstallationId],
+      [current.id, weekStart, browserInstallationId],
     ),
     query<SourceRow>(
       `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
@@ -165,7 +278,30 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         ORDER BY event.created_at DESC`,
       [current.id],
     ),
+    query<DailyUsageRow>(
+      `WITH account_daily AS (
+         SELECT a.id,
+                d.usage_date,
+                CASE a.aggregation_mode
+                  WHEN 'account_max' THEN max(d.total_tokens)
+                  ELSE sum(d.total_tokens)
+                END AS tokens
+           FROM agent_accounts a
+           JOIN installation_sources s
+             ON s.agent_account_id = a.id AND s.user_id = a.user_id
+           JOIN daily_usage d ON d.source_id = s.id
+          WHERE a.user_id = $1
+            AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+          GROUP BY a.id, a.aggregation_mode, d.usage_date
+       )
+       SELECT usage_date::text, sum(tokens)::text AS tokens
+         FROM account_daily
+        GROUP BY usage_date
+        ORDER BY usage_date`,
+      [current.id, weekStart],
+    ),
   ]);
+  const chartDays = usageChartDays(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
   const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
   const notice =
@@ -287,6 +423,44 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </div>
       </section>
 
+      <section className="dashboard-section" aria-labelledby="usage-chart-title">
+        <div className="section-heading plain-heading">
+          <div>
+            <p className="eyebrow">WEEKLY USAGE</p>
+            <h2 id="usage-chart-title">Tokens by day</h2>
+          </div>
+          <span>UTC · MON–SUN</span>
+        </div>
+        <figure aria-labelledby="usage-chart-title" className="usage-chart">
+          <figcaption className="sr-only">
+            {chartDays
+              .map((day) => `${day.fullLabel}: ${formatExactTokens(day.tokens)} tokens`)
+              .join("; ")}
+          </figcaption>
+          <div aria-hidden="true" className="usage-chart-plot">
+            {chartDays.map((day) => (
+              <div className="usage-chart-day" key={day.date}>
+                <span
+                  className="usage-chart-value"
+                  title={`${formatExactTokens(day.tokens)} tokens`}
+                >
+                  {formatCompactTokens(day.tokens)}
+                </span>
+                <div className="usage-chart-track">
+                  <span
+                    className={`usage-chart-bar usage-chart-bar-level-${day.level.toString()}`}
+                  />
+                </div>
+                <time dateTime={day.date}>
+                  <strong>{day.weekday}</strong>
+                  <span>{day.day}</span>
+                </time>
+              </div>
+            ))}
+          </div>
+        </figure>
+      </section>
+
       <section className="dashboard-section" aria-labelledby="accounts-title">
         <div className="section-heading plain-heading">
           <div>
@@ -328,6 +502,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         {account.aggregation_mode === "account_max" ? "Deduplicated" : "Summed"}
                       </span>
                     </div>
+                    <WeeklyTokenBreakdown account={account} />
                   </div>
                   <div className="device-meta">
                     <span>Last sync</span>
@@ -389,7 +564,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                           )}
                         </div>
                       ))}
-                    <SameOriginActionForm action="/api/accounts/delete">
+                    <SameOriginActionForm
+                      action="/api/accounts/delete"
+                      className="account-delete-form"
+                    >
                       <input name="accountId" type="hidden" value={account.id} />
                       {sources.some((source) => source.agent_account_id === account.id) ? (
                         <label className="confirm-row">
@@ -456,7 +634,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       <div className="settings-grid">
         <Panel className="privacy-panel">
           <p className="eyebrow">PRIVACY &amp; AGGREGATION</p>
-          <h2>Only exact totals cross the boundary</h2>
+          <h2>Only exact aggregate token counters cross the boundary</h2>
           <ul>
             <li>Account-wide totals are deduplicated across linked computers.</li>
             <li>Machine-local histories are summed; different accounts always sum.</li>

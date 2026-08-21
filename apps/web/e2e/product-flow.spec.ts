@@ -86,6 +86,10 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.goto("/api/auth/github/start?next=/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText(`Signed in as @${handle}`)).toBeVisible();
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
+  const favicon = await request.get("/favicon.svg");
+  expect(favicon.status()).toBe(200);
+  expect(favicon.headers()["content-type"]).toContain("image/svg+xml");
 
   const installationId = randomUUID();
   const clientSourceId = randomUUID();
@@ -140,7 +144,17 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
           rangeStart: today,
           rangeEnd: today,
           completeness: "complete",
-          entries: [{ date: today, totalTokens: "12345" }],
+          entries: [
+            {
+              date: today,
+              totalTokens: "12345",
+              inputTokens: "7000",
+              outputTokens: "3000",
+              cacheReadTokens: "1500",
+              cacheWriteTokens: "500",
+              reasoningTokens: "345",
+            },
+          ],
         },
       ],
       sourceErrors: [],
@@ -150,8 +164,35 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.reload();
   await expect(page.getByText(/12[.,]3K tokens/)).toBeVisible();
+  const usageChart = page.getByRole("figure", { name: "Tokens by day" });
+  await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
+  const todayBar = usageChart.locator(`.usage-chart-day:has(time[datetime="${today}"])`);
+  await expect(todayBar).toContainText(/12[.,]3K/);
+  await expect(todayBar.locator(".usage-chart-bar-level-20")).toHaveCount(1);
+  const tokenBreakdown = page.locator('dl[aria-label="Weekly token breakdown"]');
+  await expect(tokenBreakdown.locator("div")).toHaveText([
+    "Input7K",
+    "Output3K",
+    "Cached2K",
+    "Reasoning345",
+  ]);
+  await expect(
+    page.getByRole("heading", { name: "Only exact aggregate token counters cross the boundary" }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
   await page.getByText("Manage account").click();
+  const accountDeleteForm = page.locator(".account-delete-form");
+  const [confirmationBox, deleteButtonBox] = await Promise.all([
+    accountDeleteForm.getByText("Delete linked sources and usage").boundingBox(),
+    accountDeleteForm.getByRole("button", { name: "Delete account" }).boundingBox(),
+  ]);
+  expect(confirmationBox).not.toBeNull();
+  expect(deleteButtonBox).not.toBeNull();
+  if (confirmationBox !== null && deleteButtonBox !== null) {
+    const confirmationCenter = confirmationBox.y + confirmationBox.height / 2;
+    const buttonCenter = deleteButtonBox.y + deleteButtonBox.height / 2;
+    expect(Math.abs(confirmationCenter - buttonCenter)).toBeLessThanOrEqual(1);
+  }
   await page.getByLabel("Account label").fill("Renamed E2E");
   await page.getByRole("button", { name: "Rename" }).click();
   await expect(page.getByText(/Renamed E2E/)).toBeVisible();
@@ -170,6 +211,21 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.goto("/dashboard");
+  await expect(page.locator(".usage-chart-day")).toHaveCount(7);
+  const [usagePlotBox, usageDayBox] = await Promise.all([
+    page.locator(".usage-chart-plot").boundingBox(),
+    page.locator(".usage-chart-day").first().boundingBox(),
+  ]);
+  expect(usagePlotBox).not.toBeNull();
+  expect(usageDayBox).not.toBeNull();
+  if (usagePlotBox !== null && usageDayBox !== null) {
+    expect(usageDayBox.y + usageDayBox.height).toBeLessThanOrEqual(
+      usagePlotBox.y + usagePlotBox.height,
+    );
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
   await page.getByLabel("I understand this cannot be undone.").check();
   await page.getByRole("button", { name: "Delete account" }).click();
   await expect(page).toHaveURL(/\/?accountDeleted=1$/);

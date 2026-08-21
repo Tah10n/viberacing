@@ -149,6 +149,8 @@ export async function unregisterBrowserSync(options = {}) {
   const environment = options.environment ?? process.env;
   const stateRoot = options.stateDirectory ?? stateDirectory;
   const homeDirectory = options.homeDirectory ?? homedir();
+  if (!options.allowCustomState && resolve(stateRoot) !== resolve(join(homedir(), ".viberacing")))
+    return;
   if (platform === "darwin") {
     const app = join(homeDirectory, "Applications", "Vibe Racing.app");
     if ((await existingOwned(join(app, "Contents", "Resources", "viberacing-owned"))) === true) {
