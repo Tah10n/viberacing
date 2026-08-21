@@ -54,7 +54,27 @@ const stateFiles = new Set([
   "state.json",
   "dirty.json",
 ]);
-const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin"]);
+const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin", "lib"]);
+const legacyRuntimeFiles = new Set([
+  "browser.mjs",
+  "config.mjs",
+  "executables.mjs",
+  "readers.mjs",
+  "registry.mjs",
+  "runtime.mjs",
+]);
+const legacyRuntimeAdapterFiles = new Set([
+  "antigravity.mjs",
+  "claude.mjs",
+  "codex.mjs",
+  "cursor.mjs",
+  "gemini.mjs",
+  "kimi.mjs",
+  "opencode.mjs",
+  "qwen-settings.mjs",
+  "qwen.mjs",
+  "shared.mjs",
+]);
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
@@ -144,6 +164,18 @@ function ownedStatePath(path, info) {
     if (parts.length === 5 && parts[2] === "lib" && parts[3] === "adapters")
       return installedRuntimeAdapterFiles.has(parts[4]) && info.isFile();
     return false;
+  }
+  if (top === "lib") {
+    if (parts.length === 2)
+      return parts[1] === "adapters"
+        ? info.isDirectory()
+        : legacyRuntimeFiles.has(parts[1]) && info.isFile();
+    return (
+      parts.length === 3 &&
+      parts[1] === "adapters" &&
+      legacyRuntimeAdapterFiles.has(parts[2]) &&
+      info.isFile()
+    );
   }
   if (top === "bin") return parts.length === 2 && parts[1] === "viberacing.mjs" && info.isFile();
   return top === "logs" && parts.length === 2 && parts[1] === "last-error.log" && info.isFile();
