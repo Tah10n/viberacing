@@ -288,7 +288,7 @@ async function exactPairingSources(sources) {
   return result;
 }
 
-async function reconcilePreviousConnectionBeforePairing(origin, installationId, options = {}) {
+async function reconcilePreviousConnectionBeforePairing(origin, installationId) {
   return withLifecycleMutation(async () => {
     let previousConfig;
     try {
@@ -304,14 +304,13 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId, 
       remote = await requestReconciliation(previousConfig);
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) {
-        if (options.clearAfterCancelledAttempt) {
-          await disableLocalConnection();
-          return null;
-        }
-        throw new Error(
-          "Existing installation authorization cannot be reconciled; run `viberacing disconnect` before reconnecting",
-          { cause: error },
-        );
+        const cleanupWarnings = await disableLocalConnection(true);
+        output("Previous installation authorization is no longer valid; reconnecting…");
+        if (cleanupWarnings)
+          warning(
+            "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.",
+          );
+        return null;
       }
       throw error;
     }
@@ -341,10 +340,8 @@ async function connect() {
     );
   const installedRuntime = await prepareRuntime(import.meta.url);
   const installation = await readOrCreateInstallation();
-  const abandonedAttempt = await invalidateAndCancelConnectAttempt();
-  const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id, {
-    clearAfterCancelledAttempt: abandonedAttempt.cancellation.status === "confirmed",
-  });
+  await invalidateAndCancelConnectAttempt();
+  const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id);
   const pairingLocalSources = new Map(sources);
   if (previousConfig !== null) {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));

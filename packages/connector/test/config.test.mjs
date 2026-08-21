@@ -3360,7 +3360,7 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
   assert.match(await readFile(hookPath, "utf8"), /viberacing-hook-v3/);
 });
 
-test("reconnect retires only an explicitly disconnected unavailable source before pairing", async (context) => {
+test("reconnect preserves transient failures, retires disconnected sources, and recovers revoked authorization", async (context) => {
   let mode = "malformed";
   let pairingStarts = 0;
   let pairingBody;
@@ -3540,10 +3540,6 @@ test("reconnect retires only an explicitly disconnected unavailable source befor
   for (const failure of [
     ["malformed", /invalid protocol response/],
     ["transient", /server_error/],
-    [
-      "unauthorized",
-      /Existing installation authorization cannot be reconciled; run `viberacing disconnect`/,
-    ],
   ]) {
     mode = failure[0];
     await assert.rejects(
@@ -3575,6 +3571,25 @@ test("reconnect retires only an explicitly disconnected unavailable source befor
   const hook = await readFile(join(hookRoot, "settings.json"), "utf8");
   assert.match(hook, /keep-foreign/);
   assert.doesNotMatch(hook, new RegExp(retiredClientSourceId));
+
+  const pending = join(directory, "pending");
+  await mkdir(pending, { recursive: true });
+  await writeFile(join(pending, `${activeSourceId}.json`), '{"stale":true}\n');
+  mode = "unauthorized";
+  const reconnected = await execFileAsync(
+    process.execPath,
+    [connectorPath, "connect", "--origin", origin],
+    { env: environment },
+  );
+  assert.match(
+    reconnected.stdout,
+    /Previous installation authorization is no longer valid; reconnecting/,
+  );
+  assert.equal(pairingStarts, 2);
+  await assert.rejects(access(join(pending, `${activeSourceId}.json`)));
+  const reconnectedConfig = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(reconnectedConfig.installationId, installationId);
+  assert.equal(reconnectedConfig.deviceToken, "dashboard_disconnect_device_token_long_enough");
 });
 
 test("hostile pairing response cannot change config, hooks, or local paths", async (context) => {
