@@ -54,7 +54,27 @@ const stateFiles = new Set([
   "state.json",
   "dirty.json",
 ]);
-const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin"]);
+const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin", "lib"]);
+const legacyRuntimeFiles = new Set([
+  "browser.mjs",
+  "config.mjs",
+  "executables.mjs",
+  "readers.mjs",
+  "registry.mjs",
+  "runtime.mjs",
+]);
+const legacyRuntimeAdapterFiles = new Set([
+  "antigravity.mjs",
+  "claude.mjs",
+  "codex.mjs",
+  "cursor.mjs",
+  "gemini.mjs",
+  "kimi.mjs",
+  "opencode.mjs",
+  "qwen-settings.mjs",
+  "qwen.mjs",
+  "shared.mjs",
+]);
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
@@ -144,6 +164,18 @@ function ownedStatePath(path, info) {
     if (parts.length === 5 && parts[2] === "lib" && parts[3] === "adapters")
       return installedRuntimeAdapterFiles.has(parts[4]) && info.isFile();
     return false;
+  }
+  if (top === "lib") {
+    if (parts.length === 2)
+      return parts[1] === "adapters"
+        ? info.isDirectory()
+        : legacyRuntimeFiles.has(parts[1]) && info.isFile();
+    return (
+      parts.length === 3 &&
+      parts[1] === "adapters" &&
+      legacyRuntimeAdapterFiles.has(parts[2]) &&
+      info.isFile()
+    );
   }
   if (top === "bin") return parts.length === 2 && parts[1] === "viberacing.mjs" && info.isFile();
   return top === "logs" && parts.length === 2 && parts[1] === "last-error.log" && info.isFile();
@@ -1119,9 +1151,52 @@ function ownsAnyHook(handler) {
   );
 }
 
+function swapUtf16ByteOrder(value) {
+  if (value.length % 2 !== 0) throw new Error("Hook settings contain truncated UTF-16 data");
+  const swapped = Buffer.allocUnsafe(value.length);
+  for (let index = 0; index < value.length; index += 2) {
+    swapped[index] = value[index + 1];
+    swapped[index + 1] = value[index];
+  }
+  return swapped;
+}
+
+function decodeHookSettings(value) {
+  if (value.length >= 2 && value[0] === 0xff && value[1] === 0xfe) {
+    const contents = value.subarray(2);
+    if (contents.length % 2 !== 0) throw new Error("Hook settings contain truncated UTF-16 data");
+    return { contents: contents.toString("utf16le"), encoding: "utf16le" };
+  }
+  if (value.length >= 2 && value[0] === 0xfe && value[1] === 0xff)
+    return {
+      contents: swapUtf16ByteOrder(value.subarray(2)).toString("utf16le"),
+      encoding: "utf16be",
+    };
+  if (value.length >= 3 && value[0] === 0xef && value[1] === 0xbb && value[2] === 0xbf)
+    return { contents: value.subarray(3).toString("utf8"), encoding: "utf8-bom" };
+  return { contents: value.toString("utf8"), encoding: "utf8" };
+}
+
+function encodeHookSettings(contents, encoding) {
+  if (encoding === "utf16le")
+    return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(contents, "utf16le")]);
+  if (encoding === "utf16be")
+    return Buffer.concat([
+      Buffer.from([0xfe, 0xff]),
+      swapUtf16ByteOrder(Buffer.from(contents, "utf16le")),
+    ]);
+  if (encoding === "utf8-bom")
+    return Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(contents, "utf8")]);
+  return Buffer.from(contents, "utf8");
+}
+
+async function readHookSettings(path) {
+  return decodeHookSettings(await readFile(path));
+}
+
 async function jsonHookStatus(path, event, expectedCommand, marker, options = {}) {
   try {
-    const contents = await readFile(path, "utf8");
+    const { contents } = await readHookSettings(path);
     const settings = options.jsonc ? parseQwenJsonc(contents) : JSON.parse(contents);
     const groups = settings?.hooks?.[event];
     if (!Array.isArray(groups)) return "missing";
@@ -1141,8 +1216,9 @@ async function updateHook(path, event, hook, options = {}) {
   const { remove = false, markers = [], removeAll = false, jsonc = false } = options;
   let settings = {};
   let contents = "{}";
+  let encoding = "utf8";
   try {
-    contents = await readFile(path, "utf8");
+    ({ contents, encoding } = await readHookSettings(path));
     settings = jsonc ? parseQwenJsonc(contents) : JSON.parse(contents);
   } catch (error) {
     if (error?.code !== "ENOENT")
@@ -1178,9 +1254,12 @@ async function updateHook(path, event, hook, options = {}) {
     .filter((group) => !Array.isArray(group?.hooks) || group.hooks.length > 0);
   if (!remove) retained.push(hook);
   settings.hooks[event] = retained;
+  await ensurePrivateStateDirectory();
   if (jsonc)
-    await atomicText(path, setQwenJsoncProperty(contents, "hooks", settings.hooks).trimEnd());
-  else await atomicJson(path, settings);
+    await atomicText(path, setQwenJsoncProperty(contents, "hooks", settings.hooks).trimEnd(), {
+      encoding,
+    });
+  else await atomicText(path, JSON.stringify(settings, null, 2), { encoding });
   return true;
 }
 
@@ -1225,10 +1304,10 @@ async function updateKimiHook(root, command, marker, options = {}) {
   return !remove;
 }
 
-async function atomicText(path, contents) {
+async function atomicText(path, contents, { encoding = "utf8" } = {}) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, `${contents}\n`, { mode: 0o600 });
+  await writeFile(temporary, encodeHookSettings(`${contents}\n`, encoding), { mode: 0o600 });
   await rename(temporary, path);
   await chmod(path, 0o600);
 }

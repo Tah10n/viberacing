@@ -31,7 +31,7 @@ function unique(values, platform) {
 function pathNames(command, platform, environment) {
   if (platform !== "win32") return [command];
   const extensions = (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD").split(";").filter(Boolean);
-  return [command, ...extensions.map((extension) => `${command}${extension.toLowerCase()}`)];
+  return extensions.map((extension) => `${command}${extension.toLowerCase()}`);
 }
 
 function managerDirectories(home, platform, environment) {
@@ -50,7 +50,7 @@ function managerDirectories(home, platform, environment) {
       environment.LOCALAPPDATA && join(environment.LOCALAPPDATA, "Microsoft", "WindowsApps"),
       join(home, "scoop", "shims"),
       environment.ProgramData && join(environment.ProgramData, "chocolatey", "bin"),
-    ];
+    ].filter(Boolean);
   return [
     ...common,
     "/usr/local/bin",
