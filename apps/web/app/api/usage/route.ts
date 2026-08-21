@@ -1,11 +1,12 @@
 import { connectorProtocolVersion, maximumDailyTokens } from "@/lib/config";
 import { agentRegistry, isSupportedAgent } from "@/lib/agents";
+import { autoDeduplicateAccountWideSource } from "@/lib/account-dedup";
 import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
-import { refreshAgentWeek } from "@/lib/usage-summary";
+import { rebuildAgentSummaries, refreshAgentWeek } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface UsageBody {
@@ -328,7 +329,7 @@ async function post(request: Request): Promise<Response> {
     ) {
       return problem(400, "invalid_request");
     }
-    const result = await transaction(async (client) => {
+    const transactionResult = await transaction(async (client) => {
       const lockedUser = await client.query<{ id: string }>(
         "SELECT id::text FROM users WHERE id = $1 FOR UPDATE",
         [installation.user_id],
@@ -360,6 +361,7 @@ async function post(request: Request): Promise<Response> {
         sources.rows.map((source) => [source.id, source.last_accepted_sync_sequence]),
       );
       const acceptedSourceIds = new Set<string>();
+      const completeSourcesForDedup = new Set<string>();
       const summaries = new Set<string>();
       for (const snapshot of snapshots) {
         const source = sourceById.get(snapshot.sourceId);
@@ -478,6 +480,12 @@ async function post(request: Request): Promise<Response> {
         acceptedSnapshots += 1;
         acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
         acceptedSourceIds.add(snapshot.sourceId);
+        if (
+          snapshot.completeness === "complete" &&
+          agentRegistry[source.agent_id].aggregationMode === "account_max"
+        ) {
+          completeSourcesForDedup.add(snapshot.sourceId);
+        }
         for (const week of affectedWeeks(snapshot)) {
           summaries.add(`${source.user_id}\0${source.agent_id}\0${week}`);
         }
@@ -494,12 +502,36 @@ async function post(request: Request): Promise<Response> {
           [sourceError.sourceId],
         );
       }
+      const rebuiltAgents = new Set<string>();
+      let autoMerges = 0;
+      const todayUtc = new Date().toISOString().slice(0, 10);
+      for (const sourceId of [...completeSourcesForDedup].sort()) {
+        const merged = await autoDeduplicateAccountWideSource(
+          client,
+          lockedInstallation.user_id,
+          sourceId,
+          todayUtc,
+        );
+        if (merged !== null) {
+          autoMerges += 1;
+          rebuiltAgents.add(`${lockedInstallation.user_id}\0${merged.agentId}`);
+        }
+      }
       for (const summary of [...summaries].sort()) {
         const [userId, agentId, week] = summary.split("\0");
         if (userId === undefined || agentId === undefined || week === undefined) {
           throw new Error("Invalid internal summary key");
         }
-        await refreshAgentWeek(client, userId, agentId, week);
+        if (!rebuiltAgents.has(`${userId}\0${agentId}`)) {
+          await refreshAgentWeek(client, userId, agentId, week);
+        }
+      }
+      for (const rebuilt of [...rebuiltAgents].sort()) {
+        const [userId, agentId] = rebuilt.split("\0");
+        if (userId === undefined || agentId === undefined) {
+          throw new Error("Invalid internal account deduplication key");
+        }
+        await rebuildAgentSummaries(client, userId, agentId);
       }
       if (acceptedSnapshots > 0) {
         await client.query(
@@ -508,23 +540,28 @@ async function post(request: Request): Promise<Response> {
         );
       }
       return {
-        acceptedEntries,
-        acceptedSnapshots,
-        acceptedSourceErrors: sourceErrors.length,
-        staleSnapshots: snapshots.length - acceptedSnapshots,
-        sourceSequences: sourceIds.map((sourceId) => ({
-          sourceId,
-          lastAcceptedSyncSequence: acceptedSequences.get(sourceId) ?? "0",
-          accepted: acceptedSourceIds.has(sourceId),
-        })),
+        response: {
+          acceptedEntries,
+          acceptedSnapshots,
+          acceptedSourceErrors: sourceErrors.length,
+          staleSnapshots: snapshots.length - acceptedSnapshots,
+          sourceSequences: sourceIds.map((sourceId) => ({
+            sourceId,
+            lastAcceptedSyncSequence: acceptedSequences.get(sourceId) ?? "0",
+            accepted: acceptedSourceIds.has(sourceId),
+          })),
+        },
+        autoMerges,
       };
     });
+    const result = transactionResult.response;
     return annotateResponse(Response.json(result, { headers: { "Cache-Control": "no-store" } }), {
       snapshotsReceived: snapshots.length,
       snapshotsAccepted: result.acceptedSnapshots,
       snapshotsStale: result.staleSnapshots,
       entriesAccepted: result.acceptedEntries,
       sourceErrorsReceived: sourceErrors.length,
+      accountAutoMerges: transactionResult.autoMerges,
     });
   } catch (error) {
     if (error instanceof UsageError) return problem(error.status, error.code);

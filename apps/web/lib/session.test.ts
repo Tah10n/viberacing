@@ -46,6 +46,11 @@ describe("browser session creation", () => {
     );
     expect(clientQueryMock).toHaveBeenCalledWith(expect.stringContaining("OFFSET $2"), ["42", 9]);
     expect(clientQueryMock).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /DELETE FROM agent_accounts[\s\S]+a\.merged_into_account_id IS NULL[\s\S]+OR NOT EXISTS[\s\S]+event\.status = 'active'/,
+      ),
+    );
+    expect(clientQueryMock).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO sessions"),
       expect.arrayContaining([expect.any(String), "42"]),
     );

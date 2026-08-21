@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { agentRegistry, type SupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { transaction } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
@@ -17,17 +18,46 @@ async function post(request: Request): Promise<Response> {
     if (!isUuid(sourceId) || !isUuid(accountId)) return problem(400, "invalid_request");
     const changed = await transaction(async (client) => {
       await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
-      const result = await client.query<{ agent_id: string }>(
-        `UPDATE installation_sources s
-            SET agent_account_id = a.id, updated_at = now()
-           FROM agent_accounts a
-          WHERE s.id = $1 AND a.id = $2
-            AND s.user_id = $3 AND a.user_id = $3 AND s.agent_id = a.agent_id
-          RETURNING s.agent_id`,
-        [sourceId, accountId, current.id],
+      const sources = await client.query<{
+        agent_id: SupportedAgent;
+        agent_account_id: string;
+      }>(
+        `SELECT agent_id, agent_account_id::text
+           FROM installation_sources
+          WHERE id = $1 AND user_id = $2
+          FOR UPDATE`,
+        [sourceId, current.id],
       );
-      if (result.rows[0]) await rebuildAgentSummaries(client, current.id, result.rows[0].agent_id);
-      return result.rowCount === 1;
+      const source = sources.rows[0];
+      if (source === undefined) return false;
+      const accounts = await client.query<{ id: string }>(
+        `SELECT id::text FROM agent_accounts
+          WHERE id = $1 AND user_id = $2 AND agent_id = $3
+            AND merged_into_account_id IS NULL
+          FOR UPDATE`,
+        [accountId, current.id, source.agent_id],
+      );
+      if (accounts.rows[0] === undefined) return false;
+      if (source.agent_account_id === accountId) return true;
+      await client.query(
+        `UPDATE installation_sources
+            SET agent_account_id = $2,
+                auto_dedup_decided_at = CASE
+                  WHEN $3::boolean THEN coalesce(auto_dedup_decided_at, now())
+                  ELSE auto_dedup_decided_at
+                END,
+                updated_at = now()
+          WHERE id = $1`,
+        [sourceId, accountId, agentRegistry[source.agent_id].aggregationMode === "account_max"],
+      );
+      await client.query(
+        `UPDATE account_dedup_events
+            SET status = 'superseded', updated_at = now()
+          WHERE source_id = $1 AND user_id = $2 AND status = 'active'`,
+        [sourceId, current.id],
+      );
+      await rebuildAgentSummaries(client, current.id, source.agent_id);
+      return true;
     });
     if (!changed) return problem(404, "source_or_account_not_found");
     return NextResponse.redirect(new URL("/dashboard?updated=1", publicOrigin()), 303);

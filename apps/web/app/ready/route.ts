@@ -19,7 +19,8 @@ async function get(): Promise<Response> {
               ) AS expected_version,
               to_regclass('public.installation_sources') IS NOT NULL
                 AND to_regclass('public.daily_usage') IS NOT NULL
-                AND to_regclass('public.weekly_agent_usage') IS NOT NULL AS required_tables`,
+                AND to_regclass('public.weekly_agent_usage') IS NOT NULL
+                AND to_regclass('public.account_dedup_events') IS NOT NULL AS required_tables`,
       [expectedSchemaVersion],
     );
     const schema = rows[0];

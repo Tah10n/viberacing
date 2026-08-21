@@ -31,6 +31,12 @@ async function post(request: Request): Promise<Response> {
       [current.id],
     );
     await client.query(
+      `UPDATE account_dedup_events
+          SET status = 'superseded', updated_at = now()
+        WHERE user_id = $1 AND status = 'active'`,
+      [current.id],
+    );
+    await client.query(
       `DELETE FROM daily_usage
         WHERE source_id IN (SELECT id FROM installation_sources WHERE user_id = $1)`,
       [current.id],

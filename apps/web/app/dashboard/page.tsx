@@ -44,6 +44,14 @@ interface SourceRow {
   status: string;
 }
 
+interface DedupEventRow {
+  id: string;
+  agent_id: string;
+  matched_days: number;
+  installation_name: string;
+  target_label: string;
+}
+
 function agentLabel(agent: string): string {
   return isSupportedAgent(agent) ? agentNames[agent] : agent;
 }
@@ -81,7 +89,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
   const [current, params] = await Promise.all([viewer(), searchParams]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
-  const [installations, accounts, sources] = await Promise.all([
+  const [installations, accounts, sources, dedupEvents] = await Promise.all([
     query<InstallationRow>(
       `SELECT i.id::text, i.name, i.last_sync_at, count(s.id)::int AS source_count
          FROM installations i
@@ -120,7 +128,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                 GROUP BY d.usage_date
              ) day
          ) usage ON true
-        WHERE a.user_id = $1
+        WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
         GROUP BY a.id, usage.tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
       [current.id, currentWeekStart()],
@@ -132,6 +140,21 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
+      [current.id],
+    ),
+    query<DedupEventRow>(
+      `SELECT event.id::text,
+              event.agent_id,
+              event.matched_days,
+              installation.name AS installation_name,
+              target.label AS target_label
+         FROM account_dedup_events event
+         JOIN installation_sources source ON source.id = event.source_id
+         JOIN installations installation ON installation.id = source.installation_id
+         JOIN agent_accounts target ON target.id = event.target_account_id
+        WHERE event.user_id = $1 AND event.status = 'active'
+          AND source.agent_account_id = event.target_account_id
+        ORDER BY event.created_at DESC`,
       [current.id],
     ),
   ]);
@@ -150,7 +173,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               ? "Agent account and its stored usage were deleted."
               : params.updated === "1"
                 ? "Account mapping updated."
-                : null;
+                : params.dedupUndone === "1"
+                  ? "Automatic account match undone. These totals are separate again."
+                  : null;
   return (
     <PageShell className="dashboard-page">
       <PageHeader
@@ -176,6 +201,26 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
       )}
+
+      {dedupEvents.map((event) => (
+        <Panel className="dedup-notice" key={event.id}>
+          <p className="eyebrow">AUTOMATIC ACCOUNT MATCH</p>
+          <h2>
+            {agentLabel(event.agent_id)} on {event.installation_name} was combined with{" "}
+            {event.target_label}
+          </h2>
+          <p>
+            {event.matched_days} completed daily totals matched exactly. Provider email and
+            credentials were not used.
+          </p>
+          <SameOriginActionForm action="/api/accounts/dedup/undo">
+            <input name="eventId" type="hidden" value={event.id} />
+            <button className="text-button" type="submit">
+              Undo automatic match
+            </button>
+          </SameOriginActionForm>
+        </Panel>
+      ))}
 
       <details
         className="panel connect-disclosure"

@@ -58,6 +58,13 @@ export async function createSession(userId: string): Promise<void> {
          SELECT a.id FROM agent_accounts a
           WHERE a.created_at < now() - interval '1 day'
             AND NOT EXISTS (SELECT 1 FROM installation_sources s WHERE s.agent_account_id = a.id)
+            AND (
+              a.merged_into_account_id IS NULL
+              OR NOT EXISTS (
+                SELECT 1 FROM account_dedup_events event
+                 WHERE event.previous_account_id = a.id AND event.status = 'active'
+              )
+            )
           LIMIT 25
        )`,
     );
