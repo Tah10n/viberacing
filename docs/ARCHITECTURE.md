@@ -101,6 +101,13 @@ intact, so the event is neither dropped nor turned into an unbounded retry. Sche
 carry ownership tokens, so a stale owner cannot remove a replacement lock. There is no daemon,
 watcher, polling loop, or required cron.
 
+The optional browser path is an on-demand OS protocol launch, not another service. A browser paired
+to an active installation receives an independent short-lived grant; `viberacing://sync` starts the
+installed runtime, which authenticates with its existing device token and claims the active source
+IDs for one agent account on that installation. The connector applies the normal single-flight and
+snapshot rules to only those IDs, posts an allowlisted completion status, and exits. The server
+never pushes work and the connector never polls for browser requests.
+
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with
 no pending payload make no HTTP request. A direct manual sync waits at most 60 seconds for that lock

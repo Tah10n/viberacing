@@ -53,6 +53,7 @@ const stateFiles = new Set([
   "connect-attempt.json",
   "state.json",
   "dirty.json",
+  "browser-handler.json",
 ]);
 const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin", "lib"]);
 const legacyRuntimeFiles = new Set([
@@ -1313,6 +1314,7 @@ async function atomicText(path, contents, { encoding = "utf8" } = {}) {
 }
 
 const installedRuntimeFiles = [
+  "browser-integration.mjs",
   "browser.mjs",
   "connection-lifecycle.mjs",
   "config.mjs",

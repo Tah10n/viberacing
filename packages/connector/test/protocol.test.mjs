@@ -110,6 +110,27 @@ test("protocol errors are snake_case and terminal output strips control characte
   assert.equal(sanitizeTerminalText("safe\u001b[2J\r\nnext"), "safe�[2J��next");
 });
 
+test("browser Sync claims accept only a bounded unique source set", async () => {
+  const requestId = "11111111-1111-4111-8111-111111111111";
+  const sourceId = "22222222-2222-4222-8222-222222222222";
+  const response = new Response(JSON.stringify({ requestId, sourceIds: [sourceId] }), {
+    headers: { "Content-Type": "application/json" },
+  });
+  assert.deepEqual(await parseProtocolResponse(response, { kind: "browserSyncClaim" }), {
+    requestId,
+    sourceIds: [sourceId],
+  });
+  await assert.rejects(
+    parseProtocolResponse(
+      new Response(JSON.stringify({ requestId, sourceIds: [sourceId, sourceId] }), {
+        headers: { "Content-Type": "application/json" },
+      }),
+      { kind: "browserSyncClaim" },
+    ),
+    /invalid protocol response/i,
+  );
+});
+
 test("rejects agent substitution and non-exact pairing source sets", async () => {
   await assert.rejects(
     parseProtocolResponse(json(activePoll([mapping({ agentId: "codex" })])), {

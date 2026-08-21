@@ -3,7 +3,7 @@ import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
-import { viewer } from "@/lib/session";
+import { clearLocalInstallation, localInstallationId, viewer } from "@/lib/session";
 
 async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
@@ -31,6 +31,7 @@ async function post(request: Request): Promise<Response> {
       WHERE installation_id IN (SELECT id FROM revoked) AND status = 'active'`,
     [installationId, current.id],
   );
+  if ((await localInstallationId()) === installationId) await clearLocalInstallation();
   return NextResponse.redirect(new URL("/dashboard?disconnected=1", publicOrigin()), 303);
 }
 

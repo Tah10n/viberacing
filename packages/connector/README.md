@@ -51,6 +51,12 @@ viberacing reset-installation
 viberacing run antigravity [--source <client-source-id>] -- <native agy arguments>
 ```
 
+`connect` also registers a per-user `viberacing://` handler on macOS, Windows, and Linux when the
+default state directory is used. The dashboard uses it only after that browser approved the same
+installation. A click starts the installed connector copy, claims a short-lived device-authenticated
+grant, syncs only the selected account's sources on that computer, reports a safe result code, and
+exits. Custom state roots continue to use `viberacing sync` and never replace the global handler.
+
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.
 Pairing configuration contains the server mapping but never a path or path hash. Separate Codex
@@ -127,6 +133,11 @@ and hooks even when counters are unchanged. There is no resident daemon, polling
 watcher. Manual sync and initial connect bypass the cooldown and collect all active sources; a
 direct manual sync waits up to 60 seconds for an existing sync and reports a busy error if the lock
 remains occupied. Unchanged data sends no request.
+
+Browser-triggered sync shares the same single-flight lock but scopes collection and pending delivery
+to the server-authorized source IDs for one account on the bound installation. The URL contains only
+opaque IDs and a one-time grant; account labels, paths, provider identities, and usage content are
+never included. `uninstall` removes only an owned handler registration before deleting its runtime.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file

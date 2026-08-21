@@ -56,6 +56,12 @@ expose daily data, account labels, source/installation details, or credentials. 
 the user's control, so the leaderboard is explicitly self-reported and grants no authorization,
 reward, or access.
 
+Browser sync stores only an installation capability, independently hashed five-minute grants, opaque
+account and request IDs, and an allowlisted run status for bounded cleanup. The custom URL has no
+label, path, provider identity, usage total, or session content. A grant is insufficient without the
+connector's device token, and a handler claim can return only active source IDs already mapped to
+that account on the same installation.
+
 Disconnecting an installation or source revokes future ingestion but retains its history. Deleting
 an agent account deletes its sources and usage. **Leave leaderboard** deletes all usage and revokes
 installations while retaining the GitHub identity and empty account labels. **Delete Vibe Racing

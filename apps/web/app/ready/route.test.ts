@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock("@/lib/config", () => ({
-  expectedSchemaVersion: "002_account_deduplication.sql",
+  expectedSchemaVersion: "003_browser_sync.sql",
   validateRuntimeConfig: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({ query }));
@@ -19,7 +19,7 @@ describe("readiness migration ledger", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       status: "ready",
-      schemaVersion: "002_account_deduplication.sql",
+      schemaVersion: "003_browser_sync.sql",
     });
   });
 

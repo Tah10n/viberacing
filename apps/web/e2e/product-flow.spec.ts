@@ -92,7 +92,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const start = await request.post("/api/pairing/start", {
     data: {
       protocolVersion: 2,
-      connectorVersion: "0.2.1",
+      connectorVersion: "0.3.0",
+      browserSyncCapable: true,
       installationId,
       installationSecret: "synthetic_e2e_installation_secret_123456",
       sources: [
@@ -149,6 +150,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.reload();
   await expect(page.getByText(/12[.,]3K tokens/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
   await page.getByText("Manage account").click();
   await page.getByLabel("Account label").fill("Renamed E2E");
   await page.getByRole("button", { name: "Rename" }).click();

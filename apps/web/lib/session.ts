@@ -4,7 +4,9 @@ import { digest, randomToken } from "./crypto";
 import { query, transaction } from "./db";
 
 const cookieName = "vr_session";
+const localInstallationCookieName = "vr_local_installation";
 const sessionSeconds = 60 * 60 * 24 * 30;
+const localInstallationSeconds = 60 * 60 * 24 * 365;
 const maximumActiveSessionsPerUser = 10;
 
 export interface Viewer {
@@ -92,6 +94,28 @@ export async function createSession(userId: string): Promise<void> {
     sameSite: "lax",
     secure: secureCookies(),
   });
+}
+
+export async function localInstallationId(): Promise<string | null> {
+  const value = (await cookies()).get(localInstallationCookieName)?.value;
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
+export async function bindLocalInstallation(installationId: string): Promise<void> {
+  (await cookies()).set(localInstallationCookieName, installationId, {
+    httpOnly: true,
+    maxAge: localInstallationSeconds,
+    path: "/",
+    sameSite: "lax",
+    secure: secureCookies(),
+  });
+}
+
+export async function clearLocalInstallation(): Promise<void> {
+  (await cookies()).delete(localInstallationCookieName);
 }
 
 export async function destroySession(): Promise<void> {

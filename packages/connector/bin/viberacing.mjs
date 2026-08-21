@@ -18,6 +18,11 @@ import {
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
+import {
+  browserSyncRegistrationStatus,
+  registerBrowserSync,
+  unregisterBrowserSync,
+} from "../lib/browser-integration.mjs";
 import { disableLocalConnection } from "../lib/connection-lifecycle.mjs";
 import { sanitizeTerminalText } from "../lib/terminal.mjs";
 import {
@@ -339,6 +344,11 @@ async function connect() {
       "No exact token source was found yet. Run a supported agent at least once, or add its token data root explicitly. Try `viberacing doctor` or `viberacing source add --agent <agent> --name <label> --data-dir <usage-root>`.",
     );
   const installedRuntime = await prepareRuntime(import.meta.url);
+  const browserSyncCapable = await registerBrowserSync(installedRuntime);
+  if (!browserSyncCapable)
+    warning(
+      "Vibe Racing warning: browser Sync could not be registered; CLI sync remains available.",
+    );
   const installation = await readOrCreateInstallation();
   await invalidateAndCancelConnectAttempt();
   const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id);
@@ -382,6 +392,7 @@ async function connect() {
           installationSecret: installation.secret,
           sources: [...sources.values()].map(publicSource),
           supersededClientSourceIds,
+          browserSyncCapable,
         }),
       },
       1,
@@ -821,7 +832,7 @@ function pendingGroups(items) {
   return groups;
 }
 
-async function drainPending(config, retryStale = true) {
+async function drainPending(config, retryStale = true, allowedSourceIds) {
   const configured = new Set(
     config.sources
       .map((source) => source.sourceId)
@@ -842,6 +853,7 @@ async function drainPending(config, retryStale = true) {
       await removePending(path);
       continue;
     }
+    if (allowedSourceIds && !allowedSourceIds.has(sourceId)) continue;
     items.push({ path, payload, sourceId });
   }
   const retired = new Set();
@@ -866,7 +878,7 @@ async function drainPending(config, retryStale = true) {
     await retireMappedSources(config, retired);
   }
   if (retryStale && staleSources.size > 0) {
-    const retried = await drainPending(config, false);
+    const retried = await drainPending(config, false, allowedSourceIds);
     accepted += retried.accepted;
     for (const sourceId of retried.retiredSources) retired.add(sourceId);
     for (const sourceId of retried.quarantinedSources) quarantinedSources.add(sourceId);
@@ -902,7 +914,10 @@ async function sync(providedConfig, options = {}) {
   return withSyncLock(
     async () => {
       const config = providedConfig ?? (await readConfig());
-      const previous = await drainPending(config);
+      const requestedSourceIds = Array.isArray(options.sourceIds)
+        ? new Set(options.sourceIds)
+        : undefined;
+      const previous = await drainPending(config, true, requestedSourceIds);
       let accepted = previous.accepted;
       let state = await readState();
       state = await reconcileServerState(config, state);
@@ -912,9 +927,13 @@ async function sync(providedConfig, options = {}) {
       const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
       const dirty = await readDirty();
       const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
-      const syncSources = options.automatic
-        ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
-        : mappedSources;
+      const syncSources = requestedSourceIds
+        ? mappedSources.filter((source) => requestedSourceIds.has(source.sourceId))
+        : options.automatic
+          ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
+          : mappedSources;
+      if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
+        throw new Error("Browser sync requested an unavailable source");
       const activeIds = new Set(mappedSources.map((source) => source.clientSourceId));
       const unmappedDirtyIds = [...dirtyIds].filter(
         (clientSourceId) => !activeIds.has(clientSourceId),
@@ -1003,7 +1022,7 @@ async function sync(providedConfig, options = {}) {
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
       await savePending(payload);
-      const delivered = await drainPending(config);
+      const delivered = await drainPending(config, true, requestedSourceIds);
       accepted += delivered.accepted;
       await clearSuccessfulDirty();
       if (snapshots.length === 0)
@@ -1020,6 +1039,99 @@ async function sync(providedConfig, options = {}) {
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
+}
+
+function parseBrowserSyncUrl(value) {
+  if (typeof value !== "string" || value.length > 1_024)
+    throw new Error("Invalid browser Sync URL");
+  const url = new URL(value);
+  const keys = [...url.searchParams.keys()].sort();
+  if (
+    url.protocol !== "viberacing:" ||
+    url.hostname !== "sync" ||
+    (url.pathname !== "" && url.pathname !== "/") ||
+    url.hash !== "" ||
+    JSON.stringify(keys) !== JSON.stringify(["accountId", "grant", "requestId"]) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      url.searchParams.get("requestId") ?? "",
+    ) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      url.searchParams.get("accountId") ?? "",
+    ) ||
+    !/^[A-Za-z0-9_-]{32,128}$/.test(url.searchParams.get("grant") ?? "")
+  )
+    throw new Error("Invalid browser Sync URL");
+  return {
+    requestId: url.searchParams.get("requestId"),
+    accountId: url.searchParams.get("accountId"),
+    grant: url.searchParams.get("grant"),
+  };
+}
+
+async function reportBrowserSync(config, requestId, status, resultCode) {
+  await request(
+    config.origin,
+    "/api/installations/current/sync/result",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.deviceToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ requestId, status, resultCode }),
+    },
+    1,
+    { kind: "empty" },
+  );
+}
+
+async function browserSync(value) {
+  const link = parseBrowserSyncUrl(value);
+  const config = await readConnectedConfig();
+  const claim = await request(
+    config.origin,
+    "/api/installations/current/sync/claim",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.deviceToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(link),
+    },
+    1,
+    { kind: "browserSyncClaim" },
+  );
+  const requested = new Set(claim.sourceIds);
+  const local = config.sources.filter(
+    (source) => requested.has(source.sourceId) && source.agentAccountId === link.accountId,
+  );
+  if (local.length !== requested.size) {
+    await reportBrowserSync(config, link.requestId, "failed", "invalid_request").catch(() => {});
+    throw new Error("Browser sync source mapping changed");
+  }
+  try {
+    const result = await sync(config, { sourceIds: claim.sourceIds, waitMs: manualSyncLockWaitMs });
+    if (result?.skipped) await reportBrowserSync(config, link.requestId, "failed", "busy");
+    else if ((result?.failures?.length ?? 0) > 0)
+      await reportBrowserSync(config, link.requestId, "partial", "partial");
+    else
+      await reportBrowserSync(
+        config,
+        link.requestId,
+        "succeeded",
+        result?.unchanged ? "unchanged" : "complete",
+      );
+  } catch (error) {
+    const resultCode =
+      error?.status === 401 || error?.status === 403
+        ? "authorization_failed"
+        : error?.message?.includes("collector")
+          ? "collector_failed"
+          : "network_failed";
+    await reportBrowserSync(config, link.requestId, "failed", resultCode).catch(() => {});
+    throw error;
+  }
 }
 
 async function launchAutomaticScheduler(existingLaunch) {
@@ -1208,6 +1320,7 @@ async function doctor() {
   const detected = discovery.sources;
   const localSources = await readSources().catch(() => []);
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
+  output(`Browser Sync handler: ${await browserSyncRegistrationStatus()}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
@@ -1580,6 +1693,7 @@ try {
     if (result?.skipped) throw new Error("Another sync is already running.");
   } else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
+  else if (command === "handle-url") await browserSync(arguments_[1]);
   else if (command === "doctor") await doctor();
   else if (command === "accounts") {
     const config = await readConnectedConfig();
@@ -1666,15 +1780,21 @@ try {
         );
       } catch {}
       const result = await removeHooks();
-      if (result.failures.length === 0)
+      let browserCleanupFailed = false;
+      try {
+        await unregisterBrowserSync();
+      } catch {
+        browserCleanupFailed = true;
+      }
+      if (result.failures.length === 0 && !browserCleanupFailed)
         await clearAutomaticState({ afterStopped: removeLocalState });
       else {
         await resetInstallation();
         await clearAutomaticState();
       }
-      return result;
+      return { ...result, browserCleanupFailed };
     });
-    if (cleanup.failures.length === 0)
+    if (cleanup.failures.length === 0 && !cleanup.browserCleanupFailed)
       output(
         "Vibe Racing hooks, installed copy, secrets, and local state removed. Provider data was not changed.",
       );
@@ -1683,7 +1803,7 @@ try {
         "Vibe Racing network access and secrets were removed; cleanup metadata and runtime were retained for retry.",
       );
       warning(
-        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned. Fix the reported provider settings and run \`viberacing uninstall\` again.`,
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) and ${cleanup.browserCleanupFailed ? 1 : 0} browser handler(s) could not be cleaned. Fix the reported settings and run \`viberacing uninstall\` again.`,
       );
       for (const failure of cleanup.failures)
         warning(`- ${failure.agentId ?? "sources"}: ${failure.path} (${failure.message})`);
