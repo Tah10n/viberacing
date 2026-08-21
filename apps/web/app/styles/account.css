@@ -348,6 +348,15 @@
   font-weight: var(--meta-label-weight);
 }
 
+.token-breakdown-note {
+  max-width: 62ch;
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  line-height: var(--meta-line-height);
+}
+
 .connect-disclosure {
   overflow: hidden;
   padding: 0;

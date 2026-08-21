@@ -8,8 +8,11 @@ import {
   diagnosePath,
   integer,
   mergeEntries,
+  totalEntry,
   utcDay,
 } from "./shared.mjs";
+
+const qwenParserVersion = 2;
 
 export function parseQwenLines(lines) {
   const seen = new Set();
@@ -24,21 +27,34 @@ export function parseQwenLines(lines) {
     if (record?.schemaVersion !== 1 || !record.id || seen.has(record.id)) continue;
     const day = utcDay(record.timestamp);
     const input = integer(record.inputTokens);
+    const output = integer(record.outputTokens);
     const cached = integer(record.cachedTokens ?? 0);
-    if (day === null || input === null || cached === null) continue;
+    const thoughts = integer(record.thoughtsTokens ?? 0);
+    const total = integer(record.totalTokens);
+    if (
+      day === null ||
+      input === null ||
+      output === null ||
+      cached === null ||
+      thoughts === null ||
+      total === null
+    )
+      continue;
     seen.add(record.id);
     entries.push(
-      componentEntry(
-        day,
-        {
-          inputTokens: input >= cached ? input - cached : input,
-          outputTokens: record.outputTokens,
-          cacheReadTokens: cached,
-          cacheWriteTokens: 0,
-          reasoningTokens: record.thoughtsTokens,
-        },
-        record.totalTokens,
-      ),
+      cached <= input && thoughts <= output
+        ? componentEntry(
+            day,
+            {
+              inputTokens: input - cached,
+              outputTokens: output - thoughts,
+              cacheReadTokens: cached,
+              cacheWriteTokens: 0,
+              reasoningTokens: thoughts,
+            },
+            total,
+          )
+        : totalEntry(day, total),
     );
   }
   return mergeEntries(entries);
@@ -291,14 +307,19 @@ export const qwenAdapter = Object.freeze({
     return { hookConfigRoot };
   },
   detect: detectQwenSources,
-  collect: (source, range, state) =>
-    collectJsonl(
+  collect: async (source, range, state = {}) => {
+    const result = await collectJsonl(
       source,
       parseQwenLines,
       (path) => basename(path).startsWith("token-usage-"),
-      state,
+      state.parserVersion === qwenParserVersion ? state : {},
       range,
       qwenEventKey,
-    ),
+    );
+    return {
+      ...result,
+      nextState: { ...result.nextState, parserVersion: qwenParserVersion },
+    };
+  },
   diagnose: (source) => diagnosePath(source),
 });

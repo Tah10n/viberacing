@@ -1432,13 +1432,20 @@ export async function installHookForSource(source, installedScript) {
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(installedScript, source);
   const options = { markers: [legacyHookMarker, marker] };
-  if (source.agentId === "codex")
-    return updateHook(
-      join(hookRoot(source, "codex"), "hooks.json"),
-      "SessionEnd",
+  if (source.agentId === "codex") {
+    const path = join(hookRoot(source, "codex"), "hooks.json");
+    const installedStop = await updateHook(
+      path,
+      "Stop",
       { hooks: [{ type: "command", command, timeout: 3 }] },
       options,
     );
+    const removedSessionEnd = await updateHook(path, "SessionEnd", null, {
+      ...options,
+      remove: true,
+    });
+    return installedStop || removedSessionEnd;
+  }
   if (source.agentId === "claude_code")
     return updateHook(
       join(hookRoot(source, "claude_code"), "settings.json"),
@@ -1493,12 +1500,7 @@ export async function diagnoseHookForSource(source) {
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(installedScript, source);
   if (source.agentId === "codex")
-    return jsonHookStatus(
-      join(hookRoot(source, "codex"), "hooks.json"),
-      "SessionEnd",
-      command,
-      marker,
-    );
+    return jsonHookStatus(join(hookRoot(source, "codex"), "hooks.json"), "Stop", command, marker);
   if (source.agentId === "claude_code")
     return jsonHookStatus(
       join(hookRoot(source, "claude_code"), "settings.json"),
@@ -1552,8 +1554,12 @@ export async function removeHookForSource(source, options = {}) {
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
   const root = hookRoot(source, source.agentId);
-  if (source.agentId === "codex")
-    return updateHook(join(root, "hooks.json"), "SessionEnd", null, hookOptions);
+  if (source.agentId === "codex") {
+    const path = join(root, "hooks.json");
+    const removedStop = await updateHook(path, "Stop", null, hookOptions);
+    const removedSessionEnd = await updateHook(path, "SessionEnd", null, hookOptions);
+    return removedStop || removedSessionEnd;
+  }
   if (source.agentId === "claude_code")
     return updateHook(join(root, "settings.json"), "Stop", null, hookOptions);
   if (source.agentId === "gemini_cli" || source.agentId === "qwen_code")
@@ -1652,12 +1658,16 @@ export async function removeHooks() {
     try {
       if (source.clientSourceId)
         await removeHookForSource(source, { removeLegacy: true, removeAll: true });
-      else if (source.agentId === "codex")
+      else if (source.agentId === "codex") {
         await updateHook(join(root, "hooks.json"), "SessionEnd", null, {
           remove: true,
           removeAll: true,
         });
-      else if (source.agentId === "claude_code")
+        await updateHook(join(root, "hooks.json"), "Stop", null, {
+          remove: true,
+          removeAll: true,
+        });
+      } else if (source.agentId === "claude_code")
         await updateHook(join(root, "settings.json"), "Stop", null, {
           remove: true,
           removeAll: true,

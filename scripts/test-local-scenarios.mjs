@@ -221,7 +221,13 @@ function snapshot(
     rangeStart: start,
     rangeEnd: end,
     completeness,
-    entries: entries.map(([date, totalTokens]) => ({ date, totalTokens: String(totalTokens) })),
+    entries: entries.map(([date, totalTokens, components]) => ({
+      date,
+      totalTokens: String(totalTokens),
+      ...(components
+        ? Object.fromEntries(Object.entries(components).map(([key, value]) => [key, String(value)]))
+        : {}),
+    })),
   };
 }
 
@@ -424,8 +430,32 @@ try {
   const secondByClient = new Map(second.sources.map((item) => [item.clientSourceId, item]));
 
   const initial = await usage(first.deviceToken, [
-    snapshot(byClient.get("codex-personal-a").sourceId, 1, [[today, 100]]),
-    snapshot(byClient.get("codex-work").sourceId, 1, [[today, 40]]),
+    snapshot(byClient.get("codex-personal-a").sourceId, 1, [
+      [
+        today,
+        100,
+        {
+          inputTokens: 30,
+          outputTokens: 20,
+          cacheReadTokens: 20,
+          cacheWriteTokens: 10,
+          reasoningTokens: 10,
+        },
+      ],
+    ]),
+    snapshot(byClient.get("codex-work").sourceId, 1, [
+      [
+        today,
+        40,
+        {
+          inputTokens: 10,
+          outputTokens: 10,
+          cacheReadTokens: 5,
+          cacheWriteTokens: 5,
+          reasoningTokens: 5,
+        },
+      ],
+    ]),
     snapshot(byClient.get("claude-personal").sourceId, 1, [[today, 30]]),
     snapshot(byClient.get("opencode-personal").sourceId, 1, [[today, 7]]),
   ]);
@@ -452,6 +482,70 @@ try {
   console.log(
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
+
+  let componentDashboard = await authenticatedGet("/dashboard");
+  let componentDashboardHtml = await componentDashboard.text();
+  let componentBreakdownCount = (
+    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+  ).length;
+  let independentComponentNoteCount = (
+    componentDashboardHtml.match(/Local component counters total/g) ?? []
+  ).length;
+  check(
+    componentDashboard.status === 200 &&
+      componentBreakdownCount === 2 &&
+      independentComponentNoteCount >= 2,
+    `account_max component display mismatch: status=${componentDashboard.status}, breakdowns=${componentBreakdownCount}, notes=${independentComponentNoteCount}`,
+  );
+  const rejectedMachineLocalMismatch = await usage(first.deviceToken, [
+    snapshot(byClient.get("claude-personal").sourceId, 2, [
+      [
+        today,
+        30,
+        {
+          inputTokens: 10,
+          outputTokens: 5,
+          cacheReadTokens: 3,
+          cacheWriteTokens: 2,
+          reasoningTokens: 0,
+        },
+      ],
+    ]),
+  ]);
+  check(
+    rejectedMachineLocalMismatch.status === 400,
+    "source_sum accepted components that did not match its authoritative total",
+  );
+  const conflictingComponents = await usage(second.deviceToken, [
+    snapshot(secondByClient.get("codex-personal-b").sourceId, 2, [
+      [
+        today,
+        100,
+        {
+          inputTokens: 50,
+          outputTokens: 10,
+          cacheReadTokens: 10,
+          cacheWriteTokens: 10,
+          reasoningTokens: 10,
+        },
+      ],
+    ]),
+  ]);
+  check(conflictingComponents.status === 200, "conflicting component snapshot failed");
+  componentDashboard = await authenticatedGet("/dashboard");
+  componentDashboardHtml = await componentDashboard.text();
+  componentBreakdownCount = (
+    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+  ).length;
+  check(
+    componentDashboard.status === 200 && componentBreakdownCount === 1,
+    `account_max conflict display mismatch: status=${componentDashboard.status}, breakdowns=${componentBreakdownCount}`,
+  );
+  const restoredComponents = await usage(second.deviceToken, [
+    snapshot(secondByClient.get("codex-personal-b").sourceId, 3, [[today, 80]]),
+  ]);
+  check(restoredComponents.status === 200, "component conflict restoration failed");
+  console.log("ok - account_max component tuples are exact, deduplicated, and fail closed");
 
   const dedupBaseline = await pool.query(
     "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",

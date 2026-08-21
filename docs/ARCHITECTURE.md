@@ -69,7 +69,11 @@ pending snapshot is rewritten to `server + 1` and retried once; there is no unbo
 
 Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
 Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
-use daily `max`; machine-local sources use daily `sum`. Different accounts and agents sum.
+use daily `max`; machine-local sources use daily `sum`. Different accounts and agents sum. Dashboard
+components for an account-wide day are selected conservatively from the largest complete local
+component total. They are hidden for that day if equally large rows contain more than one distinct
+tuple. The dashboard identifies a local component sum that differs from the separate provider
+account total.
 
 ## Reliability and lifecycle
 
@@ -77,7 +81,13 @@ Collectors run independently with concurrency four. The first run reads at most 
 days within explicit file/count/byte bounds. Later JSONL runs reuse size, mtime, inode, and the last
 complete byte offset; unchanged files are not reopened for content, appends resume, truncation or
 replacement rereads only that file, and disappeared files leave the index. OpenCode's read-only SQL
-is range-bounded. One Codex App Server is started per actually configured profile per batch.
+is range-bounded. One Codex App Server is started per actually configured profile per batch. Its
+official daily total remains authoritative; the connector incrementally extracts only cumulative
+token events from that profile's local session records, uses the exact last-call counters, removes
+cache/reasoning overlap, and deduplicates repeated or copied events with content-free hashes. The
+provider's account-wide daily total and the locally observed component sum remain separate exact
+counters. Missing, bounded, or changed transcript shapes therefore degrade to total-only rather than
+an estimate.
 
 Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable local
 source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and other
@@ -86,6 +96,10 @@ remove hooks for known unmapped sources, and replace the one legacy v2 marker. A
 stdin, updates its entry in the version-2 `dirty.json` ledger under a short read-modify-write file
 lock, claims one scheduler lock, and exits with the provider's minimal response. Entries contain
 only source UUID, timestamps, and a generation—never a path or account label.
+
+Codex uses `Stop`, which runs after each completed turn; upgrades remove only the connector-owned
+legacy `SessionEnd` handler. The hook still performs no collection itself. Other providers keep the
+documented lifecycle event supported by their current release.
 
 The short-lived detached scheduler uses one timer: 15-second debounce, 120-second minimum automatic
 interval, and 120-second maximum delay. After taking the single-flight sync lock it drains pending

@@ -61,7 +61,13 @@ exits. Custom state roots continue to use `viberacing sync` and never replace th
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.
 Pairing configuration contains the server mapping but never a path or path hash. Separate Codex
 accounts require separate `--data-dir` profile roots; each App Server launch gets that source's
-`CODEX_HOME`, so one profile is never collected twice as two local sources.
+`CODEX_HOME`, so one profile is never collected twice as two local sources. The App Server daily
+total remains authoritative. A local incremental pass extracts only cumulative `token_count` events
+from that profile's session files, uses provider-recorded `last_token_usage`, removes
+cache/reasoning overlap, and deduplicates repeated/copied events with content-free hashes. The
+account-wide total and locally observed component sum remain separate exact counters and may differ;
+the dashboard labels that scope difference instead of scaling either value. Every other transcript
+field is discarded, and unsupported or incomplete shapes remain total-only.
 
 Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
 add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
@@ -90,7 +96,9 @@ additive `SessionEnd` hook always lives in `<QWEN_HOME>/settings.json`. Hook edi
 settings and comments outside the changed `hooks` subtree. In Qwen Code 0.21.12, that hook fires on
 interactive TUI exit and is wired into ACP, but the headless `qwen -p` runner does not emit
 `SessionEnd`. Headless runs still write exact usage records; run `viberacing sync`, or wait for the
-next supported lifecycle event, to collect them.
+next supported lifecycle event, to collect them. Qwen's cached count is already included in input
+and its thoughts count is already included in output, so the connector subtracts both overlaps
+before sending the five exact component fields.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
@@ -114,25 +122,26 @@ runtime and owned hooks; its server reconciliation shares the sync lock, and it 
 usage unless the user separately runs `viberacing sync`. A successful compatible reconnect,
 authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
 
-Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers.
-Qwen's trigger currently covers interactive TUI and ACP lifecycle events, not headless `qwen -p`
-exits. OpenCode uses its read-only SQLite store and a documented `sync`; Antigravity requires the
-opt-in `run` wrapper. Every installed hook contains its stable `clientSourceId` and a source-owned
-v3 marker. Hooks only discard stdin, atomically update that source's locked dirty entry, start/reuse
-one short-lived timer process, and return the provider's minimal response. Automatic collection
-first drains pending payloads and then scans only active dirty sources; events for other sources do
-not start Codex, open OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds,
-limited to roughly one attempt per 120 seconds, and forced by 120 seconds of continuous activity.
-Each dirty generation receives at most one automatic attempt; collector errors complete that
-generation, while failed uploads remain compactly pending until another hook or manual sync. A
-generation created during the attempt schedules the next finite batch; if a manual sync still owns
-the single-flight lock, that automatic batch makes at most two bounded 60-second lock acquisitions.
-If both expire, it exits with the dirty generation intact for the next hook or manual sync. During
-already-triggered activity, a TTL-bounded installation check removes dashboard-disconnected mappings
-and hooks even when counters are unchanged. There is no resident daemon, polling loop, or file
-watcher. Manual sync and initial connect bypass the cooldown and collect all active sources; a
-direct manual sync waits up to 60 seconds for an existing sync and reports a busy error if the lock
-remains occupied. Unchanged data sends no request.
+Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers. Codex
+uses `Stop` after every completed turn; upgrades remove only Vibe Racing's older `SessionEnd`
+handler. Qwen's trigger currently covers interactive TUI and ACP lifecycle events, not headless
+`qwen -p` exits. OpenCode uses its read-only SQLite store and a documented `sync`; Antigravity
+requires the opt-in `run` wrapper. Every installed hook contains its stable `clientSourceId` and a
+source-owned v3 marker. Hooks only discard stdin, atomically update that source's locked dirty
+entry, start/reuse one short-lived timer process, and return the provider's minimal response.
+Automatic collection first drains pending payloads and then scans only active dirty sources; events
+for other sources do not start Codex, open OpenCode SQLite, or read unrelated histories. It is
+debounced for 15 seconds, limited to roughly one attempt per 120 seconds, and forced by 120 seconds
+of continuous activity. Each dirty generation receives at most one automatic attempt; collector
+errors complete that generation, while failed uploads remain compactly pending until another hook or
+manual sync. A generation created during the attempt schedules the next finite batch; if a manual
+sync still owns the single-flight lock, that automatic batch makes at most two bounded 60-second
+lock acquisitions. If both expire, it exits with the dirty generation intact for the next hook or
+manual sync. During already-triggered activity, a TTL-bounded installation check removes
+dashboard-disconnected mappings and hooks even when counters are unchanged. There is no resident
+daemon, polling loop, or file watcher. Manual sync and initial connect bypass the cooldown and
+collect all active sources; a direct manual sync waits up to 60 seconds for an existing sync and
+reports a busy error if the lock remains occupied. Unchanged data sends no request.
 
 Browser-triggered sync shares the same single-flight lock but scopes collection and pending delivery
 to the server-authorized source IDs for one account on the bound installation. The URL contains only

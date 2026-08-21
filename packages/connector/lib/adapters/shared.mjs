@@ -116,13 +116,13 @@ export async function findFile(root, predicate, maximumEntries = 10_000) {
   return false;
 }
 
-export async function walk(root, suffixes, maximum = 2_000) {
+export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 20_000_000) {
   try {
     const rootInfo = await stat(root);
     if (rootInfo.isFile()) {
       return {
         files:
-          rootInfo.size <= 20_000_000 && suffixes.some((suffix) => root.endsWith(suffix))
+          rootInfo.size <= maximumFileBytes && suffixes.some((suffix) => root.endsWith(suffix))
             ? [
                 {
                   path: root,
@@ -132,7 +132,7 @@ export async function walk(root, suffixes, maximum = 2_000) {
                 },
               ]
             : [],
-        incomplete: rootInfo.size > 20_000_000,
+        incomplete: rootInfo.size > maximumFileBytes,
       };
     }
   } catch {
@@ -157,7 +157,7 @@ export async function walk(root, suffixes, maximum = 2_000) {
       else if (entry.isFile() && suffixes.some((suffix) => entry.name.endsWith(suffix))) {
         try {
           const info = await stat(path);
-          if (info.size <= 20_000_000)
+          if (info.size <= maximumFileBytes)
             found.push({ path, size: info.size, modifiedAt: info.mtimeMs, ino: info.ino });
           else incomplete = true;
         } catch {

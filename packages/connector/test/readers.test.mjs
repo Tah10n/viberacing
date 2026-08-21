@@ -6,10 +6,13 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   collectClaude,
+  collectCodexSessionUsage,
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
   codexProfileEnvironment,
+  mergeCodexUsageComponents,
+  parseCodexSessionLines,
   parseGeminiRecords,
   parseKimiLines,
   parseKimiLegacyLines,
@@ -25,6 +28,18 @@ import {
 
 async function fixture(name) {
   return readFile(fileURLToPath(new URL(`fixtures/${name}`, import.meta.url)), "utf8");
+}
+
+function codexTokenCount(timestamp, usage, lastUsage = usage, ordinal = 1) {
+  return JSON.stringify({
+    ordinal,
+    timestamp,
+    type: "event_msg",
+    payload: {
+      type: "token_count",
+      info: { total_token_usage: usage, last_token_usage: lastUsage },
+    },
+  });
 }
 
 test("projects authoritative Codex UTC buckets", async () => {
@@ -49,6 +64,242 @@ test("isolates each Codex App Server with its source-specific CODEX_HOME", () =>
   assert.equal(first.CODEX_HOME, work);
   assert.equal(second.CODEX_HOME, personal);
   assert.notEqual(first.CODEX_HOME, second.CODEX_HOME);
+});
+
+test("extracts exact non-overlapping Codex components from cumulative token events", () => {
+  const first = codexTokenCount(
+    "2026-08-10T12:00:00Z",
+    {
+      input_tokens: 60,
+      cached_input_tokens: 30,
+      cache_write_input_tokens: 2,
+      output_tokens: 40,
+      reasoning_output_tokens: 10,
+      total_tokens: 100,
+    },
+    {
+      input_tokens: 10,
+      cached_input_tokens: 3,
+      cache_write_input_tokens: 2,
+      output_tokens: 8,
+      reasoning_output_tokens: 3,
+      total_tokens: 18,
+    },
+  );
+  const second = codexTokenCount(
+    "2026-08-10T12:01:00Z",
+    {
+      input_tokens: 65,
+      cached_input_tokens: 31,
+      cache_write_input_tokens: 2,
+      output_tokens: 44,
+      reasoning_output_tokens: 11,
+      total_tokens: 109,
+    },
+    {
+      input_tokens: 5,
+      cached_input_tokens: 1,
+      cache_write_input_tokens: 0,
+      output_tokens: 4,
+      reasoning_output_tokens: 1,
+      total_tokens: 9,
+    },
+    2,
+  );
+  const reset = codexTokenCount("2026-08-11T00:01:00Z", {
+    input_tokens: 4,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 3,
+    reasoning_output_tokens: 1,
+    total_tokens: 7,
+  });
+  const parsed = parseCodexSessionLines([first, first, second, reset]);
+  assert.equal(parsed.invalid, false);
+  assert.deepEqual(parsed.entries, [
+    {
+      date: "2026-08-10",
+      totalTokens: "27",
+      inputTokens: "9",
+      outputTokens: "8",
+      cacheReadTokens: "4",
+      cacheWriteTokens: "2",
+      reasoningTokens: "4",
+    },
+    {
+      date: "2026-08-11",
+      totalTokens: "7",
+      inputTokens: "3",
+      outputTokens: "2",
+      cacheReadTokens: "1",
+      cacheWriteTokens: "0",
+      reasoningTokens: "1",
+    },
+  ]);
+  assert.equal(parsed.lastUsage.totalTokens, "7");
+});
+
+test("keeps the Codex account total while attaching exact local components", () => {
+  const components = [
+    {
+      date: "2026-08-10",
+      totalTokens: "27",
+      inputTokens: "9",
+      outputTokens: "8",
+      cacheReadTokens: "4",
+      cacheWriteTokens: "2",
+      reasoningTokens: "4",
+    },
+    {
+      date: "2026-08-11",
+      totalTokens: "7",
+      inputTokens: "3",
+      outputTokens: "2",
+      cacheReadTokens: "1",
+      cacheWriteTokens: "0",
+      reasoningTokens: "1",
+    },
+  ];
+  assert.deepEqual(
+    mergeCodexUsageComponents(
+      [
+        { date: "2026-08-10", totalTokens: "27" },
+        { date: "2026-08-11", totalTokens: "8" },
+      ],
+      components,
+    ),
+    [components[0], { ...components[1], totalTokens: "8" }],
+  );
+});
+
+test("resumes Codex transcripts and deduplicates copied token events", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-components-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  const path = join(directory, "rollout.jsonl");
+  await mkdir(directory, { recursive: true });
+  const firstLine = `${codexTokenCount("2026-08-10T12:00:00Z", {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  })}\n`;
+  await writeFile(path, firstLine);
+  await writeFile(join(directory, "copied-rollout.jsonl"), firstLine);
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await collectCodexSessionUsage({ dataPath: root }, range);
+  await appendFile(
+    path,
+    `${codexTokenCount(
+      "2026-08-10T12:01:00Z",
+      {
+        input_tokens: 15,
+        cached_input_tokens: 4,
+        cache_write_input_tokens: 2,
+        output_tokens: 12,
+        reasoning_output_tokens: 4,
+        total_tokens: 27,
+      },
+      {
+        input_tokens: 5,
+        cached_input_tokens: 1,
+        cache_write_input_tokens: 0,
+        output_tokens: 4,
+        reasoning_output_tokens: 1,
+        total_tokens: 9,
+      },
+      2,
+    )}\n`,
+  );
+  const second = await collectCodexSessionUsage({ dataPath: root }, range, first.nextState);
+  assert.deepEqual(second.warnings, []);
+  assert.deepEqual(second.entries, [
+    {
+      date: "2026-08-10",
+      totalTokens: "27",
+      inputTokens: "9",
+      outputTokens: "8",
+      cacheReadTokens: "4",
+      cacheWriteTokens: "2",
+      reasoningTokens: "4",
+    },
+  ]);
+});
+
+test("omits all Codex components when the bounded scan skips a session file", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-component-budget-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const first = `${codexTokenCount("2026-08-10T12:00:00Z", {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  })}\n`;
+  const second = `${codexTokenCount("2026-08-10T12:01:00Z", {
+    input_tokens: 12,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 9,
+    reasoning_output_tokens: 3,
+    total_tokens: 21,
+  })}\n`;
+  await writeFile(join(directory, "first.jsonl"), first);
+  await writeFile(join(directory, "second.jsonl"), second);
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+    { maximumBytes: Math.max(Buffer.byteLength(first), Buffer.byteLength(second)) },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.equal(Object.keys(result.nextState.events).length, 1);
+});
+
+test("keeps malformed Codex component state fail-closed until the file is reread", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-component-invalid-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  const path = join(directory, "rollout.jsonl");
+  await mkdir(directory, { recursive: true });
+  const valid = `${codexTokenCount("2026-08-10T12:00:00Z", {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  })}\n`;
+  const malformed = `${codexTokenCount("2026-08-10T12:01:00Z", {
+    input_tokens: 2,
+    cached_input_tokens: 0,
+    cache_write_input_tokens: 0,
+    output_tokens: 0,
+    reasoning_output_tokens: 0,
+    total_tokens: 99,
+  })}\n`;
+  await writeFile(path, `${valid}${malformed}`);
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await collectCodexSessionUsage({ dataPath: root }, range);
+  assert.deepEqual(first.entries, []);
+  assert.deepEqual(first.warnings, ["codex_session_components_incomplete"]);
+  assert.equal(Object.values(first.nextState.files)[0].incomplete, true);
+
+  const unchanged = await collectCodexSessionUsage({ dataPath: root }, range, first.nextState);
+  assert.deepEqual(unchanged.entries, []);
+  assert.deepEqual(unchanged.warnings, ["codex_session_components_incomplete"]);
+
+  await writeFile(path, valid);
+  const recovered = await collectCodexSessionUsage({ dataPath: root }, range, unchanged.nextState);
+  assert.equal(recovered.entries.length, 1);
+  assert.deepEqual(recovered.warnings, []);
+  assert.equal(Object.values(recovered.nextState.files)[0].incomplete, undefined);
 });
 
 test("deduplicates Claude messages without reading content", async () => {
@@ -253,14 +504,34 @@ test("reads Qwen content-free stats using UTC timestamp instead of localDate", a
   assert.deepEqual(parseQwenLines(lines), [
     {
       date: "2026-08-10",
-      totalTokens: "20",
+      totalTokens: "17",
       inputTokens: "7",
-      outputTokens: "5",
+      outputTokens: "2",
       cacheReadTokens: "3",
       cacheWriteTokens: "0",
       reasoningTokens: "5",
     },
   ]);
+});
+
+test("invalidates Qwen incremental state created with overlapping component semantics", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-qwen-parser-version-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const path = join(root, "token-usage-2026-08.jsonl");
+  await writeFile(path, await fixture("qwen.jsonl"));
+  const source = { dataPath: root };
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const current = await adapterFor("qwen_code").collect(source, range, {});
+  const { parserVersion: _parserVersion, ...stale } = current.nextState;
+  for (const file of Object.values(stale.files))
+    file.entries = file.entries.map((entry) => ({
+      date: entry.date,
+      totalTokens: entry.totalTokens,
+    }));
+  const refreshed = await adapterFor("qwen_code").collect(source, range, stale);
+  assert.equal(refreshed.nextState.parserVersion, 2);
+  assert.equal(refreshed.entries[0].inputTokens, "7");
+  assert.equal(refreshed.entries[0].outputTokens, "2");
 });
 
 test("reads Antigravity CLI snake-case usage", async () => {

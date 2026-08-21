@@ -10,6 +10,10 @@ experience or protocol.
 
 ### Changed
 
+- Completed exact input/output/cache/reasoning collection for Codex and Qwen Code. Codex now keeps
+  its authoritative account-wide App Server total alongside independently exact local component
+  counters and marks usage dirty after each `Stop`; Qwen normalizes cached input and reasoning as
+  overlapping counters.
 - Squashed the unreleased database history into the first locked pre-production baseline. Databases
   created from earlier commits are unsupported and must be recreated before deployment.
 

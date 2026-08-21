@@ -314,8 +314,13 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     const codexMarker = module.hookMarkerForSource(source("codex").clientSourceId);
     assert.equal(
       codex.hooks.SessionEnd.filter((group) => JSON.stringify(group).includes(codexMarker)).length,
+      0,
+    );
+    assert.equal(
+      codex.hooks.Stop.filter((group) => JSON.stringify(group).includes(codexMarker)).length,
       1,
     );
+    assert.equal(codex.hooks.Stop.at(-1).hooks[0].timeout, 3);
     assert.doesNotMatch(JSON.stringify(codex), /viberacing-hook-v2/);
     assert.match(JSON.stringify(claude), /viberacing-hook-v3:/);
     assert.match(JSON.stringify(gemini), /viberacing-hook-v3:/);
