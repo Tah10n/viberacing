@@ -38,8 +38,38 @@ test("macOS browser Sync registration creates and removes only its owned app", a
     await browserSyncRegistrationStatus({ homeDirectory: root, platform: "darwin" }),
     "current",
   );
-  await unregisterBrowserSync({ homeDirectory: root, platform: "darwin" });
+  await unregisterBrowserSync({
+    allowCustomState: true,
+    homeDirectory: root,
+    platform: "darwin",
+    stateDirectory: root,
+  });
   await assert.rejects(readFile(join(app, "Contents", "Info.plist")), { code: "ENOENT" });
+});
+
+test("browser Sync removal with custom state never touches the normal user handler", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-custom-state-handler-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const markerPath = join(
+    root,
+    "Applications",
+    "Vibe Racing.app",
+    "Contents",
+    "Resources",
+    "viberacing-owned",
+  );
+  await mkdir(join(root, "Applications", "Vibe Racing.app", "Contents", "Resources"), {
+    recursive: true,
+  });
+  await writeFile(markerPath, "viberacing-browser-handler-v1\n");
+
+  await unregisterBrowserSync({
+    homeDirectory: root,
+    platform: "darwin",
+    stateDirectory: join(root, "custom-state"),
+  });
+
+  assert.equal(await readFile(markerPath, "utf8"), "viberacing-browser-handler-v1\n");
 });
 
 test("Linux browser Sync registration is owned, exact, and removable", async (context) => {
@@ -76,7 +106,13 @@ test("Linux browser Sync registration is owned, exact, and removable", async (co
     await browserSyncRegistrationStatus({ environment, execute, platform: "linux" }),
     "current",
   );
-  await unregisterBrowserSync({ environment, execute, platform: "linux", stateDirectory: root });
+  await unregisterBrowserSync({
+    allowCustomState: true,
+    environment,
+    execute,
+    platform: "linux",
+    stateDirectory: root,
+  });
   assert.equal(current, "previous.desktop");
   await assert.rejects(readFile(desktop), { code: "ENOENT" });
 });
