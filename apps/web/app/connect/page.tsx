@@ -85,7 +85,7 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
       : await query<AccountRow>(
           `SELECT id::text, agent_id, label
              FROM agent_accounts
-            WHERE user_id = $1
+            WHERE user_id = $1 AND merged_into_account_id IS NULL
             ORDER BY agent_id, lower(label), created_at`,
           [current.id],
         );
@@ -154,6 +154,9 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
                   const compatible = accounts.filter(
                     (account) => account.agent_id === source.agent_id,
                   );
+                  const automaticallyMatched =
+                    isSupportedAgent(source.agent_id) &&
+                    agentRegistry[source.agent_id].aggregationMode === "account_max";
                   const defaultValue =
                     source.agent_account_id !== null &&
                     compatible.some((account) => account.id === source.agent_account_id)
@@ -164,35 +167,51 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
                       <legend>
                         {agentLabel(source.agent_id)} · {source.supported_surface.toUpperCase()}
                       </legend>
-                      <label>
-                        Agent account
-                        <select defaultValue={defaultValue} name={`account_${source.id}`}>
-                          <option value="new">Create a new account</option>
-                          {compatible.map((account) => (
-                            <option key={account.id} value={account.id}>
-                              {account.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Label for a new account
-                        <input
-                          defaultValue={
-                            source.suggested_label ?? (index === 0 ? "Personal" : "Work")
-                          }
-                          maxLength={40}
-                          name={`label_${source.id}`}
-                          type="text"
-                        />
-                      </label>
-                      {isSupportedAgent(source.agent_id) &&
-                      agentRegistry[source.agent_id].aggregationMode === "account_max" &&
-                      compatible.length > 0 ? (
+                      {automaticallyMatched ? (
+                        <>
+                          <input name={`account_${source.id}`} type="hidden" value={defaultValue} />
+                          {defaultValue === "new" ? (
+                            <input
+                              name={`label_${source.id}`}
+                              type="hidden"
+                              value={source.suggested_label ?? agentLabel(source.agent_id)}
+                            />
+                          ) : null}
+                          <p>
+                            Vibe Racing will automatically match this account after its first
+                            complete sync.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <label>
+                            Agent account
+                            <select defaultValue={defaultValue} name={`account_${source.id}`}>
+                              <option value="new">Create a new account</option>
+                              {compatible.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Label for a new account
+                            <input
+                              defaultValue={
+                                source.suggested_label ?? (index === 0 ? "Personal" : "Work")
+                              }
+                              maxLength={40}
+                              name={`label_${source.id}`}
+                              type="text"
+                            />
+                          </label>
+                        </>
+                      )}
+                      {automaticallyMatched ? (
                         <p className="muted">
-                          If this is the same provider account on another computer, select its
-                          existing account. Creating another account makes the totals additive and
-                          can double count account-wide usage.
+                          Matching uses completed daily totals only. Provider email and credentials
+                          never leave this computer.
                         </p>
                       ) : null}
                     </fieldset>

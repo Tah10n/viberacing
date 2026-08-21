@@ -20,12 +20,13 @@ root and config root separate there. `config.json` contains only the origin, dev
 server mapping; it contains no path or path hash. Source discovery reconciles by
 `(agent, normalized data root)`, so discovery order and reconnect do not change identity. The
 connector sends only opaque client source IDs and allowlisted source metadata during pairing. In one
-browser transaction, each source is mapped to a new or existing `agent_account` of the same user and
-agent. Reconnect stages source mappings with the hashed pairing code without changing an existing
-source's active status, so an abandoned or expired browser approval cannot interrupt the current
-connector. Approval atomically activates the staged mappings and rotates the device token; a
-transaction lock serializes reconnects. Usage authentication rechecks that token under the same
-installation row lock.
+browser transaction, each source is mapped to an `agent_account` of the same user and agent.
+Account-wide sources start in a separate account and are matched automatically after complete usage
+arrives; machine-local sources retain the explicit new/existing account control. Reconnect stages
+source mappings with the hashed pairing code without changing an existing source's active status, so
+an abandoned or expired browser approval cannot interrupt the current connector. Approval atomically
+activates the staged mappings and rotates the device token; a transaction lock serializes
+reconnects. Usage authentication rechecks that token under the same installation row lock.
 
 Current Kimi discovery previews removal of a migrated legacy root without changing `sources.json`.
 The pairing carries only its opaque client source ID, and the approval page discloses the
@@ -41,6 +42,16 @@ the `account_max` rule prevents account-wide totals shared across computers from
 sources use `captures/<clientSourceId>.jsonl`. Antigravity Personal and Work therefore have
 independent files and can map to independent accounts; the wrapper consumes `--source` locally when
 more than one profile exists.
+
+After a complete account-wide snapshot, ingestion compares up to 30 finished UTC days against other
+root accounts of the same user and agent. Only nonzero complete days count. At least two exact
+matches and no overlapping mismatch are required. A deterministic oldest matching account becomes
+the root; the single-source account is retained as a hidden alias and an event records only opaque
+IDs and the number of matched days. The source retains only the timestamp of that decision, so Undo,
+manual reassignment, or later event cleanup cannot make it eligible for another automatic decision.
+Undo moves the source back to that alias. Zero-token days do not count as positive evidence, but a
+complete zero-versus-positive day is a contradiction. Partial, current-day, weak, or contradictory
+history never triggers a merge. Provider email and credentials are neither read nor transmitted.
 
 ## Snapshot ingestion and ranking
 
@@ -121,7 +132,8 @@ per-user validation, so anonymous traffic cannot consume the authenticated work 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small
 opportunistic cleanup batches remove expired sessions/pairings, rate-limit buckets, old empty
-revoked installations, and orphaned empty accounts.
+revoked installations, and orphaned empty root accounts. Hidden aliases are retained while their
+automatic match is active; superseded unreferenced aliases become eligible for normal cleanup.
 
 HTML responses use a fresh request nonce for framework scripts and styles. The production CSP never
 allows unsafe inline script or style execution; development permits only the eval support required

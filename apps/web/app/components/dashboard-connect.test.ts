@@ -58,4 +58,20 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain('aria-label="Move source to account"');
     expect(dashboard).toContain("<option key={candidate.id} value={candidate.id}>");
   });
+
+  it("explains reversible automatic account-wide matching without provider identity", () => {
+    const connect = source("../connect/page.tsx");
+    const pairingApproval = source("../api/pairing/approve/route.ts");
+    const leaderboardLeave = source("../api/leaderboard/leave/route.ts");
+    expect(connect).toContain('aggregationMode === "account_max"');
+    expect(connect).toContain("automatically match this account after its first");
+    expect(connect).toContain("Provider email and credentials");
+    expect(dashboard).toContain("AUTOMATIC ACCOUNT MATCH");
+    expect(dashboard).toContain('action="/api/accounts/dedup/undo"');
+    expect(dashboard).toContain("Undo automatic match");
+    expect(pairingApproval).toContain("dedupEventsToSupersede");
+    expect(pairingApproval).toContain("UPDATE account_dedup_events");
+    expect(pairingApproval).toContain("auto_dedup_decided_at");
+    expect(leaderboardLeave).toContain("UPDATE account_dedup_events");
+  });
 });

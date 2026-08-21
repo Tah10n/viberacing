@@ -23,9 +23,11 @@ local `sources.json`, so later processes do not require the variable again. Wind
 is reported as a detection warning and never hides other healthy sources. Discovery never scans the
 whole home directory or disk.
 
-The browser approval maps every detected local source to a new or existing account. Re-running
-`connect` keeps the stable installation identity, rotates device authorization, refreshes the
-installed connector copy, and updates only Vibe Racing-owned hooks. Hook reconciliation is
+The browser approval maps machine-local sources to a new or existing account. Account-wide sources
+are matched automatically after complete daily totals arrive; the server requires two exact finished
+nonzero days with no conflicting overlap, never provider identity, and the dashboard offers Undo.
+Re-running `connect` keeps the stable installation identity, rotates device authorization, refreshes
+the installed connector copy, and updates only Vibe Racing-owned hooks. Hook reconciliation is
 best-effort per source: one damaged settings file is reported without blocking healthy hooks or the
 initial sync. The final token/config swap is serialized behind any active sync, so an older request
 cannot restore superseded authorization.

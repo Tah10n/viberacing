@@ -43,6 +43,7 @@ describe("browser-safe mutation forms", () => {
       source("../api/connections/revoke/route.ts"),
       source("../api/leaderboard/leave/route.ts"),
       source("../api/pairing/approve/route.ts"),
+      source("../api/accounts/dedup/undo/route.ts"),
     ]) {
       expect(route).toContain('problem(401, "unauthorized")');
       expect(route).not.toContain('new URL("/api/auth/github/start"');

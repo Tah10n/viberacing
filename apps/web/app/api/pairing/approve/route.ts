@@ -154,7 +154,8 @@ async function post(request: Request): Promise<Response> {
            (SELECT count(*)::int FROM installation_sources
              WHERE user_id = $1 AND status = 'active'
                AND NOT (id = ANY($3::uuid[]))) AS sources,
-           (SELECT count(*)::int FROM agent_accounts WHERE user_id = $1) AS accounts`,
+           (SELECT count(*)::int FROM agent_accounts
+             WHERE user_id = $1 AND merged_into_account_id IS NULL) AS accounts`,
         [current.id, installation.id, pairingSourceIds],
       );
       const counts = usage.rows[0];
@@ -198,6 +199,7 @@ async function post(request: Request): Promise<Response> {
         const account = await client.query<{ id: string }>(
           `SELECT id::text FROM agent_accounts
             WHERE id = $1 AND user_id = $2 AND agent_id = $3
+              AND merged_into_account_id IS NULL
             FOR UPDATE`,
           [selection, current.id, source.agent_id],
         );
@@ -215,6 +217,19 @@ async function post(request: Request): Promise<Response> {
           summariesToRebuild.add(source.agent_id);
         }
       }
+      const dedupEventsToSupersede = [
+        ...supersededSourceIds,
+        ...sources.rows
+          .filter((source) => {
+            const nextAccountId = assignments.get(source.id);
+            return (
+              source.agent_account_id !== null &&
+              nextAccountId !== undefined &&
+              source.agent_account_id !== nextAccountId
+            );
+          })
+          .map((source) => source.id),
+      ];
 
       let name = installation.name;
       if (name === null) {
@@ -238,15 +253,33 @@ async function post(request: Request): Promise<Response> {
         [installation.id, current.id, name],
       );
       for (const source of sources.rows) {
+        const nextAccountId = assignments.get(source.id);
+        const accountWideDecision =
+          source.agent_account_id !== null &&
+          nextAccountId !== undefined &&
+          source.agent_account_id !== nextAccountId &&
+          agentRegistry[source.agent_id].aggregationMode === "account_max";
         await client.query(
           `UPDATE installation_sources
               SET user_id = $2,
                   agent_account_id = $3,
+                  auto_dedup_decided_at = CASE
+                    WHEN $4::boolean THEN coalesce(auto_dedup_decided_at, now())
+                    ELSE auto_dedup_decided_at
+                  END,
                   status = 'active',
                   pending_pairing_code_hash = NULL,
                   updated_at = now()
             WHERE id = $1`,
-          [source.id, current.id, assignments.get(source.id)],
+          [source.id, current.id, nextAccountId, accountWideDecision],
+        );
+      }
+      if (dedupEventsToSupersede.length > 0) {
+        await client.query(
+          `UPDATE account_dedup_events
+              SET status = 'superseded', updated_at = now()
+            WHERE user_id = $1 AND source_id = ANY($2::uuid[]) AND status = 'active'`,
+          [current.id, dedupEventsToSupersede],
         );
       }
       if (supersededSourceIds.length > 0) {

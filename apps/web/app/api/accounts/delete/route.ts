@@ -17,7 +17,9 @@ async function post(request: Request): Promise<Response> {
     const outcome = await transaction(async (client) => {
       await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
       const account = await client.query<{ agent_id: string }>(
-        "SELECT agent_id FROM agent_accounts WHERE id = $1 AND user_id = $2 FOR UPDATE",
+        `SELECT agent_id FROM agent_accounts
+          WHERE id = $1 AND user_id = $2 AND merged_into_account_id IS NULL
+          FOR UPDATE`,
         [accountId, current.id],
       );
       const row = account.rows[0];

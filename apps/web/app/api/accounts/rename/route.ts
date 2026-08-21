@@ -15,7 +15,9 @@ async function post(request: Request): Promise<Response> {
     const label = form.get("label")?.trim();
     if (!isUuid(accountId) || !isSafeDisplayText(label, 40)) return problem(400, "invalid_request");
     const changed = await query<{ id: string }>(
-      "UPDATE agent_accounts SET label = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id::text",
+      `UPDATE agent_accounts SET label = $1, updated_at = now()
+        WHERE id = $2 AND user_id = $3 AND merged_into_account_id IS NULL
+        RETURNING id::text`,
       [label, accountId, current.id],
     );
     if (changed.length === 0) return problem(404, "account_not_found");

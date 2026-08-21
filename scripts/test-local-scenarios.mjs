@@ -372,6 +372,287 @@ try {
     "ok - account_max, source_sum, multiple accounts, and multiple agents aggregate correctly",
   );
 
+  const dedupBaseline = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  const dedupBaselineTokens = BigInt(dedupBaseline.rows[0].tokens);
+  const guardFirstInstallation = { id: randomUUID(), secret: token() };
+  const guardSecondInstallation = { id: randomUUID(), secret: token() };
+  const guardFirst = await pair(guardFirstInstallation, [source("guard-codex-a", "codex")]);
+  const guardSecond = await pair(guardSecondInstallation, [source("guard-codex-b", "codex")]);
+  const guardFirstSource = guardFirst.sources[0];
+  const guardSecondSource = guardSecond.sources[0];
+  const guardDates = [dateOffset(-6), dateOffset(-5), dateOffset(-4)];
+  check(
+    guardFirstSource !== undefined && guardSecondSource !== undefined,
+    "deduplication guard pairing omitted a source",
+  );
+  let guardUsage = await usage(guardFirst.deviceToken, [
+    snapshot(
+      guardFirstSource.sourceId,
+      1,
+      [
+        [guardDates[0], 11111],
+        [guardDates[1], 22222],
+        [guardDates[2], 33333],
+      ],
+      "complete",
+      guardDates[0],
+      guardDates[2],
+    ),
+  ]);
+  check(guardUsage.status === 200, "deduplication guard history was rejected");
+  guardUsage = await usage(guardSecond.deviceToken, [
+    snapshot(
+      guardSecondSource.sourceId,
+      1,
+      [
+        [guardDates[0], 11111],
+        [guardDates[1], 22222],
+        [guardDates[2], 33333],
+      ],
+      "partial",
+      guardDates[0],
+      guardDates[2],
+    ),
+  ]);
+  let guardEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [guardSecondSource.sourceId],
+  );
+  check(
+    guardUsage.status === 200 && guardEvents.rows[0].count === 0,
+    "partial history triggered automatic account matching",
+  );
+  guardUsage = await usage(guardSecond.deviceToken, [
+    snapshot(
+      guardSecondSource.sourceId,
+      2,
+      [
+        [guardDates[0], 11111],
+        [guardDates[1], 22222],
+        [guardDates[2], 0],
+      ],
+      "complete",
+      guardDates[0],
+      guardDates[2],
+    ),
+  ]);
+  guardEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [guardSecondSource.sourceId],
+  );
+  check(
+    guardUsage.status === 200 && guardEvents.rows[0].count === 0,
+    "a complete zero-versus-positive contradiction was ignored",
+  );
+  for (const accountId of [guardFirstSource.agentAccountId, guardSecondSource.agentAccountId]) {
+    const deletion = await form("/api/accounts/delete", { accountId, confirm: "delete" });
+    check(deletion.status === 303, "deduplication guard account cleanup failed");
+  }
+  await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+    [guardFirstInstallation.id, guardSecondInstallation.id],
+  ]);
+  const guardCleanupTotals = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  check(
+    BigInt(guardCleanupTotals.rows[0].tokens) === dedupBaselineTokens,
+    "deduplication guard cleanup left stale leaderboard totals",
+  );
+  const dedupFixtureTokens = 13_579n + 24_680n;
+  const dedupFirstInstallation = { id: randomUUID(), secret: token() };
+  const dedupSecondInstallation = { id: randomUUID(), secret: token() };
+  const dedupFirstPairing = await beginPairing(dedupFirstInstallation, [
+    source("dedup-codex-a", "codex"),
+  ]);
+  const dedupConnectPage = await authenticatedGet(`/connect?code=${dedupFirstPairing.code}`);
+  const dedupConnectHtml = await dedupConnectPage.text();
+  check(
+    dedupConnectPage.status === 200 &&
+      dedupConnectHtml.includes("automatically match this account after its first") &&
+      !dedupConnectHtml.includes("If this is the same provider account"),
+    "Codex pairing still required a technical account-mapping decision",
+  );
+  const dedupFirst = await approvePairing(dedupFirstPairing);
+  const dedupSecond = await pair(dedupSecondInstallation, [source("dedup-codex-b", "codex")]);
+  const dedupFirstSource = dedupFirst.sources[0];
+  const dedupSecondSource = dedupSecond.sources[0];
+  const dedupStart = dateOffset(-3);
+  const dedupEnd = dateOffset(-2);
+  check(
+    dedupFirstSource !== undefined && dedupSecondSource !== undefined,
+    "deduplication pairing omitted a source",
+  );
+  let dedupUsage = await usage(dedupSecond.deviceToken, [
+    snapshot(
+      dedupSecondSource.sourceId,
+      1,
+      [
+        [dedupStart, 13579],
+        [dedupEnd, 24680],
+      ],
+      "complete",
+      dedupStart,
+      dedupEnd,
+    ),
+  ]);
+  const dedupEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [dedupSecondSource.sourceId],
+  );
+  check(
+    dedupUsage.status === 200 && dedupEvents.rows[0].count === 0,
+    "a source was matched before another account had comparable history",
+  );
+  dedupUsage = await usage(dedupFirst.deviceToken, [
+    snapshot(
+      dedupFirstSource.sourceId,
+      1,
+      [
+        [dedupStart, 13579],
+        [dedupEnd, 24680],
+      ],
+      "complete",
+      dedupStart,
+      dedupEnd,
+    ),
+  ]);
+  const dedupEvent = await pool.query(
+    `SELECT event.id::text,
+            event.previous_account_id::text,
+            event.target_account_id::text,
+            event.matched_days,
+            previous.merged_into_account_id::text,
+            source.agent_account_id::text AS current_account_id,
+            source.auto_dedup_decided_at IS NOT NULL AS has_durable_decision
+       FROM account_dedup_events event
+       JOIN agent_accounts previous ON previous.id = event.previous_account_id
+       JOIN installation_sources source ON source.id = event.source_id
+      WHERE event.source_id = $1 AND event.status = 'active'`,
+    [dedupSecondSource.sourceId],
+  );
+  const activeDedup = dedupEvent.rows[0];
+  const mergedCodexTotals = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  check(
+    dedupUsage.status === 200 &&
+      activeDedup?.matched_days === 2 &&
+      activeDedup.previous_account_id === dedupSecondSource.agentAccountId &&
+      activeDedup.target_account_id === dedupFirstSource.agentAccountId &&
+      activeDedup.merged_into_account_id === activeDedup.target_account_id &&
+      activeDedup.current_account_id === activeDedup.target_account_id &&
+      activeDedup.has_durable_decision === true &&
+      BigInt(mergedCodexTotals.rows[0].tokens) === dedupBaselineTokens + dedupFixtureTokens,
+    "matching complete Codex histories were not combined",
+  );
+  const dedupDashboard = await authenticatedGet("/dashboard");
+  const dedupDashboardHtml = await dedupDashboard.text();
+  check(
+    dedupDashboard.status === 200 &&
+      dedupDashboardHtml.includes("AUTOMATIC ACCOUNT MATCH") &&
+      dedupDashboardHtml.includes("Undo automatic match") &&
+      dedupDashboardHtml.includes("completed daily totals matched exactly"),
+    "dashboard did not explain the automatic match or offer Undo",
+  );
+  const undoneDedup = await form("/api/accounts/dedup/undo", { eventId: activeDedup.id });
+  const undoneState = await pool.query(
+    `SELECT event.status,
+            event.undone_at IS NOT NULL AS has_undone_at,
+            previous.merged_into_account_id::text,
+            source.agent_account_id::text AS current_account_id
+       FROM account_dedup_events event
+       JOIN agent_accounts previous ON previous.id = event.previous_account_id
+       JOIN installation_sources source ON source.id = event.source_id
+      WHERE event.id = $1`,
+    [activeDedup.id],
+  );
+  const undoneCodexTotals = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  check(
+    undoneDedup.status === 303 &&
+      undoneState.rows[0]?.status === "undone" &&
+      undoneState.rows[0].has_undone_at === true &&
+      undoneState.rows[0].merged_into_account_id === null &&
+      undoneState.rows[0].current_account_id === activeDedup.previous_account_id &&
+      BigInt(undoneCodexTotals.rows[0].tokens) === dedupBaselineTokens + dedupFixtureTokens * 2n,
+    "Undo did not restore the original account mapping",
+  );
+  dedupUsage = await usage(dedupSecond.deviceToken, [
+    snapshot(
+      dedupSecondSource.sourceId,
+      2,
+      [
+        [dedupStart, 13579],
+        [dedupEnd, 24680],
+      ],
+      "complete",
+      dedupStart,
+      dedupEnd,
+    ),
+  ]);
+  const remerged = await pool.query("SELECT status FROM account_dedup_events WHERE id = $1", [
+    activeDedup.id,
+  ]);
+  check(
+    dedupUsage.status === 200 && remerged.rows[0]?.status === "undone",
+    "an undone account match was applied again",
+  );
+  await pool.query("DELETE FROM account_dedup_events WHERE id = $1", [activeDedup.id]);
+  dedupUsage = await usage(dedupSecond.deviceToken, [
+    snapshot(
+      dedupSecondSource.sourceId,
+      3,
+      [
+        [dedupStart, 13579],
+        [dedupEnd, 24680],
+      ],
+      "complete",
+      dedupStart,
+      dedupEnd,
+    ),
+  ]);
+  const durableDecision = await pool.query(
+    `SELECT source.agent_account_id::text,
+            source.auto_dedup_decided_at IS NOT NULL AS has_durable_decision,
+            (SELECT count(*)::int FROM account_dedup_events event
+              WHERE event.source_id = source.id) AS event_count
+       FROM installation_sources source
+      WHERE source.id = $1`,
+    [dedupSecondSource.sourceId],
+  );
+  check(
+    dedupUsage.status === 200 &&
+      durableDecision.rows[0]?.agent_account_id === activeDedup.previous_account_id &&
+      durableDecision.rows[0].has_durable_decision === true &&
+      durableDecision.rows[0].event_count === 0,
+    "deleting account-match history removed the durable no-remerge decision",
+  );
+  for (const accountId of [dedupFirstSource.agentAccountId, dedupSecondSource.agentAccountId]) {
+    const deletion = await form("/api/accounts/delete", { accountId, confirm: "delete" });
+    check(deletion.status === 303, "deduplication fixture account cleanup failed");
+  }
+  await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+    [dedupFirstInstallation.id, dedupSecondInstallation.id],
+  ]);
+  const cleanedCodexTotals = await pool.query(
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  check(
+    BigInt(cleanedCodexTotals.rows[0].tokens) === dedupBaselineTokens,
+    "deduplication fixture cleanup left stale leaderboard totals",
+  );
+  console.log(
+    "ok - complete contradictions stay separate, reverse Codex matching deduplicates totals, and Undo remains durable",
+  );
+
   const previousWeek = dateOffset(-7);
   const concurrentWeeklyUpdates = await Promise.all([
     usage(first.deviceToken, [
@@ -1020,11 +1301,14 @@ try {
   });
   check(reassigned.status === 303, "owned source could not be reassigned");
   let reassignedSource = await pool.query(
-    "SELECT agent_account_id::text FROM installation_sources WHERE id = $1",
+    `SELECT agent_account_id::text,
+            auto_dedup_decided_at IS NOT NULL AS has_durable_decision
+       FROM installation_sources WHERE id = $1`,
     [target],
   );
   check(
-    reassignedSource.rows[0]?.agent_account_id === personalAccount,
+    reassignedSource.rows[0]?.agent_account_id === personalAccount &&
+      reassignedSource.rows[0].has_durable_decision === true,
     "source reassignment was not persisted",
   );
   let codexSummary = await pool.query(
@@ -1391,22 +1675,24 @@ try {
   console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
 
   const originalRequiredMigration = await pool.query(
-    "SELECT version, checksum FROM schema_migrations WHERE version = '001_initial.sql'",
+    "SELECT version, checksum FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
   );
   try {
     await pool.query(
-      "INSERT INTO schema_migrations (version, checksum) VALUES ('002_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+      "INSERT INTO schema_migrations (version, checksum) VALUES ('003_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
     );
     check(
       (await fetch(`${appUrl}/ready`)).status === 200,
       "readiness rejected a later migration ledger row",
     );
-    await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
-    await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
+    await pool.query(
+      "DELETE FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
+    );
     const missingExpectedSchema = await fetch(`${appUrl}/ready`);
     check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
   } finally {
-    await pool.query("DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
     const original = originalRequiredMigration.rows[0];
     if (original) {
       await pool.query(
@@ -1415,7 +1701,9 @@ try {
         [original.version, original.checksum],
       );
     } else {
-      await pool.query("DELETE FROM schema_migrations WHERE version = '001_initial.sql'");
+      await pool.query(
+        "DELETE FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
+      );
     }
   }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
