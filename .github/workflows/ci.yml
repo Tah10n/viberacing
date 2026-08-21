@@ -185,9 +185,12 @@ jobs:
           fi
           expected_checksum="$(node -e "process.stdout.write(require('./apps/web/database/checksums.json')['001_initial.sql'])")"
           psql "$DATABASE_URL" --command="UPDATE schema_migrations SET checksum = '$expected_checksum' WHERE version = '001_initial.sql'"
-          psql "$DATABASE_URL" --command="INSERT INTO schema_migrations (version, checksum) VALUES ('002_synthetic_future.sql', repeat('f', 64))"
+          latest_migration="$(psql "$DATABASE_URL" --tuples-only --no-align --command='SELECT max(version) FROM schema_migrations')"
+          latest_number="${latest_migration%%_*}"
+          future_migration="$(printf '%03d_synthetic_future.sql' "$((10#$latest_number + 1))")"
+          psql "$DATABASE_URL" --command="INSERT INTO schema_migrations (version, checksum) VALUES ('$future_migration', repeat('f', 64))"
           pnpm db:migrate
-          psql "$DATABASE_URL" --command="DELETE FROM schema_migrations WHERE version = '002_synthetic_future.sql'"
+          psql "$DATABASE_URL" --command="DELETE FROM schema_migrations WHERE version = '$future_migration'"
       - name: Run server integration scenarios
         run: |
           node apps/web/.next/standalone/apps/web/server.js &

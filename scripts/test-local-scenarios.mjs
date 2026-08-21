@@ -1756,32 +1756,37 @@ try {
   console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
 
   const originalRequiredMigration = await pool.query(
-    "SELECT version, checksum FROM schema_migrations WHERE version = '003_browser_sync.sql'",
+    "SELECT version, checksum FROM schema_migrations ORDER BY version DESC LIMIT 1",
   );
+  const original = originalRequiredMigration.rows[0];
+  check(original, "migration ledger did not contain a required migration");
+  const requiredMigrationNumber = /^(\d{3})_/.exec(original.version)?.[1];
+  check(requiredMigrationNumber, "latest required migration used an unsupported version");
+  const syntheticFutureMigration = `${String(Number(requiredMigrationNumber) + 1).padStart(3, "0")}_synthetic_future.sql`;
   try {
     await pool.query(
-      "INSERT INTO schema_migrations (version, checksum) VALUES ('003_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+      "INSERT INTO schema_migrations (version, checksum) VALUES ($1, repeat('f', 64)) ON CONFLICT DO NOTHING",
+      [syntheticFutureMigration],
     );
     check(
       (await fetch(`${appUrl}/ready`)).status === 200,
       "readiness rejected a later migration ledger row",
     );
-    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
-    await pool.query("DELETE FROM schema_migrations WHERE version = '003_browser_sync.sql'");
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [
+      syntheticFutureMigration,
+    ]);
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [original.version]);
     const missingExpectedSchema = await fetch(`${appUrl}/ready`);
     check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
   } finally {
-    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
-    const original = originalRequiredMigration.rows[0];
-    if (original) {
-      await pool.query(
-        `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
-         ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
-        [original.version, original.checksum],
-      );
-    } else {
-      await pool.query("DELETE FROM schema_migrations WHERE version = '003_browser_sync.sql'");
-    }
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [
+      syntheticFutureMigration,
+    ]);
+    await pool.query(
+      `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
+       ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
+      [original.version, original.checksum],
+    );
   }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",
