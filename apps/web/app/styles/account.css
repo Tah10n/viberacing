@@ -115,35 +115,50 @@
   color: var(--color-danger);
 }
 
-.account-management {
+.account-controls {
   grid-column: 1 / -1;
-  border-top: 0.0625rem solid var(--color-line);
-  padding-top: var(--space-2);
+  display: grid;
+  gap: var(--space-3);
 }
 
-.account-management summary {
-  display: inline-flex;
-  min-height: var(--control-height);
-  align-items: center;
-  width: fit-content;
-  color: var(--color-muted-strong);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: var(--meta-font-size);
-  font-weight: var(--meta-label-weight);
-  letter-spacing: var(--meta-label-tracking);
-  line-height: var(--meta-line-height);
-  text-transform: uppercase;
+.account-control-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.account-management summary:hover {
-  color: var(--color-info);
+.account-control-buttons .button {
+  min-width: 9.5rem;
+  padding: var(--space-2) var(--space-4);
+}
+
+.account-control-buttons .button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .account-actions {
   display: grid;
   gap: var(--space-2);
   padding-top: var(--space-3);
+}
+
+.account-actions[hidden] {
+  display: none;
+}
+
+.browser-sync-message {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.browser-sync-message.status {
+  color: var(--color-info);
+}
+
+.browser-sync-message.error {
+  color: var(--color-danger);
 }
 
 .source-row {

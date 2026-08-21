@@ -15,6 +15,9 @@ experience or protocol.
 
 ### Added
 
+- Browser-triggered, current-computer sync for an individual agent account through an on-demand,
+  cross-platform `viberacing://` handler; no resident connector process or provider content is
+  introduced.
 - Open-source contribution, support, governance, issue, pull request, conduct, and release policies.
 - Privacy-focused issue forms, a pull request checklist, grouped Dependabot updates, and a
   high-severity dependency review gate.

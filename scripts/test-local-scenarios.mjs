@@ -75,6 +75,24 @@ async function authenticatedGet(path) {
   });
 }
 
+async function browserSyncGrant(installationId) {
+  return fetch(`${appUrl}/api/accounts/sync/grant`, {
+    method: "POST",
+    headers: {
+      cookie: `vr_session=${sessionToken}; vr_local_installation=${installationId}`,
+      origin: browserOrigin,
+      "content-type": "application/x-www-form-urlencoded",
+      ...syntheticEdgeHeader("127.0.0.4"),
+    },
+    body: "",
+    redirect: "manual",
+  });
+}
+
+async function connectorSyncRequest(path, deviceToken, body) {
+  return json(path, body, { authorization: `Bearer ${deviceToken}` });
+}
+
 const definitions = {
   codex: ["codex_app_server", "desktop"],
   claude_code: ["claude_jsonl", "cli"],
@@ -331,6 +349,69 @@ try {
   console.log("ok - one pairing maps multiple agents and two Codex sources to separate accounts");
 
   const byClient = new Map(first.sources.map((item) => [item.clientSourceId, item]));
+  await pool.query(
+    "UPDATE installations SET browser_sync_capable = true WHERE id = $1 AND user_id = $2",
+    [firstInstallation.id, userId],
+  );
+  const grantResponses = await Promise.all(
+    Array.from({ length: 10 }, () => browserSyncGrant(firstInstallation.id)),
+  );
+  check(
+    grantResponses.every((response) => response.status === 200),
+    "browser sync grants were not issued",
+  );
+  const grants = await Promise.all(grantResponses.map((response) => response.json()));
+  const syncRequests = grants.map((grant, index) => ({
+    account: byClient.get(index % 2 === 0 ? "codex-personal-a" : "codex-work"),
+    grant,
+    requestId: randomUUID(),
+  }));
+  const claims = await Promise.all(
+    syncRequests.map(({ account, grant, requestId: browserRequestId }) =>
+      connectorSyncRequest("/api/installations/current/sync/claim", first.deviceToken, {
+        requestId: browserRequestId,
+        accountId: account.agentAccountId,
+        grant: grant.token,
+      }),
+    ),
+  );
+  check(
+    claims.every((claim) => claim.status === 200),
+    `concurrent browser sync claims conflicted (${claims.map((claim) => claim.status).join(", ")})`,
+  );
+  const claimBodies = await Promise.all(claims.map((claim) => claim.json()));
+  check(
+    claimBodies.every(
+      (claim, index) =>
+        JSON.stringify(claim.sourceIds) === JSON.stringify([syncRequests[index].account.sourceId]),
+    ),
+    "browser sync claim crossed account source boundaries",
+  );
+  const syncResults = await Promise.all(
+    syncRequests.map(({ requestId: browserRequestId }) =>
+      connectorSyncRequest("/api/installations/current/sync/result", first.deviceToken, {
+        requestId: browserRequestId,
+        status: "succeeded",
+        resultCode: "unchanged",
+      }),
+    ),
+  );
+  check(
+    syncResults.every((result) => result.status === 204),
+    `browser sync result failed: ${syncResults.map((result) => result.status).join(", ")}`,
+  );
+  const browserStatuses = await Promise.all(
+    syncRequests.map(({ requestId: browserRequestId }) =>
+      authenticatedGet(`/api/accounts/sync/${browserRequestId}`),
+    ),
+  );
+  const browserStatusBodies = await Promise.all(browserStatuses.map((response) => response.json()));
+  check(
+    browserStatuses.every((response) => response.status === 200) &&
+      browserStatusBodies.every((status) => status.status === "succeeded"),
+    "browser sync completion was not visible to its owner",
+  );
+  console.log("ok - ten concurrent browser claims remain independent and account-scoped");
   const secondInstallation = { id: randomUUID(), secret: token() };
   const secondPairing = await beginPairing(secondInstallation, [
     source("codex-personal-b", "codex"),
@@ -1675,36 +1756,37 @@ try {
   console.log("ok - exact pairing cancellation defeats late approval and token rotation races");
 
   const originalRequiredMigration = await pool.query(
-    "SELECT version, checksum FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
+    "SELECT version, checksum FROM schema_migrations ORDER BY version DESC LIMIT 1",
   );
+  const original = originalRequiredMigration.rows[0];
+  check(original, "migration ledger did not contain a required migration");
+  const requiredMigrationNumber = /^(\d{3})_/.exec(original.version)?.[1];
+  check(requiredMigrationNumber, "latest required migration used an unsupported version");
+  const syntheticFutureMigration = `${String(Number(requiredMigrationNumber) + 1).padStart(3, "0")}_synthetic_future.sql`;
   try {
     await pool.query(
-      "INSERT INTO schema_migrations (version, checksum) VALUES ('003_synthetic_future.sql', repeat('f', 64)) ON CONFLICT DO NOTHING",
+      "INSERT INTO schema_migrations (version, checksum) VALUES ($1, repeat('f', 64)) ON CONFLICT DO NOTHING",
+      [syntheticFutureMigration],
     );
     check(
       (await fetch(`${appUrl}/ready`)).status === 200,
       "readiness rejected a later migration ledger row",
     );
-    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
-    await pool.query(
-      "DELETE FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
-    );
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [
+      syntheticFutureMigration,
+    ]);
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [original.version]);
     const missingExpectedSchema = await fetch(`${appUrl}/ready`);
     check(missingExpectedSchema.status === 503, "readiness accepted a missing required migration");
   } finally {
-    await pool.query("DELETE FROM schema_migrations WHERE version = '003_synthetic_future.sql'");
-    const original = originalRequiredMigration.rows[0];
-    if (original) {
-      await pool.query(
-        `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
-         ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
-        [original.version, original.checksum],
-      );
-    } else {
-      await pool.query(
-        "DELETE FROM schema_migrations WHERE version = '002_account_deduplication.sql'",
-      );
-    }
+    await pool.query("DELETE FROM schema_migrations WHERE version = $1", [
+      syntheticFutureMigration,
+    ]);
+    await pool.query(
+      `INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)
+       ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum`,
+      [original.version, original.checksum],
+    );
   }
   const disconnect = await fetch(`${appUrl}/api/installations/current`, {
     method: "DELETE",

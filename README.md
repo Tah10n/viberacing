@@ -28,6 +28,10 @@ Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is 
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still
 recorded exactly and is collected by `viberacing sync` or the next supported lifecycle trigger.
 
+After a current connector is paired in a browser, that browser can launch an on-demand
+`viberacing://` handler to sync one agent account on the same computer. The handler exits after the
+bounded sync; it does not install a resident process or let the web service read local histories.
+
 ## Local production preview
 
 Requirements: Node 24 LTS, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.

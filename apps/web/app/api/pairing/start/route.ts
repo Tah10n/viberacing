@@ -21,6 +21,7 @@ interface StartBody {
   installationSecret?: unknown;
   sources?: unknown;
   supersededClientSourceIds?: unknown;
+  browserSyncCapable?: unknown;
 }
 
 interface PendingSource {
@@ -45,6 +46,7 @@ const bodyKeys = new Set([
   "installationSecret",
   "sources",
   "supersededClientSourceIds",
+  "browserSyncCapable",
 ]);
 const sourceKeys = new Set([
   "clientSourceId",
@@ -139,7 +141,8 @@ async function post(request: Request): Promise<Response> {
       body.installationSecret.length < 32 ||
       body.installationSecret.length > 128 ||
       sources === null ||
-      supersededClientSourceIds === null
+      supersededClientSourceIds === null ||
+      (body.browserSyncCapable !== undefined && typeof body.browserSyncCapable !== "boolean")
     ) {
       return problem(400, "invalid_request");
     }
@@ -232,8 +235,9 @@ async function post(request: Request): Promise<Response> {
         await client.query(
           `INSERT INTO installations
              (id, status, installation_secret_hash, pairing_code_hash, poll_token_hash,
-              pending_device_token_hash, connector_version, protocol_version, pairing_expires_at)
-           VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7, now() + interval '10 minutes')`,
+              pending_device_token_hash, connector_version, protocol_version, browser_sync_capable,
+              pairing_expires_at)
+           VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7, $8, now() + interval '10 minutes')`,
           [
             installationId,
             digest(installationSecret),
@@ -242,6 +246,7 @@ async function post(request: Request): Promise<Response> {
             pendingDeviceHash,
             connectorVersion,
             body.protocolVersion,
+            body.browserSyncCapable === true,
           ],
         );
       } else {
@@ -254,6 +259,7 @@ async function post(request: Request): Promise<Response> {
                   pairing_expires_at = now() + interval '10 minutes',
                   connector_version = $5,
                   protocol_version = $6,
+                  browser_sync_capable = $7,
                   updated_at = now()
             WHERE id = $1`,
           [
@@ -263,6 +269,7 @@ async function post(request: Request): Promise<Response> {
             pendingDeviceHash,
             connectorVersion,
             protocolVersion,
+            body.browserSyncCapable === true,
           ],
         );
       }

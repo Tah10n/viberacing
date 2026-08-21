@@ -12,7 +12,7 @@ import {
   readBoundedForm,
   sameOrigin,
 } from "@/lib/http";
-import { viewer } from "@/lib/session";
+import { bindLocalInstallation, viewer } from "@/lib/session";
 import { rebuildAgentSummaries } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
 import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
@@ -104,7 +104,7 @@ async function post(request: Request): Promise<Response> {
   const codeValue = form.get("code");
   const code = normalizePairingCode(typeof codeValue === "string" ? codeValue : "");
   try {
-    await transaction(async (client) => {
+    const approvedInstallation = await transaction(async (client) => {
       await client.query("SELECT id FROM users WHERE id = $1 FOR UPDATE", [current.id]);
       const pending = await client.query<InstallationRow>(
         `SELECT id::text, user_id::text, name, status
@@ -299,7 +299,9 @@ async function post(request: Request): Promise<Response> {
       for (const agentId of summariesToRebuild) {
         await rebuildAgentSummaries(client, current.id, agentId);
       }
+      return installation.id;
     });
+    await bindLocalInstallation(approvedInstallation);
   } catch (error) {
     if (!(error instanceof ApprovalError)) throw error;
     return markResponse(

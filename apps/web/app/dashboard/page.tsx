@@ -5,11 +5,12 @@ import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
+import { AccountControls, BrowserSyncProvider } from "../components/account-controls";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens } from "@/lib/leaderboard";
-import { viewer } from "@/lib/session";
+import { localInstallationId, viewer } from "@/lib/session";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -33,6 +34,7 @@ interface AccountRow {
   last_sync_at: Date | null;
   partial: boolean;
   has_error: boolean;
+  can_browser_sync: boolean;
 }
 
 interface SourceRow {
@@ -87,7 +89,11 @@ function hasReassignmentTarget(accounts: readonly AccountRow[], account: Account
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
-  const [current, params] = await Promise.all([viewer(), searchParams]);
+  const [current, params, browserInstallationId] = await Promise.all([
+    viewer(),
+    searchParams,
+    localInstallationId(),
+  ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
   const [installations, accounts, sources, dedupEvents] = await Promise.all([
     query<InstallationRow>(
@@ -111,9 +117,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               max(s.last_successful_sync_at) AS last_sync_at,
               coalesce(bool_or(s.last_completeness = 'partial'), false) AS partial,
               coalesce(bool_or(s.last_error_summary IS NOT NULL), false) AS has_error
+              ,coalesce(bool_or(s.installation_id = $3::uuid AND installation.browser_sync_capable), false) AS can_browser_sync
          FROM agent_accounts a
          LEFT JOIN installation_sources s
            ON s.agent_account_id = a.id AND s.status = 'active'
+         LEFT JOIN installations installation ON installation.id = s.installation_id
          LEFT JOIN LATERAL (
            SELECT sum(day.tokens) AS tokens
              FROM (
@@ -131,7 +139,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
         GROUP BY a.id, usage.tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-      [current.id, currentWeekStart()],
+      [current.id, currentWeekStart(), browserInstallationId],
     ),
     query<SourceRow>(
       `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
@@ -175,7 +183,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                 ? "Account mapping updated."
                 : params.dedupUndone === "1"
                   ? "Automatic account match undone. These totals are separate again."
-                  : null;
+                  : params.browserSynced === "1"
+                    ? "Sync complete. Latest local totals are loaded."
+                    : null;
   return (
     <PageShell className="dashboard-page">
       <PageHeader
@@ -291,36 +301,39 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             <p>They are created when you approve detected local sources.</p>
           </div>
         ) : (
-          <div className="device-list">
-            {accounts.map((account) => (
-              <article className="device-card" key={account.id}>
-                <div className="device-main">
-                  <div className="device-title">
-                    <h3>{accountTitle(account.agent_id, account.label)}</h3>
-                    <Badge
-                      tone={account.has_error ? "warning" : account.partial ? "neutral" : "success"}
-                    >
-                      {account.has_error ? "Error" : account.partial ? "Partial" : "Complete"}
-                    </Badge>
+          <BrowserSyncProvider enabled={accounts.some((account) => account.can_browser_sync)}>
+            <div className="device-list">
+              {accounts.map((account) => (
+                <article className="device-card" key={account.id}>
+                  <div className="device-main">
+                    <div className="device-title">
+                      <h3>{accountTitle(account.agent_id, account.label)}</h3>
+                      <Badge
+                        tone={
+                          account.has_error ? "warning" : account.partial ? "neutral" : "success"
+                        }
+                      >
+                        {account.has_error ? "Error" : account.partial ? "Partial" : "Complete"}
+                      </Badge>
+                    </div>
+                    <div className="agent-list">
+                      <span className="agent-chip">
+                        {formatCompactTokens(account.tokens)} tokens
+                      </span>
+                      <span className="agent-chip">
+                        {countLabel(account.source_count, "source")} ·{" "}
+                        {countLabel(account.installation_count, "computer")}
+                      </span>
+                      <span className="agent-chip">
+                        {account.aggregation_mode === "account_max" ? "Deduplicated" : "Summed"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="agent-list">
-                    <span className="agent-chip">{formatCompactTokens(account.tokens)} tokens</span>
-                    <span className="agent-chip">
-                      {countLabel(account.source_count, "source")} ·{" "}
-                      {countLabel(account.installation_count, "computer")}
-                    </span>
-                    <span className="agent-chip">
-                      {account.aggregation_mode === "account_max" ? "Deduplicated" : "Summed"}
-                    </span>
+                  <div className="device-meta">
+                    <span>Last sync</span>
+                    <strong>{syncLabel(account.last_sync_at)}</strong>
                   </div>
-                </div>
-                <div className="device-meta">
-                  <span>Last sync</span>
-                  <strong>{syncLabel(account.last_sync_at)}</strong>
-                </div>
-                <details className="account-management">
-                  <summary>Manage account</summary>
-                  <div className="account-actions">
+                  <AccountControls accountId={account.id} canSync={account.can_browser_sync}>
                     <SameOriginActionForm action="/api/accounts/rename">
                       <input name="accountId" type="hidden" value={account.id} />
                       <label>
@@ -388,11 +401,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         Delete account
                       </button>
                     </SameOriginActionForm>
-                  </div>
-                </details>
-              </article>
-            ))}
-          </div>
+                  </AccountControls>
+                </article>
+              ))}
+            </div>
+          </BrowserSyncProvider>
         )}
       </section>
 

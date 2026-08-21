@@ -1,0 +1,91 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  clientQuery: vi.fn(),
+  consumeRateLimit: vi.fn(),
+  inTransaction: false,
+  query: vi.fn(),
+  transaction: vi.fn(),
+}));
+
+vi.mock("@/lib/db", () => ({
+  query: mocks.query,
+  transaction: mocks.transaction,
+}));
+vi.mock("@/lib/rate-limit", () => ({
+  clientAddress: () => ({ trusted: true, key: "127.0.0.1" }),
+  clientAdmissionLimit: (_address: unknown, trustedLimit: number) => trustedLimit,
+  consumeRateLimit: mocks.consumeRateLimit,
+}));
+vi.mock("@/lib/request-log", () => ({
+  withRequestLogging: (_route: string, handler: unknown) => handler,
+}));
+
+import { POST } from "./route";
+
+const installationId = "11111111-1111-4111-8111-111111111111";
+const accountId = "22222222-2222-4222-8222-222222222222";
+const requestId = "33333333-3333-4333-8333-333333333333";
+const sourceId = "44444444-4444-4444-8444-444444444444";
+
+function request(): Request {
+  return new Request("https://viberacing.example/api/installations/current/sync/claim", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${"d".repeat(43)}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ accountId, grant: "g".repeat(43), requestId }),
+  });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.inTransaction = false;
+  mocks.query.mockResolvedValue([{ id: installationId }]);
+  mocks.consumeRateLimit.mockImplementation(() => {
+    if (mocks.inTransaction) throw new Error("rate limiter requested a nested pool connection");
+    return Promise.resolve(true);
+  });
+  mocks.transaction.mockImplementation(async (work: (client: unknown) => Promise<unknown>) => {
+    mocks.inTransaction = true;
+    try {
+      return await work({ query: mocks.clientQuery });
+    } finally {
+      mocks.inTransaction = false;
+    }
+  });
+});
+
+describe("browser Sync claim", () => {
+  it("applies the authenticated installation quota before opening the claim transaction", async () => {
+    mocks.clientQuery
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: installationId, user_id: "42" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ grant_hash: Buffer.alloc(32) }] })
+      .mockResolvedValueOnce({ rows: [{ id: sourceId, agent_id: "codex" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ requestId, sourceIds: [sourceId] });
+    expect(mocks.consumeRateLimit).toHaveBeenNthCalledWith(
+      2,
+      "browser_sync_claim_installation",
+      installationId,
+      10,
+      60,
+    );
+    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects the installation quota without reserving a transaction connection", async () => {
+    mocks.consumeRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+});

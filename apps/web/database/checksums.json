@@ -1,4 +1,5 @@
 {
   "001_initial.sql": "79697d5cbad6b72be76e39447110555a8137b83090e0e6a391ad0dc4480a916a",
-  "002_account_deduplication.sql": "2b9d108afc5d617b14befaab2814d05b8b3643fa153561743660901aba997972"
+  "002_account_deduplication.sql": "2b9d108afc5d617b14befaab2814d05b8b3643fa153561743660901aba997972",
+  "003_browser_sync.sql": "5c5c2bc3db68a6e3a1c0a5716d9f1c5213c1b105e1ef69ab83348cd427a06061"
 }
