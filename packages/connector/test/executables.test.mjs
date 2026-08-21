@@ -69,6 +69,24 @@ test("covers Windows package managers and installed application roots", () => {
   );
   assert.ok(candidates.includes("C:\\Users\\racer\\scoop\\shims\\codex.exe"));
   assert.ok(candidates.includes("C:\\ProgramData\\chocolatey\\bin\\codex.exe"));
+  assert.ok(!candidates.includes("C:\\Tools\\codex"));
+});
+
+test("ignores extensionless Windows npm shims and resolves the command shim", async () => {
+  const extensionless = "C:\\Users\\racer\\AppData\\Roaming\\npm\\codex";
+  const commandShim = `${extensionless}.cmd`;
+  const resolved = await resolveAgentExecutable("codex", {
+    platform: "win32",
+    home: "C:\\Users\\racer",
+    environment: {
+      PATH: "C:\\Users\\racer\\AppData\\Roaming\\npm",
+      PATHEXT: ".EXE;.CMD",
+      APPDATA: "C:\\Users\\racer\\AppData\\Roaming",
+      LOCALAPPDATA: "C:\\Users\\racer\\AppData\\Local",
+    },
+    accessible: async (candidate) => candidate === extensionless || candidate === commandShim,
+  });
+  assert.equal(resolved, commandShim);
 });
 
 test("uses common standalone locations for every executable-backed agent", () => {

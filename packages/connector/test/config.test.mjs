@@ -42,6 +42,34 @@ function source(agentId) {
   return { agentId, clientSourceId: sourceIds.get(agentId) };
 }
 
+function swapUtf16TestBytes(value) {
+  const swapped = Buffer.alloc(value.length);
+  for (let index = 0; index < value.length; index += 2) {
+    swapped[index] = value[index + 1];
+    swapped[index + 1] = value[index];
+  }
+  return swapped;
+}
+
+function encodedTestJson(value, encoding) {
+  const json = `${JSON.stringify(value, null, 2)}\n`;
+  if (encoding === "utf16le")
+    return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(json, "utf16le")]);
+  if (encoding === "utf16be")
+    return Buffer.concat([
+      Buffer.from([0xfe, 0xff]),
+      swapUtf16TestBytes(Buffer.from(json, "utf16le")),
+    ]);
+  return Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(json, "utf8")]);
+}
+
+function decodedTestJson(value, encoding) {
+  if (encoding === "utf16le") return JSON.parse(value.subarray(2).toString("utf16le"));
+  if (encoding === "utf16be")
+    return JSON.parse(swapUtf16TestBytes(value.subarray(2)).toString("utf16le"));
+  return JSON.parse(value.subarray(3).toString("utf8"));
+}
+
 function usageResponse(body, overrides = {}) {
   const snapshots = body.snapshots ?? [];
   const sourceErrors = body.sourceErrors ?? [];
@@ -347,6 +375,84 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     );
   } finally {
     restoreEnvironment();
+  }
+});
+
+test("preserves BOM-encoded JSON hook settings while installing owned hooks", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-hook-encoding-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  const fixtures = [
+    { agentId: "codex", directory: ".codex", file: "hooks.json", encoding: "utf8-bom" },
+    {
+      agentId: "claude_code",
+      directory: ".claude",
+      file: "settings.json",
+      encoding: "utf16le",
+    },
+    {
+      agentId: "gemini_cli",
+      directory: ".gemini",
+      file: "settings.json",
+      encoding: "utf16be",
+    },
+  ];
+  try {
+    for (const fixture of fixtures) {
+      await mkdir(join(home, fixture.directory), { recursive: true });
+      await writeFile(
+        join(home, fixture.directory, fixture.file),
+        encodedTestJson({ retained: fixture.agentId }, fixture.encoding),
+      );
+    }
+    const module = await import(`../lib/config.mjs?hook-encoding=${encodeURIComponent(home)}`);
+    await module.installHooks(
+      new URL("../bin/viberacing.mjs", import.meta.url),
+      fixtures.map((fixture) => source(fixture.agentId)),
+    );
+    for (const fixture of fixtures) {
+      const raw = await readFile(join(home, fixture.directory, fixture.file));
+      const settings = decodedTestJson(raw, fixture.encoding);
+      assert.equal(settings.retained, fixture.agentId);
+      assert.match(JSON.stringify(settings.hooks), /viberacing-hook-v3:/);
+      if (fixture.encoding === "utf8-bom")
+        assert.deepEqual([...raw.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+      else if (fixture.encoding === "utf16le")
+        assert.deepEqual([...raw.subarray(0, 2)], [0xff, 0xfe]);
+      else assert.deepEqual([...raw.subarray(0, 2)], [0xfe, 0xff]);
+    }
+    assert.deepEqual(
+      await module.diagnoseHooks(fixtures.map((fixture) => source(fixture.agentId))),
+      {
+        codex: "current",
+        claude_code: "current",
+        gemini_cli: "current",
+      },
+    );
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("rejects truncated UTF-16 hook settings without changing them", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-hook-truncated-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  const path = join(home, ".claude", "settings.json");
+  const original = Buffer.from([0xff, 0xfe, 0x7b]);
+  try {
+    await mkdir(join(home, ".claude"), { recursive: true });
+    await writeFile(path, original);
+    const module = await import(`../lib/config.mjs?hook-truncated=${encodeURIComponent(home)}`);
+    await assert.rejects(
+      module.installHooks(new URL("../bin/viberacing.mjs", import.meta.url), [
+        source("claude_code"),
+      ]),
+      /truncated UTF-16/,
+    );
+    assert.deepEqual(await readFile(path), original);
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
   }
 });
 
