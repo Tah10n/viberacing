@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { pipeline } from "node:stream/promises";
 import { createZstdDecompress } from "node:zlib";
@@ -23,11 +23,14 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 8;
+const codexComponentStateVersion = 9;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
 const codexThreadSettingsPattern = /"type"\s*:\s*"thread_settings_applied"/;
+const codexIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const codexRolloutFilePattern =
+  /^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-([0-9a-f-]{36})(?:_([0-9a-f-]{36}))?\.jsonl(?:\.zst)?$/i;
 const codexUsageKeys = [
   "inputTokens",
   "cachedInputTokens",
@@ -104,8 +107,22 @@ function codexHash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("base64url").slice(0, 16);
 }
 
-function codexSessionKey(value) {
-  return typeof value === "string" ? codexHash(["codex-session", value]) : null;
+function codexId(value) {
+  return typeof value === "string" && codexIdPattern.test(value) ? value.toLowerCase() : null;
+}
+
+function codexIdentityKey(kind, value) {
+  const id = codexId(value);
+  return id === null ? null : codexHash([`codex-${kind}`, id]);
+}
+
+function codexRolloutFileIdentity(path) {
+  if (typeof path !== "string") return null;
+  const match = basename(path).match(codexRolloutFilePattern);
+  if (!match) return null;
+  const threadId = codexId(match[1]);
+  const rolloutId = codexId(match[2] ?? match[1]);
+  return threadId === null || rolloutId === null ? null : { threadId, rolloutId };
 }
 
 function codexUsageSignature(total, last) {
@@ -115,9 +132,10 @@ function codexUsageSignature(total, last) {
   ]);
 }
 
-function codexSessionContext(lines, priorSessionContext) {
+function codexSessionContext(lines, priorSessionContext, rolloutPath) {
   if (priorSessionContext?.complete === true) return priorSessionContext;
   let sessionMeta = null;
+  let sessionMetaOrdinal = null;
   let metadataInvalid = false;
   for (const line of lines) {
     if (!codexSessionMetaPattern.test(line)) continue;
@@ -127,9 +145,9 @@ function codexSessionContext(lines, priorSessionContext) {
       if (
         record.payload === null ||
         typeof record.payload !== "object" ||
-        typeof record.payload.id !== "string" ||
+        codexId(record.payload.id) === null ||
         (record.payload.forked_from_id != null &&
-          typeof record.payload.forked_from_id !== "string") ||
+          codexId(record.payload.forked_from_id) === null) ||
         (record.payload.history_base != null &&
           (typeof record.payload.history_base !== "object" ||
             Array.isArray(record.payload.history_base)))
@@ -137,37 +155,65 @@ function codexSessionContext(lines, priorSessionContext) {
         metadataInvalid = true;
         continue;
       }
-      sessionMeta ??= record.payload;
+      if (sessionMeta === null) {
+        sessionMeta = record.payload;
+        sessionMetaOrdinal = record.ordinal ?? null;
+      }
     } catch {
       metadataInvalid = true;
     }
   }
   if (metadataInvalid)
-    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
+    return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
   if (sessionMeta === null)
-    return { complete: false, metadataPending: true, sessionKey: null, parentSessionKey: null };
+    return { complete: false, metadataPending: true, threadKey: null, rolloutKey: null };
   const historyMode = sessionMeta.history_mode ?? "legacy";
   const subagentHistoryStartOrdinal = sessionMeta.subagent_history_start_ordinal ?? null;
+  const historyBase = sessionMeta.history_base ?? null;
   if (
     (historyMode !== "legacy" && historyMode !== "paginated") ||
+    (historyMode === "paginated" &&
+      (!Number.isSafeInteger(sessionMetaOrdinal) ||
+        sessionMetaOrdinal !== (historyBase?.end_ordinal_exclusive ?? 0))) ||
     (subagentHistoryStartOrdinal !== null &&
-      (!Number.isSafeInteger(subagentHistoryStartOrdinal) || subagentHistoryStartOrdinal < 0))
+      (!Number.isSafeInteger(subagentHistoryStartOrdinal) || subagentHistoryStartOrdinal < 0)) ||
+    (historyBase !== null &&
+      (historyMode !== "paginated" ||
+        codexId(historyBase.thread_id) === null ||
+        !Number.isSafeInteger(historyBase.end_ordinal_exclusive) ||
+        historyBase.end_ordinal_exclusive < 0 ||
+        !Number.isSafeInteger(historyBase.end_byte_offset) ||
+        historyBase.end_byte_offset < 0))
   )
-    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
-  const sessionKey = codexSessionKey(sessionMeta?.id);
-  const parentSessionKey =
-    sessionMeta?.history_base == null ? codexSessionKey(sessionMeta?.forked_from_id) : null;
+    return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
+  const threadId = codexId(sessionMeta.id);
+  const fileIdentity = codexRolloutFileIdentity(rolloutPath);
+  if (
+    (fileIdentity !== null && fileIdentity.threadId !== threadId) ||
+    (fileIdentity === null && historyMode === "paginated")
+  )
+    return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
+  const rolloutId = fileIdentity?.rolloutId ?? threadId;
+  const threadKey = codexIdentityKey("thread", threadId);
+  const rolloutKey = codexIdentityKey("rollout", rolloutId);
+  const forkParentThreadKey =
+    historyBase === null ? codexIdentityKey("thread", sessionMeta.forked_from_id) : null;
+  const historyBaseRolloutKey = codexIdentityKey("rollout", historyBase?.thread_id);
   const startedAt = Date.parse(sessionMeta?.timestamp ?? "");
   if (
-    parentSessionKey !== null &&
+    forkParentThreadKey !== null &&
     (!Number.isFinite(startedAt) ||
       (historyMode === "paginated" && subagentHistoryStartOrdinal === null))
   )
-    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
+    return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
   return {
     complete: true,
-    sessionKey,
-    parentSessionKey,
+    threadKey,
+    rolloutKey,
+    forkParentThreadKey,
+    historyBaseRolloutKey,
+    historyBaseEndOrdinalExclusive: historyBase?.end_ordinal_exclusive ?? null,
+    sessionMetaOrdinal,
     startedAt: Number.isFinite(startedAt) ? startedAt : null,
     historyMode,
     subagentHistoryStartOrdinal,
@@ -224,8 +270,9 @@ export function parseCodexSessionLines(
   priorUsage = null,
   priorSessionContext = null,
   priorEventCount = 0,
+  rolloutPath = null,
 ) {
-  const sessionContext = codexSessionContext(lines, priorSessionContext);
+  const sessionContext = codexSessionContext(lines, priorSessionContext, rolloutPath);
   let previous = storedCodexUsage(priorUsage);
   const entries = [];
   const events = [];
@@ -247,7 +294,7 @@ export function parseCodexSessionLines(
         if (
           record?.type === "event_msg" &&
           record?.payload?.type === "thread_settings_applied" &&
-          sessionContext.parentSessionKey !== null &&
+          sessionContext.forkParentThreadKey !== null &&
           sessionContext.historyMode === "legacy"
         )
           legacyForkBoundaries.push(priorEventCount + events.length);
@@ -457,42 +504,131 @@ function mergeDateBounds(previous, parsed, appended) {
 }
 
 function rebuildCodexEventState(files, range) {
-  const bySession = new Map();
-  for (const fileState of Object.values(files)) {
-    if (!fileState?.sessionContext?.sessionKey) continue;
-    const existing = bySession.get(fileState.sessionContext.sessionKey);
-    if (
-      existing === undefined ||
-      (fileState.rawEvents?.length ?? 0) > (existing.rawEvents?.length ?? 0)
-    )
-      bySession.set(fileState.sessionContext.sessionKey, fileState);
-  }
   const unresolved = new Set();
+  const rolloutGroups = new Map();
+  for (const fileState of Object.values(files)) {
+    const { threadKey, rolloutKey } = fileState?.sessionContext ?? {};
+    if (!threadKey || !rolloutKey) continue;
+    const group = rolloutGroups.get(rolloutKey) ?? { states: [], representative: null };
+    group.states.push(fileState);
+    rolloutGroups.set(rolloutKey, group);
+  }
+  const contextIdentity = (fileState) => {
+    const context = fileState.sessionContext;
+    return JSON.stringify([
+      context.threadKey,
+      context.rolloutKey,
+      context.forkParentThreadKey,
+      context.historyBaseRolloutKey,
+      context.historyBaseEndOrdinalExclusive,
+      context.sessionMetaOrdinal,
+      context.startedAt,
+      context.historyMode,
+      context.subagentHistoryStartOrdinal,
+    ]);
+  };
+  const isCompatiblePrefix = (shorter, longer) => {
+    if (contextIdentity(shorter) !== contextIdentity(longer)) return false;
+    const shorterEvents = shorter.rawEvents ?? [];
+    const longerEvents = longer.rawEvents ?? [];
+    if (shorterEvents.length > longerEvents.length) return false;
+    if (
+      !shorterEvents.every(
+        (event, index) =>
+          event[0] === longerEvents[index]?.[0] &&
+          event[1] === longerEvents[index]?.[1] &&
+          event[2] === longerEvents[index]?.[2],
+      )
+    )
+      return false;
+    const longerBoundaries = new Set(longer.legacyForkBoundaries ?? []);
+    return (shorter.legacyForkBoundaries ?? []).every((boundary) => longerBoundaries.has(boundary));
+  };
+  for (const group of rolloutGroups.values()) {
+    group.states.sort(
+      (left, right) =>
+        (right.rawEvents?.length ?? 0) - (left.rawEvents?.length ?? 0) ||
+        (right.safeOffset ?? right.size ?? 0) - (left.safeOffset ?? left.size ?? 0),
+    );
+    const representative = group.states[0];
+    if (!group.states.every((fileState) => isCompatiblePrefix(fileState, representative))) {
+      for (const fileState of group.states) unresolved.add(fileState);
+      continue;
+    }
+    group.representative = representative;
+  }
+  const byRollout = new Map();
+  const byThread = new Map();
+  for (const [rolloutKey, group] of rolloutGroups) {
+    if (group.representative === null) continue;
+    byRollout.set(rolloutKey, group.representative);
+    const { threadKey } = group.representative.sessionContext;
+    const candidates = byThread.get(threadKey) ?? [];
+    candidates.push(group.representative);
+    byThread.set(threadKey, candidates);
+  }
+  const parentForThread = (threadKey, childState) => {
+    const candidates = (byThread.get(threadKey) ?? []).filter(
+      (candidate) => candidate.sessionContext.rolloutKey !== childState.sessionContext.rolloutKey,
+    );
+    const childStartedAt = childState.sessionContext.startedAt;
+    if (!Number.isFinite(childStartedAt)) return null;
+    const eligible = candidates.filter(
+      (candidate) =>
+        Number.isFinite(candidate.sessionContext.startedAt) &&
+        candidate.sessionContext.startedAt <= childStartedAt,
+    );
+    if (eligible.length <= 1) return eligible[0] ?? null;
+    const latestStartedAt = Math.max(
+      ...eligible.map((candidate) => candidate.sessionContext.startedAt),
+    );
+    const latest = eligible.filter(
+      (candidate) => candidate.sessionContext.startedAt === latestStartedAt,
+    );
+    return latest.length === 1 ? latest[0] : null;
+  };
   const memo = new Map();
   const resolveEvents = (fileState, ancestry = new Set()) => {
     if (memo.has(fileState)) return memo.get(fileState);
     const rawEvents = (fileState.rawEvents ?? []).map(expandCodexRawEvent);
-    const { sessionKey, parentSessionKey, startedAt, historyMode, subagentHistoryStartOrdinal } =
-      fileState.sessionContext ?? {};
+    const {
+      rolloutKey,
+      forkParentThreadKey,
+      historyBaseRolloutKey,
+      historyBaseEndOrdinalExclusive,
+      startedAt,
+      historyMode,
+      subagentHistoryStartOrdinal,
+    } = fileState.sessionContext ?? {};
     let parentEvents = null;
     let inheritedCount = 0;
     let parentOffset = 0;
-    if (parentSessionKey) {
-      const parent = bySession.get(parentSessionKey);
-      if (parent === undefined || ancestry.has(parentSessionKey)) {
+    const parent = historyBaseRolloutKey
+      ? byRollout.get(historyBaseRolloutKey)
+      : forkParentThreadKey
+        ? parentForThread(forkParentThreadKey, fileState)
+        : null;
+    if (historyBaseRolloutKey || forkParentThreadKey) {
+      const parentRolloutKey = parent?.sessionContext?.rolloutKey;
+      if (parent === null || parent === undefined || ancestry.has(parentRolloutKey)) {
         unresolved.add(fileState);
         memo.set(fileState, []);
         return [];
       }
-      parentEvents = resolveEvents(parent, new Set([...ancestry, sessionKey].filter(Boolean)));
+      parentEvents = resolveEvents(parent, new Set([...ancestry, rolloutKey].filter(Boolean)));
       if (unresolved.has(parent)) {
         unresolved.add(fileState);
         memo.set(fileState, []);
         return [];
       }
-      parentEvents = parentEvents.filter(
-        (event) => !Number.isFinite(startedAt) || event.timestamp <= startedAt,
-      );
+      parentEvents = historyBaseRolloutKey
+        ? parentEvents.filter(
+            (event) =>
+              Number.isSafeInteger(event.ordinal) && event.ordinal < historyBaseEndOrdinalExclusive,
+          )
+        : parentEvents.filter(
+            (event) => !Number.isFinite(startedAt) || event.timestamp <= startedAt,
+          );
       const matchesParentSuffix = (count) => {
         if (count > rawEvents.length || count > parentEvents.length) return false;
         const offset = parentEvents.length - count;
@@ -500,7 +636,19 @@ function rebuildCodexEventState(files, range) {
           .slice(0, count)
           .every((event, index) => event.signature === parentEvents[offset + index].signature);
       };
-      if (historyMode === "paginated") {
+      if (historyBaseRolloutKey) {
+        if (
+          rawEvents.some(
+            (event) =>
+              !Number.isSafeInteger(event.ordinal) ||
+              event.ordinal <= historyBaseEndOrdinalExclusive,
+          )
+        ) {
+          unresolved.add(fileState);
+          memo.set(fileState, []);
+          return [];
+        }
+      } else if (historyMode === "paginated" && subagentHistoryStartOrdinal !== null) {
         inheritedCount = rawEvents.findIndex(
           (event) => event.ordinal >= subagentHistoryStartOrdinal,
         );
@@ -517,7 +665,7 @@ function rebuildCodexEventState(files, range) {
           memo.set(fileState, []);
           return [];
         }
-      } else {
+      } else if (forkParentThreadKey) {
         const boundaries = [...new Set(fileState.legacyForkBoundaries ?? [])]
           .filter((count) => Number.isSafeInteger(count) && count >= 0 && count <= rawEvents.length)
           .sort((left, right) => right - left);
@@ -531,12 +679,11 @@ function rebuildCodexEventState(files, range) {
       }
       parentOffset = parentEvents.length - inheritedCount;
     }
-    const branchKey = sessionKey ?? codexHash(["legacy-codex-session"]);
     const resolved = rawEvents.map((event, index) =>
       index < inheritedCount
         ? parentEvents[parentOffset + index]
         : {
-            id: codexHash(["codex-lineage-event", branchKey, index, event.signature]),
+            id: codexHash(["codex-lineage-event", rolloutKey, index, event.signature]),
             ...event,
           },
     );
@@ -544,7 +691,9 @@ function rebuildCodexEventState(files, range) {
     return resolved;
   };
   const events = {};
-  for (const fileState of Object.values(files)) {
+  for (const group of rolloutGroups.values()) {
+    const fileState = group.representative;
+    if (fileState === null) continue;
     const eventIds = new Set();
     for (const { id, entry } of resolveEvents(fileState)) {
       if (
@@ -558,7 +707,7 @@ function rebuildCodexEventState(files, range) {
       if (events[id] === undefined) events[id] = compactCodexEvent(entry);
       else events[id][codexEventReferencesIndex] += 1;
     }
-    fileState.eventIds = [...eventIds];
+    for (const representation of group.states) representation.eventIds = [...eventIds];
   }
   return { events, unresolved };
 }
@@ -700,6 +849,7 @@ export async function collectCodexSessionUsage(
         appended ? previous.lastUsage : null,
         appended ? previous.sessionContext : null,
         appended ? (previous?.rawEvents?.length ?? 0) : 0,
+        file.path,
       );
       const nextFingerprint = await fingerprint(file.path, chunk.safeOffset);
       const incompleteDates = new Set(appended ? (previous?.incompleteDates ?? []) : []);

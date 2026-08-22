@@ -47,6 +47,9 @@ function codexSessionMeta(id, options = {}) {
   const timestamp =
     options.timestamp ?? (options.forkedFromId ? "2026-08-10T12:00:02Z" : "2026-08-10T11:59:00Z");
   return JSON.stringify({
+    ...(options.historyMode === "paginated"
+      ? { ordinal: options.historyBase?.end_ordinal_exclusive ?? 0 }
+      : {}),
     timestamp,
     type: "session_meta",
     payload: {
@@ -60,6 +63,11 @@ function codexSessionMeta(id, options = {}) {
         : { subagent_history_start_ordinal: options.subagentHistoryStartOrdinal }),
     },
   });
+}
+
+function codexRolloutName(threadId, rolloutId = threadId, timestamp = "2026-08-10T12-00-00") {
+  const ids = rolloutId === threadId ? threadId : `${threadId}_${rolloutId}`;
+  return `rollout-${timestamp}-${ids}.jsonl`;
 }
 
 function codexThreadSettings(timestamp = "2026-08-10T12:00:30Z") {
@@ -671,7 +679,7 @@ test("recovers Codex lineage after first seeing an empty rollout", async (contex
   assert.deepEqual(recovered.warnings, []);
   assert.equal(recovered.entries[0].totalTokens, "27");
   assert.equal(recovered.nextState.files[childPath].sessionContext.complete, true);
-  assert.notEqual(recovered.nextState.files[childPath].sessionContext.sessionKey, null);
+  assert.notEqual(recovered.nextState.files[childPath].sessionContext.rolloutKey, null);
 });
 
 test("recovers Codex lineage after first seeing an incomplete SessionMeta line", async (context) => {
@@ -741,7 +749,7 @@ test("recovers Codex lineage after first seeing an incomplete SessionMeta line",
   assert.deepEqual(recovered.warnings, []);
   assert.equal(recovered.entries[0].totalTokens, "27");
   assert.equal(recovered.nextState.files[childPath].sessionContext.complete, true);
-  assert.notEqual(recovered.nextState.files[childPath].sessionContext.parentSessionKey, null);
+  assert.notEqual(recovered.nextState.files[childPath].sessionContext.forkParentThreadKey, null);
 });
 
 test("deduplicates inherited token sequences through a fork-of-fork lineage", async (context) => {
@@ -791,7 +799,7 @@ test("deduplicates inherited token sequences through a fork-of-fork lineage", as
     `${codexSessionMeta(rootId)}\n${codexTokenCount("2026-08-10T12:00:00Z", usages[0])}\n`,
   );
   await writeFile(
-    join(directory, "child.jsonl"),
+    join(directory, codexRolloutName(childId, childId, "2026-08-10T12-00-02")),
     `${codexSessionMeta(childId, { forkedFromId: rootId })}\n${codexTokenCount(
       "2026-08-10T12:00:05Z",
       usages[0],
@@ -976,7 +984,7 @@ test("counts a paginated child's first own TokenCount even when it matches its p
     `${codexSessionMeta(parentId)}\n${codexTokenCount("2026-08-10T12:00:00Z", inheritedUsage)}\n`,
   );
   await writeFile(
-    join(directory, "child.jsonl"),
+    join(directory, codexRolloutName(childId, childId, "2026-08-10T12-00-02")),
     `${[
       codexSessionMeta(childId, {
         forkedFromId: parentId,
@@ -994,6 +1002,165 @@ test("counts a paginated child's first own TokenCount even when it matches its p
   );
   assert.deepEqual(result.warnings, []);
   assert.equal(result.entries[0].totalTokens, "36");
+});
+
+test("keeps identical provider calls distinct across immutable thread revert rollouts", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-revert-lineage-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  const archivedDirectory = join(root, "archived_sessions");
+  await mkdir(directory, { recursive: true });
+  await mkdir(archivedDirectory, { recursive: true });
+  const threadId = "41414141-4141-4141-8141-414141414141";
+  const firstRevertId = "42424242-4242-4242-8242-424242424242";
+  const secondRevertId = "43434343-4343-4343-8343-434343434343";
+  const usage = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  const historyBase = (rolloutId, endOrdinalExclusive) => ({
+    thread_id: rolloutId,
+    end_ordinal_exclusive: endOrdinalExclusive,
+    end_byte_offset: 512,
+  });
+  const originalPath = join(directory, codexRolloutName(threadId, threadId, "2026-08-10T12-00-00"));
+  const firstRevertPath = join(
+    directory,
+    codexRolloutName(threadId, firstRevertId, "2026-08-10T12-01-00"),
+  );
+  const secondRevertName = codexRolloutName(threadId, secondRevertId, "2026-08-10T12-02-00");
+  const secondRevertPath = join(directory, secondRevertName);
+  const original = `${codexSessionMeta(threadId, {
+    historyMode: "paginated",
+    timestamp: "2026-08-10T12:00:00Z",
+  })}\n${codexTokenCount("2026-08-10T12:00:01Z", usage, usage, 1)}\n`;
+  const firstRevert = `${codexSessionMeta(threadId, {
+    historyBase: historyBase(threadId, 2),
+    historyMode: "paginated",
+    timestamp: "2026-08-10T12:01:00Z",
+  })}\n${codexTokenCount("2026-08-10T12:01:01Z", usage, usage, 3)}\n`;
+  const secondRevert = `${codexSessionMeta(threadId, {
+    historyBase: historyBase(firstRevertId, 4),
+    historyMode: "paginated",
+    timestamp: "2026-08-10T12:02:00Z",
+  })}\n${codexTokenCount("2026-08-10T12:02:01Z", usage, usage, 5)}\n`;
+  await writeFile(originalPath, original);
+  await writeFile(firstRevertPath, firstRevert);
+  await writeFile(secondRevertPath, secondRevert);
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+
+  const initial = await collectCodexSessionUsage({ dataPath: root }, range);
+  assert.deepEqual(initial.warnings, []);
+  assert.equal(initial.entries[0].totalTokens, "54");
+  const contexts = Object.values(initial.nextState.files).map((file) => file.sessionContext);
+  assert.equal(new Set(contexts.map((item) => item.threadKey)).size, 1);
+  assert.equal(new Set(contexts.map((item) => item.rolloutKey)).size, 3);
+
+  const compressedFirstRevertPath = `${firstRevertPath}.zst`;
+  await writeFile(compressedFirstRevertPath, zstdCompressSync(Buffer.from(firstRevert)));
+  const representedTwice = await collectCodexSessionUsage(
+    { dataPath: root },
+    range,
+    initial.nextState,
+  );
+  assert.deepEqual(representedTwice.warnings, []);
+  assert.equal(representedTwice.entries[0].totalTokens, "54");
+
+  const archivedSecondRevertPath = join(archivedDirectory, secondRevertName);
+  await rename(secondRevertPath, archivedSecondRevertPath);
+  const archived = await collectCodexSessionUsage(
+    { dataPath: root },
+    range,
+    representedTwice.nextState,
+  );
+  assert.deepEqual(archived.warnings, []);
+  assert.equal(archived.entries[0].totalTokens, "54");
+  assert.equal(
+    archived.nextState.files[archivedSecondRevertPath].sessionContext.rolloutKey,
+    initial.nextState.files[secondRevertPath].sessionContext.rolloutKey,
+  );
+});
+
+test("fails closed when a paginated rollout filename is noncanonical", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-revert-ambiguous-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const threadId = "44444444-4444-4444-8444-444444444444";
+  const usage = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  await writeFile(
+    join(directory, codexRolloutName(threadId, threadId)),
+    `${codexSessionMeta(threadId, {
+      historyMode: "paginated",
+    })}\n${codexTokenCount("2026-08-10T12:00:01Z", usage, usage, 1)}\n`,
+  );
+  await writeFile(
+    join(directory, "noncanonical-revert.jsonl"),
+    `${codexSessionMeta(threadId, {
+      historyMode: "paginated",
+      timestamp: "2026-08-10T12:01:00Z",
+    })}\n${codexTokenCount("2026-08-10T12:01:01Z", usage, usage, 1)}\n`,
+  );
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+});
+
+test("fails closed when history_base targets a missing rollout of an existing thread", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-revert-missing-base-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const threadId = "45454545-4545-4545-8545-454545454545";
+  const missingRolloutId = "46464646-4646-4646-8646-464646464646";
+  const revertRolloutId = "47474747-4747-4747-8747-474747474747";
+  const usage = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  await writeFile(
+    join(directory, codexRolloutName(threadId, threadId)),
+    `${codexSessionMeta(threadId, {
+      historyMode: "paginated",
+    })}\n${codexTokenCount("2026-08-10T12:00:01Z", usage, usage, 1)}\n`,
+  );
+  await writeFile(
+    join(directory, codexRolloutName(threadId, revertRolloutId, "2026-08-10T12-01-00")),
+    `${codexSessionMeta(threadId, {
+      historyBase: {
+        thread_id: missingRolloutId,
+        end_ordinal_exclusive: 2,
+        end_byte_offset: 512,
+      },
+      historyMode: "paginated",
+      timestamp: "2026-08-10T12:01:00Z",
+    })}\n${codexTokenCount("2026-08-10T12:01:01Z", usage, usage, 3)}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
 });
 
 test("parses oversized Codex SessionMeta and fails closed when it is malformed", () => {
@@ -1020,7 +1187,7 @@ test("parses oversized Codex SessionMeta and fails closed when it is malformed",
     codexTokenCount("2026-08-10T12:00:00Z", usage),
   ]);
   assert.equal(oversizedParsed.invalid, false);
-  assert.equal(oversizedParsed.sessionContext.sessionKey !== null, true);
+  assert.equal(oversizedParsed.sessionContext.rolloutKey !== null, true);
   assert.equal(oversizedParsed.events.length, 1);
 
   const malformedParsed = parseCodexSessionLines([
