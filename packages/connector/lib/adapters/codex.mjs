@@ -23,7 +23,7 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 10;
+const codexComponentStateVersion = 11;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
@@ -127,13 +127,9 @@ function codexRolloutFileIdentity(path) {
     : { threadId, rolloutId, hasRolloutSuffix: match[2] !== undefined };
 }
 
-function longestCodexParentSuffixPrefix(parentEvents, childEvents) {
+function codexSuffixPrefixLengths(parent, child) {
   const separator = Symbol("codex-lineage-boundary");
-  const signatures = [
-    ...childEvents.map((event) => event.signature),
-    separator,
-    ...parentEvents.map((event) => event.signature),
-  ];
+  const signatures = [...child, separator, ...parent];
   const prefixLengths = new Uint32Array(signatures.length);
   for (let index = 1; index < signatures.length; index += 1) {
     let matched = prefixLengths[index - 1];
@@ -142,7 +138,22 @@ function longestCodexParentSuffixPrefix(parentEvents, childEvents) {
     if (signatures[index] === signatures[matched]) matched += 1;
     prefixLengths[index] = matched;
   }
-  return prefixLengths[prefixLengths.length - 1] ?? 0;
+  const lengths = [0];
+  let matched = prefixLengths[prefixLengths.length - 1] ?? 0;
+  while (matched > 0) {
+    lengths.push(matched);
+    matched = prefixLengths[matched - 1];
+  }
+  return lengths;
+}
+
+function codexLegacyLineageSymbols(events, boundaryCounts) {
+  const symbols = [];
+  for (let index = 0; index < events.length; index += 1) {
+    symbols.push(`event:${events[index].signature}`);
+    if (index + 1 < events.length) symbols.push(`boundaries:${boundaryCounts[index + 1] ?? 0}`);
+  }
+  return symbols;
 }
 
 function codexUsageSignature(total, last) {
@@ -313,13 +324,22 @@ export function parseCodexSessionLines(
     if (codexThreadSettingsPattern.test(line)) {
       try {
         const record = JSON.parse(line);
+        const timestamp = record?.timestamp;
         if (
           record?.type === "event_msg" &&
           record?.payload?.type === "thread_settings_applied" &&
-          sessionContext.forkParentThreadKey !== null &&
+          sessionContext.historyMode === "legacy" &&
+          typeof timestamp === "string" &&
+          Number.isFinite(Date.parse(timestamp))
+        ) {
+          legacyForkBoundaries.push({ eventCount: priorEventCount + events.length, timestamp });
+        } else if (
+          record?.type === "event_msg" &&
+          record?.payload?.type === "thread_settings_applied" &&
           sessionContext.historyMode === "legacy"
-        )
-          legacyForkBoundaries.push(priorEventCount + events.length);
+        ) {
+          markInvalid(null);
+        }
       } catch {
         markInvalid(utcDay(line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1]));
       }
@@ -563,8 +583,16 @@ function rebuildCodexEventState(files, range) {
       )
     )
       return false;
-    const longerBoundaries = new Set(longer.legacyForkBoundaries ?? []);
-    return (shorter.legacyForkBoundaries ?? []).every((boundary) => longerBoundaries.has(boundary));
+    const shorterBoundaries = (shorter.legacyForkBoundaries ?? []).map((boundary) =>
+      JSON.stringify(boundary),
+    );
+    const longerBoundaries = (longer.legacyForkBoundaries ?? []).map((boundary) =>
+      JSON.stringify(boundary),
+    );
+    return (
+      shorterBoundaries.length <= longerBoundaries.length &&
+      shorterBoundaries.every((boundary, index) => boundary === longerBoundaries[index])
+    );
   };
   for (const group of rolloutGroups.values()) {
     group.states.sort(
@@ -688,18 +716,65 @@ function rebuildCodexEventState(files, range) {
           return [];
         }
       } else if (forkParentThreadKey) {
-        const boundaries = new Set(
-          (fileState.legacyForkBoundaries ?? []).filter(
-            (count) => Number.isSafeInteger(count) && count >= 0 && count <= rawEvents.length,
-          ),
+        const boundaryCounts = (boundaries, eventCount) => {
+          const counts = new Uint32Array(eventCount + 1);
+          for (const boundary of boundaries ?? []) {
+            if (
+              !Number.isSafeInteger(boundary?.eventCount) ||
+              boundary.eventCount < 0 ||
+              boundary.eventCount > eventCount
+            )
+              return null;
+            counts[boundary.eventCount] += 1;
+          }
+          return counts;
+        };
+        const childBoundaryCounts = boundaryCounts(
+          fileState.legacyForkBoundaries,
+          rawEvents.length,
         );
-        const copiedPrefixLength = longestCodexParentSuffixPrefix(parentEvents, rawEvents);
-        if (!boundaries.has(copiedPrefixLength)) {
+        const parentBoundaryCounts = boundaryCounts(
+          (parent.legacyForkBoundaries ?? []).filter(
+            (boundary) =>
+              typeof boundary?.timestamp === "string" &&
+              Number.isFinite(Date.parse(boundary.timestamp)) &&
+              (!Number.isFinite(startedAt) || Date.parse(boundary.timestamp) <= startedAt),
+          ),
+          parentEvents.length,
+        );
+        if (childBoundaryCounts === null || parentBoundaryCounts === null) {
           unresolved.add(fileState);
           memo.set(fileState, []);
           return [];
         }
-        inheritedCount = copiedPrefixLength;
+        const parentSymbols = codexLegacyLineageSymbols(parentEvents, parentBoundaryCounts);
+        const childSymbols = codexLegacyLineageSymbols(rawEvents, childBoundaryCounts);
+        const alignments = codexSuffixPrefixLengths(parentSymbols, childSymbols)
+          .filter((length) => length === 0 || length % 2 === 1)
+          .map((length) => (length === 0 ? 0 : (length + 1) / 2))
+          .filter((count) => {
+            const parentOffset = parentEvents.length - count;
+            return count === 0 || childBoundaryCounts[0] <= parentBoundaryCounts[parentOffset];
+          });
+        const candidates = alignments.filter(
+          (count) => childBoundaryCounts[count] > parentBoundaryCounts[parentEvents.length],
+        );
+        const unambiguousCandidates = candidates.filter(
+          (count) => count !== 0 || !alignments.some((alignment) => alignment > 0),
+        );
+        const pending = alignments.some(
+          (count) =>
+            (count === 0
+              ? childBoundaryCounts[count] <= parentBoundaryCounts[parentEvents.length]
+              : childBoundaryCounts[count] === parentBoundaryCounts[parentEvents.length]) &&
+            childBoundaryCounts.slice(count + 1).every((boundaries) => boundaries === 0),
+        );
+        if (pending || unambiguousCandidates.length !== 1) {
+          unresolved.add(fileState);
+          memo.set(fileState, []);
+          return [];
+        }
+        inheritedCount = unambiguousCandidates[0];
       }
       parentOffset = parentEvents.length - inheritedCount;
     }

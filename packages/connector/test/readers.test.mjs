@@ -655,7 +655,7 @@ test("keeps a legacy fork pending until its child boundary is durable", async (c
     `${codexSessionMeta(childId, {
       forkedFromId: parentId,
       timestamp: "2026-08-10T12:01:00Z",
-    })}\n${copiedSettings}\n${copiedToken}\n`,
+    })}\n${codexThreadSettings("2026-08-10T12:01:00.001Z")}\n${copiedToken}\n`,
   );
   const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
 
@@ -675,6 +675,166 @@ test("keeps a legacy fork pending until its child boundary is durable", async (c
   const recovered = await collectCodexSessionUsage({ dataPath: root }, range, pending.nextState);
   assert.deepEqual(recovered.warnings, []);
   assert.equal(recovered.entries[0].totalTokens, "27");
+});
+
+test("uses the first non-inherited legacy boundary when token signatures repeat", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-repeated-fork-signatures-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const parentId = "22222222-2222-4222-8222-222222222222";
+  const childId = "23232323-2323-4323-8323-232323232323";
+  const first = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const second = {
+    input_tokens: 10,
+    cached_input_tokens: 2,
+    cache_write_input_tokens: 0,
+    output_tokens: 8,
+    reasoning_output_tokens: 2,
+    total_tokens: 18,
+  };
+  const occupancy = {
+    input_tokens: 0,
+    cached_input_tokens: 0,
+    cache_write_input_tokens: 0,
+    output_tokens: 0,
+    reasoning_output_tokens: 0,
+    total_tokens: 100,
+  };
+  await writeFile(
+    join(directory, "parent.jsonl"),
+    `${codexSessionMeta(parentId)}\n${codexTokenCount(
+      "2026-08-10T12:00:00Z",
+      first,
+      first,
+      1,
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", second, first, 2)}\n${codexTokenCount(
+      "2026-08-10T12:02:00Z",
+      occupancy,
+      occupancy,
+      3,
+    )}\n${codexTokenCount("2026-08-10T12:03:00Z", first, first, 4)}\n${codexTokenCount(
+      "2026-08-10T12:04:00Z",
+      second,
+      first,
+      5,
+    )}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      timestamp: "2026-08-10T12:04:30Z",
+    })}\n${codexTokenCount("2026-08-10T12:04:31Z", second, first, 41)}\n${codexThreadSettings(
+      "2026-08-10T12:04:32Z",
+    )}\n${codexTokenCount("2026-08-10T12:05:00Z", occupancy, occupancy, 42)}\n${codexTokenCount(
+      "2026-08-10T12:06:00Z",
+      first,
+      first,
+      43,
+    )}\n${codexTokenCount("2026-08-10T12:07:00Z", second, first, 44)}\n${codexThreadSettings(
+      "2026-08-10T12:08:00Z",
+    )}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.entries, [
+    {
+      date: "2026-08-10",
+      totalTokens: "54",
+      inputTokens: "24",
+      outputTokens: "18",
+      cacheReadTokens: "6",
+      cacheWriteTokens: "0",
+      reasoningTokens: "6",
+    },
+  ]);
+});
+
+test("fails closed when repeated legacy signatures and boundaries remain ambiguous", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-ambiguous-fork-boundaries-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const parentId = "24242424-2424-4424-8424-242424242424";
+  const childId = "25252525-2525-4525-8525-252525252525";
+  const first = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const second = {
+    input_tokens: 10,
+    cached_input_tokens: 2,
+    cache_write_input_tokens: 0,
+    output_tokens: 8,
+    reasoning_output_tokens: 2,
+    total_tokens: 18,
+  };
+  const occupancy = {
+    input_tokens: 0,
+    cached_input_tokens: 0,
+    cache_write_input_tokens: 0,
+    output_tokens: 0,
+    reasoning_output_tokens: 0,
+    total_tokens: 100,
+  };
+  await writeFile(
+    join(directory, "parent.jsonl"),
+    `${codexSessionMeta(parentId)}\n${codexTokenCount(
+      "2026-08-10T12:00:00Z",
+      first,
+      first,
+      1,
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", second, first, 2)}\n${codexTokenCount(
+      "2026-08-10T12:02:00Z",
+      occupancy,
+      occupancy,
+      3,
+    )}\n${codexThreadSettings("2026-08-10T12:02:30Z")}\n${codexTokenCount(
+      "2026-08-10T12:03:00Z",
+      first,
+      first,
+      4,
+    )}\n${codexTokenCount("2026-08-10T12:04:00Z", second, first, 5)}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      timestamp: "2026-08-10T12:04:30Z",
+    })}\n${codexTokenCount("2026-08-10T12:04:31Z", second, first, 41)}\n${codexThreadSettings(
+      "2026-08-10T12:04:32Z",
+    )}\n${codexTokenCount("2026-08-10T12:05:00Z", occupancy, occupancy, 42)}\n${codexTokenCount(
+      "2026-08-10T12:06:00Z",
+      first,
+      first,
+      43,
+    )}\n${codexTokenCount("2026-08-10T12:07:00Z", second, first, 44)}\n${codexThreadSettings(
+      "2026-08-10T12:08:00Z",
+    )}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
 });
 
 test("recovers Codex lineage after first seeing an empty rollout", async (context) => {
