@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
+import { pipeline } from "node:stream/promises";
 import { createZstdDecompress } from "node:zlib";
 import {
   executableOverride,
@@ -22,9 +23,10 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 5;
+const codexComponentStateVersion = 7;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
+const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
 const codexUsageKeys = [
   "inputTokens",
   "cachedInputTokens",
@@ -97,14 +99,62 @@ function codexUsageDelta(current, previous) {
   return Object.fromEntries(codexUsageKeys.map((key) => [key, current[key] - previous[key]]));
 }
 
-function codexUsageEventId(record, total, last) {
-  const identity = [
-    record.timestamp,
-    record.ordinal,
+function codexHash(value) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("base64url").slice(0, 16);
+}
+
+function codexSessionKey(value) {
+  return typeof value === "string" ? codexHash(["codex-session", value]) : null;
+}
+
+function codexUsageSignature(total, last) {
+  return codexHash([
     ...codexUsageKeys.map((key) => total[key].toString()),
     ...codexUsageKeys.map((key) => last[key].toString()),
-  ];
-  return createHash("sha256").update(JSON.stringify(identity)).digest("base64url").slice(0, 16);
+  ]);
+}
+
+function codexSessionContext(lines, priorSessionContext) {
+  if (priorSessionContext?.complete === true) return priorSessionContext;
+  let sessionMeta = null;
+  let metadataInvalid = false;
+  for (const line of lines) {
+    if (!codexSessionMetaPattern.test(line)) continue;
+    try {
+      const record = JSON.parse(line);
+      if (record?.type !== "session_meta") continue;
+      if (
+        record.payload === null ||
+        typeof record.payload !== "object" ||
+        typeof record.payload.id !== "string" ||
+        (record.payload.forked_from_id != null &&
+          typeof record.payload.forked_from_id !== "string") ||
+        (record.payload.history_base != null &&
+          (typeof record.payload.history_base !== "object" ||
+            Array.isArray(record.payload.history_base)))
+      ) {
+        metadataInvalid = true;
+        continue;
+      }
+      sessionMeta ??= record.payload;
+    } catch {
+      metadataInvalid = true;
+    }
+  }
+  if (metadataInvalid)
+    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
+  const sessionKey = codexSessionKey(sessionMeta?.id);
+  const parentSessionKey =
+    sessionMeta?.history_base == null ? codexSessionKey(sessionMeta?.forked_from_id) : null;
+  const startedAt = Date.parse(sessionMeta?.timestamp ?? "");
+  if (parentSessionKey !== null && !Number.isFinite(startedAt))
+    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
+  return {
+    complete: true,
+    sessionKey,
+    parentSessionKey,
+    startedAt: Number.isFinite(startedAt) ? startedAt : null,
+  };
 }
 
 function compactCodexEvent(entry, references = 1) {
@@ -132,7 +182,26 @@ function expandCodexEvent(event) {
   };
 }
 
-export function parseCodexSessionLines(lines, priorUsage = null) {
+function compactCodexRawEvent(event, range) {
+  return event.entry.date < range.rangeStart || event.entry.date > range.rangeEnd
+    ? [event.signature, event.timestamp]
+    : [
+        event.signature,
+        event.timestamp,
+        ...compactCodexEvent(event.entry).slice(0, codexEventReferencesIndex),
+      ];
+}
+
+function expandCodexRawEvent(event) {
+  return {
+    signature: event[0],
+    timestamp: event[1],
+    entry: event.length > 2 ? expandCodexEvent(event.slice(2)) : null,
+  };
+}
+
+export function parseCodexSessionLines(lines, priorUsage = null, priorSessionContext = null) {
+  const sessionContext = codexSessionContext(lines, priorSessionContext);
   let previous = storedCodexUsage(priorUsage);
   const entries = [];
   const events = [];
@@ -145,6 +214,7 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
     if (day === null) unknownIncomplete = true;
     else incompleteDates.add(day);
   };
+  if (sessionContext.complete !== true) markInvalid(null);
   for (const line of lines) {
     if (!codexTokenCountPattern.test(line)) continue;
     let day = utcDay(line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1]);
@@ -165,7 +235,6 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
       markInvalid(null);
       continue;
     }
-    eventDates.add(day);
     const rawUsage = record?.payload?.info?.total_token_usage;
     if (rawUsage === null || rawUsage === undefined) continue;
     const current = codexUsage(rawUsage);
@@ -177,6 +246,11 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
     const rawLastUsage = codexUsage(rawLast);
     if (isContextWindowUsage(current) && isContextWindowUsage(rawLastUsage)) continue;
     if (previous && sameCodexUsage(previous, current)) continue;
+    if (sessionContext.complete !== true) {
+      previous = current;
+      continue;
+    }
+    eventDates.add(day);
     const delta = codexUsageDelta(current, previous);
     const last = exactCodexUsage(rawLast);
     let contribution = last;
@@ -209,7 +283,11 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
     if (entry === null || entry.inputTokens === undefined) markInvalid(day);
     else {
       entries.push(entry);
-      events.push({ id: codexUsageEventId(record, current, contribution), entry });
+      events.push({
+        signature: codexUsageSignature(current, contribution),
+        timestamp: Date.parse(record.timestamp),
+        entry,
+      });
     }
   }
   return {
@@ -220,6 +298,7 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
     eventDates: [...eventDates].sort(),
     incompleteDates: [...incompleteDates].sort(),
     unknownIncomplete,
+    sessionContext,
   };
 }
 
@@ -229,25 +308,20 @@ async function codexLinesChunk(path, start = 0, size, maximumBytes = 100_000_000
     return { ...chunk, readBytes: Math.max(0, (size ?? chunk.safeOffset) - start) };
   }
   if (start !== 0) throw new Error("Compressed Codex rollouts cannot be read incrementally");
-  const input = createReadStream(path);
-  const stream = input.pipe(createZstdDecompress());
-  stream.setEncoding("utf8");
   let contents = "";
   let readBytes = 0;
-  try {
+  await pipeline(createReadStream(path), createZstdDecompress(), async (stream) => {
+    stream.setEncoding("utf8");
     for await (const chunk of stream) {
       readBytes += Buffer.byteLength(chunk);
       if (readBytes > maximumBytes) {
         const error = new Error("Decompressed Codex rollout exceeds the read limit");
         error.code = "CODEX_ROLLOUT_LIMIT";
-        stream.destroy(error);
         throw error;
       }
       contents += chunk;
     }
-  } finally {
-    input.destroy();
-  }
+  });
   const newline = contents.lastIndexOf("\n");
   if (newline < 0) return { lines: [], safeOffset: size ?? 0, oversizedLines: 0, readBytes };
   const complete = contents.slice(0, newline + 1);
@@ -280,24 +354,35 @@ function intersectRange(start, end, range) {
 function fileRanges(fileState, file, range) {
   const intervals = [];
   let hasDateEvidence = false;
-  if (fileState?.dateStart && fileState?.dateEnd) {
+  const hasKnownRange = Boolean(fileState?.dateStart && fileState?.dateEnd);
+  if (hasKnownRange) {
     hasDateEvidence = true;
     const known = intersectRange(fileState.dateStart, fileState.dateEnd, range);
     if (known) intervals.push(known);
   }
+  const fallbackDays = [];
   if (Number.isFinite(file?.modifiedAt)) {
     hasDateEvidence = true;
     const modifiedDay = utcDay(file.modifiedAt);
-    const modified = intersectRange(modifiedDay, modifiedDay, range);
-    if (modified) intervals.push(modified);
+    if (modifiedDay !== null) fallbackDays.push(modifiedDay);
   }
   const pathDay = codexPathDay(file?.path ?? "");
   if (pathDay !== null) {
     hasDateEvidence = true;
-    const path = intersectRange(pathDay, pathDay, range);
-    if (path) intervals.push(path);
+    fallbackDays.push(pathDay);
+  }
+  if (fallbackDays.length) {
+    const start = fallbackDays.sort()[0];
+    const end = fallbackDays.at(-1);
+    const fallback = intersectRange(start, end, range);
+    if (fallback) intervals.push(fallback);
   }
   return hasDateEvidence ? intervals : [[range.rangeStart, range.rangeEnd]];
+}
+
+function pathIsWithin(candidate, directory) {
+  const child = relative(directory, candidate);
+  return child !== "" && child !== ".." && !child.startsWith(`..${sep}`) && !isAbsolute(child);
 }
 
 function incompleteIntervals(fileState, file, range) {
@@ -318,6 +403,81 @@ function mergeDateBounds(previous, parsed, appended) {
     ...(starts.length ? { dateStart: starts.sort()[0] } : {}),
     ...(ends.length ? { dateEnd: ends.sort().at(-1) } : {}),
   };
+}
+
+function rebuildCodexEventState(files, range) {
+  const bySession = new Map();
+  for (const fileState of Object.values(files)) {
+    if (!fileState?.sessionContext?.sessionKey) continue;
+    const existing = bySession.get(fileState.sessionContext.sessionKey);
+    if (
+      existing === undefined ||
+      (fileState.rawEvents?.length ?? 0) > (existing.rawEvents?.length ?? 0)
+    )
+      bySession.set(fileState.sessionContext.sessionKey, fileState);
+  }
+  const unresolved = new Set();
+  const memo = new Map();
+  const resolveEvents = (fileState, ancestry = new Set()) => {
+    if (memo.has(fileState)) return memo.get(fileState);
+    const rawEvents = (fileState.rawEvents ?? []).map(expandCodexRawEvent);
+    const { sessionKey, parentSessionKey, startedAt } = fileState.sessionContext ?? {};
+    let parentEvents = null;
+    if (parentSessionKey) {
+      const parent = bySession.get(parentSessionKey);
+      if (parent === undefined || ancestry.has(parentSessionKey)) {
+        unresolved.add(fileState);
+        memo.set(fileState, []);
+        return [];
+      }
+      parentEvents = resolveEvents(parent, new Set([...ancestry, sessionKey].filter(Boolean)));
+      if (unresolved.has(parent)) {
+        unresolved.add(fileState);
+        memo.set(fileState, []);
+        return [];
+      }
+      parentEvents = parentEvents.filter(
+        (event) => !Number.isFinite(startedAt) || event.timestamp <= startedAt,
+      );
+    }
+    let inheritedCount = 0;
+    while (
+      parentEvents !== null &&
+      inheritedCount < rawEvents.length &&
+      inheritedCount < parentEvents.length &&
+      rawEvents[inheritedCount].signature === parentEvents[inheritedCount].signature
+    )
+      inheritedCount += 1;
+    const branchKey = sessionKey ?? codexHash(["legacy-codex-session"]);
+    const resolved = rawEvents.map((event, index) =>
+      index < inheritedCount
+        ? parentEvents[index]
+        : {
+            id: codexHash(["codex-lineage-event", branchKey, index, event.signature]),
+            ...event,
+          },
+    );
+    memo.set(fileState, resolved);
+    return resolved;
+  };
+  const events = {};
+  for (const fileState of Object.values(files)) {
+    const eventIds = new Set();
+    for (const { id, entry } of resolveEvents(fileState)) {
+      if (
+        entry === null ||
+        entry.date < range.rangeStart ||
+        entry.date > range.rangeEnd ||
+        eventIds.has(id)
+      )
+        continue;
+      eventIds.add(id);
+      if (events[id] === undefined) events[id] = compactCodexEvent(entry);
+      else events[id][codexEventReferencesIndex] += 1;
+    }
+    fileState.eventIds = [...eventIds];
+  }
+  return { events, unresolved };
 }
 
 async function discoverCodexRollouts(dataPath, discover, maximumFiles, maximumFileBytes) {
@@ -375,45 +535,26 @@ export async function collectCodexSessionUsage(
   const nextState = {
     version: codexComponentStateVersion,
     files: {},
-    events: Object.fromEntries(
-      Object.entries(currentState.events ?? {})
-        .filter(([, event]) => event?.[0] >= range.rangeStart && event[0] <= range.rangeEnd)
-        .map(([id, event]) => [id, [...event]]),
-    ),
+    events: {},
   };
-  const retainedFile = (fileState) => ({
-    ...fileState,
-    eventIds: (fileState?.eventIds ?? []).filter((id) => nextState.events[id] !== undefined),
-  });
-  const removeOwnership = (fileState) => {
-    for (const id of new Set(fileState?.eventIds ?? [])) {
-      const event = nextState.events[id];
-      if (event === undefined) continue;
-      if (event[codexEventReferencesIndex] <= 1) delete nextState.events[id];
-      else event[codexEventReferencesIndex] -= 1;
-    }
-  };
-  const addOwnership = (parsedEvents, existingIds = new Set()) => {
-    const ids = new Set(existingIds);
-    for (const { id, entry } of parsedEvents) {
-      if (ids.has(id) || entry.date < range.rangeStart || entry.date > range.rangeEnd) continue;
-      ids.add(id);
-      const event = nextState.events[id];
-      if (event === undefined) nextState.events[id] = compactCodexEvent(entry);
-      else event[codexEventReferencesIndex] += 1;
-    }
-    return [...ids];
-  };
+  const retainedFile = (fileState) => ({ ...fileState });
   const blockedIntervals = [];
   const block = (interval) => {
     if (interval) blockedIntervals.push(interval);
   };
   let discoveryRelevant = false;
   for (const issue of discovered.issues) {
+    const affectedStates = Object.entries(currentState.files ?? {}).filter(
+      ([path]) => path === issue.path || pathIsWithin(path, issue.path),
+    );
     const intervals =
       issue.reason === "limit"
         ? [[range.rangeStart, range.rangeEnd]]
-        : fileRanges(currentState.files?.[issue.path], issue, range);
+        : affectedStates.length
+          ? affectedStates.flatMap(([path, fileState]) =>
+              fileRanges(fileState, { path, modifiedAt: fileState.modifiedAt }, range),
+            )
+          : fileRanges(currentState.files?.[issue.path], issue, range);
     if (intervals.length) {
       for (const interval of intervals) block(interval);
       discoveryRelevant = true;
@@ -443,6 +584,7 @@ export async function collectCodexSessionUsage(
       previous.size <= file.size &&
       (previous.safeOffset ?? previous.size) <= file.size &&
       (previous.ino === undefined || previous.ino === file.ino);
+    if (previous?.sessionContext?.complete === false) appended = false;
     if (appended && previous.tailFingerprint !== undefined) {
       try {
         appended =
@@ -470,10 +612,12 @@ export async function collectCodexSessionUsage(
       const consumedBytes = chunk.readBytes ?? requiredBytes;
       if (bytes + consumedBytes > maximumBytes) throw new Error("Codex rollout budget exceeded");
       bytes += consumedBytes;
-      const parsed = parseCodexSessionLines(chunk.lines, appended ? previous.lastUsage : null);
+      const parsed = parseCodexSessionLines(
+        chunk.lines,
+        appended ? previous.lastUsage : null,
+        appended ? previous.sessionContext : null,
+      );
       const nextFingerprint = await fingerprint(file.path, chunk.safeOffset);
-      if (!appended && previous) removeOwnership(previous);
-      const existingIds = new Set(appended ? retainedFile(previous).eventIds : []);
       const incompleteDates = new Set(appended ? (previous?.incompleteDates ?? []) : []);
       for (const day of parsed.incompleteDates) incompleteDates.add(day);
       nextState.files[file.path] = {
@@ -483,7 +627,11 @@ export async function collectCodexSessionUsage(
         safeOffset: chunk.safeOffset,
         tailFingerprint: nextFingerprint,
         lastUsage: parsed.lastUsage,
-        eventIds: addOwnership(parsed.events, existingIds),
+        sessionContext: parsed.sessionContext,
+        rawEvents: [
+          ...(appended ? (previous?.rawEvents ?? []) : []),
+          ...parsed.events.map((event) => compactCodexRawEvent(event, range)),
+        ],
         ...mergeDateBounds(previous, parsed, appended),
         ...(incompleteDates.size ? { incompleteDates: [...incompleteDates].sort() } : {}),
         ...(parsed.unknownIncomplete || (appended && previous?.unknownIncomplete === true)
@@ -503,8 +651,13 @@ export async function collectCodexSessionUsage(
       if (discoveryRelevant && intervals.length) {
         nextState.files[path] = retainedFile(previous);
         for (const interval of intervals) block(interval);
-      } else removeOwnership(previous);
+      }
     }
+  const rebuilt = rebuildCodexEventState(nextState.files, range);
+  nextState.events = rebuilt.events;
+  for (const fileState of rebuilt.unresolved)
+    for (const interval of fileRanges(fileState, { modifiedAt: fileState.modifiedAt }, range))
+      block(interval);
   const warnings = [];
   if (blockedIntervals.length) warnings.push("codex_session_components_incomplete");
   return {

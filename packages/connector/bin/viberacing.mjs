@@ -561,11 +561,13 @@ async function forgetSourceState(sourceIds) {
   state.adapters ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
+  state.collectionWarnings ??= {};
   for (const sourceId of sourceIds) {
     delete state.sequences[sourceId];
     delete state.adapters[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
+    delete state.collectionWarnings[sourceId];
     await removePendingForSource(sourceId);
     await clearQuarantine(sourceId);
   }

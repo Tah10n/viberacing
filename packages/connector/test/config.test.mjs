@@ -3748,6 +3748,7 @@ test("removes a source online with all local state and remains idempotent", asyn
       adapters: { [sourceId]: { qwen: 1 } },
       fingerprints: { [sourceId]: "fingerprint" },
       quarantine: { [sourceId]: "invalid_payload" },
+      collectionWarnings: { [sourceId]: ["codex_session_components_incomplete"] },
     })}\n`,
   );
   await writeFile(
@@ -3803,6 +3804,7 @@ test("removes a source online with all local state and remains idempotent", asyn
   assert.equal(localState.adapters[sourceId], undefined);
   assert.equal(localState.fingerprints[sourceId], undefined);
   assert.equal(localState.quarantine[sourceId], undefined);
+  assert.equal(localState.collectionWarnings[sourceId], undefined);
   await assert.rejects(access(join(pending, `${sourceId}.json`)));
   await assert.rejects(access(join(pending, "quarantine", `${sourceId}.json`)));
   await assert.rejects(access(join(directory, "dirty.json")));
