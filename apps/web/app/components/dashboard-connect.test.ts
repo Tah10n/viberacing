@@ -74,4 +74,12 @@ describe("dashboard connection flow", () => {
     expect(pairingApproval).toContain("auto_dedup_decided_at");
     expect(leaderboardLeave).toContain("UPDATE account_dedup_events");
   });
+
+  it("shows an account-wide breakdown only from one largest exact local component tuple", () => {
+    expect(dashboard).toContain("candidate.component_tokens = candidate.maximum_component_tokens");
+    expect(dashboard).toContain("count(DISTINCT ROW(");
+    expect(dashboard).toContain("WHEN 'account_max' THEN max(candidate.input_tokens) FILTER");
+    expect(dashboard).toContain("ELSE bool_and(candidate.components_available)");
+    expect(dashboard).toContain("Local component counters total");
+  });
 });

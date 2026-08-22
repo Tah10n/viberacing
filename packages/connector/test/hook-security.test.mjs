@@ -43,7 +43,7 @@ test(
     };
     await config.installHookForSource(source, installed);
     const settings = JSON.parse(await readFile(join(hookRoot, "hooks.json"), "utf8"));
-    const command = settings.hooks.SessionEnd[0].hooks[0].command;
+    const command = settings.hooks.Stop[0].hooks[0].command;
     assert.match(command, /viberacing-hook-v3:45454545/);
     await execFileAsync("/bin/sh", ["-c", `${command} </dev/null`], {
       cwd: root,

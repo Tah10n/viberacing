@@ -24,6 +24,11 @@ successful `connect` still collect every active source immediately. The first co
 to 31 UTC days, later JSONL reads resume from safe byte offsets, and an unchanged normalized
 snapshot causes no HTTP request.
 
+Codex marks its source dirty after each completed turn. Its authoritative account-wide App Server
+daily total remains the ranking value, while provider-recorded local input/output/cache/reasoning
+counters are shown separately when available. The dashboard explicitly notes when those different
+scopes do not sum to the same value; neither counter is estimated.
+
 Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still
 recorded exactly and is collected by `viberacing sync` or the next supported lifecycle trigger.

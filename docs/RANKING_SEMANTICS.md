@@ -8,13 +8,22 @@ cryptographically verified.
 For each source and UTC date, `totalTokens` is an authoritative provider total when available;
 otherwise it is the non-overlapping sum of input, output, cache read, cache creation/write, and
 separately reported reasoning. Adapters remove provider-specific overlap such as cached input
-already included in prompt input. All integers remain canonical decimal strings in the protocol and
-`numeric(30,0)` in PostgreSQL.
+already included in prompt input and reasoning already included in output. All integers remain
+canonical decimal strings in the protocol and `numeric(30,0)` in PostgreSQL.
+
+Codex is the one scoped exception for component display: its authoritative daily total is
+account-wide, while its provider-recorded component events are locally retained. The ranking always
+uses the account total. Available local components are displayed as a separate exact tuple with
+their own sum and an explicit scope note; they are never scaled or estimated to fit the account
+total. Other agents' five components must sum exactly to `totalTokens`.
 
 For an `account_max` account, daily usage is the maximum across linked sources. This prevents an
 account-wide Codex daily bucket reported from two computers from doubling. For a `source_sum`
 account, daily usage is the sum across machine-local histories. Daily account totals then sum across
-multiple accounts of the same agent; agent totals sum into the user's weekly total.
+multiple accounts of the same agent; agent totals sum into the user's weekly total. An `account_max`
+component breakdown selects the largest complete local component sum for each day and is hidden for
+that day if equally large tuples disagree. A `source_sum` breakdown still requires complete
+components whose sum matches each authoritative source total.
 
 Local sources have random stable identities independent of discovery order. Pairing can assign two
 profiles of the same agent to different accounts, which makes their account totals additive, or to
