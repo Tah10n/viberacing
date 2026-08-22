@@ -1836,6 +1836,7 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   const home = await mkdtemp(join(tmpdir(), "viberacing-real-scheduler-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const schedulerTrace = join(home, "scheduler-trace.log");
   await writeFile(
     join(installation.directory, "state.json"),
     `${JSON.stringify({ version: 1, sequences: { [installation.sourceId]: "0" } })}\n`,
@@ -1843,6 +1844,7 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "50,400,200",
+    VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
   });
 
   const hookResults = await Promise.all(
@@ -1862,7 +1864,22 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
     );
     assert.equal(result.stdout, "", `hook ${index} unexpectedly wrote to stdout`);
   }
-  await firstRequest;
+  await Promise.race([
+    firstRequest,
+    delay(10_000, undefined, { ref: false }).then(async () => {
+      const diagnostics = {};
+      for (const name of ["dirty.json", "scheduler-launch.lock", "scheduler.lock", "state.json"])
+        diagnostics[name] = await readFile(join(installation.directory, name), "utf8").catch(
+          (error) => error?.code ?? error?.message,
+        );
+      diagnostics.schedulerTrace = await readFile(schedulerTrace, "utf8").catch(
+        (error) => error?.code ?? error?.message,
+      );
+      throw new Error(
+        `Automatic scheduler did not issue its first request: ${JSON.stringify(diagnostics)}`,
+      );
+    }),
+  ]);
   const firstAutomaticSyncAt = JSON.parse(
     await readFile(join(installation.directory, "state.json"), "utf8"),
   ).lastAutomaticSyncAt;
