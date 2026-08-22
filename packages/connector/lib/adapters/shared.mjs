@@ -133,12 +133,24 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
               ]
             : [],
         incomplete: rootInfo.size > maximumFileBytes,
+        issues:
+          rootInfo.size > maximumFileBytes
+            ? [
+                {
+                  path: root,
+                  size: rootInfo.size,
+                  modifiedAt: rootInfo.mtimeMs,
+                  reason: "oversized",
+                },
+              ]
+            : [],
       };
     }
   } catch {
-    return { files: [], incomplete: true };
+    return { files: [], incomplete: true, issues: [{ path: root, reason: "unreadable" }] };
   }
   const found = [];
+  const issues = [];
   const queue = [root];
   let incomplete = false;
   while (queue.length) {
@@ -148,6 +160,7 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
       directory = await opendir(current);
     } catch {
       incomplete = true;
+      issues.push({ path: current, reason: "unreadable" });
       continue;
     }
     for await (const entry of directory) {
@@ -159,13 +172,23 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
           const info = await stat(path);
           if (info.size <= maximumFileBytes)
             found.push({ path, size: info.size, modifiedAt: info.mtimeMs, ino: info.ino });
-          else incomplete = true;
+          else {
+            incomplete = true;
+            issues.push({
+              path,
+              size: info.size,
+              modifiedAt: info.mtimeMs,
+              reason: "oversized",
+            });
+          }
         } catch {
           incomplete = true;
+          issues.push({ path, reason: "unreadable" });
         }
       }
       if (found.length >= maximum) {
         incomplete = true;
+        issues.push({ path: current, reason: "limit" });
         break;
       }
     }
@@ -174,6 +197,7 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
   return {
     files: found.sort((a, b) => b.modifiedAt - a.modifiedAt || a.path.localeCompare(b.path)),
     incomplete,
+    issues,
   };
 }
 

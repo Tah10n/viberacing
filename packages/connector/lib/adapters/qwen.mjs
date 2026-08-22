@@ -12,7 +12,7 @@ import {
   utcDay,
 } from "./shared.mjs";
 
-const qwenParserVersion = 2;
+const qwenParserVersion = 3;
 
 export function parseQwenLines(lines) {
   const seen = new Set();
@@ -41,20 +41,25 @@ export function parseQwenLines(lines) {
     )
       continue;
     seen.add(record.id);
+    let regularOutput = null;
+    if (cached <= input) {
+      if (total === input + output + thoughts) regularOutput = output;
+      else if (total === input + output && thoughts <= output) regularOutput = output - thoughts;
+    }
     entries.push(
-      cached <= input && thoughts <= output
-        ? componentEntry(
+      regularOutput === null
+        ? totalEntry(day, total)
+        : componentEntry(
             day,
             {
               inputTokens: input - cached,
-              outputTokens: output - thoughts,
+              outputTokens: regularOutput,
               cacheReadTokens: cached,
               cacheWriteTokens: 0,
               reasoningTokens: thoughts,
             },
             total,
-          )
-        : totalEntry(day, total),
+          ),
     );
   }
   return mergeEntries(entries);

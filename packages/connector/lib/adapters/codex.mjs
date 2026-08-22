@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { createZstdDecompress } from "node:zlib";
 import {
   executableOverride,
   resolveAgentExecutable,
@@ -20,7 +22,7 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 4;
+const codexComponentStateVersion = 5;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexUsageKeys = [
@@ -32,7 +34,7 @@ const codexUsageKeys = [
   "totalTokens",
 ];
 
-function cumulativeCodexUsage(value) {
+function codexUsage(value) {
   if (value === null || typeof value !== "object") return null;
   const usage = {
     inputTokens: integer(value.input_tokens),
@@ -43,13 +45,33 @@ function cumulativeCodexUsage(value) {
     totalTokens: integer(value.total_tokens),
   };
   if (Object.values(usage).some((counter) => counter === null)) return null;
-  if (
-    usage.totalTokens !== usage.inputTokens + usage.outputTokens ||
-    usage.cachedInputTokens + usage.cacheWriteInputTokens > usage.inputTokens ||
-    usage.reasoningOutputTokens > usage.outputTokens
-  )
-    return null;
   return usage;
+}
+
+function hasExactCodexComponents(usage) {
+  return (
+    usage !== null &&
+    usage.totalTokens === usage.inputTokens + usage.outputTokens &&
+    usage.cachedInputTokens + usage.cacheWriteInputTokens <= usage.inputTokens &&
+    usage.reasoningOutputTokens <= usage.outputTokens
+  );
+}
+
+function exactCodexUsage(value) {
+  const usage = codexUsage(value);
+  return hasExactCodexComponents(usage) ? usage : null;
+}
+
+function isContextWindowUsage(usage) {
+  return (
+    usage !== null &&
+    usage.totalTokens > 0n &&
+    usage.inputTokens === 0n &&
+    usage.cachedInputTokens === 0n &&
+    usage.cacheWriteInputTokens === 0n &&
+    usage.outputTokens === 0n &&
+    usage.reasoningOutputTokens === 0n
+  );
 }
 
 function storedCodexUsage(value) {
@@ -114,49 +136,59 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
   let previous = storedCodexUsage(priorUsage);
   const entries = [];
   const events = [];
+  const eventDates = new Set();
+  const incompleteDates = new Set();
   let invalid = false;
+  let unknownIncomplete = false;
+  const markInvalid = (day) => {
+    invalid = true;
+    if (day === null) unknownIncomplete = true;
+    else incompleteDates.add(day);
+  };
   for (const line of lines) {
     if (!codexTokenCountPattern.test(line)) continue;
+    let day = utcDay(line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1]);
     if (Buffer.byteLength(line) > 1_000_000) {
-      invalid = true;
+      markInvalid(day);
       continue;
     }
     let record;
     try {
       record = JSON.parse(line);
     } catch {
-      invalid = true;
+      markInvalid(day);
       continue;
     }
     if (record?.type !== "event_msg" || record?.payload?.type !== "token_count") continue;
-    const rawUsage = record?.payload?.info?.total_token_usage;
-    if (rawUsage === null || rawUsage === undefined) continue;
-    const current = cumulativeCodexUsage(rawUsage);
-    if (current === null) {
-      invalid = true;
+    day = utcDay(record.timestamp);
+    if (day === null) {
+      markInvalid(null);
       continue;
     }
+    eventDates.add(day);
+    const rawUsage = record?.payload?.info?.total_token_usage;
+    if (rawUsage === null || rawUsage === undefined) continue;
+    const current = codexUsage(rawUsage);
+    if (current === null) {
+      markInvalid(day);
+      continue;
+    }
+    const rawLast = record?.payload?.info?.last_token_usage;
+    const rawLastUsage = codexUsage(rawLast);
+    if (isContextWindowUsage(current) && isContextWindowUsage(rawLastUsage)) continue;
     if (previous && sameCodexUsage(previous, current)) continue;
     const delta = codexUsageDelta(current, previous);
-    const rawLast = record?.payload?.info?.last_token_usage;
-    const last = cumulativeCodexUsage(rawLast);
+    const last = exactCodexUsage(rawLast);
     let contribution = last;
-    if (previous !== null && (last === null || !sameCodexUsage(last, delta))) {
+    if (previous !== null && last === null) {
       contribution =
-        integer(rawLast?.total_tokens) === delta.totalTokens &&
-        delta.cachedInputTokens + delta.cacheWriteInputTokens <= delta.inputTokens &&
-        delta.reasoningOutputTokens <= delta.outputTokens
+        integer(rawLast?.total_tokens) === delta.totalTokens && hasExactCodexComponents(delta)
           ? delta
           : null;
     }
     previous = current;
     if (contribution === null) {
-      invalid = true;
-      continue;
-    }
-    const day = utcDay(record.timestamp);
-    if (day === null) {
-      invalid = true;
+      markInvalid(day);
       continue;
     }
     if (contribution.totalTokens === 0n) continue;
@@ -174,7 +206,7 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
       },
       contribution.totalTokens,
     );
-    if (entry === null || entry.inputTokens === undefined) invalid = true;
+    if (entry === null || entry.inputTokens === undefined) markInvalid(day);
     else {
       entries.push(entry);
       events.push({ id: codexUsageEventId(record, current, contribution), entry });
@@ -185,6 +217,142 @@ export function parseCodexSessionLines(lines, priorUsage = null) {
     events,
     lastUsage: serializeCodexUsage(previous),
     invalid,
+    eventDates: [...eventDates].sort(),
+    incompleteDates: [...incompleteDates].sort(),
+    unknownIncomplete,
+  };
+}
+
+async function codexLinesChunk(path, start = 0, size, maximumBytes = 100_000_000) {
+  if (!path.endsWith(".jsonl.zst")) {
+    const chunk = await jsonLinesChunk(path, start, size);
+    return { ...chunk, readBytes: Math.max(0, (size ?? chunk.safeOffset) - start) };
+  }
+  if (start !== 0) throw new Error("Compressed Codex rollouts cannot be read incrementally");
+  const input = createReadStream(path);
+  const stream = input.pipe(createZstdDecompress());
+  stream.setEncoding("utf8");
+  let contents = "";
+  let readBytes = 0;
+  try {
+    for await (const chunk of stream) {
+      readBytes += Buffer.byteLength(chunk);
+      if (readBytes > maximumBytes) {
+        const error = new Error("Decompressed Codex rollout exceeds the read limit");
+        error.code = "CODEX_ROLLOUT_LIMIT";
+        stream.destroy(error);
+        throw error;
+      }
+      contents += chunk;
+    }
+  } finally {
+    input.destroy();
+  }
+  const newline = contents.lastIndexOf("\n");
+  if (newline < 0) return { lines: [], safeOffset: size ?? 0, oversizedLines: 0, readBytes };
+  const complete = contents.slice(0, newline + 1);
+  const lines = complete.split(/\r?\n/).filter(Boolean);
+  return {
+    lines,
+    safeOffset: size ?? 0,
+    oversizedLines: lines.filter((line) => Buffer.byteLength(line) > 1_000_000).length,
+    readBytes,
+  };
+}
+
+function codexPathDay(path) {
+  const match = path.match(
+    /(?:^|[\\/])(\d{4})[\\/](\d{2})[\\/](\d{2})(?:[\\/]|$)|rollout-(\d{4}-\d{2}-\d{2})T/,
+  );
+  const pathDay = match ? (match[4] ?? `${match[1]}-${match[2]}-${match[3]}`) : null;
+  if (pathDay !== null && utcDay(pathDay) === pathDay) return pathDay;
+  return null;
+}
+
+function intersectRange(start, end, range) {
+  if (!start || !end || end < range.rangeStart || start > range.rangeEnd) return null;
+  return [
+    start < range.rangeStart ? range.rangeStart : start,
+    end > range.rangeEnd ? range.rangeEnd : end,
+  ];
+}
+
+function fileRanges(fileState, file, range) {
+  const intervals = [];
+  let hasDateEvidence = false;
+  if (fileState?.dateStart && fileState?.dateEnd) {
+    hasDateEvidence = true;
+    const known = intersectRange(fileState.dateStart, fileState.dateEnd, range);
+    if (known) intervals.push(known);
+  }
+  if (Number.isFinite(file?.modifiedAt)) {
+    hasDateEvidence = true;
+    const modifiedDay = utcDay(file.modifiedAt);
+    const modified = intersectRange(modifiedDay, modifiedDay, range);
+    if (modified) intervals.push(modified);
+  }
+  const pathDay = codexPathDay(file?.path ?? "");
+  if (pathDay !== null) {
+    hasDateEvidence = true;
+    const path = intersectRange(pathDay, pathDay, range);
+    if (path) intervals.push(path);
+  }
+  return hasDateEvidence ? intervals : [[range.rangeStart, range.rangeEnd]];
+}
+
+function incompleteIntervals(fileState, file, range) {
+  const intervals = (fileState?.incompleteDates ?? [])
+    .map((day) => intersectRange(day, day, range))
+    .filter(Boolean);
+  if (fileState?.unknownIncomplete === true) {
+    intervals.push(...fileRanges(fileState, file, range));
+  }
+  return intervals;
+}
+
+function mergeDateBounds(previous, parsed, appended) {
+  const dates = parsed.eventDates;
+  const starts = [appended ? previous?.dateStart : null, dates[0]].filter(Boolean);
+  const ends = [appended ? previous?.dateEnd : null, dates.at(-1)].filter(Boolean);
+  return {
+    ...(starts.length ? { dateStart: starts.sort()[0] } : {}),
+    ...(ends.length ? { dateEnd: ends.sort().at(-1) } : {}),
+  };
+}
+
+async function discoverCodexRollouts(dataPath, discover, maximumFiles, maximumFileBytes) {
+  const files = [];
+  const issues = [];
+  let incomplete = false;
+  for (const name of ["sessions", "archived_sessions"]) {
+    const root = join(dataPath, name);
+    try {
+      await access(root);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        incomplete = true;
+        issues.push({ path: root, reason: "unreadable" });
+      }
+      continue;
+    }
+    const remaining = maximumFiles - files.length;
+    if (remaining <= 0) {
+      incomplete = true;
+      issues.push({ path: root, reason: "limit" });
+      continue;
+    }
+    const result = await discover(root, [".jsonl", ".jsonl.zst"], remaining, maximumFileBytes);
+    files.push(...result.files);
+    issues.push(...(result.issues ?? []));
+    if (result.incomplete) {
+      incomplete = true;
+      if ((result.issues?.length ?? 0) === 0) issues.push({ path: root, reason: "incomplete" });
+    }
+  }
+  return {
+    files: files.sort((a, b) => b.modifiedAt - a.modifiedAt || a.path.localeCompare(b.path)),
+    incomplete,
+    issues,
   };
 }
 
@@ -196,23 +364,14 @@ export async function collectCodexSessionUsage(
     maximumBytes = 1_000_000_000,
     maximumFileBytes = 100_000_000,
     discover = walk,
-    readChunk = jsonLinesChunk,
+    readChunk = codexLinesChunk,
     fingerprint = tailFingerprint,
   } = {},
 ) {
   const currentState =
     state.version === codexComponentStateVersion ? state : { files: {}, events: {} };
-  const sessionRoot = join(resolve(source.dataPath), "sessions");
-  try {
-    await access(sessionRoot);
-  } catch (error) {
-    return {
-      entries: [],
-      nextState: { version: codexComponentStateVersion, files: {}, events: {} },
-      warnings: error?.code === "ENOENT" ? [] : ["codex_session_components_incomplete"],
-    };
-  }
-  const discovered = await discover(sessionRoot, [".jsonl"], 10_000, maximumFileBytes);
+  const dataPath = resolve(source.dataPath);
+  const discovered = await discoverCodexRollouts(dataPath, discover, 10_000, maximumFileBytes);
   const nextState = {
     version: codexComponentStateVersion,
     files: {},
@@ -245,7 +404,25 @@ export async function collectCodexSessionUsage(
     }
     return [...ids];
   };
-  let incomplete = discovered.incomplete;
+  const blockedIntervals = [];
+  const block = (interval) => {
+    if (interval) blockedIntervals.push(interval);
+  };
+  let discoveryRelevant = false;
+  for (const issue of discovered.issues) {
+    const intervals =
+      issue.reason === "limit"
+        ? [[range.rangeStart, range.rangeEnd]]
+        : fileRanges(currentState.files?.[issue.path], issue, range);
+    if (intervals.length) {
+      for (const interval of intervals) block(interval);
+      discoveryRelevant = true;
+    }
+  }
+  if (discovered.incomplete && discovered.issues.length === 0) {
+    block([range.rangeStart, range.rangeEnd]);
+    discoveryRelevant = true;
+  }
   let bytes = 0;
   for (const file of discovered.files) {
     const previous = currentState.files?.[file.path];
@@ -257,10 +434,11 @@ export async function collectCodexSessionUsage(
     ) {
       const retained = retainedFile(previous);
       nextState.files[file.path] = retained;
-      if (retained.incomplete === true) incomplete = true;
+      for (const interval of incompleteIntervals(retained, file, range)) block(interval);
       continue;
     }
     let appended =
+      !file.path.endsWith(".jsonl.zst") &&
       previous &&
       previous.size <= file.size &&
       (previous.safeOffset ?? previous.size) <= file.size &&
@@ -276,20 +454,28 @@ export async function collectCodexSessionUsage(
     }
     const offset = appended ? (previous.safeOffset ?? previous.size) : 0;
     const requiredBytes = file.size - offset;
-    if (bytes + requiredBytes > maximumBytes) {
-      incomplete = true;
+    const estimatedBytes = file.path.endsWith(".jsonl.zst") ? 0 : requiredBytes;
+    if (bytes + estimatedBytes > maximumBytes) {
+      for (const interval of fileRanges(previous, file, range)) block(interval);
       if (previous) nextState.files[file.path] = retainedFile(previous);
       continue;
     }
-    bytes += requiredBytes;
     try {
-      const chunk = await readChunk(file.path, offset, file.size);
+      const chunk = await readChunk(
+        file.path,
+        offset,
+        file.size,
+        Math.min(maximumFileBytes, maximumBytes - bytes),
+      );
+      const consumedBytes = chunk.readBytes ?? requiredBytes;
+      if (bytes + consumedBytes > maximumBytes) throw new Error("Codex rollout budget exceeded");
+      bytes += consumedBytes;
       const parsed = parseCodexSessionLines(chunk.lines, appended ? previous.lastUsage : null);
-      const fileIncomplete = parsed.invalid || (appended && previous?.incomplete === true);
-      if (fileIncomplete) incomplete = true;
       const nextFingerprint = await fingerprint(file.path, chunk.safeOffset);
       if (!appended && previous) removeOwnership(previous);
       const existingIds = new Set(appended ? retainedFile(previous).eventIds : []);
+      const incompleteDates = new Set(appended ? (previous?.incompleteDates ?? []) : []);
+      for (const day of parsed.incompleteDates) incompleteDates.add(day);
       nextState.files[file.path] = {
         size: file.size,
         modifiedAt: file.modifiedAt,
@@ -298,22 +484,38 @@ export async function collectCodexSessionUsage(
         tailFingerprint: nextFingerprint,
         lastUsage: parsed.lastUsage,
         eventIds: addOwnership(parsed.events, existingIds),
-        ...(fileIncomplete ? { incomplete: true } : {}),
+        ...mergeDateBounds(previous, parsed, appended),
+        ...(incompleteDates.size ? { incompleteDates: [...incompleteDates].sort() } : {}),
+        ...(parsed.unknownIncomplete || (appended && previous?.unknownIncomplete === true)
+          ? { unknownIncomplete: true }
+          : {}),
       };
+      for (const interval of incompleteIntervals(nextState.files[file.path], file, range))
+        block(interval);
     } catch {
-      incomplete = true;
+      for (const interval of fileRanges(previous, file, range)) block(interval);
       if (previous) nextState.files[file.path] = retainedFile(previous);
     }
   }
   for (const [path, previous] of Object.entries(currentState.files ?? {}))
     if (nextState.files[path] === undefined) {
-      if (incomplete) nextState.files[path] = retainedFile(previous);
-      else removeOwnership(previous);
+      const intervals = fileRanges(previous, { path, modifiedAt: previous.modifiedAt }, range);
+      if (discoveryRelevant && intervals.length) {
+        nextState.files[path] = retainedFile(previous);
+        for (const interval of intervals) block(interval);
+      } else removeOwnership(previous);
     }
   const warnings = [];
-  if (incomplete) warnings.push("codex_session_components_incomplete");
+  if (blockedIntervals.length) warnings.push("codex_session_components_incomplete");
   return {
-    entries: incomplete ? [] : mergeEntries(Object.values(nextState.events).map(expandCodexEvent)),
+    entries: mergeEntries(
+      Object.values(nextState.events)
+        .map(expandCodexEvent)
+        .filter(
+          (entry) =>
+            !blockedIntervals.some(([start, end]) => entry.date >= start && entry.date <= end),
+        ),
+    ),
     nextState,
     warnings,
   };
@@ -373,15 +575,6 @@ async function collect(source, range, state = {}) {
     throw new Error(
       `Codex executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride("codex")} to its absolute path`,
     );
-  const componentPromise = collectCodexSessionUsage(
-    source,
-    range,
-    state.componentUsage ?? {},
-  ).catch(() => ({
-    entries: [],
-    nextState: state.componentUsage ?? {},
-    warnings: ["codex_session_components_incomplete"],
-  }));
   const child = spawnResolvedExecutable(executable, ["app-server"], {
     stdio: ["pipe", "pipe", "ignore"],
     windowsHide: true,
@@ -427,7 +620,15 @@ async function collect(source, range, state = {}) {
       const response = await next();
       if (response?.id === 1) {
         const authoritative = parseCodexUsage(response);
-        const components = await componentPromise;
+        const components = await collectCodexSessionUsage(
+          source,
+          range,
+          state.componentUsage ?? {},
+        ).catch(() => ({
+          entries: [],
+          nextState: state.componentUsage ?? {},
+          warnings: ["codex_session_components_incomplete"],
+        }));
         return {
           entries: mergeCodexUsageComponents(authoritative, components.entries),
           completeness: "complete",
