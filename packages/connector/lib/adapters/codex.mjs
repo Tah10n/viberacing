@@ -23,7 +23,7 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 9;
+const codexComponentStateVersion = 10;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
@@ -122,7 +122,27 @@ function codexRolloutFileIdentity(path) {
   if (!match) return null;
   const threadId = codexId(match[1]);
   const rolloutId = codexId(match[2] ?? match[1]);
-  return threadId === null || rolloutId === null ? null : { threadId, rolloutId };
+  return threadId === null || rolloutId === null
+    ? null
+    : { threadId, rolloutId, hasRolloutSuffix: match[2] !== undefined };
+}
+
+function longestCodexParentSuffixPrefix(parentEvents, childEvents) {
+  const separator = Symbol("codex-lineage-boundary");
+  const signatures = [
+    ...childEvents.map((event) => event.signature),
+    separator,
+    ...parentEvents.map((event) => event.signature),
+  ];
+  const prefixLengths = new Uint32Array(signatures.length);
+  for (let index = 1; index < signatures.length; index += 1) {
+    let matched = prefixLengths[index - 1];
+    while (matched > 0 && signatures[index] !== signatures[matched])
+      matched = prefixLengths[matched - 1];
+    if (signatures[index] === signatures[matched]) matched += 1;
+    prefixLengths[index] = matched;
+  }
+  return prefixLengths[prefixLengths.length - 1] ?? 0;
 }
 
 function codexUsageSignature(total, last) {
@@ -190,7 +210,9 @@ function codexSessionContext(lines, priorSessionContext, rolloutPath) {
   const fileIdentity = codexRolloutFileIdentity(rolloutPath);
   if (
     (fileIdentity !== null && fileIdentity.threadId !== threadId) ||
-    (fileIdentity === null && historyMode === "paginated")
+    (fileIdentity === null && historyMode === "paginated") ||
+    (fileIdentity?.hasRolloutSuffix === true &&
+      (fileIdentity.rolloutId === fileIdentity.threadId || historyMode !== "paginated"))
   )
     return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
   const rolloutId = fileIdentity?.rolloutId ?? threadId;
@@ -666,16 +688,18 @@ function rebuildCodexEventState(files, range) {
           return [];
         }
       } else if (forkParentThreadKey) {
-        const boundaries = [...new Set(fileState.legacyForkBoundaries ?? [])]
-          .filter((count) => Number.isSafeInteger(count) && count >= 0 && count <= rawEvents.length)
-          .sort((left, right) => right - left);
-        const boundary = boundaries.find(matchesParentSuffix);
-        if (boundary === undefined) {
+        const boundaries = new Set(
+          (fileState.legacyForkBoundaries ?? []).filter(
+            (count) => Number.isSafeInteger(count) && count >= 0 && count <= rawEvents.length,
+          ),
+        );
+        const copiedPrefixLength = longestCodexParentSuffixPrefix(parentEvents, rawEvents);
+        if (!boundaries.has(copiedPrefixLength)) {
           unresolved.add(fileState);
           memo.set(fileState, []);
           return [];
         }
-        inheritedCount = boundary;
+        inheritedCount = copiedPrefixLength;
       }
       parentOffset = parentEvents.length - inheritedCount;
     }

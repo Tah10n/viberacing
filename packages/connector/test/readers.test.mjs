@@ -614,6 +614,69 @@ test("keeps a copied fork prefix deduplicated across a partial write", async (co
   assert.equal(complete.entries[0].totalTokens, "27");
 });
 
+test("keeps a legacy fork pending until its child boundary is durable", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-pending-fork-boundary-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  const parentPath = join(directory, "parent.jsonl");
+  const childPath = join(directory, "child.jsonl");
+  await mkdir(directory, { recursive: true });
+  const parentId = "20202020-2020-4020-8020-202020202020";
+  const childId = "21212121-2121-4121-8121-212121212121";
+  const inherited = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  const childTotal = {
+    input_tokens: 15,
+    cached_input_tokens: 4,
+    cache_write_input_tokens: 2,
+    output_tokens: 12,
+    reasoning_output_tokens: 4,
+    total_tokens: 27,
+  };
+  const childLast = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const copiedSettings = codexThreadSettings("2026-08-10T11:59:30Z");
+  const copiedToken = codexTokenCount("2026-08-10T12:00:00Z", inherited, inherited, 1);
+  await writeFile(parentPath, `${codexSessionMeta(parentId)}\n${copiedSettings}\n${copiedToken}\n`);
+  await writeFile(
+    childPath,
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      timestamp: "2026-08-10T12:01:00Z",
+    })}\n${copiedSettings}\n${copiedToken}\n`,
+  );
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+
+  const pending = await collectCodexSessionUsage({ dataPath: root }, range);
+  assert.deepEqual(pending.entries, []);
+  assert.deepEqual(pending.warnings, ["codex_session_components_incomplete"]);
+
+  await appendFile(
+    childPath,
+    `${codexThreadSettings("2026-08-10T12:01:01Z")}\n${codexTokenCount(
+      "2026-08-10T12:02:00Z",
+      childTotal,
+      childLast,
+      2,
+    )}\n`,
+  );
+  const recovered = await collectCodexSessionUsage({ dataPath: root }, range, pending.nextState);
+  assert.deepEqual(recovered.warnings, []);
+  assert.equal(recovered.entries[0].totalTokens, "27");
+});
+
 test("recovers Codex lineage after first seeing an empty rollout", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-codex-empty-rollout-"));
   context.after(() => rm(root, { force: true, recursive: true }));
@@ -1112,6 +1175,38 @@ test("fails closed when a paginated rollout filename is noncanonical", async (co
       timestamp: "2026-08-10T12:01:00Z",
     })}\n${codexTokenCount("2026-08-10T12:01:01Z", usage, usage, 1)}\n`,
   );
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+});
+
+test("fails closed when a revert rollout suffix contradicts legacy metadata", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-revert-legacy-metadata-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const threadId = "48484848-4848-4848-8848-484848484848";
+  const rolloutId = "49494949-4949-4949-8949-494949494949";
+  const usage = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  const contents = `${codexSessionMeta(threadId, {
+    historyMode: "legacy",
+  })}\n${codexTokenCount("2026-08-10T12:00:01Z", usage)}\n`;
+  await writeFile(join(directory, codexRolloutName(threadId, threadId)), contents);
+  await writeFile(
+    join(directory, codexRolloutName(threadId, rolloutId, "2026-08-10T12-01-00")),
+    contents,
+  );
+
   const result = await collectCodexSessionUsage(
     { dataPath: root },
     { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
