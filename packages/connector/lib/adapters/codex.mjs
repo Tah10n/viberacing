@@ -23,10 +23,11 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 7;
+const codexComponentStateVersion = 8;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
+const codexThreadSettingsPattern = /"type"\s*:\s*"thread_settings_applied"/;
 const codexUsageKeys = [
   "inputTokens",
   "cachedInputTokens",
@@ -143,17 +144,33 @@ function codexSessionContext(lines, priorSessionContext) {
   }
   if (metadataInvalid)
     return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
+  if (sessionMeta === null)
+    return { complete: false, metadataPending: true, sessionKey: null, parentSessionKey: null };
+  const historyMode = sessionMeta.history_mode ?? "legacy";
+  const subagentHistoryStartOrdinal = sessionMeta.subagent_history_start_ordinal ?? null;
+  if (
+    (historyMode !== "legacy" && historyMode !== "paginated") ||
+    (subagentHistoryStartOrdinal !== null &&
+      (!Number.isSafeInteger(subagentHistoryStartOrdinal) || subagentHistoryStartOrdinal < 0))
+  )
+    return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
   const sessionKey = codexSessionKey(sessionMeta?.id);
   const parentSessionKey =
     sessionMeta?.history_base == null ? codexSessionKey(sessionMeta?.forked_from_id) : null;
   const startedAt = Date.parse(sessionMeta?.timestamp ?? "");
-  if (parentSessionKey !== null && !Number.isFinite(startedAt))
+  if (
+    parentSessionKey !== null &&
+    (!Number.isFinite(startedAt) ||
+      (historyMode === "paginated" && subagentHistoryStartOrdinal === null))
+  )
     return { complete: false, metadataInvalid: true, sessionKey: null, parentSessionKey: null };
   return {
     complete: true,
     sessionKey,
     parentSessionKey,
     startedAt: Number.isFinite(startedAt) ? startedAt : null,
+    historyMode,
+    subagentHistoryStartOrdinal,
   };
 }
 
@@ -184,10 +201,11 @@ function expandCodexEvent(event) {
 
 function compactCodexRawEvent(event, range) {
   return event.entry.date < range.rangeStart || event.entry.date > range.rangeEnd
-    ? [event.signature, event.timestamp]
+    ? [event.signature, event.timestamp, event.ordinal]
     : [
         event.signature,
         event.timestamp,
+        event.ordinal,
         ...compactCodexEvent(event.entry).slice(0, codexEventReferencesIndex),
       ];
 }
@@ -196,17 +214,24 @@ function expandCodexRawEvent(event) {
   return {
     signature: event[0],
     timestamp: event[1],
-    entry: event.length > 2 ? expandCodexEvent(event.slice(2)) : null,
+    ordinal: event[2],
+    entry: event.length > 3 ? expandCodexEvent(event.slice(3)) : null,
   };
 }
 
-export function parseCodexSessionLines(lines, priorUsage = null, priorSessionContext = null) {
+export function parseCodexSessionLines(
+  lines,
+  priorUsage = null,
+  priorSessionContext = null,
+  priorEventCount = 0,
+) {
   const sessionContext = codexSessionContext(lines, priorSessionContext);
   let previous = storedCodexUsage(priorUsage);
   const entries = [];
   const events = [];
   const eventDates = new Set();
   const incompleteDates = new Set();
+  const legacyForkBoundaries = [];
   let invalid = false;
   let unknownIncomplete = false;
   const markInvalid = (day) => {
@@ -216,6 +241,21 @@ export function parseCodexSessionLines(lines, priorUsage = null, priorSessionCon
   };
   if (sessionContext.complete !== true) markInvalid(null);
   for (const line of lines) {
+    if (codexThreadSettingsPattern.test(line)) {
+      try {
+        const record = JSON.parse(line);
+        if (
+          record?.type === "event_msg" &&
+          record?.payload?.type === "thread_settings_applied" &&
+          sessionContext.parentSessionKey !== null &&
+          sessionContext.historyMode === "legacy"
+        )
+          legacyForkBoundaries.push(priorEventCount + events.length);
+      } catch {
+        markInvalid(utcDay(line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1]));
+      }
+      continue;
+    }
     if (!codexTokenCountPattern.test(line)) continue;
     let day = utcDay(line.match(/"timestamp"\s*:\s*"([^"]+)"/)?.[1]);
     if (Buffer.byteLength(line) > 1_000_000) {
@@ -248,6 +288,15 @@ export function parseCodexSessionLines(lines, priorUsage = null, priorSessionCon
     if (previous && sameCodexUsage(previous, current)) continue;
     if (sessionContext.complete !== true) {
       previous = current;
+      continue;
+    }
+    const ordinal = record.ordinal ?? null;
+    if (
+      sessionContext.historyMode === "paginated" &&
+      (!Number.isSafeInteger(ordinal) || ordinal < 0)
+    ) {
+      previous = current;
+      markInvalid(day);
       continue;
     }
     eventDates.add(day);
@@ -286,6 +335,7 @@ export function parseCodexSessionLines(lines, priorUsage = null, priorSessionCon
       events.push({
         signature: codexUsageSignature(current, contribution),
         timestamp: Date.parse(record.timestamp),
+        ordinal,
         entry,
       });
     }
@@ -299,6 +349,7 @@ export function parseCodexSessionLines(lines, priorUsage = null, priorSessionCon
     incompleteDates: [...incompleteDates].sort(),
     unknownIncomplete,
     sessionContext,
+    legacyForkBoundaries,
   };
 }
 
@@ -421,8 +472,11 @@ function rebuildCodexEventState(files, range) {
   const resolveEvents = (fileState, ancestry = new Set()) => {
     if (memo.has(fileState)) return memo.get(fileState);
     const rawEvents = (fileState.rawEvents ?? []).map(expandCodexRawEvent);
-    const { sessionKey, parentSessionKey, startedAt } = fileState.sessionContext ?? {};
+    const { sessionKey, parentSessionKey, startedAt, historyMode, subagentHistoryStartOrdinal } =
+      fileState.sessionContext ?? {};
     let parentEvents = null;
+    let inheritedCount = 0;
+    let parentOffset = 0;
     if (parentSessionKey) {
       const parent = bySession.get(parentSessionKey);
       if (parent === undefined || ancestry.has(parentSessionKey)) {
@@ -439,19 +493,48 @@ function rebuildCodexEventState(files, range) {
       parentEvents = parentEvents.filter(
         (event) => !Number.isFinite(startedAt) || event.timestamp <= startedAt,
       );
+      const matchesParentSuffix = (count) => {
+        if (count > rawEvents.length || count > parentEvents.length) return false;
+        const offset = parentEvents.length - count;
+        return rawEvents
+          .slice(0, count)
+          .every((event, index) => event.signature === parentEvents[offset + index].signature);
+      };
+      if (historyMode === "paginated") {
+        inheritedCount = rawEvents.findIndex(
+          (event) => event.ordinal >= subagentHistoryStartOrdinal,
+        );
+        if (inheritedCount < 0) inheritedCount = rawEvents.length;
+        if (
+          rawEvents.some(
+            (event, index) =>
+              !Number.isSafeInteger(event.ordinal) ||
+              (index >= inheritedCount && event.ordinal < subagentHistoryStartOrdinal),
+          ) ||
+          !matchesParentSuffix(inheritedCount)
+        ) {
+          unresolved.add(fileState);
+          memo.set(fileState, []);
+          return [];
+        }
+      } else {
+        const boundaries = [...new Set(fileState.legacyForkBoundaries ?? [])]
+          .filter((count) => Number.isSafeInteger(count) && count >= 0 && count <= rawEvents.length)
+          .sort((left, right) => right - left);
+        const boundary = boundaries.find(matchesParentSuffix);
+        if (boundary === undefined) {
+          unresolved.add(fileState);
+          memo.set(fileState, []);
+          return [];
+        }
+        inheritedCount = boundary;
+      }
+      parentOffset = parentEvents.length - inheritedCount;
     }
-    let inheritedCount = 0;
-    while (
-      parentEvents !== null &&
-      inheritedCount < rawEvents.length &&
-      inheritedCount < parentEvents.length &&
-      rawEvents[inheritedCount].signature === parentEvents[inheritedCount].signature
-    )
-      inheritedCount += 1;
     const branchKey = sessionKey ?? codexHash(["legacy-codex-session"]);
     const resolved = rawEvents.map((event, index) =>
       index < inheritedCount
-        ? parentEvents[index]
+        ? parentEvents[parentOffset + index]
         : {
             id: codexHash(["codex-lineage-event", branchKey, index, event.signature]),
             ...event,
@@ -616,6 +699,7 @@ export async function collectCodexSessionUsage(
         chunk.lines,
         appended ? previous.lastUsage : null,
         appended ? previous.sessionContext : null,
+        appended ? (previous?.rawEvents?.length ?? 0) : 0,
       );
       const nextFingerprint = await fingerprint(file.path, chunk.safeOffset);
       const incompleteDates = new Set(appended ? (previous?.incompleteDates ?? []) : []);
@@ -631,6 +715,10 @@ export async function collectCodexSessionUsage(
         rawEvents: [
           ...(appended ? (previous?.rawEvents ?? []) : []),
           ...parsed.events.map((event) => compactCodexRawEvent(event, range)),
+        ],
+        legacyForkBoundaries: [
+          ...(appended ? (previous?.legacyForkBoundaries ?? []) : []),
+          ...parsed.legacyForkBoundaries,
         ],
         ...mergeDateBounds(previous, parsed, appended),
         ...(incompleteDates.size ? { incompleteDates: [...incompleteDates].sort() } : {}),
