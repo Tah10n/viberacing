@@ -13,22 +13,49 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/db", () => ({ query: queryMock, transaction: transactionMock }));
 
-import { DELETE, POST } from "./route";
+import { DELETE, parseReconciliationBody, POST } from "./route";
 
 const deviceToken = "synthetic-device-token-that-is-long-enough";
 const installationId = "11111111-1111-4111-8111-111111111111";
 const sourceId = "22222222-2222-4222-8222-222222222222";
 
-function request(): Request {
+function request(body: unknown = { sourceIds: [sourceId] }): Request {
   return new Request("https://viberacing.example/api/installations/current", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${deviceToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ sourceIds: [sourceId] }),
+    body: JSON.stringify(body),
   });
 }
+
+describe("compact reconciliation payload", () => {
+  it("accepts legacy and version-reporting bodies", () => {
+    expect(parseReconciliationBody({ sourceIds: [sourceId] })).toEqual({
+      sourceIds: [sourceId],
+    });
+    expect(parseReconciliationBody({ sourceIds: [sourceId], connectorVersion: "0.3.11" })).toEqual({
+      sourceIds: [sourceId],
+      connectorVersion: "0.3.11",
+    });
+    expect(
+      parseReconciliationBody({ sourceIds: [sourceId], connectorVersion: "0.3.11-beta.1" }),
+    ).toEqual({ sourceIds: [sourceId], connectorVersion: "0.3.11-beta.1" });
+  });
+
+  it("rejects malformed versions, duplicates, and unknown fields", () => {
+    for (const body of [
+      { sourceIds: [sourceId], connectorVersion: "0.3" },
+      { sourceIds: [sourceId], connectorVersion: "0.3.11+private" },
+      { sourceIds: [sourceId], connectorVersion: "1".repeat(41) },
+      { sourceIds: [sourceId, sourceId] },
+      { sourceIds: [sourceId], extra: true },
+    ]) {
+      expect(parseReconciliationBody(body)).toBeNull();
+    }
+  });
+});
 
 describe("compact reconciliation rate limiting", () => {
   afterEach(() => {
@@ -52,6 +79,16 @@ describe("compact reconciliation rate limiting", () => {
       60,
     );
     expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("never persists a version for an invalid capability", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([]);
+
+    const response = await POST(request({ sourceIds: [sourceId], connectorVersion: "0.3.11" }));
+
+    expect(response.status).toBe(401);
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 
   it("keys the authenticated quota by the server-side installation id", async () => {
@@ -92,6 +129,70 @@ describe("compact reconciliation rate limiting", () => {
     expect(queryMock.mock.invocationCallOrder[0]).toBeLessThan(
       consumeRateLimitMock.mock.invocationCallOrder[1] ?? Number.NEGATIVE_INFINITY,
     );
+  });
+
+  it("persists a reported version and reconciles sources in one transaction", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            source_id: sourceId,
+            status: "active",
+            last_accepted_sync_sequence: "7",
+          },
+        ],
+      });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(request({ sourceIds: [sourceId], connectorVersion: "0.3.11" }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }],
+    });
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("connector_version IS DISTINCT FROM $2"),
+      [installationId, "0.3.11", expect.any(Uint8Array)],
+    );
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("source.installation_id = $1"),
+      [installationId, [sourceId]],
+    );
+  });
+
+  it("keeps legacy clients read-only while using the same source transaction", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+    const clientQuery = vi.fn().mockResolvedValue({ rows: [] });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(clientQuery).toHaveBeenCalledOnce();
+    expect(clientQuery.mock.calls[0]?.[0]).not.toContain("UPDATE installations");
+  });
+
+  it("rejects an invalid reported version before opening a transaction", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+
+    const response = await POST(request({ sourceIds: [sourceId], connectorVersion: "0.3" }));
+
+    expect(response.status).toBe(400);
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });
 

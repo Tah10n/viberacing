@@ -148,6 +148,10 @@ export function versionAtLeast(candidate: string, minimum: string): boolean {
   return true;
 }
 
+export function isSemanticVersion(value: string): boolean {
+  return parseSemver(value) !== null;
+}
+
 function parseSemver(
   value: string,
 ): { core: readonly [bigint, bigint, bigint]; prerelease: readonly string[] } | null {

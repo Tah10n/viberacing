@@ -36,7 +36,7 @@ Example:
   "diagnosticCode": "codex_lineage_ambiguous",
   "diagnosticState": "opened",
   "diagnosticPhase": "collect",
-  "connectorVersion": "0.3.10"
+  "connectorVersion": "0.3.11"
 }
 ```
 

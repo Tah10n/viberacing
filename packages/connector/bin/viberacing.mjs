@@ -2,7 +2,8 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -666,7 +667,7 @@ async function requestReconciliation(config, attempts = 1) {
         Authorization: `Bearer ${config.deviceToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ sourceIds }),
+      body: JSON.stringify({ sourceIds, connectorVersion }),
     },
     attempts,
     { kind: "reconciliation", sourceIds },
@@ -1461,11 +1462,37 @@ async function automaticSync() {
 }
 
 async function doctor() {
+  const repairRequested = arguments_.includes("--repair");
+  const defaultState = resolve(stateDirectory) === resolve(join(homedir(), ".viberacing"));
+  let repairIncomplete = false;
+  let repairFailed = false;
+  let repairStarted = false;
+  let repairServerPending = false;
+  let repairSummaryWritten = false;
+  const finishRepair = () => {
+    if (!repairRequested || repairSummaryWritten) return;
+    repairSummaryWritten = true;
+    output("Usage sync: not run.");
+    if (repairIncomplete) {
+      warning("Vibe Racing warning: connector repair is incomplete; review the warnings above.");
+      process.exitCode = 1;
+    } else if (repairServerPending) {
+      output("Local repair complete; server confirmation is pending until the next contact.");
+    } else {
+      output(
+        "Repair complete. Refresh the dashboard, or run `viberacing sync` to upload totals now.",
+      );
+    }
+  };
   const discovery = await discoverSources();
   const detected = discovery.sources;
   const localSources = await readSources().catch(() => []);
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
-  output(`Browser Sync handler: ${await browserSyncRegistrationStatus()}`);
+  output(
+    defaultState
+      ? `Browser Sync handler: ${await browserSyncRegistrationStatus()}`
+      : "Browser Sync handler: unavailable for custom state root",
+  );
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
@@ -1518,15 +1545,44 @@ async function doctor() {
   try {
     let config = await readConfig();
     let state = await readState();
-    if (arguments_.includes("--repair")) {
-      const repaired = await reconcileHooks(import.meta.url, config.sources, await readSources());
+    if (repairRequested) {
+      let repaired;
+      repairStarted = true;
+      try {
+        repaired = await withLifecycleMutation(async () => {
+          const installedRuntime = await prepareRuntime(import.meta.url);
+          const hooks = await reconcileHooks(import.meta.url, config.sources, await readSources(), {
+            installedScript: installedRuntime,
+          });
+          const browserSyncCapable = defaultState
+            ? await registerBrowserSync(installedRuntime)
+            : false;
+          return { browserSyncCapable, hooks };
+        });
+      } catch (error) {
+        repairFailed = true;
+        repairIncomplete = true;
+        warning(
+          `Vibe Racing repair error: ${error instanceof Error ? error.message : "unexpected error"}`,
+        );
+        throw error;
+      }
+      output(`Runtime: updated to ${connectorVersion}`);
       output(
-        repaired.failures.length === 0
-          ? "Installed connector copy and owned hooks repaired."
-          : `Hook repair completed with ${repaired.failures.length} warning(s).`,
+        repaired.hooks.failures.length === 0
+          ? "Hooks: repaired"
+          : `Hooks: repaired with ${repaired.hooks.failures.length} warning(s)`,
       );
-      for (const failure of repaired.failures)
+      repairIncomplete = repaired.hooks.failures.length > 0;
+      for (const failure of repaired.hooks.failures)
         output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
+      if (!defaultState) {
+        output("Browser Sync handler: unavailable for custom state root");
+      } else {
+        const handlerStatus = await browserSyncRegistrationStatus();
+        output(`Browser Sync handler: ${handlerStatus}`);
+        if (!repaired.browserSyncCapable || handlerStatus !== "current") repairIncomplete = true;
+      }
     }
     const hooks = await diagnoseHooks(config.sources);
     for (const [agentId, status] of Object.entries(hooks)) output(`${agentId} hook: ${status}`);
@@ -1574,12 +1630,17 @@ async function doctor() {
       output("Run `viberacing connect` to reconnect this installation.");
       if (reconciliation.cleanupWarnings)
         output("One or more auxiliary hook cleanup steps need manual inspection.");
+      repairServerPending = true;
+      finishRepair();
       return;
     } else if (reconciliation.status === "unsupported") {
       output("Pairing status: connector update required; automatic sync is disabled.");
+      repairServerPending = true;
+      finishRepair();
       return;
     } else if (reconciliation.status === "error") {
       output(`Pairing status: error (${reconciliation.error.message})`);
+      repairServerPending = true;
     } else {
       config = reconciliation.config;
       state = reconciliation.state;
@@ -1618,8 +1679,19 @@ async function doctor() {
         `Last hook error: ${(await readFile(join(stateDirectory, "logs", "last-error.log"), "utf8")).trim()}`,
       );
     } catch {}
-  } catch {
-    output("Connector is not paired.");
+    finishRepair();
+  } catch (error) {
+    if (repairRequested) {
+      repairIncomplete = true;
+      if (!repairFailed)
+        warning(
+          `Vibe Racing repair error: ${error instanceof Error ? error.message : "unexpected error"}`,
+        );
+      output(repairStarted ? "Connector repair failed." : "Connector repair not run.");
+    } else {
+      output("Connector is not paired.");
+    }
+    finishRepair();
   }
 }
 

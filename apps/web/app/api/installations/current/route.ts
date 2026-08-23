@@ -1,4 +1,5 @@
 import { digest } from "@/lib/crypto";
+import { isSemanticVersion } from "@/lib/config";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
 import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
@@ -16,6 +17,42 @@ function rateLimited(): Response {
     { error: "rate_limited" },
     { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
   );
+}
+
+interface ReconciliationBody {
+  connectorVersion?: string;
+  sourceIds: string[];
+}
+
+export function parseReconciliationBody(value: unknown): ReconciliationBody | null {
+  if (!isRecord(value)) return null;
+  const keys = Object.keys(value).sort();
+  if (
+    JSON.stringify(keys) !== JSON.stringify(["sourceIds"]) &&
+    JSON.stringify(keys) !== JSON.stringify(["connectorVersion", "sourceIds"])
+  ) {
+    return null;
+  }
+  if (
+    !Array.isArray(value.sourceIds) ||
+    value.sourceIds.length > 100 ||
+    !value.sourceIds.every(isUuid) ||
+    new Set(value.sourceIds).size !== value.sourceIds.length
+  ) {
+    return null;
+  }
+  if (
+    value.connectorVersion !== undefined &&
+    (typeof value.connectorVersion !== "string" ||
+      value.connectorVersion.length > 40 ||
+      !isSemanticVersion(value.connectorVersion))
+  ) {
+    return null;
+  }
+  return {
+    sourceIds: value.sourceIds,
+    ...(value.connectorVersion === undefined ? {} : { connectorVersion: value.connectorVersion }),
+  };
 }
 
 async function post(request: Request): Promise<Response> {
@@ -45,33 +82,38 @@ async function post(request: Request): Promise<Response> {
     if (!(await consumeRateLimit("reconciliation_global", "all", 10_000, 60))) {
       return rateLimited();
     }
-    const body = await readBoundedJson(request, 8_192);
-    if (
-      !isRecord(body) ||
-      Object.keys(body).length !== 1 ||
-      !Array.isArray(body.sourceIds) ||
-      body.sourceIds.length > 100 ||
-      !body.sourceIds.every(isUuid) ||
-      new Set(body.sourceIds).size !== body.sourceIds.length
-    ) {
-      return problem(400, "invalid_request");
-    }
-    const sourceIds = body.sourceIds;
-    const rows = await query<{
-      source_id: string;
-      status: "active" | "disconnected";
-      last_accepted_sync_sequence: string;
-    }>(
-      `SELECT requested.source_id::text,
-              CASE WHEN source.status = 'active' THEN 'active' ELSE 'disconnected' END AS status,
-              coalesce(source.last_accepted_sync_sequence, 0)::text AS last_accepted_sync_sequence
-         FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(source_id, position)
-         LEFT JOIN installation_sources source
-           ON source.id = requested.source_id
-          AND source.installation_id = $1
-        ORDER BY requested.position`,
-      [installation.id, sourceIds],
-    );
+    const body = parseReconciliationBody(await readBoundedJson(request, 8_192));
+    if (body === null) return problem(400, "invalid_request");
+    const rows = await transaction(async (client) => {
+      if (body.connectorVersion !== undefined) {
+        await client.query(
+          `UPDATE installations
+              SET connector_version = $2,
+                  updated_at = now()
+            WHERE id = $1
+              AND status = 'active'
+              AND device_token_hash = $3
+              AND connector_version IS DISTINCT FROM $2`,
+          [installation.id, body.connectorVersion, digest(token)],
+        );
+      }
+      const result = await client.query<{
+        source_id: string;
+        status: "active" | "disconnected";
+        last_accepted_sync_sequence: string;
+      }>(
+        `SELECT requested.source_id::text,
+                CASE WHEN source.status = 'active' THEN 'active' ELSE 'disconnected' END AS status,
+                coalesce(source.last_accepted_sync_sequence, 0)::text AS last_accepted_sync_sequence
+           FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(source_id, position)
+           LEFT JOIN installation_sources source
+             ON source.id = requested.source_id
+            AND source.installation_id = $1
+          ORDER BY requested.position`,
+        [installation.id, body.sourceIds],
+      );
+      return result.rows;
+    });
     return Response.json(
       {
         sources: rows.map((source) => ({

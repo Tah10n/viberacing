@@ -10,11 +10,12 @@ source IDs remain stable in local `sources.json`. On upgrade, an old OpenCode fi
 is replaced only when it exactly matches the connector's former automatically generated value;
 user-defined labels are preserved. The legacy value is never included in a pairing request.
 Normalized local data roots, executable paths, hook config roots, and their hashes are never copied
-into pairing config or requests. During sync it sends a server source ID, sequence, UTC range,
-complete/partial status, UTC dates, aggregate total tokens, and optional aggregate
-input/output/cache/reasoning counters. If collection fails, it may instead send the fixed
-`collector_failed` source error and source ID through the legacy usage endpoint; exception messages
-are never sent.
+into pairing config or requests. Compact installation reconciliation sends only the current
+connector version and the already assigned server source IDs; legacy connectors may omit the
+version. During sync it sends a server source ID, sequence, UTC range, complete/partial status, UTC
+dates, aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. If
+collection fails, it may instead send the fixed `collector_failed` source error and source ID
+through the legacy usage endpoint; exception messages are never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32

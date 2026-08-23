@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+
+const connectorPackage = JSON.parse(
+  readFileSync(new URL("../../../packages/connector/package.json", import.meta.url), "utf8"),
+) as { version: string };
+const bundledConnectorVersion = connectorPackage.version;
 
 let oauthServer: Server;
 const handle = `e2e-racer-${String(Date.now()).slice(-8)}`;
@@ -217,6 +223,14 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.reload();
   await expect(page.getByText(/12[.,]3K tokens/)).toBeVisible();
+  const connectorUpdate = page.locator(".connector-update");
+  await expect(connectorUpdate.getByText("Update available", { exact: true })).toBeVisible();
+  await expect(connectorUpdate).toContainText(`Connector 0.3.0 → ${bundledConnectorVersion}`);
+  await expect(connectorUpdate.locator("code")).toContainText(
+    `/downloads/viberacing-connector-${bundledConnectorVersion}.tgz`,
+  );
+  await expect(connectorUpdate.locator("code")).toContainText("viberacing doctor --repair");
+  await expect(connectorUpdate.getByRole("button", { name: "Copy update command" })).toBeVisible();
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
   await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
   const todayBar = usageChart.locator(`.usage-chart-day:has(time[datetime="${today}"])`);
@@ -269,6 +283,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
   await page.goto("/dashboard");
+  await expect(page.locator(".connector-update")).toBeVisible();
   await expect(page.locator(".usage-chart-day")).toHaveCount(7);
   const [usagePlotBox, usageDayBox] = await Promise.all([
     page.locator(".usage-chart-plot").boundingBox(),
@@ -284,6 +299,16 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+  const reconciliation = await request.post("/api/installations/current", {
+    headers: { authorization: `Bearer ${active.deviceToken}` },
+    data: {
+      sourceIds: [mapped.sourceId],
+      connectorVersion: bundledConnectorVersion,
+    },
+  });
+  expect(reconciliation.status()).toBe(200);
+  await page.reload();
+  await expect(page.locator(".connector-update")).toHaveCount(0);
   await page.getByLabel("I understand this cannot be undone.").check();
   await page.getByRole("button", { name: "Delete account" }).click();
   await expect(page).toHaveURL(/\/?accountDeleted=1$/);

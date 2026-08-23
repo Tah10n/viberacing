@@ -9,14 +9,22 @@ import {
   unregisterBrowserSync,
 } from "../lib/browser-integration.mjs";
 
+async function macExecute(calls, file, arguments_) {
+  calls.push([file, arguments_]);
+  if (file === "/usr/bin/osacompile") {
+    const output = arguments_[arguments_.indexOf("-o") + 1];
+    await mkdir(join(output, "Contents", "MacOS"), { recursive: true });
+    await mkdir(join(output, "Contents", "Resources"), { recursive: true });
+    await writeFile(join(output, "Contents", "MacOS", "applet"), "synthetic applet\n");
+  }
+  return { stdout: "" };
+}
+
 test("macOS browser Sync registration creates and removes only its owned app", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-mac-handler-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
-  const execute = async (...arguments_) => {
-    calls.push(arguments_);
-    return { stdout: "" };
-  };
+  const execute = (...arguments_) => macExecute(calls, ...arguments_);
   assert.equal(
     await registerBrowserSync("/safe/runtime/viberacing.mjs", {
       allowCustomState: true,
@@ -29,22 +37,96 @@ test("macOS browser Sync registration creates and removes only its owned app", a
   );
   const app = join(root, "Applications", "Vibe Racing.app");
   const info = await readFile(join(app, "Contents", "Info.plist"), "utf8");
-  const launcher = await readFile(join(app, "Contents", "MacOS", "viberacing-url"), "utf8");
   assert.match(info, /<string>viberacing<\/string>/);
-  assert.match(launcher, /handle-url "\$1"/);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0][1], ["-f", app]);
+  assert.match(info, /<key>CFBundleTypeRole<\/key><string>Viewer<\/string>/);
+  assert.match(info, /<key>LSUIElement<\/key><true\/>/);
+  assert.doesNotMatch(info, /NSCameraUsageDescription|NSAppleEventsUsageDescription/);
+  const compile = calls.find(([file]) => file === "/usr/bin/osacompile");
+  assert.match(compile[1].at(-1), /on open location incomingURL/);
+  assert.match(compile[1].at(-1), /handle-url.*incomingURL.*--quiet/);
+  assert.doesNotMatch(compile[1].at(-1), /"\$1"/);
+  assert.ok(
+    calls.some(([file, arguments_]) => file === "/usr/bin/plutil" && arguments_[0] === "-lint"),
+  );
+  assert.equal(calls.filter(([file]) => file === "/usr/bin/codesign").length, 2);
+  assert.ok(calls.some(([, arguments_]) => arguments_[0] === "-f" && arguments_[1] === app));
   assert.equal(
     await browserSyncRegistrationStatus({ homeDirectory: root, platform: "darwin" }),
     "current",
   );
   await unregisterBrowserSync({
     allowCustomState: true,
+    execute,
     homeDirectory: root,
     platform: "darwin",
     stateDirectory: root,
   });
   await assert.rejects(readFile(join(app, "Contents", "Info.plist")), { code: "ENOENT" });
+  assert.ok(calls.some(([, arguments_]) => arguments_[0] === "-u" && arguments_[1] === app));
+});
+
+test("macOS browser Sync registration preserves a foreign app", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-foreign-mac-handler-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const app = join(root, "Applications", "Vibe Racing.app");
+  await mkdir(join(app, "Contents"), { recursive: true });
+  await writeFile(join(app, "Contents", "Info.plist"), "foreign\n");
+  const calls = [];
+
+  assert.equal(
+    await registerBrowserSync("/safe/runtime/viberacing.mjs", {
+      allowCustomState: true,
+      execute: (...arguments_) => macExecute(calls, ...arguments_),
+      homeDirectory: root,
+      platform: "darwin",
+      stateDirectory: root,
+    }),
+    false,
+  );
+  assert.equal(
+    await browserSyncRegistrationStatus({ homeDirectory: root, platform: "darwin" }),
+    "foreign",
+  );
+  assert.equal(await readFile(join(app, "Contents", "Info.plist"), "utf8"), "foreign\n");
+  assert.equal(calls.length, 0);
+});
+
+test("macOS browser Sync registration rolls back an owned app when registration fails", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-mac-handler-rollback-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const app = join(root, "Applications", "Vibe Racing.app");
+  await mkdir(join(app, "Contents", "Resources"), { recursive: true });
+  await writeFile(join(app, "Contents", "Info.plist"), "previous\n");
+  await writeFile(
+    join(app, "Contents", "Resources", "viberacing-owned"),
+    "viberacing-browser-handler-v1\n",
+  );
+  const calls = [];
+  let failed = false;
+  const execute = async (...arguments_) => {
+    await macExecute(calls, ...arguments_);
+    if (!failed && arguments_[1]?.[0] === "-f" && arguments_[1]?.[1] === app) {
+      failed = true;
+      throw new Error("synthetic registration failure");
+    }
+    return { stdout: "" };
+  };
+
+  assert.equal(
+    await registerBrowserSync("/safe/runtime/viberacing.mjs", {
+      allowCustomState: true,
+      execute,
+      homeDirectory: root,
+      platform: "darwin",
+      stateDirectory: root,
+    }),
+    false,
+  );
+  assert.equal(await readFile(join(app, "Contents", "Info.plist"), "utf8"), "previous\n");
+  assert.equal(
+    await readFile(join(app, "Contents", "Resources", "viberacing-owned"), "utf8"),
+    "viberacing-browser-handler-v1\n",
+  );
 });
 
 test("browser Sync removal with custom state never touches the normal user handler", async (context) => {

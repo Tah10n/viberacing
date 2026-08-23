@@ -123,10 +123,10 @@ owned hook without deleting its local definition or blocking other agents. Direc
 owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
 server-accepted sequence and reports hook freshness, mapped accounts, supported surfaces, excluded
 desktop surfaces, data availability, partial warnings, and the last hook error; `doctor --repair`
-refreshes the installed runtime and owned hooks; its server reconciliation shares the sync lock, and
-it does not collect usage unless the user separately runs `viberacing sync`. A successful compatible
-reconnect, authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync
-disable.
+refreshes the installed runtime, owned hooks, and the default-state browser protocol handler under
+the lifecycle lock. Its server reconciliation shares the sync lock, and it does not collect usage
+unless the user separately runs `viberacing sync`. A successful compatible reconnect, authenticated
+sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers. Codex
 uses `Stop` after every completed turn; upgrades remove only Vibe Racing's older `SessionEnd`

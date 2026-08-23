@@ -127,6 +127,14 @@ seconds after a claim and has a separate authenticated per-user quota. A rejecte
 stores only a terminal `busy` result under its opaque request ID so the originating dashboard stops
 polling promptly; these rejected rows do not extend the installation cooldown.
 
+The connector owns only registrations marked with `viberacing-browser-handler-v1`. Linux uses an XDG
+desktop handler, Windows uses an owner-marked per-user registry key, and macOS uses a signed
+AppleScript applet whose `open location` handler receives the LaunchServices URL event. macOS
+replacement is staged beside the target app, validated and signed before an atomic swap, and rolls
+back the prior owned app if registration fails. Foreign handlers are never overwritten. Connect and
+`doctor --repair` point each owned handler at the current versioned runtime; custom state roots do
+not mutate the normal user's global handler.
+
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with
 no pending payload make no HTTP request. A direct manual sync waits at most 60 seconds for that lock

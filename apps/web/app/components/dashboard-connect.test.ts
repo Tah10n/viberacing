@@ -49,6 +49,14 @@ describe("dashboard connection flow", () => {
     expect(dashboard).not.toContain("npx @viberacing/connector");
   });
 
+  it("offers an exact repair command only for outdated computers", () => {
+    expect(dashboard).toContain("i.connector_version");
+    expect(dashboard).toContain("versionAtLeast(item.connector_version, bundledConnectorVersion)");
+    expect(dashboard).toContain("-- viberacing doctor --repair");
+    expect(dashboard).toContain('label="Copy update command"');
+    expect(dashboard).toContain("without collecting or uploading token totals");
+  });
+
   it("offers source reassignment only when the same agent has another account", () => {
     expect(dashboard).toContain("function hasReassignmentTarget");
     expect(dashboard).toContain("candidate.agent_id === account.agent_id");
