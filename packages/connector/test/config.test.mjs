@@ -2398,7 +2398,10 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     new Set(Object.keys(dirty.sources)),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
   );
-  await waitFor(() => bodies.length === 1, 10_000);
+  // The detached scheduler is intentionally outside the hook processes. Give it
+  // enough wall-clock budget when the full connector suite saturates a CI host;
+  // the configured 3 s maximum delay still keeps this wait bounded.
+  await waitFor(() => bodies.length === 1, 30_000);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
