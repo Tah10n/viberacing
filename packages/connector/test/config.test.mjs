@@ -1872,7 +1872,10 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   }
   await Promise.race([
     firstRequest,
-    delay(10_000, undefined, { ref: false }).then(async () => {
+    // Launching twenty real hook processes can briefly saturate a Windows CI
+    // runner. Keep the production timing assertions below, but allow the
+    // detached scheduler enough wall-clock time to start under that load.
+    delay(30_000, undefined, { ref: false }).then(async () => {
       const diagnostics = {};
       for (const name of ["dirty.json", "scheduler-launch.lock", "scheduler.lock", "state.json"])
         diagnostics[name] = await readFile(join(installation.directory, name), "utf8").catch(
