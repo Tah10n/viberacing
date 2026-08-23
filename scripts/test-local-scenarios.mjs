@@ -36,9 +36,19 @@ const handle = `local-test-${randomBytes(5).toString("hex")}`;
 const githubId = 800_000_000_000_000_000n + BigInt(`0x${randomBytes(7).toString("hex")}`);
 const trustedProxyScenario = process.env.VIBERACING_TEST_TRUSTED_PROXY === "true";
 let userId;
+let pairingClientSequence = 0;
 
 function syntheticEdgeHeader(address) {
   return trustedProxyScenario ? { "x-real-ip": address } : {};
+}
+
+function nextPairingClientAddress() {
+  if (pairingClientSequence >= 254 * 256)
+    throw new Error("synthetic pairing client address space exhausted");
+  const thirdOctet = Math.floor(pairingClientSequence / 254);
+  const fourthOctet = (pairingClientSequence % 254) + 1;
+  pairingClientSequence += 1;
+  return `198.18.${thirdOctet}.${fourthOctet}`;
 }
 
 async function json(path, body, headers = {}) {
@@ -121,7 +131,7 @@ async function beginPairing(installation, sources, supersededClientSourceIds = [
       sources,
       supersededClientSourceIds,
     },
-    syntheticEdgeHeader(`127.0.0.${Math.floor(Math.random() * 200) + 2}`),
+    syntheticEdgeHeader(nextPairingClientAddress()),
   );
   if (response.status !== 201)
     throw new Error(`pairing start failed: ${response.status} ${await response.text()}`);
