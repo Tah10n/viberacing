@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 let oauthServer: Server;
 const handle = `e2e-racer-${String(Date.now()).slice(-8)}`;
@@ -38,6 +38,32 @@ function isActivePairingResponse(value: unknown): value is ActivePairingResponse
     value.sources.length === 1 &&
     value.sources.every((source) => isRecord(source) && typeof source.sourceId === "string")
   );
+}
+
+async function expectLeftAlignedHero(page: Page): Promise<void> {
+  const alignment = await page.locator(".hero-primary").evaluate((hero) => {
+    const style = (selector: string): CSSStyleDeclaration => {
+      const element = hero.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      return getComputedStyle(element);
+    };
+
+    return {
+      copyJustification: style(".hero-copy").justifyContent,
+      copyText: style(".hero-copy").textAlign,
+      positionText: style(".user-callout").textAlign,
+      tokenMargin: style(".user-score-line strong").marginLeft,
+      raceText: style(".hero-race").textAlign,
+    };
+  });
+
+  expect(alignment).toEqual({
+    copyJustification: "flex-start",
+    copyText: "left",
+    positionText: "left",
+    tokenMargin: "0px",
+    raceText: "left",
+  });
 }
 
 test.beforeAll(async () => {
@@ -198,9 +224,13 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(page.getByText(/Renamed E2E/)).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 
+  await page.goto("/");
+  await expectLeftAlignedHero(page);
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await expectLeftAlignedHero(page);
   await expect(page.getByText("Self-reported", { exact: true }).first()).toBeVisible();
   const row = page.getByRole("row", { name: new RegExp(`@${handle}`) });
   await row.focus();

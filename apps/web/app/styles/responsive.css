@@ -394,10 +394,6 @@
     display: none;
   }
 
-  .user-score-line strong {
-    margin-left: auto;
-  }
-
   footer div {
     flex-direction: column;
     gap: var(--space-1);
