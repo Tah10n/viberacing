@@ -66,6 +66,33 @@ async function expectLeftAlignedHero(page: Page): Promise<void> {
   });
 }
 
+async function expectConsistentMobileHeroBlocks(page: Page): Promise<void> {
+  const blocks = await page.locator(".hero").evaluate((hero) =>
+    [".user-callout", ".hero-race", ".hero-agents", ".hero-privacy"].map((selector) => {
+      const element = hero.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      const style = getComputedStyle(element);
+      return {
+        alignItems: style.alignItems,
+        flexDirection: style.flexDirection,
+        gap: style.gap,
+        paddingLeft: style.paddingLeft,
+        paddingRight: style.paddingRight,
+      };
+    }),
+  );
+
+  expect(blocks).toEqual(
+    Array.from({ length: 4 }, () => ({
+      alignItems: "start",
+      flexDirection: "column",
+      gap: "4px",
+      paddingLeft: "16px",
+      paddingRight: "16px",
+    })),
+  );
+}
+
 test.beforeAll(async () => {
   oauthServer = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1:3016");
@@ -231,6 +258,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expectLeftAlignedHero(page);
+  await expectConsistentMobileHeroBlocks(page);
   await expect(page.getByText("Self-reported", { exact: true }).first()).toBeVisible();
   const row = page.getByRole("row", { name: new RegExp(`@${handle}`) });
   await row.focus();

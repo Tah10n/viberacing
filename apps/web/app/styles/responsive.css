@@ -159,24 +159,19 @@
     font-size: 1.25rem;
   }
 
-  .hero-race {
-    display: grid;
-    grid-template-columns: auto auto;
-    align-content: center;
-    column-gap: var(--space-2);
-  }
-
-  .hero-race small {
-    grid-column: 1 / -1;
-    margin-top: 0;
-  }
-
+  .user-callout,
+  .hero-race,
   .hero-summary > div {
+    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: start;
     gap: var(--space-1);
     padding: var(--space-2) var(--space-4);
+  }
+
+  .hero-race small {
+    margin-top: 0;
   }
 
   .app-nav {
