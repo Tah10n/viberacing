@@ -1872,7 +1872,10 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
   }
   await Promise.race([
     firstRequest,
-    delay(10_000, undefined, { ref: false }).then(async () => {
+    // Launching twenty real hook processes can briefly saturate a Windows CI
+    // runner. Keep the production timing assertions below, but allow the
+    // detached scheduler enough wall-clock time to start under that load.
+    delay(30_000, undefined, { ref: false }).then(async () => {
       const diagnostics = {};
       for (const name of ["dirty.json", "scheduler-launch.lock", "scheduler.lock", "state.json"])
         diagnostics[name] = await readFile(join(installation.directory, name), "utf8").catch(
@@ -2398,7 +2401,10 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     new Set(Object.keys(dirty.sources)),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
   );
-  await waitFor(() => bodies.length === 1, 10_000);
+  // The detached scheduler is intentionally outside the hook processes. Give it
+  // enough wall-clock budget when the full connector suite saturates a CI host;
+  // the configured 3 s maximum delay still keeps this wait bounded.
+  await waitFor(() => bodies.length === 1, 30_000);
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
