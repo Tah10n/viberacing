@@ -12,8 +12,9 @@ experience or protocol.
 
 - Browser-triggered sync now has an atomic installation-wide cooldown, rejects overlapping recent
   runs before connector work starts, and uses bounded two-to-five-second status polling with a
-  separate authenticated quota. Rejected duplicate claims settle as terminal `busy` results, and
-  cooldown-disabled controls automatically recover using the bounded `Retry-After` response.
+  per-run quota plus a higher aggregate user guard. Rejected duplicate claims settle as terminal
+  `busy` results, status `429` responses use bounded backoff, and cooldown-disabled controls
+  automatically recover using the bounded `Retry-After` response.
 - Completed exact input/output/cache/reasoning collection for Codex and Qwen Code. Codex now keeps
   its authoritative account-wide App Server total alongside independently exact local component
   counters and marks usage dirty after each `Stop`; Qwen normalizes cached input and reasoning as

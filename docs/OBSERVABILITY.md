@@ -18,6 +18,12 @@ accepted state transition. The fields are intentionally fixed: `agentId`, `diagn
 `resolved` transitions are `info`. The enclosing completed-request record contains only aggregate
 `diagnosticEventsReceived`, `diagnosticsOpened`, and `diagnosticsResolved` counts.
 
+Delivery is intentionally at-least-once. The connector removes a transition from its local outbox
+only after it receives the successful response, so a response lost after the server writes the log
+can produce the same structured transition again. Local transition deduplication and the bounded
+outbox prevent repeated unchanged state from generating new events; they do not provide server-side
+exactly-once logging.
+
 Example:
 
 ```json
@@ -60,12 +66,14 @@ records cover 5xx responses, uncaught route/render failures, PostgreSQL pool fai
 failures. Successful health/readiness probes are `debug` to avoid burying application events in
 Railway health traffic; failed readiness probes remain `error`.
 
-Browser Sync has separate `browser_sync_grant_user`, `browser_sync_claim_installation`, and
-`browser_sync_status_user` quotas. A second installation claim inside the 60-second cooldown, or
-while a recent run remains active, returns `429 sync_rate_limited` with `Retry-After: 60`; request
-logs expose only the bounded `rate_limited` outcome. The corresponding content-free terminal
+Browser Sync has a `browser_sync_grant_user` quota plus isolated `browser_sync_status_run` and
+higher aggregate `browser_sync_status_user` polling quotas. Claim admission is bounded before
+authentication, then the installation row serializes the active-run and 60-second cooldown guard. A
+second valid claim while the guard is active returns `429 sync_rate_limited` with `Retry-After: 60`;
+request logs expose only the bounded `rate_limited` outcome. The corresponding content-free terminal
 `failed/busy` run lets dashboard polling settle without emitting repeated not-found requests and is
-excluded from the cooldown calculation.
+excluded from the cooldown calculation. Status `429` responses also carry `Retry-After`, which the
+browser treats as bounded backoff rather than a failed poll.
 
 Runtime configuration is validated before `server_started` is emitted. Invalid configuration logs
 `server_configuration_invalid` with a bounded `CONFIG_*` error code, flushes the record

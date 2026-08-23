@@ -41,17 +41,32 @@ export const browserSyncRunningPollIntervalMs = 5_000;
 const maximumConsecutivePollFailures = 3;
 const defaultGrantRetryAfterMs = 60_000;
 const maximumGrantRetryAfterMs = 5 * 60_000;
+const defaultStatusRetryAfterMs = 5_000;
+const maximumStatusRetryAfterMs = 60_000;
 
-export function grantRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
-  let milliseconds = defaultGrantRetryAfterMs;
+function retryAfterMilliseconds(
+  value: string | null,
+  fallbackMilliseconds: number,
+  maximumMilliseconds: number,
+  now: number,
+): number {
+  let milliseconds = fallbackMilliseconds;
   if (value !== null && /^\d+$/.test(value.trim())) {
     milliseconds = Number(value.trim()) * 1_000;
   } else if (value !== null) {
     const timestamp = Date.parse(value);
     if (Number.isFinite(timestamp)) milliseconds = timestamp - now;
   }
-  if (!Number.isFinite(milliseconds)) return defaultGrantRetryAfterMs;
-  return Math.min(maximumGrantRetryAfterMs, Math.max(1_000, milliseconds));
+  if (!Number.isFinite(milliseconds)) return fallbackMilliseconds;
+  return Math.min(maximumMilliseconds, Math.max(1_000, milliseconds));
+}
+
+export function grantRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  return retryAfterMilliseconds(value, defaultGrantRetryAfterMs, maximumGrantRetryAfterMs, now);
+}
+
+export function statusRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  return retryAfterMilliseconds(value, defaultStatusRetryAfterMs, maximumStatusRetryAfterMs, now);
 }
 
 type BrowserSyncPollOutcome =
@@ -74,14 +89,28 @@ export async function pollBrowserSyncStatus(
   const startDeadline = dependencies.now() + browserSyncStartTimeoutMs;
   let runningDeadline: number | null = null;
   let consecutiveFailures = 0;
+  let nextPollInterval = browserSyncWaitingPollIntervalMs;
   for (;;) {
-    await dependencies.pause(
+    await dependencies.pause(nextPollInterval);
+    nextPollInterval =
       runningDeadline === null
         ? browserSyncWaitingPollIntervalMs
-        : browserSyncRunningPollIntervalMs,
-    );
+        : browserSyncRunningPollIntervalMs;
     try {
       const response = await dependencies.fetchStatus();
+      if (response.status === 429) {
+        consecutiveFailures = 0;
+        const deadline = runningDeadline ?? startDeadline;
+        const now = dependencies.now();
+        if (now >= deadline) {
+          return { kind: runningDeadline === null ? "not_started" : "running_unconfirmed" };
+        }
+        nextPollInterval = Math.min(
+          statusRetryAfterMilliseconds(response.headers.get("retry-after"), now),
+          deadline - now,
+        );
+        continue;
+      }
       if (response.status === 404) {
         consecutiveFailures = 0;
         if (runningDeadline !== null) return { kind: "running_unconfirmed" };
@@ -96,6 +125,7 @@ export async function pollBrowserSyncStatus(
           runningDeadline = dependencies.now() + browserSyncRunningTimeoutMs;
           dependencies.onRunning();
         }
+        nextPollInterval = browserSyncRunningPollIntervalMs;
         if (dependencies.now() >= runningDeadline) return { kind: "running_too_long" };
         continue;
       }

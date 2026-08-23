@@ -2053,6 +2053,61 @@ test("fails closed when history_base targets a missing rollout of an existing th
   );
   assert.deepEqual(result.entries, []);
   assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(result.diagnostics, [
+    { code: "codex_lineage_parent_missing", phase: "collect" },
+  ]);
+});
+
+test("classifies an existing conflicting history_base rollout as ambiguous", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-revert-ambiguous-base-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const threadId = "56565656-5656-4656-8656-565656565656";
+  const parentRolloutId = "57575757-5757-4757-8757-575757575757";
+  const childRolloutId = "58585858-5858-4858-8858-585858585858";
+  const usage = {
+    input_tokens: 10,
+    cached_input_tokens: 3,
+    cache_write_input_tokens: 2,
+    output_tokens: 8,
+    reasoning_output_tokens: 3,
+    total_tokens: 18,
+  };
+  const conflictingUsage = { ...usage, input_tokens: 11, total_tokens: 19 };
+  for (const [timestamp, value] of [
+    ["2026-08-10T12-00-00", usage],
+    ["2026-08-10T12-00-01", conflictingUsage],
+  ])
+    await writeFile(
+      join(directory, codexRolloutName(threadId, parentRolloutId, timestamp)),
+      `${codexSessionMeta(threadId, { historyMode: "paginated" })}\n${codexTokenCount(
+        "2026-08-10T12:00:01Z",
+        value,
+        value,
+        1,
+      )}\n`,
+    );
+  await writeFile(
+    join(directory, codexRolloutName(threadId, childRolloutId, "2026-08-10T12-01-00")),
+    `${codexSessionMeta(threadId, {
+      historyBase: {
+        thread_id: parentRolloutId,
+        end_ordinal_exclusive: 2,
+        end_byte_offset: 512,
+      },
+      historyMode: "paginated",
+      timestamp: "2026-08-10T12:01:00Z",
+    })}\n${codexTokenCount("2026-08-10T12:01:01Z", usage, usage, 3)}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(result.diagnostics, [{ code: "codex_lineage_ambiguous", phase: "collect" }]);
 });
 
 test("parses oversized Codex SessionMeta and fails closed when it is malformed", () => {

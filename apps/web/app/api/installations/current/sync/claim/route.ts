@@ -1,5 +1,5 @@
 import { digest } from "@/lib/crypto";
-import { query, transaction } from "@/lib/db";
+import { transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
@@ -42,25 +42,6 @@ async function post(request: Request): Promise<Response> {
     const accountId = body.accountId;
     const grant = body.grant;
     const tokenHash = digest(token);
-    const authenticated = await query<{ id: string }>(
-      `SELECT id::text
-         FROM installations
-        WHERE device_token_hash = $1 AND status = 'active' AND browser_sync_capable
-        LIMIT 1`,
-      [tokenHash],
-    );
-    const authenticatedInstallation = authenticated[0];
-    if (authenticatedInstallation === undefined) return problem(401, "unauthorized");
-    if (
-      !(await consumeRateLimit(
-        "browser_sync_claim_installation",
-        authenticatedInstallation.id,
-        10,
-        60,
-      ))
-    ) {
-      return problem(429, "rate_limited");
-    }
     const outcome = await transaction(async (client) => {
       await client.query(
         "DELETE FROM browser_sync_runs WHERE created_at < now() - interval '1 day'",
@@ -71,10 +52,9 @@ async function post(request: Request): Promise<Response> {
       }>(
         `SELECT id::text, user_id::text
            FROM installations
-          WHERE id = $1 AND device_token_hash = $2
-            AND status = 'active' AND browser_sync_capable
+          WHERE device_token_hash = $1 AND status = 'active' AND browser_sync_capable
           FOR UPDATE`,
-        [authenticatedInstallation.id, tokenHash],
+        [tokenHash],
       );
       const installation = installations.rows[0];
       if (installation === undefined) return { kind: "unauthorized" as const };

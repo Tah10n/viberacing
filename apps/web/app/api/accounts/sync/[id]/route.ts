@@ -8,14 +8,21 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+function rateLimited(): Response {
+  const response = problem(429, "rate_limited");
+  response.headers.set("Retry-After", "60");
+  return response;
+}
+
 async function get(_request: Request, context: RouteContext): Promise<Response> {
   const current = await viewer();
   if (current === null) return problem(401, "unauthorized");
   const { id } = await context.params;
   if (!isUuid(id)) return problem(400, "invalid_request");
-  if (!(await consumeRateLimit("browser_sync_status_user", current.id, 30, 60))) {
-    return problem(429, "rate_limited");
-  }
+  if (!(await consumeRateLimit("browser_sync_status_user", current.id, 300, 60)))
+    return rateLimited();
+  if (!(await consumeRateLimit("browser_sync_status_run", `${current.id}:${id}`, 60, 60)))
+    return rateLimited();
   const rows = await query<{ status: string; result_code: string | null }>(
     `SELECT status, result_code FROM browser_sync_runs
       WHERE id = $1 AND user_id = $2 AND created_at > now() - interval '1 day'`,

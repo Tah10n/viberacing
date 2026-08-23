@@ -115,10 +115,12 @@ source, hook diagnostics, the installed executable/library, and usage-only CLI c
 state contains only allowlisted code keys plus pending `opened`/`resolved` transitions; it never
 stores exception messages, stack traces, paths, commands, environment values, or agent content. Its
 bounded owner-only outbox retries after a later successful server contact, independently of usage
-acceptance. Pending usage records are uploaded in bounded batches without forcing another collector
-scan. A source already disconnected on the server loses its mapping, pending/runtime state, dirty
-entry, and owned hook without deleting its local definition or blocking other agents. Directories
-are owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
+acceptance. Delivery is at-least-once: a lost successful response can cause the same allowlisted
+transition to be retried, so local deduplication is not an exactly-once server-log guarantee.
+Pending usage records are uploaded in bounded batches without forcing another collector scan. A
+source already disconnected on the server loses its mapping, pending/runtime state, dirty entry, and
+owned hook without deleting its local definition or blocking other agents. Directories are
+owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
 server-accepted sequence and reports hook freshness, mapped accounts, supported surfaces, excluded
 desktop surfaces, data availability, partial warnings, and the last hook error; `doctor --repair`
 refreshes the installed runtime and owned hooks; its server reconciliation shares the sync lock, and

@@ -1038,6 +1038,7 @@ async function sync(providedConfig, options = {}) {
       const snapshots = [];
       const sourceErrors = [];
       const failures = [];
+      const failedClientSourceIds = [];
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
@@ -1045,6 +1046,7 @@ async function sync(providedConfig, options = {}) {
         const outcome = collected[index];
         const source = syncSources[index];
         if (outcome.status === "rejected") {
+          failedClientSourceIds.push(source.clientSourceId);
           failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
           const nextFingerprint = fingerprint({ error: "collector_failed" });
           if (state.fingerprints[source.sourceId] !== nextFingerprint) {
@@ -1131,8 +1133,11 @@ async function sync(providedConfig, options = {}) {
         successfullyCheckedSourceIds,
         requestedSourceIds,
       );
-      if (snapshots.length === 0)
-        throw new Error(failures.join("; ") || "No configured collectors succeeded");
+      if (successfullyCheckedSourceIds.length === 0) {
+        const error = new Error(failures.join("; ") || "No configured collectors succeeded");
+        error.automaticDiagnosticClientSourceIds = failedClientSourceIds;
+        throw error;
+      }
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
       for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
       for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
@@ -1414,7 +1419,14 @@ async function automaticSync() {
       try {
         result = await sync(undefined, { automatic: true });
       } catch (error) {
-        await recordAutomaticSyncFailure(Object.keys(attemptedClaims)).catch(() => {});
+        const sourceLocalFailures = Array.isArray(error?.automaticDiagnosticClientSourceIds)
+          ? error.automaticDiagnosticClientSourceIds.filter((clientSourceId) =>
+              Object.hasOwn(attemptedClaims, clientSourceId),
+            )
+          : null;
+        await recordAutomaticSyncFailure(sourceLocalFailures ?? Object.keys(attemptedClaims)).catch(
+          () => {},
+        );
         throw error;
       }
       if (result?.skipped) {

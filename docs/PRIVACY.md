@@ -29,8 +29,10 @@ The connector keeps only active code keys and pending state transitions in its o
 state. An unchanged failure produces no event; disappearance produces one `resolved` event. The
 bounded outbox is retried after a later successful contact. Diagnostic delivery is best-effort: a
 missing, unavailable, or rejecting diagnostic endpoint cannot fail usage sync and cannot generate a
-recursive diagnostic. The original `collector_failed` source error remains in usage sync for
-dashboard compatibility.
+recursive diagnostic. Delivery is at-least-once: if the server writes an event but its response is
+lost, the connector may retry the same allowlisted transition. This can duplicate only the same safe
+structured event and does not add raw diagnostic data. The original `collector_failed` source error
+remains in usage sync for dashboard compatibility.
 
 For account-wide agents, the server may compare already stored complete daily totals from the last
 30 finished UTC days. Two exact nonzero days with no conflicting overlap can automatically map two

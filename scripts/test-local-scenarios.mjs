@@ -360,7 +360,7 @@ try {
     [firstInstallation.id, userId],
   );
   const grantResponses = await Promise.all(
-    Array.from({ length: 10 }, () => browserSyncGrant(firstInstallation.id)),
+    Array.from({ length: 12 }, () => browserSyncGrant(firstInstallation.id)),
   );
   check(
     grantResponses.every((response) => response.status === 200),
@@ -436,10 +436,6 @@ try {
       WHERE id = $1 AND installation_id = $2`,
     [winningRequest.requestId, firstInstallation.id],
   );
-  await pool.query(
-    "DELETE FROM rate_limit_buckets WHERE scope = 'browser_sync_claim_installation' AND key_hash = $1",
-    [digest(firstInstallation.id)],
-  );
   const recoveryGrantResponse = await browserSyncGrant(firstInstallation.id);
   check(
     recoveryGrantResponse.status === 200,
@@ -477,7 +473,7 @@ try {
   );
   check(recoveryResult.status === 204, "browser sync recovery result failed");
   console.log(
-    "ok - concurrent browser claims admit one winner, settle busy, and preserve cooldown recovery",
+    "ok - twelve concurrent browser claims admit one winner, settle busy, and preserve cooldown recovery",
   );
   const secondInstallation = { id: randomUUID(), secret: token() };
   const secondPairing = await beginPairing(secondInstallation, [

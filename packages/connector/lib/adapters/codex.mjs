@@ -707,11 +707,15 @@ function rebuildCodexEventState(files, range) {
     let parentEvents = null;
     let inheritedCount = 0;
     let parentOffset = 0;
+    const historyBaseGroup = historyBaseRolloutKey
+      ? rolloutGroups.get(historyBaseRolloutKey)
+      : undefined;
     const parentResolution = historyBaseRolloutKey
-      ? {
-          parent: byRollout.get(historyBaseRolloutKey) ?? null,
-          reason: byRollout.has(historyBaseRolloutKey) ? null : "missing",
-        }
+      ? historyBaseGroup === undefined
+        ? { parent: null, reason: "missing" }
+        : historyBaseGroup.representative === null
+          ? { parent: null, reason: "ambiguous" }
+          : { parent: historyBaseGroup.representative, reason: null }
       : forkParentThreadKey
         ? parentForThread(forkParentThreadKey, fileState)
         : { parent: null, reason: null };

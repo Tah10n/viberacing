@@ -6,6 +6,7 @@ import {
   browserSyncWaitingPollIntervalMs,
   grantRetryAfterMilliseconds,
   pollBrowserSyncStatus,
+  statusRetryAfterMilliseconds,
 } from "./account-controls";
 
 const component = readFileSync(new URL("./account-controls.tsx", import.meta.url), "utf8");
@@ -97,6 +98,59 @@ describe("account controls", () => {
     expect(browserSyncRunningPollIntervalMs).toBeGreaterThan(browserSyncWaitingPollIntervalMs);
   });
 
+  it("honors status Retry-After without counting rate limits as polling failures", async () => {
+    let now = 0;
+    const pauses: number[] = [];
+    const responses = [
+      new Response(null, { status: 429, headers: { "Retry-After": "17" } }),
+      Response.json({ status: "running", resultCode: null }),
+      Response.json({ status: "succeeded", resultCode: "complete" }),
+    ];
+
+    const outcome = await pollBrowserSyncStatus({
+      fetchStatus: () => Promise.resolve(responses.shift() ?? new Response(null, { status: 503 })),
+      now: () => now,
+      onRunning: () => undefined,
+      pause: (milliseconds) => {
+        pauses.push(milliseconds);
+        now += milliseconds;
+        return Promise.resolve();
+      },
+    });
+
+    expect(outcome).toEqual({ kind: "terminal", status: "succeeded", resultCode: "complete" });
+    expect(pauses).toEqual([
+      browserSyncWaitingPollIntervalMs,
+      17_000,
+      browserSyncRunningPollIntervalMs,
+    ]);
+  });
+
+  it("bounds a persistently rate-limited waiting poller by its start deadline", async () => {
+    let now = 0;
+    let requests = 0;
+    const pauses: number[] = [];
+    const outcome = await pollBrowserSyncStatus({
+      fetchStatus: () => {
+        requests += 1;
+        return Promise.resolve(
+          new Response(null, { status: 429, headers: { "Retry-After": "60" } }),
+        );
+      },
+      now: () => now,
+      onRunning: () => undefined,
+      pause: (milliseconds) => {
+        pauses.push(milliseconds);
+        now += milliseconds;
+        return Promise.resolve();
+      },
+    });
+
+    expect(outcome).toEqual({ kind: "not_started" });
+    expect(requests).toBe(3);
+    expect(pauses).toEqual([browserSyncWaitingPollIntervalMs, 60_000, 28_000]);
+  });
+
   it("bounds grant retries from Retry-After", () => {
     const now = Date.parse("2026-08-23T12:00:00Z");
     expect(grantRetryAfterMilliseconds("60", now)).toBe(60_000);
@@ -104,6 +158,9 @@ describe("account controls", () => {
     expect(grantRetryAfterMilliseconds("999999", now)).toBe(5 * 60_000);
     expect(grantRetryAfterMilliseconds("invalid", now)).toBe(60_000);
     expect(grantRetryAfterMilliseconds("Sun, 23 Aug 2026 12:00:30 GMT", now)).toBe(30_000);
+    expect(statusRetryAfterMilliseconds("60", now)).toBe(60_000);
+    expect(statusRetryAfterMilliseconds("999999", now)).toBe(60_000);
+    expect(statusRetryAfterMilliseconds("invalid", now)).toBe(5_000);
     expect(component).toContain("setGrantRetryAt");
     expect(component).toContain("grantRetryTimer.current = window.setTimeout");
   });

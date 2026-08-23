@@ -2021,6 +2021,146 @@ test("a failed collector gets one automatic attempt per hook generation", async 
   assert.equal(requests, 1);
 });
 
+test("an unchanged healthy source never inherits another collector automatic failure", async (context) => {
+  const usageBodies = [];
+  const diagnosticBodies = [];
+  const healthySourceId = "51515151-5151-4151-8151-515151515151";
+  const failedSourceId = "52525252-5252-4252-8252-525252525252";
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(
+          JSON.stringify(
+            reconciliationResponse([{ sourceId: healthySourceId }, { sourceId: failedSourceId }]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/diagnostics") {
+        diagnosticBodies.push(body);
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      response.writeHead(404);
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-mixed-collector-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const captureDirectory = join(directory, "captures");
+  await mkdir(captureDirectory, { recursive: true });
+  const date = new Date().toISOString().slice(0, 10);
+  const sources = [
+    {
+      clientSourceId: "53535353-5353-4353-8353-535353535353",
+      sourceId: healthySourceId,
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "healthy.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Healthy",
+    },
+    {
+      clientSourceId: "54545454-5454-4454-8454-545454545454",
+      sourceId: failedSourceId,
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "failed.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Fails later",
+    },
+  ];
+  for (const [index, source] of sources.entries())
+    await writeFile(
+      source.dataPath,
+      `${JSON.stringify({
+        id: `mixed-${index}`,
+        date,
+        usage: { date, totalTokens: `${index + 1}` },
+      })}\n`,
+    );
+  await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1,1,1",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(usageBodies.length, 1);
+  assert.equal(usageBodies[0].snapshots.length, 2);
+
+  const configPath = join(directory, "config.json");
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  config.sources[1].collectionMethod = "synthetic_invalid_collector";
+  await writeFile(configPath, `${JSON.stringify(config)}\n`);
+  const sourcesPath = join(directory, "sources.json");
+  const localSources = JSON.parse(await readFile(sourcesPath, "utf8"));
+  localSources.sources[1].collectionMethod = "synthetic_invalid_collector";
+  await writeFile(sourcesPath, `${JSON.stringify(localSources)}\n`);
+  const timestamp = new Date().toISOString();
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: Object.fromEntries(
+        sources.map((source) => [
+          source.clientSourceId,
+          { dirtySince: timestamp, lastEventAt: timestamp, generation: randomUUID() },
+        ]),
+      ),
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "auto-sync"], { env: environment });
+
+  assert.equal(usageBodies.length, 2);
+  assert.deepEqual(usageBodies[1].snapshots, []);
+  assert.deepEqual(usageBodies[1].sourceErrors, [
+    { sourceId: failedSourceId, code: "collector_failed" },
+  ]);
+  assert.equal(diagnosticBodies.length, 1);
+  assert.deepEqual(
+    diagnosticBodies[0].events.map(({ sourceId, code, state, phase }) => ({
+      sourceId,
+      code,
+      state,
+      phase,
+    })),
+    [
+      {
+        sourceId: failedSourceId,
+        code: "collector_failed",
+        state: "opened",
+        phase: "collect",
+      },
+    ],
+  );
+  assert.equal(
+    diagnosticBodies[0].events.some(({ code }) => code === "automatic_sync_failed"),
+    false,
+  );
+  const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.deepEqual(state.diagnostics.activeBySource[failedSourceId], ["collect:collector_failed"]);
+  assert.equal(state.diagnostics.activeBySource[healthySourceId], undefined);
+});
+
 test("a permanent upload failure leaves one pending payload without background retries", async (context) => {
   let requests = 0;
   const server = createServer((request, response) => {
