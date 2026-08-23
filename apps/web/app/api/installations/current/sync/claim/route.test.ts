@@ -4,12 +4,10 @@ const mocks = vi.hoisted(() => ({
   clientQuery: vi.fn(),
   consumeRateLimit: vi.fn(),
   inTransaction: false,
-  query: vi.fn(),
   transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({
-  query: mocks.query,
   transaction: mocks.transaction,
 }));
 vi.mock("@/lib/rate-limit", () => ({
@@ -42,7 +40,6 @@ function request(): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.inTransaction = false;
-  mocks.query.mockResolvedValue([{ id: installationId }]);
   mocks.consumeRateLimit.mockImplementation(() => {
     if (mocks.inTransaction) throw new Error("rate limiter requested a nested pool connection");
     return Promise.resolve(true);
@@ -58,34 +55,63 @@ beforeEach(() => {
 });
 
 describe("browser Sync claim", () => {
-  it("applies the authenticated installation quota before opening the claim transaction", async () => {
+  it("authenticates and serializes the installation inside the claim transaction", async () => {
     mocks.clientQuery
       .mockResolvedValueOnce({ rowCount: 0, rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: installationId, user_id: "42" }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ grant_hash: Buffer.alloc(32) }] })
       .mockResolvedValueOnce({ rows: [{ id: sourceId, agent_id: "codex" }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const response = await POST(request());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ requestId, sourceIds: [sourceId] });
-    expect(mocks.consumeRateLimit).toHaveBeenNthCalledWith(
+    expect(mocks.consumeRateLimit).toHaveBeenCalledTimes(1);
+    expect(mocks.clientQuery).toHaveBeenNthCalledWith(
       2,
-      "browser_sync_claim_installation",
-      installationId,
-      10,
-      60,
+      expect.stringMatching(/device_token_hash = \$1[\s\S]*FOR UPDATE/),
+      [expect.any(Buffer)],
     );
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects the installation quota without reserving a transaction connection", async () => {
-    mocks.consumeRateLimit.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  it("rejects the pre-auth admission quota without reserving a transaction connection", async () => {
+    mocks.consumeRateLimit.mockResolvedValueOnce(false);
 
     const response = await POST(request());
 
     expect(response.status).toBe(429);
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("atomically rejects another recent run before starting connector work", async () => {
+    mocks.clientQuery
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: installationId, user_id: "42" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ grant_hash: Buffer.alloc(32) }] })
+      .mockResolvedValueOnce({ rows: [{ id: sourceId, agent_id: "codex" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "55555555-5555-4555-8555-555555555555" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    await expect(response.json()).resolves.toEqual({ error: "sync_rate_limited" });
+    expect(mocks.clientQuery).toHaveBeenCalledTimes(6);
+    expect(mocks.clientQuery).toHaveBeenNthCalledWith(
+      5,
+      expect.stringMatching(
+        /browser_sync_runs[\s\S]*interval '60 seconds'[\s\S]*IS DISTINCT FROM 'busy'/,
+      ),
+      [installationId, "42"],
+    );
+    expect(mocks.clientQuery).toHaveBeenNthCalledWith(
+      6,
+      expect.stringMatching(/INSERT INTO browser_sync_runs[\s\S]*'failed', 'busy'/),
+      [requestId, installationId, "42", accountId, "codex"],
+    );
   });
 });

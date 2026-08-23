@@ -61,6 +61,7 @@ const requiredFiles = [
   "README.md",
   "package.json",
   "bin/viberacing.mjs",
+  "lib/diagnostics.mjs",
   "lib/protocol.mjs",
   "lib/terminal.mjs",
   "lib/version.mjs",
@@ -103,7 +104,7 @@ for (const path of paths) {
     lowerName.endsWith(".swo") ||
     lowerName.endsWith(".temp") ||
     lowerName.endsWith(".tmp") ||
-    lowerName.startsWith("diagnostic");
+    (lowerName.startsWith("diagnostic") && path !== "lib/diagnostics.mjs");
 
   if (
     segments.some((segment) => forbiddenDirectoryNames.has(segment.toLowerCase())) ||

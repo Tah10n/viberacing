@@ -10,6 +10,11 @@ experience or protocol.
 
 ### Changed
 
+- Browser-triggered sync now has an atomic installation-wide cooldown, rejects overlapping recent
+  runs before connector work starts, and uses bounded two-to-five-second status polling with a
+  per-run quota plus a higher aggregate user guard. Rejected duplicate claims settle as terminal
+  `busy` results, status `429` responses use bounded backoff, and cooldown-disabled controls
+  automatically recover using the bounded `Retry-After` response.
 - Completed exact input/output/cache/reasoning collection for Codex and Qwen Code. Codex now keeps
   its authoritative account-wide App Server total alongside independently exact local component
   counters and marks usage dirty after each `Stop`; Qwen normalizes cached input and reasoning as
@@ -19,6 +24,10 @@ experience or protocol.
 
 ### Added
 
+- Added privacy-minimized connector diagnostics with an authenticated, source-owned server endpoint,
+  allowlisted reason codes, deduplicated `opened`/`resolved` transitions, and a bounded owner-only
+  retry outbox. Diagnostic delivery remains independent from usage acceptance, while the legacy
+  `collector_failed` usage error is retained for dashboard compatibility.
 - Browser-triggered, current-computer sync for an individual agent account through an on-demand,
   cross-platform `viberacing://` handler; no resident connector process or provider content is
   introduced.

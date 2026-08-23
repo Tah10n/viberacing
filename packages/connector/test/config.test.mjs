@@ -25,6 +25,11 @@ import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  diagnosticCodesByPhase,
+  pendingDiagnosticEvents,
+  reconcileDiagnosticPhase,
+} from "../lib/diagnostics.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -217,6 +222,7 @@ async function writeMappedInstallation(home, origin, sources) {
       sources: sources.map((source) => ({
         clientSourceId: source.clientSourceId,
         sourceId: source.sourceId,
+        ...(source.agentAccountId === undefined ? {} : { agentAccountId: source.agentAccountId }),
         agentId: source.agentId,
         accountLabel: source.accountLabel ?? source.suggestedLabel,
         collectionMethod: source.collectionMethod,
@@ -1934,8 +1940,15 @@ test("a failed collector gets one automatic attempt per hook generation", async 
       response.end(JSON.stringify(reconciliationResponse([{ sourceId: source.sourceId }])));
       return;
     }
-    request.resume();
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (request.url === "/api/installations/current/diagnostics") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
       requests += 1;
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
@@ -2006,6 +2019,146 @@ test("a failed collector gets one automatic attempt per hook generation", async 
     }
   });
   assert.equal(requests, 1);
+});
+
+test("an unchanged healthy source never inherits another collector automatic failure", async (context) => {
+  const usageBodies = [];
+  const diagnosticBodies = [];
+  const healthySourceId = "51515151-5151-4151-8151-515151515151";
+  const failedSourceId = "52525252-5252-4252-8252-525252525252";
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(
+          JSON.stringify(
+            reconciliationResponse([{ sourceId: healthySourceId }, { sourceId: failedSourceId }]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/diagnostics") {
+        diagnosticBodies.push(body);
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      response.writeHead(404);
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-mixed-collector-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const captureDirectory = join(directory, "captures");
+  await mkdir(captureDirectory, { recursive: true });
+  const date = new Date().toISOString().slice(0, 10);
+  const sources = [
+    {
+      clientSourceId: "53535353-5353-4353-8353-535353535353",
+      sourceId: healthySourceId,
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "healthy.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Healthy",
+    },
+    {
+      clientSourceId: "54545454-5454-4454-8454-545454545454",
+      sourceId: failedSourceId,
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "failed.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Fails later",
+    },
+  ];
+  for (const [index, source] of sources.entries())
+    await writeFile(
+      source.dataPath,
+      `${JSON.stringify({
+        id: `mixed-${index}`,
+        date,
+        usage: { date, totalTokens: `${index + 1}` },
+      })}\n`,
+    );
+  await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1,1,1",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(usageBodies.length, 1);
+  assert.equal(usageBodies[0].snapshots.length, 2);
+
+  const configPath = join(directory, "config.json");
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  config.sources[1].collectionMethod = "synthetic_invalid_collector";
+  await writeFile(configPath, `${JSON.stringify(config)}\n`);
+  const sourcesPath = join(directory, "sources.json");
+  const localSources = JSON.parse(await readFile(sourcesPath, "utf8"));
+  localSources.sources[1].collectionMethod = "synthetic_invalid_collector";
+  await writeFile(sourcesPath, `${JSON.stringify(localSources)}\n`);
+  const timestamp = new Date().toISOString();
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: Object.fromEntries(
+        sources.map((source) => [
+          source.clientSourceId,
+          { dirtySince: timestamp, lastEventAt: timestamp, generation: randomUUID() },
+        ]),
+      ),
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "auto-sync"], { env: environment });
+
+  assert.equal(usageBodies.length, 2);
+  assert.deepEqual(usageBodies[1].snapshots, []);
+  assert.deepEqual(usageBodies[1].sourceErrors, [
+    { sourceId: failedSourceId, code: "collector_failed" },
+  ]);
+  assert.equal(diagnosticBodies.length, 1);
+  assert.deepEqual(
+    diagnosticBodies[0].events.map(({ sourceId, code, state, phase }) => ({
+      sourceId,
+      code,
+      state,
+      phase,
+    })),
+    [
+      {
+        sourceId: failedSourceId,
+        code: "collector_failed",
+        state: "opened",
+        phase: "collect",
+      },
+    ],
+  );
+  assert.equal(
+    diagnosticBodies[0].events.some(({ code }) => code === "automatic_sync_failed"),
+    false,
+  );
+  const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.deepEqual(state.diagnostics.activeBySource[failedSourceId], ["collect:collector_failed"]);
+  assert.equal(state.diagnostics.activeBySource[healthySourceId], undefined);
 });
 
 test("a permanent upload failure leaves one pending payload without background retries", async (context) => {
@@ -4908,8 +5061,14 @@ test("quarantines a permanent 400 once without blocking the next corrected snaps
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (request.url === "/api/installations/current/diagnostics") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
       requests += 1;
-      bodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      bodies.push(body);
       response.writeHead(requests === 1 ? 400 : 200, { "content-type": "application/json" });
       response.end(
         JSON.stringify(
@@ -4954,6 +5113,354 @@ test("quarantines a permanent 400 once without blocking the next corrected snaps
   await assert.rejects(access(quarantine));
 });
 
+test("diagnostic 404 and 500 responses do not break sync and retain one outbox event", async (context) => {
+  const diagnosticBodies = [];
+  let diagnosticAttempts = 0;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/installations/current") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (request.method === "POST" && request.url === "/api/usage") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/installations/current/diagnostics") {
+        diagnosticAttempts += 1;
+        diagnosticBodies.push(body);
+        const status = diagnosticAttempts === 1 ? 404 : diagnosticAttempts === 2 ? 500 : 200;
+        response.writeHead(status, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify(
+            status === 200
+              ? { acceptedEvents: body.events.length }
+              : { error: status === 404 ? "not_found" : "server_error" },
+          ),
+        );
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const home = await mkdtemp(join(tmpdir(), "viberacing-diagnostic-retry-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const statePath = join(installation.directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.diagnostics = {
+    version: 1,
+    activeBySource: { [installation.sourceId]: ["sync:automatic_sync_failed"] },
+    outboxBySource: {
+      [installation.sourceId]: { "sync:automatic_sync_failed": ["opened"] },
+    },
+  };
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const environment = connectorEnvironment(home);
+
+  const results = [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: environment,
+    });
+    results.push(result);
+    assert.doesNotMatch(result.stderr, /diagnostic|404|500/i);
+  }
+
+  for (const result of results.slice(1)) {
+    assert.match(result.stdout, /diagnostics request was attempted/i);
+    assert.doesNotMatch(result.stdout, /no request was sent/i);
+  }
+
+  assert.equal(diagnosticAttempts, 3);
+  assert.deepEqual(diagnosticBodies[0], diagnosticBodies[1]);
+  assert.deepEqual(diagnosticBodies[1], diagnosticBodies[2]);
+  assert.deepEqual(
+    diagnosticBodies[2].events.map(({ code, state }) => ({ code, state })),
+    [
+      { code: "automatic_sync_failed", state: "opened" },
+      { code: "automatic_sync_failed", state: "resolved" },
+    ],
+  );
+  const finalState = JSON.parse(await readFile(statePath, "utf8"));
+  assert.deepEqual(finalState.diagnostics, {
+    version: 1,
+    activeBySource: {},
+    outboxBySource: {},
+  });
+});
+
+test("browser Sync sends diagnostics only for the claimed account sources", async (context) => {
+  const requestId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const selectedAccountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const selectedSourceId = "33333333-3333-4333-8333-333333333333";
+  const otherSourceId = "44444444-4444-4444-8444-444444444444";
+  const diagnosticBodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(JSON.stringify({ requestId, sourceIds: [selectedSourceId] }));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/diagnostics") {
+        diagnosticBodies.push(body);
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-browser-diagnostic-scope-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const captures = join(home, ".viberacing", "captures");
+  await mkdir(captures, { recursive: true });
+  const sources = [
+    {
+      clientSourceId: "11111111-1111-4111-8111-111111111111",
+      sourceId: selectedSourceId,
+      agentAccountId: selectedAccountId,
+      agentId: "antigravity",
+      accountLabel: "Selected",
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Selected",
+      dataPath: join(captures, "selected.jsonl"),
+    },
+    {
+      clientSourceId: "22222222-2222-4222-8222-222222222222",
+      sourceId: otherSourceId,
+      agentAccountId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      agentId: "antigravity",
+      accountLabel: "Other",
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Other",
+      dataPath: join(captures, "other.jsonl"),
+    },
+  ];
+  for (const source of sources) await writeFile(source.dataPath, "");
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+  const statePath = join(directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  for (const sourceId of [selectedSourceId, otherSourceId]) {
+    reconcileDiagnosticPhase(state, sourceId, "collect", [
+      { code: "collector_failed", phase: "collect" },
+    ]);
+  }
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+
+  await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&accountId=${selectedAccountId}&grant=${"g".repeat(32)}`,
+    ],
+    { env: connectorEnvironment(home) },
+  );
+
+  assert.equal(diagnosticBodies.length, 1);
+  assert.deepEqual(
+    [...new Set(diagnosticBodies.flatMap((body) => body.events.map((event) => event.sourceId)))],
+    [selectedSourceId],
+  );
+  const finalState = JSON.parse(await readFile(statePath, "utf8"));
+  assert.deepEqual(finalState.diagnostics.outboxBySource[otherSourceId], {
+    "collect:collector_failed": ["opened"],
+  });
+});
+
+test("one successful contact sends at most one bounded diagnostic batch", async (context) => {
+  const diagnosticBodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/usage") {
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/diagnostics") {
+        diagnosticBodies.push(body);
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-diagnostic-batch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const captures = join(home, ".viberacing", "captures");
+  await mkdir(captures, { recursive: true });
+  const sources = [1, 2].map((index) => ({
+    clientSourceId: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+    sourceId: `00000000-0000-4000-9000-${String(index).padStart(12, "0")}`,
+    agentId: "antigravity",
+    collectionMethod: "antigravity_cli_capture",
+    supportedSurface: "cli",
+    suggestedLabel: `Source ${index}`,
+    dataPath: join(captures, `${index}.jsonl`),
+  }));
+  for (const source of sources) await writeFile(source.dataPath, "");
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+  const statePath = join(directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.diagnostics = { version: 1, activeBySource: {}, outboxBySource: {} };
+  for (const source of sources) {
+    state.diagnostics.outboxBySource[source.sourceId] = {};
+    for (const [phase, codes] of Object.entries(diagnosticCodesByPhase)) {
+      for (const code of codes) {
+        state.diagnostics.outboxBySource[source.sourceId][`${phase}:${code}`] = [
+          "opened",
+          "resolved",
+        ];
+      }
+    }
+  }
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home),
+  });
+
+  assert.equal(diagnosticBodies.length, 1);
+  assert.equal(diagnosticBodies[0].events.length, 32);
+  const finalState = JSON.parse(await readFile(statePath, "utf8"));
+  assert.equal(
+    pendingDiagnosticEvents(
+      finalState,
+      sources.map((source) => source.sourceId),
+      1_000,
+    ).length,
+    20,
+  );
+});
+
+test("diagnostic outbox survives offline sync and drains after connectivity recovers", async (context) => {
+  const reservation = createServer();
+  reservation.listen(0, "127.0.0.1");
+  await once(reservation, "listening");
+  const reservedAddress = reservation.address();
+  assert.notEqual(reservedAddress, null);
+  assert.equal(typeof reservedAddress, "object");
+  const port = reservedAddress.port;
+  await new Promise((resolve, reject) =>
+    reservation.close((error) => (error === undefined ? resolve() : reject(error))),
+  );
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-diagnostic-offline-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${port}`);
+  const statePath = join(installation.directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  reconcileDiagnosticPhase(state, installation.sourceId, "collect", [
+    { code: "collector_failed", phase: "collect" },
+  ]);
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const environment = connectorEnvironment(home);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment }),
+  );
+  assert.equal(
+    JSON.parse(await readFile(statePath, "utf8")).diagnostics.outboxBySource[installation.sourceId][
+      "collect:collector_failed"
+    ][0],
+    "opened",
+  );
+
+  const diagnosticBodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/installations/current") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (request.method === "POST" && request.url === "/api/usage") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.method === "POST" && request.url === "/api/installations/current/diagnostics") {
+        diagnosticBodies.push(body);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(port, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.deepEqual(
+    diagnosticBodies.flatMap((body) => body.events.map(({ code, state }) => ({ code, state }))),
+    [
+      { code: "collector_failed", state: "opened" },
+      { code: "collector_failed", state: "resolved" },
+    ],
+  );
+  assert.deepEqual(JSON.parse(await readFile(statePath, "utf8")).diagnostics.outboxBySource, {});
+});
+
 test("revoked authorization removes pairing config and stops automatic scheduling", async (context) => {
   let requests = 0;
   const server = createServer((_request, response) => {
@@ -4993,6 +5500,11 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if (request.url === "/api/installations/current/diagnostics") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
       bodies.push(body);
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify(usageResponse(body)));

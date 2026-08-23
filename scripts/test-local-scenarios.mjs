@@ -360,7 +360,7 @@ try {
     [firstInstallation.id, userId],
   );
   const grantResponses = await Promise.all(
-    Array.from({ length: 10 }, () => browserSyncGrant(firstInstallation.id)),
+    Array.from({ length: 12 }, () => browserSyncGrant(firstInstallation.id)),
   );
   check(
     grantResponses.every((response) => response.status === 200),
@@ -381,31 +381,39 @@ try {
       }),
     ),
   );
+  const winningIndexes = claims
+    .map((claim, index) => (claim.status === 200 ? index : -1))
+    .filter((index) => index >= 0);
   check(
-    claims.every((claim) => claim.status === 200),
-    `concurrent browser sync claims conflicted (${claims.map((claim) => claim.status).join(", ")})`,
+    winningIndexes.length === 1 &&
+      claims.every(
+        (claim, index) =>
+          claim.status === (index === winningIndexes[0] ? 200 : 429) &&
+          (index === winningIndexes[0] || claim.headers.get("retry-after") === "60"),
+      ),
+    `browser sync cooldown admitted an invalid claim set (${claims.map((claim) => claim.status).join(", ")})`,
   );
   const claimBodies = await Promise.all(claims.map((claim) => claim.json()));
+  const winningIndex = winningIndexes[0];
   check(
-    claimBodies.every(
-      (claim, index) =>
-        JSON.stringify(claim.sourceIds) === JSON.stringify([syncRequests[index].account.sourceId]),
-    ),
+    JSON.stringify(claimBodies[winningIndex].sourceIds) ===
+      JSON.stringify([syncRequests[winningIndex].account.sourceId]) &&
+      claimBodies.every(
+        (claim, index) => index === winningIndex || claim.error === "sync_rate_limited",
+      ),
     "browser sync claim crossed account source boundaries",
   );
-  const syncResults = await Promise.all(
-    syncRequests.map(({ requestId: browserRequestId }) =>
-      connectorSyncRequest("/api/installations/current/sync/result", first.deviceToken, {
-        requestId: browserRequestId,
-        status: "succeeded",
-        resultCode: "unchanged",
-      }),
-    ),
+  const winningRequest = syncRequests[winningIndex];
+  const syncResult = await connectorSyncRequest(
+    "/api/installations/current/sync/result",
+    first.deviceToken,
+    {
+      requestId: winningRequest.requestId,
+      status: "succeeded",
+      resultCode: "unchanged",
+    },
   );
-  check(
-    syncResults.every((result) => result.status === 204),
-    `browser sync result failed: ${syncResults.map((result) => result.status).join(", ")}`,
-  );
+  check(syncResult.status === 204, `browser sync winner result failed: ${syncResult.status}`);
   const browserStatuses = await Promise.all(
     syncRequests.map(({ requestId: browserRequestId }) =>
       authenticatedGet(`/api/accounts/sync/${browserRequestId}`),
@@ -414,10 +422,59 @@ try {
   const browserStatusBodies = await Promise.all(browserStatuses.map((response) => response.json()));
   check(
     browserStatuses.every((response) => response.status === 200) &&
-      browserStatusBodies.every((status) => status.status === "succeeded"),
+      browserStatusBodies.every((status, index) =>
+        index === winningIndex
+          ? status.status === "succeeded" && status.resultCode === "unchanged"
+          : status.status === "failed" && status.resultCode === "busy",
+      ),
     "browser sync completion was not visible to its owner",
   );
-  console.log("ok - ten concurrent browser claims remain independent and account-scoped");
+  await pool.query(
+    `UPDATE browser_sync_runs
+        SET created_at = now() - interval '61 seconds',
+            updated_at = now() - interval '61 seconds'
+      WHERE id = $1 AND installation_id = $2`,
+    [winningRequest.requestId, firstInstallation.id],
+  );
+  const recoveryGrantResponse = await browserSyncGrant(firstInstallation.id);
+  check(
+    recoveryGrantResponse.status === 200,
+    `terminal busy rows extended the browser sync cooldown: ${recoveryGrantResponse.status}`,
+  );
+  const recoveryGrant = await recoveryGrantResponse.json();
+  const recoveryRequestId = randomUUID();
+  const recoveryClaim = await connectorSyncRequest(
+    "/api/installations/current/sync/claim",
+    first.deviceToken,
+    {
+      requestId: recoveryRequestId,
+      accountId: winningRequest.account.agentAccountId,
+      grant: recoveryGrant.token,
+    },
+  );
+  check(
+    recoveryClaim.status === 200,
+    `terminal busy rows blocked the next browser sync claim: ${recoveryClaim.status}`,
+  );
+  const recoveryClaimBody = await recoveryClaim.json();
+  check(
+    JSON.stringify(recoveryClaimBody.sourceIds) ===
+      JSON.stringify([winningRequest.account.sourceId]),
+    "browser sync recovery claim crossed account source boundaries",
+  );
+  const recoveryResult = await connectorSyncRequest(
+    "/api/installations/current/sync/result",
+    first.deviceToken,
+    {
+      requestId: recoveryRequestId,
+      status: "succeeded",
+      resultCode: "unchanged",
+    },
+  );
+  check(recoveryResult.status === 204, "browser sync recovery result failed");
+  console.log(
+    "ok - twelve concurrent browser claims admit one winner, settle busy, and preserve cooldown recovery",
+  );
   const secondInstallation = { id: randomUUID(), secret: token() };
   const secondPairing = await beginPairing(secondInstallation, [
     source("codex-personal-b", "codex"),

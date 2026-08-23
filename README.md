@@ -7,9 +7,10 @@ Vibe Racing is a fast weekly leaderboard for exact, self-reported coding-agent t
 GitHub user can connect several computers, several agents, and several accounts of the same agent.
 
 The production shape stays deliberately small: one Next.js service, one PostgreSQL database, and one
-local connector. Only UTC dates and aggregate token counters cross the local boundary—never prompts,
-responses, code, paths, repositories, hostnames, provider identities, credentials, model names, or
-costs.
+local connector. Usage sync contains only UTC dates and aggregate token counters. A separate,
+strictly allowlisted diagnostics channel can send fixed machine codes and state transitions—never
+prompts, responses, code, paths, repositories, hostnames, provider identities, credentials, model
+names, exception messages, stack traces, or costs.
 
 Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Antigravity
 CLI, and Gemini CLI. Antigravity Desktop is not supported. See

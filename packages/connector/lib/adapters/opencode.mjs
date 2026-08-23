@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { diagnosticError } from "../diagnostics.mjs";
 import { canonicalPathKey, componentEntry, diagnosePath, mergeEntries, utcDay } from "./shared.mjs";
 
 export const openCodeDatabasePattern = /^opencode(?:-[A-Za-z0-9._-]+)?\.db$/;
@@ -39,8 +40,9 @@ export function parseOpenCodeMessages(rows) {
 
 async function collect(source, range, state = {}) {
   const { DatabaseSync } = await import("node:sqlite");
-  const database = new DatabaseSync(source.dataPath, { readOnly: true });
+  let database;
   try {
+    database = new DatabaseSync(source.dataPath, { readOnly: true });
     const rows = database
       .prepare(
         "SELECT id, time_created, data FROM message WHERE time_created >= ? AND time_created < ? ORDER BY time_created",
@@ -54,9 +56,14 @@ async function collect(source, range, state = {}) {
       completeness: "complete",
       nextState: state,
       warnings: [],
+      diagnostics: [],
     };
+  } catch (error) {
+    throw diagnosticError("OpenCode local store is unreadable", "local_store_unreadable", {
+      cause: error,
+    });
   } finally {
-    database.close();
+    database?.close();
   }
 }
 

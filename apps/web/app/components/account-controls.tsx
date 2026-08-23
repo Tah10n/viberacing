@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -35,7 +36,38 @@ function wait(milliseconds: number): Promise<void> {
 
 const browserSyncStartTimeoutMs = 90_000;
 export const browserSyncRunningTimeoutMs = 10 * 60_000;
+export const browserSyncWaitingPollIntervalMs = 2_000;
+export const browserSyncRunningPollIntervalMs = 5_000;
 const maximumConsecutivePollFailures = 3;
+const defaultGrantRetryAfterMs = 60_000;
+const maximumGrantRetryAfterMs = 5 * 60_000;
+const defaultStatusRetryAfterMs = 5_000;
+const maximumStatusRetryAfterMs = 60_000;
+
+function retryAfterMilliseconds(
+  value: string | null,
+  fallbackMilliseconds: number,
+  maximumMilliseconds: number,
+  now: number,
+): number {
+  let milliseconds = fallbackMilliseconds;
+  if (value !== null && /^\d+$/.test(value.trim())) {
+    milliseconds = Number(value.trim()) * 1_000;
+  } else if (value !== null) {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp)) milliseconds = timestamp - now;
+  }
+  if (!Number.isFinite(milliseconds)) return fallbackMilliseconds;
+  return Math.min(maximumMilliseconds, Math.max(1_000, milliseconds));
+}
+
+export function grantRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  return retryAfterMilliseconds(value, defaultGrantRetryAfterMs, maximumGrantRetryAfterMs, now);
+}
+
+export function statusRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  return retryAfterMilliseconds(value, defaultStatusRetryAfterMs, maximumStatusRetryAfterMs, now);
+}
 
 type BrowserSyncPollOutcome =
   | { kind: "terminal"; status: "succeeded" | "partial" | "failed"; resultCode: string | null }
@@ -57,10 +89,28 @@ export async function pollBrowserSyncStatus(
   const startDeadline = dependencies.now() + browserSyncStartTimeoutMs;
   let runningDeadline: number | null = null;
   let consecutiveFailures = 0;
+  let nextPollInterval = browserSyncWaitingPollIntervalMs;
   for (;;) {
-    await dependencies.pause(1_000);
+    await dependencies.pause(nextPollInterval);
+    nextPollInterval =
+      runningDeadline === null
+        ? browserSyncWaitingPollIntervalMs
+        : browserSyncRunningPollIntervalMs;
     try {
       const response = await dependencies.fetchStatus();
+      if (response.status === 429) {
+        consecutiveFailures = 0;
+        const deadline = runningDeadline ?? startDeadline;
+        const now = dependencies.now();
+        if (now >= deadline) {
+          return { kind: runningDeadline === null ? "not_started" : "running_unconfirmed" };
+        }
+        nextPollInterval = Math.min(
+          statusRetryAfterMilliseconds(response.headers.get("retry-after"), now),
+          deadline - now,
+        );
+        continue;
+      }
       if (response.status === 404) {
         consecutiveFailures = 0;
         if (runningDeadline !== null) return { kind: "running_unconfirmed" };
@@ -75,6 +125,7 @@ export async function pollBrowserSyncStatus(
           runningDeadline = dependencies.now() + browserSyncRunningTimeoutMs;
           dependencies.onRunning();
         }
+        nextPollInterval = browserSyncRunningPollIntervalMs;
         if (dependencies.now() >= runningDeadline) return { kind: "running_too_long" };
         continue;
       }
@@ -107,6 +158,8 @@ export function BrowserSyncProvider({
 }) {
   const [grant, setGrant] = useState<Grant | null>(null);
   const [state, setState] = useState<SyncState | null>(null);
+  const [grantRetryAt, setGrantRetryAt] = useState<number | null>(null);
+  const grantRetryTimer = useRef<number | null>(null);
 
   const prepare = useCallback(async () => {
     if (!enabled) return;
@@ -117,16 +170,44 @@ export function BrowserSyncProvider({
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "",
       });
-      if (response.ok) setGrant((await response.json()) as Grant);
-      else setGrant(null);
+      if (response.ok) {
+        setGrant((await response.json()) as Grant);
+        setGrantRetryAt(null);
+      } else {
+        setGrant(null);
+        setGrantRetryAt(
+          response.status === 429
+            ? Date.now() + grantRetryAfterMilliseconds(response.headers.get("retry-after"))
+            : null,
+        );
+      }
     } catch {
       setGrant(null);
+      setGrantRetryAt(null);
     }
   }, [enabled]);
 
   useEffect(() => {
     void prepare();
   }, [prepare]);
+
+  useEffect(() => {
+    if (grantRetryTimer.current !== null) window.clearTimeout(grantRetryTimer.current);
+    grantRetryTimer.current = null;
+    if (grantRetryAt === null) return;
+    grantRetryTimer.current = window.setTimeout(
+      () => {
+        grantRetryTimer.current = null;
+        setGrantRetryAt(null);
+        void prepare();
+      },
+      Math.max(0, grantRetryAt - Date.now()),
+    );
+    return () => {
+      if (grantRetryTimer.current !== null) window.clearTimeout(grantRetryTimer.current);
+      grantRetryTimer.current = null;
+    };
+  }, [grantRetryAt, prepare]);
 
   const poll = useCallback(
     async (accountId: string, requestId: string) => {

@@ -111,16 +111,22 @@ installation identity.
 
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per
-source, hook diagnostics, the installed executable/library, and usage-only CLI captures. Pending
-records are uploaded in bounded batches without forcing another collector scan. A source already
-disconnected on the server loses its mapping, pending/runtime state, dirty entry, and owned hook
-without deleting its local definition or blocking other agents. Directories are owner-only where the
-OS supports permissions; secrets are `0600`. `doctor` reconciles the last server-accepted sequence
-and reports hook freshness, mapped accounts, supported surfaces, excluded desktop surfaces, data
-availability, partial warnings, and the last hook error; `doctor --repair` refreshes the installed
-runtime and owned hooks; its server reconciliation shares the sync lock, and it does not collect
-usage unless the user separately runs `viberacing sync`. A successful compatible reconnect,
-authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
+source, hook diagnostics, the installed executable/library, and usage-only CLI captures. Diagnostic
+state contains only allowlisted code keys plus pending `opened`/`resolved` transitions; it never
+stores exception messages, stack traces, paths, commands, environment values, or agent content. Its
+bounded owner-only outbox retries after a later successful server contact, independently of usage
+acceptance. Delivery is at-least-once: a lost successful response can cause the same allowlisted
+transition to be retried, so local deduplication is not an exactly-once server-log guarantee.
+Pending usage records are uploaded in bounded batches without forcing another collector scan. A
+source already disconnected on the server loses its mapping, pending/runtime state, dirty entry, and
+owned hook without deleting its local definition or blocking other agents. Directories are
+owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
+server-accepted sequence and reports hook freshness, mapped accounts, supported surfaces, excluded
+desktop surfaces, data availability, partial warnings, and the last hook error; `doctor --repair`
+refreshes the installed runtime and owned hooks; its server reconciliation shares the sync lock, and
+it does not collect usage unless the user separately runs `viberacing sync`. A successful compatible
+reconnect, authenticated sync, or doctor server check clears a prior version-upgrade automatic-sync
+disable.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers. Codex
 uses `Stop` after every completed turn; upgrades remove only Vibe Racing's older `SessionEnd`
@@ -146,7 +152,9 @@ reports a busy error if the lock remains occupied. Unchanged data sends no reque
 Browser-triggered sync shares the same single-flight lock but scopes collection and pending delivery
 to the server-authorized source IDs for one account on the bound installation. The URL contains only
 opaque IDs and a one-time grant; account labels, paths, provider identities, and usage content are
-never included. `uninstall` removes only an owned handler registration before deleting its runtime.
+never included. The server serializes claims per installation, permits at most one new browser sync
+per 60 seconds, and rejects a second claim while a recent run is still active. `uninstall` removes
+only an owned handler registration before deleting its runtime.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file

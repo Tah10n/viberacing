@@ -141,13 +141,18 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
                   size: rootInfo.size,
                   modifiedAt: rootInfo.mtimeMs,
                   reason: "oversized",
+                  kind: "file",
                 },
               ]
             : [],
       };
     }
   } catch {
-    return { files: [], incomplete: true, issues: [{ path: root, reason: "unreadable" }] };
+    return {
+      files: [],
+      incomplete: true,
+      issues: [{ path: root, reason: "unreadable", kind: "root" }],
+    };
   }
   const found = [];
   const issues = [];
@@ -160,7 +165,7 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
       directory = await opendir(current);
     } catch {
       incomplete = true;
-      issues.push({ path: current, reason: "unreadable" });
+      issues.push({ path: current, reason: "unreadable", kind: "directory" });
       continue;
     }
     for await (const entry of directory) {
@@ -179,16 +184,17 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
               size: info.size,
               modifiedAt: info.mtimeMs,
               reason: "oversized",
+              kind: "file",
             });
           }
         } catch {
           incomplete = true;
-          issues.push({ path, reason: "unreadable" });
+          issues.push({ path, reason: "unreadable", kind: "file" });
         }
       }
       if (found.length >= maximum) {
         incomplete = true;
-        issues.push({ path: current, reason: "limit" });
+        issues.push({ path: current, reason: "limit", kind: "directory" });
         break;
       }
     }
@@ -252,10 +258,13 @@ export async function collectJsonl(
   const entries = [];
   let incomplete = discovered.incomplete;
   let oversized = false;
+  let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
+  let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   let bytes = 0;
   for (const file of files) {
     if (bytes + file.size > 100_000_000) {
       incomplete = true;
+      limited = true;
       const previous = state.files?.[file.path];
       if (previous) {
         nextState.files[file.path] = previous;
@@ -294,6 +303,7 @@ export async function collectJsonl(
       if (chunk.oversizedLines > 0) {
         incomplete = true;
         oversized = true;
+        limited = true;
       }
       const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
       const unseenLines = [];
@@ -335,6 +345,7 @@ export async function collectJsonl(
       entries.push(...ranged);
     } catch {
       incomplete = true;
+      unreadable = true;
       if (previous) {
         nextState.files[file.path] = previous;
         entries.push(...(previous.entries ?? []));
@@ -355,6 +366,10 @@ export async function collectJsonl(
     completeness: incomplete ? "partial" : "complete",
     nextState,
     warnings,
+    diagnostics: [
+      ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
+      ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+    ],
   };
 }
 

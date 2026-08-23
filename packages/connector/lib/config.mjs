@@ -59,6 +59,7 @@ const stateDirectories = new Set(["pending", "captures", "runtime", "logs", "bin
 const legacyRuntimeFiles = new Set([
   "browser.mjs",
   "config.mjs",
+  "diagnostics.mjs",
   "executables.mjs",
   "readers.mjs",
   "registry.mjs",
@@ -1318,6 +1319,7 @@ const installedRuntimeFiles = [
   "browser.mjs",
   "connection-lifecycle.mjs",
   "config.mjs",
+  "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
   "origin.mjs",

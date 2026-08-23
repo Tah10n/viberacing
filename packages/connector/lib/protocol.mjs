@@ -270,6 +270,16 @@ function parseBrowserSyncClaim(value) {
   return value;
 }
 
+function parseDiagnostics(value, context) {
+  if (
+    !requiredExactKeys(value, new Set(["acceptedEvents"])) ||
+    !safeInteger(value.acceptedEvents) ||
+    value.acceptedEvents !== context.expectedEvents
+  )
+    throw invalid();
+  return value;
+}
+
 export function mergeStoredSourceMapping(local, mapping) {
   if (!record(mapping) || mapping.clientSourceId !== local.clientSourceId)
     throw invalid("Connector configuration contains an invalid source mapping");
@@ -313,5 +323,6 @@ export async function parseProtocolResponse(response, context) {
   if (context.kind === "reconciliation") return parseReconciliation(value, context);
   if (context.kind === "usage") return parseUsage(value, context);
   if (context.kind === "browserSyncClaim") return parseBrowserSyncClaim(value);
+  if (context.kind === "diagnostics") return parseDiagnostics(value, context);
   throw invalid();
 }

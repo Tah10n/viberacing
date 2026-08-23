@@ -1,5 +1,5 @@
 import { digest } from "@/lib/crypto";
-import { query, transaction } from "@/lib/db";
+import { transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
@@ -42,25 +42,6 @@ async function post(request: Request): Promise<Response> {
     const accountId = body.accountId;
     const grant = body.grant;
     const tokenHash = digest(token);
-    const authenticated = await query<{ id: string }>(
-      `SELECT id::text
-         FROM installations
-        WHERE device_token_hash = $1 AND status = 'active' AND browser_sync_capable
-        LIMIT 1`,
-      [tokenHash],
-    );
-    const authenticatedInstallation = authenticated[0];
-    if (authenticatedInstallation === undefined) return problem(401, "unauthorized");
-    if (
-      !(await consumeRateLimit(
-        "browser_sync_claim_installation",
-        authenticatedInstallation.id,
-        10,
-        60,
-      ))
-    ) {
-      return problem(429, "rate_limited");
-    }
     const outcome = await transaction(async (client) => {
       await client.query(
         "DELETE FROM browser_sync_runs WHERE created_at < now() - interval '1 day'",
@@ -71,10 +52,9 @@ async function post(request: Request): Promise<Response> {
       }>(
         `SELECT id::text, user_id::text
            FROM installations
-          WHERE id = $1 AND device_token_hash = $2
-            AND status = 'active' AND browser_sync_capable
+          WHERE device_token_hash = $1 AND status = 'active' AND browser_sync_capable
           FOR UPDATE`,
-        [authenticatedInstallation.id, tokenHash],
+        [tokenHash],
       );
       const installation = installations.rows[0];
       if (installation === undefined) return { kind: "unauthorized" as const };
@@ -96,6 +76,30 @@ async function post(request: Request): Promise<Response> {
       );
       const first = sources.rows[0];
       if (first === undefined) return { kind: "missing" as const };
+      const recent = await client.query<{ id: string }>(
+        `SELECT id::text
+           FROM browser_sync_runs
+          WHERE installation_id = $1 AND user_id = $2
+            AND (
+              (status = 'running' AND updated_at > now() - interval '10 minutes')
+              OR (
+                created_at > now() - interval '60 seconds'
+                AND result_code IS DISTINCT FROM 'busy'
+              )
+            )
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [installation.id, installation.user_id],
+      );
+      if (recent.rows[0] !== undefined) {
+        await client.query(
+          `INSERT INTO browser_sync_runs
+             (id, installation_id, user_id, agent_account_id, agent_id, status, result_code)
+           VALUES ($1, $2, $3, $4, $5, 'failed', 'busy')`,
+          [requestId, installation.id, installation.user_id, accountId, first.agent_id],
+        );
+        return { kind: "rate_limited" as const };
+      }
       await client.query(
         `INSERT INTO browser_sync_runs
            (id, installation_id, user_id, agent_account_id, agent_id, status)
@@ -107,6 +111,11 @@ async function post(request: Request): Promise<Response> {
     if (outcome.kind === "unauthorized") return problem(401, "unauthorized");
     if (outcome.kind === "expired") return problem(409, "sync_grant_expired");
     if (outcome.kind === "missing") return problem(404, "account_source_not_found");
+    if (outcome.kind === "rate_limited") {
+      const response = problem(429, "sync_rate_limited");
+      response.headers.set("Retry-After", "60");
+      return response;
+    }
     return Response.json(
       { requestId, sourceIds: outcome.sourceIds },
       { headers: { "Cache-Control": "no-store" } },
