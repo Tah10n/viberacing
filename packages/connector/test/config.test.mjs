@@ -1756,6 +1756,39 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
 });
 
+test("a slow detached scheduler survives its parent handshake timeout", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-slow-scheduler-handshake-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "slow-scheduler-claim");
+  const trace = join(home, "slow-scheduler-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_SCHEDULER_HANDSHAKE_TIMEOUT_MS: "50",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const hook = runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const hookResult = await hook;
+  assert.equal(hookResult.code, 0);
+  assert.doesNotMatch(await readFile(trace, "utf8"), /acquired:/);
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("acquired:"));
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
+});
+
 test("uninstall waits for a scheduler child paused before lock acquisition", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-scheduler-launch-"));
   context.after(() => rm(home, { recursive: true, force: true }));
