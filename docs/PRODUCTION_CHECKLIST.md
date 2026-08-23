@@ -40,6 +40,10 @@
 - Confirm the connector matrix passes on Linux, macOS, and Windows using `VIBERACING_STATE_DIR`, and
   that the production job reaches migration, integration, audit, package, image, non-root, and
   readiness stages.
+- Open Browser Sync concurrently in multiple tabs and confirm only one installation claim starts in
+  a 60-second window, later claims receive `429` with `Retry-After` and settle as terminal `busy` on
+  their next poll, rejected rows do not extend the cooldown, and status polling remains under its
+  authenticated user quota while backing off after the connector claims the run.
 - Confirm a 20-event burst produces one deferred batch, automatic attempts respect the two-minute
   interval/maximum delay, a Claude event does not start Codex or open OpenCode SQLite, pending
   delivery does not rescan collectors, manual sync collects all sources immediately, and unchanged

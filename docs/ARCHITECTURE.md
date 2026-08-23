@@ -120,7 +120,12 @@ to an active installation receives an independent short-lived grant; `viberacing
 installed runtime, which authenticates with its existing device token and claims the active source
 IDs for one agent account on that installation. The connector applies the normal single-flight and
 snapshot rules to only those IDs, posts an allowlisted completion status, and exits. The server
-never pushes work and the connector never polls for browser requests.
+never pushes work and the connector never polls for browser requests. Claim creation is serialized
+on the installation row: an active run and a 60-second installation-wide cooldown both reject a
+second claim before connector work starts. Dashboard result polling backs off from two to five
+seconds after a claim and has a separate authenticated per-user quota. A rejected duplicate claim
+stores only a terminal `busy` result under its opaque request ID so the originating dashboard stops
+polling promptly; these rejected rows do not extend the installation cooldown.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with

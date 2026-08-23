@@ -434,6 +434,7 @@ test("fails closed when a tokenless historical prefix matches a later parent cal
   );
   assert.deepEqual(result.entries, []);
   assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(result.diagnostics, [{ code: "codex_lineage_ambiguous", phase: "collect" }]);
 });
 
 test("counts both calls when a tokenless historical prefix has distinct child usage", async (context) => {
@@ -1724,6 +1725,9 @@ test("fails closed when a copied Codex fork's parent rollout is unavailable", as
   );
   assert.deepEqual(result.entries, []);
   assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(result.diagnostics, [
+    { code: "codex_lineage_parent_missing", phase: "collect" },
+  ]);
 });
 
 test("counts identical token counters from independent Codex sessions", async (context) => {
@@ -2293,6 +2297,7 @@ test("uses descendant file state when a Codex session directory becomes unreadab
 
   assert.deepEqual(unreadable.entries, []);
   assert.deepEqual(unreadable.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(unreadable.diagnostics, [{ code: "local_store_unreadable", phase: "collect" }]);
   assert.deepEqual(unreadable.nextState.files, first.nextState.files);
   assert.deepEqual(unreadable.nextState.events, first.nextState.events);
 });
@@ -2334,6 +2339,7 @@ test("omits all Codex components when the bounded scan skips a session file", as
   );
   assert.deepEqual(result.entries, []);
   assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+  assert.deepEqual(result.diagnostics, [{ code: "local_store_scan_limit", phase: "collect" }]);
   assert.equal(Object.keys(result.nextState.events).length, 1);
 });
 

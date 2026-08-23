@@ -34,7 +34,9 @@ beforeEach(() => {
 
 describe("browser Sync grant", () => {
   it("creates a short-lived grant only for the browser-bound active installation", async () => {
-    mocks.query.mockResolvedValue([{ expires_at: new Date("2026-08-21T12:05:00Z") }]);
+    mocks.query.mockResolvedValue([
+      { expires_at: new Date("2026-08-21T12:05:00Z"), rate_limited: false },
+    ]);
     const response = await POST(request());
     expect(response.status).toBe(200);
     const body: unknown = await response.json();
@@ -54,5 +56,21 @@ describe("browser Sync grant", () => {
     const response = await POST(request());
     expect(response.status).toBe(404);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it("does not issue another grant during the server-enforced sync cooldown", async () => {
+    mocks.query.mockResolvedValue([{ expires_at: null, rate_limited: true }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    await expect(response.json()).resolves.toEqual({ error: "sync_rate_limited" });
+    expect(mocks.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /FOR UPDATE[\s\S]*browser_sync_runs[\s\S]*interval '60 seconds'[\s\S]*IS DISTINCT FROM 'busy'/,
+      ),
+      ["11111111-1111-4111-8111-111111111111", "42", expect.any(Buffer)],
+    );
   });
 });

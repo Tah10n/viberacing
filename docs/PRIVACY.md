@@ -13,7 +13,24 @@ Normalized local data roots, executable paths, hook config roots, and their hash
 into pairing config or requests. During sync it sends a server source ID, sequence, UTC range,
 complete/partial status, UTC dates, aggregate total tokens, and optional aggregate
 input/output/cache/reasoning counters. If collection fails, it may instead send the fixed
-`collector_failed` diagnostic code and source ID; exception messages are kept local.
+`collector_failed` source error and source ID through the legacy usage endpoint; exception messages
+are never sent.
+
+Operational diagnostics use a separate authenticated endpoint and never change whether a usage
+snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
+events. Each event contains a server source ID, an allowlisted machine code, an allowlisted phase
+(`collect`, `sync`, or `deliver`), and an `opened` or `resolved` state. The server verifies every
+source belongs to the authenticated installation, derives the agent ID itself, and logs no source,
+installation, user, provider, rollout, thread, or session identifier. Diagnostic logs also contain
+no message, stack trace, filename, path, command, environment value, prompt, response, transcript,
+or other agent-store content.
+
+The connector keeps only active code keys and pending state transitions in its owner-only local
+state. An unchanged failure produces no event; disappearance produces one `resolved` event. The
+bounded outbox is retried after a later successful contact. Diagnostic delivery is best-effort: a
+missing, unavailable, or rejecting diagnostic endpoint cannot fail usage sync and cannot generate a
+recursive diagnostic. The original `collector_failed` source error remains in usage sync for
+dashboard compatibility.
 
 For account-wide agents, the server may compare already stored complete daily totals from the last
 30 finished UTC days. Two exact nonzero days with no conflicting overlap can automatically map two

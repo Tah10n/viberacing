@@ -64,6 +64,7 @@ describe("browser Sync claim", () => {
       .mockResolvedValueOnce({ rows: [{ id: installationId, user_id: "42" }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [{ grant_hash: Buffer.alloc(32) }] })
       .mockResolvedValueOnce({ rows: [{ id: sourceId, agent_id: "codex" }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const response = await POST(request());
@@ -87,5 +88,34 @@ describe("browser Sync claim", () => {
 
     expect(response.status).toBe(429);
     expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("atomically rejects another recent run before starting connector work", async () => {
+    mocks.clientQuery
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: installationId, user_id: "42" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ grant_hash: Buffer.alloc(32) }] })
+      .mockResolvedValueOnce({ rows: [{ id: sourceId, agent_id: "codex" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "55555555-5555-4555-8555-555555555555" }] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    await expect(response.json()).resolves.toEqual({ error: "sync_rate_limited" });
+    expect(mocks.clientQuery).toHaveBeenCalledTimes(6);
+    expect(mocks.clientQuery).toHaveBeenNthCalledWith(
+      5,
+      expect.stringMatching(
+        /browser_sync_runs[\s\S]*interval '60 seconds'[\s\S]*IS DISTINCT FROM 'busy'/,
+      ),
+      [installationId, "42"],
+    );
+    expect(mocks.clientQuery).toHaveBeenNthCalledWith(
+      6,
+      expect.stringMatching(/INSERT INTO browser_sync_runs[\s\S]*'failed', 'busy'/),
+      [requestId, installationId, "42", accountId, "codex"],
+    );
   });
 });

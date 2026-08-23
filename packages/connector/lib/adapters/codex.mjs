@@ -11,6 +11,7 @@ import {
   resolveAgentExecutable,
   spawnResolvedExecutable,
 } from "../executables.mjs";
+import { diagnosticError } from "../diagnostics.mjs";
 import {
   componentEntry,
   integer,
@@ -588,6 +589,11 @@ function mergeDateBounds(previous, parsed, appended) {
 
 function rebuildCodexEventState(files, range) {
   const unresolved = new Set();
+  const unresolvedReasons = new Map();
+  const markUnresolved = (fileState, code = "codex_lineage_ambiguous") => {
+    unresolved.add(fileState);
+    unresolvedReasons.set(fileState, code);
+  };
   const rolloutGroups = new Map();
   for (const fileState of Object.values(files)) {
     const { threadKey, rolloutKey } = fileState?.sessionContext ?? {};
@@ -644,7 +650,7 @@ function rebuildCodexEventState(files, range) {
     );
     const representative = group.states[0];
     if (!group.states.every((fileState) => isCompatiblePrefix(fileState, representative))) {
-      for (const fileState of group.states) unresolved.add(fileState);
+      for (const fileState of group.states) markUnresolved(fileState);
       continue;
     }
     group.representative = representative;
@@ -664,20 +670,25 @@ function rebuildCodexEventState(files, range) {
       (candidate) => candidate.sessionContext.rolloutKey !== childState.sessionContext.rolloutKey,
     );
     const childStartedAt = childState.sessionContext.startedAt;
-    if (!Number.isFinite(childStartedAt)) return null;
+    if (!Number.isFinite(childStartedAt)) return { parent: null, reason: "ambiguous" };
     const eligible = candidates.filter(
       (candidate) =>
         Number.isFinite(candidate.sessionContext.startedAt) &&
         candidate.sessionContext.startedAt <= childStartedAt,
     );
-    if (eligible.length <= 1) return eligible[0] ?? null;
+    if (eligible.length <= 1)
+      return eligible.length === 1
+        ? { parent: eligible[0], reason: null }
+        : { parent: null, reason: "missing" };
     const latestStartedAt = Math.max(
       ...eligible.map((candidate) => candidate.sessionContext.startedAt),
     );
     const latest = eligible.filter(
       (candidate) => candidate.sessionContext.startedAt === latestStartedAt,
     );
-    return latest.length === 1 ? latest[0] : null;
+    return latest.length === 1
+      ? { parent: latest[0], reason: null }
+      : { parent: null, reason: "ambiguous" };
   };
   const memo = new Map();
   const resolveEvents = (fileState, ancestry = new Set()) => {
@@ -696,21 +707,30 @@ function rebuildCodexEventState(files, range) {
     let parentEvents = null;
     let inheritedCount = 0;
     let parentOffset = 0;
-    const parent = historyBaseRolloutKey
-      ? byRollout.get(historyBaseRolloutKey)
+    const parentResolution = historyBaseRolloutKey
+      ? {
+          parent: byRollout.get(historyBaseRolloutKey) ?? null,
+          reason: byRollout.has(historyBaseRolloutKey) ? null : "missing",
+        }
       : forkParentThreadKey
         ? parentForThread(forkParentThreadKey, fileState)
-        : null;
+        : { parent: null, reason: null };
+    const parent = parentResolution.parent;
     if (historyBaseRolloutKey || forkParentThreadKey) {
       const parentRolloutKey = parent?.sessionContext?.rolloutKey;
       if (parent === null || parent === undefined || ancestry.has(parentRolloutKey)) {
-        unresolved.add(fileState);
+        markUnresolved(
+          fileState,
+          parentResolution.reason === "missing"
+            ? "codex_lineage_parent_missing"
+            : "codex_lineage_ambiguous",
+        );
         memo.set(fileState, []);
         return [];
       }
       parentEvents = resolveEvents(parent, new Set([...ancestry, rolloutKey].filter(Boolean)));
       if (unresolved.has(parent)) {
-        unresolved.add(fileState);
+        markUnresolved(fileState, unresolvedReasons.get(parent) ?? "codex_lineage_ambiguous");
         memo.set(fileState, []);
         return [];
       }
@@ -737,7 +757,7 @@ function rebuildCodexEventState(files, range) {
               event.ordinal <= historyBaseEndOrdinalExclusive,
           )
         ) {
-          unresolved.add(fileState);
+          markUnresolved(fileState);
           memo.set(fileState, []);
           return [];
         }
@@ -754,7 +774,7 @@ function rebuildCodexEventState(files, range) {
           ) ||
           !matchesParentSuffix(inheritedCount)
         ) {
-          unresolved.add(fileState);
+          markUnresolved(fileState);
           memo.set(fileState, []);
           return [];
         }
@@ -786,7 +806,7 @@ function rebuildCodexEventState(files, range) {
           parentEvents.length,
         );
         if (childBoundaryCounts === null || parentBoundaryCounts === null) {
-          unresolved.add(fileState);
+          markUnresolved(fileState);
           memo.set(fileState, []);
           return [];
         }
@@ -824,7 +844,7 @@ function rebuildCodexEventState(files, range) {
             childBoundaryCounts.slice(count + 1).every((boundaries) => boundaries === 0),
         );
         if (pending || candidates.length !== 1) {
-          unresolved.add(fileState);
+          markUnresolved(fileState);
           memo.set(fileState, []);
           return [];
         }
@@ -864,7 +884,7 @@ function rebuildCodexEventState(files, range) {
     }
     for (const representation of group.states) representation.eventIds = [...eventIds];
   }
-  return { events, unresolved };
+  return { events, unresolved, unresolvedReasons };
 }
 
 async function discoverCodexRollouts(dataPath, discover, maximumFiles, maximumFileBytes) {
@@ -926,8 +946,13 @@ export async function collectCodexSessionUsage(
   };
   const retainedFile = (fileState) => ({ ...fileState });
   const blockedIntervals = [];
+  const diagnosticCodes = new Set();
   const block = (interval) => {
     if (interval) blockedIntervals.push(interval);
+  };
+  const diagnoseIntervals = (intervals, code) => {
+    if (intervals.length > 0) diagnosticCodes.add(code);
+    for (const interval of intervals) block(interval);
   };
   let discoveryRelevant = false;
   for (const issue of discovered.issues) {
@@ -943,12 +968,20 @@ export async function collectCodexSessionUsage(
             )
           : fileRanges(currentState.files?.[issue.path], issue, range);
     if (intervals.length) {
-      for (const interval of intervals) block(interval);
+      const code =
+        issue.reason === "unreadable"
+          ? issue.kind === "file"
+            ? "codex_rollout_read_failed"
+            : "local_store_unreadable"
+          : ["limit", "oversized"].includes(issue.reason)
+            ? "local_store_scan_limit"
+            : "codex_components_incomplete";
+      diagnoseIntervals(intervals, code);
       discoveryRelevant = true;
     }
   }
   if (discovered.incomplete && discovered.issues.length === 0) {
-    block([range.rangeStart, range.rangeEnd]);
+    diagnoseIntervals([[range.rangeStart, range.rangeEnd]], "codex_components_incomplete");
     discoveryRelevant = true;
   }
   let bytes = 0;
@@ -962,7 +995,13 @@ export async function collectCodexSessionUsage(
     ) {
       const retained = retainedFile(previous);
       nextState.files[file.path] = retained;
-      for (const interval of incompleteIntervals(retained, file, range)) block(interval);
+      const intervals = incompleteIntervals(retained, file, range);
+      diagnoseIntervals(
+        intervals,
+        retained.sessionContext?.metadataInvalid === true
+          ? "codex_rollout_metadata_invalid"
+          : "codex_components_incomplete",
+      );
       continue;
     }
     let appended =
@@ -985,7 +1024,7 @@ export async function collectCodexSessionUsage(
     const requiredBytes = file.size - offset;
     const estimatedBytes = file.path.endsWith(".jsonl.zst") ? 0 : requiredBytes;
     if (bytes + estimatedBytes > maximumBytes) {
-      for (const interval of fileRanges(previous, file, range)) block(interval);
+      diagnoseIntervals(fileRanges(previous, file, range), "local_store_scan_limit");
       if (previous) nextState.files[file.path] = retainedFile(previous);
       continue;
     }
@@ -997,7 +1036,11 @@ export async function collectCodexSessionUsage(
         Math.min(maximumFileBytes, maximumBytes - bytes),
       );
       const consumedBytes = chunk.readBytes ?? requiredBytes;
-      if (bytes + consumedBytes > maximumBytes) throw new Error("Codex rollout budget exceeded");
+      if (bytes + consumedBytes > maximumBytes) {
+        const error = new Error("Codex rollout budget exceeded");
+        error.code = "CODEX_ROLLOUT_LIMIT";
+        throw error;
+      }
       bytes += consumedBytes;
       const parsed = parseCodexSessionLines(
         chunk.lines,
@@ -1031,10 +1074,20 @@ export async function collectCodexSessionUsage(
           ? { unknownIncomplete: true }
           : {}),
       };
-      for (const interval of incompleteIntervals(nextState.files[file.path], file, range))
-        block(interval);
-    } catch {
-      for (const interval of fileRanges(previous, file, range)) block(interval);
+      const intervals = incompleteIntervals(nextState.files[file.path], file, range);
+      diagnoseIntervals(
+        intervals,
+        parsed.sessionContext?.metadataInvalid === true
+          ? "codex_rollout_metadata_invalid"
+          : "codex_components_incomplete",
+      );
+    } catch (error) {
+      diagnoseIntervals(
+        fileRanges(previous, file, range),
+        error?.code === "CODEX_ROLLOUT_LIMIT"
+          ? "local_store_scan_limit"
+          : "codex_rollout_read_failed",
+      );
       if (previous) nextState.files[file.path] = retainedFile(previous);
     }
   }
@@ -1049,10 +1102,15 @@ export async function collectCodexSessionUsage(
   const rebuilt = rebuildCodexEventState(nextState.files, range);
   nextState.events = rebuilt.events;
   for (const fileState of rebuilt.unresolved)
-    for (const interval of fileRanges(fileState, { modifiedAt: fileState.modifiedAt }, range))
-      block(interval);
+    diagnoseIntervals(
+      fileRanges(fileState, { modifiedAt: fileState.modifiedAt }, range),
+      rebuilt.unresolvedReasons.get(fileState) ?? "codex_lineage_ambiguous",
+    );
   const warnings = [];
-  if (blockedIntervals.length) warnings.push("codex_session_components_incomplete");
+  if (blockedIntervals.length) {
+    warnings.push("codex_session_components_incomplete");
+    if (diagnosticCodes.size === 0) diagnosticCodes.add("codex_components_incomplete");
+  }
   return {
     entries: mergeEntries(
       Object.values(nextState.events)
@@ -1064,6 +1122,7 @@ export async function collectCodexSessionUsage(
     ),
     nextState,
     warnings,
+    diagnostics: [...diagnosticCodes].sort().map((code) => ({ code, phase: "collect" })),
   };
 }
 
@@ -1118,8 +1177,9 @@ export function codexProfileEnvironment(source, environment = process.env) {
 async function collect(source, range, state = {}) {
   const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
   if (!executable)
-    throw new Error(
+    throw diagnosticError(
       `Codex executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride("codex")} to its absolute path`,
+      "agent_executable_missing",
     );
   const child = spawnResolvedExecutable(executable, ["app-server"], {
     stdio: ["pipe", "pipe", "ignore"],
@@ -1133,16 +1193,37 @@ async function collect(source, range, state = {}) {
   const next = async () => {
     let timeout;
     const timedOut = new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(new Error("Codex App Server timed out")), 8_000);
+      timeout = setTimeout(
+        () => reject(diagnosticError("Codex App Server timed out", "agent_api_timeout")),
+        8_000,
+      );
     });
     let result;
     try {
       result = await Promise.race([lines.next(), spawnFailure, timedOut]);
+    } catch (error) {
+      if (error?.diagnosticCode) throw error;
+      if (error?.code === "ENOENT")
+        throw diagnosticError("Codex executable became unavailable", "agent_executable_missing", {
+          cause: error,
+        });
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
-    if (result.done) throw new Error("Codex App Server closed unexpectedly");
-    return JSON.parse(result.value);
+    if (result.done)
+      throw diagnosticError("Codex App Server closed unexpectedly", "agent_api_invalid_response");
+    try {
+      return JSON.parse(result.value);
+    } catch (error) {
+      throw diagnosticError(
+        "Codex App Server returned malformed JSON",
+        "agent_api_invalid_response",
+        {
+          cause: error,
+        },
+      );
+    }
   };
   const write = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
   try {
@@ -1159,13 +1240,22 @@ async function collect(source, range, state = {}) {
     });
     const initialized = await next();
     if (initialized?.id !== 0 || !initialized.result)
-      throw new Error("Codex App Server initialization failed");
+      throw diagnosticError("Codex App Server initialization failed", "agent_api_invalid_response");
     write({ method: "initialized", params: {} });
     write({ id: 1, method: "account/usage/read", params: null });
     for (;;) {
       const response = await next();
       if (response?.id === 1) {
-        const authoritative = parseCodexUsage(response);
+        let authoritative;
+        try {
+          authoritative = parseCodexUsage(response);
+        } catch (error) {
+          throw diagnosticError(
+            "Codex App Server returned invalid usage",
+            "agent_api_invalid_response",
+            { cause: error },
+          );
+        }
         const components = await collectCodexSessionUsage(
           source,
           range,
@@ -1174,12 +1264,14 @@ async function collect(source, range, state = {}) {
           entries: [],
           nextState: state.componentUsage ?? {},
           warnings: ["codex_session_components_incomplete"],
+          diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
         }));
         return {
           entries: mergeCodexUsageComponents(authoritative, components.entries),
           completeness: "complete",
           nextState: { componentUsage: components.nextState },
           warnings: components.warnings,
+          diagnostics: components.diagnostics,
         };
       }
     }

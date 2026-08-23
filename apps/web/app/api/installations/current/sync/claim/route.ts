@@ -96,6 +96,30 @@ async function post(request: Request): Promise<Response> {
       );
       const first = sources.rows[0];
       if (first === undefined) return { kind: "missing" as const };
+      const recent = await client.query<{ id: string }>(
+        `SELECT id::text
+           FROM browser_sync_runs
+          WHERE installation_id = $1 AND user_id = $2
+            AND (
+              (status = 'running' AND updated_at > now() - interval '10 minutes')
+              OR (
+                created_at > now() - interval '60 seconds'
+                AND result_code IS DISTINCT FROM 'busy'
+              )
+            )
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [installation.id, installation.user_id],
+      );
+      if (recent.rows[0] !== undefined) {
+        await client.query(
+          `INSERT INTO browser_sync_runs
+             (id, installation_id, user_id, agent_account_id, agent_id, status, result_code)
+           VALUES ($1, $2, $3, $4, $5, 'failed', 'busy')`,
+          [requestId, installation.id, installation.user_id, accountId, first.agent_id],
+        );
+        return { kind: "rate_limited" as const };
+      }
       await client.query(
         `INSERT INTO browser_sync_runs
            (id, installation_id, user_id, agent_account_id, agent_id, status)
@@ -107,6 +131,11 @@ async function post(request: Request): Promise<Response> {
     if (outcome.kind === "unauthorized") return problem(401, "unauthorized");
     if (outcome.kind === "expired") return problem(409, "sync_grant_expired");
     if (outcome.kind === "missing") return problem(404, "account_source_not_found");
+    if (outcome.kind === "rate_limited") {
+      const response = problem(429, "sync_rate_limited");
+      response.headers.set("Retry-After", "60");
+      return response;
+    }
     return Response.json(
       { requestId, sourceIds: outcome.sourceIds },
       { headers: { "Cache-Control": "no-store" } },

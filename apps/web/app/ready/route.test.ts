@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock("@/lib/config", () => ({
-  expectedSchemaVersion: "003_browser_sync.sql",
+  expectedSchemaVersion: "004_browser_sync_rate_guard.sql",
   validateRuntimeConfig: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({ query }));
@@ -19,7 +19,7 @@ describe("readiness migration ledger", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       status: "ready",
-      schemaVersion: "003_browser_sync.sql",
+      schemaVersion: "004_browser_sync_rate_guard.sql",
     });
   });
 

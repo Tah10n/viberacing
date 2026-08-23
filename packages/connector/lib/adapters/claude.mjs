@@ -60,10 +60,13 @@ export async function collectClaude(
     messages: Object.assign(Object.create(null), state.messages ?? {}),
   };
   let partial = discovered.incomplete;
+  let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
+  let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   let bytes = 0;
   for (const file of discovered.files) {
     if (bytes + file.size > maximumBytes) {
       partial = true;
+      limited = true;
       continue;
     }
     bytes += file.size;
@@ -92,7 +95,10 @@ export async function collectClaude(
     const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
       const chunk = await readChunk(file.path, offset, file.size);
-      if (chunk.oversizedLines > 0) partial = true;
+      if (chunk.oversizedLines > 0) {
+        partial = true;
+        limited = true;
+      }
       const messages = Object.create(null);
       for (const line of chunk.lines) {
         const value = contribution(line);
@@ -114,6 +120,7 @@ export async function collectClaude(
       nextState.files[file.path] = fileState;
     } catch {
       partial = true;
+      unreadable = true;
     }
   }
   const activeFiles = new Set(discovered.files.map((file) => file.path));
@@ -131,6 +138,10 @@ export async function collectClaude(
     completeness: partial ? "partial" : "complete",
     nextState,
     warnings: partial ? ["unreadable_or_unbounded_session_data"] : [],
+    diagnostics: [
+      ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
+      ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+    ],
   };
 }
 

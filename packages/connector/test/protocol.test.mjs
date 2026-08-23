@@ -304,3 +304,23 @@ test("stored network mappings cannot override local collection authority", () =>
   assert.equal(restored.executablePath, local.executablePath);
   assert.equal(restored.agentId, local.agentId);
 });
+
+test("diagnostic delivery accepts only the exact acknowledged event count", async () => {
+  assert.deepEqual(
+    await parseProtocolResponse(json({ acceptedEvents: 2 }), {
+      kind: "diagnostics",
+      expectedEvents: 2,
+    }),
+    { acceptedEvents: 2 },
+  );
+  for (const value of [
+    { acceptedEvents: 1 },
+    { acceptedEvents: 2, sourceId },
+    { acceptedEvents: "2" },
+  ]) {
+    await assert.rejects(
+      parseProtocolResponse(json(value), { kind: "diagnostics", expectedEvents: 2 }),
+      /invalid protocol response/,
+    );
+  }
+});

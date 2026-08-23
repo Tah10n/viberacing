@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -35,7 +36,23 @@ function wait(milliseconds: number): Promise<void> {
 
 const browserSyncStartTimeoutMs = 90_000;
 export const browserSyncRunningTimeoutMs = 10 * 60_000;
+export const browserSyncWaitingPollIntervalMs = 2_000;
+export const browserSyncRunningPollIntervalMs = 5_000;
 const maximumConsecutivePollFailures = 3;
+const defaultGrantRetryAfterMs = 60_000;
+const maximumGrantRetryAfterMs = 5 * 60_000;
+
+export function grantRetryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  let milliseconds = defaultGrantRetryAfterMs;
+  if (value !== null && /^\d+$/.test(value.trim())) {
+    milliseconds = Number(value.trim()) * 1_000;
+  } else if (value !== null) {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp)) milliseconds = timestamp - now;
+  }
+  if (!Number.isFinite(milliseconds)) return defaultGrantRetryAfterMs;
+  return Math.min(maximumGrantRetryAfterMs, Math.max(1_000, milliseconds));
+}
 
 type BrowserSyncPollOutcome =
   | { kind: "terminal"; status: "succeeded" | "partial" | "failed"; resultCode: string | null }
@@ -58,7 +75,11 @@ export async function pollBrowserSyncStatus(
   let runningDeadline: number | null = null;
   let consecutiveFailures = 0;
   for (;;) {
-    await dependencies.pause(1_000);
+    await dependencies.pause(
+      runningDeadline === null
+        ? browserSyncWaitingPollIntervalMs
+        : browserSyncRunningPollIntervalMs,
+    );
     try {
       const response = await dependencies.fetchStatus();
       if (response.status === 404) {
@@ -107,6 +128,8 @@ export function BrowserSyncProvider({
 }) {
   const [grant, setGrant] = useState<Grant | null>(null);
   const [state, setState] = useState<SyncState | null>(null);
+  const [grantRetryAt, setGrantRetryAt] = useState<number | null>(null);
+  const grantRetryTimer = useRef<number | null>(null);
 
   const prepare = useCallback(async () => {
     if (!enabled) return;
@@ -117,16 +140,44 @@ export function BrowserSyncProvider({
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: "",
       });
-      if (response.ok) setGrant((await response.json()) as Grant);
-      else setGrant(null);
+      if (response.ok) {
+        setGrant((await response.json()) as Grant);
+        setGrantRetryAt(null);
+      } else {
+        setGrant(null);
+        setGrantRetryAt(
+          response.status === 429
+            ? Date.now() + grantRetryAfterMilliseconds(response.headers.get("retry-after"))
+            : null,
+        );
+      }
     } catch {
       setGrant(null);
+      setGrantRetryAt(null);
     }
   }, [enabled]);
 
   useEffect(() => {
     void prepare();
   }, [prepare]);
+
+  useEffect(() => {
+    if (grantRetryTimer.current !== null) window.clearTimeout(grantRetryTimer.current);
+    grantRetryTimer.current = null;
+    if (grantRetryAt === null) return;
+    grantRetryTimer.current = window.setTimeout(
+      () => {
+        grantRetryTimer.current = null;
+        setGrantRetryAt(null);
+        void prepare();
+      },
+      Math.max(0, grantRetryAt - Date.now()),
+    );
+    return () => {
+      if (grantRetryTimer.current !== null) window.clearTimeout(grantRetryTimer.current);
+      grantRetryTimer.current = null;
+    };
+  }, [grantRetryAt, prepare]);
 
   const poll = useCallback(
     async (accountId: string, requestId: string) => {

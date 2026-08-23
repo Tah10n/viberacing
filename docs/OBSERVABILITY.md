@@ -12,6 +12,28 @@ Each completed API request contains:
 - safe error type plus PostgreSQL/Next.js error code or digest when available.
 - aggregate pairing/sync diagnostics such as received, accepted, stale, and returned item counts.
 
+The authenticated connector diagnostics endpoint emits one `connector_diagnostic` record per
+accepted state transition. The fields are intentionally fixed: `agentId`, `diagnosticCode`,
+`diagnosticState`, `diagnosticPhase`, and `connectorVersion`. `opened` transitions are `warn` and
+`resolved` transitions are `info`. The enclosing completed-request record contains only aggregate
+`diagnosticEventsReceived`, `diagnosticsOpened`, and `diagnosticsResolved` counts.
+
+Example:
+
+```json
+{
+  "timestamp": "2026-08-23T12:00:00.000Z",
+  "level": "warn",
+  "service": "viberacing-web",
+  "event": "connector_diagnostic",
+  "agentId": "codex",
+  "diagnosticCode": "codex_lineage_ambiguous",
+  "diagnosticState": "opened",
+  "diagnosticPhase": "collect",
+  "connectorVersion": "0.3.10"
+}
+```
+
 Example:
 
 ```json
@@ -38,6 +60,13 @@ records cover 5xx responses, uncaught route/render failures, PostgreSQL pool fai
 failures. Successful health/readiness probes are `debug` to avoid burying application events in
 Railway health traffic; failed readiness probes remain `error`.
 
+Browser Sync has separate `browser_sync_grant_user`, `browser_sync_claim_installation`, and
+`browser_sync_status_user` quotas. A second installation claim inside the 60-second cooldown, or
+while a recent run remains active, returns `429 sync_rate_limited` with `Retry-After: 60`; request
+logs expose only the bounded `rate_limited` outcome. The corresponding content-free terminal
+`failed/busy` run lets dashboard polling settle without emitting repeated not-found requests and is
+excluded from the cooldown calculation.
+
 Runtime configuration is validated before `server_started` is emitted. Invalid configuration logs
 `server_configuration_invalid` with a bounded `CONFIG_*` error code, flushes the record
 synchronously, and terminates startup. Next.js and dependency console output is normalized into
@@ -53,9 +82,10 @@ Set `VIBERACING_LOG_LEVEL` to one of:
 - `warn` or `error`: reduced production volume;
 - `silent`: disable application logs; do not use this for production.
 
-Filter Railway logs by `level`, `event`, `route`, `status`, `outcome`, `errorCode`, or `requestId`.
-Use a returned `X-Request-Id` to follow one failed request. A request start without a matching
-completion at `debug` level points to a terminated or stalled request.
+Filter Railway logs by `level`, `event`, `route`, `status`, `outcome`, `errorCode`, `requestId`,
+`agentId`, `diagnosticCode`, `diagnosticState`, or `diagnosticPhase`. Use a returned `X-Request-Id`
+to follow one failed request. A request start without a matching completion at `debug` level points
+to a terminated or stalled request.
 
 ## Privacy boundary
 
@@ -63,8 +93,9 @@ Logs deliberately never include request or response bodies, URL query strings, I
 user-agent strings, cookies, authorization headers, session/pairing/device secrets, user handles,
 source identifiers, token totals, prompts, responses, code, repository names, local paths, provider
 credentials, model names, or costs. Error messages and stack traces are also omitted because they
-can contain those values. Operational diagnosis uses bounded outcome codes, error classes/codes,
-route templates, timing, and request correlation instead.
+can contain those values. Connector diagnostics likewise omit source, installation, user, GitHub,
+provider, rollout, thread, and session identifiers. Operational diagnosis uses bounded outcome and
+diagnostic codes, error classes/codes, route templates, timing, and request correlation instead.
 
 The pre-deploy migration command uses the same JSON format under the `viberacing-migrate` service
 name and reports configuration/discovery failures, connection, start, applied migration, completion,

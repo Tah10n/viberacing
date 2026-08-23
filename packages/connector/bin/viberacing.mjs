@@ -7,6 +7,14 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { connectorVersion } from "../lib/version.mjs";
+import {
+  acknowledgeDiagnosticEvents,
+  collectorDiagnostic,
+  forgetSourceDiagnostics,
+  normalizeAdapterDiagnostics,
+  pendingDiagnosticEvents,
+  reconcileDiagnosticPhase,
+} from "../lib/diagnostics.mjs";
 import { parseProtocolResponse } from "../lib/protocol.mjs";
 import { normalizeOrigin } from "../lib/origin.mjs";
 import {
@@ -547,6 +555,58 @@ async function deliver(config, payload) {
   );
 }
 
+async function deliverDiagnosticOutbox(config, allowedSourceIds) {
+  let attempted = false;
+  try {
+    const configuredSourceIds = config.sources
+      .map((source) => source.sourceId)
+      .filter((sourceId) => typeof sourceId === "string");
+    const allowed = allowedSourceIds ? new Set(allowedSourceIds) : undefined;
+    const eligibleSourceIds = allowed
+      ? configuredSourceIds.filter((sourceId) => allowed.has(sourceId))
+      : configuredSourceIds;
+    const state = await readState();
+    const events = pendingDiagnosticEvents(state, configuredSourceIds, 32, eligibleSourceIds);
+    await writeState(state);
+    if (events.length === 0 || (await lifecycleMutationActive())) {
+      return { attempted, delivered: 0 };
+    }
+    attempted = true;
+    await request(
+      config.origin,
+      "/api/installations/current/diagnostics",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.deviceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ schemaVersion: 1, connectorVersion, events }),
+      },
+      1,
+      { kind: "diagnostics", expectedEvents: events.length },
+    );
+    const current = await readState();
+    acknowledgeDiagnosticEvents(current, events);
+    await writeState(current);
+    return { attempted, delivered: events.length };
+  } catch {
+    // Diagnostics are best-effort and must never affect usage delivery or recurse.
+    return { attempted, delivered: 0 };
+  }
+}
+
+async function finishSuccessfulSourceDiagnostics(config, sourceIds, allowedSourceIds) {
+  try {
+    if (sourceIds.length > 0) {
+      const state = await readState();
+      for (const sourceId of sourceIds) reconcileDiagnosticPhase(state, sourceId, "sync", []);
+      await writeState(state);
+    }
+  } catch {}
+  return deliverDiagnosticOutbox(config, allowedSourceIds);
+}
+
 function pendingSourceId(payload) {
   const ids = [
     ...(payload.snapshots ?? []).map((snapshot) => snapshot.sourceId),
@@ -568,6 +628,7 @@ async function forgetSourceState(sourceIds) {
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
     delete state.collectionWarnings[sourceId];
+    forgetSourceDiagnostics(state, sourceId);
     await removePendingForSource(sourceId);
     await clearQuarantine(sourceId);
   }
@@ -781,8 +842,9 @@ async function deliverPendingGroup(config, items, retired) {
           const state = await readState();
           if (state.quarantine?.[item.sourceId]) {
             delete state.quarantine[item.sourceId];
-            await writeState(state);
           }
+          reconcileDiagnosticPhase(state, item.sourceId, "deliver", []);
+          await writeState(state);
         }
       }
     }
@@ -810,6 +872,9 @@ async function deliverPendingGroup(config, items, retired) {
       const state = await readState();
       state.quarantine ??= {};
       state.quarantine[item.sourceId] = error.code ?? "invalid_payload";
+      reconcileDiagnosticPhase(state, item.sourceId, "deliver", [
+        { code: "pending_payload_rejected", phase: "deliver" },
+      ]);
       await writeState(state);
       return { accepted: 0, staleSources: [], quarantinedSources: [item.sourceId] };
     }
@@ -975,6 +1040,7 @@ async function sync(providedConfig, options = {}) {
       const failures = [];
       const collectionWarnings = [];
       const successfullyChecked = [];
+      const successfullyCheckedSourceIds = [];
       for (let index = 0; index < collected.length; index += 1) {
         const outcome = collected[index];
         const source = syncSources[index];
@@ -985,10 +1051,20 @@ async function sync(providedConfig, options = {}) {
             sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
             state.fingerprints[source.sourceId] = nextFingerprint;
           }
+          reconcileDiagnosticPhase(state, source.sourceId, "collect", [
+            collectorDiagnostic(outcome.reason),
+          ]);
           continue;
         }
         successfullyChecked.push(source.clientSourceId);
+        successfullyCheckedSourceIds.push(source.sourceId);
         state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
+        reconcileDiagnosticPhase(
+          state,
+          source.sourceId,
+          "collect",
+          normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
+        );
         const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
         if (resultWarnings.length) state.collectionWarnings[source.sourceId] = resultWarnings;
         else delete state.collectionWarnings[source.sourceId];
@@ -1029,7 +1105,16 @@ async function sync(providedConfig, options = {}) {
         await clearSuccessfulDirty();
         if (failures.length === 0 && syncSources.length > 0)
           await compactSuccessfulCaptures({ ...config, sources: syncSources });
-        output("No usage changes; no request was sent.");
+        const diagnosticDelivery = await finishSuccessfulSourceDiagnostics(
+          config,
+          successfullyCheckedSourceIds,
+          requestedSourceIds,
+        );
+        output(
+          diagnosticDelivery.attempted
+            ? "No usage changes; a diagnostics request was attempted."
+            : "No usage changes; no request was sent.",
+        );
         for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
         if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
         return { accepted, failures, unchanged: true };
@@ -1041,6 +1126,11 @@ async function sync(providedConfig, options = {}) {
       const delivered = await drainPending(config, true, requestedSourceIds);
       accepted += delivered.accepted;
       await clearSuccessfulDirty();
+      await finishSuccessfulSourceDiagnostics(
+        config,
+        successfullyCheckedSourceIds,
+        requestedSourceIds,
+      );
       if (snapshots.length === 0)
         throw new Error(failures.join("; ") || "No configured collectors succeeded");
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
@@ -1223,6 +1313,26 @@ async function sendSchedulerHandshake(status) {
   process.disconnect?.();
 }
 
+async function recordAutomaticSyncFailure(clientSourceIds) {
+  const selected = new Set(clientSourceIds);
+  if (selected.size === 0) return;
+  const recorded = await withSyncLock(
+    async () => {
+      const config = await readConfig();
+      const state = await readState();
+      for (const source of config.sources) {
+        if (!selected.has(source.clientSourceId) || typeof source.sourceId !== "string") continue;
+        reconcileDiagnosticPhase(state, source.sourceId, "sync", [
+          { code: "automatic_sync_failed", phase: "sync" },
+        ]);
+      }
+      await writeState(state);
+    },
+    { waitMs: automaticSyncLockWaitMs },
+  );
+  if (recorded?.skipped) return;
+}
+
 async function hook() {
   try {
     if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_HOOK_READY)
@@ -1300,7 +1410,13 @@ async function automaticSync() {
       }
       attemptedClaims = dirtyClaims(current);
       attempted = true;
-      const result = await sync(undefined, { automatic: true });
+      let result;
+      try {
+        result = await sync(undefined, { automatic: true });
+      } catch (error) {
+        await recordAutomaticSyncFailure(Object.keys(attemptedClaims)).catch(() => {});
+        throw error;
+      }
       if (result?.skipped) {
         attempted = false;
         if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_AUTOMATIC_SYNC_TRACE)
@@ -1838,7 +1954,7 @@ try {
     await mkdir(directory, { recursive: true, mode: 0o700 }).catch(() => {});
     await writeFile(
       join(directory, "last-error.log"),
-      `${new Date().toISOString()} ${error instanceof Error ? error.message : "unexpected error"}\n`,
+      `${new Date().toISOString()} ${command === "auto-sync" ? "automatic_sync_failed" : "connector_command_failed"}\n`,
       { mode: 0o600 },
     ).catch(() => {});
   }
