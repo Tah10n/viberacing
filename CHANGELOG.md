@@ -10,6 +10,13 @@ experience or protocol.
 
 ### Changed
 
+- Connected-computer cards now identify outdated connector versions and provide an exact,
+  same-origin `doctor --repair` command. Compact reconciliation reports the current connector
+  version without sending usage, and the update notice clears after server confirmation.
+- `doctor --repair` now refreshes the installed runtime, owned lifecycle hooks, and the browser
+  protocol handler under the existing lifecycle lock. On macOS the handler is a signed,
+  transactional AppleScript applet that receives the LaunchServices URL event instead of relying on
+  a missing shell positional argument.
 - Browser-triggered sync now has an atomic installation-wide cooldown, rejects overlapping recent
   runs before connector work starts, and uses bounded two-to-five-second status polling with a
   per-run quota plus a higher aggregate user guard. Rejected duplicate claims settle as terminal

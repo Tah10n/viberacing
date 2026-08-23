@@ -62,6 +62,10 @@
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
+- Pair an installation with an older connector version and verify its computer card shows the exact
+  same-origin versioned `doctor --repair` command on desktop and mobile. Confirm the command repairs
+  runtime/hooks without a usage request, reconciliation clears the notice, and the macOS CI gate
+  receives a synthetic custom-scheme URL through the real LaunchServices applet.
 - Confirm public copy reports seven counted agents.
 
 ## GitHub and npm manual controls

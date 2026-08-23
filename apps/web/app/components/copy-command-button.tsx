@@ -4,9 +4,15 @@ import { useState } from "react";
 
 interface CopyCommandButtonProps {
   readonly command: string;
+  readonly copiedLabel?: string;
+  readonly label?: string;
 }
 
-export function CopyCommandButton({ command }: CopyCommandButtonProps) {
+export function CopyCommandButton({
+  command,
+  copiedLabel = "Copied",
+  label = "Copy connect command",
+}: CopyCommandButtonProps) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
 
   async function copyCommand() {
@@ -27,7 +33,7 @@ export function CopyCommandButton({ command }: CopyCommandButtonProps) {
         }}
         type="button"
       >
-        {status === "copied" ? "Copied" : "Copy connect command"}
+        {status === "copied" ? copiedLabel : label}
       </button>
       <span aria-live="polite" className="copy-command-status">
         {status === "error" ? "Copy failed — select the command above." : ""}

@@ -1,13 +1,13 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { connectorArchiveName } from "@/lib/connector";
+import { bundledConnectorVersion, connectorArchiveName } from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { AccountControls, BrowserSyncProvider } from "../components/account-controls";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
-import { publicOrigin } from "@/lib/config";
+import { publicOrigin, versionAtLeast } from "@/lib/config";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
@@ -17,6 +17,7 @@ interface DashboardProps {
 }
 
 interface InstallationRow {
+  connector_version: string;
   id: string;
   name: string;
   last_sync_at: Date | null;
@@ -191,7 +192,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const weekStart = currentWeekStart();
   const [installations, accounts, sources, dedupEvents, dailyUsage] = await Promise.all([
     query<InstallationRow>(
-      `SELECT i.id::text, i.name, i.last_sync_at, count(s.id)::int AS source_count
+      `SELECT i.id::text, i.name, i.connector_version, i.last_sync_at,
+              count(s.id)::int AS source_count
          FROM installations i
          LEFT JOIN installation_sources s
            ON s.installation_id = i.id AND s.status = 'active'
@@ -392,6 +394,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const chartDays = usageChartDays(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
   const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
+  const updateCommand = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing doctor --repair`;
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -713,6 +716,32 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                     Disconnect
                   </button>
                 </SameOriginActionForm>
+                {versionAtLeast(item.connector_version, bundledConnectorVersion) ? null : (
+                  <div className="connector-update">
+                    <div className="connector-update-heading">
+                      <Badge tone="warning">Update available</Badge>
+                      <strong>
+                        Connector{" "}
+                        {versionAtLeast(item.connector_version, "0.0.0-0")
+                          ? item.connector_version
+                          : "version unknown"}{" "}
+                        → {bundledConnectorVersion}
+                      </strong>
+                    </div>
+                    <p>Update the connector and repair supported automatic and browser Sync.</p>
+                    <pre>
+                      <code>{updateCommand}</code>
+                    </pre>
+                    <CopyCommandButton
+                      command={updateCommand}
+                      copiedLabel="Update command copied"
+                      label="Copy update command"
+                    />
+                    <p className="muted">
+                      This repairs the connector without collecting or uploading token totals.
+                    </p>
+                  </div>
+                )}
               </article>
             ))}
           </div>

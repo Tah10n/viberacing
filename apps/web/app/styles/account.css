@@ -237,6 +237,40 @@
   font-size: var(--text-xs);
 }
 
+.connector-update {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--space-3);
+  border-top: 0.0625rem solid var(--color-danger);
+  padding-top: var(--space-4);
+}
+
+.connector-update-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.connector-update-heading strong {
+  color: var(--color-danger);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.connector-update > p {
+  margin: 0;
+}
+
+.connector-update > .muted {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.connector-update .copy-command-action .button {
+  margin-top: 0;
+}
+
 .text-button {
   display: inline-flex;
   min-width: var(--control-height);

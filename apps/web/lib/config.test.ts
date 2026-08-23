@@ -3,6 +3,7 @@ import { Client } from "pg";
 import {
   databaseClientConfig,
   databaseSslEnabled,
+  isSemanticVersion,
   maximumDailyTokens,
   publicOrigin,
   secureCookies,
@@ -144,6 +145,10 @@ describe("public origin", () => {
     expect(versionAtLeast("0.2.0-beta", "0.2.0-alpha.10")).toBe(true);
     expect(versionAtLeast("0.2.0-01", "0.2.0-alpha")).toBe(false);
     expect(versionAtLeast("01.2.0", "0.2.0")).toBe(false);
+    expect(isSemanticVersion("0.3.11")).toBe(true);
+    expect(isSemanticVersion("0.3.11-beta.1")).toBe(true);
+    expect(isSemanticVersion("0.3")).toBe(false);
+    expect(isSemanticVersion("0.3.11+build")).toBe(false);
   });
 });
 

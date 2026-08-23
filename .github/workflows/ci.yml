@@ -38,6 +38,13 @@ jobs:
       - name: Run connector tests sequentially on Windows
         if: runner.os == 'Windows'
         run: pnpm --filter @viberacing/connector exec node --test --test-concurrency=1
+      - name: Verify the real macOS custom URL handler
+        if: runner.os == 'macOS'
+        env:
+          VIBERACING_TEST_MAC_URL_HANDLER: "1"
+        run: >-
+          pnpm --filter @viberacing/connector exec node --test
+          test/browser-integration.macos.test.mjs
 
   local-smoke:
     name: Documented local startup

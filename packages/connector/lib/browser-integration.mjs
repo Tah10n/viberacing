@@ -1,15 +1,28 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve, win32 } from "node:path";
 import { stateDirectory } from "./config.mjs";
+import { connectorVersion } from "./version.mjs";
 
 const run = promisify(execFile);
 const marker = "viberacing-browser-handler-v1";
 
-function shellQuote(value) {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
+function appleScriptString(value) {
+  if (typeof value !== "string" || /[\0\r\n]/.test(value))
+    throw new Error("Invalid macOS URL handler path");
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
+function xmlEscape(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function desktopQuote(value) {
@@ -32,37 +45,121 @@ async function existingOwned(path) {
   }
 }
 
-async function registerMac(installedScript, execute, homeDirectory) {
-  const app = join(homeDirectory, "Applications", "Vibe Racing.app");
+function macHandlerOptions(options = {}) {
+  const appName = options.macAppName ?? "Vibe Racing";
+  const bundleIdentifier = options.macBundleIdentifier ?? "com.viberacing.connector";
+  const urlScheme = options.urlScheme ?? "viberacing";
+  if (!/^[A-Za-z0-9._ -]{1,80}$/.test(appName)) throw new Error("Invalid macOS app name");
+  if (!/^[A-Za-z0-9.-]{3,160}$/.test(bundleIdentifier))
+    throw new Error("Invalid macOS bundle identifier");
+  if (!/^[A-Za-z][A-Za-z0-9+.-]{0,63}$/.test(urlScheme))
+    throw new Error("Invalid macOS URL scheme");
+  return { appName, bundleIdentifier, urlScheme };
+}
+
+async function macRegistrationStatus(homeDirectory, options = {}) {
+  const { appName } = macHandlerOptions(options);
+  const app = join(homeDirectory, "Applications", `${appName}.app`);
   const markerPath = join(app, "Contents", "Resources", "viberacing-owned");
   const owned = await existingOwned(markerPath);
-  if (owned === null) {
-    try {
-      await access(app);
-      return false;
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
+  if (owned === true) return "current";
+  try {
+    await access(app);
+    return "foreign";
+  } catch (error) {
+    if (error?.code === "ENOENT") return "missing";
+    throw error;
   }
-  if (owned === false) return false;
-  const executable = join(app, "Contents", "MacOS", "viberacing-url");
-  await mkdir(dirname(executable), { recursive: true, mode: 0o700 });
-  await mkdir(dirname(markerPath), { recursive: true, mode: 0o700 });
-  await writeFile(
-    join(app, "Contents", "Info.plist"),
-    `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.viberacing.connector</string><key>CFBundleName</key><string>Vibe Racing</string><key>CFBundleExecutable</key><string>viberacing-url</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>com.viberacing.sync</string><key>CFBundleURLSchemes</key><array><string>viberacing</string></array></dict></array></dict></plist>\n`,
-    { mode: 0o600 },
-  );
-  await writeFile(
-    executable,
-    `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(installedScript)} handle-url "$1"\n`,
-    { mode: 0o700 },
-  );
-  await writeFile(markerPath, `${marker}\n`, { mode: 0o600 });
+}
+
+async function registerMac(installedScript, execute, homeDirectory, runtimeExecutable, options) {
+  const { appName, bundleIdentifier, urlScheme } = macHandlerOptions(options);
+  const applications = join(homeDirectory, "Applications");
+  const app = join(applications, `${appName}.app`);
+  const status = await macRegistrationStatus(homeDirectory, options);
+  if (status === "foreign") return false;
+  await mkdir(applications, { recursive: true, mode: 0o700 });
+  const stagingRoot = await mkdtemp(join(applications, ".viberacing-browser-handler-"));
+  const stagedApp = join(stagingRoot, `${appName}.app`);
+  const backupApp = join(applications, `.${appName}.${process.pid}.${randomUUID()}.backup.app`);
   const registrar =
     "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
-  await execute(registrar, ["-f", app]);
-  return true;
+  let previousMoved = false;
+  let stagedInstalled = false;
+  try {
+    const script = [
+      "on open location incomingURL",
+      `set commandText to "/usr/bin/nohup " & quoted form of ${appleScriptString(runtimeExecutable)} & " " & quoted form of ${appleScriptString(installedScript)} & " handle-url " & quoted form of incomingURL & " --quiet >/dev/null 2>&1 &"`,
+      "do shell script commandText",
+      "end open location",
+    ].join("\n");
+    await execute("/usr/bin/osacompile", ["-o", stagedApp, "-e", script]);
+    const contents = join(stagedApp, "Contents");
+    const resources = join(contents, "Resources");
+    const markerPath = join(resources, "viberacing-owned");
+    await access(join(contents, "MacOS", "applet"));
+    await mkdir(resources, { recursive: true, mode: 0o700 });
+    await writeFile(
+      join(contents, "Info.plist"),
+      `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>CFBundleExecutable</key><string>applet</string>
+<key>CFBundleIconFile</key><string>applet</string>
+<key>CFBundleIdentifier</key><string>${xmlEscape(bundleIdentifier)}</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleName</key><string>${xmlEscape(appName)}</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>${connectorVersion}</string>
+<key>CFBundleSignature</key><string>aplt</string>
+<key>CFBundleVersion</key><string>${connectorVersion}</string>
+<key>CFBundleURLTypes</key><array><dict>
+<key>CFBundleTypeRole</key><string>Viewer</string>
+<key>CFBundleURLName</key><string>${xmlEscape(bundleIdentifier)}</string>
+<key>CFBundleURLSchemes</key><array><string>${xmlEscape(urlScheme)}</string></array>
+</dict></array>
+<key>LSUIElement</key><true/>
+<key>OSAAppletShowStartupScreen</key><false/>
+</dict></plist>
+`,
+      { mode: 0o600 },
+    );
+    await writeFile(markerPath, `${marker}\n`, { mode: 0o600 });
+    await chmod(stagedApp, 0o700);
+    await chmod(contents, 0o700);
+    await chmod(join(contents, "MacOS"), 0o700);
+    await chmod(resources, 0o700);
+    await chmod(join(contents, "MacOS", "applet"), 0o700);
+    await execute("/usr/bin/plutil", ["-lint", join(contents, "Info.plist")]);
+    await execute("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", stagedApp]);
+    await execute("/usr/bin/codesign", ["--verify", "--deep", "--strict", stagedApp]);
+    if (status === "current") {
+      await rename(app, backupApp);
+      previousMoved = true;
+    }
+    await rename(stagedApp, app);
+    stagedInstalled = true;
+    await execute(registrar, ["-f", app]);
+    if (previousMoved) {
+      await execute(registrar, ["-u", backupApp]).catch(() => {});
+      await rm(backupApp, { recursive: true, force: true });
+      previousMoved = false;
+    }
+    return true;
+  } catch (error) {
+    if (stagedInstalled) await rm(app, { recursive: true, force: true }).catch(() => {});
+    if (previousMoved) {
+      try {
+        await rename(backupApp, app);
+        previousMoved = false;
+        await execute(registrar, ["-f", app]).catch(() => {});
+      } catch {}
+    }
+    throw error;
+  } finally {
+    await rm(stagingRoot, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 async function registerWindows(installedScript, execute, environment, runtimeExecutable) {
@@ -134,7 +231,8 @@ export async function registerBrowserSync(installedScript, options = {}) {
   const homeDirectory = options.homeDirectory ?? homedir();
   const runtimeExecutable = options.runtimeExecutable ?? process.execPath;
   try {
-    if (platform === "darwin") return await registerMac(installedScript, execute, homeDirectory);
+    if (platform === "darwin")
+      return await registerMac(installedScript, execute, homeDirectory, runtimeExecutable, options);
     if (platform === "win32")
       return await registerWindows(installedScript, execute, environment, runtimeExecutable);
     return await registerLinux(installedScript, execute, environment, stateRoot, homeDirectory);
@@ -152,8 +250,12 @@ export async function unregisterBrowserSync(options = {}) {
   if (!options.allowCustomState && resolve(stateRoot) !== resolve(join(homedir(), ".viberacing")))
     return;
   if (platform === "darwin") {
-    const app = join(homeDirectory, "Applications", "Vibe Racing.app");
+    const { appName } = macHandlerOptions(options);
+    const app = join(homeDirectory, "Applications", `${appName}.app`);
     if ((await existingOwned(join(app, "Contents", "Resources", "viberacing-owned"))) === true) {
+      const registrar =
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+      await execute(registrar, ["-u", app]).catch(() => {});
       await rm(app, { recursive: true, force: true });
     }
     return;
@@ -202,18 +304,7 @@ export async function browserSyncRegistrationStatus(options = {}) {
   const environment = options.environment ?? process.env;
   const homeDirectory = options.homeDirectory ?? homedir();
   if (platform === "darwin") {
-    return (await existingOwned(
-      join(
-        homeDirectory,
-        "Applications",
-        "Vibe Racing.app",
-        "Contents",
-        "Resources",
-        "viberacing-owned",
-      ),
-    )) === true
-      ? "current"
-      : "missing";
+    return macRegistrationStatus(homeDirectory, options);
   }
   if (platform === "linux") {
     const dataHome = environment.XDG_DATA_HOME?.trim() || join(homeDirectory, ".local", "share");

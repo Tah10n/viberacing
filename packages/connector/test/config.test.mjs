@@ -4336,14 +4336,73 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   assert.match(doctorOutput, /Pairing status: active/);
 });
 
+test("doctor repair fails closed when connection config cannot be loaded", async () => {
+  for (const scenario of ["missing", "malformed"]) {
+    const home = await mkdtemp(join(tmpdir(), `viberacing-doctor-repair-${scenario}-`));
+    const directory = join(home, ".viberacing");
+    try {
+      if (scenario === "malformed") {
+        await mkdir(directory, { recursive: true });
+        await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+        await writeFile(join(directory, "config.json"), "{\n");
+      }
+
+      const failure = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
+        env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+      }).then(
+        () => assert.fail(`doctor --repair unexpectedly succeeded with ${scenario} config`),
+        (error) => error,
+      );
+      const output = `${failure.stdout ?? ""}\n${failure.stderr ?? ""}`;
+
+      assert.equal(failure.code, 1);
+      assert.match(output, /Connector repair not run/);
+      assert.match(output, /connector repair is incomplete/);
+      assert.doesNotMatch(output, /Local repair complete/);
+      await assert.rejects(access(join(directory, "runtime")), { code: "ENOENT" });
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test("doctor repair keeps successful local work when server confirmation is unavailable", async (context) => {
+  const unavailable = createServer();
+  unavailable.listen(0, "127.0.0.1");
+  await once(unavailable, "listening");
+  const address = unavailable.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  await new Promise((resolve, reject) =>
+    unavailable.close((error) => (error === undefined ? resolve() : reject(error))),
+  );
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-repair-offline-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+
+  const repaired = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+  });
+
+  assert.match(repaired.stdout, new RegExp(`Runtime: updated to ${connectorVersion}`));
+  assert.match(repaired.stdout, /Pairing status: error/);
+  assert.match(repaired.stdout, /Local repair complete; server confirmation is pending/);
+  assert.match(repaired.stdout, /Usage sync: not run/);
+  assert.doesNotMatch(`${repaired.stdout}\n${repaired.stderr}`, /repair is incomplete/);
+  await access(join(installation.directory, "runtime", connectorVersion, "bin", "viberacing.mjs"));
+});
+
 test("doctor repair re-enables automatic sync after a connector upgrade", async (context) => {
   let usageRequests = 0;
+  const reconciliationBodies = [];
   let installation;
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/installations/current") {
+        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify(
@@ -4389,9 +4448,16 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
   });
 
-  await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
+  const repaired = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: environment,
   });
+  assert.match(repaired.stdout, new RegExp(`Runtime: updated to ${connectorVersion}`));
+  assert.match(repaired.stdout, /Hooks: repaired/);
+  assert.match(repaired.stdout, /Usage sync: not run/);
+  assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], connectorVersion },
+  ]);
+  assert.equal(usageRequests, 0);
   assert.equal(
     JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
       .automaticDisabledReason,
