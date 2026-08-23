@@ -541,6 +541,39 @@ pre {
   margin-top: auto;
 }
 
+.account-deletion-cleanup,
+.account-deleted-cleanup {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  border: 0.0625rem solid var(--color-danger-border);
+  border-left-width: 0.25rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  background: var(--color-danger-surface);
+}
+
+.account-deletion-cleanup h3,
+.account-deletion-cleanup p,
+.account-deleted-cleanup h2,
+.account-deleted-cleanup p {
+  margin: 0;
+}
+
+.account-deletion-cleanup h3,
+.account-deleted-cleanup h2 {
+  color: var(--color-danger-ink);
+}
+
+.account-deletion-cleanup .copy-command-action,
+.account-deleted-cleanup .copy-command-action {
+  min-height: 0;
+}
+
+.account-deleted-cleanup {
+  margin: 0 0 var(--space-5);
+}
+
 .confirm-row {
   display: flex;
   align-items: flex-start;

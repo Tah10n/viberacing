@@ -57,6 +57,26 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("without collecting or uploading token totals");
   });
 
+  it("requires explicit local cleanup around permanent account deletion", () => {
+    const home = source("../page.tsx");
+    const deleteRoute = source("../api/account/delete/route.ts");
+    const connector = source("../../lib/connector.ts");
+    expect(connector).toContain("export function connectorUninstallCommand");
+    expect(connector).toContain("-- viberacing uninstall");
+    expect(dashboard).toContain("Local cleanup required");
+    expect(dashboard).toContain("Account deletion cannot uninstall software or hooks");
+    expect(dashboard).toContain('label="Copy uninstall command"');
+    expect(dashboard).toContain("local connectors must be uninstalled separately");
+    expect(deleteRoute).toContain("issueAccountDeletionReceipt");
+    expect(deleteRoute).toContain("NextResponse.redirect(publicOrigin(), 303)");
+    expect(home).toContain("hasAccountDeletionReceipt()");
+    expect(home).toContain("current === null && accountDeletionReceipt");
+    expect(home).not.toContain("params.accountDeleted");
+    expect(home).toContain("Remove the connector from your computers");
+    expect(home).toMatch(/The website cannot uninstall local\s+software or hooks/);
+    expect(home).toContain('label="Copy uninstall command"');
+  });
+
   it("offers source reassignment only when the same agent has another account", () => {
     expect(dashboard).toContain("function hasReassignmentTarget");
     expect(dashboard).toContain("candidate.agent_id === account.agent_id");

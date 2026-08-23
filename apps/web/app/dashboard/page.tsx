@@ -1,6 +1,10 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
-import { bundledConnectorVersion, connectorArchiveName } from "@/lib/connector";
+import {
+  bundledConnectorVersion,
+  connectorArchiveName,
+  connectorUninstallCommand,
+} from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { DangerActionForm } from "../components/danger-action-form";
@@ -395,6 +399,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const origin = publicOrigin().origin;
   const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
   const updateCommand = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing doctor --repair`;
+  const uninstallCommand = connectorUninstallCommand(origin);
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -779,10 +784,30 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <p>
             Delete the GitHub-linked user, sessions, installations, agent accounts, and all usage.
           </p>
+          <div className="account-deletion-cleanup">
+            <h3>Local cleanup required</h3>
+            <p>
+              Account deletion cannot uninstall software or hooks from your computers. Run this
+              command on every connected computer before deleting the account. You can also run it
+              afterward.
+            </p>
+            <pre>
+              <code>{uninstallCommand}</code>
+            </pre>
+            <CopyCommandButton
+              command={uninstallCommand}
+              copiedLabel="Uninstall command copied"
+              label="Copy uninstall command"
+            />
+            <p className="muted">
+              This removes only Vibe Racing hooks, its installed copy, secrets, and local state.
+              Provider usage data is not changed.
+            </p>
+          </div>
           <DangerActionForm
             action="/api/account/delete"
             buttonLabel="Delete account"
-            confirmation="I understand this cannot be undone."
+            confirmation="I understand that server data will be permanently deleted and local connectors must be uninstalled separately."
             confirmValue="delete-account"
           />
         </Panel>

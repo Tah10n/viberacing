@@ -144,6 +144,10 @@
   border-radius: 0;
 }
 
+.app-nav > a.button-small {
+  color: var(--color-action-ink);
+}
+
 .button-secondary {
   flex: 0 0 auto;
   border-color: var(--color-line-strong);

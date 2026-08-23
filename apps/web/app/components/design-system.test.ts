@@ -55,4 +55,9 @@ describe("design system contracts", () => {
     expect(systemStyles).not.toContain("--header-height");
     expect(systemStyles).not.toContain("--hero-row-height");
   });
+
+  it("keeps the guest navigation action legible on its action background", () => {
+    expect(components).toContain(".app-nav > a.button-small");
+    expect(components).toContain("color: var(--color-action-ink)");
+  });
 });

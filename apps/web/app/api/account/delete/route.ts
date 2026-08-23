@@ -3,7 +3,12 @@ import { publicOrigin } from "@/lib/config";
 import { query } from "@/lib/db";
 import { problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
-import { clearLocalInstallation, destroySession, viewer } from "@/lib/session";
+import {
+  clearLocalInstallation,
+  destroySession,
+  issueAccountDeletionReceipt,
+  viewer,
+} from "@/lib/session";
 
 async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
@@ -15,7 +20,8 @@ async function post(request: Request): Promise<Response> {
     await query("DELETE FROM users WHERE id = $1", [current.id]);
     await destroySession();
     await clearLocalInstallation();
-    return NextResponse.redirect(new URL("/?accountDeleted=1", publicOrigin()), 303);
+    await issueAccountDeletionReceipt();
+    return NextResponse.redirect(publicOrigin(), 303);
   } catch (error) {
     if (error instanceof RangeError) return problem(413, "body_too_large");
     return error instanceof SyntaxError
