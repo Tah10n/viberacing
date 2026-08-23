@@ -7,5 +7,5 @@ export function connectorArchiveName(): string {
 }
 
 export function connectorUninstallCommand(origin: string): string {
-  return `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing uninstall`;
+  return `npx --yes --prefer-online --package ${origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
 }

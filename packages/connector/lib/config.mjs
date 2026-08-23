@@ -804,6 +804,17 @@ export async function connectedStateExists() {
   }
 }
 
+export async function localInstallationStateExists() {
+  for (const path of [stateMarkerPath, installationPath, configPath, sourcesPath])
+    try {
+      await lstat(path);
+      return true;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  return false;
+}
+
 export async function localSourceRegistryContains(clientSourceId) {
   try {
     const value = JSON.parse(await readFile(sourcesPath, "utf8"));

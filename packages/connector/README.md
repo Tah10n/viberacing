@@ -106,8 +106,10 @@ local source identities. Lifecycle removal commands serialize with an active syn
 deleting state. `uninstall` removes every cleanable owned hook even if another profile is damaged;
 on a partial failure it removes network credentials but retains source/root metadata and the small
 installed runtime so an ordinary repeated `uninstall` can finish safely. Provider data and foreign
-hooks are untouched. `reset-installation` is the explicit escape hatch for creating a new
-installation identity.
+hooks are untouched. Run `uninstall` once for every connector installation. If an installation used
+`VIBERACING_STATE_DIR`, set it to the same value when uninstalling; the command refuses to report
+success when the selected state directory contains no Vibe Racing marker or installation metadata.
+`reset-installation` is the explicit escape hatch for creating a new installation identity.
 
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per

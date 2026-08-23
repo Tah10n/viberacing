@@ -48,6 +48,7 @@ import {
   connectedSourceMappingExists,
   diagnoseHooks,
   invalidateConnectAttempt,
+  localInstallationStateExists,
   localSourceRegistryContains,
   prepareRuntime,
   reconcileHooks,
@@ -1989,6 +1990,10 @@ try {
         `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned; local source metadata was retained.`,
       );
   } else if (command === "uninstall") {
+    if (!(await localInstallationStateExists()))
+      throw new Error(
+        "No Vibe Racing installation was found in the selected state directory. Set VIBERACING_STATE_DIR to the value used during connect.",
+      );
     const cleanup = await withLifecycleMutation(async () => {
       await invalidateAndCancelConnectAttempt();
       try {

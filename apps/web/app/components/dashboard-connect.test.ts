@@ -62,11 +62,17 @@ describe("dashboard connection flow", () => {
     const deleteRoute = source("../api/account/delete/route.ts");
     const connector = source("../../lib/connector.ts");
     expect(connector).toContain("export function connectorUninstallCommand");
+    expect(connector).toContain("/downloads/viberacing-connector.tgz");
     expect(connector).toContain("-- viberacing uninstall");
     expect(dashboard).toContain("Local cleanup required");
     expect(dashboard).toContain("Account deletion cannot uninstall software or hooks");
+    expect(dashboard).toContain("once for every connector installation");
+    expect(dashboard).toContain("VIBERACING_STATE_DIR");
+    expect(dashboard).toContain("every connector state directory");
     expect(dashboard).toContain('label="Copy uninstall command"');
-    expect(dashboard).toContain("local connectors must be uninstalled separately");
+    expect(dashboard).toContain(
+      "every local connector installation must be uninstalled separately",
+    );
     expect(deleteRoute).toContain("issueAccountDeletionReceipt");
     expect(deleteRoute).toContain("NextResponse.redirect(publicOrigin(), 303)");
     expect(home).toContain("hasAccountDeletionReceipt()");
@@ -74,6 +80,8 @@ describe("dashboard connection flow", () => {
     expect(home).not.toContain("params.accountDeleted");
     expect(home).toContain("Remove the connector from your computers");
     expect(home).toMatch(/The website cannot uninstall local\s+software or hooks/);
+    expect(home).toContain("once for every connector installation");
+    expect(home).toContain("VIBERACING_STATE_DIR");
     expect(home).toContain('label="Copy uninstall command"');
   });
 

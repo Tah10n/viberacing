@@ -788,8 +788,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             <h3>Local cleanup required</h3>
             <p>
               Account deletion cannot uninstall software or hooks from your computers. Run this
-              command on every connected computer before deleting the account. You can also run it
-              afterward.
+              command once for every connector installation before deleting the account. You can
+              also run it afterward.
             </p>
             <pre>
               <code>{uninstallCommand}</code>
@@ -800,14 +800,16 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               label="Copy uninstall command"
             />
             <p className="muted">
-              This removes only Vibe Racing hooks, its installed copy, secrets, and local state.
-              Provider usage data is not changed.
+              If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before running
+              this command. Repeat it for every connector state directory. This removes only Vibe
+              Racing hooks, its installed copy, secrets, and local state. Provider usage data is not
+              changed.
             </p>
           </div>
           <DangerActionForm
             action="/api/account/delete"
             buttonLabel="Delete account"
-            confirmation="I understand that server data will be permanently deleted and local connectors must be uninstalled separately."
+            confirmation="I understand that server data will be permanently deleted and every local connector installation must be uninstalled separately."
             confirmValue="delete-account"
           />
         </Panel>

@@ -60,7 +60,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <h2 id="account-deleted-title">Remove the connector from your computers</h2>
           <p>
             Your Vibe Racing server data was permanently deleted. The website cannot uninstall local
-            software or hooks, so run this command on every computer that was connected.
+            software or hooks, so run this command once for every connector installation that was
+            connected.
           </p>
           <pre>
             <code>{uninstallCommand}</code>
@@ -71,8 +72,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             label="Copy uninstall command"
           />
           <p className="muted">
-            This removes only Vibe Racing hooks, its installed copy, secrets, and local state.
-            Provider usage data is not changed.
+            If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before running
+            this command. Repeat it for every connector state directory. This removes only Vibe
+            Racing hooks, its installed copy, secrets, and local state. Provider usage data is not
+            changed.
           </p>
         </section>
       ) : null}

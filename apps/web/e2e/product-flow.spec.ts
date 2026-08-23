@@ -317,13 +317,14 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(reconciliation.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".connector-update")).toHaveCount(0);
-  const uninstallCommand = `npx --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector-${bundledConnectorVersion}.tgz -- viberacing uninstall`;
+  const uninstallCommand = `npx --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
   await expect(page.getByRole("heading", { name: "Local cleanup required" })).toBeVisible();
-  await expect(page.locator(".account-deletion-cleanup code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deletion-cleanup pre code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deletion-cleanup")).toContainText("VIBERACING_STATE_DIR");
   await expect(page.getByRole("button", { name: "Copy uninstall command" })).toBeVisible();
   await page
     .getByLabel(
-      "I understand that server data will be permanently deleted and local connectors must be uninstalled separately.",
+      "I understand that server data will be permanently deleted and every local connector installation must be uninstalled separately.",
     )
     .check();
   await page.getByRole("button", { name: "Delete account" }).click();
@@ -336,7 +337,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(
     page.getByRole("heading", { name: "Remove the connector from your computers" }),
   ).toBeVisible();
-  await expect(page.locator(".account-deleted-cleanup code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deleted-cleanup pre code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deleted-cleanup")).toContainText("VIBERACING_STATE_DIR");
   await expect(page.getByRole("button", { name: "Copy uninstall command" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
