@@ -556,6 +556,233 @@ test("deduplicates truncated suffixes through a LastNTurns fork-of-fork", async 
   assert.equal(result.entries[0].totalTokens, "45");
 });
 
+test("fails closed when a tokenless LastNTurns suffix matches the child's first usage", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-tokenless-suffix-match-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const parentId = "32323232-3232-4232-8232-323232323232";
+  const childId = "33333333-3333-4333-8333-333333333333";
+  const usage = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  await writeFile(
+    join(directory, "parent.jsonl"),
+    `${codexSessionMeta(parentId)}\n${codexThreadSettings(
+      "2026-08-10T12:00:00Z",
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", usage, usage, 1)}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      sessionSource: codexSubagentSource(parentId),
+      timestamp: "2026-08-10T12:02:00Z",
+    })}\n${codexThreadSettings("2026-08-10T12:02:01Z")}\n${codexTokenCount(
+      "2026-08-10T12:03:00Z",
+      usage,
+      usage,
+      41,
+    )}\n${codexThreadSettings("2026-08-10T12:04:00Z")}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+});
+
+test("counts both calls when a tokenless LastNTurns suffix has distinct child usage", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-tokenless-suffix-distinct-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const parentId = "34343434-3434-4434-8434-343434343434";
+  const childId = "35353535-3535-4535-8535-353535353535";
+  const first = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const second = {
+    input_tokens: 10,
+    cached_input_tokens: 2,
+    cache_write_input_tokens: 0,
+    output_tokens: 8,
+    reasoning_output_tokens: 2,
+    total_tokens: 18,
+  };
+  await writeFile(
+    join(directory, "parent.jsonl"),
+    `${codexSessionMeta(parentId)}\n${codexThreadSettings(
+      "2026-08-10T12:00:00Z",
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", first, first, 1)}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      sessionSource: codexSubagentSource(parentId),
+      timestamp: "2026-08-10T12:02:00Z",
+    })}\n${codexThreadSettings("2026-08-10T12:02:01Z")}\n${codexTokenCount(
+      "2026-08-10T12:03:00Z",
+      second,
+      second,
+      41,
+    )}\n${codexThreadSettings("2026-08-10T12:04:00Z")}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.entries, [
+    {
+      date: "2026-08-10",
+      totalTokens: "27",
+      inputTokens: "12",
+      outputTokens: "9",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "0",
+      reasoningTokens: "3",
+    },
+  ]);
+});
+
+test("fails closed when a LastNTurns suffix has only context-window occupancy", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-occupancy-only-suffix-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const parentId = "36363636-3636-4636-8636-363636363636";
+  const childId = "37373737-3737-4737-8737-373737373737";
+  const usage = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const occupancy = {
+    input_tokens: 0,
+    cached_input_tokens: 0,
+    cache_write_input_tokens: 0,
+    output_tokens: 0,
+    reasoning_output_tokens: 0,
+    total_tokens: 100,
+  };
+  await writeFile(
+    join(directory, "parent.jsonl"),
+    `${codexSessionMeta(parentId)}\n${codexThreadSettings(
+      "2026-08-10T12:00:00Z",
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", usage, usage, 1)}\n${codexTokenCount(
+      "2026-08-10T12:01:30Z",
+      occupancy,
+      occupancy,
+      2,
+    )}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: parentId,
+      sessionSource: codexSubagentSource(parentId),
+      timestamp: "2026-08-10T12:02:00Z",
+    })}\n${codexTokenCount(
+      "2026-08-10T12:01:30Z",
+      occupancy,
+      occupancy,
+      40,
+    )}\n${codexThreadSettings("2026-08-10T12:02:01Z")}\n${codexTokenCount(
+      "2026-08-10T12:03:00Z",
+      usage,
+      usage,
+      41,
+    )}\n${codexThreadSettings("2026-08-10T12:04:00Z")}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+});
+
+test("fails closed for a tokenless LastNTurns suffix through a fork-of-fork", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-codex-tokenless-suffix-chain-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const directory = join(root, "sessions", "2026", "08", "10");
+  await mkdir(directory, { recursive: true });
+  const rootId = "38383838-3838-4838-8838-383838383838";
+  const childId = "39393939-3939-4939-8939-393939393939";
+  const grandchildId = "40404040-4040-4040-8040-404040404040";
+  const first = {
+    input_tokens: 5,
+    cached_input_tokens: 1,
+    cache_write_input_tokens: 0,
+    output_tokens: 4,
+    reasoning_output_tokens: 1,
+    total_tokens: 9,
+  };
+  const second = {
+    input_tokens: 10,
+    cached_input_tokens: 2,
+    cache_write_input_tokens: 0,
+    output_tokens: 8,
+    reasoning_output_tokens: 2,
+    total_tokens: 18,
+  };
+  await writeFile(
+    join(directory, "root.jsonl"),
+    `${codexSessionMeta(rootId)}\n${codexThreadSettings(
+      "2026-08-10T12:00:00Z",
+    )}\n${codexTokenCount("2026-08-10T12:01:00Z", first, first, 1)}\n`,
+  );
+  await writeFile(
+    join(directory, "child.jsonl"),
+    `${codexSessionMeta(childId, {
+      forkedFromId: rootId,
+      sessionSource: codexSubagentSource(rootId),
+      timestamp: "2026-08-10T12:02:00Z",
+    })}\n${codexTokenCount("2026-08-10T12:01:00Z", first, first, 41)}\n${codexThreadSettings(
+      "2026-08-10T12:02:01Z",
+    )}\n${codexTokenCount("2026-08-10T12:03:00Z", second, second, 42)}\n`,
+  );
+  await writeFile(
+    join(directory, "grandchild.jsonl"),
+    `${codexSessionMeta(grandchildId, {
+      forkedFromId: childId,
+      sessionSource: codexSubagentSource(childId),
+      timestamp: "2026-08-10T12:04:00Z",
+    })}\n${codexThreadSettings("2026-08-10T12:04:01Z")}\n${codexTokenCount(
+      "2026-08-10T12:05:00Z",
+      second,
+      second,
+      81,
+    )}\n${codexThreadSettings("2026-08-10T12:06:00Z")}\n`,
+  );
+
+  const result = await collectCodexSessionUsage(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+  );
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.warnings, ["codex_session_components_incomplete"]);
+});
+
 test("keeps a copied fork prefix deduplicated across a partial write", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-codex-partial-fork-"));
   context.after(() => rm(root, { force: true, recursive: true }));
