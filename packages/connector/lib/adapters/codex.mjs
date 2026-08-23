@@ -23,7 +23,7 @@ import {
 } from "./shared.mjs";
 import { connectorVersion } from "../version.mjs";
 
-const codexComponentStateVersion = 11;
+const codexComponentStateVersion = 12;
 const codexEventReferencesIndex = 7;
 const codexTokenCountPattern = /"type"\s*:\s*"token_count"/;
 const codexSessionMetaPattern = /"type"\s*:\s*"session_meta"/;
@@ -147,6 +147,41 @@ function codexSuffixPrefixLengths(parent, child) {
   return lengths;
 }
 
+function codexPrefixPrefixLengths(parent, child) {
+  const lengths = [0];
+  const maximum = Math.min(parent.length, child.length);
+  for (let index = 0; index < maximum && parent[index] === child[index]; index += 1) {
+    if (index % 2 === 0) lengths.push(index + 1);
+  }
+  return lengths;
+}
+
+function codexLegacyForkStrategy(source, forkedFromId) {
+  if (["cli", "vscode", "exec", "mcp"].includes(source)) return "prefix";
+  if (source === null || typeof source !== "object" || Array.isArray(source)) return null;
+  const keys = Object.keys(source);
+  if (keys.length !== 1) return null;
+  if (keys[0] === "custom" && typeof source.custom === "string") return "prefix";
+  if (keys[0] !== "subagent") return null;
+  const subagent = source.subagent;
+  if (subagent === null || typeof subagent !== "object" || Array.isArray(subagent)) return null;
+  const subagentKeys = Object.keys(subagent);
+  if (subagentKeys.length !== 1) return null;
+  if (subagentKeys[0] === "other") return subagent.other === "guardian" ? "prefix" : null;
+  const spawn = subagent.thread_spawn;
+  if (
+    subagentKeys[0] === "thread_spawn" &&
+    spawn !== null &&
+    typeof spawn === "object" &&
+    !Array.isArray(spawn) &&
+    codexId(spawn.parent_thread_id) === codexId(forkedFromId) &&
+    Number.isSafeInteger(spawn.depth) &&
+    spawn.depth >= 0
+  )
+    return "suffix";
+  return null;
+}
+
 function codexLegacyLineageSymbols(events, boundaryCounts) {
   const symbols = [];
   for (let index = 0; index < events.length; index += 1) {
@@ -233,10 +268,15 @@ function codexSessionContext(lines, priorSessionContext, rolloutPath) {
     historyBase === null ? codexIdentityKey("thread", sessionMeta.forked_from_id) : null;
   const historyBaseRolloutKey = codexIdentityKey("rollout", historyBase?.thread_id);
   const startedAt = Date.parse(sessionMeta?.timestamp ?? "");
+  const legacyForkStrategy =
+    forkParentThreadKey !== null && historyMode === "legacy"
+      ? codexLegacyForkStrategy(sessionMeta.source, sessionMeta.forked_from_id)
+      : null;
   if (
     forkParentThreadKey !== null &&
     (!Number.isFinite(startedAt) ||
-      (historyMode === "paginated" && subagentHistoryStartOrdinal === null))
+      (historyMode === "paginated" && subagentHistoryStartOrdinal === null) ||
+      (historyMode === "legacy" && legacyForkStrategy === null))
   )
     return { complete: false, metadataInvalid: true, threadKey: null, rolloutKey: null };
   return {
@@ -250,6 +290,7 @@ function codexSessionContext(lines, priorSessionContext, rolloutPath) {
     startedAt: Number.isFinite(startedAt) ? startedAt : null,
     historyMode,
     subagentHistoryStartOrdinal,
+    legacyForkStrategy,
   };
 }
 
@@ -567,6 +608,7 @@ function rebuildCodexEventState(files, range) {
       context.startedAt,
       context.historyMode,
       context.subagentHistoryStartOrdinal,
+      context.legacyForkStrategy,
     ]);
   };
   const isCompatiblePrefix = (shorter, longer) => {
@@ -649,6 +691,7 @@ function rebuildCodexEventState(files, range) {
       startedAt,
       historyMode,
       subagentHistoryStartOrdinal,
+      legacyForkStrategy,
     } = fileState.sessionContext ?? {};
     let parentEvents = null;
     let inheritedCount = 0;
@@ -749,24 +792,37 @@ function rebuildCodexEventState(files, range) {
         }
         const parentSymbols = codexLegacyLineageSymbols(parentEvents, parentBoundaryCounts);
         const childSymbols = codexLegacyLineageSymbols(rawEvents, childBoundaryCounts);
-        const alignments = codexSuffixPrefixLengths(parentSymbols, childSymbols)
+        const alignmentLengths =
+          legacyForkStrategy === "suffix"
+            ? codexSuffixPrefixLengths(parentSymbols, childSymbols)
+            : legacyForkStrategy === "prefix"
+              ? codexPrefixPrefixLengths(parentSymbols, childSymbols)
+              : [];
+        const alignments = alignmentLengths
           .filter((length) => length === 0 || length % 2 === 1)
-          .map((length) => (length === 0 ? 0 : (length + 1) / 2))
-          .filter((count) => {
-            const parentOffset = parentEvents.length - count;
-            return count === 0 || childBoundaryCounts[0] <= parentBoundaryCounts[parentOffset];
+          .map((length) => {
+            const count = length === 0 ? 0 : (length + 1) / 2;
+            return {
+              count,
+              parentOffset:
+                legacyForkStrategy === "prefix" && count > 0 ? 0 : parentEvents.length - count,
+            };
+          })
+          .filter(({ count, parentOffset: offset }) => {
+            return count === 0 || childBoundaryCounts[0] <= parentBoundaryCounts[offset];
           });
         const candidates = alignments.filter(
-          (count) => childBoundaryCounts[count] > parentBoundaryCounts[parentEvents.length],
+          ({ count, parentOffset: offset }) =>
+            childBoundaryCounts[count] > parentBoundaryCounts[offset + count],
         );
         const unambiguousCandidates = candidates.filter(
-          (count) => count !== 0 || !alignments.some((alignment) => alignment > 0),
+          ({ count }) => count !== 0 || !alignments.some((alignment) => alignment.count > 0),
         );
         const pending = alignments.some(
-          (count) =>
+          ({ count, parentOffset: offset }) =>
             (count === 0
-              ? childBoundaryCounts[count] <= parentBoundaryCounts[parentEvents.length]
-              : childBoundaryCounts[count] === parentBoundaryCounts[parentEvents.length]) &&
+              ? childBoundaryCounts[count] <= parentBoundaryCounts[offset]
+              : childBoundaryCounts[count] === parentBoundaryCounts[offset + count]) &&
             childBoundaryCounts.slice(count + 1).every((boundaries) => boundaries === 0),
         );
         if (pending || unambiguousCandidates.length !== 1) {
@@ -774,9 +830,11 @@ function rebuildCodexEventState(files, range) {
           memo.set(fileState, []);
           return [];
         }
-        inheritedCount = unambiguousCandidates[0];
+        inheritedCount = unambiguousCandidates[0].count;
+        parentOffset = unambiguousCandidates[0].parentOffset;
       }
-      parentOffset = parentEvents.length - inheritedCount;
+      if (!(forkParentThreadKey && historyMode === "legacy"))
+        parentOffset = parentEvents.length - inheritedCount;
     }
     const resolved = rawEvents.map((event, index) =>
       index < inheritedCount
