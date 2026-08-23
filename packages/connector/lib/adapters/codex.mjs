@@ -811,15 +811,10 @@ function rebuildCodexEventState(files, range) {
           .filter(({ count, parentOffset: offset }) => {
             return count === 0 || childBoundaryCounts[0] <= parentBoundaryCounts[offset];
           });
-        const candidates = alignments.filter(
-          ({ count, parentOffset: offset }) =>
-            childBoundaryCounts[count] > parentBoundaryCounts[offset + count],
-        );
-        const lineageCandidates = candidates.filter(
-          ({ count }) =>
-            legacyForkStrategy === "suffix" ||
-            count !== 0 ||
-            !alignments.some((alignment) => alignment.count > 0),
+        const candidates = alignments.filter(({ count, parentOffset: offset }) =>
+          count === 0
+            ? childBoundaryCounts[0] > 0
+            : childBoundaryCounts[count] > parentBoundaryCounts[offset + count],
         );
         const pending = alignments.some(
           ({ count, parentOffset: offset }) =>
@@ -828,13 +823,13 @@ function rebuildCodexEventState(files, range) {
               : childBoundaryCounts[count] === parentBoundaryCounts[offset + count]) &&
             childBoundaryCounts.slice(count + 1).every((boundaries) => boundaries === 0),
         );
-        if (pending || lineageCandidates.length !== 1) {
+        if (pending || candidates.length !== 1) {
           unresolved.add(fileState);
           memo.set(fileState, []);
           return [];
         }
-        inheritedCount = lineageCandidates[0].count;
-        parentOffset = lineageCandidates[0].parentOffset;
+        inheritedCount = candidates[0].count;
+        parentOffset = candidates[0].parentOffset;
       }
       if (!(forkParentThreadKey && historyMode === "legacy"))
         parentOffset = parentEvents.length - inheritedCount;
