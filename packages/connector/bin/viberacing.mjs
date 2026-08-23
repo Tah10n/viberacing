@@ -129,6 +129,12 @@ const output = (...values) => {
 };
 const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
 
+function collectorWarningMessage(code) {
+  if (code === "codex_session_components_incomplete")
+    return "local Codex token components are incomplete for one or more requested UTC days; authoritative daily totals remain available";
+  return `local usage detail warning: ${code}`;
+}
+
 async function waitForTestConnectBarrier(stage) {
   if (
     process.env.NODE_ENV !== "test" ||
@@ -555,11 +561,13 @@ async function forgetSourceState(sourceIds) {
   state.adapters ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
+  state.collectionWarnings ??= {};
   for (const sourceId of sourceIds) {
     delete state.sequences[sourceId];
     delete state.adapters[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
+    delete state.collectionWarnings[sourceId];
     await removePendingForSource(sourceId);
     await clearQuarantine(sourceId);
   }
@@ -924,6 +932,7 @@ async function sync(providedConfig, options = {}) {
       const range = snapshotRange();
       state.adapters ??= {};
       state.fingerprints ??= {};
+      state.collectionWarnings ??= {};
       const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
       const dirty = await readDirty();
       const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
@@ -964,6 +973,7 @@ async function sync(providedConfig, options = {}) {
       const snapshots = [];
       const sourceErrors = [];
       const failures = [];
+      const collectionWarnings = [];
       const successfullyChecked = [];
       for (let index = 0; index < collected.length; index += 1) {
         const outcome = collected[index];
@@ -979,12 +989,17 @@ async function sync(providedConfig, options = {}) {
         }
         successfullyChecked.push(source.clientSourceId);
         state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
+        const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
+        if (resultWarnings.length) state.collectionWarnings[source.sourceId] = resultWarnings;
+        else delete state.collectionWarnings[source.sourceId];
+        for (const code of resultWarnings)
+          collectionWarnings.push(`${source.agentId}: ${collectorWarningMessage(code)}`);
         const entries = recentEntries(outcome.value.result.entries);
         const nextFingerprint = fingerprint({
           ...range,
           completeness: outcome.value.result.completeness,
           entries,
-          warnings: [...(outcome.value.result.warnings ?? [])].sort(),
+          warnings: resultWarnings,
         });
         if (state.fingerprints[source.sourceId] === nextFingerprint) continue;
         const previous = BigInt(state.sequences[source.sourceId] ?? "0");
@@ -1015,6 +1030,7 @@ async function sync(providedConfig, options = {}) {
         if (failures.length === 0 && syncSources.length > 0)
           await compactSuccessfulCaptures({ ...config, sources: syncSources });
         output("No usage changes; no request was sent.");
+        for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
         if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
         return { accepted, failures, unchanged: true };
       }
@@ -1028,6 +1044,7 @@ async function sync(providedConfig, options = {}) {
       if (snapshots.length === 0)
         throw new Error(failures.join("; ") || "No configured collectors succeeded");
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
+      for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
       for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
         failures.push(`server disconnected source ${sourceId}`);
       for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
@@ -1458,6 +1475,8 @@ async function doctor() {
       } catch (error) {
         output(`${source.agentId} (${source.accountLabel}): error, ${error.message}`);
       }
+      for (const code of state.collectionWarnings?.[source.sourceId] ?? [])
+        output(`${source.agentId} collection warning: ${collectorWarningMessage(code)}`);
     }
     output(`Pending uploads: ${(await pendingPayloads()).length}`);
     const quarantined = await quarantinedPayloads();

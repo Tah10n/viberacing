@@ -116,13 +116,13 @@ export async function findFile(root, predicate, maximumEntries = 10_000) {
   return false;
 }
 
-export async function walk(root, suffixes, maximum = 2_000) {
+export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 20_000_000) {
   try {
     const rootInfo = await stat(root);
     if (rootInfo.isFile()) {
       return {
         files:
-          rootInfo.size <= 20_000_000 && suffixes.some((suffix) => root.endsWith(suffix))
+          rootInfo.size <= maximumFileBytes && suffixes.some((suffix) => root.endsWith(suffix))
             ? [
                 {
                   path: root,
@@ -132,13 +132,25 @@ export async function walk(root, suffixes, maximum = 2_000) {
                 },
               ]
             : [],
-        incomplete: rootInfo.size > 20_000_000,
+        incomplete: rootInfo.size > maximumFileBytes,
+        issues:
+          rootInfo.size > maximumFileBytes
+            ? [
+                {
+                  path: root,
+                  size: rootInfo.size,
+                  modifiedAt: rootInfo.mtimeMs,
+                  reason: "oversized",
+                },
+              ]
+            : [],
       };
     }
   } catch {
-    return { files: [], incomplete: true };
+    return { files: [], incomplete: true, issues: [{ path: root, reason: "unreadable" }] };
   }
   const found = [];
+  const issues = [];
   const queue = [root];
   let incomplete = false;
   while (queue.length) {
@@ -148,6 +160,7 @@ export async function walk(root, suffixes, maximum = 2_000) {
       directory = await opendir(current);
     } catch {
       incomplete = true;
+      issues.push({ path: current, reason: "unreadable" });
       continue;
     }
     for await (const entry of directory) {
@@ -157,15 +170,25 @@ export async function walk(root, suffixes, maximum = 2_000) {
       else if (entry.isFile() && suffixes.some((suffix) => entry.name.endsWith(suffix))) {
         try {
           const info = await stat(path);
-          if (info.size <= 20_000_000)
+          if (info.size <= maximumFileBytes)
             found.push({ path, size: info.size, modifiedAt: info.mtimeMs, ino: info.ino });
-          else incomplete = true;
+          else {
+            incomplete = true;
+            issues.push({
+              path,
+              size: info.size,
+              modifiedAt: info.mtimeMs,
+              reason: "oversized",
+            });
+          }
         } catch {
           incomplete = true;
+          issues.push({ path, reason: "unreadable" });
         }
       }
       if (found.length >= maximum) {
         incomplete = true;
+        issues.push({ path: current, reason: "limit" });
         break;
       }
     }
@@ -174,6 +197,7 @@ export async function walk(root, suffixes, maximum = 2_000) {
   return {
     files: found.sort((a, b) => b.modifiedAt - a.modifiedAt || a.path.localeCompare(b.path)),
     incomplete,
+    issues,
   };
 }
 

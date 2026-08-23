@@ -54,6 +54,7 @@ interface SourceRow {
 interface ParsedEntry {
   date: string;
   totalTokens: string;
+  componentTotalTokens: string | null;
   inputTokens: string | null;
   outputTokens: string | null;
   cacheReadTokens: string | null;
@@ -192,17 +193,24 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
         );
       }
       const reported = components.filter((item): item is string => item !== null);
-      if (
-        (reported.length !== 0 && reported.length !== components.length) ||
-        (reported.length > 0 &&
-          reported.reduce((sum, item) => sum + BigInt(item), 0n) !== BigInt(total))
-      ) {
+      if (reported.length !== 0 && reported.length !== components.length) {
         throw new UsageError(400, "token_components_mismatch");
+      }
+      if (reported.some((item) => BigInt(item) > maximum)) {
+        throw new UsageError(400, "tokens_too_large");
+      }
+      const componentTotal =
+        reported.length === 0
+          ? null
+          : reported.reduce((sum, item) => sum + BigInt(item), 0n).toString();
+      if (componentTotal !== null && BigInt(componentTotal) > maximum) {
+        throw new UsageError(400, "tokens_too_large");
       }
       dates.add(entry.date as string);
       return {
         date: entry.date as string,
         totalTokens: total,
+        componentTotalTokens: componentTotal,
         inputTokens: components[0] as string | null,
         outputTokens: components[1] as string | null,
         cacheReadTokens: components[2] as string | null,
@@ -219,6 +227,16 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
       entries,
     };
   });
+}
+
+export function componentTotalsAccepted(agentId: string, entries: readonly ParsedEntry[]): boolean {
+  return (
+    agentId === "codex" ||
+    entries.every(
+      (entry) =>
+        entry.componentTotalTokens === null || entry.componentTotalTokens === entry.totalTokens,
+    )
+  );
 }
 
 export function parseSourceErrors(value: unknown): ParsedSourceError[] {
@@ -369,6 +387,9 @@ async function post(request: Request): Promise<Response> {
           throw new UsageError(400, "unsupported_source");
         }
         if (BigInt(snapshot.syncSequence) <= BigInt(source.last_accepted_sync_sequence)) continue;
+        if (!componentTotalsAccepted(source.agent_id, snapshot.entries)) {
+          throw new UsageError(400, "token_components_mismatch");
+        }
         if (
           !isSupportedAgent(source.agent_id) ||
           !agentRegistry[source.agent_id].countsExactTokens

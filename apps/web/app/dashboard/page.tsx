@@ -29,6 +29,7 @@ interface AccountRow {
   label: string;
   aggregation_mode: "account_max" | "source_sum";
   tokens: string;
+  component_tokens: string | null;
   input_tokens: string | null;
   output_tokens: string | null;
   cache_tokens: string | null;
@@ -131,15 +132,24 @@ function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
     ["Cached", account.cache_tokens],
     ["Reasoning", account.reasoning_tokens],
   ] as const;
+  const componentTotal = account.component_tokens;
   return (
-    <dl aria-label="Weekly token breakdown" className="token-breakdown">
-      {counters.map(([label, tokens]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd title={`${formatExactTokens(tokens)} tokens`}>{formatCompactTokens(tokens)}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <dl aria-label="Weekly token breakdown" className="token-breakdown">
+        {counters.map(([label, tokens]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd title={`${formatExactTokens(tokens)} tokens`}>{formatCompactTokens(tokens)}</dd>
+          </div>
+        ))}
+      </dl>
+      {componentTotal !== null && BigInt(componentTotal) !== BigInt(account.tokens) ? (
+        <p className="token-breakdown-note">
+          Local component counters total {formatCompactTokens(componentTotal)} tokens; the
+          account-wide provider total above is a separate counter.
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -196,6 +206,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               a.label,
               a.aggregation_mode,
               coalesce(usage.tokens, 0)::text AS tokens,
+              usage.component_tokens::text AS component_tokens,
               usage.input_tokens::text AS input_tokens,
               usage.output_tokens::text AS output_tokens,
               usage.cache_tokens::text AS cache_tokens,
@@ -212,44 +223,121 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          LEFT JOIN installations installation ON installation.id = s.installation_id
          LEFT JOIN LATERAL (
            SELECT sum(day.tokens) AS tokens,
-                  CASE WHEN a.aggregation_mode = 'source_sum'
-                         AND bool_and(day.components_complete)
-                       THEN sum(day.input_tokens) END AS input_tokens,
-                  CASE WHEN a.aggregation_mode = 'source_sum'
-                         AND bool_and(day.components_complete)
-                       THEN sum(day.output_tokens) END AS output_tokens,
-                  CASE WHEN a.aggregation_mode = 'source_sum'
-                         AND bool_and(day.components_complete)
-                       THEN sum(day.cache_read_tokens + day.cache_write_tokens) END AS cache_tokens,
-                  CASE WHEN a.aggregation_mode = 'source_sum'
-                         AND bool_and(day.components_complete)
-                       THEN sum(day.reasoning_tokens) END AS reasoning_tokens
+                  CASE WHEN (a.aggregation_mode = 'account_max'
+                              AND bool_or(day.components_complete))
+                              OR (a.aggregation_mode = 'source_sum'
+                              AND bool_and(day.components_complete))
+                       THEN sum(day.component_tokens) FILTER (
+                         WHERE day.components_complete) END AS component_tokens,
+                  CASE WHEN (a.aggregation_mode = 'account_max'
+                              AND bool_or(day.components_complete))
+                              OR (a.aggregation_mode = 'source_sum'
+                              AND bool_and(day.components_complete))
+                       THEN sum(day.input_tokens) FILTER (
+                         WHERE day.components_complete) END AS input_tokens,
+                  CASE WHEN (a.aggregation_mode = 'account_max'
+                              AND bool_or(day.components_complete))
+                              OR (a.aggregation_mode = 'source_sum'
+                              AND bool_and(day.components_complete))
+                       THEN sum(day.output_tokens) FILTER (
+                         WHERE day.components_complete) END AS output_tokens,
+                  CASE WHEN (a.aggregation_mode = 'account_max'
+                              AND bool_or(day.components_complete))
+                              OR (a.aggregation_mode = 'source_sum'
+                              AND bool_and(day.components_complete))
+                       THEN sum(day.cache_read_tokens + day.cache_write_tokens) FILTER (
+                         WHERE day.components_complete) END AS cache_tokens,
+                  CASE WHEN (a.aggregation_mode = 'account_max'
+                              AND bool_or(day.components_complete))
+                              OR (a.aggregation_mode = 'source_sum'
+                              AND bool_and(day.components_complete))
+                       THEN sum(day.reasoning_tokens) FILTER (
+                         WHERE day.components_complete) END AS reasoning_tokens
              FROM (
-               SELECT d.usage_date,
+               SELECT candidate.usage_date,
                       CASE a.aggregation_mode
-                        WHEN 'account_max' THEN max(d.total_tokens)
-                        ELSE sum(d.total_tokens)
+                        WHEN 'account_max' THEN max(candidate.total_tokens)
+                        ELSE sum(candidate.total_tokens)
                       END AS tokens,
-                      sum(d.input_tokens) AS input_tokens,
-                      sum(d.output_tokens) AS output_tokens,
-                      sum(d.cache_read_tokens) AS cache_read_tokens,
-                      sum(d.cache_write_tokens) AS cache_write_tokens,
-                      sum(d.reasoning_tokens) AS reasoning_tokens,
-                      bool_and(d.input_tokens IS NOT NULL
-                        AND d.output_tokens IS NOT NULL
-                        AND d.cache_read_tokens IS NOT NULL
-                        AND d.cache_write_tokens IS NOT NULL
-                        AND d.reasoning_tokens IS NOT NULL) AS components_complete
-                 FROM installation_sources source_usage
-                 JOIN daily_usage d ON d.source_id = source_usage.id
-                WHERE source_usage.agent_account_id = a.id
-                  AND source_usage.user_id = a.user_id
-                  AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
-                GROUP BY d.usage_date
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.input_tokens) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available)
+                        ELSE sum(candidate.input_tokens)
+                      END AS input_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.output_tokens) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available)
+                        ELSE sum(candidate.output_tokens)
+                      END AS output_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.cache_read_tokens) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available)
+                        ELSE sum(candidate.cache_read_tokens)
+                      END AS cache_read_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.cache_write_tokens) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available)
+                        ELSE sum(candidate.cache_write_tokens)
+                      END AS cache_write_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.reasoning_tokens) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available)
+                        ELSE sum(candidate.reasoning_tokens)
+                      END AS reasoning_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN max(candidate.component_tokens)
+                        ELSE sum(candidate.component_tokens)
+                      END AS component_tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN count(DISTINCT ROW(
+                          candidate.input_tokens,
+                          candidate.output_tokens,
+                          candidate.cache_read_tokens,
+                          candidate.cache_write_tokens,
+                          candidate.reasoning_tokens
+                        )) FILTER (
+                          WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.components_available) = 1
+                        ELSE bool_and(candidate.components_available)
+                      END AS components_complete
+                 FROM (
+                   SELECT d.*,
+                          CASE WHEN d.input_tokens IS NOT NULL
+                            AND d.output_tokens IS NOT NULL
+                            AND d.cache_read_tokens IS NOT NULL
+                            AND d.cache_write_tokens IS NOT NULL
+                            AND d.reasoning_tokens IS NOT NULL
+                          THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
+                            + d.cache_write_tokens + d.reasoning_tokens END AS component_tokens,
+                          max(CASE WHEN d.input_tokens IS NOT NULL
+                            AND d.output_tokens IS NOT NULL
+                            AND d.cache_read_tokens IS NOT NULL
+                            AND d.cache_write_tokens IS NOT NULL
+                            AND d.reasoning_tokens IS NOT NULL
+                          THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
+                            + d.cache_write_tokens + d.reasoning_tokens END)
+                            OVER (PARTITION BY d.usage_date) AS maximum_component_tokens,
+                          d.input_tokens IS NOT NULL
+                            AND d.output_tokens IS NOT NULL
+                            AND d.cache_read_tokens IS NOT NULL
+                            AND d.cache_write_tokens IS NOT NULL
+                            AND d.reasoning_tokens IS NOT NULL AS components_available
+                     FROM installation_sources source_usage
+                     JOIN daily_usage d ON d.source_id = source_usage.id
+                    WHERE source_usage.agent_account_id = a.id
+                      AND source_usage.user_id = a.user_id
+                      AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+                 ) candidate
+                GROUP BY candidate.usage_date
              ) day
          ) usage ON true
         WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
-        GROUP BY a.id, usage.tokens, usage.input_tokens, usage.output_tokens,
+        GROUP BY a.id, usage.tokens, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
       [current.id, weekStart, browserInstallationId],

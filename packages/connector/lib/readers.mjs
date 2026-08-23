@@ -1,6 +1,12 @@
 export { parseAntigravityLines } from "./adapters/antigravity.mjs";
 export { collectClaude, parseClaudeLines } from "./adapters/claude.mjs";
-export { codexProfileEnvironment, parseCodexUsage } from "./adapters/codex.mjs";
+export {
+  codexProfileEnvironment,
+  collectCodexSessionUsage,
+  mergeCodexUsageComponents,
+  parseCodexSessionLines,
+  parseCodexUsage,
+} from "./adapters/codex.mjs";
 export { parseGeminiRecords } from "./adapters/gemini.mjs";
 export {
   kimiCollectionMethodForPath,

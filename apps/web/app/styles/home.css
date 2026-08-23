@@ -25,8 +25,9 @@
 .hero-copy {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding-right: var(--shell-inline-padding);
+  text-align: left;
 }
 
 .hero-copy h1 {
@@ -42,6 +43,7 @@
   gap: var(--space-3);
   border-left: 0.0625rem solid var(--color-line);
   padding: 0 var(--shell-inline-padding);
+  text-align: left;
 }
 
 .user-callout > .eyebrow {
@@ -86,7 +88,7 @@
 }
 
 .user-score-line strong {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .hero-guest {
@@ -102,6 +104,7 @@
   gap: var(--space-3);
   border-left: 0.0625rem solid var(--color-line);
   padding: 0 var(--space-4);
+  text-align: left;
 }
 
 .hero-summary {

@@ -26,13 +26,18 @@ match from overriding that decision after temporary Undo metadata is cleaned up.
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
 monetary/request metrics. Raw session stores can contain sensitive content, so adapters extract
-usage locally and discard every other field. The Antigravity wrapper passes native output through to
-the terminal and persists only the stable event ID, UTC date, and exact token counters needed for
-deduplication. Capture records older than 35 days are removed after a successful sync and large
-files are rewritten atomically with the same allowlist. `source add` requires an explicit label and
-never derives network metadata from the local data-root path. Each capture profile is keyed by its
-random client source ID, not an account label, provider identity, or agent name. Multiple
-Antigravity accounts therefore remain in separate local files.
+usage locally and discard every other field. The Codex component pass examines local session JSONL,
+retains only `token_count` cumulative counters and per-day aggregates in local connector state, and
+uses provider-recorded last-call counters for exact local components. Those local components may
+have a different sum from the separate account-wide App Server daily total; both remain aggregate
+counters, and the dashboard identifies the scope difference. It never retains or transmits any other
+transcript field. The Antigravity wrapper passes native output through to the terminal and persists
+only the stable event ID, UTC date, and exact token counters needed for deduplication. Capture
+records older than 35 days are removed after a successful sync and large files are rewritten
+atomically with the same allowlist. `source add` requires an explicit label and never derives
+network metadata from the local data-root path. Each capture profile is keyed by its random client
+source ID, not an account label, provider identity, or agent name. Multiple Antigravity accounts
+therefore remain in separate local files.
 
 Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
 by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value
