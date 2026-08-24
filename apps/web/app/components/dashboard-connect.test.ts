@@ -44,8 +44,11 @@ describe("dashboard connection flow", () => {
     expect(connector).toContain("export const bundledConnectorVersion = connectorPackage.version");
     expect(connector).not.toMatch(/bundledConnectorVersion\s*=\s*["']\d+\.\d+\.\d+/);
     expect(dashboard).toContain("${origin}/downloads/${connectorArchiveName()}");
-    expect(dashboard).toContain("npx --yes --prefer-online --package");
+    expect(dashboard).toContain("npx --allow-remote=all --yes --prefer-online --package");
     expect(dashboard).toContain("-- viberacing connect --origin ${origin}");
+    expect(dashboard).toContain("connectorCommandShell");
+    expect(dashboard).toContain("Run this one-line command in {commandShell}");
+    expect(dashboard).toContain("npm remote allowance applies");
     expect(dashboard).not.toContain("npx @viberacing/connector");
   });
 
@@ -54,7 +57,8 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("versionAtLeast(item.connector_version, bundledConnectorVersion)");
     expect(dashboard).toContain("-- viberacing doctor --repair");
     expect(dashboard).toContain('label="Copy update command"');
-    expect(dashboard).toContain("without collecting or uploading token totals");
+    expect(dashboard).toContain("Repair does not collect or upload");
+    expect(dashboard).toContain("token totals");
   });
 
   it("requires explicit local cleanup around permanent account deletion", () => {
@@ -65,6 +69,9 @@ describe("dashboard connection flow", () => {
     expect(connector).toContain("/downloads/viberacing-connector.tgz");
     expect(connector).toContain("-- viberacing uninstall");
     expect(dashboard).toContain("Local cleanup required");
+    expect(dashboard).toContain('<details className="account-deletion-cleanup">');
+    expect(dashboard).toContain("Show command");
+    expect(dashboard).toContain("Hide command");
     expect(dashboard).toContain("Account deletion cannot uninstall software or hooks");
     expect(dashboard).toContain("once for every connector installation");
     expect(dashboard).toContain("VIBERACING_STATE_DIR");

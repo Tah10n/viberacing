@@ -238,6 +238,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     `/downloads/viberacing-connector-${bundledConnectorVersion}.tgz`,
   );
   await expect(connectorUpdate.locator("code")).toContainText("viberacing doctor --repair");
+  await expect(connectorUpdate.locator("code")).toContainText("--allow-remote=all");
   await expect(connectorUpdate.getByRole("button", { name: "Copy update command" })).toBeVisible();
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
   await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
@@ -317,11 +318,30 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(reconciliation.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".connector-update")).toHaveCount(0);
-  const uninstallCommand = `npx --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
-  await expect(page.getByRole("heading", { name: "Local cleanup required" })).toBeVisible();
+  const uninstallCommand = `npx --allow-remote=all --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
+  const cleanupDisclosure = page.locator(".account-deletion-cleanup");
+  await expect(cleanupDisclosure.getByText("Local cleanup required")).toBeVisible();
+  await expect(cleanupDisclosure).not.toHaveAttribute("open", "");
+  await expect(cleanupDisclosure.locator("pre code")).not.toBeVisible();
+  await cleanupDisclosure.locator("summary").click();
+  await expect(cleanupDisclosure).toHaveAttribute("open", "");
   await expect(page.locator(".account-deletion-cleanup pre code")).toHaveText(uninstallCommand);
   await expect(page.locator(".account-deletion-cleanup")).toContainText("VIBERACING_STATE_DIR");
   await expect(page.getByRole("button", { name: "Copy uninstall command" })).toBeVisible();
+  const leaveConfirmation = page.getByLabel("I understand that my ranking data will be deleted.");
+  const accountDeletionConfirmation = page.getByLabel(
+    "I understand that server data will be permanently deleted and every local connector installation must be uninstalled separately.",
+  );
+  const [leaveConfirmationBox, accountDeletionConfirmationBox] = await Promise.all([
+    leaveConfirmation.boundingBox(),
+    accountDeletionConfirmation.boundingBox(),
+  ]);
+  expect(leaveConfirmationBox).not.toBeNull();
+  expect(accountDeletionConfirmationBox).not.toBeNull();
+  if (leaveConfirmationBox !== null && accountDeletionConfirmationBox !== null) {
+    expect(leaveConfirmationBox.width).toBe(accountDeletionConfirmationBox.width);
+    expect(leaveConfirmationBox.height).toBe(accountDeletionConfirmationBox.height);
+  }
   await page
     .getByLabel(
       "I understand that server data will be permanently deleted and every local connector installation must be uninstalled separately.",

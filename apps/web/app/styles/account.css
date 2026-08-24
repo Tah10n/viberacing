@@ -543,24 +543,75 @@ pre {
 
 .account-deletion-cleanup,
 .account-deleted-cleanup {
-  display: grid;
-  gap: var(--space-3);
   margin: var(--space-4) 0;
   border: 0.0625rem solid var(--color-danger-border);
   border-left-width: 0.25rem;
   border-radius: var(--radius-sm);
-  padding: var(--space-4);
   background: var(--color-danger-surface);
 }
 
-.account-deletion-cleanup h3,
+.account-deletion-cleanup > summary {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+
+.account-deletion-cleanup > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-deletion-cleanup-title {
+  color: var(--color-danger-ink);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.account-deletion-cleanup-action {
+  flex: 0 0 auto;
+  color: var(--color-muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  font-weight: var(--meta-label-weight);
+  letter-spacing: var(--meta-label-tracking);
+  line-height: var(--meta-line-height);
+  text-transform: uppercase;
+}
+
+.account-deletion-cleanup-open,
+.account-deletion-cleanup[open] .account-deletion-cleanup-closed {
+  display: none;
+}
+
+.account-deletion-cleanup[open] .account-deletion-cleanup-open {
+  display: inline;
+}
+
+.account-deletion-cleanup-body,
+.account-deleted-cleanup {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.account-deletion-cleanup-body {
+  border-top: 0.0625rem solid var(--color-danger-border);
+}
+
 .account-deletion-cleanup p,
 .account-deleted-cleanup h2,
 .account-deleted-cleanup p {
   margin: 0;
 }
 
-.account-deletion-cleanup h3,
 .account-deleted-cleanup h2 {
   color: var(--color-danger-ink);
 }
@@ -584,9 +635,13 @@ pre {
 }
 
 .confirm-row input {
+  flex: 0 0 1.125rem;
+  min-width: 1.125rem;
+  min-height: 1.125rem;
   width: 1.125rem;
   height: 1.125rem;
   margin: var(--space-1) 0 0;
+  padding: 0;
   accent-color: var(--color-danger);
 }
 
