@@ -3,13 +3,15 @@ import type { PoolClient } from "pg";
 import type { SupportedAgent } from "./agents";
 
 export const accountDedupLookbackDays = 30;
-export const minimumAccountDedupMatchedDays = 2;
+export const minimumAccountDedupMatchedDays = 7;
+export const minimumAccountDedupDistinctPositiveTotals = 3;
 
 interface CandidateScore {
   account_id: string;
   source_id: string;
   created_at: Date;
   matched_days: number;
+  distinct_matched_totals: number;
   mismatched_days: number;
 }
 
@@ -30,9 +32,13 @@ export interface AccountDedupResult {
 }
 
 export function isConfidentAccountMatch(
-  score: Pick<CandidateScore, "matched_days" | "mismatched_days">,
+  score: Pick<CandidateScore, "matched_days" | "distinct_matched_totals" | "mismatched_days">,
 ): boolean {
-  return score.matched_days >= minimumAccountDedupMatchedDays && score.mismatched_days === 0;
+  return (
+    score.matched_days >= minimumAccountDedupMatchedDays &&
+    score.distinct_matched_totals >= minimumAccountDedupDistinctPositiveTotals &&
+    score.mismatched_days === 0
+  );
 }
 
 export function selectAccountDedupCandidate(
@@ -120,6 +126,10 @@ export async function autoDeduplicateAccountWideSource(
               WHERE candidate.total_tokens = source.total_tokens AND source.total_tokens > 0
             )::int
               AS matched_days,
+            count(DISTINCT source.total_tokens) FILTER (
+              WHERE candidate.total_tokens = source.total_tokens AND source.total_tokens > 0
+            )::int
+              AS distinct_matched_totals,
             count(*) FILTER (WHERE candidate.total_tokens <> source.total_tokens)::int
               AS mismatched_days
        FROM source_days source
