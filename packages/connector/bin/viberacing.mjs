@@ -71,7 +71,7 @@ import {
   automaticDueAt,
   configuredAutomaticSyncTimings,
   appendCapture,
-  claimScheduler,
+  claimConnectedScheduler,
   claimSchedulerLaunch,
   compactCapture,
   clearAutomaticState,
@@ -1379,7 +1379,7 @@ async function automaticSync() {
     await sendSchedulerHandshake("lost");
     return;
   }
-  const scheduler = await claimScheduler();
+  const scheduler = await claimConnectedScheduler();
   if (!scheduler) {
     await sendSchedulerHandshake("lost");
     if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)

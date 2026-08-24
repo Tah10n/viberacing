@@ -542,12 +542,35 @@ async function waitForTestConnectionBarrier(stage) {
   }
 }
 
+function connectionStateLockWaitMs() {
+  return process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+}
+
 export async function withConnectionStateLock(callback) {
   await ensurePrivateStateDirectory();
-  const waitMs = process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  const waitMs = connectionStateLockWaitMs();
   const lock = await acquireOwnedLock(connectionStateLockPath, { waitMs });
   if (!lock) throw new Error("Timed out waiting for connector connection state");
   try {
+    return await callback();
+  } finally {
+    await releaseOwnedLock(lock);
+  }
+}
+
+export async function withExistingConnectionStateLock(callback) {
+  if (!(await connectedStateExists())) return null;
+  const waitMs = connectionStateLockWaitMs();
+  let lock;
+  try {
+    lock = await acquireOwnedLock(connectionStateLockPath, { waitMs });
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!lock) throw new Error("Timed out waiting for connector connection state");
+  try {
+    if (!(await connectedStateExists())) return null;
     return await callback();
   } finally {
     await releaseOwnedLock(lock);

@@ -1789,6 +1789,59 @@ test("a slow detached scheduler survives its parent handshake timeout", async (c
   await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
 });
 
+test("a slow detached scheduler cannot recreate state after uninstall", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-slow-scheduler-uninstall-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "slow-scheduler-uninstall-claim");
+  const trace = join(home, "slow-scheduler-uninstall-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_SCHEDULER_HANDSHAKE_TIMEOUT_MS: "50",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const hook = runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const hookResult = await hook;
+  assert.equal(hookResult.code, 0);
+  const schedulerPid = Number(
+    (await readFile(trace, "utf8"))
+      .trim()
+      .split("\n")
+      .find((line) => line.startsWith("started:"))
+      .split(":", 2)[1],
+  );
+
+  const uninstall = await runWithInput(["uninstall"], environment, "");
+  assert.equal(uninstall.code, 0);
+  assert.match(uninstall.stdout, /local state removed/i);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  await waitFor(async () => (await readFile(trace, "utf8")).includes(`lost:${schedulerPid}`));
+  await waitFor(() => {
+    try {
+      process.kill(schedulerPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
+  await delay(100);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+});
+
 test("uninstall waits for a scheduler child paused before lock acquisition", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-scheduler-launch-"));
   context.after(() => rm(home, { recursive: true, force: true }));
