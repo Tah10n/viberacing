@@ -145,6 +145,14 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.goto("/api/auth/github/start?next=/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText(`Signed in as @${handle}`)).toBeVisible();
+  await page.goto("/?accountDeleted=1");
+  await expect(
+    page.getByRole("heading", { name: "Remove the connector from your computers" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".app-nav").getByRole("link", { name: `@${handle}`, exact: true }),
+  ).toBeVisible();
+  await page.goto("/dashboard");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
   const favicon = await request.get("/favicon.svg");
   expect(favicon.status()).toBe(200);
@@ -309,7 +317,31 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(reconciliation.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".connector-update")).toHaveCount(0);
-  await page.getByLabel("I understand this cannot be undone.").check();
+  const uninstallCommand = `npx --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
+  await expect(page.getByRole("heading", { name: "Local cleanup required" })).toBeVisible();
+  await expect(page.locator(".account-deletion-cleanup pre code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deletion-cleanup")).toContainText("VIBERACING_STATE_DIR");
+  await expect(page.getByRole("button", { name: "Copy uninstall command" })).toBeVisible();
+  await page
+    .getByLabel(
+      "I understand that server data will be permanently deleted and every local connector installation must be uninstalled separately.",
+    )
+    .check();
   await page.getByRole("button", { name: "Delete account" }).click();
-  await expect(page).toHaveURL(/\/?accountDeleted=1$/);
+  await expect(page).toHaveURL(/\/$/);
+  expect(new URL(page.url()).search).toBe("");
+  const accountDeletionReceipt = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "vr_account_deleted",
+  );
+  expect(accountDeletionReceipt).toMatchObject({ httpOnly: true, sameSite: "Lax", value: "1" });
+  await expect(
+    page.getByRole("heading", { name: "Remove the connector from your computers" }),
+  ).toBeVisible();
+  await expect(page.locator(".account-deleted-cleanup pre code")).toHaveText(uninstallCommand);
+  await expect(page.locator(".account-deleted-cleanup")).toContainText("VIBERACING_STATE_DIR");
+  await expect(page.getByRole("button", { name: "Copy uninstall command" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

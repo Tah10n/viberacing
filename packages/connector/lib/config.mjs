@@ -38,6 +38,7 @@ const installationPath = join(stateDirectory, "installation.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
 const connectAttemptPath = join(stateDirectory, "connect-attempt.json");
+const browserHandlerPath = join(stateDirectory, "browser-handler.json");
 const connectionStateLockPath = join(stateDirectory, "connection-state.lock");
 const stateMarkerPath = join(stateDirectory, ".viberacing-state");
 const stateMigrationLockPath = join(stateDirectory, ".viberacing-state.lock");
@@ -542,12 +543,35 @@ async function waitForTestConnectionBarrier(stage) {
   }
 }
 
+function connectionStateLockWaitMs() {
+  return process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+}
+
 export async function withConnectionStateLock(callback) {
   await ensurePrivateStateDirectory();
-  const waitMs = process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  const waitMs = connectionStateLockWaitMs();
   const lock = await acquireOwnedLock(connectionStateLockPath, { waitMs });
   if (!lock) throw new Error("Timed out waiting for connector connection state");
   try {
+    return await callback();
+  } finally {
+    await releaseOwnedLock(lock);
+  }
+}
+
+export async function withExistingConnectionStateLock(callback) {
+  if (!(await connectedStateExists())) return null;
+  const waitMs = connectionStateLockWaitMs();
+  let lock;
+  try {
+    lock = await acquireOwnedLock(connectionStateLockPath, { waitMs });
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!lock) throw new Error("Timed out waiting for connector connection state");
+  try {
+    if (!(await connectedStateExists())) return null;
     return await callback();
   } finally {
     await releaseOwnedLock(lock);
@@ -802,6 +826,42 @@ export async function connectedStateExists() {
     if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
     throw error;
   }
+}
+
+export async function localInstallationStateExists() {
+  for (const path of [
+    installationPath,
+    configPath,
+    sourcesPath,
+    connectAttemptPath,
+    connectionCommitPath,
+    browserHandlerPath,
+    join(stateDirectory, "bin", "viberacing.mjs"),
+  ])
+    try {
+      await lstat(path);
+      return true;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+
+  let runtimeVersions;
+  try {
+    runtimeVersions = await readdir(join(stateDirectory, "runtime"), { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  for (const entry of runtimeVersions) {
+    if (!entry.isDirectory() || !runtimeVersionPattern.test(entry.name)) continue;
+    try {
+      await lstat(join(stateDirectory, "runtime", entry.name, "bin", "viberacing.mjs"));
+      return true;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  return false;
 }
 
 export async function localSourceRegistryContains(clientSourceId) {

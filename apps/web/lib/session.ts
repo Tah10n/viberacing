@@ -5,8 +5,10 @@ import { query, transaction } from "./db";
 
 const cookieName = "vr_session";
 const localInstallationCookieName = "vr_local_installation";
+const accountDeletionReceiptCookieName = "vr_account_deleted";
 const sessionSeconds = 60 * 60 * 24 * 30;
 const localInstallationSeconds = 60 * 60 * 24 * 365;
+const accountDeletionReceiptSeconds = 60 * 5;
 const maximumActiveSessionsPerUser = 10;
 
 export interface Viewer {
@@ -90,6 +92,21 @@ export async function createSession(userId: string): Promise<void> {
   store.set(cookieName, token, {
     httpOnly: true,
     maxAge: sessionSeconds,
+    path: "/",
+    sameSite: "lax",
+    secure: secureCookies(),
+  });
+  store.delete(accountDeletionReceiptCookieName);
+}
+
+export async function hasAccountDeletionReceipt(): Promise<boolean> {
+  return (await cookies()).get(accountDeletionReceiptCookieName)?.value === "1";
+}
+
+export async function issueAccountDeletionReceipt(): Promise<void> {
+  (await cookies()).set(accountDeletionReceiptCookieName, "1", {
+    httpOnly: true,
+    maxAge: accountDeletionReceiptSeconds,
     path: "/",
     sameSite: "lax",
     secure: secureCookies(),

@@ -1756,6 +1756,92 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
 });
 
+test("a slow detached scheduler survives its parent handshake timeout", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-slow-scheduler-handshake-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "slow-scheduler-claim");
+  const trace = join(home, "slow-scheduler-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_SCHEDULER_HANDSHAKE_TIMEOUT_MS: "50",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const hook = runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const hookResult = await hook;
+  assert.equal(hookResult.code, 0);
+  assert.doesNotMatch(await readFile(trace, "utf8"), /acquired:/);
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("acquired:"));
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
+});
+
+test("a slow detached scheduler cannot recreate state after uninstall", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-slow-scheduler-uninstall-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, "http://127.0.0.1:9");
+  const barrier = join(home, "slow-scheduler-uninstall-claim");
+  const trace = join(home, "slow-scheduler-uninstall-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_CLAIM_BARRIER: barrier,
+    VIBERACING_TEST_SCHEDULER_HANDSHAKE_TIMEOUT_MS: "50",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const hook = runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() =>
+    access(`${barrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const hookResult = await hook;
+  assert.equal(hookResult.code, 0);
+  const schedulerPid = Number(
+    (await readFile(trace, "utf8"))
+      .trim()
+      .split("\n")
+      .find((line) => line.startsWith("started:"))
+      .split(":", 2)[1],
+  );
+
+  const uninstall = await runWithInput(["uninstall"], environment, "");
+  assert.equal(uninstall.code, 0);
+  assert.match(uninstall.stdout, /local state removed/i);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+
+  await writeFile(`${barrier}.continue`, "continue\n");
+  await waitFor(async () => (await readFile(trace, "utf8")).includes(`lost:${schedulerPid}`));
+  await waitFor(() => {
+    try {
+      process.kill(schedulerPid, 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
+  await delay(100);
+  await assert.rejects(access(installation.directory), { code: "ENOENT" });
+});
+
 test("uninstall waits for a scheduler child paused before lock acquisition", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-scheduler-launch-"));
   context.after(() => rm(home, { recursive: true, force: true }));
@@ -6182,6 +6268,92 @@ test("uninstall removes v2 and source-owned hooks from remembered custom roots",
   const settings = await readFile(join(root, "settings.json"), "utf8");
   assert.match(settings, /keep-foreign/);
   assert.doesNotMatch(settings, /viberacing-hook-v[23]/);
+});
+
+test("uninstall rejects the wrong default state root and cleans the selected custom installation", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-selected-state-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const customHome = join(home, "custom-installation");
+  const customDirectory = join(customHome, ".viberacing");
+  const qwenRoot = join(home, "qwen-custom");
+  const source = {
+    clientSourceId: "97979797-9797-4797-8797-979797979797",
+    sourceId: "98989898-9898-4989-8989-989898989898",
+    agentId: "qwen_code",
+    dataPath: join(qwenRoot, "usage"),
+    hookConfigRoot: qwenRoot,
+    collectionMethod: "qwen_stats_jsonl",
+    supportedSurface: "cli",
+    suggestedLabel: "Custom state",
+  };
+  await writeMappedInstallation(customHome, "http://127.0.0.1:1", [source]);
+  const runtime = join(customDirectory, "runtime", connectorVersion, "bin", "viberacing.mjs");
+  await mkdir(join(customDirectory, "runtime", connectorVersion, "bin"), { recursive: true });
+  await writeFile(runtime, "// installed connector runtime\n");
+  await mkdir(qwenRoot, { recursive: true });
+  await writeFile(
+    join(qwenRoot, "settings.json"),
+    JSON.stringify({
+      hooks: {
+        SessionEnd: [
+          { hooks: [{ type: "command", command: "keep-foreign" }] },
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `node hook --viberacing-hook-id=viberacing-hook-v3:${source.clientSourceId}`,
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  const defaultEnvironment = connectorEnvironment(home, { HOME: home, USERPROFILE: home });
+  delete defaultEnvironment.VIBERACING_STATE_DIR;
+  const defaultDirectory = join(home, ".viberacing");
+  const initializedDefault = await runWithInput(["source", "list"], defaultEnvironment, "");
+  assert.equal(initializedDefault.code, 0);
+  assert.deepEqual(await readdir(defaultDirectory), [".viberacing-state"]);
+  const defaultMarker = await readFile(join(defaultDirectory, ".viberacing-state"), "utf8");
+
+  const wrongRoot = await runWithInput(["uninstall"], defaultEnvironment, "");
+  assert.equal(wrongRoot.code, 1);
+  assert.equal(wrongRoot.stdout, "");
+  assert.match(wrongRoot.stderr, /No Vibe Racing installation was found/i);
+  assert.match(wrongRoot.stderr, /VIBERACING_STATE_DIR/);
+  assert.deepEqual(await readdir(defaultDirectory), [".viberacing-state"]);
+  assert.equal(await readFile(join(defaultDirectory, ".viberacing-state"), "utf8"), defaultMarker);
+  await access(join(customDirectory, "config.json"));
+  await access(runtime);
+  assert.match(await readFile(join(qwenRoot, "settings.json"), "utf8"), /viberacing-hook-v3/);
+
+  const selectedRoot = await runWithInput(
+    ["uninstall"],
+    { ...defaultEnvironment, VIBERACING_STATE_DIR: customDirectory },
+    "",
+  );
+  assert.equal(selectedRoot.code, 0);
+  assert.match(selectedRoot.stdout, /hooks, installed copy, secrets, and local state removed/i);
+  await assert.rejects(access(customDirectory), { code: "ENOENT" });
+  const settings = await readFile(join(qwenRoot, "settings.json"), "utf8");
+  assert.match(settings, /keep-foreign/);
+  assert.doesNotMatch(settings, /viberacing-hook-v3/);
+});
+
+test("uninstall cleans an incomplete installation that contains only an installed runtime", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-runtime-only-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const runtime = join(directory, "runtime", connectorVersion, "bin", "viberacing.mjs");
+  await mkdir(join(directory, "runtime", connectorVersion, "bin"), { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+  await writeFile(runtime, "// installed connector runtime\n");
+
+  const result = await runWithInput(["uninstall"], connectorEnvironment(home), "");
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /hooks, installed copy, secrets, and local state removed/i);
+  await assert.rejects(access(directory), { code: "ENOENT" });
 });
 
 test("uninstall cleans later roots and retains failed-root metadata for an idempotent retry", async (context) => {

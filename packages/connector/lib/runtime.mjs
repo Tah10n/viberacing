@@ -19,6 +19,7 @@ import {
   ensurePrivateStateDirectory,
   stateDirectory,
   withConnectionStateLock,
+  withExistingConnectionStateLock,
 } from "./config.mjs";
 import { acquireOwnedLock, ownedLockActive, releaseOwnedLock } from "./owned-lock.mjs";
 
@@ -264,6 +265,16 @@ async function acquireRuntimeOwnedLock(path, options = {}) {
 
 export async function claimScheduler() {
   return (await acquireRuntimeOwnedLock(schedulerLockPath)) ?? false;
+}
+
+export async function claimConnectedScheduler() {
+  const scheduler = await withExistingConnectionStateLock(async () => {
+    if (await lifecycleMutationActive()) return false;
+    await ensurePrivateStateDirectory();
+    if (!(await connectedStateExists())) return false;
+    return (await acquireOwnedLock(schedulerLockPath)) ?? false;
+  });
+  return scheduler ?? false;
 }
 
 export async function claimSchedulerLaunch(options = {}) {

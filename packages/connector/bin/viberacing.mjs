@@ -48,6 +48,7 @@ import {
   connectedSourceMappingExists,
   diagnoseHooks,
   invalidateConnectAttempt,
+  localInstallationStateExists,
   localSourceRegistryContains,
   prepareRuntime,
   reconcileHooks,
@@ -70,7 +71,7 @@ import {
   automaticDueAt,
   configuredAutomaticSyncTimings,
   appendCapture,
-  claimScheduler,
+  claimConnectedScheduler,
   claimSchedulerLaunch,
   compactCapture,
   clearAutomaticState,
@@ -1247,6 +1248,12 @@ async function browserSync(value) {
   }
 }
 
+function schedulerHandshakeWaitMs() {
+  if (process.env.NODE_ENV !== "test") return 2_000;
+  const value = process.env.VIBERACING_TEST_SCHEDULER_HANDSHAKE_TIMEOUT_MS;
+  return value !== undefined && /^[1-9]\d{0,3}$/.test(value) ? Number(value) : 5_000;
+}
+
 async function launchAutomaticScheduler(existingLaunch) {
   if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
   const launch = existingLaunch ?? (await claimSchedulerLaunch());
@@ -1267,26 +1274,26 @@ async function launchAutomaticScheduler(existingLaunch) {
     );
     const status = await new Promise((resolve) => {
       let settled = false;
+      let timeout;
+      const message = (value) =>
+        finish(value?.type === "viberacing-scheduler" ? value.status : "lost");
+      const lost = () => finish("lost");
       const finish = (value) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timeout);
+        if (timeout !== undefined) clearTimeout(timeout);
+        child.off("message", message);
+        child.off("error", lost);
+        child.off("exit", lost);
         resolve(value);
       };
-      const timeout = setTimeout(
-        () => {
-          child.kill();
-          finish("lost");
-        },
-        process.env.NODE_ENV === "test" ? 5_000 : 2_000,
-      );
-      child.once("message", (message) =>
-        finish(message?.type === "viberacing-scheduler" ? message.status : "lost"),
-      );
-      child.once("error", () => finish("lost"));
-      child.once("exit", () => finish("lost"));
+      timeout = setTimeout(() => finish("pending"), schedulerHandshakeWaitMs());
+      child.once("message", message);
+      child.once("error", lost);
+      child.once("exit", lost);
     });
     child.unref();
+    child.channel?.unref();
     return status === "acquired";
   } finally {
     if (ownsLaunch) await releaseSchedulerLaunch(launch);
@@ -1312,11 +1319,11 @@ async function waitForTestSchedulerClaimBarrier() {
 }
 
 async function sendSchedulerHandshake(status) {
-  if (typeof process.send !== "function") return;
+  if (typeof process.send !== "function" || !process.connected) return;
   await new Promise((resolve) =>
     process.send({ type: "viberacing-scheduler", status }, () => resolve()),
   );
-  process.disconnect?.();
+  if (process.connected) process.disconnect();
 }
 
 async function recordAutomaticSyncFailure(clientSourceIds) {
@@ -1372,7 +1379,7 @@ async function automaticSync() {
     await sendSchedulerHandshake("lost");
     return;
   }
-  const scheduler = await claimScheduler();
+  const scheduler = await claimConnectedScheduler();
   if (!scheduler) {
     await sendSchedulerHandshake("lost");
     if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
@@ -1983,6 +1990,10 @@ try {
         `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) could not be cleaned; local source metadata was retained.`,
       );
   } else if (command === "uninstall") {
+    if (!(await localInstallationStateExists()))
+      throw new Error(
+        "No Vibe Racing installation was found in the selected state directory. Set VIBERACING_STATE_DIR to the value used during connect.",
+      );
     const cleanup = await withLifecycleMutation(async () => {
       await invalidateAndCancelConnectAttempt();
       try {

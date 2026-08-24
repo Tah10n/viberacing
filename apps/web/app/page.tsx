@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import Link from "next/link";
+import { CopyCommandButton } from "./components/copy-command-button";
 import { RacerLink } from "./components/racer-link";
 import { StandingsTable } from "./components/standings-table";
 import {
@@ -9,11 +10,15 @@ import {
   leaderboard,
   publicProfile,
 } from "@/lib/leaderboard";
-import { viewer } from "@/lib/session";
+import { hasAccountDeletionReceipt, viewer } from "@/lib/session";
 import { agentNames, supportedAgents } from "@/lib/agents";
+import { connectorUninstallCommand } from "@/lib/connector";
+import { publicOrigin } from "@/lib/config";
 
 interface HomePageProps {
-  readonly searchParams: Promise<{ page?: string | string[] }>;
+  readonly searchParams: Promise<{
+    page?: string | string[];
+  }>;
 }
 
 const leaderboardPageSize = 100;
@@ -32,9 +37,15 @@ function pageHref(page: number): string {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();
-  const page = parsePage((await searchParams).page);
+  const params = await searchParams;
+  const page = parsePage(params.page);
+  const uninstallCommand = connectorUninstallCommand(publicOrigin().origin);
   const offset = (page - 1) * leaderboardPageSize;
-  const current = await viewer();
+  const [current, accountDeletionReceipt] = await Promise.all([
+    viewer(),
+    hasAccountDeletionReceipt(),
+  ]);
+  const accountDeleted = current === null && accountDeletionReceipt;
   const [pageRows, profile] = await Promise.all([
     leaderboard({ limit: leaderboardPageSize + 1, offset }),
     current === null ? Promise.resolve(null) : publicProfile(current.handle),
@@ -43,6 +54,31 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const rows = pageRows.slice(0, leaderboardPageSize);
   return (
     <main className="home-page">
+      {accountDeleted ? (
+        <section className="account-deleted-cleanup" aria-labelledby="account-deleted-title">
+          <p className="eyebrow">ACCOUNT DELETED</p>
+          <h2 id="account-deleted-title">Remove the connector from your computers</h2>
+          <p>
+            Your Vibe Racing server data was permanently deleted. The website cannot uninstall local
+            software or hooks, so run this command once for every connector installation that was
+            connected.
+          </p>
+          <pre>
+            <code>{uninstallCommand}</code>
+          </pre>
+          <CopyCommandButton
+            command={uninstallCommand}
+            copiedLabel="Uninstall command copied"
+            label="Copy uninstall command"
+          />
+          <p className="muted">
+            If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before running
+            this command. Repeat it for every connector state directory. This removes only Vibe
+            Racing hooks, its installed copy, secrets, and local state. Provider usage data is not
+            changed.
+          </p>
+        </section>
+      ) : null}
       <section className="hero" aria-labelledby="race-title">
         <div className="hero-primary">
           <div className="hero-copy">
