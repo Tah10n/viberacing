@@ -11,7 +11,8 @@ export function connectorCommandShell(
     platform === "ios" ||
     agent.includes("android") ||
     agent.includes("iphone") ||
-    agent.includes("ipad")
+    agent.includes("ipad") ||
+    agent.includes("mobile/")
   ) {
     return fallback;
   }

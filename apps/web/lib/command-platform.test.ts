@@ -16,6 +16,10 @@ describe("connectorCommandShell", () => {
   it.each([
     [null, "Mozilla/5.0 (iPhone)"],
     ['"Android"', "Mozilla/5.0 (Linux; Android 16)"],
+    [
+      null,
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1",
+    ],
     [null, "Unknown browser"],
   ])("falls back to the connector computer for %s / %s", (platformHint, userAgent) => {
     expect(connectorCommandShell(platformHint, userAgent)).toBe(
