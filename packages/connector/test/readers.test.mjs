@@ -8,6 +8,7 @@ import { zstdCompressSync } from "node:zlib";
 import {
   collectClaude,
   collectCodexSessionUsage,
+  codexUsageSnapshot,
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
@@ -273,6 +274,142 @@ test("keeps the Codex account total while attaching exact local components", () 
       components,
     ),
     [components[0], { ...components[1], totalTokens: "8" }],
+  );
+});
+
+test("keeps the exact local Codex tail until delayed authoritative buckets arrive", () => {
+  const current = {
+    date: "2026-08-12",
+    totalTokens: "27",
+    inputTokens: "9",
+    outputTokens: "8",
+    cacheReadTokens: "4",
+    cacheWriteTokens: "2",
+    reasoningTokens: "4",
+  };
+  assert.deepEqual(
+    codexUsageSnapshot(
+      [{ date: "2026-08-10", totalTokens: "18" }],
+      [
+        {
+          ...current,
+          date: "2026-08-11",
+          totalTokens: "7",
+        },
+        current,
+      ],
+      "2026-08-12",
+    ),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-10", totalTokens: "18", completeness: "complete" },
+        {
+          ...current,
+          date: "2026-08-11",
+          totalTokens: "7",
+          completeness: "partial",
+        },
+        { ...current, completeness: "partial" },
+      ],
+    },
+  );
+});
+
+test("retains every provisional Codex day across a UTC rollover", () => {
+  const component = (date, totalTokens) => ({
+    date,
+    totalTokens,
+    inputTokens: totalTokens,
+    outputTokens: "0",
+    cacheReadTokens: "0",
+    cacheWriteTokens: "0",
+    reasoningTokens: "0",
+  });
+  const authoritative = [{ date: "2026-08-20", totalTokens: "10" }];
+  assert.deepEqual(
+    codexUsageSnapshot(authoritative, [component("2026-08-21", "11")], "2026-08-21"),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-20", totalTokens: "10", completeness: "complete" },
+        { ...component("2026-08-21", "11"), completeness: "partial" },
+      ],
+    },
+  );
+  assert.deepEqual(
+    codexUsageSnapshot(
+      authoritative,
+      [component("2026-08-21", "11"), component("2026-08-22", "12")],
+      "2026-08-22",
+    ),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-20", totalTokens: "10", completeness: "complete" },
+        { ...component("2026-08-21", "11"), completeness: "partial" },
+        { ...component("2026-08-22", "12"), completeness: "partial" },
+      ],
+    },
+  );
+});
+
+test("does not backfill a local Codex gap before the newest authoritative bucket", () => {
+  const component = (date, totalTokens) => ({
+    date,
+    totalTokens,
+    inputTokens: totalTokens,
+    outputTokens: "0",
+    cacheReadTokens: "0",
+    cacheWriteTokens: "0",
+    reasoningTokens: "0",
+  });
+  assert.deepEqual(
+    codexUsageSnapshot(
+      [
+        { date: "2026-08-20", totalTokens: "10" },
+        { date: "2026-08-22", totalTokens: "12" },
+      ],
+      [component("2026-08-21", "11"), component("2026-08-23", "13")],
+      "2026-08-23",
+    ),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-20", totalTokens: "10", completeness: "complete" },
+        { date: "2026-08-22", totalTokens: "12", completeness: "complete" },
+        { ...component("2026-08-23", "13"), completeness: "partial" },
+      ],
+    },
+  );
+});
+
+test("prefers the Codex account total once the current UTC bucket is available", () => {
+  const current = {
+    date: "2026-08-12",
+    totalTokens: "27",
+    inputTokens: "9",
+    outputTokens: "8",
+    cacheReadTokens: "4",
+    cacheWriteTokens: "2",
+    reasoningTokens: "4",
+  };
+  assert.deepEqual(
+    codexUsageSnapshot([{ date: "2026-08-12", totalTokens: "30" }], [current], "2026-08-12"),
+    {
+      completeness: "complete",
+      entries: [{ ...current, totalTokens: "30" }],
+    },
+  );
+});
+
+test("keeps a Codex snapshot partial while the current UTC bucket is unavailable", () => {
+  assert.deepEqual(
+    codexUsageSnapshot([{ date: "2026-08-11", totalTokens: "18" }], [], "2026-08-12"),
+    {
+      completeness: "partial",
+      entries: [{ date: "2026-08-11", totalTokens: "18", completeness: "complete" }],
+    },
   );
 });
 

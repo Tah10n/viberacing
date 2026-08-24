@@ -125,4 +125,12 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("ELSE bool_and(candidate.components_available)");
     expect(dashboard).toContain("Local component counters total");
   });
+
+  it("shares authoritative account-day precedence with ranking summaries", () => {
+    const usageSummary = source("../../lib/usage-summary.ts");
+    expect(usageSummary).toContain("export const accountMaxDailyTokensSql");
+    expect(usageSummary).toContain("updated_at > latest_complete_at");
+    expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(2);
+    expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
+  });
 });

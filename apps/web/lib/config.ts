@@ -81,7 +81,14 @@ export function databaseSslEnabled(): boolean {
 
 export { databaseClientConfig };
 
-export const connectorProtocolVersion = 2;
+export const connectorProtocolVersion = 3;
+export type SupportedConnectorProtocolVersion = 2 | typeof connectorProtocolVersion;
+
+export function isSupportedConnectorProtocolVersion(
+  value: unknown,
+): value is SupportedConnectorProtocolVersion {
+  return value === 2 || value === connectorProtocolVersion;
+}
 export const expectedSchemaVersion = "004_browser_sync_rate_guard.sql";
 
 export type TrustedProxyMode = "none" | "railway" | "trusted-x-real-ip";

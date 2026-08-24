@@ -10,6 +10,14 @@ experience or protocol.
 
 ### Changed
 
+- Manual and browser-triggered Sync now submit a successfully collected snapshot even when its
+  normalized usage is unchanged, so account and computer **Last sync** times advance immediately.
+  Automatic hooks retain fingerprint suppression and make no usage request for unchanged data.
+- Codex provisional ranking now retains every exact local day after the newest delayed App Server
+  bucket across UTC rollovers. Snapshots containing any partial day are non-destructive until later
+  authoritative account buckets correct the provisional values. Across linked computers, a newer
+  complete observation excludes older provisional rows while later provisional usage can advance the
+  total again until the next complete observation.
 - Connected-computer cards now identify outdated connector versions and provide an exact,
   same-origin `doctor --repair` command. Compact reconciliation reports the current connector
   version without sending usage, and the update notice clears after server confirmation.

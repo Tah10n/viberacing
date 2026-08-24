@@ -1,3 +1,4 @@
+import { isSupportedConnectorProtocolVersion } from "@/lib/config";
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
@@ -13,6 +14,7 @@ interface PollRow {
   id: string;
   status: "pending" | "active" | "revoked";
   pairing_pending: boolean;
+  protocol_version: number;
 }
 
 interface SourceRow {
@@ -55,7 +57,8 @@ async function post(request: Request): Promise<Response> {
     const rows = await query<PollRow>(
       `SELECT id::text,
               status,
-              pending_device_token_hash IS NOT NULL AS pairing_pending
+              pending_device_token_hash IS NOT NULL AS pairing_pending,
+              protocol_version
          FROM installations
         WHERE id = $1
           AND poll_token_hash = $2
@@ -94,6 +97,9 @@ async function post(request: Request): Promise<Response> {
         pairingStatus === "pending" ? "debug" : "warn",
       );
     }
+    if (!isSupportedConnectorProtocolVersion(installation.protocol_version)) {
+      throw new Error("Installation has an unsupported connector protocol version");
+    }
     const deviceToken = deviceTokenFromPollToken(body.pollToken);
     const mappings = await query<SourceRow>(
       `SELECT s.client_source_id,
@@ -129,7 +135,12 @@ async function post(request: Request): Promise<Response> {
             collectionMethod: source.collection_method,
             lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
           })),
-          protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+          protocol: {
+            version: installation.protocol_version,
+            snapshotDays: 31,
+            maximumSources: 32,
+            maximumEntries: 1_024,
+          },
         },
         { headers: { "Cache-Control": "no-store" } },
       ),

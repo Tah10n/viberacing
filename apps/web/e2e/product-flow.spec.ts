@@ -21,6 +21,7 @@ interface ActivePairingResponse {
   status: "active";
   deviceToken: string;
   sources: Array<{ sourceId: string }>;
+  protocol: { version: number };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,6 +41,8 @@ function isActivePairingResponse(value: unknown): value is ActivePairingResponse
     isRecord(value) &&
     value.status === "active" &&
     typeof value.deviceToken === "string" &&
+    isRecord(value.protocol) &&
+    value.protocol.version === 3 &&
     Array.isArray(value.sources) &&
     value.sources.length === 1 &&
     value.sources.every((source) => isRecord(source) && typeof source.sourceId === "string")
@@ -162,7 +165,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const clientSourceId = randomUUID();
   const start = await request.post("/api/pairing/start", {
     data: {
-      protocolVersion: 2,
+      protocolVersion: 3,
       connectorVersion: "0.3.0",
       browserSyncCapable: true,
       installationId,
@@ -203,7 +206,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const usage = await request.post("/api/usage", {
     headers: { authorization: `Bearer ${active.deviceToken}` },
     data: {
-      protocolVersion: 2,
+      protocolVersion: 3,
       snapshots: [
         {
           sourceId: mapped.sourceId,

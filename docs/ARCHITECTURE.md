@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-local adapter registry -> connector protocol v2 -> Next.js -> PostgreSQL
+local adapter registry -> connector protocol v3 -> Next.js -> PostgreSQL
 browser ---------------------- GitHub OAuth -----------^
 ```
 
@@ -58,10 +58,12 @@ history never triggers a merge. Provider email and credentials are neither read 
 Every changed source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence.
 Complete snapshots replace values and delete missing dates; partial snapshots update only present
 dates and retain the greater prior total when a partial subtotal is lower. Complete corrections may
-decrease values. The server validates canonical decimal strings, source ownership, body/range
-limits, and token components, then uses bulk JSON-to-recordset SQL in one transaction. A failed
-collector can send only the allowlisted `collector_failed` diagnostic code for its mapped source;
-raw errors, content, and paths are never part of the protocol.
+decrease values, including complete per-day entries carried by an otherwise partial snapshot. The v3
+protocol adds that per-day completeness field; the server continues to accept legacy v2 snapshots,
+whose entries inherit the snapshot-level status. The server validates canonical decimal strings,
+source ownership, body/range limits, and token components, then uses bulk JSON-to-recordset SQL in
+one transaction. A failed collector can send only the allowlisted `collector_failed` diagnostic code
+for its mapped source; raw errors, content, and paths are never part of the protocol.
 
 The server reports `lastAcceptedSyncSequence` during pairing, installation inspection, and usage
 responses. Connect, doctor, and sync reconcile the local value with the server maximum. A stale
@@ -69,11 +71,13 @@ pending snapshot is rewritten to `server + 1` and retried once; there is no unbo
 
 Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
 Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
-use daily `max`; machine-local sources use daily `sum`. Different accounts and agents sum. Dashboard
-components for an account-wide day are selected conservatively from the largest complete local
-component total. They are hidden for that day if equally large rows contain more than one distinct
-tuple. The dashboard identifies a local component sum that differs from the separate provider
-account total.
+use a daily maximum over every complete observation and any provisional observations accepted after
+the newest complete one; a later complete observation excludes older provisional rows and may
+correct the value down. If no complete observation exists, every provisional row is eligible.
+Machine-local sources use daily `sum`; different accounts and agents sum. Dashboard components for
+an account-wide day are selected conservatively from the largest complete local component total.
+They are hidden for that day if equally large rows contain more than one distinct tuple. The
+dashboard identifies a local component sum that differs from the separate provider account total.
 
 ## Reliability and lifecycle
 
@@ -86,8 +90,11 @@ official daily total remains authoritative; the connector incrementally extracts
 token events from that profile's local session records, uses the exact last-call counters, removes
 cache/reasoning overlap, and deduplicates repeated or copied events with content-free hashes. The
 provider's account-wide daily total and the locally observed component sum remain separate exact
-counters. Missing, bounded, or changed transcript shapes therefore degrade to total-only rather than
-an estimate.
+counters. While account buckets lag, each exact local daily sum after the newest authoritative
+bucket is submitted as partial so Sync can update the ranking immediately across UTC rollovers. The
+source remains non-destructive until an authoritative bucket covers the current day; later complete
+account data corrects each provisional value. Missing, bounded, or changed transcript shapes
+otherwise degrade to total-only rather than an estimate.
 
 Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable local
 source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and other

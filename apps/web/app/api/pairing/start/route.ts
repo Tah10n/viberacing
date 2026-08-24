@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/config";
+import {
+  isSupportedConnectorProtocolVersion,
+  minimumConnectorVersion,
+  publicOrigin,
+  versionAtLeast,
+} from "@/lib/config";
 import { deviceTokenFromPollToken, digest, pairingCode, randomToken } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isSupportedAgent, isSupportedSource, type SupportedAgent } from "@/lib/agents";
@@ -36,7 +41,6 @@ interface InstallationRow {
   secret_matches: boolean;
 }
 
-const protocolVersion = 2;
 const identifierPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,39}$/;
 const bodyKeys = new Set([
@@ -132,7 +136,9 @@ async function post(request: Request): Promise<Response> {
       sourceIds,
     );
     if (
-      body.protocolVersion !== protocolVersion ||
+      typeof body.protocolVersion !== "number" ||
+      !Number.isSafeInteger(body.protocolVersion) ||
+      body.protocolVersion < 1 ||
       !versionPattern.test(
         typeof body.connectorVersion === "string" ? body.connectorVersion : "",
       ) ||
@@ -145,6 +151,9 @@ async function post(request: Request): Promise<Response> {
       (body.browserSyncCapable !== undefined && typeof body.browserSyncCapable !== "boolean")
     ) {
       return problem(400, "invalid_request");
+    }
+    if (!isSupportedConnectorProtocolVersion(body.protocolVersion)) {
+      return problem(426, "unsupported_protocol_version");
     }
     if (!versionAtLeast(body.connectorVersion as string, minimumConnectorVersion())) {
       return problem(426, "connector_upgrade_required");
@@ -268,7 +277,7 @@ async function post(request: Request): Promise<Response> {
             digest(pollToken),
             pendingDeviceHash,
             connectorVersion,
-            protocolVersion,
+            body.protocolVersion,
             body.browserSyncCapable === true,
           ],
         );

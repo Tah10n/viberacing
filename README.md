@@ -22,13 +22,16 @@ drains saved payloads first and runs collectors only for currently dirty sources
 loop: one dirty generation gets one automatic attempt, and a later hook or manual sync retries saved
 failures. There is no daemon, watcher, or polling loop. Manual `viberacing sync` and the first
 successful `connect` still collect every active source immediately. The first collection is bounded
-to 31 UTC days, later JSONL reads resume from safe byte offsets, and an unchanged normalized
-snapshot causes no HTTP request.
+to 31 UTC days, and later JSONL reads resume from safe byte offsets. Automatic hooks suppress an
+unchanged normalized snapshot. Manual and browser-triggered Sync still submit a content-equivalent
+confirmation snapshot so the dashboard's **Last sync** time advances after a successful check.
 
-Codex marks its source dirty after each completed turn. Its authoritative account-wide App Server
-daily total remains the ranking value, while provider-recorded local input/output/cache/reasoning
-counters are shown separately when available. The dashboard explicitly notes when those different
-scopes do not sum to the same value; neither counter is estimated.
+Codex marks its source dirty after each completed turn. While its account-wide App Server daily
+buckets lag, Sync uses every exact locally observed non-overlapping daily total after the newest
+authoritative bucket as a partial value, including across UTC rollovers. The dashboard and ranking
+therefore update immediately; later App Server buckets may correct each value up or down.
+Provider-recorded local input/output/cache/reasoning counters remain separately visible; neither
+counter is estimated.
 
 Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still

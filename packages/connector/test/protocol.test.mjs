@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeStoredSourceMapping, parseProtocolResponse } from "../lib/protocol.mjs";
+import {
+  connectorProtocolVersion,
+  mergeStoredSourceMapping,
+  parseProtocolResponse,
+} from "../lib/protocol.mjs";
 import { sanitizeTerminalText } from "../lib/terminal.mjs";
 
 const installationId = "11111111-1111-4111-8111-111111111111";
@@ -47,7 +51,12 @@ function activePoll(sources = [mapping()], overrides = {}) {
     status: "active",
     deviceToken: "device_token_that_is_long_enough_123456789",
     sources,
-    protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+    protocol: {
+      version: connectorProtocolVersion,
+      snapshotDays: 31,
+      maximumSources: 32,
+      maximumEntries: 1_024,
+    },
     ...overrides,
   };
 }
@@ -63,6 +72,20 @@ test("accepts the exact pairing contract and preserves local-only source authori
   assert.deepEqual(
     Object.keys(result.sources[0]).filter((key) => key.startsWith("server")),
     [],
+  );
+});
+
+test("rejects a pairing response for an older wire protocol", async () => {
+  await assert.rejects(
+    parseProtocolResponse(
+      json(
+        activePoll(undefined, {
+          protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+        }),
+      ),
+      { kind: "pairingPoll", localSources: [local] },
+    ),
+    /invalid protocol response/,
   );
 });
 

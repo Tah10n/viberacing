@@ -16,7 +16,7 @@ import {
   pendingDiagnosticEvents,
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
-import { parseProtocolResponse } from "../lib/protocol.mjs";
+import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
 import { normalizeOrigin } from "../lib/origin.mjs";
 import {
   adapters,
@@ -101,7 +101,7 @@ import {
   writeState,
 } from "../lib/runtime.mjs";
 
-const protocolVersion = 2;
+const protocolVersion = connectorProtocolVersion;
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
@@ -917,7 +917,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   for (const path of await pendingPayloads()) {
     let payload;
     try {
-      payload = await readPending(path);
+      payload = { ...(await readPending(path)), protocolVersion };
     } catch (error) {
       if (error?.code === "ENOENT") continue;
       throw error;
@@ -1081,7 +1081,7 @@ async function sync(providedConfig, options = {}) {
           entries,
           warnings: resultWarnings,
         });
-        if (state.fingerprints[source.sourceId] === nextFingerprint) continue;
+        if (options.automatic && state.fingerprints[source.sourceId] === nextFingerprint) continue;
         const previous = BigInt(state.sequences[source.sourceId] ?? "0");
         const sequence = (previous + 1n).toString();
         state.sequences[source.sourceId] = sequence;
