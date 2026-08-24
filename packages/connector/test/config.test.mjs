@@ -6311,13 +6311,19 @@ test("uninstall rejects the wrong default state root and cleans the selected cus
   );
   const defaultEnvironment = connectorEnvironment(home, { HOME: home, USERPROFILE: home });
   delete defaultEnvironment.VIBERACING_STATE_DIR;
+  const defaultDirectory = join(home, ".viberacing");
+  const initializedDefault = await runWithInput(["source", "list"], defaultEnvironment, "");
+  assert.equal(initializedDefault.code, 0);
+  assert.deepEqual(await readdir(defaultDirectory), [".viberacing-state"]);
+  const defaultMarker = await readFile(join(defaultDirectory, ".viberacing-state"), "utf8");
 
   const wrongRoot = await runWithInput(["uninstall"], defaultEnvironment, "");
   assert.equal(wrongRoot.code, 1);
   assert.equal(wrongRoot.stdout, "");
   assert.match(wrongRoot.stderr, /No Vibe Racing installation was found/i);
   assert.match(wrongRoot.stderr, /VIBERACING_STATE_DIR/);
-  await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
+  assert.deepEqual(await readdir(defaultDirectory), [".viberacing-state"]);
+  assert.equal(await readFile(join(defaultDirectory, ".viberacing-state"), "utf8"), defaultMarker);
   await access(join(customDirectory, "config.json"));
   await access(runtime);
   assert.match(await readFile(join(qwenRoot, "settings.json"), "utf8"), /viberacing-hook-v3/);
@@ -6333,6 +6339,21 @@ test("uninstall rejects the wrong default state root and cleans the selected cus
   const settings = await readFile(join(qwenRoot, "settings.json"), "utf8");
   assert.match(settings, /keep-foreign/);
   assert.doesNotMatch(settings, /viberacing-hook-v3/);
+});
+
+test("uninstall cleans an incomplete installation that contains only an installed runtime", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-runtime-only-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const runtime = join(directory, "runtime", connectorVersion, "bin", "viberacing.mjs");
+  await mkdir(join(directory, "runtime", connectorVersion, "bin"), { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+  await writeFile(runtime, "// installed connector runtime\n");
+
+  const result = await runWithInput(["uninstall"], connectorEnvironment(home), "");
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /hooks, installed copy, secrets, and local state removed/i);
+  await assert.rejects(access(directory), { code: "ENOENT" });
 });
 
 test("uninstall cleans later roots and retains failed-root metadata for an idempotent retry", async (context) => {
