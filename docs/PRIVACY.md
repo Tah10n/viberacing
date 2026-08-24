@@ -12,10 +12,12 @@ user-defined labels are preserved. The legacy value is never included in a pairi
 Normalized local data roots, executable paths, hook config roots, and their hashes are never copied
 into pairing config or requests. Compact installation reconciliation sends only the current
 connector version and the already assigned server source IDs; legacy connectors may omit the
-version. During sync it sends a server source ID, sequence, UTC range, complete/partial status, UTC
-dates, aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. If
-collection fails, it may instead send the fixed `collector_failed` source error and source ID
-through the legacy usage endpoint; exception messages are never sent.
+version. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
+aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3
+may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
+carry only snapshot-level status. If collection fails, it may instead send the fixed
+`collector_failed` source error and source ID through the legacy usage endpoint; exception messages
+are never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
@@ -50,14 +52,16 @@ usage locally and discard every other field. The Codex component pass examines l
 retains only `token_count` cumulative counters and per-day aggregates in local connector state, and
 uses provider-recorded last-call counters for exact local components. Those local components may
 have a different sum from the separate account-wide App Server daily total; both remain aggregate
-counters, and the dashboard identifies the scope difference. It never retains or transmits any other
-transcript field. The Antigravity wrapper passes native output through to the terminal and persists
-only the stable event ID, UTC date, and exact token counters needed for deduplication. Capture
-records older than 35 days are removed after a successful sync and large files are rewritten
-atomically with the same allowlist. `source add` requires an explicit label and never derives
-network metadata from the local data-root path. Each capture profile is keyed by its random client
-source ID, not an account label, provider identity, or agent name. Multiple Antigravity accounts
-therefore remain in separate local files.
+counters, and the dashboard identifies the scope difference. While account buckets lag, every exact
+local daily aggregate after the newest authoritative bucket is sent as a partial ranking value and
+is later corrected by complete account data. These remain date-level aggregate counters; it never
+retains or transmits any other transcript field. The Antigravity wrapper passes native output
+through to the terminal and persists only the stable event ID, UTC date, and exact token counters
+needed for deduplication. Capture records older than 35 days are removed after a successful sync and
+large files are rewritten atomically with the same allowlist. `source add` requires an explicit
+label and never derives network metadata from the local data-root path. Each capture profile is
+keyed by its random client source ID, not an account label, provider identity, or agent name.
+Multiple Antigravity accounts therefore remain in separate local files.
 
 Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
 by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value

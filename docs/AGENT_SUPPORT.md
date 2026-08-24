@@ -79,8 +79,9 @@ be postponed past 120 seconds from the first dirty event. It drains pending uplo
 rescanning, then collects only active dirty sources; events for different sources can share one
 batch. The scheduler exits after its batch and there is no daemon, watcher, or polling loop. Manual
 sync and initial connect are immediate and collect all active sources. A first sync reads a bounded
-31-day UTC window; later file-backed syncs are incremental and an unchanged snapshot sends no HTTP
-request. Seven agents currently contribute exact counters.
+31-day UTC window; later file-backed syncs are incremental. An unchanged automatic snapshot sends no
+HTTP request, while manual and browser-triggered Sync submit a confirmation snapshot so **Last
+sync** advances. Seven agents currently contribute exact counters.
 
 ## Upstream references
 

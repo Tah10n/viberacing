@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { componentTotalsAccepted, parseSnapshots, parseSourceErrors } from "./route";
+import {
+  componentTotalsAccepted,
+  entryCompletenessAccepted,
+  parseSnapshots as parseVersionedSnapshots,
+  parseSourceErrors,
+} from "./route";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 const sourceId = "11111111-1111-4111-8111-111111111111";
+const parseSnapshots = (value: unknown) => parseVersionedSnapshots(value, 3);
 
 describe("usage payload privacy and numeric contract", () => {
   it("accepts canonical decimal strings beyond JavaScript integer precision", () => {
@@ -61,6 +67,89 @@ describe("usage payload privacy and numeric contract", () => {
         },
       ]),
     ).toThrow("token_components_mismatch");
+  });
+
+  it("defaults per-day completeness and restricts authoritative partial entries to Codex", () => {
+    const date = today();
+    const partial = parseSnapshots([
+      {
+        sourceId,
+        syncSequence: "1",
+        rangeStart: date,
+        rangeEnd: date,
+        completeness: "partial",
+        entries: [{ date, totalTokens: "2", completeness: "complete" }],
+      },
+    ])[0];
+    if (!partial) throw new Error("missing partial snapshot");
+    expect(partial.entries[0]?.completeness).toBe("complete");
+    expect(entryCompletenessAccepted("codex", partial)).toBe(true);
+    expect(entryCompletenessAccepted("opencode", partial)).toBe(false);
+
+    const covered = parseSnapshots([
+      {
+        sourceId,
+        syncSequence: "1",
+        rangeStart: date,
+        rangeEnd: date,
+        completeness: "complete",
+        entries: [{ date, totalTokens: "2", completeness: "partial" }],
+      },
+    ])[0];
+    if (!covered) throw new Error("missing range-complete snapshot");
+    expect(entryCompletenessAccepted("codex", covered)).toBe(true);
+    expect(entryCompletenessAccepted("opencode", covered)).toBe(false);
+
+    const complete = parseSnapshots([
+      {
+        sourceId,
+        syncSequence: "1",
+        rangeStart: date,
+        rangeEnd: date,
+        completeness: "complete",
+        entries: [{ date, totalTokens: "2" }],
+      },
+    ])[0];
+    if (!complete) throw new Error("missing complete snapshot");
+    expect(complete.entries[0]?.completeness).toBe("complete");
+    expect(entryCompletenessAccepted("codex", complete)).toBe(true);
+  });
+
+  it("keeps v2 payloads compatible while reserving per-day completeness for v3", () => {
+    const date = today();
+    const legacySnapshot = {
+      sourceId,
+      syncSequence: "1",
+      rangeStart: date,
+      rangeEnd: date,
+      completeness: "partial",
+      entries: [{ date, totalTokens: "2" }],
+    };
+    expect(parseVersionedSnapshots([legacySnapshot], 2)[0]?.entries[0]?.completeness).toBe(
+      "partial",
+    );
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...legacySnapshot,
+            entries: [{ date, totalTokens: "2", completeness: "complete" }],
+          },
+        ],
+        2,
+      ),
+    ).toThrow("invalid_entry");
+    expect(
+      parseVersionedSnapshots(
+        [
+          {
+            ...legacySnapshot,
+            entries: [{ date, totalTokens: "2", completeness: "complete" }],
+          },
+        ],
+        3,
+      )[0]?.entries[0]?.completeness,
+    ).toBe("complete");
   });
 
   it("retains an independently exact component total for source-aware validation", () => {

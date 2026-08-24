@@ -1,5 +1,7 @@
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 
+export const connectorProtocolVersion = 3;
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
 const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/;
@@ -172,7 +174,7 @@ function parsePairingPoll(value, context) {
       value.protocol,
       new Set(["version", "snapshotDays", "maximumSources", "maximumEntries"]),
     ) ||
-    value.protocol.version !== 2 ||
+    value.protocol.version !== connectorProtocolVersion ||
     value.protocol.snapshotDays !== 31 ||
     value.protocol.maximumSources !== 32 ||
     value.protocol.maximumEntries !== 1_024

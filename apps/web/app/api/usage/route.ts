@@ -1,4 +1,8 @@
-import { connectorProtocolVersion, maximumDailyTokens } from "@/lib/config";
+import {
+  isSupportedConnectorProtocolVersion,
+  maximumDailyTokens,
+  type SupportedConnectorProtocolVersion,
+} from "@/lib/config";
 import { agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { autoDeduplicateAccountWideSource } from "@/lib/account-dedup";
 import { digest } from "@/lib/crypto";
@@ -27,6 +31,7 @@ interface SnapshotInput {
 interface EntryInput {
   date?: unknown;
   totalTokens?: unknown;
+  completeness?: unknown;
   inputTokens?: unknown;
   outputTokens?: unknown;
   cacheReadTokens?: unknown;
@@ -54,6 +59,7 @@ interface SourceRow {
 interface ParsedEntry {
   date: string;
   totalTokens: string;
+  completeness: "complete" | "partial";
   componentTotalTokens: string | null;
   inputTokens: string | null;
   outputTokens: string | null;
@@ -97,7 +103,7 @@ const snapshotKeys = new Set([
   "completeness",
   "entries",
 ]);
-const entryKeys = new Set([
+const legacyEntryKeys = new Set([
   "date",
   "totalTokens",
   "inputTokens",
@@ -106,6 +112,7 @@ const entryKeys = new Set([
   "cacheWriteTokens",
   "reasoningTokens",
 ]);
+const entryKeys = new Set([...legacyEntryKeys, "completeness"]);
 const sourceErrorKeys = new Set(["sourceId", "code"]);
 
 function onlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
@@ -123,7 +130,10 @@ function optionalToken(value: unknown): string | null | undefined {
   return typeof value === "string" && tokenPattern.test(value) ? value : undefined;
 }
 
-export function parseSnapshots(value: unknown): ParsedSnapshot[] {
+export function parseSnapshots(
+  value: unknown,
+  protocolVersion: SupportedConnectorProtocolVersion,
+): ParsedSnapshot[] {
   if (!Array.isArray(value) || value.length > 32) {
     throw new UsageError(400, "invalid_snapshots");
   }
@@ -164,12 +174,14 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
     if (totalEntries > 1_024) throw new UsageError(400, "too_many_entries");
     const dates = new Set<string>();
     const entries = snapshot.entries.map((rawEntry): ParsedEntry => {
-      if (!isRecord(rawEntry) || !onlyKeys(rawEntry, entryKeys)) {
+      const allowedEntryKeys = protocolVersion >= 3 ? entryKeys : legacyEntryKeys;
+      if (!isRecord(rawEntry) || !onlyKeys(rawEntry, allowedEntryKeys)) {
         throw new UsageError(400, "invalid_entry");
       }
       const entry = rawEntry as EntryInput;
       const date = utcDate(entry.date);
       const total = typeof entry.totalTokens === "string" ? entry.totalTokens : "";
+      const completeness = entry.completeness ?? snapshot.completeness;
       const components = [
         optionalToken(entry.inputTokens),
         optionalToken(entry.outputTokens),
@@ -185,6 +197,7 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
         dates.has(entry.date as string) ||
         !totalIsValid ||
         BigInt(total) > maximum ||
+        (completeness !== "complete" && completeness !== "partial") ||
         components.includes(undefined)
       ) {
         throw new UsageError(
@@ -210,6 +223,7 @@ export function parseSnapshots(value: unknown): ParsedSnapshot[] {
       return {
         date: entry.date as string,
         totalTokens: total,
+        completeness,
         componentTotalTokens: componentTotal,
         inputTokens: components[0] as string | null,
         outputTokens: components[1] as string | null,
@@ -239,6 +253,21 @@ export function componentTotalsAccepted(agentId: string, entries: readonly Parse
   );
 }
 
+export function entryCompletenessAccepted(
+  agentId: string,
+  snapshot: Readonly<ParsedSnapshot>,
+): boolean {
+  return snapshot.entries.every(
+    (entry) =>
+      entry.completeness === snapshot.completeness ||
+      (agentId === "codex" &&
+        ((snapshot.completeness === "partial" && entry.completeness === "complete") ||
+          (snapshot.completeness === "complete" &&
+            entry.completeness === "partial" &&
+            entry.date === snapshot.rangeEnd))),
+  );
+}
+
 export function parseSourceErrors(value: unknown): ParsedSourceError[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 32) {
@@ -262,9 +291,12 @@ export function parseSourceErrors(value: unknown): ParsedSourceError[] {
   });
 }
 
-function affectedWeeks(snapshot: ParsedSnapshot): Set<string> {
+function affectedWeeks(
+  snapshot: ParsedSnapshot,
+  completeness: "complete" | "partial",
+): Set<string> {
   const result = new Set<string>();
-  if (snapshot.completeness === "partial") {
+  if (completeness === "partial") {
     for (const entry of snapshot.entries)
       result.add(currentWeekStart(new Date(`${entry.date}T00:00:00Z`)));
     return result;
@@ -331,10 +363,10 @@ async function post(request: Request): Promise<Response> {
     const rawBody = await readBoundedJson(request, 131_072);
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as UsageBody;
-    if (body.protocolVersion !== connectorProtocolVersion) {
+    if (!isSupportedConnectorProtocolVersion(body.protocolVersion)) {
       return problem(426, "unsupported_protocol_version");
     }
-    const snapshots = parseSnapshots(body.snapshots);
+    const snapshots = parseSnapshots(body.snapshots, body.protocolVersion);
     const sourceErrors = parseSourceErrors(body.sourceErrors);
     const sourceIds = [
       ...snapshots.map((snapshot) => snapshot.sourceId),
@@ -372,6 +404,11 @@ async function post(request: Request): Promise<Response> {
       );
       const sourceById = new Map(sources.rows.map((source) => [source.id, source]));
       if (sources.rows.length !== sourceIds.length) throw new UsageError(400, "unsupported_source");
+      const acceptanceClock = await client.query<{ accepted_at: Date }>(
+        "SELECT clock_timestamp() AS accepted_at",
+      );
+      const acceptedAt = acceptanceClock.rows[0]?.accepted_at;
+      if (!(acceptedAt instanceof Date)) throw new Error("Usage acceptance clock is unavailable");
 
       let acceptedEntries = 0;
       let acceptedSnapshots = 0;
@@ -379,7 +416,7 @@ async function post(request: Request): Promise<Response> {
         sources.rows.map((source) => [source.id, source.last_accepted_sync_sequence]),
       );
       const acceptedSourceIds = new Set<string>();
-      const completeSourcesForDedup = new Set<string>();
+      const sourcesWithCompleteEntriesForDedup = new Set<string>();
       const summaries = new Set<string>();
       for (const snapshot of snapshots) {
         const source = sourceById.get(snapshot.sourceId);
@@ -390,6 +427,14 @@ async function post(request: Request): Promise<Response> {
         if (!componentTotalsAccepted(source.agent_id, snapshot.entries)) {
           throw new UsageError(400, "token_components_mismatch");
         }
+        if (!entryCompletenessAccepted(source.agent_id, snapshot)) {
+          throw new UsageError(400, "invalid_entry_completeness");
+        }
+        const sourceCompleteness = snapshot.entries.some(
+          (entry) => entry.completeness === "partial",
+        )
+          ? "partial"
+          : snapshot.completeness;
         if (
           !isSupportedAgent(source.agent_id) ||
           !agentRegistry[source.agent_id].countsExactTokens
@@ -408,7 +453,7 @@ async function post(request: Request): Promise<Response> {
                     last_warning_summary = 'This agent does not expose exact countable tokens',
                     updated_at = now()
               WHERE id = $1`,
-            [snapshot.sourceId, snapshot.syncSequence, snapshot.completeness],
+            [snapshot.sourceId, snapshot.syncSequence, sourceCompleteness],
           );
           acceptedSnapshots += 1;
           acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
@@ -416,7 +461,7 @@ async function post(request: Request): Promise<Response> {
           continue;
         }
         const dates = snapshot.entries.map((entry) => entry.date);
-        if (snapshot.completeness === "complete") {
+        if (sourceCompleteness === "complete") {
           await client.query(
             `DELETE FROM daily_usage
               WHERE source_id = $1
@@ -429,7 +474,7 @@ async function post(request: Request): Promise<Response> {
           await client.query(
             `INSERT INTO daily_usage
                (source_id, usage_date, total_tokens, input_tokens, output_tokens,
-                cache_read_tokens, cache_write_tokens, reasoning_tokens, completeness)
+                cache_read_tokens, cache_write_tokens, reasoning_tokens, completeness, updated_at)
              SELECT $1,
                     e.date::date,
                     e."totalTokens"::numeric,
@@ -438,10 +483,12 @@ async function post(request: Request): Promise<Response> {
                     e."cacheReadTokens"::numeric,
                     e."cacheWriteTokens"::numeric,
                     e."reasoningTokens"::numeric,
-                    $3
+                    e.completeness,
+                    $3::timestamptz
                FROM jsonb_to_recordset($2::jsonb) AS e(
                  date text,
                  "totalTokens" text,
+                 completeness text,
                  "inputTokens" text,
                  "outputTokens" text,
                  "cacheReadTokens" text,
@@ -475,10 +522,17 @@ async function post(request: Request): Promise<Response> {
                      THEN daily_usage.reasoning_tokens ELSE EXCLUDED.reasoning_tokens END,
                    completeness = CASE
                      WHEN EXCLUDED.completeness = 'partial'
-                      AND EXCLUDED.total_tokens < daily_usage.total_tokens
+                      AND (EXCLUDED.total_tokens < daily_usage.total_tokens
+                        OR (EXCLUDED.total_tokens = daily_usage.total_tokens
+                          AND daily_usage.completeness = 'complete'))
                      THEN daily_usage.completeness ELSE EXCLUDED.completeness END,
-                   updated_at = now()`,
-            [snapshot.sourceId, JSON.stringify(snapshot.entries), snapshot.completeness],
+                   updated_at = CASE
+                     WHEN EXCLUDED.completeness = 'partial'
+                      AND (EXCLUDED.total_tokens < daily_usage.total_tokens
+                        OR (EXCLUDED.total_tokens = daily_usage.total_tokens
+                          AND daily_usage.completeness = 'complete'))
+                     THEN daily_usage.updated_at ELSE $3::timestamptz END`,
+            [snapshot.sourceId, JSON.stringify(snapshot.entries), acceptedAt],
           );
         }
         await client.query(
@@ -493,8 +547,8 @@ async function post(request: Request): Promise<Response> {
           [
             snapshot.sourceId,
             snapshot.syncSequence,
-            snapshot.completeness,
-            snapshot.completeness === "partial" ? "Collector reported a partial snapshot" : null,
+            sourceCompleteness,
+            sourceCompleteness === "partial" ? "Collector reported a partial snapshot" : null,
           ],
         );
         acceptedEntries += snapshot.entries.length;
@@ -502,12 +556,12 @@ async function post(request: Request): Promise<Response> {
         acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
         acceptedSourceIds.add(snapshot.sourceId);
         if (
-          snapshot.completeness === "complete" &&
+          snapshot.entries.some((entry) => entry.completeness === "complete") &&
           agentRegistry[source.agent_id].aggregationMode === "account_max"
         ) {
-          completeSourcesForDedup.add(snapshot.sourceId);
+          sourcesWithCompleteEntriesForDedup.add(snapshot.sourceId);
         }
-        for (const week of affectedWeeks(snapshot)) {
+        for (const week of affectedWeeks(snapshot, sourceCompleteness)) {
           summaries.add(`${source.user_id}\0${source.agent_id}\0${week}`);
         }
       }
@@ -526,7 +580,7 @@ async function post(request: Request): Promise<Response> {
       const rebuiltAgents = new Set<string>();
       let autoMerges = 0;
       const todayUtc = new Date().toISOString().slice(0, 10);
-      for (const sourceId of [...completeSourcesForDedup].sort()) {
+      for (const sourceId of [...sourcesWithCompleteEntriesForDedup].sort()) {
         const merged = await autoDeduplicateAccountWideSource(
           client,
           lockedInstallation.user_id,

@@ -1,6 +1,12 @@
 import type { PoolClient } from "pg";
 import { agentRegistry, isSupportedAgent } from "./agents";
 
+export const accountMaxDailyTokensSql = `max(total_tokens) FILTER (
+  WHERE latest_complete_at IS NULL
+     OR completeness = 'complete'
+     OR (completeness = 'partial' AND updated_at > latest_complete_at)
+)`;
+
 export async function refreshAgentWeek(
   client: PoolClient,
   userId: string,
@@ -15,16 +21,29 @@ export async function refreshAgentWeek(
     return;
   }
   await client.query(
-    `WITH account_daily AS (
+    `WITH source_days AS (
        SELECT a.id,
+              a.aggregation_mode,
               d.usage_date,
-              CASE a.aggregation_mode WHEN 'account_max' THEN max(d.total_tokens) ELSE sum(d.total_tokens) END AS tokens
+              d.total_tokens,
+              d.completeness,
+              d.updated_at,
+              max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
          FROM agent_accounts a
          JOIN installation_sources s ON s.agent_account_id = a.id
          JOIN daily_usage d ON d.source_id = s.id
         WHERE a.user_id = $2 AND a.agent_id = $3
           AND d.usage_date >= $1::date AND d.usage_date < $1::date + 7
-        GROUP BY a.id, a.aggregation_mode, d.usage_date
+     ), account_daily AS (
+       SELECT id,
+              usage_date,
+              CASE aggregation_mode
+                WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
+                ELSE sum(total_tokens)
+              END AS tokens
+         FROM source_days
+        GROUP BY id, aggregation_mode, usage_date
      )
      INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
      SELECT $1::date, $2, $3, sum(tokens) FROM account_daily
@@ -59,16 +78,30 @@ export async function rebuildAgentSummaries(
   ]);
   if (!isSupportedAgent(agentId) || !agentRegistry[agentId].countsExactTokens) return;
   await client.query(
-    `WITH account_daily AS (
+    `WITH source_days AS (
        SELECT a.id,
+              a.aggregation_mode,
               date_trunc('week', d.usage_date)::date AS week_start,
               d.usage_date,
-              CASE a.aggregation_mode WHEN 'account_max' THEN max(d.total_tokens) ELSE sum(d.total_tokens) END AS tokens
+              d.total_tokens,
+              d.completeness,
+              d.updated_at,
+              max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
          FROM agent_accounts a
          JOIN installation_sources s ON s.agent_account_id = a.id
          JOIN daily_usage d ON d.source_id = s.id
         WHERE a.user_id = $1 AND a.agent_id = $2
-        GROUP BY a.id, a.aggregation_mode, date_trunc('week', d.usage_date)::date, d.usage_date
+     ), account_daily AS (
+       SELECT id,
+              week_start,
+              usage_date,
+              CASE aggregation_mode
+                WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
+                ELSE sum(total_tokens)
+              END AS tokens
+         FROM source_days
+        GROUP BY id, aggregation_mode, week_start, usage_date
      )
      INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
      SELECT week_start, $1, $2, sum(tokens) FROM account_daily GROUP BY week_start`,

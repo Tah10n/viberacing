@@ -46,10 +46,12 @@
   isolated run quota and higher aggregate user quota while honoring bounded `Retry-After` backoff.
 - Confirm a 20-event burst produces one deferred batch, automatic attempts respect the two-minute
   interval/maximum delay, a Claude event does not start Codex or open OpenCode SQLite, pending
-  delivery does not rescan collectors, manual sync collects all sources immediately, and unchanged
-  data produces no request. Verify permanent collector/network failure ends after one generation,
-  retains safe pending/error state, and retries only after a new hook/manual sync. No daemon,
-  watcher, polling loop, system service, or required cron should be installed.
+  delivery does not rescan collectors, and unchanged automatic data produces no usage request.
+  Confirm manual and browser-triggered Sync collect their selected sources immediately, submit an
+  unchanged confirmation snapshot, and advance account/computer **Last sync** timestamps. Verify
+  permanent collector/network failure ends after one generation, retains safe pending/error state,
+  and retries only after a new hook/manual sync. No daemon, watcher, polling loop, system service,
+  or required cron should be installed.
 - Verify two Codex profiles use distinct `CODEX_HOME` roots; Antigravity Personal and Work use
   distinct client-source capture files and require `--source`; removing or server-retiring one
   source removes only its hook; multi-account reassignment immediately rebuilds totals; missing
@@ -79,8 +81,8 @@
   major-version ignore indefinitely unaudited.
 - Configure npm trusted publishing with provenance for `@viberacing/connector`; run
   `corepack pnpm connector:package:check` against the package root before the first publish.
-- Publish only after the deployed server accepts protocol v2 and its minimum version policy matches
-  the package.
+- Publish the v3 connector only after the deployed server accepts both legacy protocol v2 and
+  protocol v3, and its minimum version policy matches the package.
 
 ## PostgreSQL operations
 

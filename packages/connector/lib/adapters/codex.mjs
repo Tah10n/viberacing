@@ -1130,7 +1130,7 @@ export async function collectCodexSessionUsage(
   };
 }
 
-export function mergeCodexUsageComponents(authoritative, components) {
+export function mergeCodexUsageComponents(authoritative, components, provisionalEndDate = null) {
   const byDate = new Map(components.map((entry) => [entry.date, entry]));
   const componentKeys = [
     "inputTokens",
@@ -1139,7 +1139,7 @@ export function mergeCodexUsageComponents(authoritative, components) {
     "cacheWriteTokens",
     "reasoningTokens",
   ];
-  return authoritative.map((entry) => {
+  const merged = authoritative.map((entry) => {
     const component = byDate.get(entry.date);
     if (!component || !componentKeys.every((key) => component[key] !== undefined)) return entry;
     return {
@@ -1151,6 +1151,35 @@ export function mergeCodexUsageComponents(authoritative, components) {
       reasoningTokens: component.reasoningTokens,
     };
   });
+  const latestAuthoritativeDate = authoritative.reduce(
+    (latest, entry) => (latest === null || entry.date > latest ? entry.date : latest),
+    null,
+  );
+  if (provisionalEndDate !== null) {
+    for (const component of byDate.values()) {
+      if (
+        component.date <= provisionalEndDate &&
+        (latestAuthoritativeDate === null || component.date > latestAuthoritativeDate) &&
+        componentKeys.every((key) => component[key] !== undefined)
+      ) {
+        merged.push(component);
+      }
+    }
+  }
+  return merged.sort((left, right) => left.date.localeCompare(right.date));
+}
+
+export function codexUsageSnapshot(authoritative, components, currentDate) {
+  const entries = mergeCodexUsageComponents(authoritative, components, currentDate);
+  const authoritativeDates = new Set(authoritative.map((entry) => entry.date));
+  if (authoritativeDates.has(currentDate)) return { entries, completeness: "complete" };
+  return {
+    entries: entries.map((entry) => ({
+      ...entry,
+      completeness: authoritativeDates.has(entry.date) ? "complete" : "partial",
+    })),
+    completeness: "partial",
+  };
 }
 
 export function parseCodexUsage(payload) {
@@ -1270,9 +1299,9 @@ async function collect(source, range, state = {}) {
           warnings: ["codex_session_components_incomplete"],
           diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
         }));
+        const snapshot = codexUsageSnapshot(authoritative, components.entries, range.rangeEnd);
         return {
-          entries: mergeCodexUsageComponents(authoritative, components.entries),
-          completeness: "complete",
+          ...snapshot,
           nextState: { componentUsage: components.nextState },
           warnings: components.warnings,
           diagnostics: components.diagnostics,

@@ -12,13 +12,20 @@ already included in prompt input and reasoning already included in output. All i
 canonical decimal strings in the protocol and `numeric(30,0)` in PostgreSQL.
 
 Codex is the one scoped exception for component display: its authoritative daily total is
-account-wide, while its provider-recorded component events are locally retained. The ranking always
-uses the account total. Available local components are displayed as a separate exact tuple with
-their own sum and an explicit scope note; they are never scaled or estimated to fit the account
-total. Other agents' five components must sum exactly to `totalTokens`.
+account-wide, while its provider-recorded component events are locally retained. While account
+buckets lag, the ranking uses every exact locally observed non-overlapping daily sum after the
+newest authoritative bucket as a partial value, including days retained across a UTC rollover. Later
+complete account data replaces each value and may correct it up or down. Available local components
+are displayed as a separate exact tuple with their own sum and an explicit scope note; they are
+never scaled or estimated to fit the account total. Other agents' five components must sum exactly
+to `totalTokens`.
 
-For an `account_max` account, daily usage is the maximum across linked sources. This prevents an
-account-wide Codex daily bucket reported from two computers from doubling. For a `source_sum`
+For an `account_max` account, complete observations establish the authoritative daily baseline as
+their maximum across linked sources. A partial observation accepted after the newest complete
+observation may advance the displayed value until another complete observation excludes older
+provisional rows. If no complete observation exists, the daily maximum across provisional sources is
+used. This prevents an account-wide Codex bucket reported from two computers from doubling without
+letting an offline computer's older provisional value mask a later correction. For a `source_sum`
 account, daily usage is the sum across machine-local histories. Daily account totals then sum across
 multiple accounts of the same agent; agent totals sum into the user's weekly total. An `account_max`
 component breakdown selects the largest complete local component sum for each day and is hidden for
@@ -41,15 +48,19 @@ Each source snapshot has a monotonic sequence and inclusive UTC range. A stale o
 is a no-op. The server exposes its last accepted sequence so a connector that lost local state
 continues at `server + 1`; one stale pending snapshot is repaired and retried once. A newer
 `complete` snapshot replaces values and deletes dates missing from the range; a newer `partial`
-snapshot preserves missing dates and cannot reduce a previously stored daily total. This protects an
-exact day when a bounded collector temporarily misses one file. A later complete correction may
-increase or decrease values. Only weeks touched by an accepted snapshot are rebuilt.
+snapshot preserves missing dates and cannot reduce a previously stored daily total. A snapshot with
+any partial day is treated as partial for deletion even if its outer range flag says complete. This
+protects an exact day when a bounded collector temporarily misses one file. A partial snapshot may
+mark an individually authoritative date complete, allowing that date to correct an earlier
+provisional value up or down without deleting other absent dates. Only weeks touched by an accepted
+snapshot are rebuilt.
 
 Automatic scheduling changes delivery timing, not ranking semantics. Source-owned hooks coalesce
 events into at most about one batch every two minutes; only dirty sources are collected, while
 pending aggregates can upload without a rescan. Manual sync and first connect collect all active
-sources immediately. An unchanged snapshot makes no request. The leaderboard is intentionally not
-advertised as real-time.
+sources immediately. Automatic hooks make no usage request for an unchanged normalized snapshot.
+Manual and browser-triggered Sync submit a content-equivalent snapshot with the next sequence, so a
+successful check advances **Last sync** and the refreshed dashboard immediately confirms it.
 
 Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
 Code, Qwen Code, Antigravity, and Gemini CLI.

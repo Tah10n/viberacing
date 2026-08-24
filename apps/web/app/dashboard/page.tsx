@@ -17,6 +17,7 @@ import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
+import { accountMaxDailyTokensSql } from "@/lib/usage-summary";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -269,7 +270,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
              FROM (
                SELECT candidate.usage_date,
                       CASE a.aggregation_mode
-                        WHEN 'account_max' THEN max(candidate.total_tokens)
+                        WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
                         ELSE sum(candidate.total_tokens)
                       END AS tokens,
                       CASE a.aggregation_mode
@@ -335,6 +336,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                           THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
                             + d.cache_write_tokens + d.reasoning_tokens END)
                             OVER (PARTITION BY d.usage_date) AS maximum_component_tokens,
+                          max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                            OVER (PARTITION BY d.usage_date) AS latest_complete_at,
                           d.input_tokens IS NOT NULL
                             AND d.output_tokens IS NOT NULL
                             AND d.cache_read_tokens IS NOT NULL
@@ -380,20 +383,30 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id],
     ),
     query<DailyUsageRow>(
-      `WITH account_daily AS (
+      `WITH source_days AS (
          SELECT a.id,
+                a.aggregation_mode,
                 d.usage_date,
-                CASE a.aggregation_mode
-                  WHEN 'account_max' THEN max(d.total_tokens)
-                  ELSE sum(d.total_tokens)
-                END AS tokens
+                d.total_tokens,
+                d.completeness,
+                d.updated_at,
+                max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                  OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
            FROM agent_accounts a
            JOIN installation_sources s
              ON s.agent_account_id = a.id AND s.user_id = a.user_id
            JOIN daily_usage d ON d.source_id = s.id
           WHERE a.user_id = $1
             AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
-          GROUP BY a.id, a.aggregation_mode, d.usage_date
+       ), account_daily AS (
+         SELECT id,
+                usage_date,
+                CASE aggregation_mode
+                  WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
+                  ELSE sum(total_tokens)
+                END AS tokens
+           FROM source_days
+          GROUP BY id, aggregation_mode, usage_date
        )
        SELECT usage_date::text, sum(tokens)::text AS tokens
          FROM account_daily

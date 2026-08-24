@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import {
+  connectorProtocolVersion,
   databaseClientConfig,
   databaseSslEnabled,
+  isSupportedConnectorProtocolVersion,
   isSemanticVersion,
   maximumDailyTokens,
   publicOrigin,
@@ -44,6 +46,17 @@ afterEach(() => {
   mutableEnv.NODE_ENV = originalNodeEnv;
   if (originalAllowInsecureLocal === undefined) delete process.env.VIBERACING_ALLOW_INSECURE_LOCAL;
   else process.env.VIBERACING_ALLOW_INSECURE_LOCAL = originalAllowInsecureLocal;
+});
+
+describe("connector protocol compatibility", () => {
+  it("keeps legacy v2 available during the v3 rollout", () => {
+    expect(connectorProtocolVersion).toBe(3);
+    expect(isSupportedConnectorProtocolVersion(2)).toBe(true);
+    expect(isSupportedConnectorProtocolVersion(3)).toBe(true);
+    expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
+    expect(isSupportedConnectorProtocolVersion(4)).toBe(false);
+    expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
+  });
 });
 
 describe("public origin", () => {

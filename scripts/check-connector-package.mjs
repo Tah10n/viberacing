@@ -7,6 +7,17 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = "packages/connector";
 const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
+const protocolPattern = /export const connectorProtocolVersion = ([1-9]\d*);/;
+const connectorProtocol = readFileSync(
+  resolve(root, packageRoot, "lib/protocol.mjs"),
+  "utf8",
+).match(protocolPattern)?.[1];
+const serverProtocol = readFileSync(resolve(root, "apps/web/lib/config.ts"), "utf8").match(
+  protocolPattern,
+)?.[1];
+if (connectorProtocol === undefined || connectorProtocol !== serverProtocol) {
+  throw new Error("Connector and server current protocol versions do not match");
+}
 execFileSync(
   process.execPath,
   [resolve(root, packageRoot, "scripts/generate-version.mjs"), "--check"],

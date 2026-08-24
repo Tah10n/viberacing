@@ -30,6 +30,7 @@ import {
   pendingDiagnosticEvents,
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
+import { connectorProtocolVersion } from "../lib/protocol.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -2711,7 +2712,12 @@ test("manual sync collects every active source and clears only its prior dirty g
   await assert.rejects(access(join(directory, "scheduler.lock")));
 
   await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
-  assert.equal(bodies.length, 1);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].snapshots.length, 2);
+  assert.deepEqual(
+    bodies[1].snapshots.map((snapshot) => snapshot.syncSequence),
+    ["2", "2"],
+  );
   assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 4);
 });
 
@@ -3084,7 +3090,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
             status: "active",
             deviceToken: "opencode_label_device_token_that_is_long_enough",
             protocol: {
-              version: 2,
+              version: connectorProtocolVersion,
               snapshotDays: 31,
               maximumSources: 32,
               maximumEntries: 1_024,
@@ -3137,6 +3143,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
     },
   );
 
+  assert.equal(pairingBody.protocolVersion, connectorProtocolVersion);
   assert.equal(pairingBody.sources[0].suggestedLabel, "OpenCode");
   assert.equal(JSON.stringify(pairingBody).includes("custom-channel"), false);
   assert.equal((await readLocalSources(directory))[0].suggestedLabel, "OpenCode");
@@ -3220,7 +3227,7 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
                   deviceToken: "race_replacement_device_token_that_is_long_enough",
                   sources: [mapping],
                   protocol: {
-                    version: 2,
+                    version: connectorProtocolVersion,
                     snapshotDays: 31,
                     maximumSources: 32,
                     maximumEntries: 1_024,
@@ -3476,7 +3483,7 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
             status: "active",
             deviceToken: "retained_device_token_that_is_long_enough_12",
             protocol: {
-              version: 2,
+              version: connectorProtocolVersion,
               snapshotDays: 31,
               maximumSources: 32,
               maximumEntries: 1_024,
@@ -3706,7 +3713,7 @@ test("reconnect preserves transient failures, retires disconnected sources, and 
             status: "active",
             deviceToken: "dashboard_disconnect_device_token_long_enough",
             protocol: {
-              version: 2,
+              version: connectorProtocolVersion,
               snapshotDays: 31,
               maximumSources: 32,
               maximumEntries: 1_024,
@@ -3885,7 +3892,7 @@ test("hostile pairing response cannot change config, hooks, or local paths", asy
           status: "active",
           deviceToken: "hostile_device_token_that_is_long_enough_12",
           protocol: {
-            version: 2,
+            version: connectorProtocolVersion,
             snapshotDays: 31,
             maximumSources: 32,
             maximumEntries: 1_024,
@@ -4902,7 +4909,7 @@ test("remote reconciliation cannot restore retired runtime state from a stale sn
   assert.doesNotMatch(await readFile(join(qwenRoot, "settings.json"), "utf8"), /viberacing/);
 });
 
-test("recovers a missing local sequence from 500 and sends snapshot 501", async (context) => {
+test("recovers a missing sequence and confirms unchanged manual sync with the next sequence", async (context) => {
   let uploaded;
   let uploadCount = 0;
   const sourceId = "66666666-6666-4666-8666-666666666666";
@@ -4920,13 +4927,7 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
       uploadCount += 1;
       uploaded = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(
-        JSON.stringify(
-          usageResponse(uploaded, {
-            sourceSequences: [{ sourceId, lastAcceptedSyncSequence: "501", accepted: true }],
-          }),
-        ),
-      );
+      response.end(JSON.stringify(usageResponse(uploaded)));
     });
   });
   server.listen(0, "127.0.0.1");
@@ -4998,8 +4999,14 @@ test("recovers a missing local sequence from 500 and sends snapshot 501", async 
   const unchanged = await execFileAsync(process.execPath, [connectorPath, "sync"], {
     env: connectorEnvironment(home),
   });
-  assert.equal(uploadCount, 1);
-  assert.match(unchanged.stdout, /no request was sent/i);
+  assert.equal(uploadCount, 2);
+  assert.equal(uploaded.snapshots[0].syncSequence, "502");
+  assert.equal(
+    JSON.parse(await readFile(join(directory, "state.json"), "utf8")).sequences[sourceId],
+    "502",
+  );
+  assert.match(unchanged.stdout, /synced 1 daily totals from 1 source/i);
+  assert.doesNotMatch(unchanged.stdout, /no request was sent/i);
 });
 
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {
@@ -5068,6 +5075,10 @@ test("repairs one stale pending snapshot and still delivers the newly collected 
   assert.deepEqual(
     bodies.map((body) => body.snapshots[0].syncSequence),
     ["1", "501", "502"],
+  );
+  assert.deepEqual(
+    bodies.map((body) => body.protocolVersion),
+    [connectorProtocolVersion, connectorProtocolVersion, connectorProtocolVersion],
   );
   assert.equal(
     JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8")).sequences[
@@ -5337,8 +5348,8 @@ test("diagnostic 404 and 500 responses do not break sync and retain one outbox e
     assert.doesNotMatch(result.stderr, /diagnostic|404|500/i);
   }
 
-  for (const result of results.slice(1)) {
-    assert.match(result.stdout, /diagnostics request was attempted/i);
+  for (const result of results) {
+    assert.match(result.stdout, /synced 1 daily totals from 1 source/i);
     assert.doesNotMatch(result.stdout, /no request was sent/i);
   }
 
@@ -5360,12 +5371,14 @@ test("diagnostic 404 and 500 responses do not break sync and retain one outbox e
   });
 });
 
-test("browser Sync sends diagnostics only for the claimed account sources", async (context) => {
+test("browser Sync confirms unchanged usage and scopes diagnostics to claimed sources", async (context) => {
   const requestId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
   const selectedAccountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const selectedSourceId = "33333333-3333-4333-8333-333333333333";
   const otherSourceId = "44444444-4444-4444-8444-444444444444";
   const diagnosticBodies = [];
+  const usageBodies = [];
+  const resultBodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -5377,6 +5390,7 @@ test("browser Sync sends diagnostics only for the claimed account sources", asyn
         return;
       }
       if (request.url === "/api/usage") {
+        usageBodies.push(body);
         response.end(JSON.stringify(usageResponse(body)));
         return;
       }
@@ -5386,6 +5400,7 @@ test("browser Sync sends diagnostics only for the claimed account sources", asyn
         return;
       }
       if (request.url === "/api/installations/current/sync/result") {
+        resultBodies.push(body);
         response.statusCode = 204;
         response.end();
         return;
@@ -5453,11 +5468,31 @@ test("browser Sync sends diagnostics only for the claimed account sources", asyn
     ],
     { env: connectorEnvironment(home) },
   );
+  await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&accountId=${selectedAccountId}&grant=${"g".repeat(32)}`,
+    ],
+    { env: connectorEnvironment(home) },
+  );
 
   assert.equal(diagnosticBodies.length, 1);
   assert.deepEqual(
     [...new Set(diagnosticBodies.flatMap((body) => body.events.map((event) => event.sourceId)))],
     [selectedSourceId],
+  );
+  assert.deepEqual(
+    usageBodies.map((body) => body.snapshots[0]?.syncSequence),
+    ["1", "2"],
+  );
+  assert.deepEqual(
+    resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
+    [
+      { status: "succeeded", resultCode: "complete" },
+      { status: "succeeded", resultCode: "complete" },
+    ],
   );
   const finalState = JSON.parse(await readFile(statePath, "utf8"));
   assert.deepEqual(finalState.diagnostics.outboxBySource[otherSourceId], {
@@ -5773,7 +5808,12 @@ test("reconnect replaces authorization after an in-flight sync without token res
           JSON.stringify({
             status: "active",
             deviceToken: "replacement-device-token-that-is-long-enough",
-            protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+            protocol: {
+              version: connectorProtocolVersion,
+              snapshotDays: 31,
+              maximumSources: 32,
+              maximumEntries: 1_024,
+            },
             sources: [
               {
                 clientSourceId: installation.clientSourceId,
@@ -5861,6 +5901,7 @@ test("reconnect replaces authorization after an in-flight sync without token res
   assert.equal(state.automaticDisabledReason, undefined);
   assert.deepEqual(authorizations, [
     "Bearer synthetic-device-token-that-is-long-enough",
+    "Bearer replacement-device-token-that-is-long-enough",
     "Bearer replacement-device-token-that-is-long-enough",
   ]);
 });

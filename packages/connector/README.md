@@ -64,9 +64,12 @@ accounts require separate `--data-dir` profile roots; each App Server launch get
 total remains authoritative. A local incremental pass extracts only cumulative `token_count` events
 from that profile's session files, uses provider-recorded `last_token_usage`, removes
 cache/reasoning overlap, and deduplicates repeated/copied events with content-free hashes. The
-account-wide total and locally observed component sum remain separate exact counters and may differ;
-the dashboard labels that scope difference instead of scaling either value. Every other transcript
-field is discarded, and unsupported or incomplete shapes remain total-only.
+account-wide total and locally observed component sum remain separate exact counters and may differ.
+While App Server account buckets lag, Sync submits every exact local daily sum after the newest
+authoritative bucket as a partial ranking value, including across UTC rollovers. Later complete
+account data can correct each day in either direction. The dashboard labels the scope difference
+instead of scaling either value. Every other transcript field is discarded, and unsupported or
+incomplete shapes remain total-only.
 
 Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
 add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
