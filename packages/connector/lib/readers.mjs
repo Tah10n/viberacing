@@ -4,6 +4,7 @@ export {
   codexProfileEnvironment,
   codexUsageSnapshot,
   collectCodexSessionUsage,
+  materializeCodexAuthoritativeDays,
   mergeCodexUsageComponents,
   parseCodexSessionLines,
   parseCodexUsage,

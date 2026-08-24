@@ -1169,9 +1169,57 @@ export function mergeCodexUsageComponents(authoritative, components, provisional
   return merged.sort((left, right) => left.date.localeCompare(right.date));
 }
 
-export function codexUsageSnapshot(authoritative, components, currentDate) {
-  const entries = mergeCodexUsageComponents(authoritative, components, currentDate);
-  const authoritativeDates = new Set(authoritative.map((entry) => entry.date));
+export function materializeCodexAuthoritativeDays(
+  authoritative,
+  rangeStart,
+  rangeEnd,
+  authoritativeResultComplete = true,
+) {
+  const sorted = [...authoritative].sort((left, right) => left.date.localeCompare(right.date));
+  if (
+    !authoritativeResultComplete ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(rangeStart ?? "") ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(rangeEnd ?? "") ||
+    rangeStart > rangeEnd
+  )
+    return sorted;
+  const coveredThrough = sorted.reduce(
+    (latest, entry) =>
+      entry.date >= rangeStart && entry.date <= rangeEnd && (latest === null || entry.date > latest)
+        ? entry.date
+        : latest,
+    null,
+  );
+  if (coveredThrough === null) return sorted;
+  const byDate = new Map(sorted.map((entry) => [entry.date, entry]));
+  const day = new Date(`${rangeStart}T00:00:00.000Z`);
+  const end = new Date(`${coveredThrough}T00:00:00.000Z`);
+  for (; day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
+    const date = day.toISOString().slice(0, 10);
+    if (!byDate.has(date)) byDate.set(date, { date, totalTokens: "0" });
+  }
+  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date));
+}
+
+export function codexUsageSnapshot(
+  authoritative,
+  components,
+  currentDate,
+  rangeStart = null,
+  authoritativeResultComplete = true,
+) {
+  const firstAuthoritativeDate = authoritative.reduce(
+    (earliest, entry) => (earliest === null || entry.date < earliest ? entry.date : earliest),
+    null,
+  );
+  const materialized = materializeCodexAuthoritativeDays(
+    authoritative,
+    rangeStart ?? firstAuthoritativeDate,
+    currentDate,
+    authoritativeResultComplete,
+  );
+  const entries = mergeCodexUsageComponents(materialized, components, currentDate);
+  const authoritativeDates = new Set(materialized.map((entry) => entry.date));
   if (authoritativeDates.has(currentDate)) return { entries, completeness: "complete" };
   return {
     entries: entries.map((entry) => ({
@@ -1299,7 +1347,12 @@ async function collect(source, range, state = {}) {
           warnings: ["codex_session_components_incomplete"],
           diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
         }));
-        const snapshot = codexUsageSnapshot(authoritative, components.entries, range.rangeEnd);
+        const snapshot = codexUsageSnapshot(
+          authoritative,
+          components.entries,
+          range.rangeEnd,
+          range.rangeStart,
+        );
         return {
           ...snapshot,
           nextState: { componentUsage: components.nextState },
