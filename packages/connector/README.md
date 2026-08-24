@@ -5,8 +5,7 @@ sources and pairs them with Vibe Racing agent accounts. It never uploads raw ses
 paths.
 
 ```bash
-npx --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- \
-  viberacing connect --origin https://viberacing.example
+npx --allow-remote=all --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- viberacing connect --origin https://viberacing.example
 ```
 
 Use the command shown by your Vibe Racing dashboard. The connector package is served by that same

@@ -48,7 +48,8 @@ try {
 } finally {
   rmSync(cache, { force: true, recursive: true });
 }
-const results = JSON.parse(output);
+const manifest = JSON.parse(output);
+const results = Array.isArray(manifest) ? manifest : Object.values(manifest);
 
 if (results.length !== 1 || !Array.isArray(results[0]?.files)) {
   throw new Error("npm pack returned an unexpected package manifest");

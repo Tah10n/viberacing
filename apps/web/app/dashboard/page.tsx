@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import {
@@ -12,6 +13,7 @@ import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { AccountControls, BrowserSyncProvider } from "../components/account-controls";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import { publicOrigin, versionAtLeast } from "@/lib/config";
+import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
@@ -187,6 +189,11 @@ function usageChartDays(weekStart: string, usage: readonly DailyUsageRow[]): Usa
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
+  const requestHeaders = await headers();
+  const commandShell = connectorCommandShell(
+    requestHeaders.get("sec-ch-ua-platform"),
+    requestHeaders.get("user-agent"),
+  );
   const [current, params, browserInstallationId] = await Promise.all([
     viewer(),
     searchParams,
@@ -397,8 +404,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   ]);
   const chartDays = usageChartDays(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
-  const command = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
-  const updateCommand = `npx --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing doctor --repair`;
+  const command = `npx --allow-remote=all --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
+  const updateCommand = `npx --allow-remote=all --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing doctor --repair`;
   const uninstallCommand = connectorUninstallCommand(origin);
   const notice =
     params.connected === "1"
@@ -486,7 +493,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         <div className="connect-panel-body">
           <div className="connect-intro">
             <ol className="connect-steps">
-              <li>Run this command in Terminal.</li>
+              <li>Run this command in {commandShell}.</li>
               <li>Approve the detected sources in your browser.</li>
               <li>Aggregate token sync starts automatically.</li>
             </ol>
@@ -497,8 +504,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             </pre>
             <CopyCommandButton command={command} />
             <p className="muted">
-              Requires Node.js 24 LTS. No provider keys, prompts, code, paths, repositories, model
-              names, or costs are uploaded.
+              Run this one-line command in {commandShell}. Requires Node.js 24 LTS. The npm remote
+              allowance applies only to this command. No provider keys, prompts, code, paths,
+              repositories, model names, or costs are uploaded.
             </p>
           </div>
         </div>
@@ -743,7 +751,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       label="Copy update command"
                     />
                     <p className="muted">
-                      This repairs the connector without collecting or uploading token totals.
+                      Run this one-line command in {commandShell}. The npm remote allowance applies
+                      only to this command. Repair does not collect or upload token totals.
                     </p>
                   </div>
                 )}
@@ -784,28 +793,37 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <p>
             Delete the GitHub-linked user, sessions, installations, agent accounts, and all usage.
           </p>
-          <div className="account-deletion-cleanup">
-            <h3>Local cleanup required</h3>
-            <p>
-              Account deletion cannot uninstall software or hooks from your computers. Run this
-              command once for every connector installation before deleting the account. You can
-              also run it afterward.
-            </p>
-            <pre>
-              <code>{uninstallCommand}</code>
-            </pre>
-            <CopyCommandButton
-              command={uninstallCommand}
-              copiedLabel="Uninstall command copied"
-              label="Copy uninstall command"
-            />
-            <p className="muted">
-              If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before running
-              this command. Repeat it for every connector state directory. This removes only Vibe
-              Racing hooks, its installed copy, secrets, and local state. Provider usage data is not
-              changed.
-            </p>
-          </div>
+          <details className="account-deletion-cleanup">
+            <summary>
+              <span className="account-deletion-cleanup-title">Local cleanup required</span>
+              <span className="account-deletion-cleanup-action" aria-hidden="true">
+                <span className="account-deletion-cleanup-closed">Show command</span>
+                <span className="account-deletion-cleanup-open">Hide command</span>
+              </span>
+            </summary>
+            <div className="account-deletion-cleanup-body">
+              <p>
+                Account deletion cannot uninstall software or hooks from your computers. Run this
+                command once for every connector installation before deleting the account. You can
+                also run it afterward.
+              </p>
+              <pre>
+                <code>{uninstallCommand}</code>
+              </pre>
+              <CopyCommandButton
+                command={uninstallCommand}
+                copiedLabel="Uninstall command copied"
+                label="Copy uninstall command"
+              />
+              <p className="muted">
+                If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before
+                running this command. Repeat it for every connector state directory. This removes
+                only Vibe Racing hooks, its installed copy, secrets, and local state. Provider usage
+                data is not changed. Run this one-line command in {commandShell}; its npm remote
+                allowance applies only to this run.
+              </p>
+            </div>
+          </details>
           <DangerActionForm
             action="/api/account/delete"
             buttonLabel="Delete account"
