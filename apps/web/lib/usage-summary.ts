@@ -1,10 +1,14 @@
 import type { PoolClient } from "pg";
 import { agentRegistry, isSupportedAgent } from "./agents";
 
+export const accountMaxObservationIsEligibleSql = `(
+  latest_complete_at IS NULL
+  OR (completeness = 'complete' AND updated_at = latest_complete_at)
+  OR (completeness = 'partial' AND updated_at > latest_complete_at)
+)`;
+
 export const accountMaxDailyTokensSql = `max(total_tokens) FILTER (
-  WHERE latest_complete_at IS NULL
-     OR completeness = 'complete'
-     OR (completeness = 'partial' AND updated_at > latest_complete_at)
+  WHERE ${accountMaxObservationIsEligibleSql}
 )`;
 
 export async function refreshAgentWeek(

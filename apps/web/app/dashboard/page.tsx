@@ -17,7 +17,7 @@ import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
-import { accountMaxDailyTokensSql } from "@/lib/usage-summary";
+import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -276,35 +276,41 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.input_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available)
                         ELSE sum(candidate.input_tokens)
                       END AS input_tokens,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.output_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available)
                         ELSE sum(candidate.output_tokens)
                       END AS output_tokens,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.cache_read_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available)
                         ELSE sum(candidate.cache_read_tokens)
                       END AS cache_read_tokens,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.cache_write_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available)
                         ELSE sum(candidate.cache_write_tokens)
                       END AS cache_write_tokens,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.reasoning_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available)
                         ELSE sum(candidate.reasoning_tokens)
                       END AS reasoning_tokens,
                       CASE a.aggregation_mode
-                        WHEN 'account_max' THEN max(candidate.component_tokens)
+                        WHEN 'account_max' THEN max(candidate.component_tokens) FILTER (
+                          WHERE candidate.account_max_selected)
                         ELSE sum(candidate.component_tokens)
                       END AS component_tokens,
                       CASE a.aggregation_mode
@@ -316,38 +322,39 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                           candidate.reasoning_tokens
                         )) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
+                            AND candidate.account_max_selected
                             AND candidate.components_available) = 1
                         ELSE bool_and(candidate.components_available)
                       END AS components_complete
                  FROM (
-                   SELECT d.*,
-                          CASE WHEN d.input_tokens IS NOT NULL
-                            AND d.output_tokens IS NOT NULL
-                            AND d.cache_read_tokens IS NOT NULL
-                            AND d.cache_write_tokens IS NOT NULL
-                            AND d.reasoning_tokens IS NOT NULL
-                          THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
-                            + d.cache_write_tokens + d.reasoning_tokens END AS component_tokens,
-                          max(CASE WHEN d.input_tokens IS NOT NULL
-                            AND d.output_tokens IS NOT NULL
-                            AND d.cache_read_tokens IS NOT NULL
-                            AND d.cache_write_tokens IS NOT NULL
-                            AND d.reasoning_tokens IS NOT NULL
-                          THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
-                            + d.cache_write_tokens + d.reasoning_tokens END)
-                            OVER (PARTITION BY d.usage_date) AS maximum_component_tokens,
-                          max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
-                            OVER (PARTITION BY d.usage_date) AS latest_complete_at,
-                          d.input_tokens IS NOT NULL
-                            AND d.output_tokens IS NOT NULL
-                            AND d.cache_read_tokens IS NOT NULL
-                            AND d.cache_write_tokens IS NOT NULL
-                            AND d.reasoning_tokens IS NOT NULL AS components_available
-                     FROM installation_sources source_usage
-                     JOIN daily_usage d ON d.source_id = source_usage.id
-                    WHERE source_usage.agent_account_id = a.id
-                      AND source_usage.user_id = a.user_id
-                      AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+                   SELECT precedence.*,
+                          ${accountMaxObservationIsEligibleSql} AS account_max_selected,
+                          max(precedence.component_tokens) FILTER (
+                            WHERE ${accountMaxObservationIsEligibleSql})
+                            OVER (PARTITION BY precedence.usage_date)
+                            AS maximum_component_tokens
+                     FROM (
+                       SELECT d.*,
+                              CASE WHEN d.input_tokens IS NOT NULL
+                                AND d.output_tokens IS NOT NULL
+                                AND d.cache_read_tokens IS NOT NULL
+                                AND d.cache_write_tokens IS NOT NULL
+                                AND d.reasoning_tokens IS NOT NULL
+                              THEN d.input_tokens + d.output_tokens + d.cache_read_tokens
+                                + d.cache_write_tokens + d.reasoning_tokens END AS component_tokens,
+                              max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                                OVER (PARTITION BY d.usage_date) AS latest_complete_at,
+                              d.input_tokens IS NOT NULL
+                                AND d.output_tokens IS NOT NULL
+                                AND d.cache_read_tokens IS NOT NULL
+                                AND d.cache_write_tokens IS NOT NULL
+                                AND d.reasoning_tokens IS NOT NULL AS components_available
+                         FROM installation_sources source_usage
+                         JOIN daily_usage d ON d.source_id = source_usage.id
+                        WHERE source_usage.agent_account_id = a.id
+                          AND source_usage.user_id = a.user_id
+                          AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+                     ) precedence
                  ) candidate
                 GROUP BY candidate.usage_date
              ) day
