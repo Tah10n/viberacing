@@ -20,8 +20,10 @@ Every version bump is an explicit, reviewable release pull request:
    green.
 7. Create an annotated `vX.Y.Z` tag on that exact merge commit.
 8. Create a non-draft, non-prerelease GitHub Release for that exact tag.
-9. The `publish-connector.yml` workflow validates the tag, version, generated module, package
-   metadata, main ancestry, clean package, npm availability, and full repository gate.
+9. The unprivileged `connector-release-request.yml` workflow forwards the release event to the
+   default-branch `publish-connector.yml` workflow. The publisher validates the exact event commit,
+   tag, stable GitHub Release, main ancestry, version, generated module, package metadata, clean
+   package, npm availability, and full repository gate.
 10. The workflow publishes `@viberacing/connector@X.Y.Z` with npm Trusted Publishing and moves
     `latest` to that stable version.
 11. The workflow succeeds only after bounded registry checks find both the exact version and
@@ -91,7 +93,31 @@ npx --yes @viberacing/connector@latest --version
 All three versions must match `package.json`. Do not proceed if package contents, the version, or
 `latest` differs.
 
-### 3. Configure npm Trusted Publisher
+### 3. Configure the protected GitHub environment
+
+Create the GitHub `npm-production` environment before configuring npm Trusted Publishing. Under
+**Deployment branches and tags**, select **Protected branches only** and confirm that `main` is
+covered by the repository's branch ruleset. Do not allow tags or unprotected branches, and do not
+store a publish token in the environment. If the repository has more than one maintainer, also
+require a reviewer, prevent self-review, and disable administrator bypass.
+
+This restriction is part of the publishing security boundary. A release event is associated with its
+tag and can use the workflow version stored in that tag; only the unprivileged request workflow runs
+there. The OIDC publisher is triggered through `workflow_run`, whose ref is the protected default
+branch. Restricting the environment to protected branches prevents a tag-modified copy of
+`publish-connector.yml` from obtaining the same Trusted Publisher identity directly.
+
+Verify the environment before continuing:
+
+```bash
+gh api repos/Tah10n/viberacing/environments/npm-production \
+  --jq '.deployment_branch_policy'
+```
+
+It must report `protected_branches: true` and `custom_branch_policies: false`. Do not configure the
+npm publisher if the environment is absent or unrestricted.
+
+### 4. Configure npm Trusted Publisher
 
 In the npm package settings configure:
 
@@ -104,10 +130,11 @@ Environment name: npm-production
 Allowed action: npm publish
 ```
 
-Use only the workflow filename, not `.github/workflows/publish-connector.yml`. Configure the
-matching GitHub `npm-production` environment without a publish token.
+Use only the workflow filename, not `.github/workflows/publish-connector.yml`. Recheck that the
+matching GitHub `npm-production` environment is restricted to protected branches and has no publish
+token before saving the Trusted Publisher.
 
-### 4. Verify OIDC on a real patch release
+### 5. Verify OIDC on a real patch release
 
 Prepare the next patch version through the normal release pull request. After publishing its exact
 GitHub Release, confirm:
@@ -118,13 +145,13 @@ GitHub Release, confirm:
 - the workflow used no `NPM_TOKEN` or `NODE_AUTH_TOKEN`;
 - `npx --yes @viberacing/connector@latest --version` prints the new version.
 
-### 5. Tighten npm publishing access
+### 6. Tighten npm publishing access
 
 Only after successful OIDC publication, open package **Settings → Publishing access**, choose
 **Require two-factor authentication and disallow tokens**, remove any legacy publish or automation
 tokens, and recheck the Trusted Publisher configuration.
 
-### 6. Switch official production once
+### 7. Switch official production once
 
 First verify npm connect, `doctor --repair`, and uninstall on Linux, Windows, and macOS. Then set
 this once in Railway and redeploy:

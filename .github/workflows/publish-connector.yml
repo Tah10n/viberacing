@@ -1,8 +1,9 @@
 name: Publish connector
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: [Connector release request]
+    types: [completed]
 
 permissions:
   contents: read
@@ -14,18 +15,39 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event.release.draft == false && github.event.release.prerelease == false
+    if:
+      github.ref == 'refs/heads/main' && github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'release' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     environment: npm-production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
           fetch-depth: 0
+      - name: Require the tagged commit to be part of origin/main
+        run: |
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor HEAD refs/remotes/origin/main
+      - name: Require the triggering stable release to match HEAD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$RELEASE_SHA" = "$(git rev-parse HEAD)"
+          test "$RELEASE_SHA" = "$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          published_tag="$(
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" \
+              --jq 'select(.draft == false and .prerelease == false) | .tag_name'
+          )"
+          test "$published_tag" = "$RELEASE_TAG"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
@@ -36,8 +58,6 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Validate release metadata, tools, and npm availability
         run: node scripts/check-connector-release.mjs "$RELEASE_TAG"
-      - name: Require the tagged commit to be part of origin/main
-        run: git merge-base --is-ancestor HEAD origin/main
       - name: Generate and verify the connector package
         run: |
           corepack pnpm --filter @viberacing/connector prepack

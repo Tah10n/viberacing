@@ -1,0 +1,17 @@
+name: Connector release request
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  request:
+    if: github.event.release.draft == false && github.event.release.prerelease == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Forward the stable release to the default-branch publisher
+        run: echo "Stable connector release request accepted."

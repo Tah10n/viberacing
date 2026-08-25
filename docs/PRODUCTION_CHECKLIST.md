@@ -106,8 +106,23 @@
 - At the start of each calendar quarter, review ignored npm and Node major updates, record the
   compatibility/test decision in an issue, and schedule accepted upgrades instead of leaving the
   major-version ignore indefinitely unaudited.
-- Configure npm trusted publishing with provenance for `@viberacing/connector`; run
-  `corepack pnpm connector:package:check` against the package root before the first publish.
+- Before configuring npm trusted publishing, create the GitHub `npm-production` environment. Under
+  **Deployment branches and tags**, select **Protected branches only**, confirm `main` is covered by
+  the repository's active branch ruleset, do not allow tags or unprotected branches, and do not
+  store a publish token in the environment.
+- Verify the environment before continuing:
+
+  ```bash
+  gh api repos/Tah10n/viberacing/environments/npm-production \
+    --jq '.deployment_branch_policy'
+  ```
+
+  It must report `protected_branches: true` and `custom_branch_policies: false`. Stop if the
+  environment is absent or unrestricted.
+
+- Only after that verification, configure npm trusted publishing with provenance for
+  `@viberacing/connector`; run `corepack pnpm connector:package:check` against the package root
+  before the first publish.
 - Keep Railway on `VIBERACING_CONNECTOR_DISTRIBUTION=archive` through the interactive first
   publication. Switch official production to `npm` once only after connect, repair, and uninstall
   are verified on Linux, Windows, and macOS. Normal releases must not change Railway variables.
