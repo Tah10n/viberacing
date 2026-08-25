@@ -404,6 +404,27 @@ test("materializes Codex authoritative zeros across a UTC month rollover", () =>
   );
 });
 
+test("does not extend Codex authoritative zeros before the first returned bucket", () => {
+  assert.deepEqual(
+    codexUsageSnapshot(
+      [
+        { date: "2026-08-30", totalTokens: "10" },
+        { date: "2026-09-01", totalTokens: "12" },
+      ],
+      [],
+      "2026-09-02",
+    ),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-30", totalTokens: "10", completeness: "complete" },
+        { date: "2026-08-31", totalTokens: "0", completeness: "complete" },
+        { date: "2026-09-01", totalTokens: "12", completeness: "complete" },
+      ],
+    },
+  );
+});
+
 test("does not invent Codex zeros without a proven complete authoritative range", () => {
   assert.deepEqual(materializeCodexAuthoritativeDays([], "2026-08-30", "2026-09-02"), []);
   assert.deepEqual(

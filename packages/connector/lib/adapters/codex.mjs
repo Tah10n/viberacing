@@ -1347,12 +1347,7 @@ async function collect(source, range, state = {}) {
           warnings: ["codex_session_components_incomplete"],
           diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
         }));
-        const snapshot = codexUsageSnapshot(
-          authoritative,
-          components.entries,
-          range.rangeEnd,
-          range.rangeStart,
-        );
+        const snapshot = codexUsageSnapshot(authoritative, components.entries, range.rangeEnd);
         return {
           ...snapshot,
           nextState: { componentUsage: components.nextState },
