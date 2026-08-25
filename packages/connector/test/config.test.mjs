@@ -1775,6 +1775,54 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
 });
 
+test("a hook retries once when the detached scheduler exits before its handshake", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-scheduler-launch-retry-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const marker = join(home, "scheduler-exited-once");
+  const trace = join(home, "scheduler-retry-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_ONCE: marker,
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const result = await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  assert.equal(result.code, 0);
+  await waitFor(() => bodies.length === 1, 10_000);
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
+
+  const lines = (await readFile(trace, "utf8")).trim().split("\n");
+  assert.equal(lines.filter((line) => line.startsWith("started:")).length, 2);
+  assert.equal(lines.filter((line) => line.startsWith("acquired:")).length, 1);
+  assert.equal(lines.filter((line) => line.startsWith("released:")).length, 1);
+  await access(marker);
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
+});
+
 test("a slow detached scheduler survives its parent handshake timeout", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-slow-scheduler-handshake-"));
   context.after(() => rm(home, { recursive: true, force: true }));
@@ -2558,9 +2606,11 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     sources,
   );
   const trace = join(home, "collector-trace.txt");
+  const schedulerTrace = join(home, "scheduler-trace.txt");
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
   const hookResults = await Promise.all(
@@ -2586,7 +2636,24 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
   // The detached scheduler is intentionally outside the hook processes. Give it
   // enough wall-clock budget when the full connector suite saturates a CI host;
   // the configured 3 s maximum delay still keeps this wait bounded.
-  await waitFor(() => bodies.length === 1, 30_000);
+  try {
+    await waitFor(() => bodies.length === 1, 30_000);
+  } catch {
+    const diagnostics = {};
+    for (const name of ["dirty.json", "scheduler-launch.lock", "scheduler.lock", "state.json"])
+      diagnostics[name] = await readFile(join(directory, name), "utf8").catch(
+        (error) => error?.code ?? "unavailable",
+      );
+    diagnostics.collectorTrace = await readFile(trace, "utf8").catch(
+      (error) => error?.code ?? "unavailable",
+    );
+    diagnostics.schedulerTrace = await readFile(schedulerTrace, "utf8").catch(
+      (error) => error?.code ?? "unavailable",
+    );
+    throw new Error(
+      `Automatic scheduler did not coalesce the events: ${JSON.stringify(diagnostics)}`,
+    );
+  }
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),

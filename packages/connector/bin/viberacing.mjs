@@ -1336,41 +1336,51 @@ async function launchAutomaticScheduler(existingLaunch) {
   if (!launch) return false;
   const ownsLaunch = existingLaunch === undefined;
   try {
-    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
-    const state = await readState();
-    if (state.automaticDisabledReason) return false;
-    const child = spawn(
-      process.execPath,
-      [fileURLToPath(import.meta.url), "auto-sync", "--quiet"],
-      {
-        detached: true,
-        stdio: ["ignore", "ignore", "ignore", "ipc"],
-        windowsHide: true,
-      },
-    );
-    const status = await new Promise((resolve) => {
-      let settled = false;
-      let timeout;
-      const message = (value) =>
-        finish(value?.type === "viberacing-scheduler" ? value.status : "lost");
-      const lost = () => finish("lost");
-      const finish = (value) => {
-        if (settled) return;
-        settled = true;
-        if (timeout !== undefined) clearTimeout(timeout);
-        child.off("message", message);
-        child.off("error", lost);
-        child.off("exit", lost);
-        resolve(value);
-      };
-      timeout = setTimeout(() => finish("pending"), schedulerHandshakeWaitMs());
-      child.once("message", message);
-      child.once("error", lost);
-      child.once("exit", lost);
-    });
-    child.unref();
-    child.channel?.unref();
-    return status === "acquired";
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+      const state = await readState();
+      if (state.automaticDisabledReason) return false;
+      let child;
+      try {
+        child = spawn(process.execPath, [fileURLToPath(import.meta.url), "auto-sync", "--quiet"], {
+          detached: true,
+          stdio: ["ignore", "ignore", "ignore", "ipc"],
+          windowsHide: true,
+        });
+      } catch {
+        if (attempt === 0) {
+          await delay(25);
+          continue;
+        }
+        return false;
+      }
+      const status = await new Promise((resolve) => {
+        let settled = false;
+        let timeout;
+        const message = (value) =>
+          finish(value?.type === "viberacing-scheduler" ? value.status : "lost");
+        const launchFailed = () => finish("launch_failed");
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          if (timeout !== undefined) clearTimeout(timeout);
+          child.off("message", message);
+          child.off("error", launchFailed);
+          child.off("exit", launchFailed);
+          resolve(value);
+        };
+        timeout = setTimeout(() => finish("pending"), schedulerHandshakeWaitMs());
+        child.once("message", message);
+        child.once("error", launchFailed);
+        child.once("exit", launchFailed);
+      });
+      child.unref();
+      child.channel?.unref();
+      if (status === "acquired") return true;
+      if (status !== "launch_failed") return false;
+      if (attempt === 0) await delay(25);
+    }
+    return false;
   } finally {
     if (ownsLaunch) await releaseSchedulerLaunch(launch);
   }
@@ -1400,6 +1410,18 @@ async function sendSchedulerHandshake(status) {
     process.send({ type: "viberacing-scheduler", status }, () => resolve()),
   );
   if (process.connected) process.disconnect();
+}
+
+async function exitAutomaticSchedulerOnceForTest() {
+  const marker = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_ONCE;
+  if (process.env.NODE_ENV !== "test" || !marker) return false;
+  try {
+    await writeFile(marker, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
+    return true;
+  } catch (error) {
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  }
 }
 
 async function recordAutomaticSyncFailure(clientSourceIds) {
@@ -1450,6 +1472,7 @@ async function hook() {
 async function automaticSync() {
   if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
     await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
+  if (await exitAutomaticSchedulerOnceForTest()) return;
   await waitForTestSchedulerClaimBarrier();
   if (await lifecycleMutationActive()) {
     await sendSchedulerHandshake("lost");
