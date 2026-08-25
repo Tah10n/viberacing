@@ -5,6 +5,7 @@ import {
   normalizeNpmLookupString,
   validateConnectorRelease,
   validateReleaseFiles,
+  verifyPublishedConnector,
 } from "./check-connector-release.mjs";
 
 const validPackage = Object.freeze({
@@ -178,5 +179,56 @@ describe("connector release validation", () => {
         }),
       { code: "CONNECTOR_RELEASE_REPOSITORY_INVALID" },
     );
+  });
+
+  it("waits for both the exact version and latest tag to become visible", async () => {
+    const latest = ["0.4.1", "0.4.2", "0.4.2"];
+    const exists = [false, false, true];
+    const delays = [];
+
+    await verifyPublishedConnector({
+      version: "0.4.2",
+      registry: {
+        latest: async () => latest.shift(),
+        exists: async () => exists.shift(),
+      },
+      attempts: 3,
+      delayMs: 250,
+      sleep: async (milliseconds) => delays.push(milliseconds),
+    });
+
+    assert.deepEqual(delays, [250, 250]);
+    assert.deepEqual(latest, []);
+    assert.deepEqual(exists, []);
+  });
+
+  it("stops after the configured publish verification window", async () => {
+    let latestLookups = 0;
+    let exactLookups = 0;
+    const delays = [];
+
+    await expectCode(
+      verifyPublishedConnector({
+        version: "0.4.2",
+        registry: {
+          latest: async () => {
+            latestLookups += 1;
+            return "0.4.1";
+          },
+          exists: async () => {
+            exactLookups += 1;
+            return false;
+          },
+        },
+        attempts: 3,
+        delayMs: 250,
+        sleep: async (milliseconds) => delays.push(milliseconds),
+      }),
+      "CONNECTOR_RELEASE_PUBLISH_VERIFICATION_FAILED",
+    );
+
+    assert.equal(latestLookups, 3);
+    assert.equal(exactLookups, 3);
+    assert.deepEqual(delays, [250, 250]);
   });
 });
