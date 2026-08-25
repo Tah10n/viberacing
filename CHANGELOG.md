@@ -10,6 +10,20 @@ experience or protocol.
 
 ### Changed
 
+- Connector 0.4.0 uses protocol v4 to sequence allowlisted collector errors against the last
+  server-accepted source snapshot. Delayed errors can no longer overwrite a newer success; the
+  server remains compatible with v2/v3 payloads during the server-first rollout.
+- Account-wide daily totals now prefer the newest complete observation, so a newer provider
+  correction can replace an older larger value from an offline computer. Dashboard components,
+  charts, weekly summaries, profiles, and leaderboard totals use the same precedence boundary.
+- Codex sends explicit complete zero entries only for missing days inside a successfully read,
+  continuous App Server range. These are authoritative correction markers, never estimates.
+- Automatic account matching now requires seven complete positive matching days with at least three
+  distinct totals and no complete contradiction. Manual reassignment and the existing Undo flow
+  remain available.
+- Pre-authentication admission now applies an atomic global cap before creating canonical client
+  buckets, groups IPv6 by `/64`, and performs bounded opportunistic cleanup. Configured origins with
+  URL credentials are rejected without exposing those credentials.
 - Manual and browser-triggered Sync now submit a successfully collected snapshot even when its
   normalized usage is unchanged, so account and computer **Last sync** times advance immediately.
   Automatic hooks retain fingerprint suppression and make no usage request for unchanged data.

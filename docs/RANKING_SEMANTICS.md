@@ -20,17 +20,19 @@ are displayed as a separate exact tuple with their own sum and an explicit scope
 never scaled or estimated to fit the account total. Other agents' five components must sum exactly
 to `totalTokens`.
 
-For an `account_max` account, complete observations establish the authoritative daily baseline as
-their maximum across linked sources. A partial observation accepted after the newest complete
-observation may advance the displayed value until another complete observation excludes older
-provisional rows. If no complete observation exists, the daily maximum across provisional sources is
-used. This prevents an account-wide Codex bucket reported from two computers from doubling without
-letting an offline computer's older provisional value mask a later correction. For a `source_sum`
-account, daily usage is the sum across machine-local histories. Daily account totals then sum across
-multiple accounts of the same agent; agent totals sum into the user's weekly total. An `account_max`
-component breakdown selects the largest complete local component sum for each day and is hidden for
-that day if equally large tuples disagree. A `source_sum` breakdown still requires complete
-components whose sum matches each authoritative source total.
+For an `account_max` account and UTC day, the newest complete observation wins. The server finds the
+greatest `updated_at` among complete rows, excludes every older complete and partial row, and takes
+the maximum only among complete rows tied at that exact timestamp. A partial observation is eligible
+only when no complete row exists or when it was accepted after the newest complete; eligible partial
+rows may provisionally advance the value. The next complete observation excludes those provisional
+rows and may correct the total either up or down. This prevents an account-wide Codex bucket
+reported from two computers from doubling without letting an offline computer's older complete value
+mask a later correction. For a `source_sum` account, daily usage is the sum across machine-local
+histories. Daily account totals then sum across multiple accounts of the same agent; agent totals
+sum into the user's weekly total. An `account_max` component breakdown uses only the observations
+eligible under the same precedence rule. It selects the largest available local component sum and is
+hidden for the day if equally preferred component tuples disagree. A `source_sum` breakdown still
+requires complete components whose sum matches each authoritative source total.
 
 Local sources have random stable identities independent of discovery order. Pairing can assign two
 profiles of the same agent to different accounts, which makes their account totals additive, or to
@@ -52,8 +54,11 @@ snapshot preserves missing dates and cannot reduce a previously stored daily tot
 any partial day is treated as partial for deletion even if its outer range flag says complete. This
 protects an exact day when a bounded collector temporarily misses one file. A partial snapshot may
 mark an individually authoritative date complete, allowing that date to correct an earlier
-provisional value up or down without deleting other absent dates. Only weeks touched by an accepted
-snapshot are rebuilt.
+provisional value up or down without deleting other absent dates. When Codex App Server proves a
+continuous authoritative range, the connector materializes every covered UTC date: a missing bucket
+becomes an explicit complete entry with `totalTokens="0"`. That zero is an authoritative correction
+marker, not estimated usage. The connector never synthesizes it outside the proven range or after an
+incomplete provider result. Only weeks touched by an accepted snapshot are rebuilt.
 
 Automatic scheduling changes delivery timing, not ranking semantics. Source-owned hooks coalesce
 events into at most about one batch every two minutes; only dirty sources are collected, while
