@@ -1775,7 +1775,7 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
 });
 
-test("a hook retries once when the detached scheduler exits before its handshake", async (context) => {
+test("a hook retries bounded detached scheduler startup failures", async (context) => {
   const bodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
@@ -1802,7 +1802,8 @@ test("a hook retries once when the detached scheduler exits before its handshake
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
-    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_ONCE: marker,
+    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE: marker,
+    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_COUNT: "2",
     VIBERACING_TEST_SCHEDULER_TRACE: trace,
   });
 
@@ -1816,10 +1817,12 @@ test("a hook retries once when the detached scheduler exits before its handshake
   await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
 
   const lines = (await readFile(trace, "utf8")).trim().split("\n");
-  assert.equal(lines.filter((line) => line.startsWith("started:")).length, 2);
+  assert.equal(lines.filter((line) => line.startsWith("started:")).length, 3);
+  assert.equal(lines.filter((line) => line.startsWith("launch-failed:")).length, 2);
   assert.equal(lines.filter((line) => line.startsWith("acquired:")).length, 1);
   assert.equal(lines.filter((line) => line.startsWith("released:")).length, 1);
-  await access(marker);
+  await access(`${marker}.1`);
+  await access(`${marker}.2`);
   await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 

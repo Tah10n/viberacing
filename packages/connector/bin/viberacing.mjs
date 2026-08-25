@@ -1342,13 +1342,18 @@ function schedulerHandshakeWaitMs() {
   return value !== undefined && /^[1-9]\d{0,3}$/.test(value) ? Number(value) : 5_000;
 }
 
+async function traceSchedulerForTest(value) {
+  if (process.env.NODE_ENV !== "test" || !process.env.VIBERACING_TEST_SCHEDULER_TRACE) return;
+  await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `${value}\n`).catch(() => {});
+}
+
 async function launchAutomaticScheduler(existingLaunch) {
   if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
   const launch = existingLaunch ?? (await claimSchedulerLaunch());
   if (!launch) return false;
   const ownsLaunch = existingLaunch === undefined;
   try {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
       const state = await readState();
       if (state.automaticDisabledReason) return false;
@@ -1360,8 +1365,9 @@ async function launchAutomaticScheduler(existingLaunch) {
           windowsHide: true,
         });
       } catch {
-        if (attempt === 0) {
-          await delay(25);
+        await traceSchedulerForTest(`launch-failed:${process.pid}:${attempt + 1}`);
+        if (attempt < 2) {
+          await delay(25 * 4 ** attempt);
           continue;
         }
         return false;
@@ -1390,7 +1396,8 @@ async function launchAutomaticScheduler(existingLaunch) {
       child.channel?.unref();
       if (status === "acquired") return true;
       if (status !== "launch_failed") return false;
-      if (attempt === 0) await delay(25);
+      await traceSchedulerForTest(`launch-failed:${process.pid}:${attempt + 1}`);
+      if (attempt < 2) await delay(25 * 4 ** attempt);
     }
     return false;
   } finally {
@@ -1424,16 +1431,20 @@ async function sendSchedulerHandshake(status) {
   if (process.connected) process.disconnect();
 }
 
-async function exitAutomaticSchedulerOnceForTest() {
-  const marker = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_ONCE;
+async function exitAutomaticSchedulerForTest() {
+  const marker = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE;
   if (process.env.NODE_ENV !== "test" || !marker) return false;
-  try {
-    await writeFile(marker, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
-    return true;
-  } catch (error) {
-    if (error?.code === "EEXIST") return false;
-    throw error;
+  const countText = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_COUNT ?? "1";
+  if (!/^[1-3]$/.test(countText)) throw new Error("Invalid scheduler exit test count");
+  for (let index = 1; index <= Number(countText); index += 1) {
+    try {
+      await writeFile(`${marker}.${index}`, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
+      return true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
   }
+  return false;
 }
 
 async function recordAutomaticSyncFailure(clientSourceIds) {
@@ -1467,9 +1478,13 @@ async function hook() {
     const agentId = option("--agent");
     if (await markDirtyIfConnected(clientSourceId, agentId)) {
       const launch = await claimSchedulerLaunch({ waitMs: 0 });
+      await traceSchedulerForTest(`hook-launch-${launch ? "claimed" : "busy"}:${process.pid}`);
       if (launch)
         try {
-          await launchAutomaticScheduler(launch);
+          const launched = await launchAutomaticScheduler(launch);
+          await traceSchedulerForTest(
+            `hook-launch-result:${process.pid}:${launched ? "acquired" : "not-acquired"}`,
+          );
         } finally {
           await releaseSchedulerLaunch(launch);
         }
@@ -1482,9 +1497,8 @@ async function hook() {
 }
 
 async function automaticSync() {
-  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
-    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
-  if (await exitAutomaticSchedulerOnceForTest()) return;
+  await traceSchedulerForTest(`started:${process.pid}`);
+  if (await exitAutomaticSchedulerForTest()) return;
   await waitForTestSchedulerClaimBarrier();
   if (await lifecycleMutationActive()) {
     await sendSchedulerHandshake("lost");
