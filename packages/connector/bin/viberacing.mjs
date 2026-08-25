@@ -161,6 +161,17 @@ function collectorWarningMessage(code) {
   return `local usage detail warning: ${code}`;
 }
 
+function codexHookGuidance(status) {
+  if (status === undefined || status === "current") return null;
+  if (status === "untrusted" || status === "modified")
+    return "Codex automatic sync needs approval. In Codex CLI, run `/hooks` and trust the Vibe Racing Stop hook.";
+  if (status === "disabled")
+    return "Codex automatic sync is disabled. In Codex CLI, run `/hooks`, then enable and trust the Vibe Racing Stop hook.";
+  if (status === "trust-unknown")
+    return "Codex automatic sync trust could not be verified. In Codex CLI, run `/hooks` and verify the Vibe Racing Stop hook.";
+  return "Codex automatic sync hook needs repair. Run `viberacing doctor --repair`.";
+}
+
 async function waitForTestConnectBarrier(stage) {
   if (
     process.env.NODE_ENV !== "test" ||
@@ -519,9 +530,13 @@ async function connect() {
           return nextConfig;
         });
         committed = true;
-        output("Connected. Exact aggregate sync is active.");
+        output("Connected.");
         const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
         if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
+        const hookStatuses = await diagnoseHooks(config.sources);
+        const guidance = codexHookGuidance(hookStatuses.codex);
+        if (guidance) warning(`Vibe Racing warning: ${guidance}`);
+        else output("Automatic exact aggregate sync is active.");
         return;
       }
       if (result.status !== "pending") throw new Error("Pairing was revoked");
@@ -1721,6 +1736,11 @@ async function doctor() {
     }
     const hooks = await diagnoseHooks(config.sources);
     for (const [agentId, status] of Object.entries(hooks)) output(`${agentId} hook: ${status}`);
+    const codexGuidance = codexHookGuidance(hooks.codex);
+    if (codexGuidance) {
+      output(codexGuidance);
+      if (repairRequested) repairIncomplete = true;
+    }
     output(`Connected origin: ${config.origin}`);
     const reconciliation = await withSyncLock(
       async () => {

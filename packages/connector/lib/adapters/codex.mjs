@@ -1255,7 +1255,7 @@ export function codexProfileEnvironment(source, environment = process.env) {
   return { ...environment, CODEX_HOME: codexHome };
 }
 
-async function collect(source, range, state = {}) {
+async function withCodexAppServer(source, callback) {
   const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
   if (!executable)
     throw diagnosticError(
@@ -1323,6 +1323,64 @@ async function collect(source, range, state = {}) {
     if (initialized?.id !== 0 || !initialized.result)
       throw diagnosticError("Codex App Server initialization failed", "agent_api_invalid_response");
     write({ method: "initialized", params: {} });
+    return await callback({ next, write });
+  } finally {
+    child.stdin.end();
+    child.kill();
+  }
+}
+
+async function requestCodexAppServer(source, method, params) {
+  return withCodexAppServer(source, async ({ next, write }) => {
+    write({ id: 1, method, params });
+    for (;;) {
+      const response = await next();
+      if (response?.id === 1) return response;
+    }
+  });
+}
+
+export function parseCodexHookTrust(payload, { sourcePath, command }) {
+  if (payload?.error)
+    throw diagnosticError("Codex hooks request failed", "agent_api_invalid_response");
+  if (!Array.isArray(payload?.result?.data))
+    throw diagnosticError("Codex returned invalid hook diagnostics", "agent_api_invalid_response");
+  const pathKey = (path) => {
+    const normalized = resolve(path);
+    return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  };
+  const expectedPath = pathKey(sourcePath);
+  const matches = payload.result.data.flatMap((entry) =>
+    Array.isArray(entry?.hooks)
+      ? entry.hooks.filter(
+          (hook) =>
+            hook?.eventName === "stop" &&
+            typeof hook.sourcePath === "string" &&
+            pathKey(hook.sourcePath) === expectedPath &&
+            hook.command === command,
+        )
+      : [],
+  );
+  if (matches.length === 0) return "missing";
+  if (matches.length !== 1) return "trust-unknown";
+  const [hook] = matches;
+  if (hook.enabled !== true) return "disabled";
+  if (hook.trustStatus === "trusted" || hook.trustStatus === "managed") return "current";
+  if (hook.trustStatus === "untrusted" || hook.trustStatus === "modified") return hook.trustStatus;
+  return "trust-unknown";
+}
+
+export async function inspectCodexHookTrust(
+  source,
+  expected,
+  { request = requestCodexAppServer, cwd = process.cwd() } = {},
+) {
+  const response = await request(source, "hooks/list", { cwds: [resolve(cwd)] });
+  return parseCodexHookTrust(response, expected);
+}
+
+async function collect(source, range, state = {}) {
+  return withCodexAppServer(source, async ({ next, write }) => {
     write({ id: 1, method: "account/usage/read", params: null });
     for (;;) {
       const response = await next();
@@ -1356,10 +1414,7 @@ async function collect(source, range, state = {}) {
         };
       }
     }
-  } finally {
-    child.stdin.end();
-    child.kill();
-  }
+  });
 }
 
 export const codexAdapter = Object.freeze({

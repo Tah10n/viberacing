@@ -153,8 +153,10 @@ tokens, and recheck the Trusted Publisher configuration.
 
 ### 7. Switch official production once
 
-First verify npm connect, `doctor --repair`, and uninstall on Linux, Windows, and macOS. Then set
-this once in Railway and redeploy:
+First verify npm connect, `doctor --repair`, and uninstall on Linux, Windows, and macOS. For Codex,
+review the installed Vibe Racing `Stop` hook through `/hooks`, verify one completed turn syncs, and
+confirm a repeated repair preserves the trusted hook identity. Then set this once in Railway and
+redeploy:
 
 ```text
 VIBERACING_CONNECTOR_DISTRIBUTION=npm

@@ -257,6 +257,52 @@ async function runWithInput(arguments_, environment, input) {
   return { code, stdout, stderr, pid: child.pid };
 }
 
+async function writeFakeCodexHookServer(path) {
+  await writeFile(
+    path,
+    `#!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
+
+const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+for await (const line of lines) {
+  const message = JSON.parse(line);
+  if (message.id === 0 && message.method === "initialize") {
+    process.stdout.write(JSON.stringify({ id: 0, result: { userAgent: "synthetic-codex" } }) + "\\n");
+    continue;
+  }
+  if (message.id !== 1 || message.method !== "hooks/list") continue;
+  const sourcePath = join(process.env.CODEX_HOME, "hooks.json");
+  const settings = JSON.parse(readFileSync(sourcePath, "utf8"));
+  const handler = (settings.hooks?.Stop ?? [])
+    .flatMap((group) => group.hooks ?? [])
+    .find((hook) => String(hook.command).includes("--viberacing-hook-id=viberacing-hook-v3:"));
+  process.stdout.write(
+    JSON.stringify({
+      id: 1,
+      result: {
+        data: [{
+          cwd: message.params.cwds[0],
+          errors: [],
+          warnings: [],
+          hooks: [{
+            eventName: "stop",
+            sourcePath,
+            command: handler.command,
+            enabled: process.env.VIBERACING_TEST_CODEX_HOOK_TRUST !== "disabled",
+            trustStatus: process.env.VIBERACING_TEST_CODEX_HOOK_TRUST ?? "untrusted",
+          }],
+        }],
+      },
+    }) + "\\n",
+  );
+}
+`,
+  );
+  await chmod(path, 0o700);
+}
+
 async function waitFor(predicate, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs;
   while (!(await predicate())) {
@@ -314,6 +360,16 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     );
     assert.equal(stagedVersion.stdout, `${connectorVersion}\n`);
     assert.equal(stagedVersion.stderr, "");
+    const stableHookLauncher = join(home, ".viberacing", "bin", "viberacing-hook.mjs");
+    const launchedVersion = await execFileAsync(
+      process.execPath,
+      [stableHookLauncher, "--version"],
+      {
+        env: connectorEnvironment(home),
+      },
+    );
+    assert.equal(launchedVersion.stdout, `${connectorVersion}\n`);
+    assert.equal(launchedVersion.stderr, "");
     const codex = JSON.parse(await readFile(join(home, ".codex", "hooks.json"), "utf8"));
     const claude = JSON.parse(await readFile(join(home, ".claude", "settings.json"), "utf8"));
     const gemini = JSON.parse(await readFile(join(home, ".gemini", "settings.json"), "utf8"));
@@ -330,6 +386,8 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       1,
     );
     assert.equal(codex.hooks.Stop.at(-1).hooks[0].timeout, 3);
+    assert.match(codex.hooks.Stop.at(-1).hooks[0].command, /bin[/\\]viberacing-hook\.mjs/);
+    assert.doesNotMatch(codex.hooks.Stop.at(-1).hooks[0].command, /runtime[/\\][^/\\]+/);
     assert.doesNotMatch(JSON.stringify(codex), /viberacing-hook-v2/);
     assert.match(JSON.stringify(claude), /viberacing-hook-v3:/);
     assert.match(JSON.stringify(gemini), /viberacing-hook-v3:/);
@@ -337,14 +395,17 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
     assert.equal(gemini.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
     assert.equal(qwen.hooks.SessionEnd.at(-1).hooks[0].timeout, 10_000);
     assert.match(kimi, /\[\[hooks\]\][\s\S]*Stop[\s\S]*viberacing-hook-v3:/);
-    const hooks = await module.diagnoseHooks([
-      source("codex"),
-      source("claude_code"),
-      source("gemini_cli"),
-      source("qwen_code"),
-      source("kimi_code"),
-      source("opencode"),
-    ]);
+    const hooks = await module.diagnoseHooks(
+      [
+        source("codex"),
+        source("claude_code"),
+        source("gemini_cli"),
+        source("qwen_code"),
+        source("kimi_code"),
+        source("opencode"),
+      ],
+      { inspectCodexHookTrust: async () => "current" },
+    );
     assert.deepEqual(hooks, {
       codex: "current",
       claude_code: "current",
@@ -353,6 +414,30 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       kimi_code: "current",
       opencode: "manual-sync",
     });
+    assert.equal(
+      await module.diagnoseHookForSource(source("codex"), {
+        inspectCodexHookTrust: async () => "untrusted",
+      }),
+      "untrusted",
+    );
+    assert.equal(
+      await module.diagnoseHookForSource(source("codex"), {
+        inspectCodexHookTrust: async () => {
+          throw new Error("synthetic unavailable inspector");
+        },
+      }),
+      "trust-unknown",
+    );
+    const codexSettingsBeforeRepeat = await readFile(join(home, ".codex", "hooks.json"), "utf8");
+    const repeated = await module.installHooks(
+      pathToFileURL(join(installedRuntime, "bin", "viberacing.mjs")),
+      [source("codex")],
+    );
+    assert.equal(repeated[source("codex").clientSourceId], false);
+    assert.equal(
+      await readFile(join(home, ".codex", "hooks.json"), "utf8"),
+      codexSettingsBeforeRepeat,
+    );
     await writeFile(
       join(home, ".claude", "settings.json"),
       JSON.stringify({
@@ -435,7 +520,12 @@ test("preserves BOM-encoded JSON hook settings while installing owned hooks", as
       else assert.deepEqual([...raw.subarray(0, 2)], [0xfe, 0xff]);
     }
     assert.deepEqual(
-      await module.diagnoseHooks(fixtures.map((fixture) => source(fixture.agentId))),
+      await module.diagnoseHooks(
+        fixtures.map((fixture) => source(fixture.agentId)),
+        {
+          inspectCodexHookTrust: async () => "current",
+        },
+      ),
       {
         codex: "current",
         claude_code: "current",
@@ -4455,6 +4545,93 @@ test("quarantines a server-disconnected pending source without poisoning future 
   );
   await assert.rejects(access(join(directory, "scheduler.lock")));
   await assert.rejects(access(join(directory, "dirty.json")));
+});
+
+test("doctor fails closed until Codex trusts the stable owned hook", async (context) => {
+  const clientSourceId = "71717171-7171-4171-8171-717171717171";
+  const sourceId = "72727272-7272-4272-8272-727272727272";
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.url !== "/api/installations/reconcile") {
+        response.writeHead(404).end();
+        return;
+      }
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify(
+          reconciliationResponse([
+            {
+              sourceId: body.sourceIds[0],
+              agentId: "codex",
+              collectionMethod: "codex_app_server",
+              status: "active",
+              lastAcceptedSyncSequence: "0",
+            },
+          ]),
+        ),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-codex-trust-"));
+  context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
+  const codexHome = join(home, ".codex");
+  const bin = join(home, "bin");
+  const executablePath = join(bin, "codex");
+  await mkdir(codexHome, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await writeFakeCodexHookServer(executablePath);
+  const source = {
+    clientSourceId,
+    sourceId,
+    agentId: "codex",
+    dataPath: codexHome,
+    executablePath,
+    collectionMethod: "codex_app_server",
+    supportedSurface: "desktop",
+    suggestedLabel: "Codex",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    source,
+  ]);
+  const environment = connectorEnvironment(home, {
+    VIBERACING_CODEX_BIN: executablePath,
+    VIBERACING_TEST_CODEX_HOOK_TRUST: "untrusted",
+  });
+
+  const untrusted = await runWithInput(["doctor", "--repair"], environment, "");
+  assert.equal(untrusted.code, 1);
+  assert.match(untrusted.stdout, /codex hook: untrusted/);
+  assert.match(untrusted.stdout, /Codex automatic sync needs approval/);
+  assert.match(untrusted.stdout, /run `\/hooks`/);
+  assert.match(untrusted.stdout, /Usage sync: not run/);
+  assert.match(untrusted.stderr, /connector repair is incomplete/);
+  const hookPath = join(codexHome, "hooks.json");
+  const firstSettings = await readFile(hookPath, "utf8");
+  const firstCommand = JSON.parse(firstSettings).hooks.Stop[0].hooks[0].command;
+  assert.match(firstCommand, /bin[/\\]viberacing-hook\.mjs/);
+  assert.doesNotMatch(firstCommand, new RegExp(`runtime[/\\\\]${connectorVersion}`));
+
+  const trusted = await runWithInput(
+    ["doctor", "--repair"],
+    { ...environment, VIBERACING_TEST_CODEX_HOOK_TRUST: "trusted" },
+    "",
+  );
+  assert.equal(trusted.code, 0);
+  assert.match(trusted.stdout, /codex hook: current/);
+  assert.doesNotMatch(trusted.stdout, /Codex automatic sync needs approval/);
+  assert.equal(trusted.stderr, "");
+  assert.equal(await readFile(hookPath, "utf8"), firstSettings);
+  await access(join(directory, "bin", "viberacing-hook.mjs"));
 });
 
 test("doctor reports Claude availability without collecting usage", async (context) => {

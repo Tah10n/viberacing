@@ -8,6 +8,14 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Fixed
+
+- Codex hooks now invoke a stable local launcher instead of a versioned runtime path, so an explicit
+  connector update no longer changes the trusted hook identity on every release. Connect and
+  `doctor` query Codex's official `hooks/list` status, report untrusted, modified, or disabled
+  hooks, and direct the user to review the Vibe Racing `Stop` hook without bypassing Codex hook
+  trust.
+
 ## [0.4.1] - 2026-08-25
 
 ### Fixed

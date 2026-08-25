@@ -20,6 +20,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { canonicalPathKey } from "./adapters/shared.mjs";
+import { inspectCodexHookTrust } from "./adapters/codex.mjs";
 import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.mjs";
 import { quoteWindowsCommandArgument } from "./executables.mjs";
 import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
@@ -83,6 +84,7 @@ const ownedLockPattern =
 const stateTemporaryPattern =
   /^(?:config|installation|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
+const hookLauncherTemporaryPattern = /^viberacing-hook\.mjs\.\d+\.tmp$/i;
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
@@ -180,7 +182,14 @@ function ownedStatePath(path, info) {
       info.isFile()
     );
   }
-  if (top === "bin") return parts.length === 2 && parts[1] === "viberacing.mjs" && info.isFile();
+  if (top === "bin")
+    return (
+      parts.length === 2 &&
+      (parts[1] === "viberacing.mjs" ||
+        parts[1] === "viberacing-hook.mjs" ||
+        hookLauncherTemporaryPattern.test(parts[1])) &&
+      info.isFile()
+    );
   return top === "logs" && parts.length === 2 && parts[1] === "last-error.log" && info.isFile();
 }
 
@@ -1299,6 +1308,18 @@ async function updateHook(path, event, hook, options = {}) {
   const groups = settings.hooks[event] ?? [];
   if (!Array.isArray(groups))
     throw new Error(`The ${event} hooks field at ${path} must be an array`);
+  if (!remove) {
+    const ownedHandlers = groups.flatMap((group) =>
+      Array.isArray(group?.hooks)
+        ? group.hooks.filter((handler) => markers.some((marker) => ownsHook(handler, marker)))
+        : [],
+    );
+    if (
+      ownedHandlers.length === 1 &&
+      groups.some((group) => JSON.stringify(group) === JSON.stringify(hook))
+    )
+      return false;
+  }
   const retained = groups
     .map((group) =>
       Array.isArray(group?.hooks)
@@ -1314,6 +1335,7 @@ async function updateHook(path, event, hook, options = {}) {
         : group,
     )
     .filter((group) => !Array.isArray(group?.hooks) || group.hooks.length > 0);
+  if (remove && JSON.stringify(retained) === JSON.stringify(groups)) return false;
   if (!remove) retained.push(hook);
   settings.hooks[event] = retained;
   await ensurePrivateStateDirectory();
@@ -1407,6 +1429,27 @@ function installedRuntimeScript() {
   return join(stateDirectory, "runtime", connectorVersion, "bin", "viberacing.mjs");
 }
 
+function installedHookLauncherScript() {
+  return join(stateDirectory, "bin", "viberacing-hook.mjs");
+}
+
+function hookLauncherContents(version = connectorVersion) {
+  return [
+    'import { join, resolve } from "node:path";',
+    'import { fileURLToPath, pathToFileURL } from "node:url";',
+    "",
+    'const stateDirectory = resolve(fileURLToPath(new URL("..", import.meta.url)));',
+    `const runtime = join(stateDirectory, "runtime", ${JSON.stringify(version)}, "bin", "viberacing.mjs");`,
+    "await import(pathToFileURL(runtime).href);",
+  ].join("\n");
+}
+
+async function installHookLauncher() {
+  const path = installedHookLauncherScript();
+  await atomicText(path, hookLauncherContents());
+  return path;
+}
+
 async function verifyInstalledRuntime(directory) {
   await access(join(directory, "bin", "viberacing.mjs"));
   await Promise.all(installedRuntimeFiles.map((name) => access(join(directory, "lib", name))));
@@ -1419,9 +1462,13 @@ async function installRuntime(sourceUrl) {
   const sourceRoot = resolve(dirname(sourceScript), "..");
   const installedScript = installedRuntimeScript();
   const installedDirectory = resolve(dirname(installedScript), "..");
-  if (resolve(sourceScript) === resolve(installedScript)) return installedScript;
+  if (resolve(sourceScript) === resolve(installedScript)) {
+    await installHookLauncher();
+    return installedScript;
+  }
   try {
     await verifyInstalledRuntime(installedDirectory);
+    await installHookLauncher();
     return installedScript;
   } catch {}
 
@@ -1449,6 +1496,7 @@ async function installRuntime(sourceUrl) {
   } catch (error) {
     try {
       await verifyInstalledRuntime(installedDirectory);
+      await installHookLauncher();
       return installedScript;
     } catch {
       throw error;
@@ -1456,6 +1504,7 @@ async function installRuntime(sourceUrl) {
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true });
   }
+  await installHookLauncher();
   return installedScript;
 }
 
@@ -1492,7 +1541,10 @@ export function quoteHookArgument(value, platform = process.platform) {
 
 export async function installHookForSource(source, installedScript) {
   const marker = hookMarkerForSource(source.clientSourceId);
-  const command = sourceHookCommand(installedScript, source);
+  const command = sourceHookCommand(
+    source.agentId === "codex" ? installedHookLauncherScript() : installedScript,
+    source,
+  );
   const options = { markers: [legacyHookMarker, marker] };
   if (source.agentId === "codex") {
     const path = join(hookRoot(source, "codex"), "hooks.json");
@@ -1557,12 +1609,22 @@ function hookRoot(source, agentId) {
   return dataPath;
 }
 
-export async function diagnoseHookForSource(source) {
-  const installedScript = installedRuntimeScript();
+export async function diagnoseHookForSource(source, options = {}) {
+  const installedScript =
+    source.agentId === "codex" ? installedHookLauncherScript() : installedRuntimeScript();
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(installedScript, source);
-  if (source.agentId === "codex")
-    return jsonHookStatus(join(hookRoot(source, "codex"), "hooks.json"), "Stop", command, marker);
+  if (source.agentId === "codex") {
+    const path = join(hookRoot(source, "codex"), "hooks.json");
+    const fileStatus = await jsonHookStatus(path, "Stop", command, marker);
+    if (fileStatus !== "current") return fileStatus;
+    try {
+      const inspect = options.inspectCodexHookTrust ?? inspectCodexHookTrust;
+      return await inspect(source, { sourcePath: path, command });
+    } catch {
+      return "trust-unknown";
+    }
+  }
   if (source.agentId === "claude_code")
     return jsonHookStatus(
       join(hookRoot(source, "claude_code"), "settings.json"),
@@ -1596,10 +1658,10 @@ export async function diagnoseHookForSource(source) {
   return undefined;
 }
 
-export async function diagnoseHooks(sources) {
+export async function diagnoseHooks(sources, options = {}) {
   const result = {};
   for (const source of sources) {
-    const status = await diagnoseHookForSource(source);
+    const status = await diagnoseHookForSource(source, options);
     if (status) result[source.agentId] = mergeHookStatus(result[source.agentId], status);
   }
   return result;
@@ -1607,7 +1669,16 @@ export async function diagnoseHooks(sources) {
 
 function mergeHookStatus(previous, next) {
   if (!previous || previous === next) return next;
-  const priority = ["invalid-settings", "outdated", "missing", "current"];
+  const priority = [
+    "invalid-settings",
+    "disabled",
+    "modified",
+    "untrusted",
+    "outdated",
+    "missing",
+    "trust-unknown",
+    "current",
+  ];
   return priority.indexOf(previous) <= priority.indexOf(next) ? previous : next;
 }
 
