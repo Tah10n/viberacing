@@ -1,7 +1,12 @@
 import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { isUuid, problem } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 async function remove(
@@ -15,12 +20,15 @@ async function remove(
   if (token.length < 32 || token.length > 128) return problem(401, "unauthorized");
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "source_delete_pre_auth",
-      address.key,
-      clientAdmissionLimit(address, 60, 2_000, 15),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "source_delete_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 60, 2_000, 15),
+        2_000,
+        60,
+      )
+    ).allowed
   ) {
     return Response.json(
       { error: "rate_limited" },

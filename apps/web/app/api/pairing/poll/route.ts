@@ -2,7 +2,12 @@ import { isSupportedConnectorProtocolVersion } from "@/lib/config";
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface PollBody {
@@ -31,12 +36,15 @@ async function post(request: Request): Promise<Response> {
   try {
     const address = clientAddress(request);
     if (
-      !(await consumeRateLimit(
-        "pairing_poll_pre_auth",
-        address.key,
-        clientAdmissionLimit(address, 120, 10_000, 20),
-        60,
-      ))
+      !(
+        await consumeAdmissionRateLimit(
+          "pairing_poll_pre_auth",
+          address.key,
+          clientAdmissionLimit(address, 120, 10_000, 20),
+          10_000,
+          60,
+        )
+      ).allowed
     ) {
       return Response.json(
         { error: "rate_limited" },

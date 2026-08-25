@@ -1,7 +1,12 @@
 import { digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 const statuses = new Set(["succeeded", "partial", "failed"]);
@@ -39,12 +44,15 @@ async function post(request: Request): Promise<Response> {
   if (token === null) return problem(401, "unauthorized");
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "browser_sync_result_pre_auth",
-      address.key,
-      clientAdmissionLimit(address, 60, 4_000, 20),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "browser_sync_result_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 60, 4_000, 20),
+        4_000,
+        60,
+      )
+    ).allowed
   ) {
     return problem(429, "rate_limited");
   }

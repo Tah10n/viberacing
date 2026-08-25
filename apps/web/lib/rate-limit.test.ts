@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "./rate-limit";
+import {
+  canonicalClientAddress,
+  clientAddress,
+  clientAdmissionLimit,
+  consumeRateLimit,
+  rateLimitCleanupDue,
+} from "./rate-limit";
 
 describe("database-backed rate limits", () => {
   const originalTrustProxy = process.env.VIBERACING_TRUST_PROXY;
@@ -17,6 +23,12 @@ describe("database-backed rate limits", () => {
     );
   });
 
+  it("schedules best-effort cleanup at most once per minute", () => {
+    expect(rateLimitCleanupDue(0, 1)).toBe(true);
+    expect(rateLimitCleanupDue(1_000, 60_999)).toBe(false);
+    expect(rateLimitCleanupDue(1_000, 61_000)).toBe(true);
+  });
+
   it("uses Railway's trusted client-address header", () => {
     process.env.VIBERACING_TRUST_PROXY = "railway";
     const request = new Request("https://viberacing.example", {
@@ -26,6 +38,23 @@ describe("database-backed rate limits", () => {
       },
     });
     expect(clientAddress(request)).toEqual({ trusted: true, key: "203.0.113.9" });
+  });
+
+  it("canonicalizes IPv6 clients to a stable /64 key", () => {
+    expect(canonicalClientAddress("2001:0db8:0000:0001:0000:0000:0000:0001")).toBe(
+      "2001:db8:0:1::/64",
+    );
+    expect(canonicalClientAddress("2001:db8:0:1::abcd")).toBe("2001:db8:0:1::/64");
+    expect(canonicalClientAddress("2001:db8:0:2::1")).toBe("2001:db8:0:2::/64");
+    expect(canonicalClientAddress("2001:db8:0:1::1")).not.toBe(
+      canonicalClientAddress("2001:db8:0:2::1"),
+    );
+  });
+
+  it("maps IPv4-mapped IPv6 to the canonical IPv4 client key", () => {
+    expect(canonicalClientAddress("::ffff:192.0.2.128")).toBe("192.0.2.128");
+    expect(canonicalClientAddress("192.0.2.128")).toBe("192.0.2.128");
+    expect(canonicalClientAddress("not-an-address")).toBeNull();
   });
 
   it("ignores forwarding headers unless the matching proxy is explicitly trusted", () => {
@@ -63,7 +92,7 @@ describe("database-backed rate limits", () => {
           headers: { "X-Real-IP": "2001:db8::1", "X-Forwarded-For": "spoofed" },
         }),
       ),
-    ).toEqual({ trusted: true, key: "2001:db8::1" });
+    ).toEqual({ trusted: true, key: "2001:db8::/64" });
   });
 
   it("keeps local preview usable while bounding invalid trusted headers", () => {

@@ -13,6 +13,16 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/rate-limit", () => ({
   clientAddress: () => ({ trusted: true, key: "127.0.0.1" }),
   clientAdmissionLimit: (_address: unknown, trustedLimit: number) => trustedLimit,
+  consumeAdmissionRateLimit: async (
+    scope: string,
+    key: string,
+    limit: number,
+    _globalLimit: number,
+    window: number,
+  ) => ({
+    allowed: Boolean(await mocks.consumeRateLimit(scope, key, limit, window)),
+    reason: null,
+  }),
   consumeRateLimit: mocks.consumeRateLimit,
 }));
 vi.mock("@/lib/request-log", () => ({

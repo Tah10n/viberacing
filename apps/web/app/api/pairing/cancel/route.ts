@@ -1,7 +1,12 @@
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface CancelBody {
@@ -25,12 +30,15 @@ function rateLimited(): Response {
 async function post(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "pairing_cancel_pre_auth",
-      address.key,
-      clientAdmissionLimit(address, 120, 10_000, 20),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "pairing_cancel_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 120, 10_000, 20),
+        10_000,
+        60,
+      )
+    ).allowed
   ) {
     return rateLimited();
   }

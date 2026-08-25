@@ -2,19 +2,22 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { githubWebOrigin, publicOrigin, requiredEnv, secureCookies } from "@/lib/config";
 import { randomToken } from "@/lib/crypto";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeAdmissionRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 import { safeReturnPath } from "../return-path";
 
 async function get(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "oauth_start",
-      address.key,
-      clientAdmissionLimit(address, 20, 2_000, 5),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "oauth_start",
+        address.key,
+        clientAdmissionLimit(address, 20, 2_000, 5),
+        2_000,
+        60,
+      )
+    ).allowed
   ) {
     return Response.json(
       { error: "rate_limited" },

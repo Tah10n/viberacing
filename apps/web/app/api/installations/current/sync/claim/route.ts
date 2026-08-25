@@ -1,7 +1,7 @@
 import { digest } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import { clientAddress, clientAdmissionLimit, consumeAdmissionRateLimit } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 function bearer(request: Request): string | null {
@@ -16,12 +16,15 @@ async function post(request: Request): Promise<Response> {
   if (token === null) return problem(401, "unauthorized");
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "browser_sync_claim_pre_auth",
-      address.key,
-      clientAdmissionLimit(address, 30, 2_000, 10),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "browser_sync_claim_pre_auth",
+        address.key,
+        clientAdmissionLimit(address, 30, 2_000, 10),
+        2_000,
+        60,
+      )
+    ).allowed
   ) {
     return problem(429, "rate_limited");
   }

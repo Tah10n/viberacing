@@ -27,6 +27,13 @@ vi.mock("@/lib/rate-limit", () => ({
     local: number,
     invalid: number,
   ) => (address.trusted ? trusted : address.reason === "proxy_disabled" ? local : invalid),
+  consumeAdmissionRateLimit: async (
+    scope: string,
+    key: string,
+    limit: number,
+    _globalLimit: number,
+    window: number,
+  ) => ({ allowed: Boolean(await consumeRateLimitMock(scope, key, limit, window)), reason: null }),
   consumeRateLimit: consumeRateLimitMock,
 }));
 
@@ -38,7 +45,7 @@ describe("OAuth start rate limiting", () => {
     cookieSetMock.mockReset();
   });
 
-  it("limits a trusted client without a globally exhaustible bucket", async () => {
+  it("limits a trusted client through the pre-auth admission gate", async () => {
     consumeRateLimitMock.mockResolvedValue(false);
     const request = new Request("https://viberacing.example/api/auth/github/start", {
       headers: { "X-Real-IP": "203.0.113.12" },
