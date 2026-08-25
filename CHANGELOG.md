@@ -8,6 +8,15 @@ experience or protocol.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-25
+
+### Fixed
+
+- Release validation now accepts the scalar and singleton-array JSON forms returned by npm 12 for
+  `latest` and exact-version lookups, while rejecting empty, ambiguous, and non-string responses.
+
+## [0.4.0] - 2026-08-25
+
 ### Changed
 
 - Connector onboarding now supports one centrally configured distribution: the official service can
@@ -83,6 +92,5 @@ experience or protocol.
   verification, CI, and the release process.
 - Repository social preview artwork and focused CI/license badges.
 
-Existing historical versions have not been backfilled because the repository does not yet have
-authoritative release tags. The first release entry should be created from a verified release commit
-rather than inferred from package metadata alone.
+Connector 0.4.0 was the verified interactive npm bootstrap. Connector 0.4.1 is intended to be the
+first GitHub-tagged release published through npm Trusted Publishing.
