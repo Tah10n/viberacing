@@ -24,6 +24,10 @@ experience or protocol.
 - Pre-authentication admission now applies an atomic global cap before creating canonical client
   buckets, groups IPv6 by `/64`, and performs bounded opportunistic cleanup. Configured origins with
   URL credentials are rejected without exposing those credentials.
+- A fully successful authenticated usage delivery now clears the connector's stale hook-error log,
+  so `doctor` no longer recommends reconnecting after a later Connect, manual Sync, browser Sync, or
+  changed automatic Sync succeeds. Partial and request-free automatic checks retain the last failure
+  for diagnosis.
 - Manual and browser-triggered Sync now submit a successfully collected snapshot even when its
   normalized usage is unchanged, so account and computer **Last sync** times advance immediately.
   Automatic hooks retain fingerprint suppression and make no usage request for unchanged data.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -138,6 +138,10 @@ const output = (...values) => {
   if (!quiet) process.stdout.write(`${values.map(sanitizeTerminalText).join(" ")}\n`);
 };
 const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
+
+async function clearLastHookError() {
+  await unlink(join(stateDirectory, "logs", "last-error.log")).catch(() => {});
+}
 
 function collectorWarningMessage(code) {
   if (code === "codex_session_components_incomplete")
@@ -1151,8 +1155,10 @@ async function sync(providedConfig, options = {}) {
         failures.push(`server disconnected source ${sourceId}`);
       for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
-      if (failures.length === 0)
+      if (failures.length === 0) {
         await compactSuccessfulCaptures({ ...config, sources: syncSources });
+        await clearLastHookError();
+      }
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       return { accepted, failures };
     },

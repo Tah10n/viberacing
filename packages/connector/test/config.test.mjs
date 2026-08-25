@@ -2222,6 +2222,9 @@ test("an unchanged healthy source never inherits another collector automatic fai
   const localSources = JSON.parse(await readFile(sourcesPath, "utf8"));
   localSources.sources[1].collectionMethod = "synthetic_invalid_collector";
   await writeFile(sourcesPath, `${JSON.stringify(localSources)}\n`);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
   const timestamp = new Date().toISOString();
   await writeFile(
     join(directory, "dirty.json"),
@@ -2263,6 +2266,10 @@ test("an unchanged healthy source never inherits another collector automatic fai
   assert.equal(
     diagnosticBodies[0].events.some(({ code }) => code === "automatic_sync_failed"),
     false,
+  );
+  assert.equal(
+    await readFile(lastHookErrorPath, "utf8"),
+    "2026-08-18T12:55:27.438Z automatic_sync_failed\n",
   );
   const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
   assert.deepEqual(state.diagnostics.activeBySource[failedSourceId], ["collect:collector_failed"]);
@@ -2698,6 +2705,9 @@ test("manual sync collects every active source and clears only its prior dirty g
       })}\n`,
     );
   await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
   await writeFile(
     join(directory, "dirty.json"),
     `${JSON.stringify({
@@ -2726,6 +2736,7 @@ test("manual sync collects every active source and clears only its prior dirty g
   );
   assert.equal(bodies.length, 1);
   assert.equal(bodies[0].snapshots.length, 2);
+  await assert.rejects(access(lastHookErrorPath));
   await assert.rejects(access(join(directory, "dirty.json")));
   await assert.rejects(access(join(directory, "scheduler.lock")));
 
@@ -3148,6 +3159,9 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
       suggestedLabel: "OpenCode custom-channel",
     },
   ]);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
 
   await execFileAsync(
     process.execPath,
@@ -3165,6 +3179,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   assert.equal(pairingBody.sources[0].suggestedLabel, "OpenCode");
   assert.equal(JSON.stringify(pairingBody).includes("custom-channel"), false);
   assert.equal((await readLocalSources(directory))[0].suggestedLabel, "OpenCode");
+  await assert.rejects(access(lastHookErrorPath));
   const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   assert.equal(JSON.stringify(config).includes("custom-channel"), false);
 });
