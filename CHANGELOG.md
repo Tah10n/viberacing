@@ -8,6 +8,13 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Fixed
+
+- Connector release verification now tolerates npm publish-time scanning by waiting up to 30 minutes
+  for both the exact immutable version and `latest`, while the workflow retains a bounded 45-minute
+  job timeout. Production and onboarding documentation now reflect the completed npm rollout, the
+  live Railway origin, and Codex's required one-time `/hooks` review.
+
 ## [0.4.2] - 2026-08-25
 
 ### Fixed
@@ -102,5 +109,7 @@ experience or protocol.
   verification, CI, and the release process.
 - Repository social preview artwork and focused CI/license badges.
 
-Connector 0.4.0 was the verified interactive npm bootstrap. Connector 0.4.1 is intended to be the
-first GitHub-tagged release published through npm Trusted Publishing.
+Connector 0.4.0 was the verified interactive npm bootstrap. Connector 0.4.1 was the first
+GitHub-tagged release published through npm Trusted Publishing with provenance. Connector 0.4.2
+completed the stable Codex hook and production npm lifecycle validation before the official Railway
+service switched to the npm distribution.
