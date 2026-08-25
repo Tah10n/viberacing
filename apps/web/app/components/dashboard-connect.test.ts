@@ -20,7 +20,8 @@ describe("dashboard connection flow", () => {
   it("keeps repeat setup compact while leaving first-time setup open", () => {
     expect(dashboard).toContain('className="panel connect-disclosure"');
     expect(dashboard).toContain("open={installations.length === 0}");
-    expect(dashboard).toContain('"Connect another computer"');
+    expect(dashboard).toContain("CONNECT A COMPUTER");
+    expect(dashboard).toContain("Connect your coding agents");
     expect(dashboard).toContain('className="connect-disclosure-closed"');
   });
 
@@ -36,26 +37,32 @@ describe("dashboard connection flow", () => {
     expect(component).toContain("Copy failed — select the command above.");
   });
 
-  it("installs the connector package from the same Vibe Racing origin", () => {
+  it("uses only centralized connector command helpers", () => {
     const connector = source("../../lib/connector.ts");
     expect(connector).toContain(
       'import connectorPackage from "../../../packages/connector/package.json"',
     );
     expect(connector).toContain("export const bundledConnectorVersion = connectorPackage.version");
     expect(connector).not.toMatch(/bundledConnectorVersion\s*=\s*["']\d+\.\d+\.\d+/);
-    expect(dashboard).toContain("${origin}/downloads/${connectorArchiveName()}");
-    expect(dashboard).toContain("npx --allow-remote=all --yes --prefer-online --package");
-    expect(dashboard).toContain("-- viberacing connect --origin ${origin}");
+    expect(dashboard).toContain("connectorConnectCommand(origin)");
+    expect(dashboard).toContain("connectorRepairCommand(origin)");
+    expect(dashboard).toContain("connectorUninstallCommand(origin)");
+    expect(dashboard).not.toContain("/downloads/viberacing-connector");
+    expect(dashboard).not.toContain("npx --allow-remote");
     expect(dashboard).toContain("connectorCommandShell");
-    expect(dashboard).toContain("Run this one-line command in {commandShell}");
-    expect(dashboard).toContain("npm remote allowance applies");
-    expect(dashboard).not.toContain("npx @viberacing/connector");
+    expect(dashboard).toContain("No global npm installation is performed");
+    expect(dashboard).toContain("@viberacing/connector");
+    expect(dashboard).not.toContain("download the connector");
   });
 
-  it("offers an exact repair command only for outdated computers", () => {
+  it("requires repair only below the configured minimum version", () => {
     expect(dashboard).toContain("i.connector_version");
-    expect(dashboard).toContain("versionAtLeast(item.connector_version, bundledConnectorVersion)");
-    expect(dashboard).toContain("-- viberacing doctor --repair");
+    expect(dashboard).toContain("minimumConnectorVersion()");
+    expect(dashboard).toContain("versionAtLeast(item.connector_version, minimumVersion)");
+    expect(dashboard).not.toContain(
+      "versionAtLeast(item.connector_version, bundledConnectorVersion)",
+    );
+    expect(dashboard).toContain("Connector update required");
     expect(dashboard).toContain('label="Copy update command"');
     expect(dashboard).toContain("Repair does not collect or upload");
     expect(dashboard).toContain("token totals");
@@ -66,8 +73,9 @@ describe("dashboard connection flow", () => {
     const deleteRoute = source("../api/account/delete/route.ts");
     const connector = source("../../lib/connector.ts");
     expect(connector).toContain("export function connectorUninstallCommand");
-    expect(connector).toContain("/downloads/viberacing-connector.tgz");
-    expect(connector).toContain("-- viberacing uninstall");
+    expect(connector).toContain('"viberacing-connector.tgz"');
+    expect(connector).toContain("/downloads/${archive}");
+    expect(connector).toContain('"uninstall"');
     expect(dashboard).toContain("Local cleanup required");
     expect(dashboard).toContain('<details className="account-deletion-cleanup">');
     expect(dashboard).toContain("Show command");
@@ -77,6 +85,7 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("VIBERACING_STATE_DIR");
     expect(dashboard).toContain("every connector state directory");
     expect(dashboard).toContain('label="Copy uninstall command"');
+    expect(dashboard).toContain("connectorUninstallCommand(origin)");
     expect(dashboard).toContain(
       "every local connector installation must be uninstalled separately",
     );
@@ -90,6 +99,7 @@ describe("dashboard connection flow", () => {
     expect(home).toContain("once for every connector installation");
     expect(home).toContain("VIBERACING_STATE_DIR");
     expect(home).toContain('label="Copy uninstall command"');
+    expect(home).toContain("connectorUninstallCommand(publicOrigin().origin)");
   });
 
   it("offers source reassignment only when the same agent has another account", () => {
