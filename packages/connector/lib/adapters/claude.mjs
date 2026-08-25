@@ -11,24 +11,33 @@ import {
   walk,
 } from "./shared.mjs";
 
-function contribution(line) {
+const claudeParserVersion = 1;
+
+function classifiedContribution(line) {
   let record;
   try {
     record = JSON.parse(line);
   } catch {
-    return null;
+    return { kind: "unsupported" };
   }
   const id = record?.message?.id;
   const usage = record?.message?.usage;
+  if (record?.type !== "assistant")
+    return record?.message?.role === "assistant" || usage !== undefined
+      ? { kind: "unsupported" }
+      : { kind: "irrelevant" };
   const day = utcDay(record?.timestamp);
   if (
-    record?.type !== "assistant" ||
     record?.message?.role !== "assistant" ||
     typeof id !== "string" ||
+    id.length < 1 ||
+    id.length > 256 ||
     !usage ||
+    usage.input_tokens === undefined ||
+    usage.output_tokens === undefined ||
     day === null
   )
-    return null;
+    return { kind: "unsupported" };
   const entry = componentEntry(day, {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
@@ -36,15 +45,32 @@ function contribution(line) {
     cacheWriteTokens: usage.cache_creation_input_tokens,
     reasoningTokens: usage.reasoning_tokens,
   });
-  return entry && { id, entry };
+  return entry ? { kind: "parsed", id, entry } : { kind: "unsupported" };
+}
+
+function analyzeClaudeLines(lines) {
+  const records = [];
+  let candidateRecords = 0;
+  let parsedRecords = 0;
+  let unsupportedCandidates = 0;
+  for (const line of lines) {
+    const value = classifiedContribution(line);
+    if (value.kind === "irrelevant") continue;
+    candidateRecords += 1;
+    if (value.kind === "unsupported") {
+      unsupportedCandidates += 1;
+      continue;
+    }
+    parsedRecords += 1;
+    records.push(value);
+  }
+  return { records, stats: { candidateRecords, parsedRecords, unsupportedCandidates } };
 }
 
 export function parseClaudeLines(lines) {
   const messages = new Map();
-  for (const line of lines) {
-    const value = contribution(line);
-    if (value && !messages.has(value.id)) messages.set(value.id, value.entry);
-  }
+  for (const value of analyzeClaudeLines(lines).records)
+    if (!messages.has(value.id)) messages.set(value.id, value.entry);
   return mergeEntries([...messages.values()]);
 }
 
@@ -54,14 +80,18 @@ export async function collectClaude(
   state = {},
   { maximumBytes = 100_000_000, readChunk = jsonLinesChunk, fingerprint = tailFingerprint } = {},
 ) {
+  const stateCompatible = state.parserVersion === claudeParserVersion;
+  const compatibleState = stateCompatible ? state : {};
   const discovered = await walk(source.dataPath, [".jsonl"], 10_000);
   const nextState = {
-    files: { ...(state.files ?? {}) },
-    messages: Object.assign(Object.create(null), state.messages ?? {}),
+    files: { ...(compatibleState.files ?? {}) },
+    messages: Object.assign(Object.create(null), compatibleState.messages ?? {}),
   };
   let partial = discovered.incomplete;
+  let schemaUnsupported = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
+  const provisionalMessages = Object.create(null);
   let bytes = 0;
   for (const file of discovered.files) {
     if (bytes + file.size > maximumBytes) {
@@ -75,6 +105,7 @@ export async function collectClaude(
       previous &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
+      previous.safeOffset === file.size &&
       (previous.ino === undefined || previous.ino === file.ino)
     )
       continue;
@@ -95,14 +126,29 @@ export async function collectClaude(
     const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
       const chunk = await readChunk(file.path, offset, file.size);
+      const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
+      if (hasUnterminatedTail) partial = true;
       if (chunk.oversizedLines > 0) {
         partial = true;
         limited = true;
       }
+      const provisionalLines =
+        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
+      const analysis = analyzeClaudeLines(provisionalLines);
+      if (analysis.stats.unsupportedCandidates > 0) {
+        partial = true;
+        schemaUnsupported = true;
+        continue;
+      }
+      if (hasUnterminatedTail) {
+        if (!previous || appended)
+          for (const value of analysis.records)
+            if (!ids.has(value.id)) provisionalMessages[value.id] = value.entry;
+        continue;
+      }
       const messages = Object.create(null);
-      for (const line of chunk.lines) {
-        const value = contribution(line);
-        if (value && !ids.has(value.id)) {
+      for (const value of analysis.records) {
+        if (!ids.has(value.id)) {
           messages[value.id] = value.entry;
           ids.add(value.id);
         }
@@ -133,14 +179,39 @@ export async function collectClaude(
   }
   for (const [id, entry] of Object.entries(nextState.messages))
     if (entry.date < range.rangeStart || entry.date > range.rangeEnd) delete nextState.messages[id];
+  if (!stateCompatible && partial && Object.keys(state.files ?? {}).length > 0) {
+    const previousMessages = Object.values(state.messages ?? {}).filter(
+      (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
+    );
+    return {
+      entries: mergeEntries(previousMessages),
+      completeness: "partial",
+      nextState: state,
+      warnings: ["unreadable_or_unbounded_session_data"],
+      diagnostics: [
+        ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
+        ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+        ...(schemaUnsupported
+          ? [{ code: "local_store_schema_unsupported", phase: "collect" }]
+          : []),
+      ],
+    };
+  }
   return {
-    entries: mergeEntries(Object.values(nextState.messages)),
+    entries: mergeEntries([
+      ...Object.values(nextState.messages),
+      ...Object.values(provisionalMessages),
+    ]),
     completeness: partial ? "partial" : "complete",
-    nextState,
-    warnings: partial ? ["unreadable_or_unbounded_session_data"] : [],
+    nextState: { ...nextState, parserVersion: claudeParserVersion },
+    warnings: [
+      ...(partial ? ["unreadable_or_unbounded_session_data"] : []),
+      ...(schemaUnsupported ? ["unsupported_usage_records"] : []),
+    ],
     diagnostics: [
       ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
       ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+      ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
     ],
   };
 }

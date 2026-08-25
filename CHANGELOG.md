@@ -14,6 +14,19 @@ experience or protocol.
   for both the exact immutable version and `latest`, while the workflow retains a bounded 45-minute
   job timeout. Production and onboarding documentation now reflect the completed npm rollout, the
   live Railway origin, and Codex's required one-time `/hooks` review.
+- Claude Code, OpenCode, Kimi Code, Qwen Code, Gemini CLI, and Antigravity collectors now fail
+  closed on malformed or unsupported usage records. They send a partial snapshot, retain the last
+  complete incremental state, and emit only the allowlisted `local_store_schema_unsupported`
+  diagnostic.
+- `doctor --repair` now atomically restages the current runtime even when every expected path still
+  exists, repairing truncated, changed, and missing files of the same connector version.
+- Connector publishing can resume after npm accepted an immutable version but the workflow stopped:
+  matching tarball integrity, repository metadata, and `gitHead` skip the second publish and
+  continue bounded verification, while mismatches fail closed.
+- Automatic account matching now requires seven exact positive complete days spanning at least a
+  week and three distinct totals. Public admission has a shared ceiling, expired rate-limit rows are
+  drained in bounded 10,000-row batches, the CLI defaults to the live Railway origin, and production
+  responses include a one-year HSTS policy without `includeSubDomains` or `preload`.
 
 ## [0.4.2] - 2026-08-25
 

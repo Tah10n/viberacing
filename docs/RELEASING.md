@@ -159,8 +159,10 @@ After publishing each exact GitHub Release, confirm:
 
 npm scans newly published packages before making them installable. The publish workflow therefore
 waits up to 30 minutes for both the exact version and `dist-tags.latest` to become visible. If the
-publish step succeeded but verification is still waiting, do not retry the immutable version; wait
-for the scan to finish and inspect npm availability and provenance.
+publish step succeeded but the runner stopped before verification, rerun the workflow. It compares
+the local tarball integrity, repository metadata, and `gitHead` with the immutable npm package. An
+exact match skips the second publish and resumes bounded verification; any mismatch fails closed for
+manual security review.
 
 ### 6. Keep npm publishing access tight
 

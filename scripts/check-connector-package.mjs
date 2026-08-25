@@ -6,6 +6,34 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = "packages/connector";
+const officialOrigin = "https://viberacing.up.railway.app";
+const originPolicyFiles = [
+  "README.md",
+  "docs/DEPLOYMENT.md",
+  "docs/RELEASING.md",
+  "packages/connector/README.md",
+];
+function documentedOrigins(source) {
+  return new Set(
+    [...source.matchAll(/\bhttps:\/\/[A-Za-z0-9.-]+(?::\d+)?/g)].map(
+      (match) => new URL(match[0]).origin,
+    ),
+  );
+}
+for (const relativePath of originPolicyFiles) {
+  const source = readFileSync(resolve(root, relativePath), "utf8");
+  const origins = documentedOrigins(source);
+  if (!origins.has(officialOrigin) || origins.has("https://viberacing.com")) {
+    throw new Error(`${relativePath} does not match the official production-origin policy`);
+  }
+}
+const originModule = readFileSync(resolve(root, packageRoot, "lib/origin.mjs"), "utf8");
+const configuredOrigin = originModule.match(
+  /export const officialProductionOrigin = "([^"]+)";/,
+)?.[1];
+if (configuredOrigin === undefined || new URL(configuredOrigin).origin !== officialOrigin) {
+  throw new Error("Connector default origin does not match the official production-origin policy");
+}
 const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
 if (packageJson.name !== "@viberacing/connector") {
   throw new Error("Connector package name must be @viberacing/connector");

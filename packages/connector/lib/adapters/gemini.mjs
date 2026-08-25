@@ -7,21 +7,50 @@ import {
   findFile,
   integer,
   mergeEntries,
+  parserResult,
+  previousJsonlEntries,
   utcDay,
 } from "./shared.mjs";
 
-export function parseGeminiRecords(records) {
+const geminiParserVersion = 2;
+const geminiUsageContainerKeys = ["usageMetadata", "usage", "tokenUsage", "tokens"];
+
+function hasGeminiUsageContainer(record) {
+  return (
+    record !== null &&
+    typeof record === "object" &&
+    geminiUsageContainerKeys.some((key) => Object.hasOwn(record, key))
+  );
+}
+
+function analyzeGeminiRecords(records, malformedJsonRecords = 0) {
   const seen = new Set();
   const entries = [];
+  let candidateRecords = malformedJsonRecords;
+  let parsedRecords = 0;
+  let unsupportedCandidates = malformedJsonRecords;
   for (const record of records) {
-    if (record?.type !== "gemini") continue;
     const usage = record?.usageMetadata ?? record?.usage ?? record?.tokenUsage ?? record?.tokens;
+    if (record?.type !== "gemini" && !hasGeminiUsageContainer(record)) continue;
+    candidateRecords += 1;
     const id = record?.id ?? record?.messageId ?? record?.event_id;
     const day = utcDay(record?.timestamp ?? record?.time ?? record?.startTime);
-    if (!usage || !id || seen.has(id) || day === null) continue;
+    if (
+      record?.type !== "gemini" ||
+      !usage ||
+      typeof id !== "string" ||
+      id.length < 1 ||
+      id.length > 256 ||
+      day === null
+    ) {
+      unsupportedCandidates += 1;
+      continue;
+    }
     const input = integer(
       usage.input ?? usage.promptTokenCount ?? usage.inputTokens ?? usage.input_token_count,
     );
+    const output =
+      usage.output ?? usage.candidatesTokenCount ?? usage.outputTokens ?? usage.output_token_count;
     const cached = integer(
       usage.cached ??
         usage.cachedContentTokenCount ??
@@ -29,41 +58,56 @@ export function parseGeminiRecords(records) {
         usage.cache_read_token_count ??
         0,
     );
-    if (input === null || cached === null) continue;
+    const entry =
+      input === null || cached === null || output === undefined
+        ? null
+        : componentEntry(
+            day,
+            {
+              inputTokens: input >= cached ? input - cached : input,
+              outputTokens: output,
+              cacheReadTokens: cached,
+              cacheWriteTokens: usage.cacheWriteTokens ?? usage.cache_write_token_count,
+              reasoningTokens:
+                usage.thoughts ??
+                usage.thoughtsTokenCount ??
+                usage.thoughtTokens ??
+                usage.thought_token_count,
+            },
+            usage.total ?? usage.totalTokenCount ?? usage.totalTokens ?? usage.total_token_count,
+          );
+    if (entry === null) {
+      unsupportedCandidates += 1;
+      continue;
+    }
+    parsedRecords += 1;
+    if (seen.has(id)) continue;
     seen.add(id);
-    entries.push(
-      componentEntry(
-        day,
-        {
-          inputTokens: input >= cached ? input - cached : input,
-          outputTokens:
-            usage.output ??
-            usage.candidatesTokenCount ??
-            usage.outputTokens ??
-            usage.output_token_count,
-          cacheReadTokens: cached,
-          cacheWriteTokens: usage.cacheWriteTokens ?? usage.cache_write_token_count,
-          reasoningTokens:
-            usage.thoughts ??
-            usage.thoughtsTokenCount ??
-            usage.thoughtTokens ??
-            usage.thought_token_count,
-        },
-        usage.total ?? usage.totalTokenCount ?? usage.totalTokens ?? usage.total_token_count,
-      ),
-    );
+    entries.push(entry);
   }
-  return mergeEntries(entries);
+  return parserResult(
+    mergeEntries(entries),
+    candidateRecords,
+    parsedRecords,
+    unsupportedCandidates,
+  );
+}
+
+export function parseGeminiRecords(records) {
+  return analyzeGeminiRecords(records).entries;
 }
 
 function parseGeminiLines(lines) {
   const records = [];
+  let malformedJsonRecords = 0;
   for (const line of lines) {
     try {
       records.push(JSON.parse(line));
-    } catch {}
+    } catch {
+      malformedJsonRecords += 1;
+    }
   }
-  return parseGeminiRecords(records);
+  return analyzeGeminiRecords(records, malformedJsonRecords);
 }
 
 function geminiEventKey(line) {
@@ -112,14 +156,31 @@ export const geminiAdapter = Object.freeze({
   trigger: "SessionEnd hook",
   defaultPaths: [defaultPath],
   detect: detectGeminiSources,
-  collect: (source, range, state) =>
-    collectJsonl(
+  collect: async (source, range, state = {}) => {
+    const stateCompatible = state.parserVersion === geminiParserVersion;
+    const result = await collectJsonl(
       source,
       parseGeminiLines,
       (path) => basename(path).startsWith("session-"),
-      state,
+      stateCompatible ? state : {},
       range,
       geminiEventKey,
-    ),
+    );
+    if (
+      !stateCompatible &&
+      result.completeness === "partial" &&
+      Object.keys(state.files ?? {}).length > 0
+    ) {
+      return {
+        ...result,
+        entries: previousJsonlEntries(state),
+        nextState: state,
+      };
+    }
+    return {
+      ...result,
+      nextState: { ...result.nextState, parserVersion: geminiParserVersion },
+    };
+  },
   diagnose: (source) => diagnosePath(source),
 });

@@ -25,7 +25,8 @@ vi.mock("@/lib/request-log", () => ({
   withRequestLogging: (_route: string, handler: unknown) => handler,
 }));
 
-import { parseDiagnosticBody, POST } from "./route";
+import { diagnosticCodesByPhase as connectorDiagnosticCodesByPhase } from "../../../../../../../packages/connector/lib/diagnostics.mjs";
+import { diagnosticCodesByPhase, parseDiagnosticBody, POST } from "./route";
 
 const deviceToken = "synthetic-device-token-that-is-long-enough";
 const installationId = "11111111-1111-4111-8111-111111111111";
@@ -90,6 +91,14 @@ afterEach(() => {
 });
 
 describe("connector diagnostic payload", () => {
+  it("keeps the connector and server diagnostic allowlists identical", () => {
+    expect(
+      Object.fromEntries(
+        Object.entries(diagnosticCodesByPhase).map(([phase, codes]) => [phase, [...codes]]),
+      ),
+    ).toEqual(connectorDiagnosticCodesByPhase);
+  });
+
   it("accepts only allowlisted code, phase, and state combinations", () => {
     expect(parseDiagnosticBody(validBody())).not.toBeNull();
     for (const mutation of [
@@ -124,6 +133,36 @@ describe("connector diagnostic payload", () => {
 });
 
 describe("connector diagnostic ingestion", () => {
+  it("round-trips opened and resolved local_store_schema_unsupported events", async () => {
+    authenticate([{ id: qwenSourceId, agent_id: "qwen_code" }]);
+    const body = validBody();
+    body.events = ["opened", "resolved"].map((state) => ({
+      sourceId: qwenSourceId,
+      code: "local_store_schema_unsupported",
+      state,
+      phase: "collect",
+    }));
+
+    const response = await POST(diagnosticRequest(body));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ acceptedEvents: 2 });
+    expect(logWarnMock).toHaveBeenCalledWith("connector_diagnostic", {
+      agentId: "qwen_code",
+      diagnosticCode: "local_store_schema_unsupported",
+      diagnosticState: "opened",
+      diagnosticPhase: "collect",
+      connectorVersion: "0.3.10",
+    });
+    expect(logInfoMock).toHaveBeenCalledWith("connector_diagnostic", {
+      agentId: "qwen_code",
+      diagnosticCode: "local_store_schema_unsupported",
+      diagnosticState: "resolved",
+      diagnosticPhase: "collect",
+      connectorVersion: "0.3.10",
+    });
+  });
+
   it("authenticates ownership before logging privacy-safe opened and resolved events", async () => {
     authenticate();
 

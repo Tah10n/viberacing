@@ -1,3 +1,5 @@
+export const officialProductionOrigin = "https://viberacing.up.railway.app";
+
 export function normalizeOrigin(value, label = "origin") {
   if (typeof value !== "string" || value.length === 0)
     throw new Error(`${label} must be an HTTP(S) origin`);

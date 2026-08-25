@@ -1154,7 +1154,7 @@ try {
     BigInt(guardCleanupTotals.rows[0].tokens) === dedupBaselineTokens,
     "deduplication guard cleanup left stale leaderboard totals",
   );
-  const dedupValues = [13_579, 24_680];
+  const dedupValues = [13_579, 24_680, 35_791, 13_579, 24_680, 35_791, 13_579];
   const dedupFixtureTokens = dedupValues.reduce((sum, value) => sum + BigInt(value), 0n);
   const dedupFirstInstallation = { id: randomUUID(), secret: token() };
   const dedupSecondInstallation = { id: randomUUID(), secret: token() };
@@ -1173,7 +1173,7 @@ try {
   const dedupSecond = await pair(dedupSecondInstallation, [source("dedup-codex-b", "codex")]);
   const dedupFirstSource = dedupFirst.sources[0];
   const dedupSecondSource = dedupSecond.sources[0];
-  const dedupDates = Array.from({ length: 2 }, (_, index) => dateOffset(-3 + index));
+  const dedupDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
   const dedupStart = dedupDates[0];
   const dedupEnd = dedupDates.at(-1);
   const dedupEntries = dedupDates.map((date, index) => [
@@ -1235,7 +1235,7 @@ try {
   );
   check(
     dedupUsage.status === 200 &&
-      activeDedup?.matched_days === 2 &&
+      activeDedup?.matched_days === dedupDates.length &&
       activeDedup.previous_account_id === dedupSecondSource.agentAccountId &&
       activeDedup.target_account_id === dedupFirstSource.agentAccountId &&
       activeDedup.merged_into_account_id === activeDedup.target_account_id &&
@@ -1338,7 +1338,7 @@ try {
     "deduplication fixture cleanup left stale leaderboard totals",
   );
   console.log(
-    "ok - two distinct complete days match, contradictions stay separate, and Undo remains durable",
+    "ok - seven complete days with three totals match, contradictions stay separate, and Undo remains durable",
   );
 
   const previousWeek = dateOffset(-7);

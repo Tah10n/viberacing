@@ -209,7 +209,7 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
 
 export async function jsonLinesChunk(path, start = 0, size) {
   if (size !== undefined && start >= size)
-    return { lines: [], safeOffset: start, oversizedLines: 0 };
+    return { lines: [], safeOffset: start, oversizedLines: 0, tail: "", tailBytes: 0 };
   let contents = "";
   const stream = createReadStream(path, {
     encoding: "utf8",
@@ -218,13 +218,23 @@ export async function jsonLinesChunk(path, start = 0, size) {
   });
   for await (const chunk of stream) contents += chunk;
   const newline = contents.lastIndexOf("\n");
-  if (newline < 0) return { lines: [], safeOffset: start, oversizedLines: 0 };
+  if (newline < 0)
+    return {
+      lines: [],
+      safeOffset: start,
+      oversizedLines: 0,
+      tail: contents,
+      tailBytes: Buffer.byteLength(contents),
+    };
   const complete = contents.slice(0, newline + 1);
+  const tail = contents.slice(newline + 1);
   const lines = complete.split(/\r?\n/).filter(Boolean);
   return {
     lines,
     safeOffset: start + Buffer.byteLength(complete),
     oversizedLines: lines.filter((line) => Buffer.byteLength(line) > 1_000_000).length,
+    tail,
+    tailBytes: Buffer.byteLength(tail),
   };
 }
 
@@ -258,6 +268,7 @@ export async function collectJsonl(
   const entries = [];
   let incomplete = discovered.incomplete;
   let oversized = false;
+  let schemaUnsupported = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   let bytes = 0;
@@ -278,6 +289,7 @@ export async function collectJsonl(
       previous &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
+      previous.safeOffset === file.size &&
       (previous.ino === undefined || previous.ino === file.ino)
     ) {
       nextState.files[file.path] = previous;
@@ -300,6 +312,8 @@ export async function collectJsonl(
     const offset = appended ? previous.safeOffset : 0;
     try {
       const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
+      if (hasUnterminatedTail) incomplete = true;
       if (chunk.oversizedLines > 0) {
         incomplete = true;
         oversized = true;
@@ -307,7 +321,9 @@ export async function collectJsonl(
       }
       const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
       const unseenLines = [];
-      for (const line of chunk.lines) {
+      const provisionalLines =
+        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
+      for (const line of provisionalLines) {
         const event = eventKey?.(line);
         if (
           !event ||
@@ -326,13 +342,37 @@ export async function collectJsonl(
       if (range)
         for (const [key, date] of Object.entries(eventDays))
           if (date < range.rangeStart || date > range.rangeEnd) delete eventDays[key];
-      const parsed = parser(unseenLines);
+      const parserOutput = parser(unseenLines);
+      const parsed = Array.isArray(parserOutput) ? parserOutput : parserOutput.entries;
+      const unsupportedRecords = Array.isArray(parserOutput)
+        ? 0
+        : parserOutput.stats.unsupportedCandidates;
+      if (unsupportedRecords > 0) {
+        incomplete = true;
+        schemaUnsupported = true;
+        if (previous) {
+          nextState.files[file.path] = previous;
+          entries.push(
+            ...(appended
+              ? mergeEntries([...(previous.entries ?? []), ...parsed])
+              : (previous.entries ?? [])),
+          );
+        } else {
+          entries.push(...parsed);
+        }
+        continue;
+      }
       const fileEntries = mergeEntries([...(appended ? (previous.entries ?? []) : []), ...parsed]);
       const ranged = range
         ? fileEntries.filter(
             (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
           )
         : fileEntries;
+      if (hasUnterminatedTail) {
+        if (previous) nextState.files[file.path] = previous;
+        entries.push(...(previous && !appended ? (previous.entries ?? []) : ranged));
+        continue;
+      }
       nextState.files[file.path] = {
         size: file.size,
         modifiedAt: file.modifiedAt,
@@ -361,6 +401,7 @@ export async function collectJsonl(
   const warnings = [];
   if (incomplete) warnings.push("collector_limits_or_unreadable_files");
   if (oversized) warnings.push("oversized_jsonl_records");
+  if (schemaUnsupported) warnings.push("unsupported_usage_records");
   return {
     entries: mergeEntries(entries),
     completeness: incomplete ? "partial" : "complete",
@@ -369,8 +410,20 @@ export async function collectJsonl(
     diagnostics: [
       ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
       ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+      ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
     ],
   };
+}
+
+export function parserResult(entries, candidateRecords, parsedRecords, unsupportedCandidates) {
+  return {
+    entries,
+    stats: { candidateRecords, parsedRecords, unsupportedCandidates },
+  };
+}
+
+export function previousJsonlEntries(state) {
+  return mergeEntries(Object.values(state.files ?? {}).flatMap((file) => file.entries ?? []));
 }
 
 export async function diagnosePath(source, excluded = []) {

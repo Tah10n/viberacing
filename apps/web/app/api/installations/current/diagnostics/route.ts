@@ -14,7 +14,7 @@ const maximumEvents = 32;
 const maximumBodyBytes = 16_384;
 const connectorVersionPattern = /^\d+\.\d+\.\d+$/;
 const states = new Set(["opened", "resolved"]);
-const codesByPhase = {
+export const diagnosticCodesByPhase = {
   collect: new Set([
     "collector_failed",
     "agent_executable_missing",
@@ -22,6 +22,7 @@ const codesByPhase = {
     "agent_api_invalid_response",
     "local_store_unreadable",
     "local_store_scan_limit",
+    "local_store_schema_unsupported",
     "codex_rollout_read_failed",
     "codex_rollout_metadata_invalid",
     "codex_lineage_ambiguous",
@@ -49,7 +50,7 @@ interface ParsedDiagnosticEvent {
   sourceId: string;
   code: string;
   state: "opened" | "resolved";
-  phase: keyof typeof codesByPhase;
+  phase: keyof typeof diagnosticCodesByPhase;
 }
 
 interface InstallationRow {
@@ -112,8 +113,8 @@ export function parseDiagnosticBody(value: unknown): {
       typeof event.state !== "string" ||
       !states.has(event.state) ||
       typeof event.phase !== "string" ||
-      !Object.hasOwn(codesByPhase, event.phase) ||
-      !codesByPhase[event.phase as keyof typeof codesByPhase].has(event.code)
+      !Object.hasOwn(diagnosticCodesByPhase, event.phase) ||
+      !diagnosticCodesByPhase[event.phase as keyof typeof diagnosticCodesByPhase].has(event.code)
     ) {
       return null;
     }

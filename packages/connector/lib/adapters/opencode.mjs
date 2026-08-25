@@ -6,36 +6,59 @@ import { canonicalPathKey, componentEntry, diagnosePath, mergeEntries, utcDay } 
 
 export const openCodeDatabasePattern = /^opencode(?:-[A-Za-z0-9._-]+)?\.db$/;
 
-export function parseOpenCodeMessages(rows) {
+function analyzeOpenCodeMessages(rows) {
   const seen = new Set();
   const entries = [];
+  let candidateRecords = 0;
+  let parsedRecords = 0;
+  let unsupportedCandidates = 0;
   for (const row of rows) {
     let message;
     try {
       message = typeof row.data === "string" ? JSON.parse(row.data) : row.data;
     } catch {
+      candidateRecords += 1;
+      unsupportedCandidates += 1;
       continue;
     }
-    if (message?.role !== "assistant" || seen.has(row.id)) continue;
+    if (message?.role !== "assistant") continue;
+    candidateRecords += 1;
+    if (seen.has(row.id)) {
+      parsedRecords += 1;
+      continue;
+    }
     const day = utcDay(message?.time?.created ?? row.time_created);
     const usage = message?.tokens;
-    if (day === null || !usage) continue;
+    const entry =
+      typeof row.id === "string" && row.id.length > 0 && row.id.length <= 256 && usage
+        ? componentEntry(
+            day,
+            {
+              inputTokens: usage.input,
+              outputTokens: usage.output,
+              cacheReadTokens: usage.cache?.read,
+              cacheWriteTokens: usage.cache?.write,
+              reasoningTokens: usage.reasoning,
+            },
+            usage.total,
+          )
+        : null;
+    if (entry === null) {
+      unsupportedCandidates += 1;
+      continue;
+    }
+    parsedRecords += 1;
     seen.add(row.id);
-    entries.push(
-      componentEntry(
-        day,
-        {
-          inputTokens: usage.input,
-          outputTokens: usage.output,
-          cacheReadTokens: usage.cache?.read,
-          cacheWriteTokens: usage.cache?.write,
-          reasoningTokens: usage.reasoning,
-        },
-        usage.total,
-      ),
-    );
+    entries.push(entry);
   }
-  return mergeEntries(entries);
+  return {
+    entries: mergeEntries(entries),
+    stats: { candidateRecords, parsedRecords, unsupportedCandidates },
+  };
+}
+
+export function parseOpenCodeMessages(rows) {
+  return analyzeOpenCodeMessages(rows).entries;
 }
 
 async function collect(source, range, state = {}) {
@@ -51,12 +74,16 @@ async function collect(source, range, state = {}) {
         Date.parse(`${range.rangeStart}T00:00:00.000Z`),
         Date.parse(`${range.rangeEnd}T00:00:00.000Z`) + 86_400_000,
       );
+    const analysis = analyzeOpenCodeMessages(rows);
+    const unsupported = analysis.stats.unsupportedCandidates > 0;
     return {
-      entries: parseOpenCodeMessages(rows),
-      completeness: "complete",
+      entries: analysis.entries,
+      completeness: unsupported ? "partial" : "complete",
       nextState: state,
-      warnings: [],
-      diagnostics: [],
+      warnings: unsupported ? ["unsupported_usage_records"] : [],
+      diagnostics: unsupported
+        ? [{ code: "local_store_schema_unsupported", phase: "collect" }]
+        : [],
     };
   } catch (error) {
     throw diagnosticError("OpenCode local store is unreadable", "local_store_unreadable", {

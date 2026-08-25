@@ -144,15 +144,19 @@ describe("Publish connector workflow", () => {
     );
   });
 
-  it("validates, fully verifies, publishes from the package root, and checks latest", () => {
+  it("fully verifies and either publishes or resumes a matching immutable release", () => {
     assert.match(workflow, /refs\/tags\/\$\{RELEASE_TAG\}\^\{commit\}/);
     assert.match(workflow, /releases\/tags\/\$RELEASE_TAG/);
     assert.match(workflow, /\.draft == false and \.prerelease == false/);
-    assert.match(workflow, /check-connector-release\.mjs "\$RELEASE_TAG"/);
+    assert.match(workflow, /check-connector-release\.mjs --plan "\$RELEASE_TAG" "\$RELEASE_SHA"/);
     assert.match(workflow, /git merge-base --is-ancestor HEAD refs\/remotes\/origin\/main/);
     assert.match(workflow, /corepack pnpm verify/);
     assert.match(workflow, /corepack pnpm connector:package:check/);
     assert.match(workflow, /npm pack --dry-run/);
+    assert.match(workflow, /id: release-plan/);
+    assert.match(workflow, /publish\) echo "publish=true"/);
+    assert.match(workflow, /verify\) echo "publish=false"/);
+    assert.match(workflow, /if: steps\.release-plan\.outputs\.publish == 'true'/);
     assert.match(workflow, /working-directory: packages\/connector\n\s+run: npm publish/);
     assert.match(workflow, /npm publish --access public --tag latest/);
     assert.match(workflow, /--verify-published "\$RELEASE_TAG"/);

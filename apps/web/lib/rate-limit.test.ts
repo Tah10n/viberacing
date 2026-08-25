@@ -4,6 +4,11 @@ import {
   clientAddress,
   clientAdmissionLimit,
   consumeRateLimit,
+  deleteExpiredRateLimitBuckets,
+  publicAdmissionMaximumAllocatedBuckets,
+  publicAdmissionMaximumBucketsPerRequest,
+  rateLimitCleanupBatchSize,
+  rateLimitCleanupMaximumBatches,
   rateLimitCleanupDue,
 } from "./rate-limit";
 
@@ -27,6 +32,70 @@ describe("database-backed rate limits", () => {
     expect(rateLimitCleanupDue(0, 1)).toBe(true);
     expect(rateLimitCleanupDue(1_000, 60_999)).toBe(false);
     expect(rateLimitCleanupDue(1_000, 61_000)).toBe(true);
+  });
+
+  it("drains more buckets than all pre-auth and post-auth scopes can allocate per public window", async () => {
+    const rowCounts = [rateLimitCleanupBatchSize, rateLimitCleanupBatchSize, 52];
+    const limits: unknown[] = [];
+    const client = {
+      query: (_sql: string, values: unknown[]) => {
+        limits.push(values[0]);
+        return Promise.resolve({ rowCount: rowCounts.shift() ?? 0 });
+      },
+    };
+    await expect(deleteExpiredRateLimitBuckets(client as never)).resolves.toBe(
+      rateLimitCleanupBatchSize * 2 + 52,
+    );
+    expect(limits).toEqual([
+      rateLimitCleanupBatchSize,
+      rateLimitCleanupBatchSize,
+      rateLimitCleanupBatchSize,
+    ]);
+    expect(publicAdmissionMaximumBucketsPerRequest).toBe(6);
+    expect(rateLimitCleanupBatchSize * rateLimitCleanupMaximumBatches).toBeGreaterThan(
+      publicAdmissionMaximumAllocatedBuckets,
+    );
+  });
+
+  it("expires maximum multi-window allocations without deleting a future window", async () => {
+    const rowsByWindow = new Map([
+      [0, publicAdmissionMaximumAllocatedBuckets],
+      [1, publicAdmissionMaximumAllocatedBuckets],
+      [2, publicAdmissionMaximumAllocatedBuckets],
+    ]);
+    let expiringThrough = 0;
+    const client = {
+      query: (_sql: string, values: unknown[]) => {
+        const limit = values[0] as number;
+        let remaining = limit;
+        let deleted = 0;
+        for (const [window, rows] of rowsByWindow) {
+          if (window > expiringThrough || remaining === 0) continue;
+          const count = Math.min(rows, remaining);
+          rowsByWindow.set(window, rows - count);
+          remaining -= count;
+          deleted += count;
+        }
+        return Promise.resolve({ rowCount: deleted });
+      },
+    };
+
+    await expect(deleteExpiredRateLimitBuckets(client as never)).resolves.toBe(
+      publicAdmissionMaximumAllocatedBuckets,
+    );
+    expect(rowsByWindow).toEqual(
+      new Map([
+        [0, 0],
+        [1, publicAdmissionMaximumAllocatedBuckets],
+        [2, publicAdmissionMaximumAllocatedBuckets],
+      ]),
+    );
+    expiringThrough = 1;
+    await expect(deleteExpiredRateLimitBuckets(client as never)).resolves.toBe(
+      publicAdmissionMaximumAllocatedBuckets,
+    );
+    expect(rowsByWindow.get(1)).toBe(0);
+    expect(rowsByWindow.get(2)).toBe(publicAdmissionMaximumAllocatedBuckets);
   });
 
   it("uses Railway's trusted client-address header", () => {

@@ -587,6 +587,43 @@ test("rejects an incomplete runtime before pairing-compatible staging completes"
   }
 });
 
+test("forced runtime repair restages truncated, changed, and missing files of the same version", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-runtime-force-repair-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?force-repair=${encodeURIComponent(home)}`);
+    const sourceUrl = new URL("../bin/viberacing.mjs", import.meta.url);
+    const sourceRuntime = await readFile(new URL("../lib/runtime.mjs", import.meta.url));
+    const installedScript = await module.prepareRuntime(sourceUrl);
+    const installedRuntime = join(
+      home,
+      ".viberacing",
+      "runtime",
+      connectorVersion,
+      "lib",
+      "runtime.mjs",
+    );
+    assert.equal(
+      installedScript,
+      join(home, ".viberacing", "runtime", connectorVersion, "bin", "viberacing.mjs"),
+    );
+
+    const mutations = [
+      () => writeFile(installedRuntime, sourceRuntime.subarray(0, 32)),
+      () => writeFile(installedRuntime, Buffer.alloc(sourceRuntime.length, 0x78)),
+      () => unlink(installedRuntime),
+    ];
+    for (const mutate of mutations) {
+      await mutate();
+      await module.prepareRuntime(sourceUrl, { force: true });
+      assert.deepEqual(await readFile(installedRuntime), sourceRuntime);
+    }
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("recovers a connection commit interrupted before the source registry is published", async () => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-connection-commit-"));
   const restoreEnvironment = useModuleEnvironment(home);
@@ -4841,7 +4878,7 @@ test("doctor repair keeps successful local work when server confirmation is unav
     env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
   });
 
-  assert.match(repaired.stdout, new RegExp(`Runtime: updated to ${connectorVersion}`));
+  assert.match(repaired.stdout, new RegExp(`Runtime: reinstalled ${connectorVersion}`));
   assert.match(repaired.stdout, /Pairing status: error/);
   assert.match(repaired.stdout, /Local repair complete; server confirmation is pending/);
   assert.match(repaired.stdout, /Usage sync: not run/);
@@ -4907,7 +4944,7 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
   const repaired = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: environment,
   });
-  assert.match(repaired.stdout, new RegExp(`Runtime: updated to ${connectorVersion}`));
+  assert.match(repaired.stdout, new RegExp(`Runtime: reinstalled ${connectorVersion}`));
   assert.match(repaired.stdout, /Hooks: repaired/);
   assert.match(repaired.stdout, /Usage sync: not run/);
   assert.deepEqual(reconciliationBodies, [
@@ -6062,13 +6099,16 @@ test("one successful contact sends at most one bounded diagnostic batch", async 
   assert.equal(diagnosticBodies.length, 1);
   assert.equal(diagnosticBodies[0].events.length, 32);
   const finalState = JSON.parse(await readFile(statePath, "utf8"));
+  const seededEvents =
+    sources.length *
+    Object.values(diagnosticCodesByPhase).reduce((total, codes) => total + codes.length * 2, 0);
   assert.equal(
     pendingDiagnosticEvents(
       finalState,
       sources.map((source) => source.sourceId),
       1_000,
     ).length,
-    20,
+    seededEvents - 32,
   );
 });
 

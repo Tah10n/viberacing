@@ -17,7 +17,7 @@ import {
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
 import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
-import { normalizeOrigin } from "../lib/origin.mjs";
+import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
 import {
   adapters,
   adapterFor,
@@ -368,7 +368,7 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId) 
 }
 
 async function connect() {
-  const origin = normalizeOrigin(option("--origin", "https://viberacing.com"), "--origin");
+  const origin = normalizeOrigin(option("--origin", officialProductionOrigin), "--origin");
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
   const detected = discovery.sources;
@@ -1700,7 +1700,7 @@ async function doctor() {
       repairStarted = true;
       try {
         repaired = await withLifecycleMutation(async () => {
-          const installedRuntime = await prepareRuntime(import.meta.url);
+          const installedRuntime = await prepareRuntime(import.meta.url, { force: true });
           const hooks = await reconcileHooks(import.meta.url, config.sources, await readSources(), {
             installedScript: installedRuntime,
           });
@@ -1717,7 +1717,7 @@ async function doctor() {
         );
         throw error;
       }
-      output(`Runtime: updated to ${connectorVersion}`);
+      output(`Runtime: reinstalled ${connectorVersion}`);
       output(
         repaired.hooks.failures.length === 0
           ? "Hooks: repaired"

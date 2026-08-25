@@ -56,8 +56,6 @@ jobs:
       - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Validate release metadata, tools, and npm availability
-        run: node scripts/check-connector-release.mjs "$RELEASE_TAG"
       - name: Generate and verify the connector package
         run: |
           corepack pnpm --filter @viberacing/connector prepack
@@ -67,12 +65,19 @@ jobs:
       - name: Inspect the npm package candidate
         working-directory: packages/connector
         run: npm pack --dry-run
-      - name: Recheck the clean, unpublished, newer candidate
+      - name: Plan a new publish or resume a matching immutable release
+        id: release-plan
         run: |
           git diff --exit-code
           test -z "$(git status --porcelain)"
-          node scripts/check-connector-release.mjs "$RELEASE_TAG"
+          release_action="$(node scripts/check-connector-release.mjs --plan "$RELEASE_TAG" "$RELEASE_SHA")"
+          case "$release_action" in
+            publish) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            verify) echo "publish=false" >> "$GITHUB_OUTPUT" ;;
+            *) exit 1 ;;
+          esac
       - name: Publish the stable connector with npm Trusted Publishing
+        if: steps.release-plan.outputs.publish == 'true'
         working-directory: packages/connector
         run: npm publish --access public --tag latest
       - name: Verify the published version and latest tag

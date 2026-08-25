@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   compareStableVersions,
   normalizeNpmLookupString,
+  packageIntegrityFromPackManifest,
   validateConnectorRelease,
   validateReleaseFiles,
   verifyPublishedConnector,
@@ -19,12 +20,25 @@ const validPackage = Object.freeze({
   bin: { viberacing: "bin/viberacing.mjs" },
   publishConfig: { access: "public", registry: "https://registry.npmjs.org" },
 });
+const releaseSha = "0123456789abcdef0123456789abcdef01234567";
+const candidateIntegrity = "sha512-candidate-integrity";
+const matchingPublishedMetadata = Object.freeze({
+  name: "@viberacing/connector",
+  version: "0.4.0",
+  repository: validPackage.repository,
+  gitHead: releaseSha,
+  integrity: candidateIntegrity,
+});
 
-function registry({ latest = "0.3.0", exists = false } = {}) {
+function registry({ latest = "0.3.0", published = null } = {}) {
   return {
     latest: async () => latest,
-    exists: async () => exists,
+    metadata: async () => published,
   };
+}
+
+function validateRelease(options) {
+  return validateConnectorRelease({ releaseSha, candidateIntegrity, ...options });
 }
 
 async function expectCode(promise, code) {
@@ -43,6 +57,19 @@ describe("connector release validation", () => {
     }
   });
 
+  it("reads npm pack integrity from npm 11 arrays and npm 12 keyed objects", () => {
+    assert.equal(
+      packageIntegrityFromPackManifest([{ integrity: candidateIntegrity }]),
+      candidateIntegrity,
+    );
+    assert.equal(
+      packageIntegrityFromPackManifest({
+        "@viberacing/connector": { integrity: candidateIntegrity },
+      }),
+      candidateIntegrity,
+    );
+  });
+
   it("accepts a matching stable tag and a newer unpublished version", async () => {
     assert.equal(
       validateReleaseFiles({
@@ -53,13 +80,19 @@ describe("connector release validation", () => {
       "0.4.0",
     );
     assert.deepEqual(
-      await validateConnectorRelease({
+      await validateRelease({
         tag: "v0.4.0",
         packageMetadata: validPackage,
         generatedVersion: "0.4.0",
         registry: registry(),
       }),
-      { packageName: "@viberacing/connector", version: "0.4.0", latest: "0.3.0" },
+      {
+        packageName: "@viberacing/connector",
+        version: "0.4.0",
+        latest: "0.3.0",
+        action: "publish",
+        state: "unpublished",
+      },
     );
   });
 
@@ -106,21 +139,55 @@ describe("connector release validation", () => {
     );
   });
 
-  it("rejects an already published candidate", async () => {
-    await expectCode(
-      validateConnectorRelease({
+  it("resumes an already published package that exactly matches the release", async () => {
+    assert.deepEqual(
+      await validateRelease({
         tag: "v0.4.0",
         packageMetadata: validPackage,
         generatedVersion: "0.4.0",
-        registry: registry({ exists: true }),
+        registry: registry({ latest: "0.4.0", published: matchingPublishedMetadata }),
       }),
-      "CONNECTOR_RELEASE_VERSION_EXISTS",
+      {
+        packageName: "@viberacing/connector",
+        version: "0.4.0",
+        latest: "0.4.0",
+        action: "verify",
+        state: "published_matching_release",
+      },
     );
+  });
+
+  it("waits for latest when the matching immutable package is already visible", async () => {
+    const result = await validateRelease({
+      tag: "v0.4.0",
+      packageMetadata: validPackage,
+      generatedVersion: "0.4.0",
+      registry: registry({ latest: "0.3.0", published: matchingPublishedMetadata }),
+    });
+    assert.equal(result.action, "verify");
+    assert.equal(result.state, "published_not_latest_yet");
+  });
+
+  it("fails closed when an immutable package has mismatched integrity or commit", async () => {
+    for (const published of [
+      { ...matchingPublishedMetadata, integrity: "sha512-different" },
+      { ...matchingPublishedMetadata, gitHead: "f".repeat(40) },
+    ]) {
+      await expectCode(
+        validateRelease({
+          tag: "v0.4.0",
+          packageMetadata: validPackage,
+          generatedVersion: "0.4.0",
+          registry: registry({ latest: "0.4.0", published }),
+        }),
+        "CONNECTOR_RELEASE_PUBLISHED_MISMATCH",
+      );
+    }
   });
 
   it("rejects a candidate below npm latest", async () => {
     await expectCode(
-      validateConnectorRelease({
+      validateRelease({
         tag: "v0.4.0",
         packageMetadata: validPackage,
         generatedVersion: "0.4.0",
@@ -133,18 +200,18 @@ describe("connector release validation", () => {
 
   it("rejects a candidate equal to npm latest even if the exact lookup is inconsistent", async () => {
     await expectCode(
-      validateConnectorRelease({
+      validateRelease({
         tag: "v0.4.0",
         packageMetadata: validPackage,
         generatedVersion: "0.4.0",
-        registry: registry({ latest: "0.4.0", exists: false }),
+        registry: registry({ latest: "0.4.0" }),
       }),
       "CONNECTOR_RELEASE_NOT_NEWER_THAN_LATEST",
     );
   });
 
   it("accepts a candidate above npm latest", async () => {
-    const result = await validateConnectorRelease({
+    const result = await validateRelease({
       tag: "v0.4.0",
       packageMetadata: validPackage,
       generatedVersion: "0.4.0",
@@ -156,7 +223,7 @@ describe("connector release validation", () => {
 
   it("requires an interactive bootstrap when the package is absent", async () => {
     await expectCode(
-      validateConnectorRelease({
+      validateRelease({
         tag: "v0.4.0",
         packageMetadata: validPackage,
         generatedVersion: "0.4.0",
