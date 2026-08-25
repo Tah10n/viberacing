@@ -3260,6 +3260,23 @@ test("event collectors retain their last complete state when an appended usage r
         tokens: { input: 10, output: 5, total: 15 },
       }),
     },
+    ...[
+      ["usageMetadata", null],
+      ["usage", false],
+      ["tokenUsage", 0],
+      ["tokens", ""],
+    ].map(([usageContainer, value]) => ({
+      agentId: "gemini_cli",
+      label: `invalid ${usageContainer} container`,
+      name: "session-unsupported.jsonl",
+      valid: gemini,
+      unsupported: JSON.stringify({
+        type: "gemini.v2",
+        id: `unsupported-gemini-${usageContainer}`,
+        timestamp: "2026-08-11T00:00:00Z",
+        [usageContainer]: value,
+      }),
+    })),
     {
       agentId: "antigravity",
       name: "capture.jsonl",
@@ -3295,12 +3312,63 @@ test("event collectors retain their last complete state when an appended usage r
       caseName,
     );
 
+    await writeFile(path, `${item.unsupported}\n`);
+    const rewritten = await adapter.collect(source, range, first.nextState);
+    assert.equal(rewritten.completeness, "partial", `${caseName} rewrite`);
+    assert.deepEqual(rewritten.entries, first.entries, `${caseName} rewrite retained daily usage`);
+    assert.deepEqual(
+      rewritten.nextState,
+      first.nextState,
+      `${caseName} rewrite retained file state`,
+    );
+    assert.ok(
+      rewritten.diagnostics.some(
+        (diagnostic) => diagnostic.code === "local_store_schema_unsupported",
+      ),
+      `${caseName} rewrite diagnostic`,
+    );
+
     const { parserVersion: _parserVersion, ...staleState } = first.nextState;
     const rescanned = await adapter.collect(source, range, staleState);
     assert.equal(rescanned.completeness, "partial", caseName);
     assert.deepEqual(rescanned.entries, first.entries, `${caseName} stale daily usage`);
     assert.deepEqual(rescanned.nextState, staleState, `${caseName} stale file state`);
   }
+});
+
+test("Gemini upgrades fail-open parser state without making unrelated records candidates", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-gemini-schema-upgrade-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "session-upgrade.jsonl");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const valid = JSON.stringify(JSON.parse(await fixture("gemini.json"))[0]);
+  const adapter = adapterFor("gemini_cli");
+  await writeFile(path, `${valid}\n`);
+  const first = await adapter.collect({ dataPath: directory }, range, {});
+
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      type: "gemini.v2",
+      id: "unsupported-gemini-upgrade",
+      timestamp: "2026-08-11T00:00:00Z",
+      usageMetadata: null,
+    })}\n`,
+  );
+  const oldParserState = { ...first.nextState, parserVersion: 1 };
+  const upgraded = await adapter.collect({ dataPath: directory }, range, oldParserState);
+  assert.equal(upgraded.completeness, "partial");
+  assert.deepEqual(upgraded.entries, first.entries);
+  assert.deepEqual(upgraded.nextState, oldParserState);
+  assert.deepEqual(upgraded.diagnostics, [
+    { code: "local_store_schema_unsupported", phase: "collect" },
+  ]);
+
+  await writeFile(path, `${JSON.stringify({ type: "metadata", timestamp: "2026-08-11" })}\n`);
+  const irrelevant = await adapter.collect({ dataPath: directory }, range, {});
+  assert.equal(irrelevant.completeness, "complete");
+  assert.deepEqual(irrelevant.entries, []);
+  assert.equal(irrelevant.diagnostics.length, 0);
 });
 
 test("every event-based adapter deduplicates IDs and keeps distinct UTC days", async () => {

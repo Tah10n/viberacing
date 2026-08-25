@@ -12,7 +12,16 @@ import {
   utcDay,
 } from "./shared.mjs";
 
-const geminiParserVersion = 1;
+const geminiParserVersion = 2;
+const geminiUsageContainerKeys = ["usageMetadata", "usage", "tokenUsage", "tokens"];
+
+function hasGeminiUsageContainer(record) {
+  return (
+    record !== null &&
+    typeof record === "object" &&
+    geminiUsageContainerKeys.some((key) => Object.hasOwn(record, key))
+  );
+}
 
 function analyzeGeminiRecords(records, malformedJsonRecords = 0) {
   const seen = new Set();
@@ -22,7 +31,7 @@ function analyzeGeminiRecords(records, malformedJsonRecords = 0) {
   let unsupportedCandidates = malformedJsonRecords;
   for (const record of records) {
     const usage = record?.usageMetadata ?? record?.usage ?? record?.tokenUsage ?? record?.tokens;
-    if (record?.type !== "gemini" && !usage) continue;
+    if (record?.type !== "gemini" && !hasGeminiUsageContainer(record)) continue;
     candidateRecords += 1;
     const id = record?.id ?? record?.messageId ?? record?.event_id;
     const day = utcDay(record?.timestamp ?? record?.time ?? record?.startTime);
