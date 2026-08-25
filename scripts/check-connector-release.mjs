@@ -1,5 +1,7 @@
 import { execFile as execFileCallback, execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -139,9 +141,23 @@ export async function validateConnectorRelease({
   tag,
   packageMetadata,
   generatedVersion,
+  releaseSha,
+  candidateIntegrity,
   registry,
 }) {
   const version = validateReleaseFiles({ tag, packageMetadata, generatedVersion });
+  if (!/^[0-9a-f]{40}$/.test(releaseSha ?? "")) {
+    releaseError(
+      "CONNECTOR_RELEASE_SHA_INVALID",
+      "Release SHA must be a full lowercase commit SHA",
+    );
+  }
+  if (typeof candidateIntegrity !== "string" || !candidateIntegrity.startsWith("sha512-")) {
+    releaseError(
+      "CONNECTOR_RELEASE_INTEGRITY_INVALID",
+      "The local npm package must have a SHA-512 integrity",
+    );
+  }
   const latest = await registry.latest(expectedPackageName);
   if (latest === null) {
     releaseError(
@@ -155,11 +171,37 @@ export async function validateConnectorRelease({
       "npm latest must be a canonical stable semantic version",
     );
   }
-  if (await registry.exists(expectedPackageName, version)) {
-    releaseError(
-      "CONNECTOR_RELEASE_VERSION_EXISTS",
-      "This connector name and version already exist in npm and cannot be republished",
-    );
+  const published = await registry.metadata(expectedPackageName, version);
+  if (published !== null) {
+    const repository = published.repository;
+    const publishedIntegrity = published.integrity ?? published.dist?.integrity;
+    if (
+      published.name !== expectedPackageName ||
+      published.version !== version ||
+      repository?.type !== expectedRepository.type ||
+      repository?.url !== expectedRepository.url ||
+      repository?.directory !== expectedRepository.directory ||
+      published.gitHead !== releaseSha ||
+      publishedIntegrity !== candidateIntegrity
+    ) {
+      releaseError(
+        "CONNECTOR_RELEASE_PUBLISHED_MISMATCH",
+        "The immutable npm version exists but does not match this release commit and package",
+      );
+    }
+    if (compareStableVersions(version, latest) < 0) {
+      releaseError(
+        "CONNECTOR_RELEASE_NOT_NEWER_THAN_LATEST",
+        "The matching published connector version is older than npm latest",
+      );
+    }
+    return {
+      packageName: expectedPackageName,
+      version,
+      latest,
+      action: "verify",
+      state: latest === version ? "published_matching_release" : "published_not_latest_yet",
+    };
   }
   if (compareStableVersions(version, latest) <= 0) {
     releaseError(
@@ -167,7 +209,13 @@ export async function validateConnectorRelease({
       "Candidate connector version must be higher than npm latest",
     );
   }
-  return { packageName: expectedPackageName, version, latest };
+  return {
+    packageName: expectedPackageName,
+    version,
+    latest,
+    action: "publish",
+    state: "unpublished",
+  };
 }
 
 function parseNpmJson(stdout) {
@@ -187,6 +235,19 @@ export function normalizeNpmLookupString(value) {
     return value[0];
   }
   return "";
+}
+
+function normalizeNpmLookupObject(value) {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) return value;
+  if (
+    Array.isArray(value) &&
+    value.length === 1 &&
+    value[0] !== null &&
+    typeof value[0] === "object" &&
+    !Array.isArray(value[0])
+  )
+    return value[0];
+  return null;
 }
 
 function isNpmNotFound(error) {
@@ -222,10 +283,30 @@ export const npmRegistry = Object.freeze({
     if (!result.found) return null;
     return normalizeNpmLookupString(result.value);
   },
+  async metadata(packageName, version) {
+    const result = await npmView([
+      `${packageName}@${version}`,
+      "name",
+      "version",
+      "repository",
+      "gitHead",
+      "dist.integrity",
+    ]);
+    if (!result.found) return null;
+    const metadata = normalizeNpmLookupObject(result.value);
+    if (metadata === null) {
+      releaseError(
+        "CONNECTOR_RELEASE_REGISTRY_RESPONSE_INVALID",
+        "npm returned invalid package metadata",
+      );
+    }
+    return {
+      ...metadata,
+      integrity: metadata["dist.integrity"] ?? metadata.dist?.integrity,
+    };
+  },
   async exists(packageName, version) {
-    const result = await npmView([`${packageName}@${version}`, "version"]);
-    if (!result.found) return false;
-    return normalizeNpmLookupString(result.value) === version;
+    return (await this.metadata(packageName, version)) !== null;
   },
 });
 
@@ -247,6 +328,37 @@ async function readReleaseFiles() {
   ]);
   const generatedVersion = versionSource.match(/export const connectorVersion = "([^"]+)";/)?.[1];
   return { packageMetadata: JSON.parse(packageSource), generatedVersion };
+}
+
+export function packageIntegrityFromPackManifest(manifest) {
+  const candidates = Array.isArray(manifest)
+    ? manifest
+    : manifest?.integrity === undefined
+      ? Object.values(manifest ?? {})
+      : [manifest];
+  const integrity = candidates.length === 1 ? candidates[0]?.integrity : undefined;
+  if (typeof integrity !== "string" || !integrity.startsWith("sha512-")) {
+    releaseError(
+      "CONNECTOR_RELEASE_INTEGRITY_INVALID",
+      "npm pack returned an invalid package integrity",
+    );
+  }
+  return integrity;
+}
+
+async function connectorPackageIntegrity() {
+  const cache = await mkdtemp(join(tmpdir(), "viberacing-release-npm-cache-"));
+  try {
+    const { stdout } = await execFile("npm", ["pack", "--dry-run", "--json"], {
+      cwd: fileURLToPath(new URL("../packages/connector/", import.meta.url)),
+      encoding: "utf8",
+      env: { ...process.env, npm_config_cache: cache },
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return packageIntegrityFromPackManifest(parseNpmJson(stdout));
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
 }
 
 export async function verifyPublishedConnector({
@@ -273,13 +385,16 @@ export async function verifyPublishedConnector({
 }
 
 async function main() {
-  const [firstArgument, secondArgument, ...extraArguments] = process.argv.slice(2);
+  const [firstArgument, secondArgument, thirdArgument, ...extraArguments] = process.argv.slice(2);
   if (extraArguments.length > 0 || firstArgument === undefined) {
-    releaseError("CONNECTOR_RELEASE_USAGE_INVALID", "Usage: check-connector-release.mjs vX.Y.Z");
+    releaseError(
+      "CONNECTOR_RELEASE_USAGE_INVALID",
+      "Usage: check-connector-release.mjs --plan vX.Y.Z <release-sha>",
+    );
   }
   const { packageMetadata, generatedVersion } = await readReleaseFiles();
   if (firstArgument === "--verify-published") {
-    if (secondArgument === undefined) {
+    if (secondArgument === undefined || thirdArgument !== undefined) {
       releaseError(
         "CONNECTOR_RELEASE_USAGE_INVALID",
         "Usage: check-connector-release.mjs --verify-published vX.Y.Z",
@@ -294,20 +409,24 @@ async function main() {
     process.stdout.write(`Verified ${expectedPackageName}@${version} and npm latest.\n`);
     return;
   }
-  if (secondArgument !== undefined) {
-    releaseError("CONNECTOR_RELEASE_USAGE_INVALID", "Usage: check-connector-release.mjs vX.Y.Z");
+  if (firstArgument !== "--plan" || secondArgument === undefined || thirdArgument === undefined) {
+    releaseError(
+      "CONNECTOR_RELEASE_USAGE_INVALID",
+      "Usage: check-connector-release.mjs --plan vX.Y.Z <release-sha>",
+    );
   }
   const npmVersion = execFileSync("npm", ["--version"], { encoding: "utf8" }).trim();
   assertReleaseToolVersions({ nodeVersion: process.versions.node, npmVersion });
+  const candidateIntegrity = await connectorPackageIntegrity();
   const result = await validateConnectorRelease({
-    tag: firstArgument,
+    tag: secondArgument,
     packageMetadata,
     generatedVersion,
+    releaseSha: thirdArgument,
+    candidateIntegrity,
     registry: npmRegistry,
   });
-  process.stdout.write(
-    `Validated ${result.packageName}@${result.version}; current npm latest is ${result.latest}.\n`,
-  );
+  process.stdout.write(`${result.action}\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -8,23 +8,31 @@ import {
   diagnosePath,
   integer,
   mergeEntries,
+  parserResult,
+  previousJsonlEntries,
   totalEntry,
   utcDay,
 } from "./shared.mjs";
 
-const qwenParserVersion = 3;
+const qwenParserVersion = 4;
 
-export function parseQwenLines(lines) {
+function analyzeQwenLines(lines) {
   const seen = new Set();
   const entries = [];
+  let candidateRecords = 0;
+  let parsedRecords = 0;
+  let unsupportedCandidates = 0;
   for (const line of lines) {
     let record;
     try {
       record = JSON.parse(line);
     } catch {
+      candidateRecords += 1;
+      unsupportedCandidates += 1;
       continue;
     }
-    if (record?.schemaVersion !== 1 || !record.id || seen.has(record.id)) continue;
+    if (record?.schemaVersion !== 1) continue;
+    candidateRecords += 1;
     const day = utcDay(record.timestamp);
     const input = integer(record.inputTokens);
     const output = integer(record.outputTokens);
@@ -32,21 +40,25 @@ export function parseQwenLines(lines) {
     const thoughts = integer(record.thoughtsTokens ?? 0);
     const total = integer(record.totalTokens);
     if (
+      typeof record.id !== "string" ||
+      record.id.length < 1 ||
+      record.id.length > 256 ||
       day === null ||
       input === null ||
       output === null ||
       cached === null ||
       thoughts === null ||
       total === null
-    )
+    ) {
+      unsupportedCandidates += 1;
       continue;
-    seen.add(record.id);
+    }
     let regularOutput = null;
     if (cached <= input) {
       if (total === input + output + thoughts) regularOutput = output;
       else if (total === input + output && thoughts <= output) regularOutput = output - thoughts;
     }
-    entries.push(
+    const entry =
       regularOutput === null
         ? totalEntry(day, total)
         : componentEntry(
@@ -59,10 +71,26 @@ export function parseQwenLines(lines) {
               reasoningTokens: thoughts,
             },
             total,
-          ),
-    );
+          );
+    if (entry === null) {
+      unsupportedCandidates += 1;
+      continue;
+    }
+    parsedRecords += 1;
+    if (seen.has(record.id)) continue;
+    seen.add(record.id);
+    entries.push(entry);
   }
-  return mergeEntries(entries);
+  return parserResult(
+    mergeEntries(entries),
+    candidateRecords,
+    parsedRecords,
+    unsupportedCandidates,
+  );
+}
+
+export function parseQwenLines(lines) {
+  return analyzeQwenLines(lines).entries;
 }
 
 function qwenEventKey(line) {
@@ -315,12 +343,23 @@ export const qwenAdapter = Object.freeze({
   collect: async (source, range, state = {}) => {
     const result = await collectJsonl(
       source,
-      parseQwenLines,
+      analyzeQwenLines,
       (path) => basename(path).startsWith("token-usage-"),
       state.parserVersion === qwenParserVersion ? state : {},
       range,
       qwenEventKey,
     );
+    if (
+      state.parserVersion !== qwenParserVersion &&
+      result.completeness === "partial" &&
+      Object.keys(state.files ?? {}).length > 0
+    ) {
+      return {
+        ...result,
+        entries: previousJsonlEntries(state),
+        nextState: state,
+      };
+    }
     return {
       ...result,
       nextState: { ...result.nextState, parserVersion: qwenParserVersion },

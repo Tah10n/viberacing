@@ -7,8 +7,12 @@ import {
   diagnosePath,
   findFile,
   mergeEntries,
+  previousJsonlEntries,
+  parserResult,
   utcDay,
 } from "./shared.mjs";
+
+const kimiParserVersion = 1;
 
 function currentRecord(line) {
   try {
@@ -16,7 +20,11 @@ function currentRecord(line) {
     const usage = record?.usage;
     const day = utcDay(record?.time);
     const entry =
-      record?.type === "usage.record" && usage && day
+      record?.type === "usage.record" &&
+      usage &&
+      usage.inputOther !== undefined &&
+      usage.output !== undefined &&
+      day
         ? componentEntry(day, {
             inputTokens: usage.inputOther,
             outputTokens: usage.output,
@@ -46,6 +54,8 @@ function legacyRecord(line) {
     const entry =
       message?.type === "StatusUpdate" &&
       usage &&
+      usage.input_other !== undefined &&
+      usage.output !== undefined &&
       typeof id === "string" &&
       id.length > 0 &&
       id.length <= 256 &&
@@ -64,24 +74,51 @@ function legacyRecord(line) {
   }
 }
 
-function parseRecords(lines, decoder) {
+function parseRecords(lines, decoder, relevant) {
   const seen = new Set();
   const entries = [];
+  let candidateRecords = 0;
+  let parsedRecords = 0;
+  let unsupportedCandidates = 0;
   for (const line of lines) {
+    let native;
+    try {
+      native = JSON.parse(line);
+    } catch {
+      candidateRecords += 1;
+      unsupportedCandidates += 1;
+      continue;
+    }
+    if (!relevant(native)) continue;
+    candidateRecords += 1;
     const record = decoder(line);
-    if (record === null || seen.has(record.id)) continue;
+    if (record === null) {
+      unsupportedCandidates += 1;
+      continue;
+    }
+    parsedRecords += 1;
+    if (seen.has(record.id)) continue;
     seen.add(record.id);
     entries.push(record.entry);
   }
-  return mergeEntries(entries);
+  return parserResult(
+    mergeEntries(entries),
+    candidateRecords,
+    parsedRecords,
+    unsupportedCandidates,
+  );
 }
 
 export function parseKimiCurrentLines(lines) {
-  return parseRecords(lines, currentRecord);
+  return parseRecords(lines, currentRecord, (record) => record?.type === "usage.record").entries;
 }
 
 export function parseKimiLegacyLines(lines) {
-  return parseRecords(lines, legacyRecord);
+  return parseRecords(
+    lines,
+    legacyRecord,
+    (record) => (record?.message ?? record)?.type === "StatusUpdate",
+  ).entries;
 }
 
 // The unqualified parser intentionally means the current persisted wire format.
@@ -155,14 +192,40 @@ export const kimiAdapter = Object.freeze({
     const legacy =
       source.collectionMethod === "kimi_legacy_wire_jsonl" ||
       kimiCollectionMethodForPath(source.dataPath) === "kimi_legacy_wire_jsonl";
+    const stateCompatible = state?.parserVersion === kimiParserVersion;
+    const decoder = legacy ? legacyRecord : currentRecord;
+    const parser = (lines) =>
+      parseRecords(
+        lines,
+        decoder,
+        legacy
+          ? (record) => (record?.message ?? record)?.type === "StatusUpdate"
+          : (record) => record?.type === "usage.record",
+      );
     return collectJsonl(
       source,
-      legacy ? parseKimiLegacyLines : parseKimiCurrentLines,
+      parser,
       (path) => basename(path) === "wire.jsonl",
-      state,
+      stateCompatible ? state : {},
       range,
-      eventKey(legacy ? legacyRecord : currentRecord),
-    );
+      eventKey(decoder),
+    ).then((result) => {
+      if (
+        !stateCompatible &&
+        result.completeness === "partial" &&
+        Object.keys(state?.files ?? {}).length > 0
+      ) {
+        return {
+          ...result,
+          entries: previousJsonlEntries(state ?? {}),
+          nextState: state ?? {},
+        };
+      }
+      return {
+        ...result,
+        nextState: { ...result.nextState, parserVersion: kimiParserVersion },
+      };
+    });
   },
   diagnose: (source) => diagnosePath(source),
 });

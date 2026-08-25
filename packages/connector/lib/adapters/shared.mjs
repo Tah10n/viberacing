@@ -258,6 +258,7 @@ export async function collectJsonl(
   const entries = [];
   let incomplete = discovered.incomplete;
   let oversized = false;
+  let schemaUnsupported = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   let bytes = 0;
@@ -326,7 +327,26 @@ export async function collectJsonl(
       if (range)
         for (const [key, date] of Object.entries(eventDays))
           if (date < range.rangeStart || date > range.rangeEnd) delete eventDays[key];
-      const parsed = parser(unseenLines);
+      const parserOutput = parser(unseenLines);
+      const parsed = Array.isArray(parserOutput) ? parserOutput : parserOutput.entries;
+      const unsupportedRecords = Array.isArray(parserOutput)
+        ? 0
+        : parserOutput.stats.unsupportedCandidates;
+      if (unsupportedRecords > 0) {
+        incomplete = true;
+        schemaUnsupported = true;
+        if (previous) {
+          nextState.files[file.path] = previous;
+          entries.push(
+            ...(appended
+              ? mergeEntries([...(previous.entries ?? []), ...parsed])
+              : (previous.entries ?? [])),
+          );
+        } else {
+          entries.push(...parsed);
+        }
+        continue;
+      }
       const fileEntries = mergeEntries([...(appended ? (previous.entries ?? []) : []), ...parsed]);
       const ranged = range
         ? fileEntries.filter(
@@ -361,6 +381,7 @@ export async function collectJsonl(
   const warnings = [];
   if (incomplete) warnings.push("collector_limits_or_unreadable_files");
   if (oversized) warnings.push("oversized_jsonl_records");
+  if (schemaUnsupported) warnings.push("unsupported_usage_records");
   return {
     entries: mergeEntries(entries),
     completeness: incomplete ? "partial" : "complete",
@@ -369,8 +390,20 @@ export async function collectJsonl(
     diagnostics: [
       ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
       ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+      ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
     ],
   };
+}
+
+export function parserResult(entries, candidateRecords, parsedRecords, unsupportedCandidates) {
+  return {
+    entries,
+    stats: { candidateRecords, parsedRecords, unsupportedCandidates },
+  };
+}
+
+export function previousJsonlEntries(state) {
+  return mergeEntries(Object.values(state.files ?? {}).flatMap((file) => file.entries ?? []));
 }
 
 export async function diagnosePath(source, excluded = []) {

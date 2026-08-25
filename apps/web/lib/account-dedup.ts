@@ -3,8 +3,9 @@ import type { PoolClient } from "pg";
 import type { SupportedAgent } from "./agents";
 
 export const accountDedupLookbackDays = 30;
-export const minimumAccountDedupMatchedDays = 2;
-export const minimumAccountDedupDistinctPositiveTotals = 2;
+export const minimumAccountDedupMatchedDays = 7;
+export const minimumAccountDedupDistinctPositiveTotals = 3;
+export const minimumAccountDedupMatchedSpanDays = 6;
 
 interface CandidateScore {
   account_id: string;
@@ -12,6 +13,7 @@ interface CandidateScore {
   created_at: Date;
   matched_days: number;
   distinct_matched_totals: number;
+  matched_span_days: number;
   mismatched_days: number;
 }
 
@@ -32,11 +34,15 @@ export interface AccountDedupResult {
 }
 
 export function isConfidentAccountMatch(
-  score: Pick<CandidateScore, "matched_days" | "distinct_matched_totals" | "mismatched_days">,
+  score: Pick<
+    CandidateScore,
+    "matched_days" | "distinct_matched_totals" | "matched_span_days" | "mismatched_days"
+  >,
 ): boolean {
   return (
     score.matched_days >= minimumAccountDedupMatchedDays &&
     score.distinct_matched_totals >= minimumAccountDedupDistinctPositiveTotals &&
+    score.matched_span_days >= minimumAccountDedupMatchedSpanDays &&
     score.mismatched_days === 0
   );
 }
@@ -130,6 +136,14 @@ export async function autoDeduplicateAccountWideSource(
               WHERE candidate.total_tokens = source.total_tokens AND source.total_tokens > 0
             )::int
               AS distinct_matched_totals,
+            coalesce(
+              max(source.usage_date) FILTER (
+                WHERE candidate.total_tokens = source.total_tokens AND source.total_tokens > 0
+              ) - min(source.usage_date) FILTER (
+                WHERE candidate.total_tokens = source.total_tokens AND source.total_tokens > 0
+              ),
+              0
+            )::int AS matched_span_days,
             count(*) FILTER (WHERE candidate.total_tokens <> source.total_tokens)::int
               AS mismatched_days
        FROM source_days source

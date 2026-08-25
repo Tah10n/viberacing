@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeOrigin } from "../lib/origin.mjs";
+import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
+
+test("uses the official Railway service as the connector default", () => {
+  assert.equal(officialProductionOrigin, "https://viberacing.up.railway.app");
+});
 
 test("normalizes only credential-free HTTP(S) origins", () => {
   assert.equal(normalizeOrigin("https://example.com"), "https://example.com");

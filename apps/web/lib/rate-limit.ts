@@ -5,6 +5,10 @@ import { digest } from "./crypto";
 import { transaction } from "./db";
 
 const cleanupIntervalMilliseconds = 60_000;
+export const rateLimitCleanupBatchSize = 10_000;
+export const rateLimitCleanupMaximumBatches = 3;
+export const publicAdmissionGlobalLimit = 10_000;
+const publicAdmissionWindowSeconds = 60;
 let lastCleanupStartedAt = 0;
 let cleanupInFlight: Promise<void> | null = null;
 
@@ -19,21 +23,33 @@ function validateRateLimit(scope: string, limit: number, windowSeconds: number):
     throw new RangeError("Invalid rate-limit window");
 }
 
-function scheduleExpiredRateLimitBucketCleanup(): void {
-  const startedAt = Date.now();
-  if (cleanupInFlight !== null || !rateLimitCleanupDue(lastCleanupStartedAt, startedAt)) return;
-  lastCleanupStartedAt = startedAt;
-  cleanupInFlight = transaction(async (client) => {
-    await client.query(
+export async function deleteExpiredRateLimitBuckets(client: PoolClient): Promise<number> {
+  let deleted = 0;
+  for (let batch = 0; batch < rateLimitCleanupMaximumBatches; batch += 1) {
+    const result = await client.query(
       `DELETE FROM rate_limit_buckets
         WHERE ctid IN (
           SELECT ctid
             FROM rate_limit_buckets
            WHERE expires_at <= now()
            ORDER BY expires_at
-           LIMIT 100
+           LIMIT $1
         )`,
+      [rateLimitCleanupBatchSize],
     );
+    const rowCount = result.rowCount ?? 0;
+    deleted += rowCount;
+    if (rowCount < rateLimitCleanupBatchSize) break;
+  }
+  return deleted;
+}
+
+function scheduleExpiredRateLimitBucketCleanup(): void {
+  const startedAt = Date.now();
+  if (cleanupInFlight !== null || !rateLimitCleanupDue(lastCleanupStartedAt, startedAt)) return;
+  lastCleanupStartedAt = startedAt;
+  cleanupInFlight = transaction(async (client) => {
+    await deleteExpiredRateLimitBuckets(client);
   })
     .catch(() => {})
     .finally(() => {
@@ -92,6 +108,15 @@ export async function consumeAdmissionRateLimit(
   validateRateLimit(globalScope, globalLimit, windowSeconds);
   scheduleExpiredRateLimitBucketCleanup();
   return transaction(async (client) => {
+    const publicGlobalCount = await incrementRateLimitBucket(
+      client,
+      "admit_public",
+      "all",
+      publicAdmissionWindowSeconds,
+    );
+    if (publicGlobalCount > publicAdmissionGlobalLimit) {
+      return { allowed: false, reason: "global" };
+    }
     const globalCount = await incrementRateLimitBucket(client, globalScope, "all", windowSeconds);
     if (globalCount > globalLimit) return { allowed: false, reason: "global" };
     const clientCount = await incrementRateLimitBucket(client, scope, clientKey, windowSeconds);

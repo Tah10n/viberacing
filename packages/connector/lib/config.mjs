@@ -1451,26 +1451,39 @@ async function installHookLauncher() {
 }
 
 async function verifyInstalledRuntime(directory) {
-  await access(join(directory, "bin", "viberacing.mjs"));
-  await Promise.all(installedRuntimeFiles.map((name) => access(join(directory, "lib", name))));
-  await access(join(directory, "lib", "adapters", "codex.mjs"));
+  const expectedFiles = [
+    join(directory, "bin", "viberacing.mjs"),
+    ...installedRuntimeFiles.map((name) => join(directory, "lib", name)),
+    ...[...installedRuntimeAdapterFiles].map((name) => join(directory, "lib", "adapters", name)),
+  ];
+  await Promise.all(
+    expectedFiles.map(async (path) => {
+      const info = await lstat(path);
+      if (!info.isFile() || info.size === 0) throw new Error("Installed runtime is incomplete");
+    }),
+  );
 }
 
-async function installRuntime(sourceUrl) {
+async function installRuntime(sourceUrl, { force = false } = {}) {
   await ensurePrivateStateDirectory();
   const sourceScript = fileURLToPath(sourceUrl);
   const sourceRoot = resolve(dirname(sourceScript), "..");
   const installedScript = installedRuntimeScript();
   const installedDirectory = resolve(dirname(installedScript), "..");
   if (resolve(sourceScript) === resolve(installedScript)) {
-    await installHookLauncher();
-    return installedScript;
-  }
-  try {
+    if (force) {
+      throw new Error("Runtime repair must be run from the connector package");
+    }
     await verifyInstalledRuntime(installedDirectory);
     await installHookLauncher();
     return installedScript;
-  } catch {}
+  }
+  if (!force)
+    try {
+      await verifyInstalledRuntime(installedDirectory);
+      await installHookLauncher();
+      return installedScript;
+    } catch {}
 
   const runtimesDirectory = dirname(installedDirectory);
   const stagingDirectory = join(
@@ -1479,6 +1492,11 @@ async function installRuntime(sourceUrl) {
   );
   const stagingScript = join(stagingDirectory, "bin", "viberacing.mjs");
   const stagingLibrary = join(stagingDirectory, "lib");
+  const backupDirectory = join(
+    runtimesDirectory,
+    `.${connectorVersion}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  let installedMoved = false;
   await mkdir(dirname(stagingScript), { recursive: true, mode: 0o700 });
   await mkdir(stagingLibrary, { recursive: true, mode: 0o700 });
   try {
@@ -1492,15 +1510,28 @@ async function installRuntime(sourceUrl) {
     await copyFile(sourceScript, stagingScript);
     await chmod(stagingScript, 0o700);
     await verifyInstalledRuntime(stagingDirectory);
-    await rename(stagingDirectory, installedDirectory);
-  } catch (error) {
+    if (force)
+      try {
+        await rename(installedDirectory, backupDirectory);
+        installedMoved = true;
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
     try {
-      await verifyInstalledRuntime(installedDirectory);
-      await installHookLauncher();
-      return installedScript;
-    } catch {
+      await rename(stagingDirectory, installedDirectory);
+    } catch (error) {
+      if (installedMoved) await rename(backupDirectory, installedDirectory);
       throw error;
     }
+    if (installedMoved) await rm(backupDirectory, { recursive: true, force: true });
+  } catch (error) {
+    if (!force)
+      try {
+        await verifyInstalledRuntime(installedDirectory);
+        await installHookLauncher();
+        return installedScript;
+      } catch {}
+    throw error;
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true });
   }
@@ -1508,8 +1539,8 @@ async function installRuntime(sourceUrl) {
   return installedScript;
 }
 
-export function prepareRuntime(sourceUrl) {
-  return installRuntime(sourceUrl);
+export function prepareRuntime(sourceUrl, options) {
+  return installRuntime(sourceUrl, options);
 }
 
 export function hookCommandForPlatform(installedScript, source, platform = process.platform) {

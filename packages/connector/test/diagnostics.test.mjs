@@ -107,11 +107,12 @@ test("acknowledgement removes only the delivered batch", () => {
   reconcileDiagnosticPhase(state, sourceId, "collect", [
     { code: "collector_failed", phase: "collect" },
     { code: "local_store_unreadable", phase: "collect" },
+    { code: "local_store_schema_unsupported", phase: "collect" },
   ]);
   const [first] = pendingDiagnosticEvents(state, [sourceId], 1);
   acknowledgeDiagnosticEvents(state, [first]);
 
-  assert.equal(pendingDiagnosticEvents(state, [sourceId]).length, 1);
+  assert.equal(pendingDiagnosticEvents(state, [sourceId]).length, 2);
   assert.notEqual(pendingDiagnosticEvents(state, [sourceId])[0].code, first.code);
 });
 
@@ -170,5 +171,9 @@ test("outbox is bounded by sources, allowlisted keys, and two transitions per ke
     count += events.length;
     acknowledgeDiagnosticEvents(state, events);
   }
-  assert.equal(count, 32 * 13 * 2);
+  const allowlistedKeys = Object.values(diagnosticCodesByPhase).reduce(
+    (total, codes) => total + codes.length,
+    0,
+  );
+  assert.equal(count, 32 * allowlistedKeys * 2);
 });

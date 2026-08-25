@@ -40,13 +40,14 @@ structured event and does not add raw diagnostic data. The original `collector_f
 remains in usage sync for dashboard compatibility.
 
 For account-wide agents, the server may compare already stored complete daily totals from the last
-30 finished UTC days. Two exact nonzero days containing two distinct positive totals, with no
-conflicting complete overlap, can automatically map two computer sources to one logical account.
-Partial and zero days are not evidence. The decision stores opaque source/account IDs and the number
-of matching days, not the daily values themselves, and can be undone from the dashboard. No email,
-username, account ID from the provider, or derived email fingerprint is used. The source also
-retains the timestamp of an automatic match or later explicit reassignment, preventing a background
-match from overriding that decision after temporary Undo metadata is cleaned up.
+30 finished UTC days. Seven exact nonzero days spanning at least a week and containing three
+distinct positive totals, with no conflicting complete overlap, can automatically map two computer
+sources to one logical account. Partial and zero days are not evidence. The decision stores opaque
+source/account IDs and the number of matching days, not the daily values themselves, and can be
+undone from the dashboard. No email, username, account ID from the provider, or derived email
+fingerprint is used. The source also retains the timestamp of an automatic match or later explicit
+reassignment, preventing a background match from overriding that decision after temporary Undo
+metadata is cleaned up.
 
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or

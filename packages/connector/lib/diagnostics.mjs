@@ -9,6 +9,7 @@ export const diagnosticCodesByPhase = Object.freeze({
     "agent_api_invalid_response",
     "local_store_unreadable",
     "local_store_scan_limit",
+    "local_store_schema_unsupported",
     "codex_rollout_read_failed",
     "codex_rollout_metadata_invalid",
     "codex_lineage_ambiguous",

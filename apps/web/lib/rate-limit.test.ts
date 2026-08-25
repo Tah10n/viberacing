@@ -4,6 +4,10 @@ import {
   clientAddress,
   clientAdmissionLimit,
   consumeRateLimit,
+  deleteExpiredRateLimitBuckets,
+  publicAdmissionGlobalLimit,
+  rateLimitCleanupBatchSize,
+  rateLimitCleanupMaximumBatches,
   rateLimitCleanupDue,
 } from "./rate-limit";
 
@@ -27,6 +31,28 @@ describe("database-backed rate limits", () => {
     expect(rateLimitCleanupDue(0, 1)).toBe(true);
     expect(rateLimitCleanupDue(1_000, 60_999)).toBe(false);
     expect(rateLimitCleanupDue(1_000, 61_000)).toBe(true);
+  });
+
+  it("drains bounded batches faster than the shared public admission ceiling can allocate rows", async () => {
+    const rowCounts = [rateLimitCleanupBatchSize, rateLimitCleanupBatchSize, 52];
+    const limits: unknown[] = [];
+    const client = {
+      query: (_sql: string, values: unknown[]) => {
+        limits.push(values[0]);
+        return Promise.resolve({ rowCount: rowCounts.shift() ?? 0 });
+      },
+    };
+    await expect(deleteExpiredRateLimitBuckets(client as never)).resolves.toBe(
+      rateLimitCleanupBatchSize * 2 + 52,
+    );
+    expect(limits).toEqual([
+      rateLimitCleanupBatchSize,
+      rateLimitCleanupBatchSize,
+      rateLimitCleanupBatchSize,
+    ]);
+    expect(rateLimitCleanupBatchSize * rateLimitCleanupMaximumBatches).toBeGreaterThan(
+      publicAdmissionGlobalLimit,
+    );
   });
 
   it("uses Railway's trusted client-address header", () => {

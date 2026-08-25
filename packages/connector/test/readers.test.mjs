@@ -2951,7 +2951,7 @@ test("invalidates Qwen incremental state created with overlapping component sema
       totalTokens: entry.totalTokens,
     }));
   const refreshed = await adapterFor("qwen_code").collect(source, range, stale);
-  assert.equal(refreshed.nextState.parserVersion, 3);
+  assert.equal(refreshed.nextState.parserVersion, 4);
   assert.equal(refreshed.entries[0].inputTokens, "7");
   assert.equal(refreshed.entries[0].outputTokens, "20");
 });
@@ -3068,6 +3068,129 @@ test("malformed records never become usage", () => {
   assert.deepEqual(parseQwenLines(["bad", "{}"]), []);
   assert.deepEqual(parseAntigravityLines(["bad", "{}"]), []);
   assert.deepEqual(parseGeminiRecords([{}]), []);
+});
+
+test("OpenCode marks unsupported assistant usage partial instead of authoritatively clearing days", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-schema-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT, time_created INTEGER, data TEXT)");
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "unsupported-assistant",
+      Date.parse("2026-08-10T12:00:00Z"),
+      JSON.stringify({ role: "assistant", tokensV2: { input: 10, output: 5 } }),
+    );
+  database.close();
+
+  const previousState = { lastCompleteRange: "preserve" };
+  const result = await adapterFor("opencode").collect(
+    { dataPath: path },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    previousState,
+  );
+  assert.equal(result.completeness, "partial");
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(result.nextState, previousState);
+  assert.deepEqual(result.diagnostics, [
+    { code: "local_store_schema_unsupported", phase: "collect" },
+  ]);
+});
+
+test("event collectors retain their last complete state when an appended usage record is unsupported", async (context) => {
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const kimi = (await fixture("kimi.jsonl")).trim().split("\n")[1];
+  const gemini = JSON.stringify(JSON.parse(await fixture("gemini.json"))[0]);
+  const antigravityNative = (await fixture("antigravity.jsonl")).trim();
+  const antigravity = JSON.stringify(safeCaptureRecord("antigravity", antigravityNative));
+  const cases = [
+    {
+      agentId: "claude_code",
+      name: "session.jsonl",
+      valid: (await fixture("claude.jsonl")).trim(),
+      unsupported: JSON.stringify({
+        type: "assistant",
+        timestamp: "2026-08-11T00:00:00Z",
+        message: { id: "unsupported-claude", role: "assistant", usageV2: {} },
+      }),
+    },
+    {
+      agentId: "kimi_code",
+      name: "wire.jsonl",
+      source: { collectionMethod: "kimi_wire_jsonl" },
+      valid: kimi,
+      unsupported: JSON.stringify({
+        type: "usage.record",
+        time: Date.parse("2026-08-11T00:00:00Z"),
+        usage: { inputRenamed: 10, output: 5 },
+      }),
+    },
+    {
+      agentId: "qwen_code",
+      name: "token-usage-2026-08.jsonl",
+      valid: (await fixture("qwen.jsonl")).trim(),
+      unsupported: JSON.stringify({
+        schemaVersion: 1,
+        id: "unsupported-qwen",
+        timestamp: "2026-08-11T00:00:00Z",
+        inputTokensV2: 10,
+      }),
+    },
+    {
+      agentId: "gemini_cli",
+      name: "session-unsupported.jsonl",
+      valid: gemini,
+      unsupported: JSON.stringify({
+        type: "gemini",
+        id: "unsupported-gemini",
+        timestamp: "2026-08-11T00:00:00Z",
+        usageV2: {},
+      }),
+    },
+    {
+      agentId: "antigravity",
+      name: "capture.jsonl",
+      valid: antigravity,
+      unsupported: JSON.stringify({
+        id: "unsupported-antigravity",
+        date: "2026-08-11",
+        usage: { totalTokens: "not-an-integer" },
+      }),
+    },
+  ];
+
+  for (const item of cases) {
+    const directory = await mkdtemp(join(tmpdir(), `viberacing-${item.agentId}-schema-`));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    const path = join(directory, item.name);
+    await writeFile(path, `${item.valid}\n`);
+    const adapter = adapterFor(item.agentId);
+    const source = { dataPath: directory, ...item.source };
+    const first = await adapter.collect(source, range, {});
+    assert.equal(first.completeness, "complete", item.agentId);
+    assert.equal(typeof first.nextState.parserVersion, "number", item.agentId);
+
+    await appendFile(path, `${item.unsupported}\n`);
+    const partial = await adapter.collect(source, range, first.nextState);
+    assert.equal(partial.completeness, "partial", item.agentId);
+    assert.deepEqual(partial.entries, first.entries, item.agentId);
+    assert.deepEqual(partial.nextState, first.nextState, item.agentId);
+    assert.ok(
+      partial.diagnostics.some(
+        (diagnostic) => diagnostic.code === "local_store_schema_unsupported",
+      ),
+      item.agentId,
+    );
+
+    const { parserVersion: _parserVersion, ...staleState } = first.nextState;
+    const rescanned = await adapter.collect(source, range, staleState);
+    assert.equal(rescanned.completeness, "partial", item.agentId);
+    assert.deepEqual(rescanned.entries, first.entries, item.agentId);
+    assert.deepEqual(rescanned.nextState, staleState, item.agentId);
+  }
 });
 
 test("every event-based adapter deduplicates IDs and keeps distinct UTC days", async () => {

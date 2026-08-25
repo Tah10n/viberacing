@@ -4,23 +4,29 @@ import {
   dayPattern,
   diagnosePath,
   mergeEntries,
+  parserResult,
+  previousJsonlEntries,
   utcDay,
 } from "./shared.mjs";
 
-export function parseAntigravityLines(lines) {
+const antigravityParserVersion = 1;
+
+function analyzeAntigravityLines(lines) {
   const seen = new Set();
   const entries = [];
-  for (const line of lines)
+  let candidateRecords = 0;
+  let parsedRecords = 0;
+  let unsupportedCandidates = 0;
+  for (const line of lines) {
     try {
       const record = JSON.parse(line);
       const usage = record?.usage ?? record?.result?.usage;
+      if (!usage) continue;
+      candidateRecords += 1;
       const id = record?.id ?? record?.session_id;
-      if (!usage || !id || seen.has(id)) continue;
-      seen.add(id);
       const date = dayPattern.test(record.date ?? "")
         ? record.date
-        : utcDay(record.timestamp ?? record.time ?? Date.now());
-      if (date === null) continue;
+        : utcDay(record.timestamp ?? record.time);
       const entry = componentEntry(
         date,
         {
@@ -32,9 +38,35 @@ export function parseAntigravityLines(lines) {
         },
         usage.total_tokens ?? usage.totalTokens,
       );
-      if (entry) entries.push(entry);
-    } catch {}
-  return mergeEntries(entries);
+      if (
+        typeof id !== "string" ||
+        id.length < 1 ||
+        id.length > 256 ||
+        date === null ||
+        entry === null
+      ) {
+        unsupportedCandidates += 1;
+        continue;
+      }
+      parsedRecords += 1;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      entries.push(entry);
+    } catch {
+      candidateRecords += 1;
+      unsupportedCandidates += 1;
+    }
+  }
+  return parserResult(
+    mergeEntries(entries),
+    candidateRecords,
+    parsedRecords,
+    unsupportedCandidates,
+  );
+}
+
+export function parseAntigravityLines(lines) {
+  return analyzeAntigravityLines(lines).entries;
 }
 
 function captureEventKey(line) {
@@ -57,8 +89,32 @@ export const antigravityAdapter = Object.freeze({
   trigger: "viberacing run antigravity",
   defaultPaths: [],
   detect: async () => [],
-  collect: (source, range, state) =>
-    collectJsonl(source, parseAntigravityLines, () => true, state, range, captureEventKey),
+  collect: async (source, range, state = {}) => {
+    const stateCompatible = state.parserVersion === antigravityParserVersion;
+    const result = await collectJsonl(
+      source,
+      analyzeAntigravityLines,
+      () => true,
+      stateCompatible ? state : {},
+      range,
+      captureEventKey,
+    );
+    if (
+      !stateCompatible &&
+      result.completeness === "partial" &&
+      Object.keys(state.files ?? {}).length > 0
+    ) {
+      return {
+        ...result,
+        entries: previousJsonlEntries(state),
+        nextState: state,
+      };
+    }
+    return {
+      ...result,
+      nextState: { ...result.nextState, parserVersion: antigravityParserVersion },
+    };
+  },
   parseCapture: parseAntigravityLines,
   diagnose: (source) => diagnosePath(source, ["Antigravity Desktop usage"]),
 });

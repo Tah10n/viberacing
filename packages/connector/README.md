@@ -48,14 +48,14 @@ is reported as a detection warning and never hides other healthy sources. Discov
 whole home directory or disk.
 
 The browser approval maps machine-local sources to a new or existing account. Account-wide sources
-are matched automatically only after enough complete daily totals arrive: the server requires two
-exact finished nonzero days containing two distinct positive totals and no conflicting complete
-overlap. It never uses provider identity, partial days, or zero days as matching evidence, and the
-dashboard offers Undo. Re-running `connect` keeps the stable installation identity, rotates device
-authorization, refreshes the installed connector copy, and updates only Vibe Racing-owned hooks.
-Hook reconciliation is best-effort per source: one damaged settings file is reported without
-blocking healthy hooks or the initial sync. The final token/config swap is serialized behind any
-active sync, so an older request cannot restore superseded authorization.
+are matched automatically only after enough complete daily totals arrive: the server requires seven
+exact finished nonzero days spanning at least a week, containing three distinct positive totals and
+no conflicting complete overlap. It never uses provider identity, partial days, or zero days as
+matching evidence, and the dashboard offers Undo. Re-running `connect` keeps the stable installation
+identity, rotates device authorization, refreshes the installed connector copy, and updates only
+Vibe Racing-owned hooks. Hook reconciliation is best-effort per source: one damaged settings file is
+reported without blocking healthy hooks or the initial sync. The final token/config swap is
+serialized behind any active sync, so an older request cannot restore superseded authorization.
 
 ## Commands
 

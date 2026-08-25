@@ -44,15 +44,15 @@ independent files and can map to independent accounts; the wrapper consumes `--s
 more than one profile exists.
 
 After a complete account-wide snapshot, ingestion compares up to 30 finished UTC days against other
-root accounts of the same user and agent. Only nonzero complete days count. At least two exact
-matched days, two distinct positive totals, and no overlapping complete mismatch are required. A
-deterministic oldest matching account becomes the root; the single-source account is retained as a
-hidden alias and an event records only opaque IDs and the number of matched days. The source retains
-only the timestamp of that decision, so Undo, manual reassignment, or later event cleanup cannot
-make it eligible for another automatic decision. Undo moves the source back to that alias.
-Zero-token days do not count as positive evidence, but a complete zero-versus-positive day is a
-contradiction. Partial, current-day, weak, or contradictory history never triggers a merge. Provider
-email and credentials are neither read nor transmitted.
+root accounts of the same user and agent. Only nonzero complete days count. At least seven exact
+matched days spanning a week, three distinct positive totals, and no overlapping complete mismatch
+are required. A deterministic oldest matching account becomes the root; the single-source account is
+retained as a hidden alias and an event records only opaque IDs and the number of matched days. The
+source retains only the timestamp of that decision, so Undo, manual reassignment, or later event
+cleanup cannot make it eligible for another automatic decision. Undo moves the source back to that
+alias. Zero-token days do not count as positive evidence, but a complete zero-versus-positive day is
+a contradiction. Partial, current-day, weak, or contradictory history never triggers a merge.
+Provider email and credentials are neither read nor transmitted.
 
 ## Snapshot ingestion and ranking
 
