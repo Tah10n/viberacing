@@ -110,15 +110,18 @@ function parseRecords(lines, decoder, relevant) {
 }
 
 export function parseKimiCurrentLines(lines) {
-  return parseRecords(lines, currentRecord, (record) => record?.type === "usage.record").entries;
+  return parseRecords(
+    lines,
+    currentRecord,
+    (record) => record?.type === "usage.record" || record?.usage !== undefined,
+  ).entries;
 }
 
 export function parseKimiLegacyLines(lines) {
-  return parseRecords(
-    lines,
-    legacyRecord,
-    (record) => (record?.message ?? record)?.type === "StatusUpdate",
-  ).entries;
+  return parseRecords(lines, legacyRecord, (record) => {
+    const message = record?.message ?? record;
+    return message?.type === "StatusUpdate" || message?.payload?.token_usage !== undefined;
+  }).entries;
 }
 
 // The unqualified parser intentionally means the current persisted wire format.
@@ -199,8 +202,13 @@ export const kimiAdapter = Object.freeze({
         lines,
         decoder,
         legacy
-          ? (record) => (record?.message ?? record)?.type === "StatusUpdate"
-          : (record) => record?.type === "usage.record",
+          ? (record) => {
+              const message = record?.message ?? record;
+              return (
+                message?.type === "StatusUpdate" || message?.payload?.token_usage !== undefined
+              );
+            }
+          : (record) => record?.type === "usage.record" || record?.usage !== undefined,
       );
     return collectJsonl(
       source,

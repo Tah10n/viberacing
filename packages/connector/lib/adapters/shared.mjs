@@ -209,7 +209,7 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
 
 export async function jsonLinesChunk(path, start = 0, size) {
   if (size !== undefined && start >= size)
-    return { lines: [], safeOffset: start, oversizedLines: 0 };
+    return { lines: [], safeOffset: start, oversizedLines: 0, tail: "", tailBytes: 0 };
   let contents = "";
   const stream = createReadStream(path, {
     encoding: "utf8",
@@ -218,13 +218,23 @@ export async function jsonLinesChunk(path, start = 0, size) {
   });
   for await (const chunk of stream) contents += chunk;
   const newline = contents.lastIndexOf("\n");
-  if (newline < 0) return { lines: [], safeOffset: start, oversizedLines: 0 };
+  if (newline < 0)
+    return {
+      lines: [],
+      safeOffset: start,
+      oversizedLines: 0,
+      tail: contents,
+      tailBytes: Buffer.byteLength(contents),
+    };
   const complete = contents.slice(0, newline + 1);
+  const tail = contents.slice(newline + 1);
   const lines = complete.split(/\r?\n/).filter(Boolean);
   return {
     lines,
     safeOffset: start + Buffer.byteLength(complete),
     oversizedLines: lines.filter((line) => Buffer.byteLength(line) > 1_000_000).length,
+    tail,
+    tailBytes: Buffer.byteLength(tail),
   };
 }
 
@@ -279,6 +289,7 @@ export async function collectJsonl(
       previous &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
+      previous.safeOffset === file.size &&
       (previous.ino === undefined || previous.ino === file.ino)
     ) {
       nextState.files[file.path] = previous;
@@ -301,6 +312,8 @@ export async function collectJsonl(
     const offset = appended ? previous.safeOffset : 0;
     try {
       const chunk = await jsonLinesChunk(file.path, offset, file.size);
+      const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
+      if (hasUnterminatedTail) incomplete = true;
       if (chunk.oversizedLines > 0) {
         incomplete = true;
         oversized = true;
@@ -308,7 +321,9 @@ export async function collectJsonl(
       }
       const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
       const unseenLines = [];
-      for (const line of chunk.lines) {
+      const provisionalLines =
+        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
+      for (const line of provisionalLines) {
         const event = eventKey?.(line);
         if (
           !event ||
@@ -353,6 +368,11 @@ export async function collectJsonl(
             (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
           )
         : fileEntries;
+      if (hasUnterminatedTail) {
+        if (previous) nextState.files[file.path] = previous;
+        entries.push(...(previous && !appended ? (previous.entries ?? []) : ranged));
+        continue;
+      }
       nextState.files[file.path] = {
         size: file.size,
         modifiedAt: file.modifiedAt,

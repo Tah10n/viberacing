@@ -18,11 +18,14 @@ function analyzeAntigravityLines(lines) {
   let parsedRecords = 0;
   let unsupportedCandidates = 0;
   for (const line of lines) {
+    candidateRecords += 1;
     try {
       const record = JSON.parse(line);
       const usage = record?.usage ?? record?.result?.usage;
-      if (!usage) continue;
-      candidateRecords += 1;
+      if (!usage) {
+        unsupportedCandidates += 1;
+        continue;
+      }
       const id = record?.id ?? record?.session_id;
       const date = dayPattern.test(record.date ?? "")
         ? record.date
@@ -53,7 +56,6 @@ function analyzeAntigravityLines(lines) {
       seen.add(id);
       entries.push(entry);
     } catch {
-      candidateRecords += 1;
       unsupportedCandidates += 1;
     }
   }

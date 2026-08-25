@@ -21,12 +21,19 @@ function analyzeGeminiRecords(records, malformedJsonRecords = 0) {
   let parsedRecords = 0;
   let unsupportedCandidates = malformedJsonRecords;
   for (const record of records) {
-    if (record?.type !== "gemini") continue;
-    candidateRecords += 1;
     const usage = record?.usageMetadata ?? record?.usage ?? record?.tokenUsage ?? record?.tokens;
+    if (record?.type !== "gemini" && !usage) continue;
+    candidateRecords += 1;
     const id = record?.id ?? record?.messageId ?? record?.event_id;
     const day = utcDay(record?.timestamp ?? record?.time ?? record?.startTime);
-    if (!usage || typeof id !== "string" || id.length < 1 || id.length > 256 || day === null) {
+    if (
+      record?.type !== "gemini" ||
+      !usage ||
+      typeof id !== "string" ||
+      id.length < 1 ||
+      id.length > 256 ||
+      day === null
+    ) {
       unsupportedCandidates += 1;
       continue;
     }

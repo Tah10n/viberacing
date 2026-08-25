@@ -16,8 +16,12 @@ token counters; Vibe Racing never estimates tokens from text.
 If an authoritative total differs from the visible component formula, only the authoritative total
 is uploaded for every agent except Codex. Codex's separately exact local component tuple may differ
 from its account-wide total, and the dashboard labels that difference. Other contradictory
-components are omitted or rejected. Malformed records are skipped, unreadable or bounded collections
-become `partial`, and an unavailable source is reported by `doctor` rather than submitted as zero.
+components are omitted or rejected. Records that are clearly irrelevant to usage are skipped.
+Malformed JSONL records and records that still look like usage candidates but use an unsupported
+schema make the collection `partial`, preserve the previous file state and daily usage, and report
+`local_store_schema_unsupported`. An unterminated JSONL tail is likewise provisional and cannot
+replace previously committed file state. Unreadable or bounded collections become `partial`, and an
+unavailable source is reported by `doctor` rather than submitted as zero.
 
 Codex reports overlapping counters: cached/cache-write input is removed from regular input and
 reasoning output is removed from regular output. Qwen cached input is removed from regular input,

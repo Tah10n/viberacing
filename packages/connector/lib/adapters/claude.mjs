@@ -20,9 +20,12 @@ function classifiedContribution(line) {
   } catch {
     return { kind: "unsupported" };
   }
-  if (record?.type !== "assistant") return { kind: "irrelevant" };
   const id = record?.message?.id;
   const usage = record?.message?.usage;
+  if (record?.type !== "assistant")
+    return record?.message?.role === "assistant" || usage !== undefined
+      ? { kind: "unsupported" }
+      : { kind: "irrelevant" };
   const day = utcDay(record?.timestamp);
   if (
     record?.message?.role !== "assistant" ||
@@ -88,6 +91,7 @@ export async function collectClaude(
   let schemaUnsupported = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
+  const provisionalMessages = Object.create(null);
   let bytes = 0;
   for (const file of discovered.files) {
     if (bytes + file.size > maximumBytes) {
@@ -101,6 +105,7 @@ export async function collectClaude(
       previous &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
+      previous.safeOffset === file.size &&
       (previous.ino === undefined || previous.ino === file.ino)
     )
       continue;
@@ -121,14 +126,24 @@ export async function collectClaude(
     const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
       const chunk = await readChunk(file.path, offset, file.size);
+      const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
+      if (hasUnterminatedTail) partial = true;
       if (chunk.oversizedLines > 0) {
         partial = true;
         limited = true;
       }
-      const analysis = analyzeClaudeLines(chunk.lines);
+      const provisionalLines =
+        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
+      const analysis = analyzeClaudeLines(provisionalLines);
       if (analysis.stats.unsupportedCandidates > 0) {
         partial = true;
         schemaUnsupported = true;
+        continue;
+      }
+      if (hasUnterminatedTail) {
+        if (!previous || appended)
+          for (const value of analysis.records)
+            if (!ids.has(value.id)) provisionalMessages[value.id] = value.entry;
         continue;
       }
       const messages = Object.create(null);
@@ -183,7 +198,10 @@ export async function collectClaude(
     };
   }
   return {
-    entries: mergeEntries(Object.values(nextState.messages)),
+    entries: mergeEntries([
+      ...Object.values(nextState.messages),
+      ...Object.values(provisionalMessages),
+    ]),
     completeness: partial ? "partial" : "complete",
     nextState: { ...nextState, parserVersion: claudeParserVersion },
     warnings: [

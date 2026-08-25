@@ -28,6 +28,7 @@ import {
   safeCaptureRecord,
   wrapperInvocation,
 } from "../lib/readers.mjs";
+import { jsonLinesChunk } from "../lib/adapters/shared.mjs";
 
 async function fixture(name) {
   return readFile(fileURLToPath(new URL(`fixtures/${name}`, import.meta.url)), "utf8");
@@ -2808,6 +2809,96 @@ test("keeps prior Claude contributions when a replaced file cannot be read", asy
   assert.deepEqual(partial.nextState, first.nextState);
 });
 
+test("treats a complete JSON record without a final newline as provisional on first scan", async (context) => {
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const cases = [
+    {
+      agentId: "claude_code",
+      name: "session.jsonl",
+      record: (await fixture("claude.jsonl")).trim(),
+    },
+    {
+      agentId: "qwen_code",
+      name: "token-usage-2026-08.jsonl",
+      record: (await fixture("qwen.jsonl")).trim(),
+    },
+  ];
+  for (const item of cases) {
+    const directory = await mkdtemp(join(tmpdir(), `viberacing-${item.agentId}-tail-first-`));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    await writeFile(join(directory, item.name), item.record);
+
+    const chunk = await jsonLinesChunk(join(directory, item.name));
+    assert.equal(chunk.safeOffset, 0, `${item.agentId} safe offset`);
+    assert.equal(chunk.tailBytes, Buffer.byteLength(item.record), `${item.agentId} tail bytes`);
+    assert.equal(chunk.tail, item.record, `${item.agentId} tail content`);
+
+    const result = await adapterFor(item.agentId).collect({ dataPath: directory }, range, {});
+
+    assert.equal(result.completeness, "partial", item.agentId);
+    assert.equal(result.entries.length, 1, item.agentId);
+    assert.deepEqual(result.nextState.files, {}, item.agentId);
+  }
+});
+
+test("keeps committed JSONL state across unterminated append and rewrite", async (context) => {
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const claude = JSON.parse((await fixture("claude.jsonl")).trim());
+  const qwen = JSON.parse((await fixture("qwen.jsonl")).trim());
+  const cases = [
+    {
+      agentId: "claude_code",
+      name: "session.jsonl",
+      first: JSON.stringify(claude),
+      appended: JSON.stringify({
+        ...claude,
+        timestamp: "2026-08-11T12:00:00Z",
+        message: { ...claude.message, id: "m2" },
+      }),
+      rewritten: JSON.stringify({
+        ...claude,
+        timestamp: "2026-08-12T12:00:00Z",
+        message: { ...claude.message, id: "replacement" },
+      }),
+    },
+    {
+      agentId: "qwen_code",
+      name: "token-usage-2026-08.jsonl",
+      first: JSON.stringify(qwen),
+      appended: JSON.stringify({ ...qwen, id: "event-2", timestamp: "2026-08-11T12:00:00Z" }),
+      rewritten: JSON.stringify({
+        ...qwen,
+        id: "replacement",
+        timestamp: "2026-08-12T12:00:00Z",
+      }),
+    },
+  ];
+  for (const item of cases) {
+    const directory = await mkdtemp(join(tmpdir(), `viberacing-${item.agentId}-tail-state-`));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    const path = join(directory, item.name);
+    await writeFile(path, `${item.first}\n`);
+    const adapter = adapterFor(item.agentId);
+    const first = await adapter.collect({ dataPath: directory }, range, {});
+
+    await appendFile(path, item.appended);
+    const appended = await adapter.collect({ dataPath: directory }, range, first.nextState);
+    assert.equal(appended.completeness, "partial", `${item.agentId} append`);
+    assert.equal(appended.entries.length, 2, `${item.agentId} append provisional entry`);
+    assert.deepEqual(appended.nextState, first.nextState, `${item.agentId} append state`);
+    assert.ok(
+      appended.entries.some((entry) => entry.date === first.entries[0].date),
+      `${item.agentId} append retained old daily usage`,
+    );
+
+    await writeFile(path, item.rewritten);
+    const rewritten = await adapter.collect({ dataPath: directory }, range, first.nextState);
+    assert.equal(rewritten.completeness, "partial", `${item.agentId} rewrite`);
+    assert.deepEqual(rewritten.entries, first.entries, `${item.agentId} rewrite entries`);
+    assert.deepEqual(rewritten.nextState, first.nextState, `${item.agentId} rewrite state`);
+  }
+});
+
 test("reads OpenCode assistant usage and avoids cache double-counting", async () => {
   const rows = JSON.parse(await fixture("opencode.json"));
   assert.deepEqual(parseOpenCodeMessages(rows), [
@@ -3112,9 +3203,13 @@ test("event collectors retain their last complete state when an appended usage r
       name: "session.jsonl",
       valid: (await fixture("claude.jsonl")).trim(),
       unsupported: JSON.stringify({
-        type: "assistant",
+        type: "assistant.v2",
         timestamp: "2026-08-11T00:00:00Z",
-        message: { id: "unsupported-claude", role: "assistant", usageV2: {} },
+        message: {
+          id: "unsupported-claude",
+          role: "assistant",
+          usage: { input_tokens: 10, output_tokens: 5 },
+        },
       }),
     },
     {
@@ -3123,9 +3218,9 @@ test("event collectors retain their last complete state when an appended usage r
       source: { collectionMethod: "kimi_wire_jsonl" },
       valid: kimi,
       unsupported: JSON.stringify({
-        type: "usage.record",
+        type: "usage.record.v2",
         time: Date.parse("2026-08-11T00:00:00Z"),
-        usage: { inputRenamed: 10, output: 5 },
+        usage: { inputOther: 10, output: 5, inputCacheRead: 0, inputCacheCreation: 0 },
       }),
     },
     {
@@ -3133,10 +3228,25 @@ test("event collectors retain their last complete state when an appended usage r
       name: "token-usage-2026-08.jsonl",
       valid: (await fixture("qwen.jsonl")).trim(),
       unsupported: JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         id: "unsupported-qwen",
         timestamp: "2026-08-11T00:00:00Z",
-        inputTokensV2: 10,
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+      }),
+    },
+    {
+      agentId: "qwen_code",
+      label: "missing schemaVersion",
+      name: "token-usage-2026-08.jsonl",
+      valid: (await fixture("qwen.jsonl")).trim(),
+      unsupported: JSON.stringify({
+        id: "unsupported-qwen-without-version",
+        timestamp: "2026-08-11T00:00:00Z",
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
       }),
     },
     {
@@ -3144,10 +3254,10 @@ test("event collectors retain their last complete state when an appended usage r
       name: "session-unsupported.jsonl",
       valid: gemini,
       unsupported: JSON.stringify({
-        type: "gemini",
+        type: "gemini.v2",
         id: "unsupported-gemini",
         timestamp: "2026-08-11T00:00:00Z",
-        usageV2: {},
+        tokens: { input: 10, output: 5, total: 15 },
       }),
     },
     {
@@ -3157,7 +3267,6 @@ test("event collectors retain their last complete state when an appended usage r
       unsupported: JSON.stringify({
         id: "unsupported-antigravity",
         date: "2026-08-11",
-        usage: { totalTokens: "not-an-integer" },
       }),
     },
   ];
@@ -3170,26 +3279,27 @@ test("event collectors retain their last complete state when an appended usage r
     const adapter = adapterFor(item.agentId);
     const source = { dataPath: directory, ...item.source };
     const first = await adapter.collect(source, range, {});
-    assert.equal(first.completeness, "complete", item.agentId);
-    assert.equal(typeof first.nextState.parserVersion, "number", item.agentId);
+    const caseName = `${item.agentId}${item.label ? ` ${item.label}` : ""}`;
+    assert.equal(first.completeness, "complete", caseName);
+    assert.equal(typeof first.nextState.parserVersion, "number", caseName);
 
     await appendFile(path, `${item.unsupported}\n`);
     const partial = await adapter.collect(source, range, first.nextState);
-    assert.equal(partial.completeness, "partial", item.agentId);
-    assert.deepEqual(partial.entries, first.entries, item.agentId);
-    assert.deepEqual(partial.nextState, first.nextState, item.agentId);
+    assert.equal(partial.completeness, "partial", caseName);
+    assert.deepEqual(partial.entries, first.entries, `${caseName} retained daily usage`);
+    assert.deepEqual(partial.nextState, first.nextState, `${caseName} retained file state`);
     assert.ok(
       partial.diagnostics.some(
         (diagnostic) => diagnostic.code === "local_store_schema_unsupported",
       ),
-      item.agentId,
+      caseName,
     );
 
     const { parserVersion: _parserVersion, ...staleState } = first.nextState;
     const rescanned = await adapter.collect(source, range, staleState);
-    assert.equal(rescanned.completeness, "partial", item.agentId);
-    assert.deepEqual(rescanned.entries, first.entries, item.agentId);
-    assert.deepEqual(rescanned.nextState, staleState, item.agentId);
+    assert.equal(rescanned.completeness, "partial", caseName);
+    assert.deepEqual(rescanned.entries, first.entries, `${caseName} stale daily usage`);
+    assert.deepEqual(rescanned.nextState, staleState, `${caseName} stale file state`);
   }
 });
 
@@ -3362,10 +3472,12 @@ test("JSONL collectors reuse unchanged state and resume at the last complete byt
   await appendFile(path, JSON.stringify(secondRecord));
   const partialLine = await adapter.collect({ dataPath: path }, range, unchanged.nextState);
   const priorOffset = first.nextState.files[path].safeOffset;
+  assert.equal(partialLine.completeness, "partial");
+  assert.deepEqual(partialLine.nextState, unchanged.nextState);
   assert.equal(partialLine.nextState.files[path].safeOffset, priorOffset);
   assert.deepEqual(
     partialLine.entries.map((entry) => entry.date),
-    ["2026-08-10"],
+    ["2026-08-10", "2026-08-11"],
   );
 
   await appendFile(path, "\n");

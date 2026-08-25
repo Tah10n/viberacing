@@ -6,8 +6,11 @@ import { transaction } from "./db";
 
 const cleanupIntervalMilliseconds = 60_000;
 export const rateLimitCleanupBatchSize = 10_000;
-export const rateLimitCleanupMaximumBatches = 3;
+export const publicAdmissionMaximumBucketsPerRequest = 6;
+export const rateLimitCleanupMaximumBatches = 7;
 export const publicAdmissionGlobalLimit = 10_000;
+export const publicAdmissionMaximumAllocatedBuckets =
+  publicAdmissionGlobalLimit * publicAdmissionMaximumBucketsPerRequest;
 const publicAdmissionWindowSeconds = 60;
 let lastCleanupStartedAt = 0;
 let cleanupInFlight: Promise<void> | null = null;

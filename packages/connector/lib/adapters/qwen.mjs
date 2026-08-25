@@ -31,8 +31,11 @@ function analyzeQwenLines(lines) {
       unsupportedCandidates += 1;
       continue;
     }
-    if (record?.schemaVersion !== 1) continue;
     candidateRecords += 1;
+    if (record?.schemaVersion !== 1) {
+      unsupportedCandidates += 1;
+      continue;
+    }
     const day = utcDay(record.timestamp);
     const input = integer(record.inputTokens);
     const output = integer(record.outputTokens);
