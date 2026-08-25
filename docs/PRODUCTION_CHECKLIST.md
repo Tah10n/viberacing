@@ -77,7 +77,8 @@
   changing an uncovered day. Verify two-day/two-distinct-total automatic matching and Undo.
 - Verify protocol v4 applies a collector error only at its exact observed sequence, ignores a
   delayed error after a newer success, and clears an applied error on the next success. Re-run v2/v3
-  pairing and usage compatibility scenarios.
+  pairing and usage compatibility scenarios, including replacement of an unsequenced pending v2/v3
+  error by the current v4 observation.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
