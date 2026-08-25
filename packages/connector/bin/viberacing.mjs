@@ -622,6 +622,14 @@ function pendingSourceId(payload) {
   return ids.length === 1 && typeof ids[0] === "string" ? ids[0] : null;
 }
 
+function isLegacyPendingSourceError(payload) {
+  return (
+    (payload.protocolVersion === 2 || payload.protocolVersion === 3) &&
+    (payload.snapshots?.length ?? 0) === 0 &&
+    (payload.sourceErrors?.length ?? 0) > 0
+  );
+}
+
 async function forgetSourceState(sourceIds) {
   const state = await readState();
   state.sequences ??= {};
@@ -806,7 +814,13 @@ async function deliverPendingGroup(config, items, retired) {
     if (retired.has(item.sourceId)) await removePending(item.path);
     else eligible.push(item);
   }
-  if (eligible.length === 0) return { accepted: 0, staleSources: [], quarantinedSources: [] };
+  if (eligible.length === 0)
+    return {
+      accepted: 0,
+      successfulDeliveries: 0,
+      staleSources: [],
+      quarantinedSources: [],
+    };
   try {
     if (await lifecycleMutationActive())
       throw new Error("Pending delivery stopped by a local lifecycle operation");
@@ -855,7 +869,12 @@ async function deliverPendingGroup(config, items, retired) {
         }
       }
     }
-    return { accepted: result.acceptedEntries ?? 0, staleSources, quarantinedSources: [] };
+    return {
+      accepted: result.acceptedEntries ?? 0,
+      successfulDeliveries: staleSources.length === 0 ? 1 : 0,
+      staleSources,
+      quarantinedSources: [],
+    };
   } catch (error) {
     if (error?.status === 400 && eligible.length > 1) {
       const middle = Math.ceil(eligible.length / 2);
@@ -863,6 +882,7 @@ async function deliverPendingGroup(config, items, retired) {
       const right = await deliverPendingGroup(config, eligible.slice(middle), retired);
       return {
         accepted: left.accepted + right.accepted,
+        successfulDeliveries: left.successfulDeliveries + right.successfulDeliveries,
         staleSources: [...left.staleSources, ...right.staleSources],
         quarantinedSources: [...left.quarantinedSources, ...right.quarantinedSources],
       };
@@ -870,7 +890,12 @@ async function deliverPendingGroup(config, items, retired) {
     if (error?.status === 400 && error?.code === "unsupported_source") {
       retired.add(eligible[0].sourceId);
       await removePending(eligible[0].path);
-      return { accepted: 0, staleSources: [], quarantinedSources: [] };
+      return {
+        accepted: 0,
+        successfulDeliveries: 0,
+        staleSources: [],
+        quarantinedSources: [],
+      };
     }
     if (error?.status === 400) {
       const item = eligible[0];
@@ -883,7 +908,12 @@ async function deliverPendingGroup(config, items, retired) {
         { code: "pending_payload_rejected", phase: "deliver" },
       ]);
       await writeState(state);
-      return { accepted: 0, staleSources: [], quarantinedSources: [item.sourceId] };
+      return {
+        accepted: 0,
+        successfulDeliveries: 0,
+        staleSources: [],
+        quarantinedSources: [item.sourceId],
+      };
     }
     await lifecycleFailure(error);
   }
@@ -919,25 +949,45 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
       .filter((sourceId) => typeof sourceId === "string"),
   );
   const items = [];
+  const legacyPendingErrors = [];
   for (const path of await pendingPayloads()) {
-    let payload;
+    let storedPayload;
     try {
-      payload = { ...(await readPending(path)), protocolVersion };
+      storedPayload = await readPending(path);
     } catch (error) {
       if (error?.code === "ENOENT") continue;
       throw error;
     }
-    const sourceId = pendingSourceId(payload);
+    const sourceId = pendingSourceId(storedPayload);
     if (sourceId === null) throw new Error("Invalid pending payload");
     if (!configured.has(sourceId)) {
       await removePending(path);
       continue;
     }
     if (allowedSourceIds && !allowedSourceIds.has(sourceId)) continue;
+    if (isLegacyPendingSourceError(storedPayload)) {
+      legacyPendingErrors.push({ path, sourceId });
+      continue;
+    }
+    const payload = { ...storedPayload, protocolVersion };
     items.push({ path, payload, sourceId });
   }
+  if (legacyPendingErrors.length > 0) {
+    const state = await readState();
+    const collectorFailureFingerprint = fingerprint({ error: "collector_failed" });
+    let changed = false;
+    for (const { sourceId } of legacyPendingErrors) {
+      if (state.fingerprints?.[sourceId] !== collectorFailureFingerprint) continue;
+      delete state.fingerprints[sourceId];
+      changed = true;
+    }
+    if (changed) await writeState(state);
+    for (const { path } of legacyPendingErrors) await removePending(path);
+  }
   const retired = new Set();
+  const reobserveSourceIds = new Set(legacyPendingErrors.map(({ sourceId }) => sourceId));
   let accepted = 0;
+  let successfulDeliveries = 0;
   const staleSources = new Set();
   const quarantinedSources = new Set();
   const groups = [
@@ -950,6 +1000,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
         throw new Error("Pending delivery stopped by a local lifecycle operation");
       const delivered = await deliverPendingGroup(config, group, retired);
       accepted += delivered.accepted;
+      successfulDeliveries += delivered.successfulDeliveries;
       for (const sourceId of delivered.staleSources) staleSources.add(sourceId);
       for (const sourceId of delivered.quarantinedSources) quarantinedSources.add(sourceId);
     }
@@ -960,11 +1011,15 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   if (retryStale && staleSources.size > 0) {
     const retried = await drainPending(config, false, allowedSourceIds);
     accepted += retried.accepted;
+    successfulDeliveries += retried.successfulDeliveries;
     for (const sourceId of retried.retiredSources) retired.add(sourceId);
     for (const sourceId of retried.quarantinedSources) quarantinedSources.add(sourceId);
+    for (const sourceId of retried.reobserveSourceIds) reobserveSourceIds.add(sourceId);
   }
   return {
     accepted,
+    successfulDeliveries,
+    reobserveSourceIds: [...reobserveSourceIds],
     retiredSources: [...retired],
     staleSources: [...staleSources],
     quarantinedSources: [...quarantinedSources],
@@ -1011,7 +1066,11 @@ async function sync(providedConfig, options = {}) {
       const syncSources = requestedSourceIds
         ? mappedSources.filter((source) => requestedSourceIds.has(source.sourceId))
         : options.automatic
-          ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
+          ? mappedSources.filter(
+              (source) =>
+                dirtyIds.has(source.clientSourceId) ||
+                previous.reobserveSourceIds.includes(source.sourceId),
+            )
           : mappedSources;
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
@@ -1049,6 +1108,10 @@ async function sync(providedConfig, options = {}) {
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
+      for (const sourceId of previous.retiredSources)
+        failures.push(`server disconnected source ${sourceId}`);
+      for (const sourceId of previous.quarantinedSources)
+        failures.push(`server rejected source ${sourceId}; payload quarantined`);
       for (let index = 0; index < collected.length; index += 1) {
         const outcome = collected[index];
         const source = syncSources[index];
@@ -1123,6 +1186,7 @@ async function sync(providedConfig, options = {}) {
           successfullyCheckedSourceIds,
           requestedSourceIds,
         );
+        if (failures.length === 0 && previous.successfulDeliveries > 0) await clearLastHookError();
         output(
           diagnosticDelivery.attempted
             ? "No usage changes; a diagnostics request was attempted."
@@ -1151,13 +1215,14 @@ async function sync(providedConfig, options = {}) {
       }
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
       for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
-      for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
+      for (const sourceId of delivered.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
-      for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
+      for (const sourceId of delivered.quarantinedSources)
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
       if (failures.length === 0) {
         await compactSuccessfulCaptures({ ...config, sources: syncSources });
-        await clearLastHookError();
+        if (previous.successfulDeliveries + delivered.successfulDeliveries > 0)
+          await clearLastHookError();
       }
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       return { accepted, failures };

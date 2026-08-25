@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   access,
@@ -2333,6 +2333,76 @@ test("a permanent upload failure leaves one pending payload without background r
   });
   assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 1);
   assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
+});
+
+test("a recovered initial pending drain clears the stale hook error on unchanged usage", async (context) => {
+  let available = false;
+  let usageRequests = 0;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      if (request.url === "/api/installations/current/diagnostics") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      usageRequests += 1;
+      response.writeHead(available ? 200 : 503, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify(available ? usageResponse(body) : { error: "synthetic_unavailable" }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-recovered-pending-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+  const schedulerPath = join(installation.directory, "scheduler.lock");
+  const lastHookErrorPath = join(installation.directory, "logs", "last-error.log");
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => usageRequests === 3, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(schedulerPath);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  await access(lastHookErrorPath);
+  assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
+
+  available = true;
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => usageRequests === 4, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(schedulerPath);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 2);
+  assert.deepEqual(await readdir(join(installation.directory, "pending")), []);
+  await assert.rejects(access(lastHookErrorPath));
 });
 
 test("a Claude hook collects only its dirty source and unchanged data sends no HTTP", async (context) => {
@@ -5041,6 +5111,141 @@ test("recovers a missing sequence and confirms unchanged manual sync with the ne
   assert.match(unchanged.stdout, /synced 1 daily totals from 1 source/i);
   assert.doesNotMatch(unchanged.stdout, /no request was sent/i);
 });
+
+for (const legacyProtocolVersion of [2, 3])
+  test(`replaces an unsequenced legacy v${legacyProtocolVersion} pending error when only another source is dirty`, async (context) => {
+    const usageBodies = [];
+    const server = createServer((request, response) => {
+      const chunks = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (request.url === "/api/installations/current/diagnostics") {
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+          return;
+        }
+        usageBodies.push(body);
+        const invalidSourceError = body.sourceErrors?.some(
+          (sourceError) => sourceError.observedAfterSequence === undefined,
+        );
+        response.writeHead(invalidSourceError ? 400 : 200, {
+          "content-type": "application/json",
+        });
+        response.end(
+          JSON.stringify(
+            invalidSourceError ? { error: "invalid_source_error" } : usageResponse(body),
+          ),
+        );
+      });
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    context.after(() => server.close());
+    const address = server.address();
+    assert.notEqual(address, null);
+    assert.equal(typeof address, "object");
+
+    const home = await mkdtemp(
+      join(tmpdir(), `viberacing-legacy-v${legacyProtocolVersion}-pending-error-`),
+    );
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const directory = join(home, ".viberacing");
+    const captureDirectory = join(directory, "captures");
+    await mkdir(captureDirectory, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    const healthySource = {
+      clientSourceId: "61616161-6161-4161-8161-616161616161",
+      sourceId: "62626262-6262-4262-8262-626262626262",
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "healthy.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Healthy",
+    };
+    const failedSource = {
+      clientSourceId: "63636363-6363-4363-8363-636363636363",
+      sourceId: "64646464-6464-4464-8464-646464646464",
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "failed.jsonl"),
+      collectionMethod: "synthetic_invalid_collector",
+      supportedSurface: "cli",
+      suggestedLabel: "Failed",
+    };
+    await writeFile(
+      healthySource.dataPath,
+      `${JSON.stringify({
+        id: `legacy-${legacyProtocolVersion}-healthy`,
+        date,
+        usage: { date, totalTokens: "3" },
+      })}\n`,
+    );
+    await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+      healthySource,
+      failedSource,
+    ]);
+    const statePath = join(directory, "state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.fingerprints = {
+      [failedSource.sourceId]: createHash("sha256")
+        .update(JSON.stringify({ error: "collector_failed" }))
+        .digest("hex"),
+    };
+    await writeFile(statePath, `${JSON.stringify(state)}\n`);
+    const pendingDirectory = join(directory, "pending");
+    await mkdir(pendingDirectory, { recursive: true });
+    await writeFile(
+      join(pendingDirectory, `${failedSource.sourceId}.error.json`),
+      `${JSON.stringify({
+        protocolVersion: legacyProtocolVersion,
+        snapshots: [],
+        sourceErrors: [{ sourceId: failedSource.sourceId, code: "collector_failed" }],
+      })}\n`,
+    );
+    const timestamp = new Date().toISOString();
+    await writeFile(
+      join(directory, "dirty.json"),
+      `${JSON.stringify({
+        version: 2,
+        sources: {
+          [healthySource.clientSourceId]: {
+            dirtySince: timestamp,
+            lastEventAt: timestamp,
+            generation: randomUUID(),
+          },
+        },
+      })}\n`,
+    );
+    const trace = join(home, "collector-trace.txt");
+
+    await execFileAsync(process.execPath, [connectorPath, "auto-sync"], {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        VIBERACING_TEST_COLLECTOR_TRACE: trace,
+        VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1,1,1",
+      }),
+    });
+
+    assert.deepEqual(
+      new Set((await readFile(trace, "utf8")).trim().split("\n")),
+      new Set([healthySource.clientSourceId, failedSource.clientSourceId]),
+    );
+    assert.equal(usageBodies.length, 2);
+    assert.equal(usageBodies[0].protocolVersion, connectorProtocolVersion);
+    assert.equal(usageBodies[0].snapshots[0].sourceId, healthySource.sourceId);
+    assert.deepEqual(usageBodies[0].sourceErrors, []);
+    assert.equal(usageBodies[1].protocolVersion, connectorProtocolVersion);
+    assert.deepEqual(usageBodies[1].snapshots, []);
+    assert.deepEqual(usageBodies[1].sourceErrors, [
+      {
+        sourceId: failedSource.sourceId,
+        code: "collector_failed",
+        observedAfterSequence: "0",
+      },
+    ]);
+    assert.deepEqual(await readdir(pendingDirectory), []);
+    await assert.rejects(access(join(directory, "quarantine", `${failedSource.sourceId}.json`)));
+  });
 
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {
   const bodies = [];
