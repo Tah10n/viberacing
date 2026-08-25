@@ -945,19 +945,39 @@ try {
   const zeroAccountStart = authoritativeZeroHtml.indexOf("<h3>Codex · codex-work account</h3>");
   const zeroAccountEnd = authoritativeZeroHtml.indexOf("</article>", zeroAccountStart);
   const zeroAccountHtml = authoritativeZeroHtml.slice(zeroAccountStart, zeroAccountEnd);
+  const daysSinceMonday = (new Date(`${today}T00:00:00.000Z`).getUTCDay() + 6) % 7;
+  const currentWeekStart = dateOffset(-daysSinceMonday);
+  const authoritativeZeroAccountTotal = [
+    [uncoveredDate, 60],
+    [yesterday, 45],
+  ].reduce((total, [usageDate, tokens]) => total + (usageDate >= currentWeekStart ? tokens : 0), 0);
   check(
-    authoritativeZeroUsage.status === 200 &&
-      JSON.stringify(authoritativeZeroRows.rows) ===
-        JSON.stringify([
-          { usage_date: uncoveredDate, total_tokens: "60", completeness: "complete" },
-          { usage_date: yesterday, total_tokens: "45", completeness: "complete" },
-          { usage_date: today, total_tokens: "0", completeness: "complete" },
-        ]) &&
-      authoritativeZeroCodexTotal === precedenceBaselineTokens + 65n &&
-      authoritativeZeroDashboard.status === 200 &&
-      /0(?:<!-- -->)? tokens/.test(zeroAccountHtml) &&
-      authoritativeZeroHtml.includes(`${todayLabel}: 157 tokens`),
-    "complete zero inside a partial snapshot did not correct storage, summary, dashboard, or chart",
+    authoritativeZeroUsage.status === 200,
+    `authoritative-zero correction was rejected: ${authoritativeZeroUsage.status}`,
+  );
+  const expectedAuthoritativeZeroRows = [
+    { usage_date: uncoveredDate, total_tokens: "60", completeness: "complete" },
+    { usage_date: yesterday, total_tokens: "45", completeness: "complete" },
+    { usage_date: today, total_tokens: "0", completeness: "complete" },
+  ];
+  check(
+    JSON.stringify(authoritativeZeroRows.rows) === JSON.stringify(expectedAuthoritativeZeroRows),
+    `authoritative-zero storage mismatch: ${JSON.stringify(authoritativeZeroRows.rows)}`,
+  );
+  check(
+    authoritativeZeroCodexTotal === precedenceBaselineTokens + 65n,
+    `authoritative-zero weekly summary mismatch: expected ${precedenceBaselineTokens + 65n}, received ${authoritativeZeroCodexTotal}`,
+  );
+  check(
+    authoritativeZeroDashboard.status === 200 &&
+      zeroAccountStart >= 0 &&
+      zeroAccountEnd > zeroAccountStart &&
+      new RegExp(`${authoritativeZeroAccountTotal}(?:<!-- -->)? tokens`).test(zeroAccountHtml),
+    "authoritative-zero dashboard weekly account total diverged from the fixture",
+  );
+  check(
+    authoritativeZeroHtml.includes(`${todayLabel}: 157 tokens`),
+    "authoritative-zero chart total diverged from the fixture",
   );
   const authoritativeZeroRestore = await usage(first.deviceToken, [
     snapshot(authoritativeZeroSource, 4, [[today, 40]], "complete", uncoveredDate, today),
