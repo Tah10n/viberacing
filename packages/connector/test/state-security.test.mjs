@@ -77,6 +77,12 @@ test(
     await writeFile(join(state, "bin", "viberacing.mjs"), "// legacy connector\n", {
       mode: 0o755,
     });
+    await writeFile(join(state, "bin", "viberacing-hook.mjs"), "// stable hook launcher\n", {
+      mode: 0o666,
+    });
+    await writeFile(join(state, "bin", "viberacing-hook.mjs.123.tmp"), "// interrupted update\n", {
+      mode: 0o666,
+    });
     await Promise.all(
       flatLegacyRuntimeFiles.map((name) =>
         writeFile(join(state, "lib", name), `// legacy ${name}\n`, { mode: 0o777 }),
@@ -109,6 +115,11 @@ test(
       0o700,
     );
     assert.equal((await lstat(join(state, "bin", "viberacing.mjs"))).mode & 0o777, 0o700);
+    assert.equal((await lstat(join(state, "bin", "viberacing-hook.mjs"))).mode & 0o777, 0o600);
+    assert.equal(
+      (await lstat(join(state, "bin", "viberacing-hook.mjs.123.tmp"))).mode & 0o777,
+      0o600,
+    );
     for (const name of flatLegacyRuntimeFiles)
       assert.equal((await lstat(join(state, "lib", name))).mode & 0o777, 0o600);
     for (const name of flatLegacyRuntimeAdapterFiles)

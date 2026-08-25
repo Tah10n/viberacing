@@ -71,6 +71,11 @@
   retaining failed-root metadata for retry. Race reconnect and doctor reconciliation against an
   in-flight sync; verify only the replacement token survives, a repaired connector clears the 426
   automatic-disable flag, and a lock timeout gets exactly one bounded deferred acquisition.
+- After Codex connect or the first upgrade to the stable hook launcher, run `/hooks`, inspect and
+  trust the Vibe Racing `Stop` hook, then confirm `doctor` reports `codex hook: current`. Complete a
+  turn and verify one dirty generation reaches the server within two minutes. Run `doctor --repair`
+  again and confirm the hook remains trusted and its command identity is unchanged; do not use a
+  hook-trust bypass or write `trusted_hash` from the connector.
 - Verify two linked Codex computers follow `complete 100` then newer `complete 90`; dashboard,
   weekly summary, chart, leaderboard, and component selection must all show the same corrected
   value. A later partial may provisionally advance it, and the next complete must correct it down.

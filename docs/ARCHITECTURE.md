@@ -112,8 +112,11 @@ lock, claims one scheduler lock, and exits with the provider's minimal response.
 only source UUID, timestamps, and a generation—never a path or account label.
 
 Codex uses `Stop`, which runs after each completed turn; upgrades remove only the connector-owned
-legacy `SessionEnd` handler. The hook still performs no collection itself. Other providers keep the
-documented lifecycle event supported by their current release.
+legacy `SessionEnd` handler. Its command points to an atomically refreshed stable launcher, which
+selects the explicitly installed versioned runtime. Codex still requires the user to review and
+trust the non-managed hook once; the connector reads the official `hooks/list` status for diagnosis
+but never writes trust state or bypasses that boundary. The hook still performs no collection
+itself. Other providers keep the documented lifecycle event supported by their current release.
 
 The short-lived detached scheduler uses one timer: 15-second debounce, 120-second minimum automatic
 interval, and 120-second maximum delay. After taking the single-flight sync lock it drains pending
