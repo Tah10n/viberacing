@@ -31,7 +31,8 @@ buckets lag, Sync uses every exact locally observed non-overlapping daily total 
 authoritative bucket as a partial value, including across UTC rollovers. The dashboard and ranking
 therefore update immediately; later App Server buckets may correct each value up or down.
 Provider-recorded local input/output/cache/reasoning counters remain separately visible; neither
-counter is estimated.
+counter is estimated. Codex runs the Vibe Racing `Stop` hook only after the user reviews and trusts
+it once through `/hooks`; `doctor` reports whether that hook is current or still needs review.
 
 Connector 0.4.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
 server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
@@ -53,13 +54,19 @@ bounded sync; it does not install a resident process or let the web service read
 After the verified npm rollout, the official Vibe Racing service uses one permanent command:
 
 ```bash
-npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
 ```
 
 No global npm installation is performed. `npx` starts the official package, and the connector keeps
 its working copy only in local Vibe Racing state. Update or repair that copy explicitly with
 `npx --yes @viberacing/connector@latest doctor --repair`; uninstall it with
 `npx --yes @viberacing/connector@latest uninstall`. It never updates silently.
+
+After connecting Codex, open Codex CLI, run `/hooks`, inspect the Vibe Racing `Stop` command, and
+trust it. Until that one-time review is complete, manual Sync remains available but automatic Sync
+after a completed turn does not run. A full uninstall and reconnect creates a new source identity
+and therefore requires a new review; routine `doctor --repair` keeps the trusted command identity
+stable.
 
 Self-hosted deployments default to a same-origin connector archive and show their exact command on
 the dashboard. Set `VIBERACING_CONNECTOR_DISTRIBUTION=npm` only after the public package is

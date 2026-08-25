@@ -21,6 +21,10 @@
    VIBERACING_LOG_LEVEL=info
    ```
 
+   This example keeps the self-hosted default `archive` distribution. The official Vibe Racing
+   Railway service uses `VIBERACING_CONNECTOR_DISTRIBUTION=npm`; do not change that value during an
+   ordinary connector release.
+
    `VIBERACING_DATABASE_SSL` is the only database TLS switch. Do not add `ssl`, `sslmode`,
    `sslcert`, `sslkey`, `sslrootcert`, `sslnegotiation`, or `uselibpqcompat` parameters to
    `DATABASE_URL`; startup and migrations reject them to prevent conflicting TLS behavior.
@@ -73,8 +77,7 @@ absent. Self-hosted deployments should retain `archive`: the web build and produ
 stable and versioned same-origin tarballs, and dashboard connect, repair, and uninstall commands do
 not contact `registry.npmjs.org`.
 
-After the first npm publication and cross-platform verification, the official `viberacing.com`
-Railway service can set this once:
+The official Vibe Racing Railway service completed the npm rollout on 2026-08-25 and uses:
 
 ```text
 VIBERACING_CONNECTOR_DISTRIBUTION=npm
@@ -84,7 +87,7 @@ Ordinary connector releases require no Railway change. There are no npm package-
 version environment variables. The official commands remain:
 
 ```bash
-npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
 npx --yes @viberacing/connector@latest doctor --repair
 npx --yes @viberacing/connector@latest uninstall
 ```
@@ -94,10 +97,10 @@ version, publishes a prerelease, or publishes from a pull request. The installed
 only when the user explicitly runs `doctor --repair`; there is no background updater or server-side
 npm polling.
 
-Release protocol v4 server-first. Deploy and verify a web version that accepts connector protocols
-v2, v3, and v4 before publishing connector 0.4.0. Do not raise `VIBERACING_MIN_CONNECTOR_VERSION`
-until 0.4.0 is actually available, so deployed v2/v3 connectors continue to sync throughout the
-rollout.
+The protocol v4 rollout completed with connector 0.4.0; the server remains compatible with v2, v3,
+and v4. For every future protocol change, preserve server-first ordering: deploy and verify a server
+that accepts both the old and new protocols, publish the compatible connector, and only then raise
+`VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed.
 
 `VIBERACING_MIN_CONNECTOR_VERSION` is a compatibility floor, not the latest package version. Raise
 it only after a server-first rollout and publication of a compatible npm package. Optional patch
@@ -105,5 +108,5 @@ updates do not require changing it.
 
 Rollback needs no database migration: set the single distribution variable back to `archive` and
 redeploy. Existing installations, server data, and device tokens remain valid. Do not delete the npm
-package or reuse a published name/version. See [Releasing](RELEASING.md) for first-publication,
-Trusted Publisher, stable release, and verification procedures.
+package or reuse a published name/version. See [Releasing](RELEASING.md) for the completed bootstrap
+record, Trusted Publisher controls, stable release, and verification procedures.

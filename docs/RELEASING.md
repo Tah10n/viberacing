@@ -44,31 +44,38 @@ Ordinary releases also do not change Railway. The official service permanently u
 `VIBERACING_CONNECTOR_DISTRIBUTION=npm` after rollout, while self-hosted deployments default to
 `archive`. There are no npm package-name or version environment variables.
 
-## First npm publication
+## Completed npm bootstrap and recovery reference
 
-Trusted Publisher configuration normally belongs to an existing npm package. The first publication
-is therefore an explicit interactive bootstrap; GitHub Actions intentionally exits with
-`CONNECTOR_RELEASE_BOOTSTRAP_REQUIRED` while the package is absent.
+The one-time npm rollout completed on 2026-08-25. Connector 0.4.0 created the package through an
+interactive 2FA bootstrap, 0.4.1 was the first GitHub-tagged Trusted Publisher release with
+provenance, and 0.4.2 completed the production hook lifecycle validation. The official Railway
+service now uses `VIBERACING_CONNECTOR_DISTRIBUTION=npm`.
 
-### 1. Prepare npm ownership
+The controls below are retained for audit and recovery if the package or publisher configuration
+must be recreated. Do not repeat the bootstrap for ordinary releases and never republish or reuse an
+existing immutable version. Ordinary releases follow the procedure at the start of this document.
 
-The project owner manually:
+### 1. Audit npm ownership
 
-- creates or confirms the npm account or organization for the `@viberacing` scope;
-- enables two-factor authentication for authorization and writes;
-- confirms that `@viberacing/connector` is available or already belongs to the project;
-- does not create a long-lived automation token.
+The project owner must continue to:
 
-Keep Railway on:
+- control the npm account or organization for the `@viberacing` scope;
+- require two-factor authentication for authorization and writes;
+- confirm that `@viberacing/connector` still belongs to the project;
+- avoid long-lived automation tokens.
+
+During the completed bootstrap, Railway remained on:
 
 ```text
 VIBERACING_CONNECTOR_DISTRIBUTION=archive
 ```
 
-### 2. Publish the first version interactively
+### 2. Historical interactive bootstrap command
 
-Use the exact reviewed `main` commit and npm 2FA. The connector version must match
-`packages/connector/package.json`; do not reuse it if it already exists.
+This sequence records how the package was created. Do not run it for an existing package version. A
+future recovery bootstrap would require an exact reviewed `main` commit and npm 2FA, and the
+connector version would have to match `packages/connector/package.json` without reusing an existing
+version.
 
 ```bash
 git status --short
@@ -93,13 +100,19 @@ npx --yes @viberacing/connector@latest --version
 All three versions must match `package.json`. Do not proceed if package contents, the version, or
 `latest` differs.
 
-### 3. Configure the protected GitHub environment
+### 3. Configure the protected GitHub environment (completed; audit before changes)
 
-Create the GitHub `npm-production` environment before configuring npm Trusted Publishing. Under
-**Deployment branches and tags**, select **Protected branches only** and confirm that `main` is
-covered by the repository's branch ruleset. Do not allow tags or unprotected branches, and do not
-store a publish token in the environment. If the repository has more than one maintainer, also
-require a reviewer, prevent self-review, and disable administrator bypass.
+The GitHub `npm-production` environment must remain restricted to **Protected branches only**, with
+`main` covered by the repository's branch ruleset. Do not allow tags or unprotected branches.
+
+For every audit, do not store a publish token in the environment.
+
+If the repository has more than one maintainer, also require a reviewer, prevent self-review, and
+disable administrator bypass. If this setup must be recreated, select **Protected branches only**.
+
+Always confirm that `main` is covered by the repository's branch ruleset.
+
+Only then configure the publisher.
 
 This restriction is part of the publishing security boundary. A release event is associated with its
 tag and can use the workflow version stored in that tag; only the unprivileged request workflow runs
@@ -107,19 +120,19 @@ there. The OIDC publisher is triggered through `workflow_run`, whose ref is the 
 branch. Restricting the environment to protected branches prevents a tag-modified copy of
 `publish-connector.yml` from obtaining the same Trusted Publisher identity directly.
 
-Verify the environment before continuing:
+Verify the environment before every publisher configuration change:
 
 ```bash
 gh api repos/Tah10n/viberacing/environments/npm-production \
   --jq '.deployment_branch_policy'
 ```
 
-It must report `protected_branches: true` and `custom_branch_policies: false`. Do not configure the
-npm publisher if the environment is absent or unrestricted.
+It must report `protected_branches: true` and `custom_branch_policies: false`. Do not publish or
+change the Trusted Publisher if the environment is absent or unrestricted.
 
-### 4. Configure npm Trusted Publisher
+### 4. Configure npm Trusted Publisher (completed; audit before changes)
 
-In the npm package settings configure:
+The npm package settings must retain this exact configuration:
 
 ```text
 Provider: GitHub Actions
@@ -130,14 +143,13 @@ Environment name: npm-production
 Allowed action: npm publish
 ```
 
-Use only the workflow filename, not `.github/workflows/publish-connector.yml`. Recheck that the
-matching GitHub `npm-production` environment is restricted to protected branches and has no publish
-token before saving the Trusted Publisher.
+The publisher uses only the workflow filename, not `.github/workflows/publish-connector.yml`.
+Recheck that the matching GitHub `npm-production` environment is restricted to protected branches
+and has no publish token whenever the Trusted Publisher is changed.
 
-### 5. Verify OIDC on a real patch release
+### 5. Verify every OIDC release
 
-Prepare the next patch version through the normal release pull request. After publishing its exact
-GitHub Release, confirm:
+After publishing each exact GitHub Release, confirm:
 
 - **Publish connector** succeeded;
 - the immutable version exists in npm and `latest` moved to it;
@@ -150,18 +162,16 @@ waits up to 30 minutes for both the exact version and `dist-tags.latest` to beco
 publish step succeeded but verification is still waiting, do not retry the immutable version; wait
 for the scan to finish and inspect npm availability and provenance.
 
-### 6. Tighten npm publishing access
+### 6. Keep npm publishing access tight
 
-Only after successful OIDC publication, open package **Settings → Publishing access**, choose
-**Require two-factor authentication and disallow tokens**, remove any legacy publish or automation
-tokens, and recheck the Trusted Publisher configuration.
+Package **Settings → Publishing access** must remain set to **Require two-factor authentication and
+disallow tokens**. Keep legacy publish and automation tokens removed, and recheck the Trusted
+Publisher configuration after any access change.
 
-### 7. Switch official production once
+### 7. Current official production
 
-First verify npm connect, `doctor --repair`, and uninstall on Linux, Windows, and macOS. For Codex,
-review the installed Vibe Racing `Stop` hook through `/hooks`, verify one completed turn syncs, and
-confirm a repeated repair preserves the trusted hook identity. Then set this once in Railway and
-redeploy:
+The npm connect, `doctor --repair`, uninstall, and Codex hook-trust lifecycle were verified before
+the official service switched. Railway must retain:
 
 ```text
 VIBERACING_CONNECTOR_DISTRIBUTION=npm
@@ -170,10 +180,12 @@ VIBERACING_CONNECTOR_DISTRIBUTION=npm
 Confirm the dashboard renders:
 
 ```bash
-npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
 ```
 
-Normal releases never change the variable again.
+Normal releases never change the distribution variable. A full uninstall and reconnect creates a new
+Codex source identity, so the user must review the new Vibe Racing `Stop` hook through `/hooks`;
+routine `doctor --repair` preserves the trusted command identity.
 
 ## Distribution rollback
 

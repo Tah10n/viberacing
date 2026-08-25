@@ -5,14 +5,20 @@ sources and pairs them with Vibe Racing agent accounts. It never uploads raw ses
 paths.
 
 ```bash
-npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
 ```
 
 Use the exact command shown by your Vibe Racing dashboard. The official service uses the npm command
-above after its verified rollout. Self-hosted deployments default to an equivalent versioned archive
-served by that same Vibe Racing origin, so they do not depend on the public npm registry. Neither
-path installs a global npm package; the connector saves its working copy only in local Vibe Racing
-state. Re-running `connect` is safe.
+above. Self-hosted deployments default to an equivalent versioned archive served by that same Vibe
+Racing origin, so they do not depend on the public npm registry. Neither path installs a global npm
+package; the connector saves its working copy only in local Vibe Racing state. Re-running `connect`
+is safe.
+
+For Codex, open Codex CLI after connecting, run `/hooks`, inspect the Vibe Racing `Stop` command,
+and trust it. `doctor` reports `codex hook: current` when automatic Sync is ready. Until that
+one-time review is complete, manual Sync remains available but the hook cannot run after a completed
+turn. A full uninstall and reconnect creates a new source identity and requires a new review;
+routine `doctor --repair` preserves the stable trusted command identity.
 
 Refresh the installed runtime and repair owned hooks explicitly:
 

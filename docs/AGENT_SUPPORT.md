@@ -67,7 +67,9 @@ each completed turn; the others use the lifecycle event listed above. Each hook 
 local source ID and marks only that source dirty under a short file lock. The hook itself only
 discards stdin and starts/reuses one detached timer; it does not scan histories, start an App
 Server, read SQLite, or use the network. OpenCode is manual-sync only. Antigravity requires its
-wrapper.
+wrapper. Codex runs a new or changed non-managed hook only after the user reviews it through
+`/hooks`; `doctor` reports the trust status, and the connector never writes or bypasses Codex trust
+state.
 
 Qwen Code 0.21.12 emits `SessionEnd` for interactive TUI exits and wires the event into ACP, but its
 headless `qwen -p` runner does not call the event. Those headless sessions still append exact token
