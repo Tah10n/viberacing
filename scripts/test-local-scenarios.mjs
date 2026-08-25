@@ -11,8 +11,9 @@ const appUrl = process.env.VIBERACING_TEST_ORIGIN ?? "http://127.0.0.1:3000";
 const browserOrigin = new URL(process.env.VIBERACING_PUBLIC_ORIGIN ?? "http://localhost:3000")
   .origin;
 const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-const connectorProtocolVersion = 3;
+const connectorProtocolVersion = 4;
 const legacyConnectorProtocolVersion = 2;
+const legacyConnectorProtocolVersion3 = 3;
 const digest = (value) => createHash("sha256").update(value, "utf8").digest();
 const token = () => randomBytes(32).toString("base64url");
 const check = (condition, message) => {
@@ -313,7 +314,7 @@ try {
   );
   check(
     upgradedLegacy.deviceToken !== legacy.deviceToken,
-    "v2 installation did not renegotiate protocol v3 during reconnect",
+    "v2 installation did not renegotiate protocol v4 during reconnect",
   );
   const legacyCleanup = await form("/api/accounts/delete", {
     accountId: legacySource.agentAccountId,
@@ -324,7 +325,34 @@ try {
   await pool.query(
     "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'pairing_approve_user', 'pairing_approve_global')",
   );
-  console.log("ok - legacy protocol v2 remains compatible and reconnect negotiates v3");
+  const legacyV3Installation = { id: randomUUID(), secret: token() };
+  const legacyV3 = await pair(
+    legacyV3Installation,
+    [source("legacy-v3-opencode-source", "opencode")],
+    {},
+    [],
+    legacyConnectorProtocolVersion3,
+  );
+  const legacyV3Source = legacyV3.sources[0];
+  check(legacyV3Source !== undefined, "legacy v3 pairing omitted its source");
+  check(
+    (
+      await usage(
+        legacyV3.deviceToken,
+        [snapshot(legacyV3Source.sourceId, 1, [[today, 13]])],
+        [],
+        legacyConnectorProtocolVersion3,
+      )
+    ).status === 200,
+    "legacy v3 usage payload was rejected",
+  );
+  const legacyV3Cleanup = await form("/api/accounts/delete", {
+    accountId: legacyV3Source.agentAccountId,
+    confirm: "delete",
+  });
+  check(legacyV3Cleanup.status === 303, "legacy v3 account cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [legacyV3Installation.id]);
+  console.log("ok - legacy protocol v2/v3 pairing and usage remain compatible");
 
   if (!trustedProxyScenario) {
     const directInstallation = { id: randomUUID(), secret: token() };
@@ -409,10 +437,47 @@ try {
         [isolatedInstallation.id, survivingInstallation.id],
       ]);
       await pool.query(
-        "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'pairing_start_global')",
+        "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'admit_pairing_start', 'pairing_start_global')",
       );
     }
     console.log("ok - exhausted client admission does not spend shared pairing quota");
+
+    try {
+      await pool.query(
+        `INSERT INTO rate_limit_buckets
+           (scope, key_hash, window_started_at, request_count, expires_at)
+         VALUES (
+           'admit_pairing_start', $1,
+           to_timestamp(floor(extract(epoch FROM now()) / 60) * 60),
+           1998,
+           to_timestamp((floor(extract(epoch FROM now()) / 60) + 1) * 60)
+         )
+         ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
+           SET request_count = EXCLUDED.request_count, expires_at = EXCLUDED.expires_at`,
+        [digest("all")],
+      );
+      const uniqueAdmissionResponses = [];
+      for (let index = 1; index <= 5; index += 1) {
+        uniqueAdmissionResponses.push(
+          await json("/api/pairing/start", {}, { "x-real-ip": `198.51.100.${index}` }),
+        );
+      }
+      const uniqueClientBuckets = await pool.query(
+        `SELECT count(*)::int AS count
+           FROM rate_limit_buckets
+          WHERE scope = 'pairing_start' AND expires_at > now()`,
+      );
+      check(
+        JSON.stringify(uniqueAdmissionResponses.map((response) => response.status)) ===
+          JSON.stringify([400, 400, 429, 429, 429]) && uniqueClientBuckets.rows[0].count === 2,
+        "global pre-auth admission did not bound unique client bucket creation",
+      );
+    } finally {
+      await pool.query(
+        "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'admit_pairing_start')",
+      );
+    }
+    console.log("ok - global admission caps unique client bucket cardinality before parsing");
   }
 
   const firstInstallation = { id: randomUUID(), secret: token() };
@@ -556,10 +621,12 @@ try {
   const secondInstallation = { id: randomUUID(), secret: token() };
   const secondPairing = await beginPairing(secondInstallation, [
     source("codex-personal-b", "codex"),
+    source("codex-personal-c", "codex"),
     source("claude-work", "claude_code"),
   ]);
   const second = await approvePairing(secondPairing, {
     "codex-personal-b": byClient.get("codex-personal-a").agentAccountId,
+    "codex-personal-c": byClient.get("codex-personal-a").agentAccountId,
     "claude-work": "new",
   });
   const secondByClient = new Map(second.sources.map((item) => [item.clientSourceId, item]));
@@ -597,10 +664,31 @@ try {
   check(initial.status === 200, `first usage batch failed: ${initial.status}`);
   const secondUsage = await usage(second.deviceToken, [
     snapshot(secondByClient.get("codex-personal-b").sourceId, 1, [[today, 80]]),
+    snapshot(secondByClient.get("codex-personal-c").sourceId, 1, [[today, 70]]),
     snapshot(secondByClient.get("claude-work").sourceId, 1, [[today, 20]]),
   ]);
   if (secondUsage.status !== 200)
     throw new Error(`second usage batch failed: ${secondUsage.status} ${await secondUsage.text()}`);
+  const tiedAccountObservations = await pool.query(
+    `SELECT count(*)::int AS observations,
+            count(DISTINCT updated_at)::int AS timestamps,
+            max(total_tokens)::text AS selected_tokens
+       FROM daily_usage
+      WHERE source_id = ANY($1::uuid[]) AND usage_date = $2`,
+    [
+      [
+        secondByClient.get("codex-personal-b").sourceId,
+        secondByClient.get("codex-personal-c").sourceId,
+      ],
+      today,
+    ],
+  );
+  check(
+    tiedAccountObservations.rows[0]?.observations === 2 &&
+      tiedAccountObservations.rows[0].timestamps === 1 &&
+      tiedAccountObservations.rows[0].selected_tokens === "80",
+    "equal-timestamp account_max observations in one request were not deterministic",
+  );
   const totals = await pool.query(
     "SELECT agent_id, tokens::text FROM weekly_agent_usage WHERE user_id = $1 ORDER BY agent_id",
     [userId],
@@ -609,7 +697,7 @@ try {
     JSON.stringify(totals.rows) ===
       JSON.stringify([
         { agent_id: "claude_code", tokens: "50" },
-        { agent_id: "codex", tokens: "140" },
+        { agent_id: "codex", tokens: "120" },
         { agent_id: "opencode", tokens: "7" },
       ]),
     `aggregation mismatch: ${JSON.stringify(totals.rows)}`,
@@ -628,7 +716,7 @@ try {
   ).length;
   check(
     componentDashboard.status === 200 &&
-      componentBreakdownCount === 2 &&
+      componentBreakdownCount === 1 &&
       independentComponentNoteCount >= 2,
     `account_max component display mismatch: status=${componentDashboard.status}, breakdowns=${componentBreakdownCount}, notes=${independentComponentNoteCount}`,
   );
@@ -673,20 +761,15 @@ try {
     componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
   ).length;
   check(
-    componentDashboard.status === 200 && componentBreakdownCount === 1,
+    componentDashboard.status === 200 && componentBreakdownCount === 2,
     `account_max conflict display mismatch: status=${componentDashboard.status}, breakdowns=${componentBreakdownCount}`,
   );
   const restoredComponents = await usage(second.deviceToken, [
     snapshot(secondByClient.get("codex-personal-b").sourceId, 3, [[today, 80]]),
   ]);
   check(restoredComponents.status === 200, "component conflict restoration failed");
-  console.log("ok - account_max component tuples are exact, deduplicated, and fail closed");
+  console.log("ok - account_max components follow only the selected observation");
 
-  const precedenceBaseline = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
-    [userId],
-  );
-  const precedenceBaselineTokens = BigInt(precedenceBaseline.rows[0].tokens);
   const precedenceFirstSource = byClient.get("codex-personal-a");
   const precedenceSecondSource = secondByClient.get("codex-personal-b");
   check(
@@ -702,27 +785,26 @@ try {
   };
 
   let precedenceUsage = await usage(first.deviceToken, [
-    snapshot(
-      precedenceFirstSource.sourceId,
-      2,
-      [[today, 120, undefined, "partial"]],
-      "partial",
-      today,
-      today,
-    ),
+    snapshot(precedenceFirstSource.sourceId, 2, [[today, 100]], "complete", today, today),
   ]);
-  check(
-    precedenceUsage.status === 200 &&
-      (await currentCodexTotal()) === precedenceBaselineTokens + 20n,
-    "initial provisional account_max value did not enter the ranking",
-  );
+  check(precedenceUsage.status === 200, "first complete account_max observation failed");
+  const precedenceBaselineTokens = await currentCodexTotal();
   await new Promise((resolve) => setTimeout(resolve, 10));
   precedenceUsage = await usage(second.deviceToken, [
     snapshot(precedenceSecondSource.sourceId, 4, [[today, 100]], "complete", today, today),
   ]);
   check(
     precedenceUsage.status === 200 && (await currentCodexTotal()) === precedenceBaselineTokens,
-    "a newer authoritative value did not replace an older provisional source",
+    "equal complete totals from two computers did not remain deduplicated",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  precedenceUsage = await usage(second.deviceToken, [
+    snapshot(precedenceSecondSource.sourceId, 5, [[today, 90]], "complete", today, today),
+  ]);
+  check(
+    precedenceUsage.status === 200 &&
+      (await currentCodexTotal()) === precedenceBaselineTokens - 10n,
+    "a newer complete correction remained masked by an older complete source",
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
   precedenceUsage = await usage(first.deviceToken, [
@@ -742,7 +824,7 @@ try {
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
   precedenceUsage = await usage(second.deviceToken, [
-    snapshot(precedenceSecondSource.sourceId, 5, [[today, 90]], "complete", today, today),
+    snapshot(precedenceSecondSource.sourceId, 6, [[today, 90]], "complete", today, today),
   ]);
   check(
     precedenceUsage.status === 200 &&
@@ -762,14 +844,34 @@ try {
     precedenceAccountStart,
     precedenceAccountEnd,
   );
+  const currentWeekTotal = await pool.query(
+    `SELECT coalesce(sum(tokens), 0)::text AS tokens
+       FROM weekly_agent_usage
+      WHERE user_id = $1
+        AND week_start = date_trunc('week', $2::date)::date`,
+    [userId, today],
+  );
+  const todayLabel = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${today}T00:00:00.000Z`));
   check(
     precedenceDashboard.status === 200 &&
       precedenceAccountStart >= 0 &&
       precedenceAccountEnd > precedenceAccountStart &&
-      /90(?:<!-- -->)? tokens/.test(precedenceAccountHtml),
-    "dashboard account total did not use authoritative/provisional precedence",
+      /90(?:<!-- -->)? tokens/.test(precedenceAccountHtml) &&
+      !precedenceAccountHtml.includes('aria-label="Weekly token breakdown"') &&
+      precedenceDashboardHtml.includes(`${todayLabel}: ${currentWeekTotal.rows[0].tokens} tokens`),
+    "dashboard account total, components, chart, and weekly summary diverged on precedence",
   );
-  let precedenceRestore = await usage(first.deviceToken, [
+  let precedenceRestore = await usage(second.deviceToken, [
+    snapshot(precedenceSecondSource.sourceId, 7, [[today, 80]], "complete", today, today),
+  ]);
+  check(precedenceRestore.status === 200, "second precedence source restoration failed");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  precedenceRestore = await usage(first.deviceToken, [
     snapshot(
       precedenceFirstSource.sourceId,
       4,
@@ -792,15 +894,81 @@ try {
     ),
   ]);
   check(precedenceRestore.status === 200, "first precedence source restoration failed");
-  precedenceRestore = await usage(second.deviceToken, [
-    snapshot(precedenceSecondSource.sourceId, 6, [[today, 80]], "complete", today, today),
-  ]);
   check(
-    precedenceRestore.status === 200 && (await currentCodexTotal()) === precedenceBaselineTokens,
+    (await currentCodexTotal()) === precedenceBaselineTokens,
     "precedence regression did not restore the linked account totals",
   );
   console.log(
-    "ok - newer complete account-wide totals replace older provisional rows across computers",
+    "ok - latest complete account-wide totals replace older complete/provisional rows consistently",
+  );
+
+  const authoritativeZeroSource = byClient.get("codex-work").sourceId;
+  const uncoveredDate = dateOffset(-2);
+  let authoritativeZeroUsage = await usage(first.deviceToken, [
+    snapshot(
+      authoritativeZeroSource,
+      2,
+      [
+        [uncoveredDate, 60],
+        [yesterday, 55],
+        [today, 40],
+      ],
+      "complete",
+      uncoveredDate,
+      today,
+    ),
+  ]);
+  check(authoritativeZeroUsage.status === 200, "authoritative-zero baseline was rejected");
+  authoritativeZeroUsage = await usage(first.deviceToken, [
+    snapshot(
+      authoritativeZeroSource,
+      3,
+      [
+        [yesterday, 45, undefined, "complete"],
+        [today, 0, undefined, "complete"],
+      ],
+      "partial",
+      yesterday,
+      today,
+    ),
+  ]);
+  const authoritativeZeroRows = await pool.query(
+    `SELECT usage_date::text, total_tokens::text, completeness
+       FROM daily_usage
+      WHERE source_id = $1 AND usage_date = ANY($2::date[])
+      ORDER BY usage_date`,
+    [authoritativeZeroSource, [uncoveredDate, yesterday, today]],
+  );
+  const authoritativeZeroCodexTotal = await currentCodexTotal();
+  const authoritativeZeroDashboard = await authenticatedGet("/dashboard");
+  const authoritativeZeroHtml = await authoritativeZeroDashboard.text();
+  const zeroAccountStart = authoritativeZeroHtml.indexOf("<h3>Codex · codex-work account</h3>");
+  const zeroAccountEnd = authoritativeZeroHtml.indexOf("</article>", zeroAccountStart);
+  const zeroAccountHtml = authoritativeZeroHtml.slice(zeroAccountStart, zeroAccountEnd);
+  check(
+    authoritativeZeroUsage.status === 200 &&
+      JSON.stringify(authoritativeZeroRows.rows) ===
+        JSON.stringify([
+          { usage_date: uncoveredDate, total_tokens: "60", completeness: "complete" },
+          { usage_date: yesterday, total_tokens: "45", completeness: "complete" },
+          { usage_date: today, total_tokens: "0", completeness: "complete" },
+        ]) &&
+      authoritativeZeroCodexTotal === precedenceBaselineTokens + 65n &&
+      authoritativeZeroDashboard.status === 200 &&
+      /0(?:<!-- -->)? tokens/.test(zeroAccountHtml) &&
+      authoritativeZeroHtml.includes(`${todayLabel}: 157 tokens`),
+    "complete zero inside a partial snapshot did not correct storage, summary, dashboard, or chart",
+  );
+  const authoritativeZeroRestore = await usage(first.deviceToken, [
+    snapshot(authoritativeZeroSource, 4, [[today, 40]], "complete", uncoveredDate, today),
+  ]);
+  check(
+    authoritativeZeroRestore.status === 200 &&
+      (await currentCodexTotal()) === precedenceBaselineTokens,
+    "authoritative-zero regression did not restore its fixture",
+  );
+  console.log(
+    "ok - an explicit authoritative zero corrects a mixed partial snapshot without touching uncovered days",
   );
 
   const dedupBaseline = await pool.query(
@@ -814,7 +982,8 @@ try {
   const guardSecond = await pair(guardSecondInstallation, [source("guard-codex-b", "codex")]);
   const guardFirstSource = guardFirst.sources[0];
   const guardSecondSource = guardSecond.sources[0];
-  const guardDates = [dateOffset(-6), dateOffset(-5), dateOffset(-4)];
+  const guardDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
+  const guardSameEntries = guardDates.map((date) => [date, 11111]);
   check(
     guardFirstSource !== undefined && guardSecondSource !== undefined,
     "deduplication guard pairing omitted a source",
@@ -823,14 +992,10 @@ try {
     snapshot(
       guardFirstSource.sourceId,
       1,
-      [
-        [guardDates[0], 11111],
-        [guardDates[1], 22222],
-        [guardDates[2], 33333],
-      ],
+      guardSameEntries,
       "complete",
       guardDates[0],
-      guardDates[2],
+      guardDates.at(-1),
     ),
   ]);
   check(guardUsage.status === 200, "deduplication guard history was rejected");
@@ -838,14 +1003,10 @@ try {
     snapshot(
       guardSecondSource.sourceId,
       1,
-      [
-        [guardDates[0], 11111],
-        [guardDates[1], 22222],
-        [guardDates[2], 33333],
-      ],
+      guardSameEntries,
       "partial",
       guardDates[0],
-      guardDates[2],
+      guardDates.at(-1),
     ),
   ]);
   let guardEvents = await pool.query(
@@ -860,14 +1021,10 @@ try {
     snapshot(
       guardSecondSource.sourceId,
       2,
-      [
-        [guardDates[0], 11111],
-        [guardDates[1], 22222],
-        [guardDates[2], 0],
-      ],
+      guardSameEntries.slice(0, 2),
       "complete",
       guardDates[0],
-      guardDates[2],
+      guardDates[1],
     ),
   ]);
   guardEvents = await pool.query(
@@ -876,7 +1033,91 @@ try {
   );
   check(
     guardUsage.status === 200 && guardEvents.rows[0].count === 0,
-    "a complete zero-versus-positive contradiction was ignored",
+    "two coincident complete days triggered automatic account matching",
+  );
+  guardUsage = await usage(guardSecond.deviceToken, [
+    snapshot(
+      guardSecondSource.sourceId,
+      3,
+      guardSameEntries,
+      "complete",
+      guardDates[0],
+      guardDates.at(-1),
+    ),
+  ]);
+  guardEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [guardSecondSource.sourceId],
+  );
+  check(
+    guardUsage.status === 200 && guardEvents.rows[0].count === 0,
+    "seven coincident days with one repeated value triggered automatic matching",
+  );
+  const guardZeroEntries = guardDates.map((date, index) => [date, index === 6 ? 0 : 11111]);
+  guardUsage = await usage(guardFirst.deviceToken, [
+    snapshot(
+      guardFirstSource.sourceId,
+      2,
+      guardZeroEntries,
+      "complete",
+      guardDates[0],
+      guardDates.at(-1),
+    ),
+  ]);
+  check(guardUsage.status === 200, "zero-evidence baseline was rejected");
+  guardUsage = await usage(guardSecond.deviceToken, [
+    snapshot(
+      guardSecondSource.sourceId,
+      4,
+      guardZeroEntries,
+      "complete",
+      guardDates[0],
+      guardDates.at(-1),
+    ),
+  ]);
+  guardEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [guardSecondSource.sourceId],
+  );
+  check(
+    guardUsage.status === 200 && guardEvents.rows[0].count === 0,
+    "a zero day counted toward the seven-day positive evidence threshold",
+  );
+  const guardVariedEntries = guardDates.map((date, index) => [
+    date,
+    [11111, 22222, 33333][index % 3],
+  ]);
+  guardUsage = await usage(guardFirst.deviceToken, [
+    snapshot(
+      guardFirstSource.sourceId,
+      3,
+      guardVariedEntries,
+      "complete",
+      guardDates[0],
+      guardDates.at(-1),
+    ),
+  ]);
+  check(guardUsage.status === 200, "mismatch guard baseline was rejected");
+  const guardMismatchEntries = guardVariedEntries.map((entry, index) =>
+    index === 3 ? [entry[0], Number(entry[1]) + 1] : entry,
+  );
+  guardUsage = await usage(guardSecond.deviceToken, [
+    snapshot(
+      guardSecondSource.sourceId,
+      5,
+      guardMismatchEntries,
+      "complete",
+      guardDates[0],
+      guardDates.at(-1),
+    ),
+  ]);
+  guardEvents = await pool.query(
+    "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
+    [guardSecondSource.sourceId],
+  );
+  check(
+    guardUsage.status === 200 && guardEvents.rows[0].count === 0,
+    "one mismatching complete day did not block automatic matching",
   );
   for (const accountId of [guardFirstSource.agentAccountId, guardSecondSource.agentAccountId]) {
     const deletion = await form("/api/accounts/delete", { accountId, confirm: "delete" });
@@ -893,7 +1134,8 @@ try {
     BigInt(guardCleanupTotals.rows[0].tokens) === dedupBaselineTokens,
     "deduplication guard cleanup left stale leaderboard totals",
   );
-  const dedupFixtureTokens = 13_579n + 24_680n;
+  const dedupValues = [13_579, 24_680, 97_531, 13_579, 24_680, 97_531, 13_579];
+  const dedupFixtureTokens = dedupValues.reduce((sum, value) => sum + BigInt(value), 0n);
   const dedupFirstInstallation = { id: randomUUID(), secret: token() };
   const dedupSecondInstallation = { id: randomUUID(), secret: token() };
   const dedupFirstPairing = await beginPairing(dedupFirstInstallation, [
@@ -903,7 +1145,7 @@ try {
   const dedupConnectHtml = await dedupConnectPage.text();
   check(
     dedupConnectPage.status === 200 &&
-      dedupConnectHtml.includes("automatically match this account after its first") &&
+      dedupConnectHtml.includes("after enough completed daily totals agree") &&
       !dedupConnectHtml.includes("If this is the same provider account"),
     "Codex pairing still required a technical account-mapping decision",
   );
@@ -911,8 +1153,15 @@ try {
   const dedupSecond = await pair(dedupSecondInstallation, [source("dedup-codex-b", "codex")]);
   const dedupFirstSource = dedupFirst.sources[0];
   const dedupSecondSource = dedupSecond.sources[0];
-  const dedupStart = dateOffset(-3);
-  const dedupEnd = dateOffset(-2);
+  const dedupDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
+  const dedupStart = dedupDates[0];
+  const dedupEnd = dedupDates.at(-1);
+  const dedupEntries = dedupDates.map((date, index) => [
+    date,
+    dedupValues[index],
+    undefined,
+    "complete",
+  ]);
   check(
     dedupFirstSource !== undefined && dedupSecondSource !== undefined,
     "deduplication pairing omitted a source",
@@ -921,11 +1170,7 @@ try {
     snapshot(
       dedupSecondSource.sourceId,
       1,
-      [
-        [dedupStart, 13579, undefined, "complete"],
-        [dedupEnd, 24680, undefined, "complete"],
-        [today, 0, undefined, "partial"],
-      ],
+      [...dedupEntries, [today, 0, undefined, "partial"]],
       "partial",
       dedupStart,
       today,
@@ -943,11 +1188,7 @@ try {
     snapshot(
       dedupFirstSource.sourceId,
       1,
-      [
-        [dedupStart, 13579, undefined, "complete"],
-        [dedupEnd, 24680, undefined, "complete"],
-        [today, 0, undefined, "partial"],
-      ],
+      [...dedupEntries, [today, 0, undefined, "partial"]],
       "partial",
       dedupStart,
       today,
@@ -974,7 +1215,7 @@ try {
   );
   check(
     dedupUsage.status === 200 &&
-      activeDedup?.matched_days === 2 &&
+      activeDedup?.matched_days === 7 &&
       activeDedup.previous_account_id === dedupSecondSource.agentAccountId &&
       activeDedup.target_account_id === dedupFirstSource.agentAccountId &&
       activeDedup.merged_into_account_id === activeDedup.target_account_id &&
@@ -1021,10 +1262,7 @@ try {
     snapshot(
       dedupSecondSource.sourceId,
       2,
-      [
-        [dedupStart, 13579],
-        [dedupEnd, 24680],
-      ],
+      dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
       dedupStart,
       dedupEnd,
@@ -1042,10 +1280,7 @@ try {
     snapshot(
       dedupSecondSource.sourceId,
       3,
-      [
-        [dedupStart, 13579],
-        [dedupEnd, 24680],
-      ],
+      dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
       dedupStart,
       dedupEnd,
@@ -1131,7 +1366,13 @@ try {
     orderedUsage = rawUsage(
       first.deviceToken,
       [],
-      [{ sourceId: byClient.get("claude-personal").sourceId, code: "collector_failed" }],
+      [
+        {
+          sourceId: byClient.get("claude-personal").sourceId,
+          code: "collector_failed",
+          observedAfterSequence: "2",
+        },
+      ],
     );
     let waitingForUser = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -1169,7 +1410,7 @@ try {
     const racingUsage = rawUsage(
       first.deviceToken,
       [],
-      [{ sourceId: target, code: "collector_failed" }],
+      [{ sourceId: target, code: "collector_failed", observedAfterSequence: "4" }],
     );
     let blocked = false;
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -1202,12 +1443,25 @@ try {
   }
   console.log("ok - token hash is rechecked under the ingestion row lock");
 
+  let response = await usage(first.deviceToken, [
+    snapshot(target, 5, [
+      [yesterday, 50],
+      [today, 35],
+    ]),
+  ]);
+  check(response.status === 200, "source-error sequence baseline failed");
   let diagnostic = await usage(
     first.deviceToken,
     [],
-    [{ sourceId: target, code: "collector_failed" }],
+    [{ sourceId: target, code: "collector_failed", observedAfterSequence: "5" }],
   );
-  check(diagnostic.status === 200, "source diagnostic update failed");
+  let diagnosticBody = await diagnostic.json();
+  check(
+    diagnostic.status === 200 &&
+      diagnosticBody.acceptedSourceErrors === 1 &&
+      diagnosticBody.staleSourceErrors === 0,
+    "current protocol v4 source error was not accepted",
+  );
   let diagnosticRow = await pool.query(
     "SELECT last_error_summary FROM installation_sources WHERE id = $1",
     [target],
@@ -1216,8 +1470,8 @@ try {
     diagnosticRow.rows[0]?.last_error_summary === "Collector failed",
     "source diagnostic was not persisted",
   );
-  let response = await usage(first.deviceToken, [
-    snapshot(target, 2, [
+  response = await usage(first.deviceToken, [
+    snapshot(target, 6, [
       [yesterday, 50],
       [today, 35],
     ]),
@@ -1228,13 +1482,81 @@ try {
     [target],
   );
   check(diagnosticRow.rows[0]?.last_error_summary === null, "successful sync did not clear error");
-  console.log("ok - safe source diagnostics persist and clear after a successful snapshot");
-  response = await usage(first.deviceToken, [snapshot(target, 2, [[today, 999]])]);
+  diagnostic = await usage(
+    first.deviceToken,
+    [],
+    [{ sourceId: target, code: "collector_failed", observedAfterSequence: "5" }],
+  );
+  diagnosticBody = await diagnostic.json();
+  diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    diagnostic.status === 200 &&
+      diagnosticBody.acceptedSourceErrors === 0 &&
+      diagnosticBody.staleSourceErrors === 1 &&
+      diagnosticRow.rows[0]?.last_error_summary === null,
+    "delayed protocol v4 source error overwrote a newer success",
+  );
+  diagnostic = await usage(
+    first.deviceToken,
+    [],
+    [{ sourceId: target, code: "collector_failed", observedAfterSequence: "6" }],
+  );
+  diagnosticBody = await diagnostic.json();
+  diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    diagnostic.status === 200 &&
+      diagnosticBody.acceptedSourceErrors === 1 &&
+      diagnosticRow.rows[0]?.last_error_summary === "Collector failed",
+    "source error observed after the current sequence was not persisted",
+  );
+  response = await usage(first.deviceToken, [
+    snapshot(target, 7, [
+      [yesterday, 50],
+      [today, 35],
+    ]),
+  ]);
+  diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    response.status === 200 && diagnosticRow.rows[0]?.last_error_summary === null,
+    "sequence 7 success did not clear the current source error",
+  );
+  for (const legacyProtocol of [legacyConnectorProtocolVersion, legacyConnectorProtocolVersion3]) {
+    diagnostic = await usage(
+      first.deviceToken,
+      [],
+      [{ sourceId: target, code: "collector_failed" }],
+      legacyProtocol,
+    );
+    diagnosticBody = await diagnostic.json();
+    check(
+      diagnostic.status === 200 && diagnosticBody.acceptedSourceErrors === 0,
+      `legacy protocol v${legacyProtocol} source error was not safely ignored`,
+    );
+  }
+  diagnosticRow = await pool.query(
+    "SELECT last_error_summary FROM installation_sources WHERE id = $1",
+    [target],
+  );
+  check(
+    diagnosticRow.rows[0]?.last_error_summary === null,
+    "legacy unordered source error overwrote a newer success",
+  );
+  console.log("ok - protocol v4 source errors are sequence-ordered while v2/v3 remain safe");
+  response = await usage(first.deviceToken, [snapshot(target, 7, [[today, 999]])]);
   const staleBody = await response.json();
   check(
     response.status === 200 &&
       staleBody.staleSnapshots === 1 &&
-      staleBody.sourceSequences[0]?.lastAcceptedSyncSequence === "2" &&
+      staleBody.sourceSequences[0]?.lastAcceptedSyncSequence === "7" &&
       staleBody.sourceSequences[0]?.accepted === false,
     "same sequence was not idempotent",
   );
@@ -1250,10 +1572,10 @@ try {
   check(
     currentInstallation.status === 200 &&
       currentInstallationBody.sources.find((item) => item.sourceId === target)
-        ?.lastAcceptedSyncSequence === "2",
+        ?.lastAcceptedSyncSequence === "7",
     "current installation response omitted the accepted server sequence",
   );
-  response = await usage(first.deviceToken, [snapshot(target, 1, [[today, 999]])]);
+  response = await usage(first.deviceToken, [snapshot(target, 6, [[today, 999]])]);
   check(response.status === 200, "stale request failed unexpectedly");
   const beforeConfirmation = await pool.query(
     `SELECT source.last_successful_sync_at AS source_sync_at,
@@ -1265,7 +1587,7 @@ try {
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
   response = await usage(first.deviceToken, [
-    snapshot(target, 3, [
+    snapshot(target, 8, [
       [yesterday, 50],
       [today, 35],
     ]),
@@ -1291,7 +1613,7 @@ try {
     [target, today],
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
-  response = await usage(first.deviceToken, [snapshot(target, 4, [[today, 25]], "partial")]);
+  response = await usage(first.deviceToken, [snapshot(target, 9, [[today, 25]], "partial")]);
   check(response.status === 200, "partial correction failed");
   let rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text, completeness, updated_at FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
@@ -1310,7 +1632,7 @@ try {
     [userId],
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 5, [[today, 40, undefined, "partial"]], "complete"),
+    snapshot(target, 10, [[today, 40, undefined, "partial"]], "complete"),
   ]);
   check(response.status === 200, "current-day partial snapshot failed");
   rows = await pool.query(
@@ -1333,7 +1655,7 @@ try {
     "current-day partial total did not immediately update the weekly ranking summary",
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 6, [[today, 20, undefined, "complete"]], "partial"),
+    snapshot(target, 11, [[today, 20, undefined, "complete"]], "partial"),
   ]);
   check(response.status === 200, "authoritative entry correction in a partial snapshot failed");
   const authoritativeSummary = await pool.query(
@@ -1345,7 +1667,7 @@ try {
       BigInt(provisionalSummary.rows[0]?.tokens ?? "0") - 20n,
     "authoritative entry did not correct the provisional weekly ranking total",
   );
-  response = await usage(first.deviceToken, [snapshot(target, 7, [[today, 20]])]);
+  response = await usage(first.deviceToken, [snapshot(target, 12, [[today, 20]])]);
   check(response.status === 200, "final complete correction failed");
   rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
@@ -1369,14 +1691,14 @@ try {
 
   const randomSource = randomUUID();
   const future = await usage(first.deviceToken, [
-    snapshot(target, 8, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
+    snapshot(target, 13, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
   ]);
   const old = await usage(first.deviceToken, [
-    snapshot(target, 8, [[tooOld, 1]], "complete", tooOld, tooOld),
+    snapshot(target, 13, [[tooOld, 1]], "complete", tooOld, tooOld),
   ]);
   const unsupported = await usage(first.deviceToken, [snapshot(randomSource, 1, [[today, 1]])]);
   const excessive = await usage(first.deviceToken, [
-    snapshot(target, 8, [[today, "10000000000000000"]]),
+    snapshot(target, 13, [[today, "10000000000000000"]]),
   ]);
   check(
     future.status === 400 &&
@@ -1387,14 +1709,18 @@ try {
   );
   console.log("ok - date, source, and technical token bounds are enforced");
 
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('usage_sync', 'usage_sync_user')",
+  );
   const bulkSource = byClient.get("opencode-personal").sourceId;
   const bulkEntries = Array.from({ length: 31 }, (_, index) => [dateOffset(index - 30), index + 1]);
   response = await usage(first.deviceToken, [
     snapshot(bulkSource, 2, bulkEntries, "complete", dateOffset(-30), today),
   ]);
+  const bulkResponseText = await response.text();
   check(
-    response.status === 200 && (await response.json()).acceptedEntries === 31,
-    "large bulk snapshot failed",
+    response.status === 200 && JSON.parse(bulkResponseText).acceptedEntries === 31,
+    `large bulk snapshot failed: status=${response.status}, body=${bulkResponseText}`,
   );
   response = await usage(first.deviceToken, [
     snapshot(bulkSource, 3, [[today, 7]], "complete", dateOffset(-30), today),
@@ -1458,7 +1784,7 @@ try {
     "UPDATE installations SET pairing_expires_at = now() - interval '1 second' WHERE id = $1",
     [firstInstallation.id],
   );
-  response = await usage(first.deviceToken, [snapshot(target, 8, [[today, 20]])]);
+  response = await usage(first.deviceToken, [snapshot(target, 13, [[today, 20]])]);
   const activeDuringReconnect = await pool.query(
     "SELECT count(*)::int AS count FROM installation_sources WHERE installation_id = $1 AND status = 'active'",
     [firstInstallation.id],
@@ -1476,7 +1802,7 @@ try {
   reconnectAssignments["codex-work"] = byClient.get("codex-personal-a").agentAccountId;
   const reconnect = await pair(firstInstallation, reconnectSources, reconnectAssignments);
   check(reconnect.deviceToken !== oldDeviceToken, "device token did not rotate");
-  const rejectedOldToken = await usage(oldDeviceToken, [snapshot(target, 9, [[today, 1]])]);
+  const rejectedOldToken = await usage(oldDeviceToken, [snapshot(target, 14, [[today, 1]])]);
   check(rejectedOldToken.status === 401, "old device token remained usable");
   const installationCount = await pool.query(
     "SELECT count(*)::int AS count FROM installations WHERE id = $1 AND user_id = $2",
@@ -1495,7 +1821,7 @@ try {
     [userId],
   );
   check(
-    pairingSummary.rows[0]?.tokens === "100",
+    pairingSummary.rows[0]?.tokens === "20",
     "pairing reassignment did not immediately collapse account_max summaries",
   );
   console.log(
@@ -1828,7 +2154,7 @@ try {
     "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
     [userId],
   );
-  check(codexSummary.rows[0]?.tokens === "100", "account_max was not rebuilt after reassign");
+  check(codexSummary.rows[0]?.tokens === "20", "account_max was not rebuilt after reassign");
   reassigned = await form("/api/sources/reassign", { sourceId: target, accountId: workAccount });
   check(reassigned.status === 303, "source could not be moved back to its account");
   reassignedSource = await pool.query(
@@ -2067,6 +2393,9 @@ try {
     "ok - compact exact reconciliation covers 100 active sources, large history, and both rate limits",
   );
 
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'admit_pairing_approve_pre_auth', 'pairing_approve_user')",
+  );
   const cancellationInstallation = { id: randomUUID(), secret: token() };
   const cancellationSource = source("pairing-cancellation-source", "codex");
   const cancelledInitial = await beginPairing(cancellationInstallation, [cancellationSource]);
@@ -2226,7 +2555,7 @@ try {
   });
   check(disconnect.status === 204, "current installation did not disconnect");
   const afterDisconnect = await usage(finalReconnect.deviceToken, [
-    snapshot(target, 10, [[today, 1]]),
+    snapshot(target, 15, [[today, 1]]),
   ]);
   check(afterDisconnect.status === 401, "disconnected installation could still sync");
   console.log("ok - readiness and authorization lifecycle behave as expected");
