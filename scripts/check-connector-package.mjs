@@ -7,6 +7,37 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = "packages/connector";
 const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
+if (packageJson.name !== "@viberacing/connector") {
+  throw new Error("Connector package name must be @viberacing/connector");
+}
+if (packageJson.private === true) {
+  throw new Error("Connector package must not be private");
+}
+if (
+  packageJson.publishConfig?.access !== "public" ||
+  packageJson.publishConfig?.registry !== "https://registry.npmjs.org"
+) {
+  throw new Error("Connector publishConfig must use the public npm registry");
+}
+if (
+  packageJson.repository?.type !== "git" ||
+  packageJson.repository?.url !== "git+https://github.com/Tah10n/viberacing.git" ||
+  packageJson.repository?.directory !== packageRoot
+) {
+  throw new Error("Connector repository metadata must point to Tah10n/viberacing");
+}
+if (
+  Object.keys(packageJson.bin ?? {}).length !== 1 ||
+  packageJson.bin?.viberacing !== "bin/viberacing.mjs"
+) {
+  throw new Error("Connector package must expose only the viberacing binary");
+}
+if (JSON.stringify(packageJson.files) !== JSON.stringify(["bin", "lib", "scripts", "README.md"])) {
+  throw new Error("Connector package files allowlist changed unexpectedly");
+}
+if (Object.keys(packageJson.dependencies ?? {}).length > 0) {
+  throw new Error("Connector package must not add runtime dependencies without review");
+}
 const protocolPattern = /export const connectorProtocolVersion = ([1-9]\d*);/;
 const connectorProtocol = readFileSync(
   resolve(root, packageRoot, "lib/protocol.mjs"),
