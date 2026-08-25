@@ -8,6 +8,8 @@ experience or protocol.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-25
+
 ### Fixed
 
 - Codex hooks now invoke a stable local launcher instead of a versioned runtime path, so an explicit
