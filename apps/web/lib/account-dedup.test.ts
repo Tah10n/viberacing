@@ -9,7 +9,7 @@ import {
 const created = new Date("2026-08-01T00:00:00Z");
 
 describe("account-wide usage matching", () => {
-  it("requires seven exact days, three distinct positive totals, and no mismatch", () => {
+  it("requires two exact days, two distinct positive totals, and no mismatch", () => {
     expect(
       isConfidentAccountMatch({
         matched_days: minimumAccountDedupMatchedDays,
@@ -18,13 +18,13 @@ describe("account-wide usage matching", () => {
       }),
     ).toBe(true);
     expect(
-      isConfidentAccountMatch({ matched_days: 2, distinct_matched_totals: 2, mismatched_days: 0 }),
+      isConfidentAccountMatch({ matched_days: 1, distinct_matched_totals: 1, mismatched_days: 0 }),
     ).toBe(false);
     expect(
-      isConfidentAccountMatch({ matched_days: 7, distinct_matched_totals: 1, mismatched_days: 0 }),
+      isConfidentAccountMatch({ matched_days: 2, distinct_matched_totals: 1, mismatched_days: 0 }),
     ).toBe(false);
     expect(
-      isConfidentAccountMatch({ matched_days: 8, distinct_matched_totals: 3, mismatched_days: 1 }),
+      isConfidentAccountMatch({ matched_days: 3, distinct_matched_totals: 2, mismatched_days: 1 }),
     ).toBe(false);
   });
 
@@ -34,24 +34,24 @@ describe("account-wide usage matching", () => {
         account_id: "b",
         source_id: "sb",
         created_at: created,
-        matched_days: 7,
-        distinct_matched_totals: 3,
+        matched_days: 2,
+        distinct_matched_totals: 2,
         mismatched_days: 0,
       },
       {
         account_id: "c",
         source_id: "sc",
         created_at: new Date("2026-07-01T00:00:00Z"),
-        matched_days: 8,
-        distinct_matched_totals: 3,
+        matched_days: 3,
+        distinct_matched_totals: 2,
         mismatched_days: 0,
       },
       {
         account_id: "a",
         source_id: "sa",
         created_at: new Date("2026-07-01T00:00:00Z"),
-        matched_days: 8,
-        distinct_matched_totals: 3,
+        matched_days: 3,
+        distinct_matched_totals: 2,
         mismatched_days: 0,
       },
     ]);
@@ -73,8 +73,8 @@ describe("account-wide usage matching", () => {
           account_id: "b",
           source_id: "sb",
           created_at: created,
-          matched_days: 5,
-          distinct_matched_totals: 3,
+          matched_days: 3,
+          distinct_matched_totals: 2,
           mismatched_days: 1,
         },
       ]),

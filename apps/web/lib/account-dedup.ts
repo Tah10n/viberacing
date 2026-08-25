@@ -3,8 +3,8 @@ import type { PoolClient } from "pg";
 import type { SupportedAgent } from "./agents";
 
 export const accountDedupLookbackDays = 30;
-export const minimumAccountDedupMatchedDays = 7;
-export const minimumAccountDedupDistinctPositiveTotals = 3;
+export const minimumAccountDedupMatchedDays = 2;
+export const minimumAccountDedupDistinctPositiveTotals = 2;
 
 interface CandidateScore {
   account_id: string;

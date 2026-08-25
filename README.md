@@ -35,9 +35,8 @@ counter is estimated.
 
 Connector 0.4.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
 server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
-the rollout. Account-wide sources are automatically matched only after seven complete positive days
-with at least three distinct totals and no complete contradiction; manual reassignment and Undo stay
-available.
+the rollout. Account-wide sources are automatically matched only after two complete positive days
+with two distinct totals and no complete contradiction; manual reassignment and Undo stay available.
 
 Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still

@@ -74,7 +74,7 @@
   weekly summary, chart, leaderboard, and component selection must all show the same corrected
   value. A later partial may provisionally advance it, and the next complete must correct it down.
   Verify an explicit complete zero inside an outer partial snapshot corrects a covered day without
-  changing an uncovered day. Verify seven-day/three-distinct-total automatic matching and Undo.
+  changing an uncovered day. Verify two-day/two-distinct-total automatic matching and Undo.
 - Verify protocol v4 applies a collector error only at its exact observed sequence, ignores a
   delayed error after a newer success, and clears an applied error on the next success. Re-run v2/v3
   pairing and usage compatibility scenarios.

@@ -18,9 +18,9 @@ experience or protocol.
   charts, weekly summaries, profiles, and leaderboard totals use the same precedence boundary.
 - Codex sends explicit complete zero entries only for missing days inside a successfully read,
   continuous App Server range. These are authoritative correction markers, never estimates.
-- Automatic account matching now requires seven complete positive matching days with at least three
-  distinct totals and no complete contradiction. Manual reassignment and the existing Undo flow
-  remain available.
+- Automatic account matching now requires two complete positive matching days with two distinct
+  totals and no complete contradiction. Manual reassignment and the existing Undo flow remain
+  available.
 - Pre-authentication admission now applies an atomic global cap before creating canonical client
   buckets, groups IPv6 by `/64`, and performs bounded opportunistic cleanup. Configured origins with
   URL credentials are rejected without exposing those credentials.
