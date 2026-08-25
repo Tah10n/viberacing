@@ -20,7 +20,7 @@ import {
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -258,8 +258,9 @@ async function runWithInput(arguments_, environment, input) {
 }
 
 async function writeFakeCodexHookServer(path) {
+  const scriptPath = process.platform === "win32" ? path.replace(/\.cmd$/i, ".mjs") : path;
   await writeFile(
-    path,
+    scriptPath,
     `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -300,6 +301,12 @@ for await (const line of lines) {
 }
 `,
   );
+  if (process.platform === "win32") {
+    await writeFile(
+      path,
+      `@echo off\r\n"${process.execPath}" "%~dp0${basename(scriptPath)}" %*\r\n`,
+    );
+  }
   await chmod(path, 0o700);
 }
 
@@ -4586,7 +4593,7 @@ test("doctor fails closed until Codex trusts the stable owned hook", async (cont
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const codexHome = join(home, ".codex");
   const bin = join(home, "bin");
-  const executablePath = join(bin, "codex");
+  const executablePath = join(bin, process.platform === "win32" ? "codex.cmd" : "codex");
   await mkdir(codexHome, { recursive: true });
   await mkdir(bin, { recursive: true });
   await writeFakeCodexHookServer(executablePath);
