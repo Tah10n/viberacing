@@ -108,6 +108,20 @@ export function isSupportedConnectorProtocolVersion(
 }
 export const expectedSchemaVersion = "004_browser_sync_rate_guard.sql";
 
+export type ConnectorDistribution = "npm" | "archive";
+
+export function connectorDistribution(): ConnectorDistribution {
+  const configured = process.env.VIBERACING_CONNECTOR_DISTRIBUTION;
+  if (configured === undefined) return "archive";
+  const value = configured.trim();
+  if (value !== "npm" && value !== "archive") {
+    throw Object.assign(new Error("VIBERACING_CONNECTOR_DISTRIBUTION must be npm or archive"), {
+      code: "CONFIG_CONNECTOR_DISTRIBUTION_INVALID",
+    });
+  }
+  return value;
+}
+
 export type TrustedProxyMode = "none" | "railway" | "trusted-x-real-ip";
 
 export function trustedProxyMode(): TrustedProxyMode {
@@ -207,6 +221,7 @@ export function validateRuntimeConfig(): void {
   }
   requiredEnv("GITHUB_CLIENT_ID");
   requiredEnv("GITHUB_CLIENT_SECRET");
+  connectorDistribution();
   minimumConnectorVersion();
   maximumDailyTokens();
   const proxyMode = trustedProxyMode();

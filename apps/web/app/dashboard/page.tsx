@@ -2,8 +2,8 @@ import { headers } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import {
-  bundledConnectorVersion,
-  connectorArchiveName,
+  connectorConnectCommand,
+  connectorRepairCommand,
   connectorUninstallCommand,
 } from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
@@ -12,7 +12,7 @@ import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { AccountControls, BrowserSyncProvider } from "../components/account-controls";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
-import { publicOrigin, versionAtLeast } from "@/lib/config";
+import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/config";
 import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
@@ -424,9 +424,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   ]);
   const chartDays = usageChartDays(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
-  const command = `npx --allow-remote=all --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing connect --origin ${origin}`;
-  const updateCommand = `npx --allow-remote=all --yes --prefer-online --package ${origin}/downloads/${connectorArchiveName()} -- viberacing doctor --repair`;
+  const command = connectorConnectCommand(origin);
+  const updateCommand = connectorRepairCommand(origin);
   const uninstallCommand = connectorUninstallCommand(origin);
+  const minimumVersion = minimumConnectorVersion();
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -498,12 +499,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       >
         <summary>
           <span>
-            <span className="eyebrow">ADD A COMPUTER</span>
-            <span className="connect-disclosure-title">
-              {installations.length === 0
-                ? "Connect your coding agents"
-                : "Connect another computer"}
-            </span>
+            <span className="eyebrow">CONNECT A COMPUTER</span>
+            <span className="connect-disclosure-title">Connect your coding agents</span>
           </span>
           <span className="connect-disclosure-action" aria-hidden="true">
             <span className="connect-disclosure-closed">Show command</span>
@@ -512,10 +509,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </summary>
         <div className="connect-panel-body">
           <div className="connect-intro">
+            <p>Run one command to connect this computer.</p>
             <ol className="connect-steps">
-              <li>Run this command in {commandShell}.</li>
-              <li>Approve the detected sources in your browser.</li>
-              <li>Aggregate token sync starts automatically.</li>
+              <li>Copy the command.</li>
+              <li>Paste it into {commandShell}.</li>
+              <li>Your browser opens — review and approve the detected agents.</li>
+              <li>The first token sync runs automatically.</li>
             </ol>
           </div>
           <div className="connect-command">
@@ -524,9 +523,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             </pre>
             <CopyCommandButton command={command} />
             <p className="muted">
-              Run this one-line command in {commandShell}. Requires Node.js 24 LTS. The npm remote
-              allowance applies only to this command. No provider keys, prompts, code, paths,
-              repositories, model names, or costs are uploaded.
+              No global npm installation is performed. Requires Node.js 24 LTS. npx runs the
+              official <code>@viberacing/connector</code>, which keeps its working copy only in the
+              local Vibe Racing state. Re-running connect is safe. Prompts, responses, code,
+              repositories, paths, provider credentials, model names, and costs are not sent.
             </p>
           </div>
         </div>
@@ -749,19 +749,13 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                     Disconnect
                   </button>
                 </SameOriginActionForm>
-                {versionAtLeast(item.connector_version, bundledConnectorVersion) ? null : (
+                {versionAtLeast(item.connector_version, minimumVersion) ? null : (
                   <div className="connector-update">
                     <div className="connector-update-heading">
-                      <Badge tone="warning">Update available</Badge>
-                      <strong>
-                        Connector{" "}
-                        {versionAtLeast(item.connector_version, "0.0.0-0")
-                          ? item.connector_version
-                          : "version unknown"}{" "}
-                        → {bundledConnectorVersion}
-                      </strong>
+                      <Badge tone="warning">Required</Badge>
+                      <strong>Connector update required</strong>
                     </div>
-                    <p>Update the connector and repair supported automatic and browser Sync.</p>
+                    <p>Update the connector to restore supported automatic and browser Sync.</p>
                     <pre>
                       <code>{updateCommand}</code>
                     </pre>
@@ -771,8 +765,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       label="Copy update command"
                     />
                     <p className="muted">
-                      Run this one-line command in {commandShell}. The npm remote allowance applies
-                      only to this command. Repair does not collect or upload token totals.
+                      Run this one-line command in {commandShell}. Repair refreshes the installed
+                      runtime and hooks. Repair does not collect or upload token totals.
                     </p>
                   </div>
                 )}
@@ -839,8 +833,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                 If you used <code>VIBERACING_STATE_DIR</code>, set it to the same value before
                 running this command. Repeat it for every connector state directory. This removes
                 only Vibe Racing hooks, its installed copy, secrets, and local state. Provider usage
-                data is not changed. Run this one-line command in {commandShell}; its npm remote
-                allowance applies only to this run.
+                data is not changed. Run this one-line command in {commandShell}; it only performs
+                this cleanup.
               </p>
             </div>
           </details>
