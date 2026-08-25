@@ -7,10 +7,11 @@
 - Set GitHub homepage to the production origin and callback to
   `https://domain.example/api/auth/github/callback`; Device Flow is disabled/not used.
 - Set `DATABASE_URL`, `VIBERACING_PUBLIC_ORIGIN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
-  `VIBERACING_DATABASE_SSL`, `VIBERACING_MIN_CONNECTOR_VERSION=0.2.0`, and
-  `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Set
-  `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of
-  `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch.
+  `VIBERACING_DATABASE_SSL`, `VIBERACING_CONNECTOR_DISTRIBUTION=archive`,
+  `VIBERACING_MIN_CONNECTOR_VERSION=0.2.0`, and `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`;
+  quote the large token value in YAML. Set `VIBERACING_TRUST_PROXY=railway` and
+  `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of `DATABASE_URL` so
+  `VIBERACING_DATABASE_SSL` remains the only database TLS switch.
 - For public self-hosting, use `VIBERACING_TRUST_PROXY=trusted-x-real-ip` only behind a reverse
   proxy that strips the incoming `X-Real-IP` and overwrites it with the observed client address. Do
   not forward or trust arbitrary `X-Forwarded-For` chains. Public production startup must fail when
@@ -82,10 +83,16 @@
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
-- Pair an installation with an older connector version and verify its computer card shows the exact
-  same-origin versioned `doctor --repair` command on desktop and mobile. Confirm the command repairs
-  runtime/hooks without a usage request, reconciliation clears the notice, and the macOS CI gate
-  receives a synthetic custom-scheme URL through the real LaunchServices applet.
+- With archive distribution, verify dashboard connect and repair use the exact same-origin versioned
+  tarball and uninstall uses the stable same-origin tarball. With npm distribution, verify all three
+  use fixed `@viberacing/connector@latest` commands without `--package`, `--allow-remote`, a
+  concrete version, or a downloads URL.
+- Pair or retain an installation below `VIBERACING_MIN_CONNECTOR_VERSION` and verify its computer
+  card shows **Connector update required** on desktop and mobile. Confirm a version at or above the
+  minimum does not advertise an unpublished bundled version. Run `doctor --repair`, confirm it
+  repairs runtime/hooks without a usage request, and verify reconciliation clears the notice.
+- Confirm the macOS CI gate receives a synthetic custom-scheme URL through the real LaunchServices
+  applet.
 - Confirm public copy reports seven counted agents.
 
 ## GitHub and npm manual controls
@@ -99,8 +106,29 @@
 - At the start of each calendar quarter, review ignored npm and Node major updates, record the
   compatibility/test decision in an issue, and schedule accepted upgrades instead of leaving the
   major-version ignore indefinitely unaudited.
-- Configure npm trusted publishing with provenance for `@viberacing/connector`; run
-  `corepack pnpm connector:package:check` against the package root before the first publish.
+- Before configuring npm trusted publishing, create the GitHub `npm-production` environment. Under
+  **Deployment branches and tags**, select **Protected branches only**, confirm `main` is covered by
+  the repository's active branch ruleset, do not allow tags or unprotected branches, and do not
+  store a publish token in the environment.
+- Verify the environment before continuing:
+
+  ```bash
+  gh api repos/Tah10n/viberacing/environments/npm-production \
+    --jq '.deployment_branch_policy'
+  ```
+
+  It must report `protected_branches: true` and `custom_branch_policies: false`. Stop if the
+  environment is absent or unrestricted.
+
+- Only after that verification, configure npm trusted publishing with provenance for
+  `@viberacing/connector`; run `corepack pnpm connector:package:check` against the package root
+  before the first publish.
+- Keep Railway on `VIBERACING_CONNECTOR_DISTRIBUTION=archive` through the interactive first
+  publication. Switch official production to `npm` once only after connect, repair, and uninstall
+  are verified on Linux, Windows, and macOS. Normal releases must not change Railway variables.
+- Confirm **Publish connector** ran only for a published non-draft, non-prerelease `vX.Y.Z` release,
+  used the `npm-production` environment and OIDC without npm tokens, verified main ancestry, and
+  finished only after both the exact version and `dist-tags.latest` were visible.
 - Release protocol v4 server-first: deploy a server that accepts v2/v3/v4, complete production
   checks, and only then publish connector 0.4.0. Raise `VIBERACING_MIN_CONNECTOR_VERSION` only after
   that package is available; this pull request must not create a rejection window for older

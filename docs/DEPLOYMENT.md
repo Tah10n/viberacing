@@ -14,6 +14,7 @@
    GITHUB_CLIENT_ID=<production OAuth client ID>
    GITHUB_CLIENT_SECRET=<production OAuth client secret>
    VIBERACING_DATABASE_SSL=false
+   VIBERACING_CONNECTOR_DISTRIBUTION=archive
    VIBERACING_MIN_CONNECTOR_VERSION=0.2.0
    VIBERACING_MAX_DAILY_TOKENS=9999999999999999
    VIBERACING_TRUST_PROXY=railway
@@ -65,27 +66,44 @@ are valid. See the [production checklist](PRODUCTION_CHECKLIST.md) for backups, 
 and npm setup. See [production observability](OBSERVABILITY.md) for structured Railway log fields,
 incident filtering, levels, and the enforced privacy boundary.
 
-## Connector publication
+## Connector distribution and publication
+
+`VIBERACING_CONNECTOR_DISTRIBUTION` accepts only `archive` or `npm` and defaults to `archive` when
+absent. Self-hosted deployments should retain `archive`: the web build and production image include
+stable and versioned same-origin tarballs, and dashboard connect, repair, and uninstall commands do
+not contact `registry.npmjs.org`.
+
+After the first npm publication and cross-platform verification, the official `viberacing.com`
+Railway service can set this once:
+
+```text
+VIBERACING_CONNECTOR_DISTRIBUTION=npm
+```
+
+Ordinary connector releases require no Railway change. There are no npm package-name or package-
+version environment variables. The official commands remain:
+
+```bash
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+npx --yes @viberacing/connector@latest doctor --repair
+npx --yes @viberacing/connector@latest uninstall
+```
+
+The stable release workflow publishes the reviewed package version to npm `latest`; it never bumps a
+version, publishes a prerelease, or publishes from a pull request. The installed connector refreshes
+only when the user explicitly runs `doctor --repair`; there is no background updater or server-side
+npm polling.
 
 Release protocol v4 server-first. Deploy and verify a web version that accepts connector protocols
 v2, v3, and v4 before publishing connector 0.4.0. Do not raise `VIBERACING_MIN_CONNECTOR_VERSION`
 until 0.4.0 is actually available, so deployed v2/v3 connectors continue to sync throughout the
 rollout.
 
-After configuring npm trusted publishing and running the same package-content gate used by CI:
+`VIBERACING_MIN_CONNECTOR_VERSION` is a compatibility floor, not the latest package version. Raise
+it only after a server-first rollout and publication of a compatible npm package. Optional patch
+updates do not require changing it.
 
-```bash
-corepack pnpm connector:package:check
-```
-
-Publish from the verified package root:
-
-```bash
-corepack pnpm --filter @viberacing/connector publish --access public --provenance
-```
-
-Users connect with:
-
-```bash
-npx @viberacing/connector connect --origin https://your-domain.example
-```
+Rollback needs no database migration: set the single distribution variable back to `archive` and
+redeploy. Existing installations, server data, and device tokens remain valid. Do not delete the npm
+package or reuse a published name/version. See [Releasing](RELEASING.md) for first-publication,
+Trusted Publisher, stable release, and verification procedures.

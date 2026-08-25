@@ -10,6 +10,11 @@ experience or protocol.
 
 ### Changed
 
+- Connector onboarding now supports one centrally configured distribution: the official service can
+  use the permanent `@viberacing/connector@latest` npm commands, while self-hosted deployments
+  retain the existing same-origin archive default. Installed runtimes update only through explicit
+  `doctor --repair`, and mandatory dashboard notices now follow the configured compatibility floor
+  instead of the bundled source version.
 - Connector 0.4.0 uses protocol v4 to sequence allowlisted collector errors against the last
   server-accepted source snapshot. Delayed errors can no longer overwrite a newer success; the
   server remains compatible with v2/v3 payloads during the server-first rollout. Saved v2/v3 errors
@@ -60,6 +65,10 @@ experience or protocol.
 
 ### Added
 
+- Added a stable-release-only GitHub Actions workflow for npm Trusted Publishing, with exact
+  tag/package/generated-version validation, main ancestry and clean-package gates, replay
+  prevention, post-publication `latest` verification, and a fail-closed manual-bootstrap boundary
+  for the first publication.
 - Added privacy-minimized connector diagnostics with an authenticated, source-owned server endpoint,
   allowlisted reason codes, deduplicated `opened`/`resolved` transitions, and a bounded owner-only
   retry outbox. Diagnostic delivery remains independent from usage acceptance, while the legacy

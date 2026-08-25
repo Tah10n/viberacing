@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import {
+  connectorDistribution,
   connectorProtocolVersion,
   databaseClientConfig,
   databaseSslEnabled,
@@ -19,6 +20,7 @@ const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
 const originalTestGitHubOrigin = process.env.VIBERACING_TEST_GITHUB_ORIGIN;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalDatabaseSsl = process.env.VIBERACING_DATABASE_SSL;
+const originalConnectorDistribution = process.env.VIBERACING_CONNECTOR_DISTRIBUTION;
 const originalPgSslMode = process.env.PGSSLMODE;
 const originalClientId = process.env.GITHUB_CLIENT_ID;
 const originalClientSecret = process.env.GITHUB_CLIENT_SECRET;
@@ -37,6 +39,9 @@ afterEach(() => {
   else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalDatabaseSsl === undefined) delete process.env.VIBERACING_DATABASE_SSL;
   else process.env.VIBERACING_DATABASE_SSL = originalDatabaseSsl;
+  if (originalConnectorDistribution === undefined)
+    delete process.env.VIBERACING_CONNECTOR_DISTRIBUTION;
+  else process.env.VIBERACING_CONNECTOR_DISTRIBUTION = originalConnectorDistribution;
   if (originalPgSslMode === undefined) delete process.env.PGSSLMODE;
   else process.env.PGSSLMODE = originalPgSslMode;
   if (originalClientId === undefined) delete process.env.GITHUB_CLIENT_ID;
@@ -61,6 +66,47 @@ describe("connector protocol compatibility", () => {
     expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
     expect(isSupportedConnectorProtocolVersion(5)).toBe(false);
     expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
+  });
+});
+
+describe("connector distribution", () => {
+  it("defaults to the same-origin archive", () => {
+    delete process.env.VIBERACING_CONNECTOR_DISTRIBUTION;
+    expect(connectorDistribution()).toBe("archive");
+  });
+
+  it.each([
+    ["npm", "npm"],
+    [" archive ", "archive"],
+  ] as const)("accepts %j", (configured, expected) => {
+    process.env.VIBERACING_CONNECTOR_DISTRIBUTION = configured;
+    expect(connectorDistribution()).toBe(expected);
+  });
+
+  it("fails closed with a stable safe code for every other value", () => {
+    for (const configured of ["", "NPM", "npm@latest", "npm; echo secret-value"]) {
+      process.env.VIBERACING_CONNECTOR_DISTRIBUTION = configured;
+      try {
+        connectorDistribution();
+        throw new Error("invalid connector distribution was accepted");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "CONFIG_CONNECTOR_DISTRIBUTION_INVALID" });
+        expect(String(error)).not.toContain("secret-value");
+      }
+    }
+  });
+
+  it("is part of startup validation", () => {
+    process.env.DATABASE_URL = "postgresql://example.invalid/viberacing";
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    process.env.VIBERACING_DATABASE_SSL = "true";
+    process.env.GITHUB_CLIENT_ID = "synthetic-client";
+    process.env.GITHUB_CLIENT_SECRET = "synthetic-secret";
+    process.env.VIBERACING_TRUST_PROXY = "railway";
+    process.env.VIBERACING_CONNECTOR_DISTRIBUTION = "registry";
+    expect(() => {
+      validateRuntimeConfig();
+    }).toThrow(expect.objectContaining({ code: "CONFIG_CONNECTOR_DISTRIBUTION_INVALID" }));
   });
 });
 

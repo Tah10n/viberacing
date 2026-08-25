@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { Client } from "pg";
 
 const connectorPackage = JSON.parse(
   readFileSync(new URL("../../../packages/connector/package.json", import.meta.url), "utf8"),
@@ -160,6 +161,18 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const favicon = await request.get("/favicon.svg");
   expect(favicon.status()).toBe(200);
   expect(favicon.headers()["content-type"]).toContain("image/svg+xml");
+  const expectedConnectCommand =
+    "npx --yes @viberacing/connector@latest connect --origin http://127.0.0.1:3015";
+  const connectCommand = page.locator(".connect-command pre code");
+  await expect(connectCommand).toHaveText(expectedConnectCommand);
+  await expect(connectCommand).not.toContainText("downloads/");
+  await expect(connectCommand).not.toContainText("--package");
+  await expect(connectCommand).not.toContainText("--allow-remote");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Copy connect command" }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(expectedConnectCommand);
 
   const installationId = randomUUID();
   const clientSourceId = randomUUID();
@@ -234,14 +247,31 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.reload();
   await expect(page.getByText(/12[.,]3K tokens/)).toBeVisible();
+  await expect(page.locator(".connector-update")).toHaveCount(0);
+
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl === undefined) throw new Error("DATABASE_URL is required for browser E2E");
+  const database = new Client({ connectionString: databaseUrl });
+  await database.connect();
+  try {
+    await database.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
+      "0.1.9",
+      installationId,
+    ]);
+  } finally {
+    await database.end();
+  }
+  await page.reload();
   const connectorUpdate = page.locator(".connector-update");
-  await expect(connectorUpdate.getByText("Update available", { exact: true })).toBeVisible();
-  await expect(connectorUpdate).toContainText(`Connector 0.3.0 → ${bundledConnectorVersion}`);
-  await expect(connectorUpdate.locator("code")).toContainText(
-    `/downloads/viberacing-connector-${bundledConnectorVersion}.tgz`,
+  await expect(
+    connectorUpdate.getByText("Connector update required", { exact: true }),
+  ).toBeVisible();
+  await expect(connectorUpdate.locator("code")).toHaveText(
+    "npx --yes @viberacing/connector@latest doctor --repair",
   );
-  await expect(connectorUpdate.locator("code")).toContainText("viberacing doctor --repair");
-  await expect(connectorUpdate.locator("code")).toContainText("--allow-remote=all");
+  await expect(connectorUpdate).not.toContainText(bundledConnectorVersion);
+  await expect(connectorUpdate.locator("code")).not.toContainText("--package");
+  await expect(connectorUpdate.locator("code")).not.toContainText("--allow-remote");
   await expect(connectorUpdate.getByRole("button", { name: "Copy update command" })).toBeVisible();
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
   await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
@@ -321,7 +351,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(reconciliation.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".connector-update")).toHaveCount(0);
-  const uninstallCommand = `npx --allow-remote=all --yes --prefer-online --package ${new URL(page.url()).origin}/downloads/viberacing-connector.tgz -- viberacing uninstall`;
+  const uninstallCommand = "npx --yes @viberacing/connector@latest uninstall";
   const cleanupDisclosure = page.locator(".account-deletion-cleanup");
   await expect(cleanupDisclosure.getByText("Local cleanup required")).toBeVisible();
   await expect(cleanupDisclosure).not.toHaveAttribute("open", "");

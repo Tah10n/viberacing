@@ -5,11 +5,30 @@ sources and pairs them with Vibe Racing agent accounts. It never uploads raw ses
 paths.
 
 ```bash
-npx --allow-remote=all --yes --prefer-online --package https://viberacing.example/downloads/viberacing-connector.tgz -- viberacing connect --origin https://viberacing.example
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
 ```
 
-Use the command shown by your Vibe Racing dashboard. The connector package is served by that same
-Vibe Racing origin, so a separate npm publication is not required.
+Use the exact command shown by your Vibe Racing dashboard. The official service uses the npm command
+above after its verified rollout. Self-hosted deployments default to an equivalent versioned archive
+served by that same Vibe Racing origin, so they do not depend on the public npm registry. Neither
+path installs a global npm package; the connector saves its working copy only in local Vibe Racing
+state. Re-running `connect` is safe.
+
+Refresh the installed runtime and repair owned hooks explicitly:
+
+```bash
+npx --yes @viberacing/connector@latest doctor --repair
+```
+
+Remove an installation and its owned local integration:
+
+```bash
+npx --yes @viberacing/connector@latest uninstall
+```
+
+These are permanent `@latest` commands; a concrete version is never copied into onboarding. The
+installed runtime does not update silently. A self-hosted archive dashboard generates corresponding
+same-origin repair and uninstall commands.
 
 Discovery is independent of the directory where the command runs. Provider data comes only from
 documented token-store roots, supported environment overrides, Qwen's user-level settings, and roots
