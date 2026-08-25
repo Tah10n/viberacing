@@ -86,6 +86,8 @@ function usageResponse(body, overrides = {}) {
     acceptedEntries: snapshots.flatMap((snapshot) => snapshot.entries ?? []).length,
     acceptedSnapshots: snapshots.length,
     acceptedSourceErrors: sourceErrors.length,
+    staleSourceErrors: 0,
+    legacySourceErrorsIgnored: 0,
     staleSnapshots: 0,
     sourceSequences: [...snapshots, ...sourceErrors].map((item) => ({
       sourceId: item.sourceId,
@@ -1426,6 +1428,22 @@ test("prevents overlapping syncs with an atomic lock", async () => {
       snapshots: [{ sourceId, syncSequence: "2", entries: [] }],
       sourceErrors: [{ sourceId: errorSourceId, code: "collector_failed" }],
     });
+    assert.deepEqual(
+      runtime.mergePendingPayloads([
+        {
+          protocolVersion: 4,
+          snapshots: [],
+          sourceErrors: [
+            {
+              sourceId: errorSourceId,
+              code: "collector_failed",
+              observedAfterSequence: "5",
+            },
+          ],
+        },
+      ]).sourceErrors,
+      [{ sourceId: errorSourceId, code: "collector_failed", observedAfterSequence: "5" }],
+    );
     const maximumBatch = runtime.mergePendingPayloads(
       Array.from({ length: 32 }, (_, index) => ({
         protocolVersion: 2,
@@ -2223,7 +2241,7 @@ test("an unchanged healthy source never inherits another collector automatic fai
   assert.equal(usageBodies.length, 2);
   assert.deepEqual(usageBodies[1].snapshots, []);
   assert.deepEqual(usageBodies[1].sourceErrors, [
-    { sourceId: failedSourceId, code: "collector_failed" },
+    { sourceId: failedSourceId, code: "collector_failed", observedAfterSequence: "1" },
   ]);
   assert.equal(diagnosticBodies.length, 1);
   assert.deepEqual(

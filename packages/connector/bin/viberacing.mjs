@@ -553,6 +553,7 @@ async function deliver(config, payload) {
         ...(payload.snapshots ?? []).map((snapshot) => snapshot.sourceId),
         ...(payload.sourceErrors ?? []).map((sourceError) => sourceError.sourceId),
       ],
+      protocolVersion: payload.protocolVersion,
     },
   );
 }
@@ -1052,7 +1053,11 @@ async function sync(providedConfig, options = {}) {
           failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
           const nextFingerprint = fingerprint({ error: "collector_failed" });
           if (state.fingerprints[source.sourceId] !== nextFingerprint) {
-            sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
+            sourceErrors.push({
+              sourceId: source.sourceId,
+              code: "collector_failed",
+              observedAfterSequence: source.lastAcceptedSyncSequence ?? "0",
+            });
             state.fingerprints[source.sourceId] = nextFingerprint;
           }
           reconcileDiagnosticPhase(state, source.sourceId, "collect", [

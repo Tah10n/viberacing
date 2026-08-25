@@ -81,13 +81,13 @@ export function databaseSslEnabled(): boolean {
 
 export { databaseClientConfig };
 
-export const connectorProtocolVersion = 3;
-export type SupportedConnectorProtocolVersion = 2 | typeof connectorProtocolVersion;
+export const connectorProtocolVersion = 4;
+export type SupportedConnectorProtocolVersion = 2 | 3 | typeof connectorProtocolVersion;
 
 export function isSupportedConnectorProtocolVersion(
   value: unknown,
 ): value is SupportedConnectorProtocolVersion {
-  return value === 2 || value === connectorProtocolVersion;
+  return value === 2 || value === 3 || value === connectorProtocolVersion;
 }
 export const expectedSchemaVersion = "004_browser_sync_rate_guard.sql";
 

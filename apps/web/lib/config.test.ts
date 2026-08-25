@@ -49,12 +49,13 @@ afterEach(() => {
 });
 
 describe("connector protocol compatibility", () => {
-  it("keeps legacy v2 available during the v3 rollout", () => {
-    expect(connectorProtocolVersion).toBe(3);
+  it("keeps legacy v2 and v3 available during the v4 rollout", () => {
+    expect(connectorProtocolVersion).toBe(4);
     expect(isSupportedConnectorProtocolVersion(2)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(3)).toBe(true);
+    expect(isSupportedConnectorProtocolVersion(4)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
-    expect(isSupportedConnectorProtocolVersion(4)).toBe(false);
+    expect(isSupportedConnectorProtocolVersion(5)).toBe(false);
     expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
   });
 });
