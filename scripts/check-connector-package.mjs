@@ -13,14 +13,25 @@ const originPolicyFiles = [
   "docs/RELEASING.md",
   "packages/connector/README.md",
 ];
+function documentedOrigins(source) {
+  return new Set(
+    [...source.matchAll(/\bhttps:\/\/[A-Za-z0-9.-]+(?::\d+)?/g)].map(
+      (match) => new URL(match[0]).origin,
+    ),
+  );
+}
 for (const relativePath of originPolicyFiles) {
   const source = readFileSync(resolve(root, relativePath), "utf8");
-  if (!source.includes(officialOrigin) || source.includes("https://viberacing.com")) {
+  const origins = documentedOrigins(source);
+  if (!origins.has(officialOrigin) || origins.has("https://viberacing.com")) {
     throw new Error(`${relativePath} does not match the official production-origin policy`);
   }
 }
 const originModule = readFileSync(resolve(root, packageRoot, "lib/origin.mjs"), "utf8");
-if (!originModule.includes(`officialProductionOrigin = "${officialOrigin}"`)) {
+const configuredOrigin = originModule.match(
+  /export const officialProductionOrigin = "([^"]+)";/,
+)?.[1];
+if (configuredOrigin === undefined || new URL(configuredOrigin).origin !== officialOrigin) {
   throw new Error("Connector default origin does not match the official production-origin policy");
 }
 const packageJson = JSON.parse(readFileSync(resolve(root, packageRoot, "package.json"), "utf8"));
