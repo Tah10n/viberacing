@@ -16,7 +16,12 @@ import {
   problem,
   readBoundedJson,
 } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface StartBody {
@@ -113,12 +118,15 @@ function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>
 async function post(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
-    !(await consumeRateLimit(
-      "pairing_start",
-      address.key,
-      clientAdmissionLimit(address, 6, 2_000, 3),
-      60,
-    ))
+    !(
+      await consumeAdmissionRateLimit(
+        "pairing_start",
+        address.key,
+        clientAdmissionLimit(address, 6, 2_000, 3),
+        2_000,
+        60,
+      )
+    ).allowed
   ) {
     return Response.json(
       { error: "rate_limited" },

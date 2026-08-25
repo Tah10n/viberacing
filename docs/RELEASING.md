@@ -23,6 +23,11 @@ protocol or shared user-experience change must be documented with the connector 
    limitations.
 9. Verify the tag and release point at the intended commit.
 
+For connector 0.4.0 and later protocol changes, preserve server-first ordering: deploy and verify a
+server that accepts the old and new protocols (v2/v3/v4 for this release), then publish the package,
+then raise the minimum connector version only if product policy requires it. Never merge a minimum
+version change that makes the deployed server reject users before the package is available.
+
 If the connector is later published to npm, use npm trusted publishing with provenance and run
 `corepack pnpm connector:package:check`. The command invokes `npm pack --dry-run` against
 `packages/connector`, the same package root and validation used by CI.

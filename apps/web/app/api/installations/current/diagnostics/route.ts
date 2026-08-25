@@ -2,7 +2,12 @@ import { digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { logInfo, logWarn } from "@/lib/log";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
 const maximumEvents = 32;
@@ -131,12 +136,15 @@ async function post(request: Request): Promise<Response> {
   try {
     const address = clientAddress(request);
     if (
-      !(await consumeRateLimit(
-        "diagnostics_pre_auth",
-        address.key,
-        clientAdmissionLimit(address, 120, 10_000, 20),
-        60,
-      ))
+      !(
+        await consumeAdmissionRateLimit(
+          "diagnostics_pre_auth",
+          address.key,
+          clientAdmissionLimit(address, 120, 10_000, 20),
+          10_000,
+          60,
+        )
+      ).allowed
     ) {
       return rateLimited();
     }

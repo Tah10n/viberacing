@@ -16,6 +16,8 @@
   not forward or trust arbitrary `X-Forwarded-For` chains. Public production startup must fail when
   the mode is `none`; retain `none` only for loopback preview and tests.
 - Never set `VIBERACING_ALLOW_INSECURE_LOCAL` in Railway. It is a loopback-only local-preview flag.
+- Confirm configured public and local-test origins contain no URL username or password; startup
+  rejects credential-bearing origins without printing the credential.
 - Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports the latest
   required migration. Insert a synthetic later ledger row and confirm readiness remains healthy;
   remove the required row and confirm readiness returns 503.
@@ -31,12 +33,19 @@
 - Run `corepack pnpm verify`, `corepack pnpm db:migrate` twice on a clean PostgreSQL database,
   `corepack pnpm local:up`, and `corepack pnpm local:test`.
 - Run `corepack pnpm audit --prod --audit-level moderate`, `corepack pnpm migrations:check`, and
-  `corepack pnpm connector:package:check`.
+  `corepack pnpm connector:package:check`, plus `git diff --check`.
+- Run the documented Chromium E2E/accessibility command on a clean PostgreSQL database. Confirm the
+  migration runner succeeds twice against that clean database before running the browser suite.
 - Confirm the production image runs as `node`, readiness succeeds, OAuth/pairing works, and an old
   device token fails after reconnect.
 - Confirm startup rejects a public production origin with `VIBERACING_TRUST_PROXY=none`, while the
   documented loopback preview still starts. Send malformed and missing `X-Real-IP` through a trusted
   mode and confirm both remain in a bounded fail-closed admission bucket.
+- Confirm equivalent IPv6 forms and addresses in one `/64` share one admission key, IPv4-mapped IPv6
+  shares its IPv4 key, and unique client addresses cannot create more per-client buckets than the
+  route's global admission cap. Raw client addresses must not appear in logs. The built-in limiter
+  bounds application state; retain an edge/WAF or equivalent upstream protection for a real
+  distributed attack.
 - Confirm the connector matrix passes on Linux, macOS, and Windows using `VIBERACING_STATE_DIR`, and
   that the production job reaches migration, integration, audit, package, image, non-root, and
   readiness stages.
@@ -61,6 +70,15 @@
   retaining failed-root metadata for retry. Race reconnect and doctor reconciliation against an
   in-flight sync; verify only the replacement token survives, a repaired connector clears the 426
   automatic-disable flag, and a lock timeout gets exactly one bounded deferred acquisition.
+- Verify two linked Codex computers follow `complete 100` then newer `complete 90`; dashboard,
+  weekly summary, chart, leaderboard, and component selection must all show the same corrected
+  value. A later partial may provisionally advance it, and the next complete must correct it down.
+  Verify an explicit complete zero inside an outer partial snapshot corrects a covered day without
+  changing an uncovered day. Verify two-day/two-distinct-total automatic matching and Undo.
+- Verify protocol v4 applies a collector error only at its exact observed sequence, ignores a
+  delayed error after a newer success, and clears an applied error on the next success. Re-run v2/v3
+  pairing and usage compatibility scenarios, including replacement of an unsequenced pending v2/v3
+  error by the current v4 observation.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
@@ -72,8 +90,10 @@
 
 ## GitHub and npm manual controls
 
-- Protect/ruleset `main`: require CI, pull requests, and current reviews; prohibit force pushes and
-  branch deletion.
+- Protect/ruleset `main`: require pull requests and current reviews; prohibit force pushes and
+  branch deletion. Require the exact stable checks `ci-required` and `Dependency review`. Do not use
+  a matrix child or `production` as the sole required context. After the workflow's first successful
+  run, verify with `gh api repos/Tah10n/viberacing/branches/main/protection/required_status_checks`.
 - Enable Dependabot security updates/alerts and secret scanning where the repository plan supports
   them.
 - At the start of each calendar quarter, review ignored npm and Node major updates, record the
@@ -81,8 +101,10 @@
   major-version ignore indefinitely unaudited.
 - Configure npm trusted publishing with provenance for `@viberacing/connector`; run
   `corepack pnpm connector:package:check` against the package root before the first publish.
-- Publish the v3 connector only after the deployed server accepts both legacy protocol v2 and
-  protocol v3, and its minimum version policy matches the package.
+- Release protocol v4 server-first: deploy a server that accepts v2/v3/v4, complete production
+  checks, and only then publish connector 0.4.0. Raise `VIBERACING_MIN_CONNECTOR_VERSION` only after
+  that package is available; this pull request must not create a rejection window for older
+  connectors.
 
 ## PostgreSQL operations
 

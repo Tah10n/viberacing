@@ -23,13 +23,14 @@ is reported as a detection warning and never hides other healthy sources. Discov
 whole home directory or disk.
 
 The browser approval maps machine-local sources to a new or existing account. Account-wide sources
-are matched automatically after complete daily totals arrive; the server requires two exact finished
-nonzero days with no conflicting overlap, never provider identity, and the dashboard offers Undo.
-Re-running `connect` keeps the stable installation identity, rotates device authorization, refreshes
-the installed connector copy, and updates only Vibe Racing-owned hooks. Hook reconciliation is
-best-effort per source: one damaged settings file is reported without blocking healthy hooks or the
-initial sync. The final token/config swap is serialized behind any active sync, so an older request
-cannot restore superseded authorization.
+are matched automatically only after enough complete daily totals arrive: the server requires two
+exact finished nonzero days containing two distinct positive totals and no conflicting complete
+overlap. It never uses provider identity, partial days, or zero days as matching evidence, and the
+dashboard offers Undo. Re-running `connect` keeps the stable installation identity, rotates device
+authorization, refreshes the installed connector copy, and updates only Vibe Racing-owned hooks.
+Hook reconciliation is best-effort per source: one damaged settings file is reported without
+blocking healthy hooks or the initial sync. The final token/config swap is serialized behind any
+active sync, so an older request cannot restore superseded authorization.
 
 ## Commands
 
@@ -67,9 +68,12 @@ cache/reasoning overlap, and deduplicates repeated/copied events with content-fr
 account-wide total and locally observed component sum remain separate exact counters and may differ.
 While App Server account buckets lag, Sync submits every exact local daily sum after the newest
 authoritative bucket as a partial ranking value, including across UTC rollovers. Later complete
-account data can correct each day in either direction. The dashboard labels the scope difference
-instead of scaling either value. Every other transcript field is discarded, and unsupported or
-incomplete shapes remain total-only.
+account data can correct each day in either direction. A successful App Server result also
+materializes every UTC date between its earliest and latest returned buckets: a missing bucket is
+sent as an explicit complete zero, which is an authoritative correction marker rather than an
+estimate. The connector never extends zero coverage before the earliest returned bucket or after the
+latest one. The dashboard labels the scope difference instead of scaling either value. Every other
+transcript field is discarded, and unsupported or incomplete shapes remain total-only.
 
 Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
 add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
@@ -127,11 +131,22 @@ source already disconnected on the server loses its mapping, pending/runtime sta
 owned hook without deleting its local definition or blocking other agents. Directories are
 owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
 server-accepted sequence and reports hook freshness, mapped accounts, supported surfaces, excluded
-desktop surfaces, data availability, partial warnings, and the last hook error; `doctor --repair`
-refreshes the installed runtime, owned hooks, and the default-state browser protocol handler under
-the lifecycle lock. Its server reconciliation shares the sync lock, and it does not collect usage
-unless the user separately runs `viberacing sync`. A successful compatible reconnect, authenticated
-sync, or doctor server check clears a prior version-upgrade automatic-sync disable.
+desktop surfaces, data availability, partial warnings, and the last unresolved hook error. A fully
+successful authenticated usage delivery clears that hook error; partial syncs and automatic checks
+that send no usage request retain it. A successful initial pending retry counts as that delivery
+even when the following automatic collection is unchanged. `doctor --repair` refreshes the installed
+runtime, owned hooks, and the default-state browser protocol handler under the lifecycle lock. Its
+server reconciliation shares the sync lock, and it does not collect usage unless the user separately
+runs `viberacing sync`. A successful compatible reconnect, authenticated sync, or doctor server
+check clears a prior version-upgrade automatic-sync disable.
+
+Connector 0.4.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
+allowlisted code, and `observedAfterSequence`, copied from the last server-accepted sequence known
+before collection. Saved pending errors retain that original ordering value, so retrying a delayed
+error cannot turn it into a newer observation. Servers accept legacy v2/v3 payloads during rollout;
+those protocols lack error ordering metadata and therefore cannot change persistent source-error
+status. A saved unsequenced v2/v3 error is removed only when its source is in scope, its local
+failure fingerprint is reset, and the current collection can emit a fresh ordered v4 observation.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers. Codex
 uses `Stop` after every completed turn; upgrades remove only Vibe Racing's older `SessionEnd`

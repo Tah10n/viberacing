@@ -9,7 +9,12 @@ import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
 import { currentWeekStart } from "@/lib/leaderboard";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
-import { clientAddress, clientAdmissionLimit, consumeRateLimit } from "@/lib/rate-limit";
+import {
+  clientAddress,
+  clientAdmissionLimit,
+  consumeAdmissionRateLimit,
+  consumeRateLimit,
+} from "@/lib/rate-limit";
 import { rebuildAgentSummaries, refreshAgentWeek } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
 
@@ -42,6 +47,7 @@ interface EntryInput {
 interface SourceErrorInput {
   sourceId?: unknown;
   code?: unknown;
+  observedAfterSequence?: unknown;
 }
 
 interface InstallationRow {
@@ -80,6 +86,7 @@ interface ParsedSnapshot {
 interface ParsedSourceError {
   sourceId: string;
   code: "collector_failed";
+  observedAfterSequence: string | null;
 }
 
 class UsageError extends Error {
@@ -113,7 +120,8 @@ const legacyEntryKeys = new Set([
   "reasoningTokens",
 ]);
 const entryKeys = new Set([...legacyEntryKeys, "completeness"]);
-const sourceErrorKeys = new Set(["sourceId", "code"]);
+const legacySourceErrorKeys = new Set(["sourceId", "code"]);
+const sourceErrorKeys = new Set(["sourceId", "code", "observedAfterSequence"]);
 
 function onlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
@@ -268,26 +276,38 @@ export function entryCompletenessAccepted(
   );
 }
 
-export function parseSourceErrors(value: unknown): ParsedSourceError[] {
+export function parseSourceErrors(
+  value: unknown,
+  protocolVersion: SupportedConnectorProtocolVersion,
+): ParsedSourceError[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 32) {
     throw new UsageError(400, "invalid_source_errors");
   }
   const sourceIds = new Set<string>();
   return value.map((raw): ParsedSourceError => {
-    if (!isRecord(raw) || !onlyKeys(raw, sourceErrorKeys)) {
+    const keys = protocolVersion >= 4 ? sourceErrorKeys : legacySourceErrorKeys;
+    if (!isRecord(raw) || !onlyKeys(raw, keys)) {
       throw new UsageError(400, "invalid_source_error");
     }
     const sourceError = raw as SourceErrorInput;
     if (
       !isUuid(sourceError.sourceId) ||
       sourceIds.has(sourceError.sourceId) ||
-      sourceError.code !== "collector_failed"
+      sourceError.code !== "collector_failed" ||
+      (protocolVersion >= 4 &&
+        (typeof sourceError.observedAfterSequence !== "string" ||
+          !tokenPattern.test(sourceError.observedAfterSequence)))
     ) {
       throw new UsageError(400, "invalid_source_error");
     }
     sourceIds.add(sourceError.sourceId);
-    return { sourceId: sourceError.sourceId, code: sourceError.code };
+    return {
+      sourceId: sourceError.sourceId,
+      code: sourceError.code,
+      observedAfterSequence:
+        protocolVersion >= 4 ? (sourceError.observedAfterSequence as string) : null,
+    };
   });
 }
 
@@ -321,12 +341,15 @@ async function post(request: Request): Promise<Response> {
   try {
     const address = clientAddress(request);
     if (
-      !(await consumeRateLimit(
-        "usage_pre_auth",
-        address.key,
-        clientAdmissionLimit(address, 120, 10_000, 20),
-        60,
-      ))
+      !(
+        await consumeAdmissionRateLimit(
+          "usage_pre_auth",
+          address.key,
+          clientAdmissionLimit(address, 120, 10_000, 20),
+          10_000,
+          60,
+        )
+      ).allowed
     ) {
       return Response.json(
         { error: "rate_limited" },
@@ -363,11 +386,12 @@ async function post(request: Request): Promise<Response> {
     const rawBody = await readBoundedJson(request, 131_072);
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as UsageBody;
-    if (!isSupportedConnectorProtocolVersion(body.protocolVersion)) {
+    const requestProtocolVersion = body.protocolVersion;
+    if (!isSupportedConnectorProtocolVersion(requestProtocolVersion)) {
       return problem(426, "unsupported_protocol_version");
     }
-    const snapshots = parseSnapshots(body.snapshots, body.protocolVersion);
-    const sourceErrors = parseSourceErrors(body.sourceErrors);
+    const snapshots = parseSnapshots(body.snapshots, requestProtocolVersion);
+    const sourceErrors = parseSourceErrors(body.sourceErrors, requestProtocolVersion);
     const sourceIds = [
       ...snapshots.map((snapshot) => snapshot.sourceId),
       ...sourceErrors.map((sourceError) => sourceError.sourceId),
@@ -412,6 +436,9 @@ async function post(request: Request): Promise<Response> {
 
       let acceptedEntries = 0;
       let acceptedSnapshots = 0;
+      let acceptedSourceErrors = 0;
+      let staleSourceErrors = 0;
+      let legacySourceErrorsIgnored = 0;
       const acceptedSequences = new Map(
         sources.rows.map((source) => [source.id, source.last_accepted_sync_sequence]),
       );
@@ -570,12 +597,20 @@ async function post(request: Request): Promise<Response> {
         if (source === undefined || source.user_id !== lockedInstallation.user_id) {
           throw new UsageError(400, "unsupported_source");
         }
-        await client.query(
+        if (sourceError.observedAfterSequence === null) {
+          legacySourceErrorsIgnored += 1;
+          continue;
+        }
+        const applied = await client.query(
           `UPDATE installation_sources
               SET last_error_summary = 'Collector failed', updated_at = now()
-            WHERE id = $1`,
-          [sourceError.sourceId],
+            WHERE id = $1
+              AND last_accepted_sync_sequence = $2::numeric
+          RETURNING id`,
+          [sourceError.sourceId, sourceError.observedAfterSequence],
         );
+        if (applied.rowCount === 1) acceptedSourceErrors += 1;
+        else staleSourceErrors += 1;
       }
       const rebuiltAgents = new Set<string>();
       let autoMerges = 0;
@@ -618,7 +653,8 @@ async function post(request: Request): Promise<Response> {
         response: {
           acceptedEntries,
           acceptedSnapshots,
-          acceptedSourceErrors: sourceErrors.length,
+          acceptedSourceErrors,
+          ...(requestProtocolVersion >= 4 ? { staleSourceErrors, legacySourceErrorsIgnored } : {}),
           staleSnapshots: snapshots.length - acceptedSnapshots,
           sourceSequences: sourceIds.map((sourceId) => ({
             sourceId,
@@ -636,6 +672,7 @@ async function post(request: Request): Promise<Response> {
       snapshotsStale: result.staleSnapshots,
       entriesAccepted: result.acceptedEntries,
       sourceErrorsReceived: sourceErrors.length,
+      sourceErrorsAccepted: result.acceptedSourceErrors,
       accountAutoMerges: transactionResult.autoMerges,
     });
   } catch (error) {

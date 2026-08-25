@@ -204,16 +204,29 @@ describe("usage payload privacy and numeric contract", () => {
     ).toBe(true);
   });
 
-  it("accepts only an allowlisted content-free source diagnostic", () => {
-    expect(parseSourceErrors([{ sourceId, code: "collector_failed" }])).toEqual([
-      { sourceId, code: "collector_failed" },
+  it("keeps legacy source diagnostics compatible but marks them unordered", () => {
+    expect(parseSourceErrors([{ sourceId, code: "collector_failed" }], 2)).toEqual([
+      { sourceId, code: "collector_failed", observedAfterSequence: null },
     ]);
+    expect(parseSourceErrors([{ sourceId, code: "collector_failed" }], 3)).toEqual([
+      { sourceId, code: "collector_failed", observedAfterSequence: null },
+    ]);
+  });
+
+  it("requires canonical bounded ordering metadata for protocol v4 source errors", () => {
+    expect(
+      parseSourceErrors([{ sourceId, code: "collector_failed", observedAfterSequence: "0" }], 4),
+    ).toEqual([{ sourceId, code: "collector_failed", observedAfterSequence: "0" }]);
     for (const unsafe of [
+      { sourceId, code: "collector_failed" },
+      { sourceId, code: "collector_failed", observedAfterSequence: "-1" },
+      { sourceId, code: "collector_failed", observedAfterSequence: "01" },
+      { sourceId, code: "collector_failed", observedAfterSequence: "1".repeat(31) },
       { sourceId, code: "collector_failed", path: "/private/repository" },
       { sourceId, code: "ENOENT /private/repository" },
       { sourceId, code: "collector_failed", message: "prompt content" },
     ]) {
-      expect(() => parseSourceErrors([unsafe])).toThrow("invalid_source_error");
+      expect(() => parseSourceErrors([unsafe], 4)).toThrow("invalid_source_error");
     }
   });
 });

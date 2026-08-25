@@ -9,6 +9,7 @@ import {
   collectClaude,
   collectCodexSessionUsage,
   codexUsageSnapshot,
+  materializeCodexAuthoritativeDays,
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
@@ -354,7 +355,7 @@ test("retains every provisional Codex day across a UTC rollover", () => {
   );
 });
 
-test("does not backfill a local Codex gap before the newest authoritative bucket", () => {
+test("materializes complete zero corrections inside the Codex authoritative range", () => {
   const component = (date, totalTokens) => ({
     date,
     totalTokens,
@@ -377,10 +378,63 @@ test("does not backfill a local Codex gap before the newest authoritative bucket
       completeness: "partial",
       entries: [
         { date: "2026-08-20", totalTokens: "10", completeness: "complete" },
+        { ...component("2026-08-21", "11"), totalTokens: "0", completeness: "complete" },
         { date: "2026-08-22", totalTokens: "12", completeness: "complete" },
         { ...component("2026-08-23", "13"), completeness: "partial" },
       ],
     },
+  );
+});
+
+test("materializes Codex authoritative zeros across a UTC month rollover", () => {
+  assert.deepEqual(
+    materializeCodexAuthoritativeDays(
+      [
+        { date: "2026-08-30", totalTokens: "10" },
+        { date: "2026-09-01", totalTokens: "12" },
+      ],
+      "2026-08-30",
+      "2026-09-02",
+    ),
+    [
+      { date: "2026-08-30", totalTokens: "10" },
+      { date: "2026-08-31", totalTokens: "0" },
+      { date: "2026-09-01", totalTokens: "12" },
+    ],
+  );
+});
+
+test("does not extend Codex authoritative zeros before the first returned bucket", () => {
+  assert.deepEqual(
+    codexUsageSnapshot(
+      [
+        { date: "2026-08-30", totalTokens: "10" },
+        { date: "2026-09-01", totalTokens: "12" },
+      ],
+      [],
+      "2026-09-02",
+    ),
+    {
+      completeness: "partial",
+      entries: [
+        { date: "2026-08-30", totalTokens: "10", completeness: "complete" },
+        { date: "2026-08-31", totalTokens: "0", completeness: "complete" },
+        { date: "2026-09-01", totalTokens: "12", completeness: "complete" },
+      ],
+    },
+  );
+});
+
+test("does not invent Codex zeros without a proven complete authoritative range", () => {
+  assert.deepEqual(materializeCodexAuthoritativeDays([], "2026-08-30", "2026-09-02"), []);
+  assert.deepEqual(
+    materializeCodexAuthoritativeDays(
+      [{ date: "2026-09-01", totalTokens: "12" }],
+      "2026-08-30",
+      "2026-09-02",
+      false,
+    ),
+    [{ date: "2026-09-01", totalTokens: "12" }],
   );
 });
 

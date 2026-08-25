@@ -33,6 +33,13 @@ therefore update immediately; later App Server buckets may correct each value up
 Provider-recorded local input/output/cache/reasoning counters remain separately visible; neither
 counter is estimated.
 
+Connector 0.4.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
+server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
+the rollout. A saved unsequenced v2/v3 collector error is replaced by a fresh v4 observation on its
+next in-scope collection instead of being relabeled as ordered. Account-wide sources are
+automatically matched only after two complete positive days with two distinct totals and no complete
+contradiction; manual reassignment and Undo stay available.
+
 Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still
 recorded exactly and is collected by `viberacing sync` or the next supported lifecycle trigger.

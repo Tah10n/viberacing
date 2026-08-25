@@ -24,6 +24,11 @@ export function publicOrigin(): URL {
       code: "CONFIG_PUBLIC_ORIGIN_INVALID",
     });
   }
+  if (url.username !== "" || url.password !== "") {
+    throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must not include credentials"), {
+      code: "CONFIG_PUBLIC_ORIGIN_CREDENTIALS",
+    });
+  }
   if (url.pathname !== "/" || url.search !== "" || url.hash !== "") {
     throw Object.assign(new Error("VIBERACING_PUBLIC_ORIGIN must be an origin without a path"), {
       code: "CONFIG_PUBLIC_ORIGIN_PATH",
@@ -45,7 +50,19 @@ export function secureCookies(): boolean {
 function testGitHubOrigin(): URL | null {
   const value = process.env.VIBERACING_TEST_GITHUB_ORIGIN?.trim();
   if (!value) return null;
-  const origin = new URL(value);
+  let origin: URL;
+  try {
+    origin = new URL(value);
+  } catch {
+    throw Object.assign(new Error("VIBERACING_TEST_GITHUB_ORIGIN must be a valid origin"), {
+      code: "CONFIG_TEST_GITHUB_ORIGIN_INVALID",
+    });
+  }
+  if (origin.username !== "" || origin.password !== "") {
+    throw Object.assign(new Error("VIBERACING_TEST_GITHUB_ORIGIN must not include credentials"), {
+      code: "CONFIG_TEST_GITHUB_ORIGIN_CREDENTIALS",
+    });
+  }
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
   const applicationOrigin = publicOrigin();
   const localPreview =
@@ -81,13 +98,13 @@ export function databaseSslEnabled(): boolean {
 
 export { databaseClientConfig };
 
-export const connectorProtocolVersion = 3;
-export type SupportedConnectorProtocolVersion = 2 | typeof connectorProtocolVersion;
+export const connectorProtocolVersion = 4;
+export type SupportedConnectorProtocolVersion = 2 | 3 | typeof connectorProtocolVersion;
 
 export function isSupportedConnectorProtocolVersion(
   value: unknown,
 ): value is SupportedConnectorProtocolVersion {
-  return value === 2 || value === connectorProtocolVersion;
+  return value === 2 || value === 3 || value === connectorProtocolVersion;
 }
 export const expectedSchemaVersion = "004_browser_sync_rate_guard.sql";
 

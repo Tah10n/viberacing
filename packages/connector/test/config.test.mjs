@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   access,
@@ -86,6 +86,8 @@ function usageResponse(body, overrides = {}) {
     acceptedEntries: snapshots.flatMap((snapshot) => snapshot.entries ?? []).length,
     acceptedSnapshots: snapshots.length,
     acceptedSourceErrors: sourceErrors.length,
+    staleSourceErrors: 0,
+    legacySourceErrorsIgnored: 0,
     staleSnapshots: 0,
     sourceSequences: [...snapshots, ...sourceErrors].map((item) => ({
       sourceId: item.sourceId,
@@ -1426,6 +1428,22 @@ test("prevents overlapping syncs with an atomic lock", async () => {
       snapshots: [{ sourceId, syncSequence: "2", entries: [] }],
       sourceErrors: [{ sourceId: errorSourceId, code: "collector_failed" }],
     });
+    assert.deepEqual(
+      runtime.mergePendingPayloads([
+        {
+          protocolVersion: 4,
+          snapshots: [],
+          sourceErrors: [
+            {
+              sourceId: errorSourceId,
+              code: "collector_failed",
+              observedAfterSequence: "5",
+            },
+          ],
+        },
+      ]).sourceErrors,
+      [{ sourceId: errorSourceId, code: "collector_failed", observedAfterSequence: "5" }],
+    );
     const maximumBatch = runtime.mergePendingPayloads(
       Array.from({ length: 32 }, (_, index) => ({
         protocolVersion: 2,
@@ -1755,6 +1773,57 @@ test("the detached scheduler child owns its lock and later launchers exit", asyn
   );
   await assert.rejects(access(join(installation.directory, "scheduler.lock")));
   assert.match(await readFile(trace, "utf8"), new RegExp(`released:${ownerPid}`));
+});
+
+test("a hook retries bounded detached scheduler startup failures", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-scheduler-launch-retry-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const marker = join(home, "scheduler-exited-once");
+  const trace = join(home, "scheduler-retry-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE: marker,
+    VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_COUNT: "2",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+
+  const result = await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  assert.equal(result.code, 0);
+  await waitFor(() => bodies.length === 1, 10_000);
+  await waitFor(async () => (await readFile(trace, "utf8")).includes("released:"), 10_000);
+
+  const lines = (await readFile(trace, "utf8")).trim().split("\n");
+  assert.equal(lines.filter((line) => line.startsWith("started:")).length, 3);
+  assert.equal(lines.filter((line) => line.startsWith("launch-failed:")).length, 2);
+  assert.equal(lines.filter((line) => line.startsWith("acquired:")).length, 1);
+  assert.equal(lines.filter((line) => line.startsWith("released:")).length, 1);
+  await access(`${marker}.1`);
+  await access(`${marker}.2`);
+  await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 
 test("a slow detached scheduler survives its parent handshake timeout", async (context) => {
@@ -2204,6 +2273,9 @@ test("an unchanged healthy source never inherits another collector automatic fai
   const localSources = JSON.parse(await readFile(sourcesPath, "utf8"));
   localSources.sources[1].collectionMethod = "synthetic_invalid_collector";
   await writeFile(sourcesPath, `${JSON.stringify(localSources)}\n`);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
   const timestamp = new Date().toISOString();
   await writeFile(
     join(directory, "dirty.json"),
@@ -2223,7 +2295,7 @@ test("an unchanged healthy source never inherits another collector automatic fai
   assert.equal(usageBodies.length, 2);
   assert.deepEqual(usageBodies[1].snapshots, []);
   assert.deepEqual(usageBodies[1].sourceErrors, [
-    { sourceId: failedSourceId, code: "collector_failed" },
+    { sourceId: failedSourceId, code: "collector_failed", observedAfterSequence: "1" },
   ]);
   assert.equal(diagnosticBodies.length, 1);
   assert.deepEqual(
@@ -2245,6 +2317,10 @@ test("an unchanged healthy source never inherits another collector automatic fai
   assert.equal(
     diagnosticBodies[0].events.some(({ code }) => code === "automatic_sync_failed"),
     false,
+  );
+  assert.equal(
+    await readFile(lastHookErrorPath, "utf8"),
+    "2026-08-18T12:55:27.438Z automatic_sync_failed\n",
   );
   const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
   assert.deepEqual(state.diagnostics.activeBySource[failedSourceId], ["collect:collector_failed"]);
@@ -2308,6 +2384,76 @@ test("a permanent upload failure leaves one pending payload without background r
   });
   assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 1);
   assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
+});
+
+test("a recovered initial pending drain clears the stale hook error on unchanged usage", async (context) => {
+  let available = false;
+  let usageRequests = 0;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      if (request.url === "/api/installations/current/diagnostics") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+        return;
+      }
+      usageRequests += 1;
+      response.writeHead(available ? 200 : 503, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify(available ? usageResponse(body) : { error: "synthetic_unavailable" }),
+      );
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-recovered-pending-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const trace = join(home, "collector-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "20,80,40",
+  });
+  const hookArguments = ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"];
+  const schedulerPath = join(installation.directory, "scheduler.lock");
+  const lastHookErrorPath = join(installation.directory, "logs", "last-error.log");
+
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => usageRequests === 3, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(schedulerPath);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  await access(lastHookErrorPath);
+  assert.equal((await readdir(join(installation.directory, "pending"))).length, 1);
+
+  available = true;
+  await runWithInput(hookArguments, environment, "{}");
+  await waitFor(() => usageRequests === 4, 7_000);
+  await waitFor(async () => {
+    try {
+      await access(schedulerPath);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+
+  assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 2);
+  assert.deepEqual(await readdir(join(installation.directory, "pending")), []);
+  await assert.rejects(access(lastHookErrorPath));
 });
 
 test("a Claude hook collects only its dirty source and unchanged data sends no HTTP", async (context) => {
@@ -2463,9 +2609,11 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
     sources,
   );
   const trace = join(home, "collector-trace.txt");
+  const schedulerTrace = join(home, "scheduler-trace.txt");
   const environment = connectorEnvironment(home, {
     NODE_ENV: "test",
     VIBERACING_TEST_COLLECTOR_TRACE: trace,
+    VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1500,3000,3000",
   });
   const hookResults = await Promise.all(
@@ -2491,7 +2639,24 @@ test("events from Claude and Kimi coalesce without collecting other sources", as
   // The detached scheduler is intentionally outside the hook processes. Give it
   // enough wall-clock budget when the full connector suite saturates a CI host;
   // the configured 3 s maximum delay still keeps this wait bounded.
-  await waitFor(() => bodies.length === 1, 30_000);
+  try {
+    await waitFor(() => bodies.length === 1, 30_000);
+  } catch {
+    const diagnostics = {};
+    for (const name of ["dirty.json", "scheduler-launch.lock", "scheduler.lock", "state.json"])
+      diagnostics[name] = await readFile(join(directory, name), "utf8").catch(
+        (error) => error?.code ?? "unavailable",
+      );
+    diagnostics.collectorTrace = await readFile(trace, "utf8").catch(
+      (error) => error?.code ?? "unavailable",
+    );
+    diagnostics.schedulerTrace = await readFile(schedulerTrace, "utf8").catch(
+      (error) => error?.code ?? "unavailable",
+    );
+    throw new Error(
+      `Automatic scheduler did not coalesce the events: ${JSON.stringify(diagnostics)}`,
+    );
+  }
   assert.deepEqual(
     new Set((await readFile(trace, "utf8")).trim().split("\n")),
     new Set(sources.slice(0, 2).map((source) => source.clientSourceId)),
@@ -2680,6 +2845,9 @@ test("manual sync collects every active source and clears only its prior dirty g
       })}\n`,
     );
   await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, sources);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
   await writeFile(
     join(directory, "dirty.json"),
     `${JSON.stringify({
@@ -2708,6 +2876,7 @@ test("manual sync collects every active source and clears only its prior dirty g
   );
   assert.equal(bodies.length, 1);
   assert.equal(bodies[0].snapshots.length, 2);
+  await assert.rejects(access(lastHookErrorPath));
   await assert.rejects(access(join(directory, "dirty.json")));
   await assert.rejects(access(join(directory, "scheduler.lock")));
 
@@ -3130,6 +3299,9 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
       suggestedLabel: "OpenCode custom-channel",
     },
   ]);
+  const lastHookErrorPath = join(directory, "logs", "last-error.log");
+  await mkdir(join(directory, "logs"), { recursive: true });
+  await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
 
   await execFileAsync(
     process.execPath,
@@ -3147,6 +3319,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   assert.equal(pairingBody.sources[0].suggestedLabel, "OpenCode");
   assert.equal(JSON.stringify(pairingBody).includes("custom-channel"), false);
   assert.equal((await readLocalSources(directory))[0].suggestedLabel, "OpenCode");
+  await assert.rejects(access(lastHookErrorPath));
   const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   assert.equal(JSON.stringify(config).includes("custom-channel"), false);
 });
@@ -5008,6 +5181,141 @@ test("recovers a missing sequence and confirms unchanged manual sync with the ne
   assert.match(unchanged.stdout, /synced 1 daily totals from 1 source/i);
   assert.doesNotMatch(unchanged.stdout, /no request was sent/i);
 });
+
+for (const legacyProtocolVersion of [2, 3])
+  test(`replaces an unsequenced legacy v${legacyProtocolVersion} pending error when only another source is dirty`, async (context) => {
+    const usageBodies = [];
+    const server = createServer((request, response) => {
+      const chunks = [];
+      request.on("data", (chunk) => chunks.push(chunk));
+      request.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (request.url === "/api/installations/current/diagnostics") {
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+          return;
+        }
+        usageBodies.push(body);
+        const invalidSourceError = body.sourceErrors?.some(
+          (sourceError) => sourceError.observedAfterSequence === undefined,
+        );
+        response.writeHead(invalidSourceError ? 400 : 200, {
+          "content-type": "application/json",
+        });
+        response.end(
+          JSON.stringify(
+            invalidSourceError ? { error: "invalid_source_error" } : usageResponse(body),
+          ),
+        );
+      });
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    context.after(() => server.close());
+    const address = server.address();
+    assert.notEqual(address, null);
+    assert.equal(typeof address, "object");
+
+    const home = await mkdtemp(
+      join(tmpdir(), `viberacing-legacy-v${legacyProtocolVersion}-pending-error-`),
+    );
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const directory = join(home, ".viberacing");
+    const captureDirectory = join(directory, "captures");
+    await mkdir(captureDirectory, { recursive: true });
+    const date = new Date().toISOString().slice(0, 10);
+    const healthySource = {
+      clientSourceId: "61616161-6161-4161-8161-616161616161",
+      sourceId: "62626262-6262-4262-8262-626262626262",
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "healthy.jsonl"),
+      collectionMethod: "antigravity_cli_capture",
+      supportedSurface: "cli",
+      suggestedLabel: "Healthy",
+    };
+    const failedSource = {
+      clientSourceId: "63636363-6363-4363-8363-636363636363",
+      sourceId: "64646464-6464-4464-8464-646464646464",
+      agentId: "antigravity",
+      dataPath: join(captureDirectory, "failed.jsonl"),
+      collectionMethod: "synthetic_invalid_collector",
+      supportedSurface: "cli",
+      suggestedLabel: "Failed",
+    };
+    await writeFile(
+      healthySource.dataPath,
+      `${JSON.stringify({
+        id: `legacy-${legacyProtocolVersion}-healthy`,
+        date,
+        usage: { date, totalTokens: "3" },
+      })}\n`,
+    );
+    await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+      healthySource,
+      failedSource,
+    ]);
+    const statePath = join(directory, "state.json");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.fingerprints = {
+      [failedSource.sourceId]: createHash("sha256")
+        .update(JSON.stringify({ error: "collector_failed" }))
+        .digest("hex"),
+    };
+    await writeFile(statePath, `${JSON.stringify(state)}\n`);
+    const pendingDirectory = join(directory, "pending");
+    await mkdir(pendingDirectory, { recursive: true });
+    await writeFile(
+      join(pendingDirectory, `${failedSource.sourceId}.error.json`),
+      `${JSON.stringify({
+        protocolVersion: legacyProtocolVersion,
+        snapshots: [],
+        sourceErrors: [{ sourceId: failedSource.sourceId, code: "collector_failed" }],
+      })}\n`,
+    );
+    const timestamp = new Date().toISOString();
+    await writeFile(
+      join(directory, "dirty.json"),
+      `${JSON.stringify({
+        version: 2,
+        sources: {
+          [healthySource.clientSourceId]: {
+            dirtySince: timestamp,
+            lastEventAt: timestamp,
+            generation: randomUUID(),
+          },
+        },
+      })}\n`,
+    );
+    const trace = join(home, "collector-trace.txt");
+
+    await execFileAsync(process.execPath, [connectorPath, "auto-sync"], {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        VIBERACING_TEST_COLLECTOR_TRACE: trace,
+        VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "1,1,1",
+      }),
+    });
+
+    assert.deepEqual(
+      new Set((await readFile(trace, "utf8")).trim().split("\n")),
+      new Set([healthySource.clientSourceId, failedSource.clientSourceId]),
+    );
+    assert.equal(usageBodies.length, 2);
+    assert.equal(usageBodies[0].protocolVersion, connectorProtocolVersion);
+    assert.equal(usageBodies[0].snapshots[0].sourceId, healthySource.sourceId);
+    assert.deepEqual(usageBodies[0].sourceErrors, []);
+    assert.equal(usageBodies[1].protocolVersion, connectorProtocolVersion);
+    assert.deepEqual(usageBodies[1].snapshots, []);
+    assert.deepEqual(usageBodies[1].sourceErrors, [
+      {
+        sourceId: failedSource.sourceId,
+        code: "collector_failed",
+        observedAfterSequence: "0",
+      },
+    ]);
+    assert.deepEqual(await readdir(pendingDirectory), []);
+    await assert.rejects(access(join(directory, "quarantine", `${failedSource.sourceId}.json`)));
+  });
 
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {
   const bodies = [];

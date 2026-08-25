@@ -126,3 +126,17 @@ test("the production workflow checks migration history on pull requests and main
   );
   assert.doesNotMatch(workflow, /if: github\.event_name == 'pull_request'/);
 });
+
+test("the stable required CI check fails when any mandatory job fails", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  assert.match(workflow, /ci-required:\n\s+name: ci-required\n\s+if: always\(\)/);
+  assert.match(workflow, /needs: \[connector, local-smoke, browser-e2e, production\]/);
+  for (const result of [
+    "needs.connector.result",
+    "needs['local-smoke'].result",
+    "needs['browser-e2e'].result",
+    "needs.production.result",
+  ]) {
+    assert.equal(workflow.includes(result), true);
+  }
+});

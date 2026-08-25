@@ -13,11 +13,13 @@ Normalized local data roots, executable paths, hook config roots, and their hash
 into pairing config or requests. Compact installation reconciliation sends only the current
 connector version and the already assigned server source IDs; legacy connectors may omit the
 version. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
-aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3
+aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
 may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
-carry only snapshot-level status. If collection fails, it may instead send the fixed
-`collector_failed` source error and source ID through the legacy usage endpoint; exception messages
-are never sent.
+carry only snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
+`collector_failed` code, source ID, and the last server-accepted sequence known before collection.
+That ordering value is an opaque canonical counter, not local content. Delayed errors are ignored;
+legacy v2/v3 errors are accepted but cannot overwrite persistent status. Exception messages are
+never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
@@ -38,10 +40,11 @@ structured event and does not add raw diagnostic data. The original `collector_f
 remains in usage sync for dashboard compatibility.
 
 For account-wide agents, the server may compare already stored complete daily totals from the last
-30 finished UTC days. Two exact nonzero days with no conflicting overlap can automatically map two
-computer sources to one logical account. The decision stores opaque source/account IDs and the
-number of matching days, not the daily values themselves, and can be undone from the dashboard. No
-email, username, account ID from the provider, or derived email fingerprint is used. The source also
+30 finished UTC days. Two exact nonzero days containing two distinct positive totals, with no
+conflicting complete overlap, can automatically map two computer sources to one logical account.
+Partial and zero days are not evidence. The decision stores opaque source/account IDs and the number
+of matching days, not the daily values themselves, and can be undone from the dashboard. No email,
+username, account ID from the provider, or derived email fingerprint is used. The source also
 retains the timestamp of an automatic match or later explicit reassignment, preventing a background
 match from overriding that decision after temporary Undo metadata is cleaned up.
 
@@ -54,7 +57,10 @@ uses provider-recorded last-call counters for exact local components. Those loca
 have a different sum from the separate account-wide App Server daily total; both remain aggregate
 counters, and the dashboard identifies the scope difference. While account buckets lag, every exact
 local daily aggregate after the newest authoritative bucket is sent as a partial ranking value and
-is later corrected by complete account data. These remain date-level aggregate counters; it never
+is later corrected by complete account data. Within a successfully read continuous App Server range,
+an absent day is represented by an explicit complete zero; it carries no content and is an
+authoritative correction marker rather than an inferred usage value. No zero is generated for an
+incomplete result or beyond the proven range. These remain date-level aggregate counters; it never
 retains or transmits any other transcript field. The Antigravity wrapper passes native output
 through to the terminal and persists only the stable event ID, UTC date, and exact token counters
 needed for deduplication. Capture records older than 35 days are removed after a successful sync and

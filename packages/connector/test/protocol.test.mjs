@@ -133,6 +133,32 @@ test("protocol errors are snake_case and terminal output strips control characte
   assert.equal(sanitizeTerminalText("safe\u001b[2J\r\nnext"), "safe�[2J��next");
 });
 
+test("protocol v4 usage responses distinguish applied and stale source errors", async () => {
+  const response = {
+    acceptedEntries: 0,
+    acceptedSnapshots: 0,
+    acceptedSourceErrors: 1,
+    staleSourceErrors: 1,
+    legacySourceErrorsIgnored: 0,
+    staleSnapshots: 0,
+    sourceSequences: [{ sourceId, lastAcceptedSyncSequence: "5", accepted: false }],
+  };
+  assert.deepEqual(
+    await parseProtocolResponse(json(response), { kind: "usage", sourceIds: [sourceId] }),
+    response,
+  );
+  for (const invalid of [
+    { ...response, staleSourceErrors: -1 },
+    { ...response, legacySourceErrorsIgnored: "0" },
+    Object.fromEntries(Object.entries(response).filter(([key]) => key !== "staleSourceErrors")),
+  ]) {
+    await assert.rejects(
+      parseProtocolResponse(json(invalid), { kind: "usage", sourceIds: [sourceId] }),
+      /invalid protocol response/,
+    );
+  }
+});
+
 test("browser Sync claims accept only a bounded unique source set", async () => {
   const requestId = "11111111-1111-4111-8111-111111111111";
   const sourceId = "22222222-2222-4222-8222-222222222222";

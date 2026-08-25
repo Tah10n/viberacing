@@ -107,7 +107,7 @@ describe("dashboard connection flow", () => {
     const pairingApproval = source("../api/pairing/approve/route.ts");
     const leaderboardLeave = source("../api/leaderboard/leave/route.ts");
     expect(connect).toContain('aggregationMode === "account_max"');
-    expect(connect).toContain("automatically match this account after its first");
+    expect(connect).toContain("after enough completed");
     expect(connect).toContain("Provider email and credentials");
     expect(dashboard).toContain("AUTOMATIC ACCOUNT MATCH");
     expect(dashboard).toContain('action="/api/accounts/dedup/undo"');
@@ -128,9 +128,13 @@ describe("dashboard connection flow", () => {
 
   it("shares authoritative account-day precedence with ranking summaries", () => {
     const usageSummary = source("../../lib/usage-summary.ts");
+    expect(usageSummary).toContain("export const accountMaxObservationIsEligibleSql");
     expect(usageSummary).toContain("export const accountMaxDailyTokensSql");
+    expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
     expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(2);
+    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(2);
+    expect(dashboard).toContain("AND candidate.account_max_selected");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
   });
 });

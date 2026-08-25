@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-local adapter registry -> connector protocol v3 -> Next.js -> PostgreSQL
+local adapter registry -> connector protocol v4 -> Next.js -> PostgreSQL
 browser ---------------------- GitHub OAuth -----------^
 ```
 
@@ -45,25 +45,29 @@ more than one profile exists.
 
 After a complete account-wide snapshot, ingestion compares up to 30 finished UTC days against other
 root accounts of the same user and agent. Only nonzero complete days count. At least two exact
-matches and no overlapping mismatch are required. A deterministic oldest matching account becomes
-the root; the single-source account is retained as a hidden alias and an event records only opaque
-IDs and the number of matched days. The source retains only the timestamp of that decision, so Undo,
-manual reassignment, or later event cleanup cannot make it eligible for another automatic decision.
-Undo moves the source back to that alias. Zero-token days do not count as positive evidence, but a
-complete zero-versus-positive day is a contradiction. Partial, current-day, weak, or contradictory
-history never triggers a merge. Provider email and credentials are neither read nor transmitted.
+matched days, two distinct positive totals, and no overlapping complete mismatch are required. A
+deterministic oldest matching account becomes the root; the single-source account is retained as a
+hidden alias and an event records only opaque IDs and the number of matched days. The source retains
+only the timestamp of that decision, so Undo, manual reassignment, or later event cleanup cannot
+make it eligible for another automatic decision. Undo moves the source back to that alias.
+Zero-token days do not count as positive evidence, but a complete zero-versus-positive day is a
+contradiction. Partial, current-day, weak, or contradictory history never triggers a merge. Provider
+email and credentials are neither read nor transmitted.
 
 ## Snapshot ingestion and ranking
 
 Every changed source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence.
 Complete snapshots replace values and delete missing dates; partial snapshots update only present
 dates and retain the greater prior total when a partial subtotal is lower. Complete corrections may
-decrease values, including complete per-day entries carried by an otherwise partial snapshot. The v3
-protocol adds that per-day completeness field; the server continues to accept legacy v2 snapshots,
-whose entries inherit the snapshot-level status. The server validates canonical decimal strings,
-source ownership, body/range limits, and token components, then uses bulk JSON-to-recordset SQL in
-one transaction. A failed collector can send only the allowlisted `collector_failed` diagnostic code
-for its mapped source; raw errors, content, and paths are never part of the protocol.
+decrease values, including complete per-day entries carried by an otherwise partial snapshot.
+Protocol v3 added per-day completeness; the server continues to accept legacy v2 snapshots. Protocol
+v4 orders a failed collector's allowlisted `collector_failed` code with the last server-accepted
+source sequence known before collection. The server persists that error only when the sequence still
+matches; delayed errors are counted as stale and ignored, while v2/v3 errors without ordering
+metadata are accepted on the wire but never overwrite persistent status. Raw errors, content, and
+paths are never part of the protocol. The server validates canonical decimal strings, source
+ownership, body/range limits, and token components, then uses bulk JSON-to-recordset SQL in one
+transaction.
 
 The server reports `lastAcceptedSyncSequence` during pairing, installation inspection, and usage
 responses. Connect, doctor, and sync reconcile the local value with the server maximum. A stale
@@ -71,13 +75,14 @@ pending snapshot is rewritten to `server + 1` and retried once; there is no unbo
 
 Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
 Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
-use a daily maximum over every complete observation and any provisional observations accepted after
-the newest complete one; a later complete observation excludes older provisional rows and may
-correct the value down. If no complete observation exists, every provisional row is eligible.
-Machine-local sources use daily `sum`; different accounts and agents sum. Dashboard components for
-an account-wide day are selected conservatively from the largest complete local component total.
-They are hidden for that day if equally large rows contain more than one distinct tuple. The
-dashboard identifies a local component sum that differs from the separate provider account total.
+use only complete observations tied at the newest complete `updated_at`, plus provisional
+observations accepted later than that boundary; a later complete observation excludes every older
+complete and provisional row and may correct the value down. If no complete observation exists,
+every provisional row is eligible. Machine-local sources use daily `sum`; different accounts and
+agents sum. Dashboard components for an account-wide day are selected conservatively from the
+largest complete local component total. They are hidden for that day if equally large rows contain
+more than one distinct tuple. The dashboard identifies a local component sum that differs from the
+separate provider account total.
 
 ## Reliability and lifecycle
 
@@ -92,9 +97,11 @@ cache/reasoning overlap, and deduplicates repeated or copied events with content
 provider's account-wide daily total and the locally observed component sum remain separate exact
 counters. While account buckets lag, each exact local daily sum after the newest authoritative
 bucket is submitted as partial so Sync can update the ranking immediately across UTC rollovers. The
-source remains non-destructive until an authoritative bucket covers the current day; later complete
-account data corrects each provisional value. Missing, bounded, or changed transcript shapes
-otherwise degrade to total-only rather than an estimate.
+source remains non-destructive until an authoritative bucket covers the current day. Inside a
+continuous, successfully read App Server range, a missing daily bucket is sent as an explicit
+complete zero so prior usage can be corrected; no zero is created for an incomplete result or beyond
+that proven range. Later complete account data corrects each provisional value. Missing, bounded, or
+changed transcript shapes otherwise degrade to total-only rather than an estimate.
 
 Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable local
 source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and other
@@ -164,11 +171,16 @@ only 35 days and atomically compact oversized source-specific files.
 
 Approval is serialized on the user row and caps each user at 20 active installations, 100 active
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
-additional computers cannot multiply the user-wide request budget. Browser login is also serialized
-per user, rotates the current browser token, and retains at most ten active 30-day sessions per
-user. OAuth and pairing apply pre-authentication limits only when the deployment exposes a trusted
-client address; shared global buckets are reached only after OAuth state or browser-session and
-per-user validation, so anonymous traffic cannot consume the authenticated work budget.
+additional computers cannot multiply the user-wide request budget. Pre-authentication endpoints
+first consume an atomic global admission bucket and create a canonical client bucket only while that
+global capacity remains. IPv6 clients share a canonical `/64`, IPv4-mapped IPv6 shares its IPv4 key,
+and PostgreSQL stores only the digest. Expired bucket cleanup is bounded, best-effort, and started
+at most once per minute per web process; an edge WAF remains the separate protection against a
+genuinely distributed attack. Browser login is also serialized per user, rotates the current browser
+token, and retains at most ten active 30-day sessions per user. OAuth and pairing apply
+pre-authentication limits only when the deployment exposes a trusted client address; shared global
+buckets are reached only after OAuth state or browser-session and per-user validation, so anonymous
+traffic cannot consume the authenticated work budget.
 
 `/health` is process liveness. `/ready` validates production configuration, PostgreSQL, required
 tables, and the presence of the latest required migration; later ledger rows remain ready. Small

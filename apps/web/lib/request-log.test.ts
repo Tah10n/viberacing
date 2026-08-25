@@ -31,6 +31,7 @@ describe("request logging", () => {
       headers: {
         Authorization: "Bearer secret-credential",
         "Content-Length": "19",
+        "X-Real-IP": "203.0.113.91",
       },
       body: "secret-request-body",
     });
@@ -58,6 +59,7 @@ describe("request logging", () => {
     expect(serialized).not.toContain("secret-query");
     expect(serialized).not.toContain("secret-credential");
     expect(serialized).not.toContain("secret-request-body");
+    expect(serialized).not.toContain("203.0.113.91");
     expect(serialized).not.toContain("/private/user");
   });
 

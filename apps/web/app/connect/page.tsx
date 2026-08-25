@@ -178,8 +178,8 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
                             />
                           ) : null}
                           <p>
-                            Vibe Racing will automatically match this account after its first
-                            complete sync.
+                            Vibe Racing can automatically match this account after enough completed
+                            daily totals agree across computers.
                           </p>
                         </>
                       ) : (

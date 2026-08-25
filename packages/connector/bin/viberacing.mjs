@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -138,6 +138,22 @@ const output = (...values) => {
   if (!quiet) process.stdout.write(`${values.map(sanitizeTerminalText).join(" ")}\n`);
 };
 const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
+let lastHookErrorRecorded = false;
+
+async function recordLastHookError() {
+  lastHookErrorRecorded = true;
+  const directory = join(stateDirectory, "logs");
+  await mkdir(directory, { recursive: true, mode: 0o700 }).catch(() => {});
+  await writeFile(
+    join(directory, "last-error.log"),
+    `${new Date().toISOString()} ${command === "auto-sync" ? "automatic_sync_failed" : "connector_command_failed"}\n`,
+    { mode: 0o600 },
+  ).catch(() => {});
+}
+
+async function clearLastHookError() {
+  await unlink(join(stateDirectory, "logs", "last-error.log")).catch(() => {});
+}
 
 function collectorWarningMessage(code) {
   if (code === "codex_session_components_incomplete")
@@ -553,6 +569,7 @@ async function deliver(config, payload) {
         ...(payload.snapshots ?? []).map((snapshot) => snapshot.sourceId),
         ...(payload.sourceErrors ?? []).map((sourceError) => sourceError.sourceId),
       ],
+      protocolVersion: payload.protocolVersion,
     },
   );
 }
@@ -615,6 +632,14 @@ function pendingSourceId(payload) {
     ...(payload.sourceErrors ?? []).map((sourceError) => sourceError.sourceId),
   ];
   return ids.length === 1 && typeof ids[0] === "string" ? ids[0] : null;
+}
+
+function isLegacyPendingSourceError(payload) {
+  return (
+    (payload.protocolVersion === 2 || payload.protocolVersion === 3) &&
+    (payload.snapshots?.length ?? 0) === 0 &&
+    (payload.sourceErrors?.length ?? 0) > 0
+  );
 }
 
 async function forgetSourceState(sourceIds) {
@@ -801,7 +826,13 @@ async function deliverPendingGroup(config, items, retired) {
     if (retired.has(item.sourceId)) await removePending(item.path);
     else eligible.push(item);
   }
-  if (eligible.length === 0) return { accepted: 0, staleSources: [], quarantinedSources: [] };
+  if (eligible.length === 0)
+    return {
+      accepted: 0,
+      successfulDeliveries: 0,
+      staleSources: [],
+      quarantinedSources: [],
+    };
   try {
     if (await lifecycleMutationActive())
       throw new Error("Pending delivery stopped by a local lifecycle operation");
@@ -850,7 +881,12 @@ async function deliverPendingGroup(config, items, retired) {
         }
       }
     }
-    return { accepted: result.acceptedEntries ?? 0, staleSources, quarantinedSources: [] };
+    return {
+      accepted: result.acceptedEntries ?? 0,
+      successfulDeliveries: staleSources.length === 0 ? 1 : 0,
+      staleSources,
+      quarantinedSources: [],
+    };
   } catch (error) {
     if (error?.status === 400 && eligible.length > 1) {
       const middle = Math.ceil(eligible.length / 2);
@@ -858,6 +894,7 @@ async function deliverPendingGroup(config, items, retired) {
       const right = await deliverPendingGroup(config, eligible.slice(middle), retired);
       return {
         accepted: left.accepted + right.accepted,
+        successfulDeliveries: left.successfulDeliveries + right.successfulDeliveries,
         staleSources: [...left.staleSources, ...right.staleSources],
         quarantinedSources: [...left.quarantinedSources, ...right.quarantinedSources],
       };
@@ -865,7 +902,12 @@ async function deliverPendingGroup(config, items, retired) {
     if (error?.status === 400 && error?.code === "unsupported_source") {
       retired.add(eligible[0].sourceId);
       await removePending(eligible[0].path);
-      return { accepted: 0, staleSources: [], quarantinedSources: [] };
+      return {
+        accepted: 0,
+        successfulDeliveries: 0,
+        staleSources: [],
+        quarantinedSources: [],
+      };
     }
     if (error?.status === 400) {
       const item = eligible[0];
@@ -878,7 +920,12 @@ async function deliverPendingGroup(config, items, retired) {
         { code: "pending_payload_rejected", phase: "deliver" },
       ]);
       await writeState(state);
-      return { accepted: 0, staleSources: [], quarantinedSources: [item.sourceId] };
+      return {
+        accepted: 0,
+        successfulDeliveries: 0,
+        staleSources: [],
+        quarantinedSources: [item.sourceId],
+      };
     }
     await lifecycleFailure(error);
   }
@@ -914,25 +961,45 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
       .filter((sourceId) => typeof sourceId === "string"),
   );
   const items = [];
+  const legacyPendingErrors = [];
   for (const path of await pendingPayloads()) {
-    let payload;
+    let storedPayload;
     try {
-      payload = { ...(await readPending(path)), protocolVersion };
+      storedPayload = await readPending(path);
     } catch (error) {
       if (error?.code === "ENOENT") continue;
       throw error;
     }
-    const sourceId = pendingSourceId(payload);
+    const sourceId = pendingSourceId(storedPayload);
     if (sourceId === null) throw new Error("Invalid pending payload");
     if (!configured.has(sourceId)) {
       await removePending(path);
       continue;
     }
     if (allowedSourceIds && !allowedSourceIds.has(sourceId)) continue;
+    if (isLegacyPendingSourceError(storedPayload)) {
+      legacyPendingErrors.push({ path, sourceId });
+      continue;
+    }
+    const payload = { ...storedPayload, protocolVersion };
     items.push({ path, payload, sourceId });
   }
+  if (legacyPendingErrors.length > 0) {
+    const state = await readState();
+    const collectorFailureFingerprint = fingerprint({ error: "collector_failed" });
+    let changed = false;
+    for (const { sourceId } of legacyPendingErrors) {
+      if (state.fingerprints?.[sourceId] !== collectorFailureFingerprint) continue;
+      delete state.fingerprints[sourceId];
+      changed = true;
+    }
+    if (changed) await writeState(state);
+    for (const { path } of legacyPendingErrors) await removePending(path);
+  }
   const retired = new Set();
+  const reobserveSourceIds = new Set(legacyPendingErrors.map(({ sourceId }) => sourceId));
   let accepted = 0;
+  let successfulDeliveries = 0;
   const staleSources = new Set();
   const quarantinedSources = new Set();
   const groups = [
@@ -945,6 +1012,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
         throw new Error("Pending delivery stopped by a local lifecycle operation");
       const delivered = await deliverPendingGroup(config, group, retired);
       accepted += delivered.accepted;
+      successfulDeliveries += delivered.successfulDeliveries;
       for (const sourceId of delivered.staleSources) staleSources.add(sourceId);
       for (const sourceId of delivered.quarantinedSources) quarantinedSources.add(sourceId);
     }
@@ -955,11 +1023,15 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   if (retryStale && staleSources.size > 0) {
     const retried = await drainPending(config, false, allowedSourceIds);
     accepted += retried.accepted;
+    successfulDeliveries += retried.successfulDeliveries;
     for (const sourceId of retried.retiredSources) retired.add(sourceId);
     for (const sourceId of retried.quarantinedSources) quarantinedSources.add(sourceId);
+    for (const sourceId of retried.reobserveSourceIds) reobserveSourceIds.add(sourceId);
   }
   return {
     accepted,
+    successfulDeliveries,
+    reobserveSourceIds: [...reobserveSourceIds],
     retiredSources: [...retired],
     staleSources: [...staleSources],
     quarantinedSources: [...quarantinedSources],
@@ -1006,7 +1078,11 @@ async function sync(providedConfig, options = {}) {
       const syncSources = requestedSourceIds
         ? mappedSources.filter((source) => requestedSourceIds.has(source.sourceId))
         : options.automatic
-          ? mappedSources.filter((source) => dirtyIds.has(source.clientSourceId))
+          ? mappedSources.filter(
+              (source) =>
+                dirtyIds.has(source.clientSourceId) ||
+                previous.reobserveSourceIds.includes(source.sourceId),
+            )
           : mappedSources;
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
@@ -1044,6 +1120,10 @@ async function sync(providedConfig, options = {}) {
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
+      for (const sourceId of previous.retiredSources)
+        failures.push(`server disconnected source ${sourceId}`);
+      for (const sourceId of previous.quarantinedSources)
+        failures.push(`server rejected source ${sourceId}; payload quarantined`);
       for (let index = 0; index < collected.length; index += 1) {
         const outcome = collected[index];
         const source = syncSources[index];
@@ -1052,7 +1132,11 @@ async function sync(providedConfig, options = {}) {
           failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
           const nextFingerprint = fingerprint({ error: "collector_failed" });
           if (state.fingerprints[source.sourceId] !== nextFingerprint) {
-            sourceErrors.push({ sourceId: source.sourceId, code: "collector_failed" });
+            sourceErrors.push({
+              sourceId: source.sourceId,
+              code: "collector_failed",
+              observedAfterSequence: source.lastAcceptedSyncSequence ?? "0",
+            });
             state.fingerprints[source.sourceId] = nextFingerprint;
           }
           reconcileDiagnosticPhase(state, source.sourceId, "collect", [
@@ -1114,6 +1198,7 @@ async function sync(providedConfig, options = {}) {
           successfullyCheckedSourceIds,
           requestedSourceIds,
         );
+        if (failures.length === 0 && previous.successfulDeliveries > 0) await clearLastHookError();
         output(
           diagnosticDelivery.attempted
             ? "No usage changes; a diagnostics request was attempted."
@@ -1142,12 +1227,15 @@ async function sync(providedConfig, options = {}) {
       }
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
       for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
-      for (const sourceId of [...previous.retiredSources, ...delivered.retiredSources])
+      for (const sourceId of delivered.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
-      for (const sourceId of [...previous.quarantinedSources, ...delivered.quarantinedSources])
+      for (const sourceId of delivered.quarantinedSources)
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
-      if (failures.length === 0)
+      if (failures.length === 0) {
         await compactSuccessfulCaptures({ ...config, sources: syncSources });
+        if (previous.successfulDeliveries + delivered.successfulDeliveries > 0)
+          await clearLastHookError();
+      }
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       return { accepted, failures };
     },
@@ -1254,47 +1342,64 @@ function schedulerHandshakeWaitMs() {
   return value !== undefined && /^[1-9]\d{0,3}$/.test(value) ? Number(value) : 5_000;
 }
 
+async function traceSchedulerForTest(value) {
+  if (process.env.NODE_ENV !== "test" || !process.env.VIBERACING_TEST_SCHEDULER_TRACE) return;
+  await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `${value}\n`).catch(() => {});
+}
+
 async function launchAutomaticScheduler(existingLaunch) {
   if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
   const launch = existingLaunch ?? (await claimSchedulerLaunch());
   if (!launch) return false;
   const ownsLaunch = existingLaunch === undefined;
   try {
-    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
-    const state = await readState();
-    if (state.automaticDisabledReason) return false;
-    const child = spawn(
-      process.execPath,
-      [fileURLToPath(import.meta.url), "auto-sync", "--quiet"],
-      {
-        detached: true,
-        stdio: ["ignore", "ignore", "ignore", "ipc"],
-        windowsHide: true,
-      },
-    );
-    const status = await new Promise((resolve) => {
-      let settled = false;
-      let timeout;
-      const message = (value) =>
-        finish(value?.type === "viberacing-scheduler" ? value.status : "lost");
-      const lost = () => finish("lost");
-      const finish = (value) => {
-        if (settled) return;
-        settled = true;
-        if (timeout !== undefined) clearTimeout(timeout);
-        child.off("message", message);
-        child.off("error", lost);
-        child.off("exit", lost);
-        resolve(value);
-      };
-      timeout = setTimeout(() => finish("pending"), schedulerHandshakeWaitMs());
-      child.once("message", message);
-      child.once("error", lost);
-      child.once("exit", lost);
-    });
-    child.unref();
-    child.channel?.unref();
-    return status === "acquired";
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return false;
+      const state = await readState();
+      if (state.automaticDisabledReason) return false;
+      let child;
+      try {
+        child = spawn(process.execPath, [fileURLToPath(import.meta.url), "auto-sync", "--quiet"], {
+          detached: true,
+          stdio: ["ignore", "ignore", "ignore", "ipc"],
+          windowsHide: true,
+        });
+      } catch {
+        await traceSchedulerForTest(`launch-failed:${process.pid}:${attempt + 1}`);
+        if (attempt < 2) {
+          await delay(25 * 4 ** attempt);
+          continue;
+        }
+        return false;
+      }
+      const status = await new Promise((resolve) => {
+        let settled = false;
+        let timeout;
+        const message = (value) =>
+          finish(value?.type === "viberacing-scheduler" ? value.status : "lost");
+        const launchFailed = () => finish("launch_failed");
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          if (timeout !== undefined) clearTimeout(timeout);
+          child.off("message", message);
+          child.off("error", launchFailed);
+          child.off("exit", launchFailed);
+          resolve(value);
+        };
+        timeout = setTimeout(() => finish("pending"), schedulerHandshakeWaitMs());
+        child.once("message", message);
+        child.once("error", launchFailed);
+        child.once("exit", launchFailed);
+      });
+      child.unref();
+      child.channel?.unref();
+      if (status === "acquired") return true;
+      if (status !== "launch_failed") return false;
+      await traceSchedulerForTest(`launch-failed:${process.pid}:${attempt + 1}`);
+      if (attempt < 2) await delay(25 * 4 ** attempt);
+    }
+    return false;
   } finally {
     if (ownsLaunch) await releaseSchedulerLaunch(launch);
   }
@@ -1324,6 +1429,22 @@ async function sendSchedulerHandshake(status) {
     process.send({ type: "viberacing-scheduler", status }, () => resolve()),
   );
   if (process.connected) process.disconnect();
+}
+
+async function exitAutomaticSchedulerForTest() {
+  const marker = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE;
+  if (process.env.NODE_ENV !== "test" || !marker) return false;
+  const countText = process.env.VIBERACING_TEST_SCHEDULER_EXIT_BEFORE_HANDSHAKE_COUNT ?? "1";
+  if (!/^[1-3]$/.test(countText)) throw new Error("Invalid scheduler exit test count");
+  for (let index = 1; index <= Number(countText); index += 1) {
+    try {
+      await writeFile(`${marker}.${index}`, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
+      return true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+  }
+  return false;
 }
 
 async function recordAutomaticSyncFailure(clientSourceIds) {
@@ -1357,9 +1478,13 @@ async function hook() {
     const agentId = option("--agent");
     if (await markDirtyIfConnected(clientSourceId, agentId)) {
       const launch = await claimSchedulerLaunch({ waitMs: 0 });
+      await traceSchedulerForTest(`hook-launch-${launch ? "claimed" : "busy"}:${process.pid}`);
       if (launch)
         try {
-          await launchAutomaticScheduler(launch);
+          const launched = await launchAutomaticScheduler(launch);
+          await traceSchedulerForTest(
+            `hook-launch-result:${process.pid}:${launched ? "acquired" : "not-acquired"}`,
+          );
         } finally {
           await releaseSchedulerLaunch(launch);
         }
@@ -1372,8 +1497,8 @@ async function hook() {
 }
 
 async function automaticSync() {
-  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_SCHEDULER_TRACE)
-    await appendFile(process.env.VIBERACING_TEST_SCHEDULER_TRACE, `started:${process.pid}\n`);
+  await traceSchedulerForTest(`started:${process.pid}`);
+  if (await exitAutomaticSchedulerForTest()) return;
   await waitForTestSchedulerClaimBarrier();
   if (await lifecycleMutationActive()) {
     await sendSchedulerHandshake("lost");
@@ -1448,6 +1573,9 @@ async function automaticSync() {
       }
       return;
     }
+  } catch (error) {
+    if (quiet) await recordLastHookError();
+    throw error;
   } finally {
     if (attempted) await clearDirty(attemptedClaims).catch(() => {});
     await releaseScheduler(scheduler);
@@ -2044,15 +2172,7 @@ try {
       "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
     );
 } catch (error) {
-  if (quiet) {
-    const directory = join(stateDirectory, "logs");
-    await mkdir(directory, { recursive: true, mode: 0o700 }).catch(() => {});
-    await writeFile(
-      join(directory, "last-error.log"),
-      `${new Date().toISOString()} ${command === "auto-sync" ? "automatic_sync_failed" : "connector_command_failed"}\n`,
-      { mode: 0o600 },
-    ).catch(() => {});
-  }
+  if (quiet && !lastHookErrorRecorded) await recordLastHookError();
   if (!quiet)
     warning(`Vibe Racing: ${error instanceof Error ? error.message : "unexpected error"}`);
   process.exitCode = 1;

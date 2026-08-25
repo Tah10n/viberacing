@@ -4,6 +4,7 @@ import {
   connectorProtocolVersion,
   databaseClientConfig,
   databaseSslEnabled,
+  githubWebOrigin,
   isSupportedConnectorProtocolVersion,
   isSemanticVersion,
   maximumDailyTokens,
@@ -15,6 +16,7 @@ import {
 } from "./config";
 
 const originalOrigin = process.env.VIBERACING_PUBLIC_ORIGIN;
+const originalTestGitHubOrigin = process.env.VIBERACING_TEST_GITHUB_ORIGIN;
 const originalDatabaseUrl = process.env.DATABASE_URL;
 const originalDatabaseSsl = process.env.VIBERACING_DATABASE_SSL;
 const originalPgSslMode = process.env.PGSSLMODE;
@@ -29,6 +31,8 @@ const mutableEnv = process.env as Record<string, string | undefined>;
 afterEach(() => {
   if (originalOrigin === undefined) delete process.env.VIBERACING_PUBLIC_ORIGIN;
   else process.env.VIBERACING_PUBLIC_ORIGIN = originalOrigin;
+  if (originalTestGitHubOrigin === undefined) delete process.env.VIBERACING_TEST_GITHUB_ORIGIN;
+  else process.env.VIBERACING_TEST_GITHUB_ORIGIN = originalTestGitHubOrigin;
   if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = originalDatabaseUrl;
   if (originalDatabaseSsl === undefined) delete process.env.VIBERACING_DATABASE_SSL;
@@ -49,12 +53,13 @@ afterEach(() => {
 });
 
 describe("connector protocol compatibility", () => {
-  it("keeps legacy v2 available during the v3 rollout", () => {
-    expect(connectorProtocolVersion).toBe(3);
+  it("keeps legacy v2 and v3 available during the v4 rollout", () => {
+    expect(connectorProtocolVersion).toBe(4);
     expect(isSupportedConnectorProtocolVersion(2)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(3)).toBe(true);
+    expect(isSupportedConnectorProtocolVersion(4)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
-    expect(isSupportedConnectorProtocolVersion(4)).toBe(false);
+    expect(isSupportedConnectorProtocolVersion(5)).toBe(false);
     expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
   });
 });
@@ -74,6 +79,38 @@ describe("public origin", () => {
   it("uses secure cookies over HTTPS", () => {
     process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
     expect(secureCookies()).toBe(true);
+  });
+
+  it("rejects public origins with credentials without exposing them", () => {
+    for (const value of [
+      "https://user@example.com",
+      "https://user:secret@example.com",
+      "https://user%40mail:secret%2Fvalue@example.com",
+      "http://user:secret@localhost:3000",
+    ]) {
+      process.env.VIBERACING_PUBLIC_ORIGIN = value;
+      try {
+        publicOrigin();
+        throw new Error("credentialed origin was accepted");
+      } catch (error) {
+        expect(error).toMatchObject({ code: "CONFIG_PUBLIC_ORIGIN_CREDENTIALS" });
+        expect(String(error)).not.toContain("secret");
+        expect(String(error)).not.toContain("user%40mail");
+      }
+    }
+    process.env.VIBERACING_PUBLIC_ORIGIN = "https://viberacing.example";
+    expect(publicOrigin().origin).toBe("https://viberacing.example");
+  });
+
+  it("rejects credentials in the local GitHub test origin", () => {
+    process.env.VIBERACING_PUBLIC_ORIGIN = "http://localhost:3000";
+    process.env.VIBERACING_ALLOW_INSECURE_LOCAL = "true";
+    process.env.VIBERACING_TEST_GITHUB_ORIGIN = "http://user:secret@localhost:4000";
+    expect(() => githubWebOrigin()).toThrow(
+      expect.objectContaining({ code: "CONFIG_TEST_GITHUB_ORIGIN_CREDENTIALS" }),
+    );
+    process.env.VIBERACING_TEST_GITHUB_ORIGIN = "http://localhost:4000";
+    expect(githubWebOrigin().origin).toBe("http://localhost:4000");
   });
 
   it("fails startup validation when required production configuration is absent", () => {

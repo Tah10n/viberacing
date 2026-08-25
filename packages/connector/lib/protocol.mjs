@@ -1,6 +1,6 @@
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 
-export const connectorProtocolVersion = 3;
+export const connectorProtocolVersion = 4;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
@@ -229,6 +229,8 @@ function parseUsage(value, context) {
     "acceptedEntries",
     "acceptedSnapshots",
     "acceptedSourceErrors",
+    "staleSourceErrors",
+    "legacySourceErrorsIgnored",
     "staleSnapshots",
     "sourceSequences",
   ]);
@@ -237,6 +239,8 @@ function parseUsage(value, context) {
     !safeInteger(value.acceptedEntries) ||
     !safeInteger(value.acceptedSnapshots) ||
     !safeInteger(value.acceptedSourceErrors) ||
+    !safeInteger(value.staleSourceErrors) ||
+    !safeInteger(value.legacySourceErrorsIgnored) ||
     !safeInteger(value.staleSnapshots) ||
     !Array.isArray(value.sourceSequences)
   )

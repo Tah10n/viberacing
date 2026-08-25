@@ -12,6 +12,13 @@ vi.mock("@/lib/rate-limit", () => ({
     key: request.headers.get("x-real-ip") ?? "unknown",
   }),
   clientAdmissionLimit: (_address: unknown, trusted: number) => trusted,
+  consumeAdmissionRateLimit: async (
+    scope: string,
+    key: string,
+    limit: number,
+    _globalLimit: number,
+    window: number,
+  ) => ({ allowed: Boolean(await consumeRateLimitMock(scope, key, limit, window)), reason: null }),
   consumeRateLimit: consumeRateLimitMock,
 }));
 vi.mock("@/lib/db", () => ({ query: queryMock, transaction: transactionMock }));

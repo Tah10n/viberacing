@@ -27,6 +27,10 @@
    Set database SSL to `true` only for an endpoint with a trusted TLS certificate. Do not set the
    local-only insecure-origin exception in production.
 
+   Origins must not contain URL credentials. A non-empty username or password in
+   `VIBERACING_PUBLIC_ORIGIN` (or the local-only `VIBERACING_TEST_GITHUB_ORIGIN`) is rejected with a
+   safe configuration code; the credential is never copied into the error or logs.
+
    `VIBERACING_TRUST_PROXY=railway` is specific to Railway's edge, which overwrites `X-Real-IP`. A
    public self-hosted deployment must instead set `VIBERACING_TRUST_PROXY=trusted-x-real-ip` and run
    behind a reverse proxy that removes any client-supplied `X-Real-IP` and sets exactly one value
@@ -34,6 +38,10 @@
    proxy. `none` ignores forwarding headers and is accepted only for loopback/local preview and
    tests; startup rejects it for a public production origin. Arbitrary `X-Forwarded-For` chains are
    not supported.
+
+   The application admission limiter bounds per-client PostgreSQL rows behind a global route cap and
+   canonicalizes IPv6 clients to `/64`. It is not a distributed-attack service: keep Railway edge
+   controls or another trusted reverse-proxy WAF as an additional production layer.
 
    Keep `VIBERACING_MAX_DAILY_TOKENS` quoted in YAML-based deployment definitions. Exponential
    notation, surrounding whitespace, leading zeroes, and fractional values are rejected so token
@@ -58,6 +66,11 @@ and npm setup. See [production observability](OBSERVABILITY.md) for structured R
 incident filtering, levels, and the enforced privacy boundary.
 
 ## Connector publication
+
+Release protocol v4 server-first. Deploy and verify a web version that accepts connector protocols
+v2, v3, and v4 before publishing connector 0.4.0. Do not raise `VIBERACING_MIN_CONNECTOR_VERSION`
+until 0.4.0 is actually available, so deployed v2/v3 connectors continue to sync throughout the
+rollout.
 
 After configuring npm trusted publishing and running the same package-content gate used by CI:
 
