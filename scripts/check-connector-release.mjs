@@ -179,6 +179,14 @@ function parseNpmJson(stdout) {
   }
 }
 
+export function normalizeNpmLookupString(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value) && value.length === 1 && typeof value[0] === "string") {
+    return value[0];
+  }
+  return "";
+}
+
 function isNpmNotFound(error) {
   return (
     error !== null &&
@@ -210,12 +218,12 @@ export const npmRegistry = Object.freeze({
   async latest(packageName) {
     const result = await npmView([packageName, "dist-tags.latest"]);
     if (!result.found) return null;
-    return typeof result.value === "string" ? result.value : "";
+    return normalizeNpmLookupString(result.value);
   },
   async exists(packageName, version) {
     const result = await npmView([`${packageName}@${version}`, "version"]);
     if (!result.found) return false;
-    return result.value === version;
+    return normalizeNpmLookupString(result.value) === version;
   },
 });
 

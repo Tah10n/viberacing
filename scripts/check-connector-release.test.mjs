@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   compareStableVersions,
+  normalizeNpmLookupString,
   validateConnectorRelease,
   validateReleaseFiles,
 } from "./check-connector-release.mjs";
@@ -30,6 +31,17 @@ async function expectCode(promise, code) {
 }
 
 describe("connector release validation", () => {
+  it("normalizes scalar and npm 12 single-result array lookups", () => {
+    assert.equal(normalizeNpmLookupString("0.4.0"), "0.4.0");
+    assert.equal(normalizeNpmLookupString(["0.4.0"]), "0.4.0");
+  });
+
+  it("rejects ambiguous or non-string npm lookup responses", () => {
+    for (const value of [null, undefined, 0, {}, [], ["0.4.0", "0.4.1"], [0], [["0.4.0"]]]) {
+      assert.equal(normalizeNpmLookupString(value), "");
+    }
+  });
+
   it("accepts a matching stable tag and a newer unpublished version", async () => {
     assert.equal(
       validateReleaseFiles({
