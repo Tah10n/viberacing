@@ -138,6 +138,18 @@ const output = (...values) => {
   if (!quiet) process.stdout.write(`${values.map(sanitizeTerminalText).join(" ")}\n`);
 };
 const warning = (value) => process.stderr.write(`${sanitizeTerminalText(value)}\n`);
+let lastHookErrorRecorded = false;
+
+async function recordLastHookError() {
+  lastHookErrorRecorded = true;
+  const directory = join(stateDirectory, "logs");
+  await mkdir(directory, { recursive: true, mode: 0o700 }).catch(() => {});
+  await writeFile(
+    join(directory, "last-error.log"),
+    `${new Date().toISOString()} ${command === "auto-sync" ? "automatic_sync_failed" : "connector_command_failed"}\n`,
+    { mode: 0o600 },
+  ).catch(() => {});
+}
 
 async function clearLastHookError() {
   await unlink(join(stateDirectory, "logs", "last-error.log")).catch(() => {});
@@ -1547,6 +1559,9 @@ async function automaticSync() {
       }
       return;
     }
+  } catch (error) {
+    if (quiet) await recordLastHookError();
+    throw error;
   } finally {
     if (attempted) await clearDirty(attemptedClaims).catch(() => {});
     await releaseScheduler(scheduler);
@@ -2143,15 +2158,7 @@ try {
       "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
     );
 } catch (error) {
-  if (quiet) {
-    const directory = join(stateDirectory, "logs");
-    await mkdir(directory, { recursive: true, mode: 0o700 }).catch(() => {});
-    await writeFile(
-      join(directory, "last-error.log"),
-      `${new Date().toISOString()} ${command === "auto-sync" ? "automatic_sync_failed" : "connector_command_failed"}\n`,
-      { mode: 0o600 },
-    ).catch(() => {});
-  }
+  if (quiet && !lastHookErrorRecorded) await recordLastHookError();
   if (!quiet)
     warning(`Vibe Racing: ${error instanceof Error ? error.message : "unexpected error"}`);
   process.exitCode = 1;
