@@ -48,6 +48,26 @@ After a current connector is paired in a browser, that browser can launch an on-
 `viberacing://` handler to sync one agent account on the same computer. The handler exits after the
 bounded sync; it does not install a resident process or let the web service read local histories.
 
+## Connector distribution
+
+After the verified npm rollout, the official Vibe Racing service uses one permanent command:
+
+```bash
+npx --yes @viberacing/connector@latest connect --origin https://viberacing.com
+```
+
+No global npm installation is performed. `npx` starts the official package, and the connector keeps
+its working copy only in local Vibe Racing state. Update or repair that copy explicitly with
+`npx --yes @viberacing/connector@latest doctor --repair`; uninstall it with
+`npx --yes @viberacing/connector@latest uninstall`. It never updates silently.
+
+Self-hosted deployments default to a same-origin connector archive and show their exact command on
+the dashboard. Set `VIBERACING_CONNECTOR_DISTRIBUTION=npm` only after the public package is
+verified, or retain `archive` to avoid any runtime dependency on the public npm registry. The
+setting is made once, not changed for each release; there are no connector package-name or version
+variables. Neither distribution changes the self-reported ranking model or sends prompts, responses,
+code, repositories, paths, provider credentials, model names, or costs.
+
 ## Local production preview
 
 Requirements: Node 24 LTS, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.
