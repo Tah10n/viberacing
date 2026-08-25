@@ -382,3 +382,22 @@ jobs:
           npm exec --yes --cache "$RUNNER_TEMP/viberacing-npm-cache" \
             --package http://127.0.0.1:3010/downloads/viberacing-connector.tgz \
             -- viberacing --help
+
+  ci-required:
+    name: ci-required
+    if: always()
+    needs: [connector, local-smoke, browser-e2e, production]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every mandatory CI job
+        env:
+          CONNECTOR_RESULT: ${{ needs.connector.result }}
+          LOCAL_SMOKE_RESULT: ${{ needs['local-smoke'].result }}
+          BROWSER_E2E_RESULT: ${{ needs['browser-e2e'].result }}
+          PRODUCTION_RESULT: ${{ needs.production.result }}
+        run: |
+          test "$CONNECTOR_RESULT" = success
+          test "$LOCAL_SMOKE_RESULT" = success
+          test "$BROWSER_E2E_RESULT" = success
+          test "$PRODUCTION_RESULT" = success
