@@ -14,6 +14,8 @@ const expectedRepository = Object.freeze({
 const stableVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const semanticVersionPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const publishedVerificationAttempts = 181;
+const publishedVerificationDelayMs = 10_000;
 
 export class ConnectorReleaseError extends Error {
   constructor(code, message) {
@@ -250,8 +252,9 @@ async function readReleaseFiles() {
 export async function verifyPublishedConnector({
   version,
   registry = npmRegistry,
-  attempts = 12,
-  delayMs = 10_000,
+  attempts = publishedVerificationAttempts,
+  delayMs = publishedVerificationDelayMs,
+  sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 }) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const [latest, exists] = await Promise.all([
@@ -260,7 +263,7 @@ export async function verifyPublishedConnector({
     ]);
     if (latest === version && exists) return;
     if (attempt < attempts) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await sleep(delayMs);
     }
   }
   releaseError(

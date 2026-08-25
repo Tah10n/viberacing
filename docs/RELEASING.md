@@ -145,6 +145,11 @@ GitHub Release, confirm:
 - the workflow used no `NPM_TOKEN` or `NODE_AUTH_TOKEN`;
 - `npx --yes @viberacing/connector@latest --version` prints the new version.
 
+npm scans newly published packages before making them installable. The publish workflow therefore
+waits up to 30 minutes for both the exact version and `dist-tags.latest` to become visible. If the
+publish step succeeded but verification is still waiting, do not retry the immutable version; wait
+for the scan to finish and inspect npm availability and provenance.
+
 ### 6. Tighten npm publishing access
 
 Only after successful OIDC publication, open package **Settings → Publishing access**, choose

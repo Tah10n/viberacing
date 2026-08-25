@@ -21,7 +21,7 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     environment: npm-production
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
