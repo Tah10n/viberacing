@@ -28,6 +28,7 @@ import {
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
 import {
+  browserSyncProtocolVersion,
   browserSyncRegistrationStatus,
   registerBrowserSync,
   unregisterBrowserSync,
@@ -274,6 +275,35 @@ async function request(origin, path, options = {}, attempts = 1, responseContext
   throw lastError;
 }
 
+async function requestPairingStart(origin, installationId, body) {
+  const send = (payload) =>
+    request(
+      origin,
+      "/api/pairing/start",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      1,
+      { kind: "pairingStart", origin, installationId },
+    );
+  try {
+    return await send(body);
+  } catch (error) {
+    if (
+      error?.status !== 400 ||
+      error?.code !== "invalid_request" ||
+      !Object.hasOwn(body, "browserSyncProtocol")
+    ) {
+      throw error;
+    }
+    const legacyBody = { ...body };
+    delete legacyBody.browserSyncProtocol;
+    return send(legacyBody);
+  }
+}
+
 async function cancelPairingAttempt(attempt) {
   if (
     attempt === null ||
@@ -422,25 +452,16 @@ async function connect() {
   let pairing;
   let committed = false;
   try {
-    pairing = await request(
-      origin,
-      "/api/pairing/start",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          protocolVersion,
-          connectorVersion,
-          installationId: installation.id,
-          installationSecret: installation.secret,
-          sources: [...sources.values()].map(publicSource),
-          supersededClientSourceIds,
-          browserSyncCapable,
-        }),
-      },
-      1,
-      { kind: "pairingStart", origin, installationId: installation.id },
-    );
+    pairing = await requestPairingStart(origin, installation.id, {
+      protocolVersion,
+      connectorVersion,
+      installationId: installation.id,
+      installationSecret: installation.secret,
+      sources: [...sources.values()].map(publicSource),
+      supersededClientSourceIds,
+      browserSyncCapable,
+      browserSyncProtocol: browserSyncCapable ? browserSyncProtocolVersion : 0,
+    });
     attempt = await recordConnectAttemptPairing(initialAttempt, pairing.pollToken);
     await waitForTestConnectBarrier("after_pairing_start");
     output(`Open ${pairing.verificationUrl}`);
@@ -697,22 +718,44 @@ async function retireMappedSources(config, sourceIds, options = {}) {
   return mappings;
 }
 
-async function requestReconciliation(config, attempts = 1) {
+async function requestReconciliation(config, attempts = 1, options = {}) {
   const sourceIds = config.sources.map((source) => source.sourceId);
-  return request(
-    config.origin,
-    "/api/installations/current",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.deviceToken}`,
-        "Content-Type": "application/json",
+  const body = {
+    sourceIds,
+    connectorVersion,
+    ...(options.browserSyncProtocol === undefined
+      ? {}
+      : { browserSyncProtocol: options.browserSyncProtocol }),
+  };
+  const send = (payload, requestAttempts) =>
+    request(
+      config.origin,
+      "/api/installations/current",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.deviceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify({ sourceIds, connectorVersion }),
-    },
-    attempts,
-    { kind: "reconciliation", sourceIds },
-  );
+      requestAttempts,
+      { kind: "reconciliation", sourceIds },
+    );
+  try {
+    return await send(body, attempts);
+  } catch (error) {
+    if (
+      error?.status !== 400 ||
+      error?.code !== "invalid_request" ||
+      options.browserSyncProtocol === undefined
+    ) {
+      throw error;
+    }
+    const legacyBody = { ...body };
+    delete legacyBody.browserSyncProtocol;
+    return send(legacyBody, 1);
+  }
 }
 
 async function reconcileRemoteSources(config, remoteSources, options = {}) {
@@ -1263,26 +1306,33 @@ function parseBrowserSyncUrl(value) {
     throw new Error("Invalid browser Sync URL");
   const url = new URL(value);
   const keys = [...url.searchParams.keys()].sort();
+  const accountScoped =
+    JSON.stringify(keys) === JSON.stringify(["accountId", "grant", "requestId"]) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      url.searchParams.get("accountId") ?? "",
+    );
+  const installationScoped =
+    JSON.stringify(keys) === JSON.stringify(["grant", "requestId", "scope"]) &&
+    url.searchParams.get("scope") === "installation";
   if (
     url.protocol !== "viberacing:" ||
     url.hostname !== "sync" ||
     (url.pathname !== "" && url.pathname !== "/") ||
     url.hash !== "" ||
-    JSON.stringify(keys) !== JSON.stringify(["accountId", "grant", "requestId"]) ||
+    (!accountScoped && !installationScoped) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       url.searchParams.get("requestId") ?? "",
-    ) ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      url.searchParams.get("accountId") ?? "",
     ) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(url.searchParams.get("grant") ?? "")
   )
     throw new Error("Invalid browser Sync URL");
-  return {
+  const common = {
     requestId: url.searchParams.get("requestId"),
-    accountId: url.searchParams.get("accountId"),
     grant: url.searchParams.get("grant"),
   };
+  return accountScoped
+    ? { ...common, accountId: url.searchParams.get("accountId") }
+    : { ...common, scope: "installation" };
 }
 
 async function reportBrowserSync(config, requestId, status, resultCode) {
@@ -1321,7 +1371,9 @@ async function browserSync(value) {
   );
   const requested = new Set(claim.sourceIds);
   const local = config.sources.filter(
-    (source) => requested.has(source.sourceId) && source.agentAccountId === link.accountId,
+    (source) =>
+      requested.has(source.sourceId) &&
+      (link.scope === "installation" || source.agentAccountId === link.accountId),
   );
   if (local.length !== requested.size) {
     await reportBrowserSync(config, link.requestId, "failed", "invalid_request").catch(() => {});
@@ -1619,6 +1671,7 @@ async function doctor() {
   let repairStarted = false;
   let repairServerPending = false;
   let repairSummaryWritten = false;
+  let repairedBrowserSyncProtocol;
   const finishRepair = () => {
     if (!repairRequested || repairSummaryWritten) return;
     repairSummaryWritten = true;
@@ -1728,9 +1781,14 @@ async function doctor() {
         output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
       if (!defaultState) {
         output("Browser Sync handler: unavailable for custom state root");
+        repairedBrowserSyncProtocol = 0;
       } else {
         const handlerStatus = await browserSyncRegistrationStatus();
         output(`Browser Sync handler: ${handlerStatus}`);
+        repairedBrowserSyncProtocol =
+          repaired.browserSyncCapable && handlerStatus === "current"
+            ? browserSyncProtocolVersion
+            : 0;
         if (!repaired.browserSyncCapable || handlerStatus !== "current") repairIncomplete = true;
       }
     }
@@ -1747,7 +1805,13 @@ async function doctor() {
         const lockedConfig = await readConfig();
         let remote;
         try {
-          remote = await requestReconciliation(lockedConfig);
+          remote = await requestReconciliation(
+            lockedConfig,
+            1,
+            repairedBrowserSyncProtocol === undefined
+              ? {}
+              : { browserSyncProtocol: repairedBrowserSyncProtocol },
+          );
         } catch (error) {
           if (await lifecycleMutationActive()) return { status: "lifecycle" };
           if (error?.status === 401 || error?.status === 403) {

@@ -1,3 +1,4 @@
+import { browserSyncInstallationScopeProtocol, maximumSourcesPerInstallation } from "@/lib/config";
 import { digest } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
@@ -30,11 +31,13 @@ async function post(request: Request): Promise<Response> {
   }
   try {
     const body = await readBoundedJson(request, 2_048);
+    if (!isRecord(body)) return problem(400, "invalid_request");
+    const keys = Object.keys(body).sort().join(",");
+    const accountScoped = keys === "accountId,grant,requestId" && isUuid(body.accountId);
+    const installationScoped = keys === "grant,requestId,scope" && body.scope === "installation";
     if (
-      !isRecord(body) ||
-      Object.keys(body).length !== 3 ||
+      (!accountScoped && !installationScoped) ||
       !isUuid(body.requestId) ||
-      !isUuid(body.accountId) ||
       typeof body.grant !== "string" ||
       body.grant.length < 32 ||
       body.grant.length > 128
@@ -42,7 +45,7 @@ async function post(request: Request): Promise<Response> {
       return problem(400, "invalid_request");
     }
     const requestId = body.requestId;
-    const accountId = body.accountId;
+    const accountId = accountScoped ? (body.accountId as string) : null;
     const grant = body.grant;
     const tokenHash = digest(token);
     const outcome = await transaction(async (client) => {
@@ -50,10 +53,11 @@ async function post(request: Request): Promise<Response> {
         "DELETE FROM browser_sync_runs WHERE created_at < now() - interval '1 day'",
       );
       const installations = await client.query<{
+        browser_sync_protocol: number;
         id: string;
         user_id: string;
       }>(
-        `SELECT id::text, user_id::text
+        `SELECT id::text, user_id::text, browser_sync_protocol
            FROM installations
           WHERE device_token_hash = $1 AND status = 'active' AND browser_sync_capable
           FOR UPDATE`,
@@ -61,6 +65,30 @@ async function post(request: Request): Promise<Response> {
       );
       const installation = installations.rows[0];
       if (installation === undefined) return { kind: "unauthorized" as const };
+      if (
+        installationScoped &&
+        installation.browser_sync_protocol < browserSyncInstallationScopeProtocol
+      ) {
+        return { kind: "upgrade_required" as const };
+      }
+      const sources = await client.query<{
+        id: string;
+        agent_id: string;
+        agent_account_id: string;
+      }>(
+        `SELECT id::text, agent_id, agent_account_id::text
+           FROM installation_sources
+          WHERE installation_id = $1 AND user_id = $2
+            AND ($3::uuid IS NULL OR agent_account_id = $3)
+            AND status = 'active'
+          ORDER BY created_at, id`,
+        [installation.id, installation.user_id, accountId],
+      );
+      const first = sources.rows[0];
+      if (first === undefined) return { kind: "missing" as const };
+      if (sources.rows.length > maximumSourcesPerInstallation) {
+        return { kind: "source_limit" as const };
+      }
       const consumed = await client.query(
         `DELETE FROM browser_sync_grants
           WHERE grant_hash = $1 AND installation_id = $2 AND user_id = $3
@@ -69,16 +97,9 @@ async function post(request: Request): Promise<Response> {
         [digest(grant), installation.id, installation.user_id],
       );
       if (consumed.rowCount !== 1) return { kind: "expired" as const };
-      const sources = await client.query<{ id: string; agent_id: string }>(
-        `SELECT id::text, agent_id
-           FROM installation_sources
-          WHERE installation_id = $1 AND user_id = $2 AND agent_account_id = $3
-            AND status = 'active'
-          ORDER BY created_at, id`,
-        [installation.id, installation.user_id, accountId],
-      );
-      const first = sources.rows[0];
-      if (first === undefined) return { kind: "missing" as const };
+      const runScope = installationScoped ? "installation" : "account";
+      const runAccountId = installationScoped ? null : first.agent_account_id;
+      const runAgentId = installationScoped ? null : first.agent_id;
       const recent = await client.query<{ id: string }>(
         `SELECT id::text
            FROM browser_sync_runs
@@ -97,23 +118,27 @@ async function post(request: Request): Promise<Response> {
       if (recent.rows[0] !== undefined) {
         await client.query(
           `INSERT INTO browser_sync_runs
-             (id, installation_id, user_id, agent_account_id, agent_id, status, result_code)
-           VALUES ($1, $2, $3, $4, $5, 'failed', 'busy')`,
-          [requestId, installation.id, installation.user_id, accountId, first.agent_id],
+             (id, installation_id, user_id, scope, agent_account_id, agent_id, status, result_code)
+           VALUES ($1, $2, $3, $4, $5, $6, 'failed', 'busy')`,
+          [requestId, installation.id, installation.user_id, runScope, runAccountId, runAgentId],
         );
         return { kind: "rate_limited" as const };
       }
       await client.query(
         `INSERT INTO browser_sync_runs
-           (id, installation_id, user_id, agent_account_id, agent_id, status)
-         VALUES ($1, $2, $3, $4, $5, 'running')`,
-        [requestId, installation.id, installation.user_id, accountId, first.agent_id],
+           (id, installation_id, user_id, scope, agent_account_id, agent_id, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'running')`,
+        [requestId, installation.id, installation.user_id, runScope, runAccountId, runAgentId],
       );
       return { kind: "ok" as const, sourceIds: sources.rows.map((source) => source.id) };
     });
     if (outcome.kind === "unauthorized") return problem(401, "unauthorized");
+    if (outcome.kind === "upgrade_required") {
+      return problem(426, "browser_sync_upgrade_required");
+    }
     if (outcome.kind === "expired") return problem(409, "sync_grant_expired");
     if (outcome.kind === "missing") return problem(404, "account_source_not_found");
+    if (outcome.kind === "source_limit") return problem(409, "browser_sync_source_limit");
     if (outcome.kind === "rate_limited") {
       const response = problem(429, "sync_rate_limited");
       response.headers.set("Retry-After", "60");

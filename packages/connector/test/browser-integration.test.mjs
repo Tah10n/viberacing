@@ -4,10 +4,15 @@ import { mkdtemp, readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  browserSyncProtocolVersion,
   browserSyncRegistrationStatus,
   registerBrowserSync,
   unregisterBrowserSync,
 } from "../lib/browser-integration.mjs";
+
+test("browser Sync protocol identifies installation-scoped handler support", () => {
+  assert.equal(browserSyncProtocolVersion, 2);
+});
 
 async function macExecute(calls, file, arguments_) {
   calls.push([file, arguments_]);

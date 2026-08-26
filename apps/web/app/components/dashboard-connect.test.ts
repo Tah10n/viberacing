@@ -25,6 +25,21 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain('className="connect-disclosure-closed"');
   });
 
+  it("keeps accounts collapsible and gates installation Sync to its installed handler protocol", () => {
+    expect(dashboard).toContain('className="dashboard-section account-disclosure"');
+    expect(dashboard).toContain("<summary");
+    expect(dashboard).toContain("Show accounts");
+    expect(dashboard).toContain("Hide accounts");
+    expect(dashboard).toContain("browserSyncInstallationScopeProtocol");
+    expect(dashboard).toContain(
+      "installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol",
+    );
+    expect(dashboard).toContain("installation.source_count <= maximumSourcesPerInstallation");
+    expect(dashboard).toContain("installation.browser_sync_capable");
+    expect(dashboard).not.toContain("installationBrowserSyncMinimumVersion");
+    expect(dashboard).toContain("<InstallationSyncControl");
+  });
+
   it("does not repeat an account label that matches its agent name", () => {
     expect(dashboard).toContain("function accountTitle");
     expect(dashboard).toContain("displayName.toLowerCase() === label.trim().toLowerCase()");
@@ -56,16 +71,22 @@ describe("dashboard connection flow", () => {
   });
 
   it("requires repair only below the configured minimum version", () => {
+    const connectorUpdate = source("./connector-update-notice.tsx");
+    const home = source("../page.tsx");
     expect(dashboard).toContain("i.connector_version");
     expect(dashboard).toContain("minimumConnectorVersion()");
     expect(dashboard).toContain("versionAtLeast(item.connector_version, minimumVersion)");
     expect(dashboard).not.toContain(
       "versionAtLeast(item.connector_version, bundledConnectorVersion)",
     );
-    expect(dashboard).toContain("Connector update required");
-    expect(dashboard).toContain('label="Copy update command"');
-    expect(dashboard).toContain("Repair does not collect or upload");
-    expect(dashboard).toContain("token totals");
+    expect(dashboard).toContain("<ConnectorUpdateNotice");
+    expect(home).toContain("SELECT connector_version");
+    expect(home).toContain("versionAtLeast(installation.connector_version, minimumVersion)");
+    expect(home).toContain("<ConnectorUpdateNotice");
+    expect(connectorUpdate).toContain("Connector update required");
+    expect(connectorUpdate).toContain('label="Copy update command"');
+    expect(connectorUpdate).toContain("without collecting or uploading token");
+    expect(connectorUpdate).toContain("totals");
   });
 
   it("requires explicit local cleanup around permanent account deletion", () => {
@@ -99,7 +120,7 @@ describe("dashboard connection flow", () => {
     expect(home).toContain("once for every connector installation");
     expect(home).toContain("VIBERACING_STATE_DIR");
     expect(home).toContain('label="Copy uninstall command"');
-    expect(home).toContain("connectorUninstallCommand(publicOrigin().origin)");
+    expect(home).toContain("connectorUninstallCommand(origin)");
   });
 
   it("offers source reassignment only when the same agent has another account", () => {

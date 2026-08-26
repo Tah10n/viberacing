@@ -197,6 +197,30 @@
   margin-bottom: var(--space-1);
 }
 
+.account-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.account-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-disclosure-action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.account-disclosure-open,
+.account-disclosure[open] .account-disclosure-closed {
+  display: none;
+}
+
+.account-disclosure[open] .account-disclosure-open {
+  display: inline;
+}
+
 .device-list {
   border: 0.0625rem solid var(--color-line-strong);
 }
@@ -271,6 +295,18 @@
   margin-top: 0;
 }
 
+.connector-update-prominent {
+  grid-column: auto;
+  border-top: 0;
+  border-bottom: 0.0625rem solid var(--color-danger-border);
+  padding: var(--space-5) var(--shell-inline-padding);
+  background: var(--color-danger-surface);
+}
+
+.connector-update-prominent > pre {
+  width: min(48rem, 100%);
+}
+
 .text-button {
   display: inline-flex;
   min-width: var(--control-height);
@@ -314,6 +350,23 @@
 .account-control-buttons .button:disabled {
   cursor: wait;
   opacity: 0.55;
+}
+
+.installation-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.installation-sync-control {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.installation-sync-control .button {
+  white-space: nowrap;
 }
 
 .account-actions {

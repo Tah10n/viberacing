@@ -17,16 +17,21 @@ interface Grant {
 }
 
 interface SyncState {
-  accountId: string;
+  target: string;
   message: string;
   tone: "status" | "error";
 }
 
 interface BrowserSyncContextValue {
   ready: boolean;
-  launch(accountId: string): void;
+  launchAccount(accountId: string): void;
+  launchInstallation(): void;
   state: SyncState | null;
 }
+
+type SyncTarget = { accountId: string } | { scope: "installation" };
+
+const installationSyncTarget = "installation";
 
 const BrowserSyncContext = createContext<BrowserSyncContextValue | null>(null);
 
@@ -210,7 +215,7 @@ export function BrowserSyncProvider({
   }, [grantRetryAt, prepare]);
 
   const poll = useCallback(
-    async (accountId: string, requestId: string) => {
+    async (target: string, requestId: string) => {
       const outcome = await pollBrowserSyncStatus({
         fetchStatus: () =>
           fetch(`/api/accounts/sync/${encodeURIComponent(requestId)}`, {
@@ -220,7 +225,7 @@ export function BrowserSyncProvider({
           }),
         now: Date.now,
         onRunning: () => {
-          setState({ accountId, message: "Syncing…", tone: "status" });
+          setState({ target, message: "Syncing…", tone: "status" });
         },
         pause: wait,
       });
@@ -230,7 +235,7 @@ export function BrowserSyncProvider({
       }
       if (outcome.kind === "terminal" && outcome.status === "partial") {
         setState({
-          accountId,
+          target,
           message: "Sync completed with warnings. Run viberacing doctor.",
           tone: "error",
         });
@@ -239,7 +244,7 @@ export function BrowserSyncProvider({
       }
       if (outcome.kind === "terminal") {
         setState({
-          accountId,
+          target,
           message:
             outcome.resultCode === "busy"
               ? "Another sync is already running."
@@ -251,14 +256,14 @@ export function BrowserSyncProvider({
       }
       if (outcome.kind === "running_too_long" || outcome.kind === "running_unconfirmed") {
         setState({
-          accountId,
+          target,
           message: "Sync is taking longer than expected. Refresh later to see the latest totals.",
           tone: "status",
         });
         return;
       }
       setState({
-        accountId,
+        target,
         message:
           outcome.kind === "not_started"
             ? "Connector did not respond. Reconnect this computer and try again."
@@ -271,10 +276,11 @@ export function BrowserSyncProvider({
   );
 
   const launch = useCallback(
-    (accountId: string) => {
+    (target: SyncTarget) => {
+      const targetKey = "accountId" in target ? target.accountId : installationSyncTarget;
       if (grant === null || new Date(grant.expiresAt).getTime() <= Date.now()) {
         setState({
-          accountId,
+          target: targetKey,
           message: "Sync is not ready. Refresh and try again.",
           tone: "error",
         });
@@ -285,16 +291,29 @@ export function BrowserSyncProvider({
       const url = new URL("viberacing://sync");
       url.searchParams.set("grant", grant.token);
       url.searchParams.set("requestId", requestId);
-      url.searchParams.set("accountId", accountId);
+      if ("accountId" in target) url.searchParams.set("accountId", target.accountId);
+      else url.searchParams.set("scope", target.scope);
       setGrant(null);
-      setState({ accountId, message: "Waiting for connector…", tone: "status" });
-      void poll(accountId, requestId);
+      setState({ target: targetKey, message: "Waiting for connector…", tone: "status" });
+      void poll(targetKey, requestId);
       window.location.assign(url.href);
     },
     [grant, poll, prepare],
   );
 
-  const value = useMemo(() => ({ ready: grant !== null, launch, state }), [grant, launch, state]);
+  const value = useMemo(
+    () => ({
+      ready: grant !== null,
+      launchAccount: (accountId: string) => {
+        launch({ accountId });
+      },
+      launchInstallation: () => {
+        launch({ scope: "installation" });
+      },
+      state,
+    }),
+    [grant, launch, state],
+  );
   return <BrowserSyncContext.Provider value={value}>{children}</BrowserSyncContext.Provider>;
 }
 
@@ -309,7 +328,7 @@ export function AccountControls({
 }) {
   const [open, setOpen] = useState(false);
   const sync = useContext(BrowserSyncContext);
-  const current = sync?.state?.accountId === accountId ? sync.state : null;
+  const current = sync?.state?.target === accountId ? sync.state : null;
   const actionsId = `account-actions-${accountId}`;
   return (
     <div className="account-controls">
@@ -329,7 +348,7 @@ export function AccountControls({
           <button
             className="button"
             disabled={!sync?.ready || current?.tone === "status"}
-            onClick={() => sync?.launch(accountId)}
+            onClick={() => sync?.launchAccount(accountId)}
             type="button"
           >
             Sync
@@ -347,6 +366,32 @@ export function AccountControls({
       <div className="account-actions" hidden={!open} id={actionsId}>
         {children}
       </div>
+    </div>
+  );
+}
+
+export function InstallationSyncControl({ canSync }: { canSync: boolean }) {
+  const sync = useContext(BrowserSyncContext);
+  if (!canSync) return null;
+  const current = sync?.state?.target === installationSyncTarget ? sync.state : null;
+  return (
+    <div className="installation-sync-control">
+      <button
+        className="button"
+        disabled={!sync?.ready || current?.tone === "status"}
+        onClick={() => sync?.launchInstallation()}
+        type="button"
+      >
+        Sync all agents
+      </button>
+      {current === null ? null : (
+        <p
+          className={`browser-sync-message ${current.tone}`}
+          role={current.tone === "error" ? "alert" : "status"}
+        >
+          {current.message}
+        </p>
+      )}
     </div>
   );
 }

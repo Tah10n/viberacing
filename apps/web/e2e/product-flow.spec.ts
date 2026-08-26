@@ -248,6 +248,9 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.reload();
   await expect(page.getByText(/12[.,]3K tokens/)).toBeVisible();
   await expect(page.locator(".connector-update")).toHaveCount(0);
+  const localSyncTimes = page.locator(".device-meta time");
+  await expect(localSyncTimes).toHaveCount(2);
+  await expect(localSyncTimes.first()).toHaveAttribute("title", "America/New_York");
 
   const databaseUrl = process.env.DATABASE_URL;
   if (databaseUrl === undefined) throw new Error("DATABASE_URL is required for browser E2E");
@@ -273,6 +276,18 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(connectorUpdate.locator("code")).not.toContainText("--package");
   await expect(connectorUpdate.locator("code")).not.toContainText("--allow-remote");
   await expect(connectorUpdate.getByRole("button", { name: "Copy update command" })).toBeVisible();
+  await page.goto("/");
+  const homeConnectorUpdate = page.locator(".connector-update-prominent");
+  await expect(
+    homeConnectorUpdate.getByText("Connector update required", { exact: true }),
+  ).toBeVisible();
+  await expect(homeConnectorUpdate.locator("code")).toHaveText(
+    "npx --yes @viberacing/connector@latest doctor --repair",
+  );
+  await expect(
+    homeConnectorUpdate.getByRole("button", { name: "Copy update command" }),
+  ).toBeVisible();
+  await page.goto("/dashboard");
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
   await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
   const todayBar = usageChart.locator(`.usage-chart-day:has(time[datetime="${today}"])`);
@@ -289,6 +304,36 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     page.getByRole("heading", { name: "Only exact aggregate token counters cross the boundary" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
+  const accountDisclosure = page.locator(".account-disclosure");
+  await expect(accountDisclosure).toHaveAttribute("open", "");
+  await accountDisclosure.locator("summary").click();
+  await expect(accountDisclosure).not.toHaveAttribute("open", "");
+  await expect(accountDisclosure.locator(".device-list")).not.toBeVisible();
+  await accountDisclosure.locator("summary").click();
+  await expect(accountDisclosure.locator(".device-list")).toBeVisible();
+  const featureDatabase = new Client({ connectionString: databaseUrl });
+  await featureDatabase.connect();
+  try {
+    await featureDatabase.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
+      "0.4.3",
+      installationId,
+    ]);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
+    await featureDatabase.query(
+      "UPDATE installations SET browser_sync_protocol = $1 WHERE id = $2",
+      [2, installationId],
+    );
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
+    await featureDatabase.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
+      "0.1.9",
+      installationId,
+    ]);
+  } finally {
+    await featureDatabase.end();
+  }
   await page.getByText("Manage account").click();
   const accountDeleteForm = page.locator(".account-delete-form");
   const [confirmationBox, deleteButtonBox] = await Promise.all([
@@ -309,6 +354,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.goto("/");
   await expectLeftAlignedHero(page);
+  await expect(page.locator(".hero-race time")).toHaveAttribute("title", "America/New_York");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -351,6 +397,9 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(reconciliation.status()).toBe(200);
   await page.reload();
   await expect(page.locator(".connector-update")).toHaveCount(0);
+  await page.goto("/");
+  await expect(page.locator(".connector-update-prominent")).toHaveCount(0);
+  await page.goto("/dashboard");
   const uninstallCommand = "npx --yes @viberacing/connector@latest uninstall";
   const cleanupDisclosure = page.locator(".account-deletion-cleanup");
   await expect(cleanupDisclosure.getByText("Local cleanup required")).toBeVisible();

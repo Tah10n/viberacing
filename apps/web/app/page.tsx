@@ -1,9 +1,12 @@
 import { connection } from "next/server";
 import Link from "next/link";
 import { CopyCommandButton } from "./components/copy-command-button";
+import { ConnectorUpdateNotice } from "./components/connector-update-notice";
 import { RacerLink } from "./components/racer-link";
 import { StandingsTable } from "./components/standings-table";
+import { UserLocalTime } from "./components/user-local-time";
 import {
+  currentWeekEndsAt,
   currentWeekLabel,
   formatCompactTokens,
   formatExactTokens,
@@ -12,13 +15,18 @@ import {
 } from "@/lib/leaderboard";
 import { hasAccountDeletionReceipt, viewer } from "@/lib/session";
 import { agentNames, supportedAgents } from "@/lib/agents";
-import { connectorUninstallCommand } from "@/lib/connector";
-import { publicOrigin } from "@/lib/config";
+import { connectorRepairCommand, connectorUninstallCommand } from "@/lib/connector";
+import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/config";
+import { query } from "@/lib/db";
 
 interface HomePageProps {
   readonly searchParams: Promise<{
     page?: string | string[];
   }>;
+}
+
+interface ConnectorVersionRow {
+  connector_version: string;
 }
 
 const leaderboardPageSize = 100;
@@ -39,21 +47,43 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();
   const params = await searchParams;
   const page = parsePage(params.page);
-  const uninstallCommand = connectorUninstallCommand(publicOrigin().origin);
+  const origin = publicOrigin().origin;
+  const minimumVersion = minimumConnectorVersion();
+  const raceEndsAt = currentWeekEndsAt();
+  const updateCommand = connectorRepairCommand(origin);
+  const uninstallCommand = connectorUninstallCommand(origin);
   const offset = (page - 1) * leaderboardPageSize;
   const [current, accountDeletionReceipt] = await Promise.all([
     viewer(),
     hasAccountDeletionReceipt(),
   ]);
   const accountDeleted = current === null && accountDeletionReceipt;
-  const [pageRows, profile] = await Promise.all([
+  const [pageRows, profile, connectorVersions] = await Promise.all([
     leaderboard({ limit: leaderboardPageSize + 1, offset }),
     current === null ? Promise.resolve(null) : publicProfile(current.handle),
+    current === null
+      ? Promise.resolve([] as ConnectorVersionRow[])
+      : query<ConnectorVersionRow>(
+          `SELECT connector_version
+             FROM installations
+            WHERE user_id = $1 AND status = 'active'`,
+          [current.id],
+        ),
   ]);
+  const connectorUpdateRequired = connectorVersions.some(
+    (installation) => !versionAtLeast(installation.connector_version, minimumVersion),
+  );
   const hasNextPage = pageRows.length > leaderboardPageSize;
   const rows = pageRows.slice(0, leaderboardPageSize);
   return (
     <main className="home-page">
+      {connectorUpdateRequired ? (
+        <ConnectorUpdateNotice
+          command={updateCommand}
+          minimumVersion={minimumVersion}
+          scope="computers"
+        />
+      ) : null}
       {accountDeleted ? (
         <section className="account-deleted-cleanup" aria-labelledby="account-deleted-title">
           <p className="eyebrow">ACCOUNT DELETED</p>
@@ -114,7 +144,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div className="hero-race" aria-label="Current race">
             <span className="meta-label">Current race</span>
             <strong className="meta-value">{currentWeekLabel()}</strong>
-            <small className="meta-value">Ends Sun · 23:59 UTC</small>
+            <small className="meta-value">
+              <UserLocalTime
+                dateTime={raceEndsAt}
+                fallback="Ends Sun, 23:59 UTC"
+                format="race-end"
+              />
+            </small>
           </div>
         </div>
         <aside className="hero-summary" aria-label="How Vibe Racing works">

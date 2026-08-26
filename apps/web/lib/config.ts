@@ -106,7 +106,9 @@ export function isSupportedConnectorProtocolVersion(
 ): value is SupportedConnectorProtocolVersion {
   return value === 2 || value === 3 || value === connectorProtocolVersion;
 }
-export const expectedSchemaVersion = "004_browser_sync_rate_guard.sql";
+export const browserSyncInstallationScopeProtocol = 2;
+export const maximumSourcesPerInstallation = 32;
+export const expectedSchemaVersion = "005_browser_sync_protocol.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
 

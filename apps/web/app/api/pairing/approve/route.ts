@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { agentRegistry, type SupportedAgent } from "@/lib/agents";
-import { publicOrigin } from "@/lib/config";
+import { maximumSourcesPerInstallation, publicOrigin } from "@/lib/config";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import {
@@ -52,13 +52,19 @@ const maximumActiveSourcesPerUser = 100;
 const maximumAgentAccountsPerUser = 100;
 
 export function exceedsPairingLimits(
-  counts: { installations: number; sources: number; accounts: number },
+  counts: {
+    installations: number;
+    sources: number;
+    installationSources: number;
+    accounts: number;
+  },
   incomingSources: number,
   newAccounts: number,
 ): boolean {
   return (
     counts.installations >= maximumActiveInstallationsPerUser ||
     counts.sources + incomingSources > maximumActiveSourcesPerUser ||
+    counts.installationSources + incomingSources > maximumSourcesPerInstallation ||
     counts.accounts + newAccounts > maximumAgentAccountsPerUser
   );
 }
@@ -154,6 +160,7 @@ async function post(request: Request): Promise<Response> {
       const usage = await client.query<{
         installations: number;
         sources: number;
+        installation_sources: number;
         accounts: number;
       }>(
         `SELECT
@@ -162,6 +169,9 @@ async function post(request: Request): Promise<Response> {
            (SELECT count(*)::int FROM installation_sources
              WHERE user_id = $1 AND status = 'active'
                AND NOT (id = ANY($3::uuid[]))) AS sources,
+           (SELECT count(*)::int FROM installation_sources
+             WHERE installation_id = $2 AND status = 'active'
+               AND NOT (id = ANY($3::uuid[]))) AS installation_sources,
            (SELECT count(*)::int FROM agent_accounts
              WHERE user_id = $1 AND merged_into_account_id IS NULL) AS accounts`,
         [current.id, installation.id, pairingSourceIds],
@@ -170,7 +180,19 @@ async function post(request: Request): Promise<Response> {
       const newAccounts = sources.rows.filter(
         (source) => form.get(`account_${source.id}`) === "new",
       ).length;
-      if (counts === undefined || exceedsPairingLimits(counts, sources.rows.length, newAccounts)) {
+      if (
+        counts === undefined ||
+        exceedsPairingLimits(
+          {
+            installations: counts.installations,
+            sources: counts.sources,
+            installationSources: counts.installation_sources,
+            accounts: counts.accounts,
+          },
+          sources.rows.length,
+          newAccounts,
+        )
+      ) {
         throw new ApprovalError("limit");
       }
 

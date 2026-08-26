@@ -49,6 +49,13 @@ describe("compact reconciliation payload", () => {
     expect(
       parseReconciliationBody({ sourceIds: [sourceId], connectorVersion: "0.3.11-beta.1" }),
     ).toEqual({ sourceIds: [sourceId], connectorVersion: "0.3.11-beta.1" });
+    expect(
+      parseReconciliationBody({
+        sourceIds: [sourceId],
+        connectorVersion: "0.4.3",
+        browserSyncProtocol: 2,
+      }),
+    ).toEqual({ sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 2 });
   });
 
   it("rejects malformed versions, duplicates, and unknown fields", () => {
@@ -56,6 +63,10 @@ describe("compact reconciliation payload", () => {
       { sourceIds: [sourceId], connectorVersion: "0.3" },
       { sourceIds: [sourceId], connectorVersion: "0.3.11+private" },
       { sourceIds: [sourceId], connectorVersion: "1".repeat(41) },
+      { sourceIds: [sourceId], browserSyncProtocol: 2 },
+      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: -1 },
+      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 1.5 },
+      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 3 },
       { sourceIds: [sourceId, sourceId] },
       { sourceIds: [sourceId], extra: true },
     ]) {
@@ -168,6 +179,50 @@ describe("compact reconciliation rate limiting", () => {
       1,
       expect.stringContaining("connector_version IS DISTINCT FROM $2"),
       [installationId, "0.3.11", expect.any(Uint8Array)],
+    );
+    expect(clientQuery.mock.calls[0]?.[0]).not.toContain("browser_sync_protocol");
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("source.installation_id = $1"),
+      [installationId, [sourceId]],
+    );
+  });
+
+  it("persists an installed browser handler protocol only when explicitly reported", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            source_id: sourceId,
+            status: "active",
+            last_accepted_sync_sequence: "7",
+          },
+        ],
+      });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(
+      request({
+        sourceIds: [sourceId],
+        connectorVersion: "0.4.3",
+        browserSyncProtocol: 2,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        /browser_sync_protocol = \$3[\s\S]*browser_sync_capable = \$3::smallint > 0/,
+      ),
+      [installationId, "0.4.3", 2, expect.any(Uint8Array)],
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,

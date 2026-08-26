@@ -266,6 +266,14 @@
     display: none;
   }
 
+  .account-disclosure .account-disclosure-action {
+    display: flex;
+  }
+
+  .account-disclosure-count {
+    display: none;
+  }
+
   footer {
     align-items: flex-start;
     flex-direction: column;
@@ -340,6 +348,13 @@
   .device-card {
     grid-template-columns: 1fr;
     gap: var(--space-3);
+  }
+
+  .installation-controls,
+  .installation-sync-control {
+    width: 100%;
+    justify-content: flex-start;
+    justify-items: start;
   }
 
   .source-row {

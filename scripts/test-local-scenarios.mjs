@@ -2044,7 +2044,48 @@ try {
     await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
       sourceFillers,
     ]);
-  console.log("ok - per-user installation, source, and agent-account caps are transactional");
+
+  const sourceBoundInstallation = { id: randomUUID(), secret: token() };
+  const sourceBoundFillers = Array.from({ length: 32 }, () => randomUUID());
+  try {
+    await pool.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Per-installation source limit', 'active', $3, $4, '0.4.2', 4)`,
+      [sourceBoundInstallation.id, userId, digest(sourceBoundInstallation.secret), digest(token())],
+    );
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'opencode', 'installation-limit-source-' || ordinality,
+              'opencode_sqlite', 'cli', 'Installation limit source', 'active'
+         FROM unnest($1::text[]) WITH ORDINALITY AS filler(id, ordinality)`,
+      [
+        sourceBoundFillers,
+        sourceBoundInstallation.id,
+        userId,
+        byClient.get("opencode-personal").agentAccountId,
+      ],
+    );
+    const sourceBoundPairing = await beginPairing(sourceBoundInstallation, [
+      source("installation-limit-new-source", "opencode"),
+    ]);
+    limited = await submitPairingApproval(sourceBoundPairing, {
+      "installation-limit-new-source": byClient.get("opencode-personal").agentAccountId,
+    });
+    check(
+      limited.approval.status === 303 &&
+        limited.approval.headers.get("location")?.includes("error=limit"),
+      "per-installation source cap was not enforced",
+    );
+  } finally {
+    await pool.query("DELETE FROM installations WHERE id = $1", [sourceBoundInstallation.id]);
+  }
+  console.log(
+    "ok - per-user and per-installation installation, source, and agent-account caps are transactional",
+  );
 
   const pendingBeforeQuotaRace = await pool.query(
     "SELECT count(*)::int AS count FROM installations WHERE status = 'pending' AND pairing_expires_at > now()",

@@ -8,11 +8,13 @@
   `https://domain.example/api/auth/github/callback`; Device Flow is disabled/not used.
 - Set `DATABASE_URL`, `VIBERACING_PUBLIC_ORIGIN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `VIBERACING_DATABASE_SSL`, `VIBERACING_CONNECTOR_DISTRIBUTION=npm` for the official service,
-  `VIBERACING_MIN_CONNECTOR_VERSION=0.2.0`, and `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`;
-  quote the large token value in YAML. Set `VIBERACING_TRUST_PROXY=railway` and
-  `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of `DATABASE_URL` so
-  `VIBERACING_DATABASE_SSL` remains the only database TLS switch. Self-hosted deployments should
-  retain the `archive` distribution unless they deliberately accept a runtime npm dependency.
+  `VIBERACING_MIN_CONNECTOR_VERSION` to the current published compatibility floor, and
+  `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Keep the
+  floor at `0.2.0` until the verified 0.4.3 publication, then follow the staged 0.4.3 change below.
+  Set `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out
+  of `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch. Self-hosted
+  deployments should retain the `archive` distribution unless they deliberately accept a runtime npm
+  dependency.
 - For public self-hosting, use `VIBERACING_TRUST_PROXY=trusted-x-real-ip` only behind a reverse
   proxy that strips the incoming `X-Real-IP` and overwrites it with the observed client address. Do
   not forward or trust arbitrary `X-Forwarded-For` chains. Public production startup must fail when
@@ -94,9 +96,10 @@
   use fixed `@viberacing/connector@latest` commands without `--package`, `--allow-remote`, a
   concrete version, or a downloads URL.
 - Pair or retain an installation below `VIBERACING_MIN_CONNECTOR_VERSION` and verify its computer
-  card shows **Connector update required** on desktop and mobile. Confirm a version at or above the
-  minimum does not advertise an unpublished bundled version. Run `doctor --repair`, confirm it
-  repairs runtime/hooks without a usage request, and verify reconciliation clears the notice.
+  card and the signed-in home page show **Connector update required** on desktop and mobile. Confirm
+  a version at or above the minimum does not advertise an unpublished bundled version. Run
+  `doctor --repair`, confirm it repairs runtime/hooks without a usage request, and verify
+  reconciliation clears both notices.
 - Confirm the macOS CI gate receives a synthetic custom-scheme URL through the real LaunchServices
   applet.
 - Confirm public copy reports seven counted agents.
@@ -143,6 +146,10 @@
   complete production checks, publish the compatible connector, and only then raise
   `VIBERACING_MIN_CONNECTOR_VERSION` if older protocol support is intentionally removed. A pull
   request must never create a rejection window for a connector that is not yet available.
+- For 0.4.3 specifically, verify npm `latest` and `npx --yes @viberacing/connector@latest --version`
+  first, then set Railway `VIBERACING_MIN_CONNECTOR_VERSION=0.4.3`, wait for `/ready`, and verify
+  the signed-in `/` and `/dashboard` notices before testing `doctor --repair` end to end. After this
+  staged change, `0.4.3` is the current published compatibility floor in the setup checklist above.
 
 ## PostgreSQL operations
 

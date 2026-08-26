@@ -8,8 +8,24 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Added
+
+- The dashboard can now sync every supported agent on the browser-bound computer in one action,
+  while retaining account-scoped Sync for older connectors and individual refreshes. The account
+  list is collapsible, and the lemon accent has shifted slightly greener.
+- Absolute interface times, including race end and Last sync, now use the browser's real time zone
+  with an explicit zone label. Token dates, daily buckets, and weekly ranking boundaries remain UTC.
+
 ### Fixed
 
+- Installation-wide browser Sync is now gated by the explicitly reported installed-handler protocol.
+  Running a newer one-off CLI no longer exposes an action that an older registered OS handler cannot
+  process; only successful `connect` or `doctor --repair` registration updates this capability.
+- The browser Sync protocol migration remains writable by the previous web release during pre-deploy
+  and rollback windows. Installation-wide runs no longer depend on an arbitrary account, and the
+  existing 32-source connector bound is enforced before a grant or run is consumed.
+- Signed-in racers now see the same compatibility-floor update command on the home page and on each
+  affected dashboard computer, so a required connector repair is visible before opening settings.
 - Connector release verification now tolerates npm publish-time scanning by waiting up to 30 minutes
   for both the exact immutable version and `latest`, while the workflow retains a bounded 45-minute
   job timeout. Production and onboarding documentation now reflect the completed npm rollout, the

@@ -1,5 +1,5 @@
 import { digest } from "@/lib/crypto";
-import { isSemanticVersion } from "@/lib/config";
+import { browserSyncInstallationScopeProtocol, isSemanticVersion } from "@/lib/config";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
 import {
@@ -25,6 +25,7 @@ function rateLimited(): Response {
 }
 
 interface ReconciliationBody {
+  browserSyncProtocol?: number;
   connectorVersion?: string;
   sourceIds: string[];
 }
@@ -34,7 +35,9 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   const keys = Object.keys(value).sort();
   if (
     JSON.stringify(keys) !== JSON.stringify(["sourceIds"]) &&
-    JSON.stringify(keys) !== JSON.stringify(["connectorVersion", "sourceIds"])
+    JSON.stringify(keys) !== JSON.stringify(["connectorVersion", "sourceIds"]) &&
+    JSON.stringify(keys) !==
+      JSON.stringify(["browserSyncProtocol", "connectorVersion", "sourceIds"])
   ) {
     return null;
   }
@@ -54,9 +57,21 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   ) {
     return null;
   }
+  if (
+    value.browserSyncProtocol !== undefined &&
+    (typeof value.browserSyncProtocol !== "number" ||
+      !Number.isSafeInteger(value.browserSyncProtocol) ||
+      value.browserSyncProtocol < 0 ||
+      value.browserSyncProtocol > browserSyncInstallationScopeProtocol)
+  ) {
+    return null;
+  }
   return {
     sourceIds: value.sourceIds,
     ...(value.connectorVersion === undefined ? {} : { connectorVersion: value.connectorVersion }),
+    ...(value.browserSyncProtocol === undefined
+      ? {}
+      : { browserSyncProtocol: value.browserSyncProtocol }),
   };
 }
 
@@ -93,7 +108,23 @@ async function post(request: Request): Promise<Response> {
     const body = parseReconciliationBody(await readBoundedJson(request, 8_192));
     if (body === null) return problem(400, "invalid_request");
     const rows = await transaction(async (client) => {
-      if (body.connectorVersion !== undefined) {
+      if (body.connectorVersion !== undefined && body.browserSyncProtocol !== undefined) {
+        await client.query(
+          `UPDATE installations
+              SET connector_version = $2,
+                  browser_sync_protocol = $3,
+                  browser_sync_capable = $3::smallint > 0,
+                  updated_at = now()
+            WHERE id = $1
+              AND status = 'active'
+              AND device_token_hash = $4
+              AND (
+                connector_version IS DISTINCT FROM $2
+                OR browser_sync_protocol IS DISTINCT FROM $3
+              )`,
+          [installation.id, body.connectorVersion, body.browserSyncProtocol, digest(token)],
+        );
+      } else if (body.connectorVersion !== undefined) {
         await client.query(
           `UPDATE installations
               SET connector_version = $2,

@@ -20,6 +20,8 @@ describe("account controls", () => {
     expect(component).toContain('className="button"');
     expect(component).toContain('result.status === "succeeded"');
     expect(component).toContain("Connector did not respond");
+    expect(component).toContain("Sync all agents");
+    expect(component).toContain('url.searchParams.set("scope", target.scope)');
   });
 
   it("keeps polling a claimed running sync beyond the connector lock wait", async () => {

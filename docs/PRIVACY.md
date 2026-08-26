@@ -2,20 +2,22 @@
 
 Vibe Racing sends only the data needed to compute a self-reported ranking.
 
-During pairing the connector sends protocol/connector versions, a random installation identity and
-proof, opaque client source IDs, agent IDs, allowlisted collection methods, supported surface, and a
-neutral agent/profile label. Automatically discovered labels contain only the agent name and, when
-needed, a neutral profile ordinal; they never contain a provider filename or path component. Random
-source IDs remain stable in local `sources.json`. On upgrade, an old OpenCode filename-derived label
-is replaced only when it exactly matches the connector's former automatically generated value;
-user-defined labels are preserved. The legacy value is never included in a pairing request.
-Normalized local data roots, executable paths, hook config roots, and their hashes are never copied
-into pairing config or requests. Compact installation reconciliation sends only the current
-connector version and the already assigned server source IDs; legacy connectors may omit the
-version. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
-aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
-may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
-carry only snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
+During pairing the connector sends protocol/connector versions, a small installed browser-handler
+protocol/capability value, a random installation identity and proof, opaque client source IDs, agent
+IDs, allowlisted collection methods, supported surface, and a neutral agent/profile label.
+Automatically discovered labels contain only the agent name and, when needed, a neutral profile
+ordinal; they never contain a provider filename or path component. Random source IDs remain stable
+in local `sources.json`. On upgrade, an old OpenCode filename-derived label is replaced only when it
+exactly matches the connector's former automatically generated value; user-defined labels are
+preserved. The legacy value is never included in a pairing request. Normalized local data roots,
+executable paths, hook config roots, and their hashes are never copied into pairing config or
+requests. Compact installation reconciliation sends only the current connector version and the
+already assigned server source IDs; immediately after `doctor --repair`, it may also confirm the
+small installed-handler protocol value. Legacy connectors may omit both reports. During sync it
+sends a server source ID, sequence, UTC range, snapshot status, UTC dates, aggregate total tokens,
+and optional aggregate input/output/cache/reasoning counters. Protocol v3+ may also mark an
+individual UTC date complete or partial; the server still accepts v2 payloads that carry only
+snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
 `collector_failed` code, source ID, and the last server-accepted sequence known before collection.
 That ordering value is an opaque canonical counter, not local content. Delayed errors are ignored;
 legacy v2/v3 errors are accepted but cannot overwrite persistent status. Exception messages are
@@ -92,11 +94,12 @@ expose daily data, account labels, source/installation details, or credentials. 
 the user's control, so the leaderboard is explicitly self-reported and grants no authorization,
 reward, or access.
 
-Browser sync stores only an installation capability, independently hashed five-minute grants, opaque
-account and request IDs, and an allowlisted run status for bounded cleanup. The custom URL has no
-label, path, provider identity, usage total, or session content. A grant is insufficient without the
+Browser sync stores only an installation capability, independently hashed five-minute grants, an
+opaque request ID, a closed account/installation scope, an optional opaque account ID for
+account-scoped runs, and an allowlisted run status for bounded cleanup. The custom URL has no label,
+path, provider identity, usage total, or session content. A grant is insufficient without the
 connector's device token, and a handler claim can return only active source IDs already mapped to
-that account on the same installation.
+the selected account or installation.
 
 Disconnecting an installation or source revokes future ingestion but retains its history. Deleting
 an agent account deletes its sources and usage. **Leave leaderboard** deletes all usage and revokes

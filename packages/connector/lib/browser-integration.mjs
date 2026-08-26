@@ -9,6 +9,7 @@ import { connectorVersion } from "./version.mjs";
 
 const run = promisify(execFile);
 const marker = "viberacing-browser-handler-v1";
+export const browserSyncProtocolVersion = 2;
 
 function appleScriptString(value) {
   if (typeof value !== "string" || /[\0\r\n]/.test(value))

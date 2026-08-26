@@ -1,4 +1,4 @@
-import { isSupportedConnectorProtocolVersion } from "@/lib/config";
+import { isSupportedConnectorProtocolVersion, maximumSourcesPerInstallation } from "@/lib/config";
 import { deviceTokenFromPollToken, digest } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
@@ -146,7 +146,7 @@ async function post(request: Request): Promise<Response> {
           protocol: {
             version: installation.protocol_version,
             snapshotDays: 31,
-            maximumSources: 32,
+            maximumSources: maximumSourcesPerInstallation,
             maximumEntries: 1_024,
           },
         },

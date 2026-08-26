@@ -1,6 +1,31 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+
+const browserSyncProtocolMigration = readFileSync(
+  new URL("../database/005_browser_sync_protocol.sql", import.meta.url),
+  "utf8",
+);
+
+describe("migration expansion compatibility", () => {
+  it("allows the previous web release to keep writing its legacy capability column", () => {
+    expect(browserSyncProtocolMigration).toContain("CHECK (browser_sync_protocol BETWEEN 0 AND 2)");
+    expect(browserSyncProtocolMigration).not.toMatch(
+      /browser_sync_capable\s*=\s*\(browser_sync_protocol\s*>\s*0\)/,
+    );
+  });
+
+  it("stores installation-wide runs without an arbitrary account foreign-key owner", () => {
+    expect(browserSyncProtocolMigration).toContain(
+      "ADD COLUMN scope varchar(16) NOT NULL DEFAULT 'account'",
+    );
+    expect(browserSyncProtocolMigration).toContain("ALTER COLUMN agent_account_id DROP NOT NULL");
+    expect(browserSyncProtocolMigration).toContain(
+      "scope = 'installation' AND agent_account_id IS NULL AND agent_id IS NULL",
+    );
+  });
+});
 
 describe("migration diagnostics", () => {
   it("reports missing configuration as one sanitized JSON record", () => {

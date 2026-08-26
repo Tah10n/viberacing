@@ -12,7 +12,12 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], timezoneId: "America/New_York" },
+    },
+  ],
   webServer: {
     command: "node scripts/e2e-server.mjs",
     url: "http://127.0.0.1:3015/health",

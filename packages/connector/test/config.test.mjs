@@ -3259,6 +3259,7 @@ test("requires an explicit safe label when adding a local data root", async (con
 
 test("connect pairs only exact sources and keeps every local path out of its payload", async (context) => {
   let pairingBody;
+  const pairingBodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -3273,7 +3274,14 @@ test("connect pairs only exact sources and keeps every local path out of its pay
         response.end(JSON.stringify({ status: "pending" }));
         return;
       }
-      pairingBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const candidate = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      pairingBodies.push(candidate);
+      if (Object.hasOwn(candidate, "browserSyncProtocol")) {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "invalid_request" }));
+        return;
+      }
+      pairingBody = candidate;
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -3323,6 +3331,9 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     ),
     /Pairing expired/,
   );
+  assert.equal(pairingBodies.length, 2);
+  assert.equal(pairingBodies[0].browserSyncCapable, false);
+  assert.equal(pairingBodies[0].browserSyncProtocol, 0);
   assert.equal(pairingBody.sources.length, 1);
   assert.deepEqual(Object.keys(pairingBody.sources[0]).sort(), [
     "agentId",
@@ -3332,7 +3343,9 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "supportedSurface",
   ]);
   assert.equal(pairingBody.sources[0].agentId, "antigravity");
-  assert.doesNotMatch(JSON.stringify(pairingBody), new RegExp(home.replaceAll("\\", "\\\\")));
+  assert.equal(pairingBody.browserSyncCapable, false);
+  assert.equal(Object.hasOwn(pairingBody, "browserSyncProtocol"), false);
+  assert.doesNotMatch(JSON.stringify(pairingBodies), new RegExp(home.replaceAll("\\", "\\\\")));
   for (const forbidden of [
     "dataPath",
     "canonicalPath",
@@ -3344,7 +3357,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "repository",
     "credentials",
   ])
-    assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
+    assert.equal(JSON.stringify(pairingBodies).includes(forbidden), false);
 });
 
 test("connect replaces a legacy OpenCode filename label before pairing and local commit", async (context) => {
@@ -4766,6 +4779,7 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   const uploadCanFinish = new Promise((resolve) => (releaseUpload = resolve));
   context.after(() => releaseUpload());
   let currentRequests = 0;
+  const reconciliationBodies = [];
   let installation;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -4773,6 +4787,7 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/installations/current") {
         currentRequests += 1;
+        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify(
@@ -4826,6 +4841,9 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   const [doctorCode] = await once(doctor, "close");
   assert.equal(doctorCode, 0);
   assert.equal(currentRequests, 1);
+  assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], connectorVersion },
+  ]);
   assert.match(doctorOutput, /Pairing status: active/);
 });
 
@@ -4895,7 +4913,13 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/installations/current") {
-        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        reconciliationBodies.push(body);
+        if (Object.hasOwn(body, "browserSyncProtocol")) {
+          response.writeHead(400, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: "invalid_request" }));
+          return;
+        }
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify(
@@ -4948,6 +4972,7 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
   assert.match(repaired.stdout, /Hooks: repaired/);
   assert.match(repaired.stdout, /Usage sync: not run/);
   assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], connectorVersion, browserSyncProtocol: 0 },
     { sourceIds: [installation.sourceId], connectorVersion },
   ]);
   assert.equal(usageRequests, 0);
@@ -5915,7 +5940,15 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
       response.setHeader("content-type", "application/json");
       if (request.url === "/api/installations/current/sync/claim") {
-        response.end(JSON.stringify({ requestId, sourceIds: [selectedSourceId] }));
+        response.end(
+          JSON.stringify({
+            requestId,
+            sourceIds:
+              body.scope === "installation"
+                ? [selectedSourceId, otherSourceId]
+                : [selectedSourceId],
+          }),
+        );
         return;
       }
       if (request.url === "/api/usage") {
@@ -6006,27 +6039,43 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
     ],
     { env: connectorEnvironment(home) },
   );
+  await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
+    ],
+    { env: connectorEnvironment(home) },
+  );
 
-  assert.equal(diagnosticBodies.length, 1);
+  assert.equal(diagnosticBodies.length, 2);
   assert.deepEqual(
-    [...new Set(diagnosticBodies.flatMap((body) => body.events.map((event) => event.sourceId)))],
+    [...new Set(diagnosticBodies[0].events.map((event) => event.sourceId))],
     [selectedSourceId],
   );
   assert.deepEqual(
+    [...new Set(diagnosticBodies[1].events.map((event) => event.sourceId))],
+    [otherSourceId],
+  );
+  assert.deepEqual(
     usageBodies.map((body) => body.snapshots[0]?.syncSequence),
-    ["1", "2"],
+    ["1", "2", "3"],
+  );
+  assert.deepEqual(
+    new Set(usageBodies[2].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set([selectedSourceId, otherSourceId]),
   );
   assert.deepEqual(
     resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
     [
       { status: "succeeded", resultCode: "complete" },
       { status: "succeeded", resultCode: "complete" },
+      { status: "succeeded", resultCode: "complete" },
     ],
   );
   const finalState = JSON.parse(await readFile(statePath, "utf8"));
-  assert.deepEqual(finalState.diagnostics.outboxBySource[otherSourceId], {
-    "collect:collector_failed": ["opened"],
-  });
+  assert.deepEqual(finalState.diagnostics.outboxBySource, {});
 });
 
 test("one successful contact sends at most one bounded diagnostic batch", async (context) => {

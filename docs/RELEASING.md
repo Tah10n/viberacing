@@ -28,6 +28,10 @@ Every version bump is an explicit, reviewable release pull request:
     `latest` to that stable version.
 11. The workflow succeeds only after bounded registry checks find both the exact version and
     `dist-tags.latest === X.Y.Z`.
+12. If that release intentionally raises the compatibility floor, update Railway
+    `VIBERACING_MIN_CONNECTOR_VERSION` only after step 11, wait for the new deployment and `/ready`,
+    then verify that an older signed-in installation sees the same required `doctor --repair`
+    command on both `/` and `/dashboard`.
 
 The workflow never modifies `package.json`, `CHANGELOG.md`, commits, or tags. It has no npm token or
 password and does not pass `--provenance`; npm Trusted Publishing creates provenance automatically.
@@ -39,6 +43,12 @@ old and new protocols, publish the compatible connector, and only then raise
 `VIBERACING_MIN_CONNECTOR_VERSION` if the server intentionally stops supporting an older version.
 That variable is a compatibility floor, not a latest-version tracker; normal patch and minor
 releases do not change it.
+
+For the 0.4.3 rollout, the all-agent browser handler is the new supported baseline. After npm
+`latest` is verified as 0.4.3, set the official Railway service to
+`VIBERACING_MIN_CONNECTOR_VERSION=0.4.3`; never make that production change before the immutable npm
+package is installable. This deliberately turns the 0.4.3 repair into a required update even though
+the wire protocol remains backwards-compatible.
 
 Ordinary releases also do not change Railway. The official service permanently uses
 `VIBERACING_CONNECTOR_DISTRIBUTION=npm` after rollout, while self-hosted deployments default to
