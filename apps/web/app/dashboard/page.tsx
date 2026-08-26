@@ -803,6 +803,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   </div>
                   {installedConnectorUpdateRequired(
                     item.installed_connector_version,
+                    item.browser_sync_protocol,
                     minimumVersion,
                   ) ? (
                     <ConnectorUpdateNotice

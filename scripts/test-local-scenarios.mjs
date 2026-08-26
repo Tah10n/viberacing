@@ -2381,17 +2381,19 @@ try {
       cliVersion: "0.4.3",
       handlerAttestation: {
         attestationId: downgradedAttestationId,
-        installedRuntimeVersion: "0.4.3",
+        installedRuntimeVersion: null,
         browserSyncProtocol: 1,
       },
     }),
   });
   const afterDowngrade = await pool.query(
-    "SELECT browser_sync_protocol FROM installations WHERE id = $1",
+    "SELECT installed_connector_version, browser_sync_protocol FROM installations WHERE id = $1",
     [firstInstallation.id],
   );
   check(
-    downgradedReconciliation.status === 200 && afterDowngrade.rows[0]?.browser_sync_protocol === 1,
+    downgradedReconciliation.status === 200 &&
+      afterDowngrade.rows[0]?.installed_connector_version === null &&
+      afterDowngrade.rows[0]?.browser_sync_protocol === 1,
     "handler protocol downgrade remained incorrectly confirmed as protocol 2",
   );
   console.log(

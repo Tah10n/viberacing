@@ -11,7 +11,7 @@ describe("connector update notice", () => {
     );
 
     expect(markup).toContain('aria-label="Connector update required"');
-    expect(markup).toContain("Connector 0.4.3 or newer is required");
+    expect(markup).toContain("Connector 0.4.3 or newer and the current Browser Sync handler");
     expect(markup).toContain(command);
     expect(markup).toContain("on this computer");
     expect(markup).not.toContain("connector-update-prominent");

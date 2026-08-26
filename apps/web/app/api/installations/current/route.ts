@@ -34,7 +34,7 @@ interface ReconciliationBody {
 interface HandlerAttestation {
   attestationId: string;
   browserSyncProtocol: number;
-  installedRuntimeVersion: string;
+  installedRuntimeVersion: string | null;
 }
 
 function parseHandlerAttestation(value: unknown): HandlerAttestation | null {
@@ -47,9 +47,12 @@ function parseHandlerAttestation(value: unknown): HandlerAttestation | null {
   }
   if (
     !isUuid(value.attestationId) ||
-    typeof value.installedRuntimeVersion !== "string" ||
-    value.installedRuntimeVersion.length > 40 ||
-    !isSemanticVersion(value.installedRuntimeVersion) ||
+    !(
+      value.installedRuntimeVersion === null ||
+      (typeof value.installedRuntimeVersion === "string" &&
+        value.installedRuntimeVersion.length <= 40 &&
+        isSemanticVersion(value.installedRuntimeVersion))
+    ) ||
     typeof value.browserSyncProtocol !== "number" ||
     !Number.isSafeInteger(value.browserSyncProtocol) ||
     value.browserSyncProtocol < 0 ||

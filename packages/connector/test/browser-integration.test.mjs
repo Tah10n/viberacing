@@ -199,6 +199,16 @@ test("Linux browser Sync registration is owned, exact, and removable", async (co
     await browserSyncHandlerAttestation({ environment, execute, platform: "linux" }),
     { protocol: 2, runtimeVersion: connectorVersion, status: "current" },
   );
+  await assert.rejects(
+    browserSyncHandlerAttestation({
+      environment,
+      execute: async () => {
+        throw Object.assign(new Error("xdg query unavailable"), { code: "EACCES" });
+      },
+      platform: "linux",
+    }),
+    { code: "EACCES" },
+  );
   await unregisterBrowserSync({
     allowCustomState: true,
     environment,

@@ -163,12 +163,17 @@ export function minimumConnectorVersion(): string {
 
 export function installedConnectorUpdateRequired(
   installedVersion: string | null,
+  browserSyncProtocol: number,
   minimumVersion: string,
 ): boolean {
-  if (installedVersion === null) {
-    return versionAtLeast(minimumVersion, installedStateAttestationMinimumVersion);
+  if (versionAtLeast(minimumVersion, installedStateAttestationMinimumVersion)) {
+    return (
+      installedVersion === null ||
+      !versionAtLeast(installedVersion, minimumVersion) ||
+      browserSyncProtocol < browserSyncInstallationScopeProtocol
+    );
   }
-  return !versionAtLeast(installedVersion, minimumVersion);
+  return installedVersion !== null && !versionAtLeast(installedVersion, minimumVersion);
 }
 
 export function versionAtLeast(candidate: string, minimum: string): boolean {

@@ -354,6 +354,23 @@ export async function browserSyncHandlerAttestation(options = {}) {
   const platform = options.platform ?? process.platform;
   const environment = options.environment ?? process.env;
   const homeDirectory = options.homeDirectory ?? homedir();
+  if (environment.NODE_ENV === "test") {
+    const synthetic = environment.VIBERACING_TEST_BROWSER_HANDLER_INSPECTION;
+    if (synthetic === "current")
+      return {
+        protocol: browserSyncProtocolVersion,
+        runtimeVersion: connectorVersion,
+        status: "current",
+      };
+    if (synthetic === "legacy") return { protocol: 1, runtimeVersion: null, status: "outdated" };
+    if (synthetic === "missing" || synthetic === "foreign")
+      return { protocol: 0, runtimeVersion: null, status: synthetic };
+    if (synthetic === "error_eacces") {
+      const error = new Error("Synthetic browser handler inspection failure");
+      error.code = "EACCES";
+      throw error;
+    }
+  }
   if (platform === "darwin") {
     return macRegistrationDetails(homeDirectory, options);
   }
@@ -379,8 +396,8 @@ export async function browserSyncHandlerAttestation(options = {}) {
       return value === "viberacing-url.desktop"
         ? details
         : { protocol: 0, runtimeVersion: null, status: value === "" ? "missing" : "foreign" };
-    } catch {
-      return { protocol: 0, runtimeVersion: null, status: "missing" };
+    } catch (error) {
+      throw error;
     }
   }
   const systemRoot = environment.SystemRoot?.trim();

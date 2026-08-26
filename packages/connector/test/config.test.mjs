@@ -125,6 +125,14 @@ function connectorEnvironment(home, extra = {}) {
   };
 }
 
+function defaultStateConnectorEnvironment(home, extra = {}) {
+  return connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    ...extra,
+  });
+}
+
 function useModuleEnvironment(home) {
   const environment = connectorEnvironment(home);
   const names = [
@@ -4911,6 +4919,206 @@ test("a newer one-off CLI does not attest an older installed runtime", async (co
   );
 });
 
+test("normal sync re-attests the exact observed Browser Sync handler state", async (context) => {
+  const scenarios = [
+    {
+      name: "removed handler after a confirmed protocol 2 registration",
+      observation: "missing",
+      removeState: false,
+      expectedVersion: null,
+      expectedProtocol: 0,
+    },
+    {
+      name: "legacy owned marker after a confirmed protocol 2 registration",
+      observation: "legacy",
+      removeState: false,
+      expectedVersion: null,
+      expectedProtocol: 1,
+    },
+    {
+      name: "removed state file and handler",
+      observation: "missing",
+      removeState: true,
+      expectedVersion: null,
+      expectedProtocol: 0,
+    },
+    {
+      name: "removed state file with a current marker",
+      observation: "current",
+      removeState: true,
+      expectedVersion: connectorVersion,
+      expectedProtocol: 2,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    await context.test(scenario.name, async (subtest) => {
+      const reconciliationBodies = [];
+      const usageBodies = [];
+      let installation;
+      const server = createServer((request, response) => {
+        const chunks = [];
+        request.on("data", (chunk) => chunks.push(chunk));
+        request.on("end", () => {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          response.setHeader("content-type", "application/json");
+          if (request.url === "/api/installations/current") {
+            reconciliationBodies.push(body);
+            response.end(
+              JSON.stringify({
+                ...reconciliationResponse([{ sourceId: installation.sourceId }]),
+                acceptedHandlerAttestationId: body.handlerAttestation.attestationId,
+              }),
+            );
+            return;
+          }
+          if (request.url === "/api/usage") {
+            usageBodies.push(body);
+            response.end(JSON.stringify(usageResponse(body)));
+            return;
+          }
+          response.writeHead(500);
+          response.end(JSON.stringify({ error: "unexpected_request" }));
+        });
+      });
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      subtest.after(() => server.close());
+      const address = server.address();
+      assert.notEqual(address, null);
+      assert.equal(typeof address, "object");
+
+      const home = await mkdtemp(join(tmpdir(), "viberacing-handler-observation-"));
+      subtest.after(() => rm(home, { recursive: true, force: true }));
+      installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+      const previousAttestationId = randomUUID();
+      if (scenario.removeState) {
+        await unlink(join(installation.directory, "state.json"));
+      } else {
+        await writeFile(
+          join(installation.directory, "state.json"),
+          `${JSON.stringify({
+            version: 1,
+            sequences: { [installation.sourceId]: "0" },
+            handlerAttestation: {
+              attestationId: previousAttestationId,
+              installedRuntimeVersion: connectorVersion,
+              browserSyncProtocol: 2,
+              pending: false,
+            },
+          })}\n`,
+        );
+      }
+
+      await execFileAsync(process.execPath, [connectorPath, "sync"], {
+        env: defaultStateConnectorEnvironment(home, {
+          NODE_ENV: "test",
+          VIBERACING_TEST_BROWSER_HANDLER_INSPECTION: scenario.observation,
+        }),
+      });
+
+      assert.equal(reconciliationBodies.length, 1);
+      assert.deepEqual(
+        {
+          ...reconciliationBodies[0].handlerAttestation,
+          attestationId: "<uuid>",
+        },
+        {
+          attestationId: "<uuid>",
+          installedRuntimeVersion: scenario.expectedVersion,
+          browserSyncProtocol: scenario.expectedProtocol,
+        },
+      );
+      assert.notEqual(
+        reconciliationBodies[0].handlerAttestation.attestationId,
+        previousAttestationId,
+      );
+      assert.equal(usageBodies.length, 1);
+      assert.equal(usageBodies[0].snapshots[0].entries[0].totalTokens, "3");
+      const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+      assert.deepEqual(state.handlerAttestation, {
+        ...reconciliationBodies[0].handlerAttestation,
+        pending: false,
+      });
+    });
+  }
+});
+
+test("handler inspection failure does not block token sync or overwrite attestation", async (context) => {
+  const reconciliationBodies = [];
+  const usageBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        reconciliationBodies.push(body);
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      response.writeHead(500);
+      response.end(JSON.stringify({ error: "unexpected_request" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-handler-inspection-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const confirmed = {
+    attestationId: randomUUID(),
+    installedRuntimeVersion: connectorVersion,
+    browserSyncProtocol: 2,
+    pending: false,
+  };
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      handlerAttestation: confirmed,
+    })}\n`,
+  );
+  const environment = defaultStateConnectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_BROWSER_HANDLER_INSPECTION: "error_eacces",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+
+  assert.equal(usageBodies.length, 1);
+  assert.equal(usageBodies[0].snapshots[0].entries[0].totalTokens, "3");
+  assert.equal(reconciliationBodies.length, 0);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.deepEqual(state.handlerAttestation, confirmed);
+  assert.equal(state.handlerInspectionDiagnostic, "browser_handler_inspection_failed");
+
+  const diagnostic = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: environment,
+  });
+
+  assert.match(`${diagnostic.stdout}\n${diagnostic.stderr}`, /handler inspection failed/i);
+  assert.doesNotMatch(`${diagnostic.stdout}\n${diagnostic.stderr}`, /EACCES|Synthetic/);
+  assert.equal(reconciliationBodies.length, 1);
+  assert.equal(Object.hasOwn(reconciliationBodies[0], "handlerAttestation"), false);
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.deepEqual(state.handlerAttestation, confirmed);
+  assert.equal(state.handlerInspectionDiagnostic, "browser_handler_inspection_failed");
+});
+
 test("doctor repair fails closed when connection config cannot be loaded", async () => {
   for (const scenario of ["missing", "malformed"]) {
     const home = await mkdtemp(join(tmpdir(), `viberacing-doctor-repair-${scenario}-`));
@@ -4970,7 +5178,7 @@ test("doctor repair keeps successful local work when server confirmation is unav
     await readFile(join(installation.directory, "state.json"), "utf8"),
   );
   assert.equal(pendingState.handlerAttestation.pending, true);
-  assert.equal(pendingState.handlerAttestation.installedRuntimeVersion, connectorVersion);
+  assert.equal(pendingState.handlerAttestation.installedRuntimeVersion, null);
   assert.equal(pendingState.handlerAttestation.browserSyncProtocol, 0);
 
   const reconciliationBodies = [];
@@ -5094,7 +5302,7 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
       cliVersion: connectorVersion,
       handlerAttestation: {
         attestationId: "<uuid>",
-        installedRuntimeVersion: connectorVersion,
+        installedRuntimeVersion: null,
         browserSyncProtocol: 0,
       },
     },

@@ -30,7 +30,6 @@ import { openBrowser } from "../lib/browser.mjs";
 import {
   browserSyncProtocolVersion,
   browserSyncHandlerAttestation,
-  browserSyncRegistrationStatus,
   registerBrowserSync,
   unregisterBrowserSync,
 } from "../lib/browser-integration.mjs";
@@ -106,6 +105,7 @@ import {
 const protocolVersion = connectorProtocolVersion;
 const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const handlerInspectionDiagnostic = "browser_handler_inspection_failed";
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
@@ -320,7 +320,8 @@ function validLocalHandlerAttestation(value) {
         "pending",
       ]) &&
     uuidPattern.test(value.attestationId ?? "") &&
-    semanticVersionPattern.test(value.installedRuntimeVersion ?? "") &&
+    (value.installedRuntimeVersion === null ||
+      semanticVersionPattern.test(value.installedRuntimeVersion ?? "")) &&
     Number.isSafeInteger(value.browserSyncProtocol) &&
     value.browserSyncProtocol >= 0 &&
     value.browserSyncProtocol <= browserSyncProtocolVersion &&
@@ -343,7 +344,9 @@ async function recordInstalledHandlerAttestation(
   options = {},
 ) {
   if (
-    !semanticVersionPattern.test(installedRuntimeVersion) ||
+    !(
+      installedRuntimeVersion === null || semanticVersionPattern.test(installedRuntimeVersion ?? "")
+    ) ||
     !Number.isSafeInteger(browserSyncProtocol) ||
     browserSyncProtocol < 0 ||
     browserSyncProtocol > browserSyncProtocolVersion
@@ -371,23 +374,45 @@ async function recordInstalledHandlerAttestation(
   return state.handlerAttestation;
 }
 
-async function refreshInstalledHandlerAttestation() {
+async function refreshInstalledHandlerAttestation(options = {}) {
   const state = await readState();
+  if (resolve(stateDirectory) !== resolve(join(homedir(), ".viberacing"))) {
+    return { inspectionFailed: false, observed: null, state };
+  }
+  let observed;
+  try {
+    observed = await browserSyncHandlerAttestation();
+  } catch {
+    if (state.handlerInspectionDiagnostic !== handlerInspectionDiagnostic) {
+      state.handlerInspectionDiagnostic = handlerInspectionDiagnostic;
+      await writeState(state).catch(() => {});
+    }
+    return { inspectionFailed: true, observed: null, state };
+  }
   const previous = validLocalHandlerAttestation(state.handlerAttestation)
     ? state.handlerAttestation
     : null;
-  if (previous === null) return state;
-  if (resolve(stateDirectory) !== resolve(join(homedir(), ".viberacing"))) return state;
-  const observed = await browserSyncHandlerAttestation();
-  const installedRuntimeVersion = observed.runtimeVersion ?? previous.installedRuntimeVersion;
+  let changed = false;
   if (
-    installedRuntimeVersion !== previous.installedRuntimeVersion ||
+    options.force ||
+    previous === null ||
+    observed.runtimeVersion !== previous.installedRuntimeVersion ||
     observed.protocol !== previous.browserSyncProtocol
   ) {
-    await recordInstalledHandlerAttestation(installedRuntimeVersion, observed.protocol);
-    return readState();
+    state.handlerAttestation = {
+      attestationId: randomUUID(),
+      installedRuntimeVersion: observed.runtimeVersion,
+      browserSyncProtocol: observed.protocol,
+      pending: true,
+    };
+    changed = true;
   }
-  return state;
+  if (Object.hasOwn(state, "handlerInspectionDiagnostic")) {
+    delete state.handlerInspectionDiagnostic;
+    changed = true;
+  }
+  if (changed) await writeState(state);
+  return { inspectionFailed: false, observed, state };
 }
 
 async function acknowledgeInstalledHandlerAttestation(attestationId) {
@@ -652,11 +677,7 @@ async function connect() {
           return nextConfig;
         });
         committed = true;
-        await recordInstalledHandlerAttestation(
-          connectorVersion,
-          browserSyncCapable ? browserSyncProtocolVersion : 0,
-          { force: true },
-        );
+        await refreshInstalledHandlerAttestation({ force: true });
         output("Connected.");
         const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
         if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
@@ -826,8 +847,10 @@ async function retireMappedSources(config, sourceIds, options = {}) {
 
 async function requestReconciliation(config, attempts = 1) {
   const sourceIds = config.sources.map((source) => source.sourceId);
-  const state = await refreshInstalledHandlerAttestation();
-  const handlerAttestation = publicHandlerAttestation(state.handlerAttestation);
+  const inspection = await refreshInstalledHandlerAttestation();
+  const handlerAttestation = inspection.inspectionFailed
+    ? null
+    : publicHandlerAttestation(inspection.state.handlerAttestation);
   const body = {
     sourceIds,
     cliVersion: connectorVersion,
@@ -939,7 +962,8 @@ async function lifecycleFailure(error) {
 }
 
 async function reconcileServerState(config, state) {
-  state = await refreshInstalledHandlerAttestation();
+  const inspection = await refreshInstalledHandlerAttestation();
+  state = inspection.state;
   const missing = config.sources.some(
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
@@ -1796,12 +1820,15 @@ async function doctor() {
   const discovery = await discoverSources();
   const detected = discovery.sources;
   const localSources = await readSources().catch(() => []);
+  const handlerInspection = await refreshInstalledHandlerAttestation();
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
-  output(
-    defaultState
-      ? `Browser Sync handler: ${await browserSyncRegistrationStatus()}`
-      : "Browser Sync handler: unavailable for custom state root",
-  );
+  if (!defaultState) output("Browser Sync handler: unavailable for custom state root");
+  else if (handlerInspection.inspectionFailed) {
+    output("Browser Sync handler: inspection failed");
+    warning(
+      "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+    );
+  } else output(`Browser Sync handler: ${handlerInspection.observed.status}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
@@ -1887,16 +1914,20 @@ async function doctor() {
         output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
       if (!defaultState) {
         output("Browser Sync handler: unavailable for custom state root");
-        await recordInstalledHandlerAttestation(connectorVersion, 0, { force: true });
+        await recordInstalledHandlerAttestation(null, 0, { force: true });
       } else {
-        const handler = await browserSyncHandlerAttestation();
-        output(`Browser Sync handler: ${handler.status}`);
-        await recordInstalledHandlerAttestation(
-          connectorVersion,
-          repaired.browserSyncCapable ? handler.protocol : 0,
-          { force: true },
-        );
-        if (!repaired.browserSyncCapable || handler.status !== "current") repairIncomplete = true;
+        const repairedInspection = await refreshInstalledHandlerAttestation({ force: true });
+        if (repairedInspection.inspectionFailed) {
+          output("Browser Sync handler: inspection failed");
+          warning(
+            "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+          );
+          repairIncomplete = true;
+        } else {
+          output(`Browser Sync handler: ${repairedInspection.observed.status}`);
+          if (!repaired.browserSyncCapable || repairedInspection.observed.status !== "current")
+            repairIncomplete = true;
+        }
       }
     }
     const hooks = await diagnoseHooks(config.sources);

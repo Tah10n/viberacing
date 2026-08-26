@@ -69,6 +69,25 @@ describe("compact reconciliation payload", () => {
         browserSyncProtocol: 1,
       },
     });
+    expect(
+      parseReconciliationBody({
+        sourceIds: [sourceId],
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: null,
+          browserSyncProtocol: 0,
+        },
+      }),
+    ).toEqual({
+      sourceIds: [sourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId,
+        installedRuntimeVersion: null,
+        browserSyncProtocol: 0,
+      },
+    });
     expect(parseReconciliationBody({ sourceIds: [sourceId], cliVersion: "0.4.3" })).toEqual({
       sourceIds: [sourceId],
       cliVersion: "0.4.3",
@@ -280,6 +299,38 @@ describe("compact reconciliation rate limiting", () => {
       acceptedHandlerAttestationId: attestationId,
       sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }],
     });
+  });
+
+  it("clears installed runtime when the durable attestation observes no version", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(
+      request({
+        sourceIds: [sourceId],
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: null,
+          browserSyncProtocol: 0,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("installed_connector_version = $3"),
+      [installationId, "0.4.3", null, 0, expect.any(Uint8Array)],
+    );
   });
 
   it("keeps legacy clients read-only while using the same source transaction", async () => {

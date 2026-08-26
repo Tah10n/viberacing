@@ -30,6 +30,7 @@ interface HomePageProps {
 }
 
 interface ConnectorVersionRow {
+  browser_sync_protocol: number;
   installed_connector_version: string | null;
 }
 
@@ -68,14 +69,18 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     current === null
       ? Promise.resolve([] as ConnectorVersionRow[])
       : query<ConnectorVersionRow>(
-          `SELECT installed_connector_version
+          `SELECT installed_connector_version, browser_sync_protocol
              FROM installations
             WHERE user_id = $1 AND status = 'active'`,
           [current.id],
         ),
   ]);
   const connectorUpdateRequired = connectorVersions.some((installation) =>
-    installedConnectorUpdateRequired(installation.installed_connector_version, minimumVersion),
+    installedConnectorUpdateRequired(
+      installation.installed_connector_version,
+      installation.browser_sync_protocol,
+      minimumVersion,
+    ),
   );
   const hasNextPage = pageRows.length > leaderboardPageSize;
   const rows = pageRows.slice(0, leaderboardPageSize);

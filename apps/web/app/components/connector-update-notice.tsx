@@ -22,8 +22,8 @@ export function ConnectorUpdateNotice({
         <strong>Connector update required</strong>
       </div>
       <p>
-        Connector {minimumVersion} or newer is required to restore supported automatic and browser
-        Sync.
+        Connector {minimumVersion} or newer and the current Browser Sync handler are required to
+        restore supported automatic and browser Sync.
       </p>
       <pre>
         <code>{command}</code>
