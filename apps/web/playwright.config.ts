@@ -12,7 +12,12 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], timezoneId: "America/New_York" },
+    },
+  ],
   webServer: {
     command: "node scripts/e2e-server.mjs",
     url: "http://127.0.0.1:3015/health",
@@ -25,7 +30,7 @@ export default defineConfig({
       VIBERACING_DATABASE_SSL: process.env.VIBERACING_DATABASE_SSL ?? "false",
       VIBERACING_CONNECTOR_DISTRIBUTION: "npm",
       VIBERACING_TRUST_PROXY: "none",
-      VIBERACING_MIN_CONNECTOR_VERSION: "0.2.0",
+      VIBERACING_MIN_CONNECTOR_VERSION: "0.4.3",
       VIBERACING_MAX_DAILY_TOKENS: "9999999999999999",
       VIBERACING_LOG_LEVEL: "info",
       VIBERACING_TEST_GITHUB_ORIGIN: "http://127.0.0.1:3016",

@@ -2044,7 +2044,48 @@ try {
     await pool.query("DELETE FROM installation_sources WHERE id = ANY($1::uuid[])", [
       sourceFillers,
     ]);
-  console.log("ok - per-user installation, source, and agent-account caps are transactional");
+
+  const sourceBoundInstallation = { id: randomUUID(), secret: token() };
+  const sourceBoundFillers = Array.from({ length: 32 }, () => randomUUID());
+  try {
+    await pool.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Per-installation source limit', 'active', $3, $4, '0.4.2', 4)`,
+      [sourceBoundInstallation.id, userId, digest(sourceBoundInstallation.secret), digest(token())],
+    );
+    await pool.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       SELECT id::uuid, $2, $3, $4, 'opencode', 'installation-limit-source-' || ordinality,
+              'opencode_sqlite', 'cli', 'Installation limit source', 'active'
+         FROM unnest($1::text[]) WITH ORDINALITY AS filler(id, ordinality)`,
+      [
+        sourceBoundFillers,
+        sourceBoundInstallation.id,
+        userId,
+        byClient.get("opencode-personal").agentAccountId,
+      ],
+    );
+    const sourceBoundPairing = await beginPairing(sourceBoundInstallation, [
+      source("installation-limit-new-source", "opencode"),
+    ]);
+    limited = await submitPairingApproval(sourceBoundPairing, {
+      "installation-limit-new-source": byClient.get("opencode-personal").agentAccountId,
+    });
+    check(
+      limited.approval.status === 303 &&
+        limited.approval.headers.get("location")?.includes("error=limit"),
+      "per-installation source cap was not enforced",
+    );
+  } finally {
+    await pool.query("DELETE FROM installations WHERE id = $1", [sourceBoundInstallation.id]);
+  }
+  console.log(
+    "ok - per-user and per-installation installation, source, and agent-account caps are transactional",
+  );
 
   const pendingBeforeQuotaRace = await pool.query(
     "SELECT count(*)::int AS count FROM installations WHERE status = 'pending' AND pairing_expires_at > now()",
@@ -2270,6 +2311,94 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
+  const attestedSourceId = byClient.get("codex-personal-a").sourceId;
+  const installedBeforeOneOff = await pool.query(
+    `SELECT installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  const oneOffReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ sourceIds: [attestedSourceId], cliVersion: "0.4.3" }),
+  });
+  const afterOneOff = await pool.query(
+    `SELECT last_cli_version, installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  check(
+    oneOffReconciliation.status === 200 &&
+      afterOneOff.rows[0]?.last_cli_version === "0.4.3" &&
+      afterOneOff.rows[0]?.installed_connector_version ===
+        installedBeforeOneOff.rows[0]?.installed_connector_version &&
+      afterOneOff.rows[0]?.browser_sync_protocol ===
+        installedBeforeOneOff.rows[0]?.browser_sync_protocol,
+    "newer one-off CLI changed confirmed installed connector state",
+  );
+  const handlerAttestationId = randomUUID();
+  const attestedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sourceIds: [attestedSourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId: handlerAttestationId,
+        installedRuntimeVersion: "0.4.3",
+        browserSyncProtocol: 2,
+      },
+    }),
+  });
+  const attestedBody = await attestedReconciliation.json();
+  const afterAttestation = await pool.query(
+    `SELECT installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  check(
+    attestedReconciliation.status === 200 &&
+      attestedBody.acceptedHandlerAttestationId === handlerAttestationId &&
+      afterAttestation.rows[0]?.installed_connector_version === "0.4.3" &&
+      afterAttestation.rows[0]?.browser_sync_protocol === 2,
+    "installed handler attestation was not durably acknowledged",
+  );
+  const downgradedAttestationId = randomUUID();
+  const downgradedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sourceIds: [attestedSourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId: downgradedAttestationId,
+        installedRuntimeVersion: null,
+        browserSyncProtocol: 1,
+      },
+    }),
+  });
+  const afterDowngrade = await pool.query(
+    "SELECT installed_connector_version, browser_sync_protocol FROM installations WHERE id = $1",
+    [firstInstallation.id],
+  );
+  check(
+    downgradedReconciliation.status === 200 &&
+      afterDowngrade.rows[0]?.installed_connector_version === null &&
+      afterDowngrade.rows[0]?.browser_sync_protocol === 1,
+    "handler protocol downgrade remained incorrectly confirmed as protocol 2",
+  );
+  console.log(
+    "ok - one-off CLI, installed runtime, and acknowledged handler protocol remain distinct",
+  );
   const historicalSourceIds = Array.from({ length: 80 }, () => randomUUID());
   const exactSourceIds = Array.from({ length: 100 }, () => randomUUID());
   try {

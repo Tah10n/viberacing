@@ -19,7 +19,7 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/db", () => ({ transaction: transactionMock }));
 
-import { POST } from "./route";
+import { parseBrowserSyncProtocol, POST } from "./route";
 
 const installationId = "11111111-1111-4111-8111-111111111111";
 const installationSecret = "synthetic-installation-secret-that-is-long-enough";
@@ -32,7 +32,7 @@ function request(body: unknown): Request {
   });
 }
 
-function validBody(): unknown {
+function validBody(): Record<string, unknown> {
   return {
     protocolVersion: 2,
     connectorVersion: "0.2.0",
@@ -80,6 +80,18 @@ describe("pairing start admission ordering", () => {
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
+  it("rejects an oversized installed runtime version before mutation", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+
+    const response = await POST(
+      request({ ...validBody(), installedRuntimeVersion: `1.2.3-${"a".repeat(40)}` }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it("spends capability-key quota before shared quota and mutation", async () => {
     consumeRateLimitMock
       .mockResolvedValueOnce(true)
@@ -101,5 +113,77 @@ describe("pairing start admission ordering", () => {
       consumeRateLimitMock.mock.invocationCallOrder[2] ?? Number.NEGATIVE_INFINITY,
     );
     expect(transactionMock).not.toHaveBeenCalled();
+  });
+
+  it("stores the explicitly reported installed-handler protocol with its capability", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    const clientQuery = vi.fn((sql: string, parameters?: unknown[]) => {
+      void parameters;
+      if (sql.includes("SELECT count(*)::int AS count")) {
+        return Promise.resolve({ rows: [{ count: 0 }] });
+      }
+      return Promise.resolve({ rowCount: 1, rows: [] });
+    });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(
+      request({
+        ...validBody(),
+        connectorVersion: "0.4.3",
+        installedRuntimeVersion: "0.4.3",
+        browserSyncCapable: true,
+        browserSyncProtocol: 2,
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    const insert = clientQuery.mock.calls.find(([sql]) =>
+      sql.includes("INSERT INTO installations"),
+    );
+    expect(insert?.[0]).toMatch(
+      /browser_sync_capable,[\s\S]*browser_sync_protocol,[\s\S]*last_cli_version,[\s\S]*installed_connector_version/,
+    );
+    expect(insert?.[1]).toEqual([
+      installationId,
+      expect.any(Uint8Array),
+      expect.any(Uint8Array),
+      expect.any(Uint8Array),
+      expect.any(Uint8Array),
+      "0.4.3",
+      "0.4.3",
+      2,
+      true,
+      2,
+    ]);
+  });
+});
+
+describe("browser Sync handler protocol", () => {
+  it("maps legacy capability reports to the account-only protocol", () => {
+    expect(parseBrowserSyncProtocol(undefined, undefined)).toBe(0);
+    expect(parseBrowserSyncProtocol(false, undefined)).toBe(0);
+    expect(parseBrowserSyncProtocol(true, undefined)).toBe(1);
+  });
+
+  it("accepts an explicit, internally consistent installed-handler protocol", () => {
+    expect(parseBrowserSyncProtocol(false, 0)).toBe(0);
+    expect(parseBrowserSyncProtocol(true, 2)).toBe(2);
+  });
+
+  it("rejects malformed or contradictory handler reports", () => {
+    for (const [capable, protocol] of [
+      [undefined, 2],
+      [false, 2],
+      [true, 0],
+      [true, -1],
+      [true, 1.5],
+      [true, 3],
+      ["yes", undefined],
+    ]) {
+      expect(parseBrowserSyncProtocol(capable, protocol)).toBeNull();
+    }
   });
 });

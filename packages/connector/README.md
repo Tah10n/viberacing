@@ -79,8 +79,14 @@ viberacing run antigravity [--source <client-source-id>] -- <native agy argument
 `connect` also registers a per-user `viberacing://` handler on macOS, Windows, and Linux when the
 default state directory is used. The dashboard uses it only after that browser approved the same
 installation. A click starts the installed connector copy, claims a short-lived device-authenticated
-grant, syncs only the selected account's sources on that computer, reports a safe result code, and
-exits. Custom state roots continue to use `viberacing sync` and never replace the global handler.
+grant, and syncs either the selected account's sources or every active agent on that computer. The
+all-agent control appears only after `connect` or `doctor --repair` confirms a compatible installed
+runtime and handler. That confirmation is saved locally before the network request and retried on
+later connector contacts until the server acknowledges it. Running a newer package once with `npx`
+reports only that CLI version and does not claim that its runtime was installed. Later OS inspection
+also retracts the capability if the owned handler is downgraded or removed. The connector reports a
+safe result code and exits. Custom state roots continue to use `viberacing sync` and never replace
+the global handler.
 
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.
@@ -161,9 +167,11 @@ successful authenticated usage delivery clears that hook error; partial syncs an
 that send no usage request retain it. A successful initial pending retry counts as that delivery
 even when the following automatic collection is unchanged. `doctor --repair` refreshes the installed
 runtime, owned hooks, and the default-state browser protocol handler under the lifecycle lock. Its
-server reconciliation shares the sync lock, and it does not collect usage unless the user separately
-runs `viberacing sync`. A successful compatible reconnect, authenticated sync, or doctor server
-check clears a prior version-upgrade automatic-sync disable.
+pending handler attestation survives a failed reconciliation and is repeated by a later normal
+contact until the server acknowledges the same random ID. Server reconciliation shares the sync
+lock, and it does not collect usage unless the user separately runs `viberacing sync`. A successful
+compatible reconnect, authenticated sync, or doctor server check clears a prior version-upgrade
+automatic-sync disable.
 
 Connector 0.4.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
 allowlisted code, and `observedAfterSequence`, copied from the last server-accepted sequence known
@@ -200,11 +208,12 @@ seconds for an existing sync and reports a busy error if the lock remains occupi
 sends no request.
 
 Browser-triggered sync shares the same single-flight lock but scopes collection and pending delivery
-to the server-authorized source IDs for one account on the bound installation. The URL contains only
-opaque IDs and a one-time grant; account labels, paths, provider identities, and usage content are
-never included. The server serializes claims per installation, permits at most one new browser sync
-per 60 seconds, and rejects a second claim while a recent run is still active. `uninstall` removes
-only an owned handler registration before deleting its runtime.
+to server-authorized source IDs on the bound installation. It can refresh one account or, from the
+connected-computer card, every active agent on that computer in one run. The URL contains only
+opaque IDs, a closed scope, and a one-time grant; account labels, paths, provider identities, and
+usage content are never included. The server serializes claims per installation, permits at most one
+new browser sync per 60 seconds, and rejects a second claim while a recent run is still active.
+`uninstall` removes only an owned handler registration before deleting its runtime.
 
 The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
 and resumes at the last complete byte offset, detecting append, truncation, replacement, and file

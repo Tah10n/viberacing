@@ -8,8 +8,32 @@ experience or protocol.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-26
+
+### Added
+
+- The dashboard can now sync every supported agent on the browser-bound computer in one action,
+  while retaining account-scoped Sync for older connectors and individual refreshes. The account
+  list is collapsible, and the lemon accent has shifted slightly greener.
+- Absolute interface times, including race end and Last sync, now use the browser's real time zone
+  with an explicit zone label. Token dates, daily buckets, and weekly ranking boundaries remain UTC.
+
 ### Fixed
 
+- Installation-wide browser Sync is now gated by the explicitly reported installed-handler protocol.
+  Running a newer one-off CLI no longer exposes an action that an older registered OS handler cannot
+  process. Successful `connect` or `doctor --repair` saves a durable installed-runtime/handler
+  attestation before reconciliation and retries it until acknowledged; later OS inspection safely
+  reports handler downgrade or removal.
+- Production CI now rejects changed connector archive inputs unless the package has a strictly newer
+  stable version than the pull-request base, preventing modified bytes from being bundled as an
+  already published 0.4.2. This change stages connector 0.4.3 without publishing it from the pull
+  request.
+- The browser Sync protocol migration remains writable by the previous web release during pre-deploy
+  and rollback windows. Installation-wide runs no longer depend on an arbitrary account, and the
+  existing 32-source connector bound is enforced before a grant or run is consumed.
+- Signed-in racers now see the same compatibility-floor update command on the home page and on each
+  affected dashboard computer, so a required connector repair is visible before opening settings.
 - Connector release verification now tolerates npm publish-time scanning by waiting up to 30 minutes
   for both the exact immutable version and `latest`, while the workflow retains a bounded 45-minute
   job timeout. Production and onboarding documentation now reflect the completed npm rollout, the

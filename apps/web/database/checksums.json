@@ -2,5 +2,6 @@
   "001_initial.sql": "79697d5cbad6b72be76e39447110555a8137b83090e0e6a391ad0dc4480a916a",
   "002_account_deduplication.sql": "2b9d108afc5d617b14befaab2814d05b8b3643fa153561743660901aba997972",
   "003_browser_sync.sql": "5c5c2bc3db68a6e3a1c0a5716d9f1c5213c1b105e1ef69ab83348cd427a06061",
-  "004_browser_sync_rate_guard.sql": "ff4b7b94e533d815301d95d6f6facb7366fa7c86535e457df6d887666f0f24a6"
+  "004_browser_sync_rate_guard.sql": "ff4b7b94e533d815301d95d6f6facb7366fa7c86535e457df6d887666f0f24a6",
+  "005_browser_sync_protocol.sql": "48cc5aff13f5523c1465928d23229357253c0e087584044a203211efbbec5414"
 }

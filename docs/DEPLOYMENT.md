@@ -97,14 +97,24 @@ version, publishes a prerelease, or publishes from a pull request. The installed
 only when the user explicitly runs `doctor --repair`; there is no background updater or server-side
 npm polling.
 
+Production CI compares every connector file that can enter the npm or same-origin archive with the
+pull-request base. If those bytes change, `packages/connector/package.json` must contain a strictly
+newer stable version. A web build therefore cannot silently create a changed archive under an
+already immutable npm version. Staging 0.4.3 in the server-first pull request does not publish it:
+the official service remains on npm `latest`, and publication still requires the later reviewed tag
+and GitHub Release after the compatible server deployment is healthy.
+
 The protocol v4 rollout completed with connector 0.4.0; the server remains compatible with v2, v3,
 and v4. For every future protocol change, preserve server-first ordering: deploy and verify a server
 that accepts both the old and new protocols, publish the compatible connector, and only then raise
-`VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed.
+`VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed or a
+reviewed installed capability is deliberately made the supported baseline.
 
 `VIBERACING_MIN_CONNECTOR_VERSION` is a compatibility floor, not the latest package version. Raise
 it only after a server-first rollout and publication of a compatible npm package. Optional patch
-updates do not require changing it.
+updates normally do not change it. Connector 0.4.3 is an explicit exception: after npm `latest` is
+verified as 0.4.3, the official Railway service sets the floor to 0.4.3 so the installed all-agent
+browser handler becomes the supported baseline. Self-hosted examples may retain 0.2.0.
 
 Rollback needs no database migration: set the single distribution variable back to `archive` and
 redeploy. Existing installations, server data, and device tokens remain valid. Do not delete the npm

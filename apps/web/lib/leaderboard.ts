@@ -53,6 +53,12 @@ export function currentWeekLabel(now = new Date()): string {
     : `${month.format(start)}–${endLabel}`;
 }
 
+export function currentWeekEndsAt(now = new Date()): string {
+  const nextWeek = new Date(`${currentWeekStart(now)}T00:00:00.000Z`);
+  nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+  return new Date(nextWeek.getTime() - 1).toISOString();
+}
+
 export function currentWeekNumber(now = new Date()): number {
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));

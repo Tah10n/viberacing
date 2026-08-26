@@ -8,11 +8,23 @@ import {
 } from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
+import { ConnectorUpdateNotice } from "../components/connector-update-notice";
 import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
-import { AccountControls, BrowserSyncProvider } from "../components/account-controls";
+import { UserLocalTime } from "../components/user-local-time";
+import {
+  AccountControls,
+  BrowserSyncProvider,
+  InstallationSyncControl,
+} from "../components/account-controls";
 import { agentNames, isSupportedAgent } from "@/lib/agents";
-import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/config";
+import {
+  browserSyncInstallationScopeProtocol,
+  installedConnectorUpdateRequired,
+  maximumSourcesPerInstallation,
+  minimumConnectorVersion,
+  publicOrigin,
+} from "@/lib/config";
 import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
@@ -24,7 +36,9 @@ interface DashboardProps {
 }
 
 interface InstallationRow {
-  connector_version: string;
+  browser_sync_capable: boolean;
+  browser_sync_protocol: number;
+  installed_connector_version: string | null;
   id: string;
   name: string;
   last_sync_at: Date | null;
@@ -104,8 +118,7 @@ function accountTitle(agent: string, label: string): string {
     : `${displayName} · ${label}`;
 }
 
-function syncLabel(value: Date | null): string {
-  if (value === null) return "Waiting for first sync";
+function syncUtcFallback(value: Date): string {
   return `${new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
@@ -114,6 +127,18 @@ function syncLabel(value: Date | null): string {
     hour12: false,
     timeZone: "UTC",
   }).format(value)} UTC`;
+}
+
+function LastSyncTime({ value }: { readonly value: Date | null }) {
+  return value === null ? (
+    <>Waiting for first sync</>
+  ) : (
+    <UserLocalTime
+      dateTime={value.toISOString()}
+      fallback={syncUtcFallback(value)}
+      format="timestamp"
+    />
+  );
 }
 
 function countLabel(count: number, singular: string, plural = `${singular}s`): string {
@@ -204,7 +229,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const weekStart = currentWeekStart();
   const [installations, accounts, sources, dedupEvents, dailyUsage] = await Promise.all([
     query<InstallationRow>(
-      `SELECT i.id::text, i.name, i.connector_version, i.last_sync_at,
+      `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
+              i.browser_sync_capable,
+              i.browser_sync_protocol,
               count(s.id)::int AS source_count
          FROM installations i
          LEFT JOIN installation_sources s
@@ -428,6 +455,15 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const updateCommand = connectorRepairCommand(origin);
   const uninstallCommand = connectorUninstallCommand(origin);
   const minimumVersion = minimumConnectorVersion();
+  const canSyncInstallation = (installation: InstallationRow): boolean =>
+    installation.id === browserInstallationId &&
+    installation.browser_sync_capable &&
+    installation.installed_connector_version !== null &&
+    installation.source_count > 0 &&
+    installation.source_count <= maximumSourcesPerInstallation &&
+    installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
+  const browserSyncEnabled =
+    accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -585,21 +621,31 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </figure>
       </section>
 
-      <section className="dashboard-section" aria-labelledby="accounts-title">
-        <div className="section-heading plain-heading">
-          <div>
-            <p className="eyebrow">AGENT ACCOUNTS</p>
-            <h2 id="accounts-title">Accounts in your total</h2>
-          </div>
-          <span>{accounts.length} configured</span>
-        </div>
-        {accounts.length === 0 ? (
-          <div className="empty-state">
-            <h3>No agent accounts yet</h3>
-            <p>They are created when you approve detected local sources.</p>
-          </div>
-        ) : (
-          <BrowserSyncProvider enabled={accounts.some((account) => account.can_browser_sync)}>
+      <BrowserSyncProvider enabled={browserSyncEnabled}>
+        <details
+          aria-labelledby="accounts-title"
+          className="dashboard-section account-disclosure"
+          open
+        >
+          <summary className="section-heading plain-heading">
+            <div>
+              <p className="eyebrow">AGENT ACCOUNTS</p>
+              <h2 id="accounts-title">Accounts in your total</h2>
+            </div>
+            <span className="account-disclosure-action">
+              <span className="account-disclosure-count">{accounts.length} configured</span>
+              <span aria-hidden="true">
+                <span className="account-disclosure-closed">Show accounts</span>
+                <span className="account-disclosure-open">Hide accounts</span>
+              </span>
+            </span>
+          </summary>
+          {accounts.length === 0 ? (
+            <div className="empty-state">
+              <h3>No agent accounts yet</h3>
+              <p>They are created when you approve detected local sources.</p>
+            </div>
+          ) : (
             <div className="device-list">
               {accounts.map((account) => (
                 <article className="device-card" key={account.id}>
@@ -630,7 +676,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   </div>
                   <div className="device-meta">
                     <span>Last sync</span>
-                    <strong>{syncLabel(account.last_sync_at)}</strong>
+                    <strong>
+                      <LastSyncTime value={account.last_sync_at} />
+                    </strong>
                   </div>
                   <AccountControls accountId={account.id} canSync={account.can_browser_sync}>
                     <SameOriginActionForm action="/api/accounts/rename">
@@ -707,74 +755,69 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                 </article>
               ))}
             </div>
-          </BrowserSyncProvider>
-        )}
-      </section>
+          )}
+        </details>
 
-      <section className="dashboard-section" aria-labelledby="computers-title">
-        <div className="section-heading plain-heading">
-          <div>
-            <p className="eyebrow">INSTALLATIONS</p>
-            <h2 id="computers-title">Connected computers</h2>
+        <section className="dashboard-section" aria-labelledby="computers-title">
+          <div className="section-heading plain-heading">
+            <div>
+              <p className="eyebrow">INSTALLATIONS</p>
+              <h2 id="computers-title">Connected computers</h2>
+            </div>
+            <span>{installations.length} active</span>
           </div>
-          <span>{installations.length} active</span>
-        </div>
-        {installations.length === 0 ? (
-          <div className="empty-state">
-            <h3>No computers connected</h3>
-            <p>Run the command below on each computer you want to include.</p>
-          </div>
-        ) : (
-          <div className="device-list">
-            {installations.map((item) => (
-              <article className="device-card" key={item.id}>
-                <div className="device-main">
-                  <div className="device-title">
-                    <h3>{item.name}</h3>
-                    <Badge tone="success">Connected</Badge>
-                  </div>
-                  <div className="agent-list">
-                    <span className="agent-chip">
-                      {countLabel(item.source_count, "local source")}
-                    </span>
-                  </div>
-                </div>
-                <div className="device-meta">
-                  <span>Last sync</span>
-                  <strong>{syncLabel(item.last_sync_at)}</strong>
-                </div>
-                <SameOriginActionForm action="/api/connections/revoke">
-                  <input name="installationId" type="hidden" value={item.id} />
-                  <button className="text-button danger-text" type="submit">
-                    Disconnect
-                  </button>
-                </SameOriginActionForm>
-                {versionAtLeast(item.connector_version, minimumVersion) ? null : (
-                  <div className="connector-update">
-                    <div className="connector-update-heading">
-                      <Badge tone="warning">Required</Badge>
-                      <strong>Connector update required</strong>
+          {installations.length === 0 ? (
+            <div className="empty-state">
+              <h3>No computers connected</h3>
+              <p>Run the command below on each computer you want to include.</p>
+            </div>
+          ) : (
+            <div className="device-list">
+              {installations.map((item) => (
+                <article className="device-card" key={item.id}>
+                  <div className="device-main">
+                    <div className="device-title">
+                      <h3>{item.name}</h3>
+                      <Badge tone="success">Connected</Badge>
                     </div>
-                    <p>Update the connector to restore supported automatic and browser Sync.</p>
-                    <pre>
-                      <code>{updateCommand}</code>
-                    </pre>
-                    <CopyCommandButton
-                      command={updateCommand}
-                      copiedLabel="Update command copied"
-                      label="Copy update command"
-                    />
-                    <p className="muted">
-                      Run this one-line command in {commandShell}. Repair refreshes the installed
-                      runtime and hooks. Repair does not collect or upload token totals.
-                    </p>
+                    <div className="agent-list">
+                      <span className="agent-chip">
+                        {countLabel(item.source_count, "local source")}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+                  <div className="device-meta">
+                    <span>Last sync</span>
+                    <strong>
+                      <LastSyncTime value={item.last_sync_at} />
+                    </strong>
+                  </div>
+                  <div className="installation-controls">
+                    <InstallationSyncControl canSync={canSyncInstallation(item)} />
+                    <SameOriginActionForm action="/api/connections/revoke">
+                      <input name="installationId" type="hidden" value={item.id} />
+                      <button className="text-button danger-text" type="submit">
+                        Disconnect
+                      </button>
+                    </SameOriginActionForm>
+                  </div>
+                  {installedConnectorUpdateRequired(
+                    item.installed_connector_version,
+                    item.browser_sync_protocol,
+                    minimumVersion,
+                  ) ? (
+                    <ConnectorUpdateNotice
+                      command={updateCommand}
+                      minimumVersion={minimumVersion}
+                      scope="computer"
+                    />
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </BrowserSyncProvider>
 
       <div className="settings-grid">
         <Panel className="privacy-panel">

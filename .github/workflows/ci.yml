@@ -164,6 +164,10 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/check-migration-history.mjs "$BASE_SHA" HEAD
+      - name: Require a new version for changed connector archive contents
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-connector-version-bump.mjs "$BASE_SHA" HEAD
       - name: Verify source, unit tests, and production build
         run: pnpm verify
       - name: Migrate an empty database twice

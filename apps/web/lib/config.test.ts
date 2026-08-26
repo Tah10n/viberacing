@@ -6,6 +6,7 @@ import {
   databaseClientConfig,
   databaseSslEnabled,
   githubWebOrigin,
+  installedConnectorUpdateRequired,
   isSupportedConnectorProtocolVersion,
   isSemanticVersion,
   maximumDailyTokens,
@@ -66,6 +67,24 @@ describe("connector protocol compatibility", () => {
     expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
     expect(isSupportedConnectorProtocolVersion(5)).toBe(false);
     expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
+  });
+});
+
+describe("installed connector compatibility", () => {
+  it("never treats a newer one-off CLI as confirmed installed state", () => {
+    expect(installedConnectorUpdateRequired("0.4.2", 2, "0.4.3")).toBe(true);
+    expect(installedConnectorUpdateRequired("0.4.3", 2, "0.4.3")).toBe(false);
+  });
+
+  it("defers unknown legacy state until attestation is part of the configured floor", () => {
+    expect(installedConnectorUpdateRequired(null, 0, "0.2.0")).toBe(false);
+    expect(installedConnectorUpdateRequired(null, 0, "0.4.3")).toBe(true);
+  });
+
+  it("requires the installation-scoped Browser Sync baseline at the 0.4.3 floor", () => {
+    expect(installedConnectorUpdateRequired("0.4.3", 0, "0.4.3")).toBe(true);
+    expect(installedConnectorUpdateRequired("0.4.3", 1, "0.4.3")).toBe(true);
+    expect(installedConnectorUpdateRequired("0.4.3", 2, "0.4.3")).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 import {
   isSupportedConnectorProtocolVersion,
   maximumDailyTokens,
+  maximumSourcesPerInstallation,
   type SupportedConnectorProtocolVersion,
 } from "@/lib/config";
 import { agentRegistry, isSupportedAgent } from "@/lib/agents";
@@ -398,7 +399,7 @@ async function post(request: Request): Promise<Response> {
     ];
     if (
       sourceIds.length < 1 ||
-      sourceIds.length > 32 ||
+      sourceIds.length > maximumSourcesPerInstallation ||
       new Set(sourceIds).size !== sourceIds.length
     ) {
       return problem(400, "invalid_request");

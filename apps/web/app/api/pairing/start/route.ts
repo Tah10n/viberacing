@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
+  browserSyncInstallationScopeProtocol,
+  isSemanticVersion,
   isSupportedConnectorProtocolVersion,
   minimumConnectorVersion,
   publicOrigin,
@@ -32,6 +34,8 @@ interface StartBody {
   sources?: unknown;
   supersededClientSourceIds?: unknown;
   browserSyncCapable?: unknown;
+  browserSyncProtocol?: unknown;
+  installedRuntimeVersion?: unknown;
 }
 
 interface PendingSource {
@@ -56,6 +60,8 @@ const bodyKeys = new Set([
   "sources",
   "supersededClientSourceIds",
   "browserSyncCapable",
+  "browserSyncProtocol",
+  "installedRuntimeVersion",
 ]);
 const sourceKeys = new Set([
   "clientSourceId",
@@ -115,6 +121,22 @@ function parseSupersededSourceIds(value: unknown, activeIds: ReadonlySet<string>
   return result;
 }
 
+export function parseBrowserSyncProtocol(capable: unknown, protocol: unknown): number | null {
+  if (capable !== undefined && typeof capable !== "boolean") return null;
+  if (protocol === undefined) return capable === true ? 1 : 0;
+  if (
+    typeof capable !== "boolean" ||
+    typeof protocol !== "number" ||
+    !Number.isSafeInteger(protocol) ||
+    protocol < 0 ||
+    protocol > browserSyncInstallationScopeProtocol
+  ) {
+    return null;
+  }
+  const reportsCapability = protocol > 0;
+  return capable === reportsCapability ? protocol : null;
+}
+
 async function post(request: Request): Promise<Response> {
   const address = clientAddress(request);
   if (
@@ -143,6 +165,14 @@ async function post(request: Request): Promise<Response> {
       body.supersededClientSourceIds,
       sourceIds,
     );
+    const browserSyncProtocol = parseBrowserSyncProtocol(
+      body.browserSyncCapable,
+      body.browserSyncProtocol,
+    );
+    const installedRuntimeVersion =
+      body.installedRuntimeVersion === undefined
+        ? body.connectorVersion
+        : body.installedRuntimeVersion;
     if (
       typeof body.protocolVersion !== "number" ||
       !Number.isSafeInteger(body.protocolVersion) ||
@@ -156,7 +186,10 @@ async function post(request: Request): Promise<Response> {
       body.installationSecret.length > 128 ||
       sources === null ||
       supersededClientSourceIds === null ||
-      (body.browserSyncCapable !== undefined && typeof body.browserSyncCapable !== "boolean")
+      browserSyncProtocol === null ||
+      typeof installedRuntimeVersion !== "string" ||
+      installedRuntimeVersion.length > 40 ||
+      !isSemanticVersion(installedRuntimeVersion)
     ) {
       return problem(400, "invalid_request");
     }
@@ -253,8 +286,10 @@ async function post(request: Request): Promise<Response> {
           `INSERT INTO installations
              (id, status, installation_secret_hash, pairing_code_hash, poll_token_hash,
               pending_device_token_hash, connector_version, protocol_version, browser_sync_capable,
+              browser_sync_protocol, last_cli_version, installed_connector_version,
               pairing_expires_at)
-           VALUES ($1, 'pending', $2, $3, $4, $5, $6, $7, $8, now() + interval '10 minutes')`,
+           VALUES ($1, 'pending', $2, $3, $4, $5, $6, $8, $9, $10, $6, $7,
+                   now() + interval '10 minutes')`,
           [
             installationId,
             digest(installationSecret),
@@ -262,8 +297,10 @@ async function post(request: Request): Promise<Response> {
             digest(pollToken),
             pendingDeviceHash,
             connectorVersion,
+            installedRuntimeVersion,
             body.protocolVersion,
-            body.browserSyncCapable === true,
+            browserSyncProtocol > 0,
+            browserSyncProtocol,
           ],
         );
       } else {
@@ -275,8 +312,11 @@ async function post(request: Request): Promise<Response> {
                   pending_device_token_hash = $4,
                   pairing_expires_at = now() + interval '10 minutes',
                   connector_version = $5,
-                  protocol_version = $6,
-                  browser_sync_capable = $7,
+                  last_cli_version = $5,
+                  installed_connector_version = $6,
+                  protocol_version = $7,
+                  browser_sync_capable = $8,
+                  browser_sync_protocol = $9,
                   updated_at = now()
             WHERE id = $1`,
           [
@@ -285,8 +325,10 @@ async function post(request: Request): Promise<Response> {
             digest(pollToken),
             pendingDeviceHash,
             connectorVersion,
+            installedRuntimeVersion,
             body.protocolVersion,
-            body.browserSyncCapable === true,
+            browserSyncProtocol > 0,
+            browserSyncProtocol,
           ],
         );
       }

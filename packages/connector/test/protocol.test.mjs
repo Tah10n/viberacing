@@ -305,6 +305,26 @@ test("compact reconciliation requires every requested source and supports 100 ma
   );
 });
 
+test("reconciliation accepts only the matching handler attestation acknowledgement", async () => {
+  const attestationId = "34343434-3434-4434-8434-343434343434";
+  const sources = [{ sourceId, status: "active", lastAcceptedSyncSequence: "0" }];
+  const result = await parseProtocolResponse(
+    json({ sources, acceptedHandlerAttestationId: attestationId }),
+    { kind: "reconciliation", sourceIds: [sourceId], handlerAttestationId: attestationId },
+  );
+  assert.equal(result.acceptedHandlerAttestationId, attestationId);
+  await assert.rejects(
+    parseProtocolResponse(
+      json({
+        sources,
+        acceptedHandlerAttestationId: "35353535-3535-4535-8535-353535353535",
+      }),
+      { kind: "reconciliation", sourceIds: [sourceId], handlerAttestationId: attestationId },
+    ),
+    /invalid protocol response/,
+  );
+});
+
 test("accepts only the expected verification origin, path, code, and web protocols", async () => {
   const base = {
     installationId,

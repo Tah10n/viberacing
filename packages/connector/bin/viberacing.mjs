@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -28,7 +28,8 @@ import {
 } from "../lib/readers.mjs";
 import { openBrowser } from "../lib/browser.mjs";
 import {
-  browserSyncRegistrationStatus,
+  browserSyncProtocolVersion,
+  browserSyncHandlerAttestation,
   registerBrowserSync,
   unregisterBrowserSync,
 } from "../lib/browser-integration.mjs";
@@ -102,6 +103,9 @@ import {
 } from "../lib/runtime.mjs";
 
 const protocolVersion = connectorProtocolVersion;
+const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const handlerInspectionDiagnostic = "browser_handler_inspection_failed";
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
@@ -274,6 +278,157 @@ async function request(origin, path, options = {}, attempts = 1, responseContext
   throw lastError;
 }
 
+async function requestPairingStart(origin, installationId, body) {
+  const send = (payload) =>
+    request(
+      origin,
+      "/api/pairing/start",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      1,
+      { kind: "pairingStart", origin, installationId },
+    );
+  try {
+    return await send(body);
+  } catch (error) {
+    if (
+      error?.status !== 400 ||
+      error?.code !== "invalid_request" ||
+      !Object.hasOwn(body, "browserSyncProtocol")
+    ) {
+      throw error;
+    }
+    const legacyBody = { ...body };
+    delete legacyBody.browserSyncProtocol;
+    delete legacyBody.installedRuntimeVersion;
+    return send(legacyBody);
+  }
+}
+
+function validLocalHandlerAttestation(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([
+        "attestationId",
+        "browserSyncProtocol",
+        "installedRuntimeVersion",
+        "pending",
+      ]) &&
+    uuidPattern.test(value.attestationId ?? "") &&
+    (value.installedRuntimeVersion === null ||
+      semanticVersionPattern.test(value.installedRuntimeVersion ?? "")) &&
+    Number.isSafeInteger(value.browserSyncProtocol) &&
+    value.browserSyncProtocol >= 0 &&
+    value.browserSyncProtocol <= browserSyncProtocolVersion &&
+    typeof value.pending === "boolean"
+  );
+}
+
+function publicHandlerAttestation(value) {
+  if (!validLocalHandlerAttestation(value) || !value.pending) return null;
+  return {
+    attestationId: value.attestationId,
+    installedRuntimeVersion: value.installedRuntimeVersion,
+    browserSyncProtocol: value.browserSyncProtocol,
+  };
+}
+
+async function recordInstalledHandlerAttestation(
+  installedRuntimeVersion,
+  browserSyncProtocol,
+  options = {},
+) {
+  if (
+    !(
+      installedRuntimeVersion === null || semanticVersionPattern.test(installedRuntimeVersion ?? "")
+    ) ||
+    !Number.isSafeInteger(browserSyncProtocol) ||
+    browserSyncProtocol < 0 ||
+    browserSyncProtocol > browserSyncProtocolVersion
+  ) {
+    throw new Error("Invalid installed handler attestation");
+  }
+  const state = await readState();
+  const previous = validLocalHandlerAttestation(state.handlerAttestation)
+    ? state.handlerAttestation
+    : null;
+  if (
+    !options.force &&
+    previous?.installedRuntimeVersion === installedRuntimeVersion &&
+    previous.browserSyncProtocol === browserSyncProtocol
+  ) {
+    return previous;
+  }
+  state.handlerAttestation = {
+    attestationId: randomUUID(),
+    installedRuntimeVersion,
+    browserSyncProtocol,
+    pending: true,
+  };
+  await writeState(state);
+  return state.handlerAttestation;
+}
+
+async function refreshInstalledHandlerAttestation(options = {}) {
+  const state = await readState();
+  if (resolve(stateDirectory) !== resolve(join(homedir(), ".viberacing"))) {
+    return { inspectionFailed: false, observed: null, state };
+  }
+  let observed;
+  try {
+    observed = await browserSyncHandlerAttestation();
+  } catch {
+    if (state.handlerInspectionDiagnostic !== handlerInspectionDiagnostic) {
+      state.handlerInspectionDiagnostic = handlerInspectionDiagnostic;
+      await writeState(state).catch(() => {});
+    }
+    return { inspectionFailed: true, observed: null, state };
+  }
+  const previous = validLocalHandlerAttestation(state.handlerAttestation)
+    ? state.handlerAttestation
+    : null;
+  let changed = false;
+  if (
+    options.force ||
+    previous === null ||
+    observed.runtimeVersion !== previous.installedRuntimeVersion ||
+    observed.protocol !== previous.browserSyncProtocol
+  ) {
+    state.handlerAttestation = {
+      attestationId: randomUUID(),
+      installedRuntimeVersion: observed.runtimeVersion,
+      browserSyncProtocol: observed.protocol,
+      pending: true,
+    };
+    changed = true;
+  }
+  if (Object.hasOwn(state, "handlerInspectionDiagnostic")) {
+    delete state.handlerInspectionDiagnostic;
+    changed = true;
+  }
+  if (changed) await writeState(state);
+  return { inspectionFailed: false, observed, state };
+}
+
+async function acknowledgeInstalledHandlerAttestation(attestationId) {
+  if (!uuidPattern.test(attestationId ?? "")) return;
+  const state = await readState();
+  if (
+    !validLocalHandlerAttestation(state.handlerAttestation) ||
+    state.handlerAttestation.attestationId !== attestationId ||
+    !state.handlerAttestation.pending
+  ) {
+    return;
+  }
+  state.handlerAttestation.pending = false;
+  await writeState(state);
+}
+
 async function cancelPairingAttempt(attempt) {
   if (
     attempt === null ||
@@ -422,25 +577,17 @@ async function connect() {
   let pairing;
   let committed = false;
   try {
-    pairing = await request(
-      origin,
-      "/api/pairing/start",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          protocolVersion,
-          connectorVersion,
-          installationId: installation.id,
-          installationSecret: installation.secret,
-          sources: [...sources.values()].map(publicSource),
-          supersededClientSourceIds,
-          browserSyncCapable,
-        }),
-      },
-      1,
-      { kind: "pairingStart", origin, installationId: installation.id },
-    );
+    pairing = await requestPairingStart(origin, installation.id, {
+      protocolVersion,
+      connectorVersion,
+      installationId: installation.id,
+      installationSecret: installation.secret,
+      sources: [...sources.values()].map(publicSource),
+      supersededClientSourceIds,
+      browserSyncCapable,
+      browserSyncProtocol: browserSyncCapable ? browserSyncProtocolVersion : 0,
+      installedRuntimeVersion: connectorVersion,
+    });
     attempt = await recordConnectAttemptPairing(initialAttempt, pairing.pollToken);
     await waitForTestConnectBarrier("after_pairing_start");
     output(`Open ${pairing.verificationUrl}`);
@@ -530,6 +677,7 @@ async function connect() {
           return nextConfig;
         });
         committed = true;
+        await refreshInstalledHandlerAttestation({ force: true });
         output("Connected.");
         const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
         if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
@@ -699,20 +847,42 @@ async function retireMappedSources(config, sourceIds, options = {}) {
 
 async function requestReconciliation(config, attempts = 1) {
   const sourceIds = config.sources.map((source) => source.sourceId);
-  return request(
-    config.origin,
-    "/api/installations/current",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.deviceToken}`,
-        "Content-Type": "application/json",
+  const inspection = await refreshInstalledHandlerAttestation();
+  const handlerAttestation = inspection.inspectionFailed
+    ? null
+    : publicHandlerAttestation(inspection.state.handlerAttestation);
+  const body = {
+    sourceIds,
+    cliVersion: connectorVersion,
+    ...(handlerAttestation === null ? {} : { handlerAttestation }),
+  };
+  const send = (payload, requestAttempts, attestationId) =>
+    request(
+      config.origin,
+      "/api/installations/current",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.deviceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify({ sourceIds, connectorVersion }),
-    },
-    attempts,
-    { kind: "reconciliation", sourceIds },
-  );
+      requestAttempts,
+      { kind: "reconciliation", sourceIds, handlerAttestationId: attestationId },
+    );
+  try {
+    const remote = await send(body, attempts, handlerAttestation?.attestationId);
+    if (handlerAttestation !== null) {
+      await acknowledgeInstalledHandlerAttestation(remote.acceptedHandlerAttestationId);
+    }
+    return remote;
+  } catch (error) {
+    if (error?.status !== 400 || error?.code !== "invalid_request") {
+      throw error;
+    }
+    return send({ sourceIds, connectorVersion }, 1);
+  }
 }
 
 async function reconcileRemoteSources(config, remoteSources, options = {}) {
@@ -792,25 +962,29 @@ async function lifecycleFailure(error) {
 }
 
 async function reconcileServerState(config, state) {
+  const inspection = await refreshInstalledHandlerAttestation();
+  state = inspection.state;
   const missing = config.sources.some(
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
   );
+  const handlerConfirmationPending = publicHandlerAttestation(state.handlerAttestation) !== null;
   const lastReconciliation = state.lastRemoteReconciliationAt;
-  if (!missing && lastReconciliation === undefined) {
+  if (!missing && !handlerConfirmationPending && lastReconciliation === undefined) {
     state.lastRemoteReconciliationAt = Date.now();
     await writeState(state);
     return state;
   }
   if (
     !missing &&
+    !handlerConfirmationPending &&
     Number.isFinite(lastReconciliation) &&
     Date.now() - lastReconciliation < remoteReconciliationIntervalMs
   )
     return state;
   let remote;
   try {
-    remote = await requestReconciliation(config, missing ? 3 : 1);
+    remote = await requestReconciliation(config, missing || handlerConfirmationPending ? 3 : 1);
   } catch (error) {
     if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
       await lifecycleFailure(error);
@@ -1263,26 +1437,33 @@ function parseBrowserSyncUrl(value) {
     throw new Error("Invalid browser Sync URL");
   const url = new URL(value);
   const keys = [...url.searchParams.keys()].sort();
+  const accountScoped =
+    JSON.stringify(keys) === JSON.stringify(["accountId", "grant", "requestId"]) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      url.searchParams.get("accountId") ?? "",
+    );
+  const installationScoped =
+    JSON.stringify(keys) === JSON.stringify(["grant", "requestId", "scope"]) &&
+    url.searchParams.get("scope") === "installation";
   if (
     url.protocol !== "viberacing:" ||
     url.hostname !== "sync" ||
     (url.pathname !== "" && url.pathname !== "/") ||
     url.hash !== "" ||
-    JSON.stringify(keys) !== JSON.stringify(["accountId", "grant", "requestId"]) ||
+    (!accountScoped && !installationScoped) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       url.searchParams.get("requestId") ?? "",
-    ) ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      url.searchParams.get("accountId") ?? "",
     ) ||
     !/^[A-Za-z0-9_-]{32,128}$/.test(url.searchParams.get("grant") ?? "")
   )
     throw new Error("Invalid browser Sync URL");
-  return {
+  const common = {
     requestId: url.searchParams.get("requestId"),
-    accountId: url.searchParams.get("accountId"),
     grant: url.searchParams.get("grant"),
   };
+  return accountScoped
+    ? { ...common, accountId: url.searchParams.get("accountId") }
+    : { ...common, scope: "installation" };
 }
 
 async function reportBrowserSync(config, requestId, status, resultCode) {
@@ -1321,7 +1502,9 @@ async function browserSync(value) {
   );
   const requested = new Set(claim.sourceIds);
   const local = config.sources.filter(
-    (source) => requested.has(source.sourceId) && source.agentAccountId === link.accountId,
+    (source) =>
+      requested.has(source.sourceId) &&
+      (link.scope === "installation" || source.agentAccountId === link.accountId),
   );
   if (local.length !== requested.size) {
     await reportBrowserSync(config, link.requestId, "failed", "invalid_request").catch(() => {});
@@ -1637,12 +1820,15 @@ async function doctor() {
   const discovery = await discoverSources();
   const detected = discovery.sources;
   const localSources = await readSources().catch(() => []);
+  const handlerInspection = await refreshInstalledHandlerAttestation();
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
-  output(
-    defaultState
-      ? `Browser Sync handler: ${await browserSyncRegistrationStatus()}`
-      : "Browser Sync handler: unavailable for custom state root",
-  );
+  if (!defaultState) output("Browser Sync handler: unavailable for custom state root");
+  else if (handlerInspection.inspectionFailed) {
+    output("Browser Sync handler: inspection failed");
+    warning(
+      "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+    );
+  } else output(`Browser Sync handler: ${handlerInspection.observed.status}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
   );
@@ -1728,10 +1914,20 @@ async function doctor() {
         output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
       if (!defaultState) {
         output("Browser Sync handler: unavailable for custom state root");
+        await recordInstalledHandlerAttestation(null, 0, { force: true });
       } else {
-        const handlerStatus = await browserSyncRegistrationStatus();
-        output(`Browser Sync handler: ${handlerStatus}`);
-        if (!repaired.browserSyncCapable || handlerStatus !== "current") repairIncomplete = true;
+        const repairedInspection = await refreshInstalledHandlerAttestation({ force: true });
+        if (repairedInspection.inspectionFailed) {
+          output("Browser Sync handler: inspection failed");
+          warning(
+            "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+          );
+          repairIncomplete = true;
+        } else {
+          output(`Browser Sync handler: ${repairedInspection.observed.status}`);
+          if (!repaired.browserSyncCapable || repairedInspection.observed.status !== "current")
+            repairIncomplete = true;
+        }
       }
     }
     const hooks = await diagnoseHooks(config.sources);

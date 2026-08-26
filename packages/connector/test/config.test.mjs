@@ -125,6 +125,14 @@ function connectorEnvironment(home, extra = {}) {
   };
 }
 
+function defaultStateConnectorEnvironment(home, extra = {}) {
+  return connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    ...extra,
+  });
+}
+
 function useModuleEnvironment(home) {
   const environment = connectorEnvironment(home);
   const names = [
@@ -3259,6 +3267,7 @@ test("requires an explicit safe label when adding a local data root", async (con
 
 test("connect pairs only exact sources and keeps every local path out of its payload", async (context) => {
   let pairingBody;
+  const pairingBodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -3273,7 +3282,14 @@ test("connect pairs only exact sources and keeps every local path out of its pay
         response.end(JSON.stringify({ status: "pending" }));
         return;
       }
-      pairingBody = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const candidate = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      pairingBodies.push(candidate);
+      if (Object.hasOwn(candidate, "browserSyncProtocol")) {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "invalid_request" }));
+        return;
+      }
+      pairingBody = candidate;
       response.writeHead(200, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -3323,6 +3339,10 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     ),
     /Pairing expired/,
   );
+  assert.equal(pairingBodies.length, 2);
+  assert.equal(pairingBodies[0].browserSyncCapable, false);
+  assert.equal(pairingBodies[0].browserSyncProtocol, 0);
+  assert.equal(pairingBodies[0].installedRuntimeVersion, connectorVersion);
   assert.equal(pairingBody.sources.length, 1);
   assert.deepEqual(Object.keys(pairingBody.sources[0]).sort(), [
     "agentId",
@@ -3332,7 +3352,10 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "supportedSurface",
   ]);
   assert.equal(pairingBody.sources[0].agentId, "antigravity");
-  assert.doesNotMatch(JSON.stringify(pairingBody), new RegExp(home.replaceAll("\\", "\\\\")));
+  assert.equal(pairingBody.browserSyncCapable, false);
+  assert.equal(Object.hasOwn(pairingBody, "browserSyncProtocol"), false);
+  assert.equal(Object.hasOwn(pairingBody, "installedRuntimeVersion"), false);
+  assert.doesNotMatch(JSON.stringify(pairingBodies), new RegExp(home.replaceAll("\\", "\\\\")));
   for (const forbidden of [
     "dataPath",
     "canonicalPath",
@@ -3344,7 +3367,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "repository",
     "credentials",
   ])
-    assert.equal(JSON.stringify(pairingBody).includes(forbidden), false);
+    assert.equal(JSON.stringify(pairingBodies).includes(forbidden), false);
 });
 
 test("connect replaces a legacy OpenCode filename label before pairing and local commit", async (context) => {
@@ -4015,6 +4038,7 @@ test("reconnect preserves transient failures, retires disconnected sources, and 
         return;
       }
       if (request.url === "/api/pairing/poll") {
+        mode = "disconnected";
         response.end(
           JSON.stringify({
             status: "active",
@@ -4766,6 +4790,7 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   const uploadCanFinish = new Promise((resolve) => (releaseUpload = resolve));
   context.after(() => releaseUpload());
   let currentRequests = 0;
+  const reconciliationBodies = [];
   let installation;
   const server = createServer((request, response) => {
     const chunks = [];
@@ -4773,6 +4798,7 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/installations/current") {
         currentRequests += 1;
+        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify(
@@ -4826,7 +4852,271 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   const [doctorCode] = await once(doctor, "close");
   assert.equal(doctorCode, 0);
   assert.equal(currentRequests, 1);
+  assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
+  ]);
   assert.match(doctorOutput, /Pairing status: active/);
+});
+
+test("a newer one-off CLI does not attest an older installed runtime", async (context) => {
+  const reconciliationBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/installations/current") {
+        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unexpected_request" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-one-off-cli-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const attestationId = randomUUID();
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      handlerAttestation: {
+        attestationId,
+        installedRuntimeVersion: "0.4.2",
+        browserSyncProtocol: 1,
+        pending: false,
+      },
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+  });
+
+  assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
+  ]);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
+      .handlerAttestation,
+    {
+      attestationId,
+      installedRuntimeVersion: "0.4.2",
+      browserSyncProtocol: 1,
+      pending: false,
+    },
+  );
+});
+
+test("normal sync re-attests the exact observed Browser Sync handler state", async (context) => {
+  const scenarios = [
+    {
+      name: "removed handler after a confirmed protocol 2 registration",
+      observation: "missing",
+      removeState: false,
+      expectedVersion: null,
+      expectedProtocol: 0,
+    },
+    {
+      name: "legacy owned marker after a confirmed protocol 2 registration",
+      observation: "legacy",
+      removeState: false,
+      expectedVersion: null,
+      expectedProtocol: 1,
+    },
+    {
+      name: "removed state file and handler",
+      observation: "missing",
+      removeState: true,
+      expectedVersion: null,
+      expectedProtocol: 0,
+    },
+    {
+      name: "removed state file with a current marker",
+      observation: "current",
+      removeState: true,
+      expectedVersion: connectorVersion,
+      expectedProtocol: 2,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    await context.test(scenario.name, async (subtest) => {
+      const reconciliationBodies = [];
+      const usageBodies = [];
+      let installation;
+      const server = createServer((request, response) => {
+        const chunks = [];
+        request.on("data", (chunk) => chunks.push(chunk));
+        request.on("end", () => {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          response.setHeader("content-type", "application/json");
+          if (request.url === "/api/installations/current") {
+            reconciliationBodies.push(body);
+            response.end(
+              JSON.stringify({
+                ...reconciliationResponse([{ sourceId: installation.sourceId }]),
+                acceptedHandlerAttestationId: body.handlerAttestation.attestationId,
+              }),
+            );
+            return;
+          }
+          if (request.url === "/api/usage") {
+            usageBodies.push(body);
+            response.end(JSON.stringify(usageResponse(body)));
+            return;
+          }
+          response.writeHead(500);
+          response.end(JSON.stringify({ error: "unexpected_request" }));
+        });
+      });
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      subtest.after(() => server.close());
+      const address = server.address();
+      assert.notEqual(address, null);
+      assert.equal(typeof address, "object");
+
+      const home = await mkdtemp(join(tmpdir(), "viberacing-handler-observation-"));
+      subtest.after(() => rm(home, { recursive: true, force: true }));
+      installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+      const previousAttestationId = randomUUID();
+      if (scenario.removeState) {
+        await unlink(join(installation.directory, "state.json"));
+      } else {
+        await writeFile(
+          join(installation.directory, "state.json"),
+          `${JSON.stringify({
+            version: 1,
+            sequences: { [installation.sourceId]: "0" },
+            handlerAttestation: {
+              attestationId: previousAttestationId,
+              installedRuntimeVersion: connectorVersion,
+              browserSyncProtocol: 2,
+              pending: false,
+            },
+          })}\n`,
+        );
+      }
+
+      await execFileAsync(process.execPath, [connectorPath, "sync"], {
+        env: defaultStateConnectorEnvironment(home, {
+          NODE_ENV: "test",
+          VIBERACING_TEST_BROWSER_HANDLER_INSPECTION: scenario.observation,
+        }),
+      });
+
+      assert.equal(reconciliationBodies.length, 1);
+      assert.deepEqual(
+        {
+          ...reconciliationBodies[0].handlerAttestation,
+          attestationId: "<uuid>",
+        },
+        {
+          attestationId: "<uuid>",
+          installedRuntimeVersion: scenario.expectedVersion,
+          browserSyncProtocol: scenario.expectedProtocol,
+        },
+      );
+      assert.notEqual(
+        reconciliationBodies[0].handlerAttestation.attestationId,
+        previousAttestationId,
+      );
+      assert.equal(usageBodies.length, 1);
+      assert.equal(usageBodies[0].snapshots[0].entries[0].totalTokens, "3");
+      const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+      assert.deepEqual(state.handlerAttestation, {
+        ...reconciliationBodies[0].handlerAttestation,
+        pending: false,
+      });
+    });
+  }
+});
+
+test("handler inspection failure does not block token sync or overwrite attestation", async (context) => {
+  const reconciliationBodies = [];
+  const usageBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        reconciliationBodies.push(body);
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      response.writeHead(500);
+      response.end(JSON.stringify({ error: "unexpected_request" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-handler-inspection-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const confirmed = {
+    attestationId: randomUUID(),
+    installedRuntimeVersion: connectorVersion,
+    browserSyncProtocol: 2,
+    pending: false,
+  };
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      handlerAttestation: confirmed,
+    })}\n`,
+  );
+  const environment = defaultStateConnectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_BROWSER_HANDLER_INSPECTION: "error_eacces",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+
+  assert.equal(usageBodies.length, 1);
+  assert.equal(usageBodies[0].snapshots[0].entries[0].totalTokens, "3");
+  assert.equal(reconciliationBodies.length, 0);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.deepEqual(state.handlerAttestation, confirmed);
+  assert.equal(state.handlerInspectionDiagnostic, "browser_handler_inspection_failed");
+
+  const diagnostic = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: environment,
+  });
+
+  assert.match(`${diagnostic.stdout}\n${diagnostic.stderr}`, /handler inspection failed/i);
+  assert.doesNotMatch(`${diagnostic.stdout}\n${diagnostic.stderr}`, /EACCES|Synthetic/);
+  assert.equal(reconciliationBodies.length, 1);
+  assert.equal(Object.hasOwn(reconciliationBodies[0], "handlerAttestation"), false);
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.deepEqual(state.handlerAttestation, confirmed);
+  assert.equal(state.handlerInspectionDiagnostic, "browser_handler_inspection_failed");
 });
 
 test("doctor repair fails closed when connection config cannot be loaded", async () => {
@@ -4884,6 +5174,51 @@ test("doctor repair keeps successful local work when server confirmation is unav
   assert.match(repaired.stdout, /Usage sync: not run/);
   assert.doesNotMatch(`${repaired.stdout}\n${repaired.stderr}`, /repair is incomplete/);
   await access(join(installation.directory, "runtime", connectorVersion, "bin", "viberacing.mjs"));
+  const pendingState = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  );
+  assert.equal(pendingState.handlerAttestation.pending, true);
+  assert.equal(pendingState.handlerAttestation.installedRuntimeVersion, null);
+  assert.equal(pendingState.handlerAttestation.browserSyncProtocol, 0);
+
+  const reconciliationBodies = [];
+  const recovered = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        reconciliationBodies.push(body);
+        response.end(
+          JSON.stringify({
+            ...reconciliationResponse([{ sourceId: installation.sourceId }]),
+            acceptedHandlerAttestationId: body.handlerAttestation.attestationId,
+          }),
+        );
+        return;
+      }
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  recovered.listen(address.port, "127.0.0.1");
+  await once(recovered, "listening");
+  context.after(() => recovered.close());
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+  });
+
+  assert.equal(reconciliationBodies.length, 1);
+  assert.equal(
+    reconciliationBodies[0].handlerAttestation.attestationId,
+    pendingState.handlerAttestation.attestationId,
+  );
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
+      .handlerAttestation.pending,
+    false,
+  );
 });
 
 test("doctor repair re-enables automatic sync after a connector upgrade", async (context) => {
@@ -4895,7 +5230,13 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       if (request.method === "POST" && request.url === "/api/installations/current") {
-        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        reconciliationBodies.push(body);
+        if (Object.hasOwn(body, "cliVersion")) {
+          response.writeHead(400, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: "invalid_request" }));
+          return;
+        }
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
           JSON.stringify(
@@ -4947,9 +5288,30 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
   assert.match(repaired.stdout, new RegExp(`Runtime: reinstalled ${connectorVersion}`));
   assert.match(repaired.stdout, /Hooks: repaired/);
   assert.match(repaired.stdout, /Usage sync: not run/);
-  assert.deepEqual(reconciliationBodies, [
-    { sourceIds: [installation.sourceId], connectorVersion },
-  ]);
+  assert.equal(reconciliationBodies.length, 2);
+  assert.deepEqual(
+    {
+      ...reconciliationBodies[0],
+      handlerAttestation: {
+        ...reconciliationBodies[0].handlerAttestation,
+        attestationId: "<uuid>",
+      },
+    },
+    {
+      sourceIds: [installation.sourceId],
+      cliVersion: connectorVersion,
+      handlerAttestation: {
+        attestationId: "<uuid>",
+        installedRuntimeVersion: null,
+        browserSyncProtocol: 0,
+      },
+    },
+  );
+  assert.match(reconciliationBodies[0].handlerAttestation.attestationId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(reconciliationBodies[1], {
+    sourceIds: [installation.sourceId],
+    connectorVersion,
+  });
   assert.equal(usageRequests, 0);
   assert.equal(
     JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
@@ -5915,7 +6277,15 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
       response.setHeader("content-type", "application/json");
       if (request.url === "/api/installations/current/sync/claim") {
-        response.end(JSON.stringify({ requestId, sourceIds: [selectedSourceId] }));
+        response.end(
+          JSON.stringify({
+            requestId,
+            sourceIds:
+              body.scope === "installation"
+                ? [selectedSourceId, otherSourceId]
+                : [selectedSourceId],
+          }),
+        );
         return;
       }
       if (request.url === "/api/usage") {
@@ -6006,27 +6376,43 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
     ],
     { env: connectorEnvironment(home) },
   );
+  await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
+    ],
+    { env: connectorEnvironment(home) },
+  );
 
-  assert.equal(diagnosticBodies.length, 1);
+  assert.equal(diagnosticBodies.length, 2);
   assert.deepEqual(
-    [...new Set(diagnosticBodies.flatMap((body) => body.events.map((event) => event.sourceId)))],
+    [...new Set(diagnosticBodies[0].events.map((event) => event.sourceId))],
     [selectedSourceId],
   );
   assert.deepEqual(
+    [...new Set(diagnosticBodies[1].events.map((event) => event.sourceId))],
+    [otherSourceId],
+  );
+  assert.deepEqual(
     usageBodies.map((body) => body.snapshots[0]?.syncSequence),
-    ["1", "2"],
+    ["1", "2", "3"],
+  );
+  assert.deepEqual(
+    new Set(usageBodies[2].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set([selectedSourceId, otherSourceId]),
   );
   assert.deepEqual(
     resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
     [
       { status: "succeeded", resultCode: "complete" },
       { status: "succeeded", resultCode: "complete" },
+      { status: "succeeded", resultCode: "complete" },
     ],
   );
   const finalState = JSON.parse(await readFile(statePath, "utf8"));
-  assert.deepEqual(finalState.diagnostics.outboxBySource[otherSourceId], {
-    "collect:collector_failed": ["opened"],
-  });
+  assert.deepEqual(finalState.diagnostics.outboxBySource, {});
 });
 
 test("one successful contact sends at most one bounded diagnostic batch", async (context) => {

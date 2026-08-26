@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  currentWeekEndsAt,
   currentWeekLabel,
   currentWeekNumber,
   currentWeekStart,
@@ -26,6 +27,10 @@ describe("leaderboard helpers", () => {
   it("prints a compact UTC week range", () => {
     expect(currentWeekLabel(new Date("2026-08-13T12:00:00Z"))).toBe("10–16 Aug 2026");
     expect(currentWeekLabel(new Date("2026-08-31T12:00:00Z"))).toBe("31 Aug–6 Sept 2026");
+  });
+
+  it("returns the exact end of the current UTC week for local display", () => {
+    expect(currentWeekEndsAt(new Date("2026-08-13T12:00:00Z"))).toBe("2026-08-16T23:59:59.999Z");
   });
 
   it("returns the ISO week number", () => {
