@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { readdir, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
@@ -5,10 +6,13 @@ import { diagnosticError } from "../diagnostics.mjs";
 import { canonicalPathKey, componentEntry, diagnosePath, mergeEntries, utcDay } from "./shared.mjs";
 
 export const openCodeDatabasePattern = /^opencode(?:-[A-Za-z0-9._-]+)?\.db$/;
+const maximumCutoverAliases = 65_536;
+const maximumCutoverAliasBytes = 16 * 1_024 * 1_024;
 
 function analyzeOpenCodeMessages(rows) {
   const seen = new Set();
   const entries = [];
+  const records = [];
   let candidateRecords = 0;
   let parsedRecords = 0;
   let unsupportedCandidates = 0;
@@ -50,9 +54,11 @@ function analyzeOpenCodeMessages(rows) {
     parsedRecords += 1;
     seen.add(row.id);
     entries.push(entry);
+    records.push({ id: row.id, date: entry.date });
   }
   return {
     entries: mergeEntries(entries),
+    records,
     stats: { candidateRecords, parsedRecords, unsupportedCandidates },
   };
 }
@@ -76,14 +82,34 @@ async function collect(source, range, state = {}) {
       );
     const analysis = analyzeOpenCodeMessages(rows);
     const unsupported = analysis.stats.unsupportedCandidates > 0;
+    const aliases = Object.fromEntries(
+      analysis.records.map(({ id, date }) => [createHash("sha256").update(id).digest("hex"), date]),
+    );
+    const cutoverBounded =
+      Object.keys(aliases).length <= maximumCutoverAliases &&
+      Buffer.byteLength(JSON.stringify(aliases)) <= maximumCutoverAliasBytes;
     return {
       entries: analysis.entries,
-      completeness: unsupported ? "partial" : "complete",
-      nextState: state,
-      warnings: unsupported ? ["unsupported_usage_records"] : [],
-      diagnostics: unsupported
-        ? [{ code: "local_store_schema_unsupported", phase: "collect" }]
-        : [],
+      completeness: unsupported || !cutoverBounded ? "partial" : "complete",
+      nextState:
+        unsupported || !cutoverBounded
+          ? state
+          : {
+              ...state,
+              cutoverCandidate: {
+                version: 1,
+                confirmedRangeEnd: range.rangeEnd,
+                aliases,
+              },
+            },
+      warnings: [
+        ...(unsupported ? ["unsupported_usage_records"] : []),
+        ...(!cutoverBounded ? ["collector_limits_or_unreadable_files"] : []),
+      ],
+      diagnostics: [
+        ...(unsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
+        ...(!cutoverBounded ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+      ],
     };
   } catch (error) {
     throw diagnosticError("OpenCode local store is unreadable", "local_store_unreadable", {

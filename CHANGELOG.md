@@ -8,6 +8,16 @@ experience or protocol.
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-08-27
+
+### Fixed
+
+- OpenCode keeps the existing aggregate snapshot protocol while recording bounded, content-free
+  hashes of every exact `message.id` in the rolling window. The cutover set becomes confirmed only
+  after the matching snapshot sequence is accepted by the server, preparing an exact upgrade to
+  connector 0.5.0 without double-counting or silently dropping usage inserted between scan and
+  acceptance.
+
 ## [0.4.3] - 2026-08-26
 
 ### Added

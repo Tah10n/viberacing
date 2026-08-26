@@ -5900,6 +5900,92 @@ for (const legacyProtocolVersion of [2, 3])
     await assert.rejects(access(join(directory, "quarantine", `${failedSource.sourceId}.json`)));
   });
 
+test("OpenCode cutover aliases become confirmed only after server acceptance", async (context) => {
+  const sourceId = "62626262-6262-4262-8262-626262626262";
+  const clientSourceId = "63636363-6363-4363-8363-636363636363";
+  const bodies = [];
+  const acceptedBodies = [];
+  let acceptUsage = false;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId }])));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        bodies.push(body);
+        if (acceptUsage) acceptedBodies.push(body);
+        response.statusCode = acceptUsage ? 200 : 503;
+        response.end(JSON.stringify(acceptUsage ? usageResponse(body) : { error: "server_error" }));
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-cutover-044-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const databasePath = join(home, "opencode.db");
+  const database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "private-message-id",
+      Date.now(),
+      JSON.stringify({ role: "assistant", tokens: { input: 5, output: 4, total: 9 } }),
+    );
+  database.close();
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    {
+      clientSourceId,
+      sourceId,
+      agentId: "opencode",
+      dataPath: databasePath,
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+      accountLabel: "OpenCode",
+    },
+  ]);
+
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment }),
+  );
+  let state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.equal(state.adapters[sourceId].cutover, undefined);
+  assert.equal(state.adapters[sourceId].cutoverPending.pendingSequence, "1");
+  acceptUsage = true;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+
+  assert.deepEqual(
+    acceptedBodies.map((body) => body.snapshots[0].syncSequence),
+    ["1", "2"],
+  );
+  state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.deepEqual(Object.keys(state.adapters[sourceId].cutover).sort(), [
+    "aliases",
+    "confirmedRangeEnd",
+    "confirmedSequence",
+    "version",
+  ]);
+  assert.equal(state.adapters[sourceId].cutover.confirmedSequence, "2");
+  assert.equal(Object.keys(state.adapters[sourceId].cutover.aliases).length, 1);
+  assert.equal(state.adapters[sourceId].cutoverPending, undefined);
+  assert.doesNotMatch(JSON.stringify(state.adapters[sourceId]), /private-message-id/);
+});
+
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {
   const bodies = [];
   const server = createServer((request, response) => {
