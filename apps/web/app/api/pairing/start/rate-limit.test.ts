@@ -80,6 +80,18 @@ describe("pairing start admission ordering", () => {
     expect(transactionMock).not.toHaveBeenCalled();
   });
 
+  it("rejects an oversized installed runtime version before mutation", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+
+    const response = await POST(
+      request({ ...validBody(), installedRuntimeVersion: `1.2.3-${"a".repeat(40)}` }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(consumeRateLimitMock).toHaveBeenCalledOnce();
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it("spends capability-key quota before shared quota and mutation", async () => {
     consumeRateLimitMock
       .mockResolvedValueOnce(true)
@@ -118,21 +130,30 @@ describe("pairing start admission ordering", () => {
     );
 
     const response = await POST(
-      request({ ...validBody(), browserSyncCapable: true, browserSyncProtocol: 2 }),
+      request({
+        ...validBody(),
+        connectorVersion: "0.4.3",
+        installedRuntimeVersion: "0.4.3",
+        browserSyncCapable: true,
+        browserSyncProtocol: 2,
+      }),
     );
 
     expect(response.status).toBe(201);
     const insert = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("INSERT INTO installations"),
     );
-    expect(insert?.[0]).toMatch(/browser_sync_capable,[\s\S]*browser_sync_protocol/);
+    expect(insert?.[0]).toMatch(
+      /browser_sync_capable,[\s\S]*browser_sync_protocol,[\s\S]*last_cli_version,[\s\S]*installed_connector_version/,
+    );
     expect(insert?.[1]).toEqual([
       installationId,
       expect.any(Uint8Array),
       expect.any(Uint8Array),
       expect.any(Uint8Array),
       expect.any(Uint8Array),
-      "0.2.0",
+      "0.4.3",
+      "0.4.3",
       2,
       true,
       2,

@@ -257,10 +257,10 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const database = new Client({ connectionString: databaseUrl });
   await database.connect();
   try {
-    await database.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
-      "0.1.9",
-      installationId,
-    ]);
+    await database.query(
+      "UPDATE installations SET installed_connector_version = $1 WHERE id = $2",
+      ["0.1.9", installationId],
+    );
   } finally {
     await database.end();
   }
@@ -315,10 +315,10 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const featureDatabase = new Client({ connectionString: databaseUrl });
   await featureDatabase.connect();
   try {
-    await featureDatabase.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
-      "0.4.3",
-      installationId,
-    ]);
+    await featureDatabase.query(
+      "UPDATE installations SET installed_connector_version = $1 WHERE id = $2",
+      ["0.4.3", installationId],
+    );
     await page.reload();
     await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
     await featureDatabase.query(
@@ -327,10 +327,10 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     );
     await page.reload();
     await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
-    await featureDatabase.query("UPDATE installations SET connector_version = $1 WHERE id = $2", [
-      "0.1.9",
-      installationId,
-    ]);
+    await featureDatabase.query(
+      "UPDATE installations SET installed_connector_version = $1 WHERE id = $2",
+      ["0.1.9", installationId],
+    );
   } finally {
     await featureDatabase.end();
   }
@@ -387,16 +387,39 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
-  const reconciliation = await request.post("/api/installations/current", {
+  const oneOffReconciliation = await request.post("/api/installations/current", {
     headers: { authorization: `Bearer ${active.deviceToken}` },
     data: {
       sourceIds: [mapped.sourceId],
-      connectorVersion: bundledConnectorVersion,
+      cliVersion: bundledConnectorVersion,
     },
   });
-  expect(reconciliation.status()).toBe(200);
+  expect(oneOffReconciliation.status()).toBe(200);
   await page.reload();
+  await expect(page.locator(".connector-update")).toBeVisible();
+  await page.goto("/");
+  await expect(page.locator(".connector-update-prominent")).toBeVisible();
+
+  const handlerAttestationId = randomUUID();
+  const attestedReconciliation = await request.post("/api/installations/current", {
+    headers: { authorization: `Bearer ${active.deviceToken}` },
+    data: {
+      sourceIds: [mapped.sourceId],
+      cliVersion: bundledConnectorVersion,
+      handlerAttestation: {
+        attestationId: handlerAttestationId,
+        installedRuntimeVersion: bundledConnectorVersion,
+        browserSyncProtocol: 2,
+      },
+    },
+  });
+  expect(attestedReconciliation.status()).toBe(200);
+  expect(await attestedReconciliation.json()).toMatchObject({
+    acceptedHandlerAttestationId: handlerAttestationId,
+  });
+  await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
   await page.goto("/");
   await expect(page.locator(".connector-update-prominent")).toHaveCount(0);
   await page.goto("/dashboard");

@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   browserSyncProtocolVersion,
+  browserSyncHandlerAttestation,
   browserSyncRegistrationStatus,
   registerBrowserSync,
   unregisterBrowserSync,
 } from "../lib/browser-integration.mjs";
+import { connectorVersion } from "../lib/version.mjs";
 
 test("browser Sync protocol identifies installation-scoped handler support", () => {
   assert.equal(browserSyncProtocolVersion, 2);
@@ -193,6 +195,10 @@ test("Linux browser Sync registration is owned, exact, and removable", async (co
     await browserSyncRegistrationStatus({ environment, execute, platform: "linux" }),
     "current",
   );
+  assert.deepEqual(
+    await browserSyncHandlerAttestation({ environment, execute, platform: "linux" }),
+    { protocol: 2, runtimeVersion: connectorVersion, status: "current" },
+  );
   await unregisterBrowserSync({
     allowCustomState: true,
     environment,
@@ -229,6 +235,41 @@ test("Linux uninstall preserves a newer foreign default handler", async (context
   await unregisterBrowserSync(options);
   assert.deepEqual(defaults, ["viberacing-url.desktop"]);
   assert.equal(current, "newer.desktop");
+});
+
+test("handler attestation observes protocol downgrade and removal after protocol 2", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-handler-attestation-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const desktop = join(root, "applications", "viberacing-url.desktop");
+  const options = {
+    environment: { XDG_DATA_HOME: root },
+    execute: async () => ({ stdout: "viberacing-url.desktop\n" }),
+    platform: "linux",
+  };
+  await mkdir(join(root, "applications"), { recursive: true });
+  await writeFile(
+    desktop,
+    `[Desktop Entry]\n# viberacing-browser-handler-v1;runtime=${connectorVersion};protocol=2\n`,
+  );
+  assert.deepEqual(await browserSyncHandlerAttestation(options), {
+    protocol: 2,
+    runtimeVersion: connectorVersion,
+    status: "current",
+  });
+
+  await writeFile(desktop, "[Desktop Entry]\n# viberacing-browser-handler-v1\n");
+  assert.deepEqual(await browserSyncHandlerAttestation(options), {
+    protocol: 1,
+    runtimeVersion: null,
+    status: "outdated",
+  });
+
+  await rm(desktop);
+  assert.deepEqual(await browserSyncHandlerAttestation(options), {
+    protocol: 0,
+    runtimeVersion: null,
+    status: "missing",
+  });
 });
 
 test("Linux reconnect never replaces a newer foreign default handler", async (context) => {
@@ -321,6 +362,16 @@ test("Windows browser Sync registration and diagnostics require the owned regist
       environment,
       execute: async () => ({
         stdout: "VibeRacingOwned    REG_SZ    viberacing-browser-handler-v1",
+      }),
+      platform: "win32",
+    }),
+    "outdated",
+  );
+  assert.equal(
+    await browserSyncRegistrationStatus({
+      environment,
+      execute: async () => ({
+        stdout: `VibeRacingOwned    REG_SZ    viberacing-browser-handler-v1;runtime=${connectorVersion};protocol=2`,
       }),
       platform: "win32",
     }),

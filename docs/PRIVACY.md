@@ -11,13 +11,17 @@ in local `sources.json`. On upgrade, an old OpenCode filename-derived label is r
 exactly matches the connector's former automatically generated value; user-defined labels are
 preserved. The legacy value is never included in a pairing request. Normalized local data roots,
 executable paths, hook config roots, and their hashes are never copied into pairing config or
-requests. Compact installation reconciliation sends only the current connector version and the
-already assigned server source IDs; immediately after `doctor --repair`, it may also confirm the
-small installed-handler protocol value. Legacy connectors may omit both reports. During sync it
-sends a server source ID, sequence, UTC range, snapshot status, UTC dates, aggregate total tokens,
-and optional aggregate input/output/cache/reasoning counters. Protocol v3+ may also mark an
-individual UTC date complete or partial; the server still accepts v2 payloads that carry only
-snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
+requests. Compact installation reconciliation sends the version of the one-off CLI process and the
+already assigned server source IDs. A successful default-state `connect` or `doctor --repair`
+separately records a random attestation ID, the installed runtime version, and the protocol observed
+from the owned OS handler. That closed attestation remains in owner-only local state and is retried
+after later connector contacts until the server acknowledges the same ID. Later contacts also report
+a safe protocol downgrade or handler removal discovered from the OS registration. They never infer
+an installed update from the version of a newer `npx` process. Legacy connectors may omit these
+reports. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
+aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
+may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
+carry only snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
 `collector_failed` code, source ID, and the last server-accepted sequence known before collection.
 That ordering value is an opaque canonical counter, not local content. Delayed errors are ignored;
 legacy v2/v3 errors are accepted but cannot overwrite persistent status. Exception messages are

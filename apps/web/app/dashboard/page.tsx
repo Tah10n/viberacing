@@ -20,10 +20,10 @@ import {
 import { agentNames, isSupportedAgent } from "@/lib/agents";
 import {
   browserSyncInstallationScopeProtocol,
+  installedConnectorUpdateRequired,
   maximumSourcesPerInstallation,
   minimumConnectorVersion,
   publicOrigin,
-  versionAtLeast,
 } from "@/lib/config";
 import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
@@ -38,7 +38,7 @@ interface DashboardProps {
 interface InstallationRow {
   browser_sync_capable: boolean;
   browser_sync_protocol: number;
-  connector_version: string;
+  installed_connector_version: string | null;
   id: string;
   name: string;
   last_sync_at: Date | null;
@@ -229,7 +229,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const weekStart = currentWeekStart();
   const [installations, accounts, sources, dedupEvents, dailyUsage] = await Promise.all([
     query<InstallationRow>(
-      `SELECT i.id::text, i.name, i.connector_version, i.last_sync_at,
+      `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
               i.browser_sync_capable,
               i.browser_sync_protocol,
               count(s.id)::int AS source_count
@@ -458,6 +458,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const canSyncInstallation = (installation: InstallationRow): boolean =>
     installation.id === browserInstallationId &&
     installation.browser_sync_capable &&
+    installation.installed_connector_version !== null &&
     installation.source_count > 0 &&
     installation.source_count <= maximumSourcesPerInstallation &&
     installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
@@ -800,13 +801,16 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       </button>
                     </SameOriginActionForm>
                   </div>
-                  {versionAtLeast(item.connector_version, minimumVersion) ? null : (
+                  {installedConnectorUpdateRequired(
+                    item.installed_connector_version,
+                    minimumVersion,
+                  ) ? (
                     <ConnectorUpdateNotice
                       command={updateCommand}
                       minimumVersion={minimumVersion}
                       scope="computer"
                     />
-                  )}
+                  ) : null}
                 </article>
               ))}
             </div>

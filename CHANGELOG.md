@@ -8,6 +8,8 @@ experience or protocol.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-08-26
+
 ### Added
 
 - The dashboard can now sync every supported agent on the browser-bound computer in one action,
@@ -20,7 +22,13 @@ experience or protocol.
 
 - Installation-wide browser Sync is now gated by the explicitly reported installed-handler protocol.
   Running a newer one-off CLI no longer exposes an action that an older registered OS handler cannot
-  process; only successful `connect` or `doctor --repair` registration updates this capability.
+  process. Successful `connect` or `doctor --repair` saves a durable installed-runtime/handler
+  attestation before reconciliation and retries it until acknowledged; later OS inspection safely
+  reports handler downgrade or removal.
+- Production CI now rejects changed connector archive inputs unless the package has a strictly newer
+  stable version than the pull-request base, preventing modified bytes from being bundled as an
+  already published 0.4.2. This change stages connector 0.4.3 without publishing it from the pull
+  request.
 - The browser Sync protocol migration remains writable by the previous web release during pre-deploy
   and rollback windows. Installation-wide runs no longer depend on an arbitrary account, and the
   existing 32-source connector bound is enforced before a grant or run is consumed.

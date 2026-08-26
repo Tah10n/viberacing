@@ -204,7 +204,18 @@ function parsePairingPoll(value, context) {
 }
 
 function parseReconciliation(value, context) {
-  if (!requiredExactKeys(value, new Set(["sources"])) || !Array.isArray(value.sources))
+  const expectedAttestationId = context.handlerAttestationId;
+  const actualKeys = new Set(Object.keys(value));
+  const keysValid =
+    requiredExactKeys(value, new Set(["sources"])) ||
+    (expectedAttestationId !== undefined &&
+      requiredExactKeys(value, new Set(["acceptedHandlerAttestationId", "sources"])));
+  if (
+    !keysValid ||
+    !Array.isArray(value.sources) ||
+    (actualKeys.has("acceptedHandlerAttestationId") &&
+      value.acceptedHandlerAttestationId !== expectedAttestationId)
+  )
     throw invalid();
   const expected = new Set(context.sourceIds ?? []);
   if (expected.size > 100 || value.sources.length !== expected.size) throw invalid();

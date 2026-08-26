@@ -138,17 +138,20 @@ installed runtime, which authenticates with its existing device token and claims
 source IDs for one agent account or every active source ID on that installation. The connector
 applies the normal single-flight and snapshot rules to only those server-authorized IDs, posts an
 allowlisted completion status, and exits. Installation-wide claims require a separately reported
-installed-handler protocol; ordinary CLI version reconciliation cannot enable them. The server never
-pushes work and the connector never polls for browser requests. Claim creation is serialized on the
-installation row: an active run and a 60-second installation-wide cooldown both reject a second
-claim before connector work starts. Dashboard result polling backs off from two to five seconds
-after a claim and has a separate authenticated per-user quota. A rejected duplicate claim stores
-only a terminal `busy` result under its opaque request ID so the originating dashboard stops polling
-promptly; these rejected rows do not extend the installation cooldown. Pairing enforces the
-protocol-wide maximum of 32 active sources per installation; an oversized legacy installation does
-not expose the all-agent action or consume a grant. Account-scoped runs retain their account owner,
-while an installation-scoped run is owned only by the installation and survives deletion of any one
-account.
+installed runtime and installed-handler protocol; ordinary CLI version reconciliation cannot enable
+them. Successful default-state connect or repair stores a random pending handler attestation locally
+before contacting the server. The connector repeats that exact installed version/protocol statement
+until the server acknowledges its ID, and later OS inspection can attest a downgrade or removal. The
+server never pushes work and the connector never polls for browser requests. Claim creation is
+serialized on the installation row: an active run and a 60-second installation-wide cooldown both
+reject a second claim before connector work starts. Dashboard result polling backs off from two to
+five seconds after a claim and has a separate authenticated per-user quota. A rejected duplicate
+claim stores only a terminal `busy` result under its opaque request ID so the originating dashboard
+stops polling promptly; these rejected rows do not extend the installation cooldown. Pairing
+enforces the protocol-wide maximum of 32 active sources per installation; an oversized legacy
+installation does not expose the all-agent action or consume a grant. Account-scoped runs retain
+their account owner, while an installation-scoped run is owned only by the installation and survives
+deletion of any one account.
 
 The connector owns only registrations marked with `viberacing-browser-handler-v1`. Linux uses an XDG
 desktop handler, Windows uses an owner-marked per-user registry key, and macOS uses a signed

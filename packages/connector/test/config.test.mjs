@@ -3334,6 +3334,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
   assert.equal(pairingBodies.length, 2);
   assert.equal(pairingBodies[0].browserSyncCapable, false);
   assert.equal(pairingBodies[0].browserSyncProtocol, 0);
+  assert.equal(pairingBodies[0].installedRuntimeVersion, connectorVersion);
   assert.equal(pairingBody.sources.length, 1);
   assert.deepEqual(Object.keys(pairingBody.sources[0]).sort(), [
     "agentId",
@@ -3345,6 +3346,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
   assert.equal(pairingBody.sources[0].agentId, "antigravity");
   assert.equal(pairingBody.browserSyncCapable, false);
   assert.equal(Object.hasOwn(pairingBody, "browserSyncProtocol"), false);
+  assert.equal(Object.hasOwn(pairingBody, "installedRuntimeVersion"), false);
   assert.doesNotMatch(JSON.stringify(pairingBodies), new RegExp(home.replaceAll("\\", "\\\\")));
   for (const forbidden of [
     "dataPath",
@@ -4028,6 +4030,7 @@ test("reconnect preserves transient failures, retires disconnected sources, and 
         return;
       }
       if (request.url === "/api/pairing/poll") {
+        mode = "disconnected";
         response.end(
           JSON.stringify({
             status: "active",
@@ -4842,9 +4845,70 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
   assert.equal(doctorCode, 0);
   assert.equal(currentRequests, 1);
   assert.deepEqual(reconciliationBodies, [
-    { sourceIds: [installation.sourceId], connectorVersion },
+    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
   ]);
   assert.match(doctorOutput, /Pairing status: active/);
+});
+
+test("a newer one-off CLI does not attest an older installed runtime", async (context) => {
+  const reconciliationBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.method === "POST" && request.url === "/api/installations/current") {
+        reconciliationBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+        return;
+      }
+      response.writeHead(500, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "unexpected_request" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-one-off-cli-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`);
+  const attestationId = randomUUID();
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "0" },
+      handlerAttestation: {
+        attestationId,
+        installedRuntimeVersion: "0.4.2",
+        browserSyncProtocol: 1,
+        pending: false,
+      },
+    })}\n`,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+  });
+
+  assert.deepEqual(reconciliationBodies, [
+    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
+  ]);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
+      .handlerAttestation,
+    {
+      attestationId,
+      installedRuntimeVersion: "0.4.2",
+      browserSyncProtocol: 1,
+      pending: false,
+    },
+  );
 });
 
 test("doctor repair fails closed when connection config cannot be loaded", async () => {
@@ -4902,6 +4966,51 @@ test("doctor repair keeps successful local work when server confirmation is unav
   assert.match(repaired.stdout, /Usage sync: not run/);
   assert.doesNotMatch(`${repaired.stdout}\n${repaired.stderr}`, /repair is incomplete/);
   await access(join(installation.directory, "runtime", connectorVersion, "bin", "viberacing.mjs"));
+  const pendingState = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  );
+  assert.equal(pendingState.handlerAttestation.pending, true);
+  assert.equal(pendingState.handlerAttestation.installedRuntimeVersion, connectorVersion);
+  assert.equal(pendingState.handlerAttestation.browserSyncProtocol, 0);
+
+  const reconciliationBodies = [];
+  const recovered = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        reconciliationBodies.push(body);
+        response.end(
+          JSON.stringify({
+            ...reconciliationResponse([{ sourceId: installation.sourceId }]),
+            acceptedHandlerAttestationId: body.handlerAttestation.attestationId,
+          }),
+        );
+        return;
+      }
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  recovered.listen(address.port, "127.0.0.1");
+  await once(recovered, "listening");
+  context.after(() => recovered.close());
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
+  });
+
+  assert.equal(reconciliationBodies.length, 1);
+  assert.equal(
+    reconciliationBodies[0].handlerAttestation.attestationId,
+    pendingState.handlerAttestation.attestationId,
+  );
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
+      .handlerAttestation.pending,
+    false,
+  );
 });
 
 test("doctor repair re-enables automatic sync after a connector upgrade", async (context) => {
@@ -4915,7 +5024,7 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
       if (request.method === "POST" && request.url === "/api/installations/current") {
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         reconciliationBodies.push(body);
-        if (Object.hasOwn(body, "browserSyncProtocol")) {
+        if (Object.hasOwn(body, "cliVersion")) {
           response.writeHead(400, { "content-type": "application/json" });
           response.end(JSON.stringify({ error: "invalid_request" }));
           return;
@@ -4971,10 +5080,30 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
   assert.match(repaired.stdout, new RegExp(`Runtime: reinstalled ${connectorVersion}`));
   assert.match(repaired.stdout, /Hooks: repaired/);
   assert.match(repaired.stdout, /Usage sync: not run/);
-  assert.deepEqual(reconciliationBodies, [
-    { sourceIds: [installation.sourceId], connectorVersion, browserSyncProtocol: 0 },
-    { sourceIds: [installation.sourceId], connectorVersion },
-  ]);
+  assert.equal(reconciliationBodies.length, 2);
+  assert.deepEqual(
+    {
+      ...reconciliationBodies[0],
+      handlerAttestation: {
+        ...reconciliationBodies[0].handlerAttestation,
+        attestationId: "<uuid>",
+      },
+    },
+    {
+      sourceIds: [installation.sourceId],
+      cliVersion: connectorVersion,
+      handlerAttestation: {
+        attestationId: "<uuid>",
+        installedRuntimeVersion: connectorVersion,
+        browserSyncProtocol: 0,
+      },
+    },
+  );
+  assert.match(reconciliationBodies[0].handlerAttestation.attestationId, /^[0-9a-f-]{36}$/i);
+  assert.deepEqual(reconciliationBodies[1], {
+    sourceIds: [installation.sourceId],
+    connectorVersion,
+  });
   assert.equal(usageRequests, 0);
   assert.equal(
     JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))

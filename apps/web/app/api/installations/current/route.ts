@@ -25,9 +25,43 @@ function rateLimited(): Response {
 }
 
 interface ReconciliationBody {
-  browserSyncProtocol?: number;
+  cliVersion?: string;
   connectorVersion?: string;
+  handlerAttestation?: HandlerAttestation;
   sourceIds: string[];
+}
+
+interface HandlerAttestation {
+  attestationId: string;
+  browserSyncProtocol: number;
+  installedRuntimeVersion: string;
+}
+
+function parseHandlerAttestation(value: unknown): HandlerAttestation | null {
+  if (!isRecord(value)) return null;
+  if (
+    JSON.stringify(Object.keys(value).sort()) !==
+    JSON.stringify(["attestationId", "browserSyncProtocol", "installedRuntimeVersion"])
+  ) {
+    return null;
+  }
+  if (
+    !isUuid(value.attestationId) ||
+    typeof value.installedRuntimeVersion !== "string" ||
+    value.installedRuntimeVersion.length > 40 ||
+    !isSemanticVersion(value.installedRuntimeVersion) ||
+    typeof value.browserSyncProtocol !== "number" ||
+    !Number.isSafeInteger(value.browserSyncProtocol) ||
+    value.browserSyncProtocol < 0 ||
+    value.browserSyncProtocol > browserSyncInstallationScopeProtocol
+  ) {
+    return null;
+  }
+  return {
+    attestationId: value.attestationId,
+    browserSyncProtocol: value.browserSyncProtocol,
+    installedRuntimeVersion: value.installedRuntimeVersion,
+  };
 }
 
 export function parseReconciliationBody(value: unknown): ReconciliationBody | null {
@@ -36,8 +70,8 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   if (
     JSON.stringify(keys) !== JSON.stringify(["sourceIds"]) &&
     JSON.stringify(keys) !== JSON.stringify(["connectorVersion", "sourceIds"]) &&
-    JSON.stringify(keys) !==
-      JSON.stringify(["browserSyncProtocol", "connectorVersion", "sourceIds"])
+    JSON.stringify(keys) !== JSON.stringify(["cliVersion", "sourceIds"]) &&
+    JSON.stringify(keys) !== JSON.stringify(["cliVersion", "handlerAttestation", "sourceIds"])
   ) {
     return null;
   }
@@ -50,6 +84,14 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
     return null;
   }
   if (
+    value.cliVersion !== undefined &&
+    (typeof value.cliVersion !== "string" ||
+      value.cliVersion.length > 40 ||
+      !isSemanticVersion(value.cliVersion))
+  ) {
+    return null;
+  }
+  if (
     value.connectorVersion !== undefined &&
     (typeof value.connectorVersion !== "string" ||
       value.connectorVersion.length > 40 ||
@@ -57,21 +99,16 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   ) {
     return null;
   }
-  if (
-    value.browserSyncProtocol !== undefined &&
-    (typeof value.browserSyncProtocol !== "number" ||
-      !Number.isSafeInteger(value.browserSyncProtocol) ||
-      value.browserSyncProtocol < 0 ||
-      value.browserSyncProtocol > browserSyncInstallationScopeProtocol)
-  ) {
-    return null;
-  }
+  const handlerAttestation =
+    value.handlerAttestation === undefined
+      ? undefined
+      : parseHandlerAttestation(value.handlerAttestation);
+  if (handlerAttestation === null) return null;
   return {
     sourceIds: value.sourceIds,
+    ...(value.cliVersion === undefined ? {} : { cliVersion: value.cliVersion }),
     ...(value.connectorVersion === undefined ? {} : { connectorVersion: value.connectorVersion }),
-    ...(value.browserSyncProtocol === undefined
-      ? {}
-      : { browserSyncProtocol: value.browserSyncProtocol }),
+    ...(handlerAttestation === undefined ? {} : { handlerAttestation }),
   };
 }
 
@@ -107,33 +144,42 @@ async function post(request: Request): Promise<Response> {
     }
     const body = parseReconciliationBody(await readBoundedJson(request, 8_192));
     if (body === null) return problem(400, "invalid_request");
+    const cliVersion = body.cliVersion ?? body.connectorVersion;
     const rows = await transaction(async (client) => {
-      if (body.connectorVersion !== undefined && body.browserSyncProtocol !== undefined) {
+      if (cliVersion !== undefined && body.handlerAttestation !== undefined) {
         await client.query(
           `UPDATE installations
-              SET connector_version = $2,
-                  browser_sync_protocol = $3,
-                  browser_sync_capable = $3::smallint > 0,
+              SET last_cli_version = $2,
+                  installed_connector_version = $3,
+                  browser_sync_protocol = $4,
+                  browser_sync_capable = $4::smallint > 0,
                   updated_at = now()
             WHERE id = $1
               AND status = 'active'
-              AND device_token_hash = $4
+              AND device_token_hash = $5
               AND (
-                connector_version IS DISTINCT FROM $2
-                OR browser_sync_protocol IS DISTINCT FROM $3
+                last_cli_version IS DISTINCT FROM $2
+                OR installed_connector_version IS DISTINCT FROM $3
+                OR browser_sync_protocol IS DISTINCT FROM $4
               )`,
-          [installation.id, body.connectorVersion, body.browserSyncProtocol, digest(token)],
+          [
+            installation.id,
+            cliVersion,
+            body.handlerAttestation.installedRuntimeVersion,
+            body.handlerAttestation.browserSyncProtocol,
+            digest(token),
+          ],
         );
-      } else if (body.connectorVersion !== undefined) {
+      } else if (cliVersion !== undefined) {
         await client.query(
           `UPDATE installations
-              SET connector_version = $2,
+              SET last_cli_version = $2,
                   updated_at = now()
             WHERE id = $1
               AND status = 'active'
               AND device_token_hash = $3
-              AND connector_version IS DISTINCT FROM $2`,
-          [installation.id, body.connectorVersion, digest(token)],
+              AND last_cli_version IS DISTINCT FROM $2`,
+          [installation.id, cliVersion, digest(token)],
         );
       }
       const result = await client.query<{
@@ -160,6 +206,9 @@ async function post(request: Request): Promise<Response> {
           status: source.status,
           lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
         })),
+        ...(body.handlerAttestation === undefined
+          ? {}
+          : { acceptedHandlerAttestationId: body.handlerAttestation.attestationId }),
       },
       { headers: { "Cache-Control": "no-store" } },
     );

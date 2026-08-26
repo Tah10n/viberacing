@@ -38,6 +38,10 @@
   `corepack pnpm local:up`, and `corepack pnpm local:test`.
 - Run `corepack pnpm audit --prod --audit-level moderate`, `corepack pnpm migrations:check`, and
   `corepack pnpm connector:package:check`, plus `git diff --check`.
+- Compare the pull-request base with its head using
+  `node scripts/check-connector-version-bump.mjs <base> HEAD`. Change a publishable connector file
+  without changing its version in a negative fixture and confirm the gate rejects it before any web
+  archive is built.
 - Run the documented Chromium E2E/accessibility command on a clean PostgreSQL database. Confirm the
   migration runner succeeds twice against that clean database before running the browser suite.
 - Confirm the production image runs as `node`, readiness succeeds, OAuth/pairing works, and an old
@@ -97,9 +101,13 @@
   concrete version, or a downloads URL.
 - Pair or retain an installation below `VIBERACING_MIN_CONNECTOR_VERSION` and verify its computer
   card and the signed-in home page show **Connector update required** on desktop and mobile. Confirm
-  a version at or above the minimum does not advertise an unpublished bundled version. Run
-  `doctor --repair`, confirm it repairs runtime/hooks without a usage request, and verify
-  reconciliation clears both notices.
+  a version at or above the minimum does not advertise an unpublished bundled version. Run a newer
+  one-off CLI against an older installed runtime and confirm neither notice nor **Sync all agents**
+  changes. Run `doctor --repair`, confirm it repairs runtime/hooks without a usage request,
+  interrupt its first reconciliation, and verify a later normal sync repeats the pending handler
+  attestation. Only the matching server acknowledgement may clear pending state and update both
+  notices. Finally downgrade and remove the owned handler after protocol 2 and verify later contacts
+  retract the all-agent action.
 - Confirm the macOS CI gate receives a synthetic custom-scheme URL through the real LaunchServices
   applet.
 - Confirm public copy reports seven counted agents.

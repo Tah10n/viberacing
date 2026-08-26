@@ -16,6 +16,17 @@ describe("migration expansion compatibility", () => {
     );
   });
 
+  it("separates one-off CLI reporting from confirmed installed runtime state", () => {
+    expect(browserSyncProtocolMigration).toContain("ADD COLUMN last_cli_version varchar(40)");
+    expect(browserSyncProtocolMigration).toContain(
+      "ADD COLUMN installed_connector_version varchar(40)",
+    );
+    expect(browserSyncProtocolMigration).toContain("SET last_cli_version = connector_version");
+    expect(browserSyncProtocolMigration).not.toContain(
+      "SET installed_connector_version = connector_version",
+    );
+  });
+
   it("stores installation-wide runs without an arbitrary account foreign-key owner", () => {
     expect(browserSyncProtocolMigration).toContain(
       "ADD COLUMN scope varchar(16) NOT NULL DEFAULT 'account'",

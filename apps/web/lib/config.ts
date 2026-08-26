@@ -108,6 +108,7 @@ export function isSupportedConnectorProtocolVersion(
 }
 export const browserSyncInstallationScopeProtocol = 2;
 export const maximumSourcesPerInstallation = 32;
+export const installedStateAttestationMinimumVersion = "0.4.3";
 export const expectedSchemaVersion = "005_browser_sync_protocol.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
@@ -158,6 +159,16 @@ export function minimumConnectorVersion(): string {
     });
   }
   return value;
+}
+
+export function installedConnectorUpdateRequired(
+  installedVersion: string | null,
+  minimumVersion: string,
+): boolean {
+  if (installedVersion === null) {
+    return versionAtLeast(minimumVersion, installedStateAttestationMinimumVersion);
+  }
+  return !versionAtLeast(installedVersion, minimumVersion);
 }
 
 export function versionAtLeast(candidate: string, minimum: string): boolean {

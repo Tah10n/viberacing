@@ -7,11 +7,17 @@ publish from a feature branch or pull-request workflow.
 
 ## Stable release process
 
-Every version bump is an explicit, reviewable release pull request:
+Every change to files that can enter the connector archive must carry an explicit, reviewable
+version bump relative to the pull-request base. Production CI enforces this before building the web
+image, so changed bytes cannot be packaged under an immutable npm version. The bump may be staged in
+the server-first compatibility pull request when connector regressions are part of that same review;
+merging it still does not publish npm. Publication begins only after the compatible server is
+deployed and healthy:
 
-1. Start from an up-to-date `main` with no unrelated changes.
-2. Choose the next stable connector version from the actual compatibility impact.
-3. Update `packages/connector/package.json` and `CHANGELOG.md`.
+1. Start from the reviewed merge commit on `main` with no unrelated changes.
+2. Confirm the staged stable connector version matches the actual compatibility impact and has not
+   already been published.
+3. Confirm `packages/connector/package.json`, generated `version.mjs`, and `CHANGELOG.md` agree.
 4. Run `corepack pnpm --filter @viberacing/connector prepack` and commit the regenerated
    `packages/connector/lib/version.mjs`.
 5. Run `corepack pnpm verify`, `corepack pnpm connector:package:check`, local smoke, browser E2E,
@@ -49,6 +55,11 @@ For the 0.4.3 rollout, the all-agent browser handler is the new supported baseli
 `VIBERACING_MIN_CONNECTOR_VERSION=0.4.3`; never make that production change before the immutable npm
 package is installable. This deliberately turns the 0.4.3 repair into a required update even though
 the wire protocol remains backwards-compatible.
+
+The 0.4.3 server deployment must keep the existing floor before publication. A newer one-off CLI
+version is recorded only as CLI telemetry: the home notice, computer-card notice, and all-agent Sync
+action use the server-confirmed installed runtime and OS-handler protocol. A pending connect/repair
+attestation is not confirmed until the server returns its exact random attestation ID.
 
 Ordinary releases also do not change Railway. The official service permanently uses
 `VIBERACING_CONNECTOR_DISTRIBUTION=npm` after rollout, while self-hosted deployments default to

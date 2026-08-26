@@ -16,7 +16,11 @@ import {
 import { hasAccountDeletionReceipt, viewer } from "@/lib/session";
 import { agentNames, supportedAgents } from "@/lib/agents";
 import { connectorRepairCommand, connectorUninstallCommand } from "@/lib/connector";
-import { minimumConnectorVersion, publicOrigin, versionAtLeast } from "@/lib/config";
+import {
+  installedConnectorUpdateRequired,
+  minimumConnectorVersion,
+  publicOrigin,
+} from "@/lib/config";
 import { query } from "@/lib/db";
 
 interface HomePageProps {
@@ -26,7 +30,7 @@ interface HomePageProps {
 }
 
 interface ConnectorVersionRow {
-  connector_version: string;
+  installed_connector_version: string | null;
 }
 
 const leaderboardPageSize = 100;
@@ -64,14 +68,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     current === null
       ? Promise.resolve([] as ConnectorVersionRow[])
       : query<ConnectorVersionRow>(
-          `SELECT connector_version
+          `SELECT installed_connector_version
              FROM installations
             WHERE user_id = $1 AND status = 'active'`,
           [current.id],
         ),
   ]);
-  const connectorUpdateRequired = connectorVersions.some(
-    (installation) => !versionAtLeast(installation.connector_version, minimumVersion),
+  const connectorUpdateRequired = connectorVersions.some((installation) =>
+    installedConnectorUpdateRequired(installation.installed_connector_version, minimumVersion),
   );
   const hasNextPage = pageRows.length > leaderboardPageSize;
   const rows = pageRows.slice(0, leaderboardPageSize);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -29,6 +29,7 @@ import {
 import { openBrowser } from "../lib/browser.mjs";
 import {
   browserSyncProtocolVersion,
+  browserSyncHandlerAttestation,
   browserSyncRegistrationStatus,
   registerBrowserSync,
   unregisterBrowserSync,
@@ -103,6 +104,8 @@ import {
 } from "../lib/runtime.mjs";
 
 const protocolVersion = connectorProtocolVersion;
+const semanticVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const arguments_ = process.argv.slice(2);
 const command = arguments_[0] ?? "help";
 const quiet = arguments_.includes("--quiet");
@@ -300,8 +303,105 @@ async function requestPairingStart(origin, installationId, body) {
     }
     const legacyBody = { ...body };
     delete legacyBody.browserSyncProtocol;
+    delete legacyBody.installedRuntimeVersion;
     return send(legacyBody);
   }
+}
+
+function validLocalHandlerAttestation(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([
+        "attestationId",
+        "browserSyncProtocol",
+        "installedRuntimeVersion",
+        "pending",
+      ]) &&
+    uuidPattern.test(value.attestationId ?? "") &&
+    semanticVersionPattern.test(value.installedRuntimeVersion ?? "") &&
+    Number.isSafeInteger(value.browserSyncProtocol) &&
+    value.browserSyncProtocol >= 0 &&
+    value.browserSyncProtocol <= browserSyncProtocolVersion &&
+    typeof value.pending === "boolean"
+  );
+}
+
+function publicHandlerAttestation(value) {
+  if (!validLocalHandlerAttestation(value) || !value.pending) return null;
+  return {
+    attestationId: value.attestationId,
+    installedRuntimeVersion: value.installedRuntimeVersion,
+    browserSyncProtocol: value.browserSyncProtocol,
+  };
+}
+
+async function recordInstalledHandlerAttestation(
+  installedRuntimeVersion,
+  browserSyncProtocol,
+  options = {},
+) {
+  if (
+    !semanticVersionPattern.test(installedRuntimeVersion) ||
+    !Number.isSafeInteger(browserSyncProtocol) ||
+    browserSyncProtocol < 0 ||
+    browserSyncProtocol > browserSyncProtocolVersion
+  ) {
+    throw new Error("Invalid installed handler attestation");
+  }
+  const state = await readState();
+  const previous = validLocalHandlerAttestation(state.handlerAttestation)
+    ? state.handlerAttestation
+    : null;
+  if (
+    !options.force &&
+    previous?.installedRuntimeVersion === installedRuntimeVersion &&
+    previous.browserSyncProtocol === browserSyncProtocol
+  ) {
+    return previous;
+  }
+  state.handlerAttestation = {
+    attestationId: randomUUID(),
+    installedRuntimeVersion,
+    browserSyncProtocol,
+    pending: true,
+  };
+  await writeState(state);
+  return state.handlerAttestation;
+}
+
+async function refreshInstalledHandlerAttestation() {
+  const state = await readState();
+  const previous = validLocalHandlerAttestation(state.handlerAttestation)
+    ? state.handlerAttestation
+    : null;
+  if (previous === null) return state;
+  if (resolve(stateDirectory) !== resolve(join(homedir(), ".viberacing"))) return state;
+  const observed = await browserSyncHandlerAttestation();
+  const installedRuntimeVersion = observed.runtimeVersion ?? previous.installedRuntimeVersion;
+  if (
+    installedRuntimeVersion !== previous.installedRuntimeVersion ||
+    observed.protocol !== previous.browserSyncProtocol
+  ) {
+    await recordInstalledHandlerAttestation(installedRuntimeVersion, observed.protocol);
+    return readState();
+  }
+  return state;
+}
+
+async function acknowledgeInstalledHandlerAttestation(attestationId) {
+  if (!uuidPattern.test(attestationId ?? "")) return;
+  const state = await readState();
+  if (
+    !validLocalHandlerAttestation(state.handlerAttestation) ||
+    state.handlerAttestation.attestationId !== attestationId ||
+    !state.handlerAttestation.pending
+  ) {
+    return;
+  }
+  state.handlerAttestation.pending = false;
+  await writeState(state);
 }
 
 async function cancelPairingAttempt(attempt) {
@@ -461,6 +561,7 @@ async function connect() {
       supersededClientSourceIds,
       browserSyncCapable,
       browserSyncProtocol: browserSyncCapable ? browserSyncProtocolVersion : 0,
+      installedRuntimeVersion: connectorVersion,
     });
     attempt = await recordConnectAttemptPairing(initialAttempt, pairing.pollToken);
     await waitForTestConnectBarrier("after_pairing_start");
@@ -551,6 +652,11 @@ async function connect() {
           return nextConfig;
         });
         committed = true;
+        await recordInstalledHandlerAttestation(
+          connectorVersion,
+          browserSyncCapable ? browserSyncProtocolVersion : 0,
+          { force: true },
+        );
         output("Connected.");
         const initial = await sync(config, { waitMs: automaticSyncLockWaitMs });
         if (initial?.skipped) throw new Error("Timed out waiting to start the initial sync");
@@ -718,16 +824,16 @@ async function retireMappedSources(config, sourceIds, options = {}) {
   return mappings;
 }
 
-async function requestReconciliation(config, attempts = 1, options = {}) {
+async function requestReconciliation(config, attempts = 1) {
   const sourceIds = config.sources.map((source) => source.sourceId);
+  const state = await refreshInstalledHandlerAttestation();
+  const handlerAttestation = publicHandlerAttestation(state.handlerAttestation);
   const body = {
     sourceIds,
-    connectorVersion,
-    ...(options.browserSyncProtocol === undefined
-      ? {}
-      : { browserSyncProtocol: options.browserSyncProtocol }),
+    cliVersion: connectorVersion,
+    ...(handlerAttestation === null ? {} : { handlerAttestation }),
   };
-  const send = (payload, requestAttempts) =>
+  const send = (payload, requestAttempts, attestationId) =>
     request(
       config.origin,
       "/api/installations/current",
@@ -740,21 +846,19 @@ async function requestReconciliation(config, attempts = 1, options = {}) {
         body: JSON.stringify(payload),
       },
       requestAttempts,
-      { kind: "reconciliation", sourceIds },
+      { kind: "reconciliation", sourceIds, handlerAttestationId: attestationId },
     );
   try {
-    return await send(body, attempts);
+    const remote = await send(body, attempts, handlerAttestation?.attestationId);
+    if (handlerAttestation !== null) {
+      await acknowledgeInstalledHandlerAttestation(remote.acceptedHandlerAttestationId);
+    }
+    return remote;
   } catch (error) {
-    if (
-      error?.status !== 400 ||
-      error?.code !== "invalid_request" ||
-      options.browserSyncProtocol === undefined
-    ) {
+    if (error?.status !== 400 || error?.code !== "invalid_request") {
       throw error;
     }
-    const legacyBody = { ...body };
-    delete legacyBody.browserSyncProtocol;
-    return send(legacyBody, 1);
+    return send({ sourceIds, connectorVersion }, 1);
   }
 }
 
@@ -835,25 +939,28 @@ async function lifecycleFailure(error) {
 }
 
 async function reconcileServerState(config, state) {
+  state = await refreshInstalledHandlerAttestation();
   const missing = config.sources.some(
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
   );
+  const handlerConfirmationPending = publicHandlerAttestation(state.handlerAttestation) !== null;
   const lastReconciliation = state.lastRemoteReconciliationAt;
-  if (!missing && lastReconciliation === undefined) {
+  if (!missing && !handlerConfirmationPending && lastReconciliation === undefined) {
     state.lastRemoteReconciliationAt = Date.now();
     await writeState(state);
     return state;
   }
   if (
     !missing &&
+    !handlerConfirmationPending &&
     Number.isFinite(lastReconciliation) &&
     Date.now() - lastReconciliation < remoteReconciliationIntervalMs
   )
     return state;
   let remote;
   try {
-    remote = await requestReconciliation(config, missing ? 3 : 1);
+    remote = await requestReconciliation(config, missing || handlerConfirmationPending ? 3 : 1);
   } catch (error) {
     if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
       await lifecycleFailure(error);
@@ -1671,7 +1778,6 @@ async function doctor() {
   let repairStarted = false;
   let repairServerPending = false;
   let repairSummaryWritten = false;
-  let repairedBrowserSyncProtocol;
   const finishRepair = () => {
     if (!repairRequested || repairSummaryWritten) return;
     repairSummaryWritten = true;
@@ -1781,15 +1887,16 @@ async function doctor() {
         output(`Hook repair warning (${failure.agentId ?? "connector"}): ${failure.message}`);
       if (!defaultState) {
         output("Browser Sync handler: unavailable for custom state root");
-        repairedBrowserSyncProtocol = 0;
+        await recordInstalledHandlerAttestation(connectorVersion, 0, { force: true });
       } else {
-        const handlerStatus = await browserSyncRegistrationStatus();
-        output(`Browser Sync handler: ${handlerStatus}`);
-        repairedBrowserSyncProtocol =
-          repaired.browserSyncCapable && handlerStatus === "current"
-            ? browserSyncProtocolVersion
-            : 0;
-        if (!repaired.browserSyncCapable || handlerStatus !== "current") repairIncomplete = true;
+        const handler = await browserSyncHandlerAttestation();
+        output(`Browser Sync handler: ${handler.status}`);
+        await recordInstalledHandlerAttestation(
+          connectorVersion,
+          repaired.browserSyncCapable ? handler.protocol : 0,
+          { force: true },
+        );
+        if (!repaired.browserSyncCapable || handler.status !== "current") repairIncomplete = true;
       }
     }
     const hooks = await diagnoseHooks(config.sources);
@@ -1805,13 +1912,7 @@ async function doctor() {
         const lockedConfig = await readConfig();
         let remote;
         try {
-          remote = await requestReconciliation(
-            lockedConfig,
-            1,
-            repairedBrowserSyncProtocol === undefined
-              ? {}
-              : { browserSyncProtocol: repairedBrowserSyncProtocol },
-          );
+          remote = await requestReconciliation(lockedConfig);
         } catch (error) {
           if (await lifecycleMutationActive()) return { status: "lifecycle" };
           if (error?.status === 401 || error?.status === 403) {

@@ -36,6 +36,8 @@ describe("dashboard connection flow", () => {
     );
     expect(dashboard).toContain("installation.source_count <= maximumSourcesPerInstallation");
     expect(dashboard).toContain("installation.browser_sync_capable");
+    expect(dashboard).toContain("installation.installed_connector_version !== null");
+    expect(dashboard).not.toContain("bundledConnectorVersion");
     expect(dashboard).not.toContain("installationBrowserSyncMinimumVersion");
     expect(dashboard).toContain("<InstallationSyncControl");
   });
@@ -73,15 +75,14 @@ describe("dashboard connection flow", () => {
   it("requires repair only below the configured minimum version", () => {
     const connectorUpdate = source("./connector-update-notice.tsx");
     const home = source("../page.tsx");
-    expect(dashboard).toContain("i.connector_version");
+    expect(dashboard).toContain("i.installed_connector_version");
     expect(dashboard).toContain("minimumConnectorVersion()");
-    expect(dashboard).toContain("versionAtLeast(item.connector_version, minimumVersion)");
-    expect(dashboard).not.toContain(
-      "versionAtLeast(item.connector_version, bundledConnectorVersion)",
-    );
+    expect(dashboard).toContain("installedConnectorUpdateRequired(");
+    expect(dashboard).toContain("item.installed_connector_version");
     expect(dashboard).toContain("<ConnectorUpdateNotice");
-    expect(home).toContain("SELECT connector_version");
-    expect(home).toContain("versionAtLeast(installation.connector_version, minimumVersion)");
+    expect(home).toContain("SELECT installed_connector_version");
+    expect(home).toContain("installedConnectorUpdateRequired(");
+    expect(home).toContain("installation.installed_connector_version");
     expect(home).toContain("<ConnectorUpdateNotice");
     expect(connectorUpdate).toContain("Connector update required");
     expect(connectorUpdate).toContain('label="Copy update command"');

@@ -2311,6 +2311,92 @@ try {
 
   const readiness = await fetch(`${appUrl}/ready`);
   check(readiness.status === 200, "production readiness failed after migration");
+  const attestedSourceId = byClient.get("codex-personal-a").sourceId;
+  const installedBeforeOneOff = await pool.query(
+    `SELECT installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  const oneOffReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ sourceIds: [attestedSourceId], cliVersion: "0.4.3" }),
+  });
+  const afterOneOff = await pool.query(
+    `SELECT last_cli_version, installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  check(
+    oneOffReconciliation.status === 200 &&
+      afterOneOff.rows[0]?.last_cli_version === "0.4.3" &&
+      afterOneOff.rows[0]?.installed_connector_version ===
+        installedBeforeOneOff.rows[0]?.installed_connector_version &&
+      afterOneOff.rows[0]?.browser_sync_protocol ===
+        installedBeforeOneOff.rows[0]?.browser_sync_protocol,
+    "newer one-off CLI changed confirmed installed connector state",
+  );
+  const handlerAttestationId = randomUUID();
+  const attestedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sourceIds: [attestedSourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId: handlerAttestationId,
+        installedRuntimeVersion: "0.4.3",
+        browserSyncProtocol: 2,
+      },
+    }),
+  });
+  const attestedBody = await attestedReconciliation.json();
+  const afterAttestation = await pool.query(
+    `SELECT installed_connector_version, browser_sync_protocol
+       FROM installations WHERE id = $1`,
+    [firstInstallation.id],
+  );
+  check(
+    attestedReconciliation.status === 200 &&
+      attestedBody.acceptedHandlerAttestationId === handlerAttestationId &&
+      afterAttestation.rows[0]?.installed_connector_version === "0.4.3" &&
+      afterAttestation.rows[0]?.browser_sync_protocol === 2,
+    "installed handler attestation was not durably acknowledged",
+  );
+  const downgradedAttestationId = randomUUID();
+  const downgradedReconciliation = await fetch(`${appUrl}/api/installations/current`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${finalReconnect.deviceToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sourceIds: [attestedSourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId: downgradedAttestationId,
+        installedRuntimeVersion: "0.4.3",
+        browserSyncProtocol: 1,
+      },
+    }),
+  });
+  const afterDowngrade = await pool.query(
+    "SELECT browser_sync_protocol FROM installations WHERE id = $1",
+    [firstInstallation.id],
+  );
+  check(
+    downgradedReconciliation.status === 200 && afterDowngrade.rows[0]?.browser_sync_protocol === 1,
+    "handler protocol downgrade remained incorrectly confirmed as protocol 2",
+  );
+  console.log(
+    "ok - one-off CLI, installed runtime, and acknowledged handler protocol remain distinct",
+  );
   const historicalSourceIds = Array.from({ length: 80 }, () => randomUUID());
   const exactSourceIds = Array.from({ length: 100 }, () => randomUUID());
   try {

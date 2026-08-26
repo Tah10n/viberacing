@@ -81,8 +81,12 @@ default state directory is used. The dashboard uses it only after that browser a
 installation. A click starts the installed connector copy, claims a short-lived device-authenticated
 grant, and syncs either the selected account's sources or every active agent on that computer. The
 all-agent control appears only after `connect` or `doctor --repair` confirms a compatible installed
-handler. The connector reports a safe result code and exits. Custom state roots continue to use
-`viberacing sync` and never replace the global handler.
+runtime and handler. That confirmation is saved locally before the network request and retried on
+later connector contacts until the server acknowledges it. Running a newer package once with `npx`
+reports only that CLI version and does not claim that its runtime was installed. Later OS inspection
+also retracts the capability if the owned handler is downgraded or removed. The connector reports a
+safe result code and exits. Custom state roots continue to use `viberacing sync` and never replace
+the global handler.
 
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.
@@ -163,9 +167,11 @@ successful authenticated usage delivery clears that hook error; partial syncs an
 that send no usage request retain it. A successful initial pending retry counts as that delivery
 even when the following automatic collection is unchanged. `doctor --repair` refreshes the installed
 runtime, owned hooks, and the default-state browser protocol handler under the lifecycle lock. Its
-server reconciliation shares the sync lock, and it does not collect usage unless the user separately
-runs `viberacing sync`. A successful compatible reconnect, authenticated sync, or doctor server
-check clears a prior version-upgrade automatic-sync disable.
+pending handler attestation survives a failed reconciliation and is repeated by a later normal
+contact until the server acknowledges the same random ID. Server reconciliation shares the sync
+lock, and it does not collect usage unless the user separately runs `viberacing sync`. A successful
+compatible reconnect, authenticated sync, or doctor server check clears a prior version-upgrade
+automatic-sync disable.
 
 Connector 0.4.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
 allowlisted code, and `observedAfterSequence`, copied from the last server-accepted sequence known

@@ -97,6 +97,13 @@ version, publishes a prerelease, or publishes from a pull request. The installed
 only when the user explicitly runs `doctor --repair`; there is no background updater or server-side
 npm polling.
 
+Production CI compares every connector file that can enter the npm or same-origin archive with the
+pull-request base. If those bytes change, `packages/connector/package.json` must contain a strictly
+newer stable version. A web build therefore cannot silently create a changed archive under an
+already immutable npm version. Staging 0.4.3 in the server-first pull request does not publish it:
+the official service remains on npm `latest`, and publication still requires the later reviewed tag
+and GitHub Release after the compatible server deployment is healthy.
+
 The protocol v4 rollout completed with connector 0.4.0; the server remains compatible with v2, v3,
 and v4. For every future protocol change, preserve server-first ordering: deploy and verify a server
 that accepts both the old and new protocols, publish the compatible connector, and only then raise

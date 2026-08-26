@@ -25,6 +25,7 @@ import { DELETE, parseReconciliationBody, POST } from "./route";
 const deviceToken = "synthetic-device-token-that-is-long-enough";
 const installationId = "11111111-1111-4111-8111-111111111111";
 const sourceId = "22222222-2222-4222-8222-222222222222";
+const attestationId = "33333333-3333-4333-8333-333333333333";
 
 function request(body: unknown = { sourceIds: [sourceId] }): Request {
   return new Request("https://viberacing.example/api/installations/current", {
@@ -38,7 +39,7 @@ function request(body: unknown = { sourceIds: [sourceId] }): Request {
 }
 
 describe("compact reconciliation payload", () => {
-  it("accepts legacy and version-reporting bodies", () => {
+  it("accepts legacy, one-off CLI, and installed-handler attestation bodies", () => {
     expect(parseReconciliationBody({ sourceIds: [sourceId] })).toEqual({
       sourceIds: [sourceId],
     });
@@ -52,10 +53,26 @@ describe("compact reconciliation payload", () => {
     expect(
       parseReconciliationBody({
         sourceIds: [sourceId],
-        connectorVersion: "0.4.3",
-        browserSyncProtocol: 2,
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: "0.4.2",
+          browserSyncProtocol: 1,
+        },
       }),
-    ).toEqual({ sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 2 });
+    ).toEqual({
+      sourceIds: [sourceId],
+      cliVersion: "0.4.3",
+      handlerAttestation: {
+        attestationId,
+        installedRuntimeVersion: "0.4.2",
+        browserSyncProtocol: 1,
+      },
+    });
+    expect(parseReconciliationBody({ sourceIds: [sourceId], cliVersion: "0.4.3" })).toEqual({
+      sourceIds: [sourceId],
+      cliVersion: "0.4.3",
+    });
   });
 
   it("rejects malformed versions, duplicates, and unknown fields", () => {
@@ -63,10 +80,35 @@ describe("compact reconciliation payload", () => {
       { sourceIds: [sourceId], connectorVersion: "0.3" },
       { sourceIds: [sourceId], connectorVersion: "0.3.11+private" },
       { sourceIds: [sourceId], connectorVersion: "1".repeat(41) },
-      { sourceIds: [sourceId], browserSyncProtocol: 2 },
-      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: -1 },
-      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 1.5 },
-      { sourceIds: [sourceId], connectorVersion: "0.4.3", browserSyncProtocol: 3 },
+      { sourceIds: [sourceId], cliVersion: "0.3" },
+      { sourceIds: [sourceId], handlerAttestation: {} },
+      {
+        sourceIds: [sourceId],
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: "0.4.2",
+          browserSyncProtocol: -1,
+        },
+      },
+      {
+        sourceIds: [sourceId],
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: "0.4.2",
+          browserSyncProtocol: 1.5,
+        },
+      },
+      {
+        sourceIds: [sourceId],
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: "0.4.2",
+          browserSyncProtocol: 3,
+        },
+      },
       { sourceIds: [sourceId, sourceId] },
       { sourceIds: [sourceId], extra: true },
     ]) {
@@ -149,7 +191,7 @@ describe("compact reconciliation rate limiting", () => {
     );
   });
 
-  it("persists a reported version and reconciles sources in one transaction", async () => {
+  it("records a newer one-off CLI without confirming an installed runtime update", async () => {
     consumeRateLimitMock.mockResolvedValue(true);
     queryMock.mockResolvedValue([{ id: installationId }]);
     const clientQuery = vi
@@ -169,7 +211,7 @@ describe("compact reconciliation rate limiting", () => {
         callback({ query: clientQuery }),
     );
 
-    const response = await POST(request({ sourceIds: [sourceId], connectorVersion: "0.3.11" }));
+    const response = await POST(request({ sourceIds: [sourceId], cliVersion: "0.4.3" }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -177,9 +219,10 @@ describe("compact reconciliation rate limiting", () => {
     });
     expect(clientQuery).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("connector_version IS DISTINCT FROM $2"),
-      [installationId, "0.3.11", expect.any(Uint8Array)],
+      expect.stringContaining("last_cli_version IS DISTINCT FROM $2"),
+      [installationId, "0.4.3", expect.any(Uint8Array)],
     );
+    expect(clientQuery.mock.calls[0]?.[0]).not.toContain("installed_connector_version");
     expect(clientQuery.mock.calls[0]?.[0]).not.toContain("browser_sync_protocol");
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
@@ -188,7 +231,7 @@ describe("compact reconciliation rate limiting", () => {
     );
   });
 
-  it("persists an installed browser handler protocol only when explicitly reported", async () => {
+  it("persists installed runtime and handler protocol only with a durable attestation", async () => {
     consumeRateLimitMock.mockResolvedValue(true);
     queryMock.mockResolvedValue([{ id: installationId }]);
     const clientQuery = vi
@@ -211,8 +254,12 @@ describe("compact reconciliation rate limiting", () => {
     const response = await POST(
       request({
         sourceIds: [sourceId],
-        connectorVersion: "0.4.3",
-        browserSyncProtocol: 2,
+        cliVersion: "0.4.3",
+        handlerAttestation: {
+          attestationId,
+          installedRuntimeVersion: "0.4.2",
+          browserSyncProtocol: 1,
+        },
       }),
     );
 
@@ -220,15 +267,19 @@ describe("compact reconciliation rate limiting", () => {
     expect(clientQuery).toHaveBeenNthCalledWith(
       1,
       expect.stringMatching(
-        /browser_sync_protocol = \$3[\s\S]*browser_sync_capable = \$3::smallint > 0/,
+        /installed_connector_version = \$3[\s\S]*browser_sync_protocol = \$4[\s\S]*browser_sync_capable = \$4::smallint > 0/,
       ),
-      [installationId, "0.4.3", 2, expect.any(Uint8Array)],
+      [installationId, "0.4.3", "0.4.2", 1, expect.any(Uint8Array)],
     );
     expect(clientQuery).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining("source.installation_id = $1"),
       [installationId, [sourceId]],
     );
+    await expect(response.json()).resolves.toEqual({
+      acceptedHandlerAttestationId: attestationId,
+      sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }],
+    });
   });
 
   it("keeps legacy clients read-only while using the same source transaction", async () => {

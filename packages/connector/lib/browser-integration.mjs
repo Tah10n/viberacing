@@ -8,8 +8,12 @@ import { stateDirectory } from "./config.mjs";
 import { connectorVersion } from "./version.mjs";
 
 const run = promisify(execFile);
-const marker = "viberacing-browser-handler-v1";
 export const browserSyncProtocolVersion = 2;
+const ownershipMarker = "viberacing-browser-handler-v1";
+const handlerMarker = `${ownershipMarker};runtime=${connectorVersion};protocol=${browserSyncProtocolVersion}`;
+const handlerMarkerPattern = new RegExp(
+  `${ownershipMarker.replaceAll("-", "\\-")};runtime=(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?);protocol=([0-2])`,
+);
 
 function appleScriptString(value) {
   if (typeof value !== "string" || /[\0\r\n]/.test(value))
@@ -39,11 +43,31 @@ function windowsCommandQuote(value) {
 
 async function existingOwned(path) {
   try {
-    return (await readFile(path, "utf8")).includes(marker);
+    return (await readFile(path, "utf8")).includes(ownershipMarker);
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
+}
+
+function markerAttestation(value) {
+  if (!value.includes(ownershipMarker)) return null;
+  const match = value.match(handlerMarkerPattern);
+  if (match === null) return { runtimeVersion: null, protocol: 1 };
+  return { runtimeVersion: match[1], protocol: Number(match[2]) };
+}
+
+function ownedHandlerDetails(value) {
+  const attestation = markerAttestation(value);
+  if (attestation === null) return { protocol: 0, runtimeVersion: null, status: "foreign" };
+  return {
+    ...attestation,
+    status:
+      attestation.runtimeVersion === connectorVersion &&
+      attestation.protocol === browserSyncProtocolVersion
+        ? "current"
+        : "outdated",
+  };
 }
 
 function macHandlerOptions(options = {}) {
@@ -69,6 +93,28 @@ async function macRegistrationStatus(homeDirectory, options = {}) {
     return "foreign";
   } catch (error) {
     if (error?.code === "ENOENT") return "missing";
+    throw error;
+  }
+}
+
+async function macRegistrationDetails(homeDirectory, options = {}) {
+  const { appName } = macHandlerOptions(options);
+  const app = join(homeDirectory, "Applications", `${appName}.app`);
+  try {
+    return ownedHandlerDetails(
+      await readFile(join(app, "Contents", "Resources", "viberacing-owned"), "utf8"),
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      try {
+        await access(app);
+        return { protocol: 0, runtimeVersion: null, status: "foreign" };
+      } catch (accessError) {
+        if (accessError?.code === "ENOENT")
+          return { protocol: 0, runtimeVersion: null, status: "missing" };
+        throw accessError;
+      }
+    }
     throw error;
   }
 }
@@ -126,7 +172,7 @@ async function registerMac(installedScript, execute, homeDirectory, runtimeExecu
 `,
       { mode: 0o600 },
     );
-    await writeFile(markerPath, `${marker}\n`, { mode: 0o600 });
+    await writeFile(markerPath, `${handlerMarker}\n`, { mode: 0o600 });
     await chmod(stagedApp, 0o700);
     await chmod(contents, 0o700);
     await chmod(join(contents, "MacOS"), 0o700);
@@ -178,7 +224,7 @@ async function registerWindows(installedScript, execute, environment, runtimeExe
   if (existing) {
     try {
       const result = await execute(registry, ["QUERY", key, "/v", "VibeRacingOwned"]);
-      if (!result.stdout.includes(marker)) return false;
+      if (!result.stdout.includes(ownershipMarker)) return false;
     } catch (error) {
       if (error?.code === 1) return false;
       throw error;
@@ -188,7 +234,7 @@ async function registerWindows(installedScript, execute, environment, runtimeExe
   try {
     await execute(registry, ["ADD", key, "/ve", "/d", "URL:Vibe Racing", "/f"]);
     await execute(registry, ["ADD", key, "/v", "URL Protocol", "/d", "", "/f"]);
-    await execute(registry, ["ADD", key, "/v", "VibeRacingOwned", "/d", marker, "/f"]);
+    await execute(registry, ["ADD", key, "/v", "VibeRacingOwned", "/d", handlerMarker, "/f"]);
     await execute(registry, ["ADD", `${key}\\shell\\open\\command`, "/ve", "/d", command, "/f"]);
   } catch (error) {
     if (!existing) await execute(registry, ["DELETE", key, "/f"]).catch(() => {});
@@ -215,7 +261,7 @@ async function registerLinux(installedScript, execute, environment, stateRoot, h
   await mkdir(dirname(desktop), { recursive: true, mode: 0o700 });
   await writeFile(
     desktop,
-    `[Desktop Entry]\n# ${marker}\nType=Application\nName=Vibe Racing\nNoDisplay=true\nExec=${desktopQuote(process.execPath)} ${desktopQuote(installedScript)} handle-url %u\nMimeType=x-scheme-handler/viberacing;\n`,
+    `[Desktop Entry]\n# ${handlerMarker}\nType=Application\nName=Vibe Racing\nNoDisplay=true\nExec=${desktopQuote(process.execPath)} ${desktopQuote(installedScript)} handle-url %u\nMimeType=x-scheme-handler/viberacing;\n`,
     { mode: 0o600 },
   );
   await execute("xdg-mime", ["default", "viberacing-url.desktop", "x-scheme-handler/viberacing"]);
@@ -268,7 +314,7 @@ export async function unregisterBrowserSync(options = {}) {
     const key = "HKCU\\Software\\Classes\\viberacing";
     try {
       const result = await execute(registry, ["QUERY", key, "/v", "VibeRacingOwned"]);
-      if (result.stdout.includes(marker)) await execute(registry, ["DELETE", key, "/f"]);
+      if (result.stdout.includes(ownershipMarker)) await execute(registry, ["DELETE", key, "/f"]);
     } catch (error) {
       if (error?.code !== 1) throw error;
     }
@@ -300,18 +346,29 @@ export async function unregisterBrowserSync(options = {}) {
 }
 
 export async function browserSyncRegistrationStatus(options = {}) {
+  return (await browserSyncHandlerAttestation(options)).status;
+}
+
+export async function browserSyncHandlerAttestation(options = {}) {
   const execute = options.execute ?? run;
   const platform = options.platform ?? process.platform;
   const environment = options.environment ?? process.env;
   const homeDirectory = options.homeDirectory ?? homedir();
   if (platform === "darwin") {
-    return macRegistrationStatus(homeDirectory, options);
+    return macRegistrationDetails(homeDirectory, options);
   }
   if (platform === "linux") {
     const dataHome = environment.XDG_DATA_HOME?.trim() || join(homeDirectory, ".local", "share");
-    const owned = await existingOwned(resolve(dataHome, "applications", "viberacing-url.desktop"));
-    if (owned === false) return "foreign";
-    if (owned !== true) return "missing";
+    const desktop = resolve(dataHome, "applications", "viberacing-url.desktop");
+    let contents;
+    try {
+      contents = await readFile(desktop, "utf8");
+    } catch (error) {
+      if (error?.code === "ENOENT") return { protocol: 0, runtimeVersion: null, status: "missing" };
+      throw error;
+    }
+    const details = ownedHandlerDetails(contents);
+    if (details.status === "foreign") return details;
     try {
       const current = await execute("xdg-mime", [
         "query",
@@ -319,26 +376,29 @@ export async function browserSyncRegistrationStatus(options = {}) {
         "x-scheme-handler/viberacing",
       ]);
       const value = current.stdout.trim();
-      return value === "viberacing-url.desktop" ? "current" : value === "" ? "missing" : "foreign";
+      return value === "viberacing-url.desktop"
+        ? details
+        : { protocol: 0, runtimeVersion: null, status: value === "" ? "missing" : "foreign" };
     } catch {
-      return "missing";
+      return { protocol: 0, runtimeVersion: null, status: "missing" };
     }
   }
   const systemRoot = environment.SystemRoot?.trim();
-  if (!systemRoot || !win32.isAbsolute(systemRoot)) return "missing";
+  if (!systemRoot || !win32.isAbsolute(systemRoot))
+    return { protocol: 0, runtimeVersion: null, status: "missing" };
   const registry = win32.join(systemRoot, "System32", "reg.exe");
   const key = "HKCU\\Software\\Classes\\viberacing";
   try {
     await execute(registry, ["QUERY", key]);
   } catch (error) {
-    if (error?.code === 1) return "missing";
+    if (error?.code === 1) return { protocol: 0, runtimeVersion: null, status: "missing" };
     throw error;
   }
   try {
     const result = await execute(registry, ["QUERY", key, "/v", "VibeRacingOwned"]);
-    return result.stdout.includes(marker) ? "current" : "foreign";
+    return ownedHandlerDetails(result.stdout);
   } catch (error) {
-    if (error?.code === 1) return "foreign";
+    if (error?.code === 1) return { protocol: 0, runtimeVersion: null, status: "foreign" };
     throw error;
   }
 }
