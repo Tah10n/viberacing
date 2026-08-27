@@ -31,13 +31,13 @@
     "@next/eslint-plugin-next": "16.2.11",
     "@playwright/test": "1.62.1",
     "@types/node": "24.13.3",
-    "@types/pg": "8.21.0",
+    "@types/pg": "8.23.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
     "eslint-plugin-react-hooks": "5.2.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.67.0",
-    "vitest": "4.1.10"
+    "vitest": "4.1.11"
   }
 }
