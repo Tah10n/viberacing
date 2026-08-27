@@ -32,6 +32,7 @@ import {
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
 import { connectorProtocolVersion } from "../lib/protocol.mjs";
+import { openCodePluginLocation, reconcileOpenCodePlugin } from "../lib/opencode-plugin.mjs";
 import { deriveCodexProviderAccountKey } from "../lib/readers.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 
@@ -125,6 +126,7 @@ function connectorEnvironment(home, extra = {}) {
     KIMI_CODE_HOME: join(home, ".kimi-code"),
     KIMI_SHARE_DIR: join(home, ".kimi"),
     XDG_DATA_HOME: join(home, ".local", "share"),
+    XDG_CONFIG_HOME: join(home, ".config"),
     OPENCODE_DB: "",
     QWEN_HOME: join(home, ".qwen"),
     QWEN_RUNTIME_DIR: "",
@@ -396,8 +398,8 @@ async function writeMappedInstallation(home, origin, sources) {
   return directory;
 }
 
-async function runWithInput(arguments_, environment, input) {
-  const child = spawn(process.execPath, [connectorPath, ...arguments_], {
+async function runWithInput(arguments_, environment, input, script = connectorPath) {
+  const child = spawn(process.execPath, [script, ...arguments_], {
     env: environment,
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -576,7 +578,6 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       gemini_cli: "current",
       qwen_code: "current",
       kimi_code: "current",
-      opencode: "manual-sync",
     });
     assert.equal(
       await module.diagnoseHookForSource(source("codex"), {
@@ -2044,6 +2045,350 @@ test("hook discards stdin, emits only contract JSON, and fails open", async (con
   assert.equal(result.stdout, "{}\n");
   assert.equal(result.stderr, "");
   assert.equal(await readFile(blockedState, "utf8"), "not a directory");
+});
+
+test("bulk OpenCode hook dirties every active mapped source once and stale events are inert", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-bulk-hook-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  const installationId = "10101010-1010-4010-8010-101010101010";
+  const firstClientSourceId = "11111111-1010-4010-8010-101010101010";
+  const secondClientSourceId = "12121212-1010-4010-8010-101010101010";
+  const claudeClientSourceId = "13131313-1010-4010-8010-101010101010";
+  const unmappedClientSourceId = "14141414-1010-4010-8010-101010101010";
+  const firstSourceId = "15151515-1010-4010-8010-101010101010";
+  const secondSourceId = "16161616-1010-4010-8010-101010101010";
+  const claudeSourceId = "17171717-1010-4010-8010-101010101010";
+  const localSources = [
+    {
+      clientSourceId: firstClientSourceId,
+      agentId: "opencode",
+      collectionMethod: "opencode_sqlite",
+      dataPath: join(home, "opencode.db"),
+      suggestedLabel: "OpenCode",
+      supportedSurface: "cli",
+    },
+    {
+      clientSourceId: secondClientSourceId,
+      agentId: "opencode",
+      collectionMethod: "opencode_sqlite",
+      dataPath: join(home, "opencode-dev.db"),
+      suggestedLabel: "OpenCode dev",
+      supportedSurface: "cli",
+    },
+    {
+      clientSourceId: claudeClientSourceId,
+      agentId: "claude_code",
+      collectionMethod: "claude_jsonl",
+      dataPath: join(home, ".claude"),
+      suggestedLabel: "Claude",
+      supportedSurface: "cli",
+    },
+    {
+      clientSourceId: unmappedClientSourceId,
+      agentId: "opencode",
+      collectionMethod: "opencode_sqlite",
+      dataPath: join(home, "opencode-local.db"),
+      suggestedLabel: "OpenCode local",
+      supportedSurface: "cli",
+    },
+  ];
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: installationId,
+      secret: "bulk_hook_installation_secret_that_is_long_enough",
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "sources.json"),
+    `${JSON.stringify({ version: 2, sources: localSources })}\n`,
+  );
+  const mappings = [
+    [firstClientSourceId, firstSourceId, "opencode", "opencode_sqlite"],
+    [secondClientSourceId, secondSourceId, "opencode", "opencode_sqlite"],
+    [claudeClientSourceId, claudeSourceId, "claude_code", "claude_jsonl"],
+  ].map(([clientSourceId, sourceId, agentId, collectionMethod]) => ({
+    clientSourceId,
+    sourceId,
+    agentId,
+    collectionMethod,
+    accountLabel: agentId,
+    lastAcceptedSyncSequence: "0",
+  }));
+  await writeFile(
+    join(directory, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin: "http://127.0.0.1:9",
+      installationId,
+      deviceToken: "bulk_hook_device_token_that_is_long_enough",
+      sources: mappings,
+    })}\n`,
+  );
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({
+      version: 2,
+      sequences: { [firstSourceId]: "0", [secondSourceId]: "0", [claudeSourceId]: "0" },
+    })}\n`,
+  );
+  const oldTimestamp = "2026-08-20T00:00:00.000Z";
+  const firstGeneration = randomUUID();
+  const claudeGeneration = randomUUID();
+  await writeFile(
+    join(directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [firstClientSourceId]: {
+          dirtySince: oldTimestamp,
+          lastEventAt: oldTimestamp,
+          generation: firstGeneration,
+        },
+        [claudeClientSourceId]: {
+          dirtySince: oldTimestamp,
+          lastEventAt: oldTimestamp,
+          generation: claudeGeneration,
+        },
+      },
+    })}\n`,
+  );
+  await writeFile(join(directory, "scheduler-launch.lock"), `${process.pid}:${randomUUID()}\n`);
+  const trace = join(home, "scheduler-trace.log");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_SCHEDULER_TRACE: trace,
+  });
+  const command = [
+    "hook",
+    "--agent",
+    "opencode",
+    "--all-sources",
+    "--installation",
+    installationId,
+  ];
+  const result = await runWithInput(command, environment, "");
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "");
+  const dirty = JSON.parse(await readFile(join(directory, "dirty.json"), "utf8"));
+  assert.equal(dirty.sources[firstClientSourceId].dirtySince, oldTimestamp);
+  assert.notEqual(dirty.sources[firstClientSourceId].generation, firstGeneration);
+  assert.equal(
+    dirty.sources[firstClientSourceId].lastEventAt,
+    dirty.sources[secondClientSourceId].lastEventAt,
+  );
+  assert.equal(
+    dirty.sources[secondClientSourceId].dirtySince,
+    dirty.sources[secondClientSourceId].lastEventAt,
+  );
+  assert.deepEqual(dirty.sources[claudeClientSourceId], {
+    dirtySince: oldTimestamp,
+    lastEventAt: oldTimestamp,
+    generation: claudeGeneration,
+  });
+  assert.equal(dirty.sources[unmappedClientSourceId], undefined);
+  assert.deepEqual((await readFile(trace, "utf8")).trim().split("\n"), [
+    `hook-launch-busy:${result.pid}`,
+  ]);
+
+  const beforeMismatch = await readFile(join(directory, "dirty.json"));
+  await runWithInput(
+    [...command.slice(0, -1), "18181818-1010-4010-8010-101010101010"],
+    environment,
+    "",
+  );
+  assert.deepEqual(await readFile(join(directory, "dirty.json")), beforeMismatch);
+  await runWithInput([...command, "--source", firstClientSourceId], environment, "");
+  assert.deepEqual(await readFile(join(directory, "dirty.json")), beforeMismatch);
+
+  await rm(directory, { recursive: true, force: true });
+  await runWithInput(command, environment, "");
+  await assert.rejects(access(directory), { code: "ENOENT" });
+});
+
+test("pre-connect source removal cleans an owned stale OpenCode plugin", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-preconnect-remove-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const environment = connectorEnvironment(home, { HOME: home, USERPROFILE: home });
+  const directory = environment.VIBERACING_STATE_DIR;
+  const installationId = "19191919-1010-4010-8010-101010101010";
+  const clientSourceId = "20202020-1010-4010-8010-101010101010";
+  const source = {
+    clientSourceId,
+    agentId: "opencode",
+    collectionMethod: "opencode_sqlite",
+    dataPath: join(home, "opencode.db"),
+    suggestedLabel: "OpenCode",
+    supportedSurface: "cli",
+  };
+  await writeLocalSources(directory, [source]);
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: installationId,
+      secret: "preconnect_installation_secret_that_is_long_enough",
+    })}\n`,
+  );
+  const pluginOptions = {
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+  };
+  assert.equal(
+    (await reconcileOpenCodePlugin({ ...pluginOptions, desired: true })).action,
+    "created",
+  );
+  const pluginPath = openCodePluginLocation(pluginOptions).path;
+  await access(pluginPath);
+
+  const removed = await runWithInput(["source", "remove", clientSourceId], environment, "");
+  assert.equal(removed.code, 0);
+  assert.match(removed.stdout, /removed locally/);
+  await assert.rejects(access(pluginPath), { code: "ENOENT" });
+});
+
+test("teardown removes the owned OpenCode plugin and stale idle hooks cannot resurrect state", async (context) => {
+  for (const command of ["disconnect", "reset-installation", "uninstall"]) {
+    const home = await mkdtemp(join(tmpdir(), `viberacing-opencode-${command}-`));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const environment = connectorEnvironment(home, { HOME: home, USERPROFILE: home });
+    const directory = environment.VIBERACING_STATE_DIR;
+    const installationId = randomUUID();
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+    await writeFile(
+      join(directory, "installation.json"),
+      `${JSON.stringify({
+        version: 1,
+        id: installationId,
+        secret: "teardown_installation_secret_that_is_long_enough",
+      })}\n`,
+    );
+    const pluginOptions = {
+      installationId,
+      stateRoot: directory,
+      environment,
+      homeDirectory: home,
+    };
+    await reconcileOpenCodePlugin({ ...pluginOptions, desired: true });
+    const pluginPath = openCodePluginLocation(pluginOptions).path;
+    await access(pluginPath);
+
+    const result = await runWithInput([command], environment, "");
+    assert.equal(result.code, 0, result.stderr);
+    await assert.rejects(access(pluginPath), { code: "ENOENT" });
+    const before =
+      command === "uninstall"
+        ? null
+        : await snapshotStateTree(directory).catch((error) =>
+            error?.code === "ENOENT" ? null : Promise.reject(error),
+          );
+    await runWithInput(
+      ["hook", "--agent", "opencode", "--all-sources", "--installation", installationId],
+      environment,
+      "",
+    );
+    if (before === null) await assert.rejects(access(directory), { code: "ENOENT" });
+    else assert.deepEqual(await snapshotStateTree(directory), before);
+  }
+});
+
+test("stable launcher forces its custom state root before importing the versioned runtime", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-custom-launcher-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const customState = join(home, "custom state 雪");
+  const defaultState = join(home, ".viberacing");
+  await mkdir(defaultState, { recursive: true });
+  await writeFile(join(defaultState, "sentinel.bin"), Buffer.from([0, 1, 2, 255]));
+  const defaultBefore = await snapshotStateTree(defaultState);
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    VIBERACING_STATE_DIR: customState,
+    NODE_ENV: "test",
+  });
+  const configUrl = pathToFileURL(
+    fileURLToPath(new URL("../lib/config.mjs", import.meta.url)),
+  ).href;
+  await execFileAsync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `const config = await import(${JSON.stringify(configUrl)}); await config.prepareRuntime(new URL(${JSON.stringify(pathToFileURL(connectorPath).href)}));`,
+    ],
+    { env: environment },
+  );
+  const installationId = "20202020-2020-4020-8020-202020202020";
+  const clientSourceId = "21212121-2020-4020-8020-202020202020";
+  const sourceId = "22222222-2020-4020-8020-202020202020";
+  const local = {
+    clientSourceId,
+    agentId: "opencode",
+    collectionMethod: "opencode_sqlite",
+    dataPath: join(home, "opencode.db"),
+    suggestedLabel: "OpenCode",
+    supportedSurface: "cli",
+  };
+  await writeFile(
+    join(customState, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: installationId,
+      secret: "custom_launcher_installation_secret_that_is_long_enough",
+    })}\n`,
+  );
+  await writeFile(
+    join(customState, "sources.json"),
+    `${JSON.stringify({ version: 2, sources: [local] })}\n`,
+  );
+  await writeFile(
+    join(customState, "config.json"),
+    `${JSON.stringify({
+      version: 2,
+      origin: "http://127.0.0.1:9",
+      installationId,
+      deviceToken: "custom_launcher_device_token_that_is_long_enough",
+      sources: [
+        {
+          clientSourceId,
+          sourceId,
+          agentId: "opencode",
+          collectionMethod: "opencode_sqlite",
+          accountLabel: "OpenCode",
+          lastAcceptedSyncSequence: "0",
+        },
+      ],
+    })}\n`,
+  );
+  await writeFile(
+    join(customState, "state.json"),
+    `${JSON.stringify({ version: 2, sequences: { [sourceId]: "0" } })}\n`,
+  );
+  await writeFile(join(customState, "scheduler-launch.lock"), `${process.pid}:${randomUUID()}\n`);
+  const launcher = join(customState, "bin", "viberacing-hook.mjs");
+  const launched = await runWithInput(
+    ["hook", "--agent", "opencode", "--all-sources", "--installation", installationId],
+    {
+      ...environment,
+      VIBERACING_STATE_DIR: defaultState,
+    },
+    "",
+    launcher,
+  );
+  assert.equal(launched.code, 0);
+  assert.equal(launched.stdout, "");
+  assert.equal(launched.stderr, "");
+  const dirty = JSON.parse(await readFile(join(customState, "dirty.json"), "utf8"));
+  assert.equal(typeof dirty.sources[clientSourceId].generation, "string");
+  assert.deepEqual(await snapshotStateTree(defaultState), defaultBefore);
 });
 
 test("a provider hook that receives EOF after uninstall does not recreate state", async (context) => {
@@ -4253,6 +4598,11 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
         );
         return;
       }
+      if (request.url === `/api/sources/${sourceId}` && request.method === "DELETE") {
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
       response.end(JSON.stringify(usageResponse(body)));
     });
   });
@@ -4287,7 +4637,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   await mkdir(join(directory, "logs"), { recursive: true });
   await writeFile(lastHookErrorPath, "2026-08-18T12:55:27.438Z automatic_sync_failed\n");
 
-  await execFileAsync(
+  const connected = await execFileAsync(
     process.execPath,
     [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
     {
@@ -4300,12 +4650,64 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   );
 
   assert.equal(pairingBody.protocolVersion, connectorProtocolVersion);
+  assert.match(connected.stdout, /Restart OpenCode once/);
   assert.equal(pairingBody.sources[0].suggestedLabel, "OpenCode");
   assert.equal(JSON.stringify(pairingBody).includes("custom-channel"), false);
   assert.equal((await readLocalSources(directory))[0].suggestedLabel, "OpenCode");
   await assert.rejects(access(lastHookErrorPath));
   const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   assert.equal(JSON.stringify(config).includes("custom-channel"), false);
+  const pluginPath = join(
+    home,
+    ".config",
+    "opencode",
+    "plugins",
+    `viberacing-${pairingBody.installationId}.js`,
+  );
+  const plugin = await readFile(pluginPath, "utf8");
+  assert.match(plugin, /^\/\/ viberacing-opencode-plugin /);
+  assert.match(plugin, /session\.status/);
+  assert.match(plugin, /session\.idle/);
+  assert.doesNotMatch(plugin, /sessionID|project|OPENCODE_/);
+  const beforeDoctor = await snapshotStateTree(directory);
+  const diagnosed = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+    }),
+  });
+  assert.match(diagnosed.stdout, /OpenCode automatic sync plugin: current/);
+  assert.doesNotMatch(diagnosed.stdout, /Restart OpenCode/);
+  assert.deepEqual(await snapshotStateTree(directory), beforeDoctor);
+  assert.equal(await readFile(pluginPath, "utf8"), plugin);
+  await unlink(pluginPath);
+  const repaired = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test" }),
+  });
+  assert.match(repaired.stdout, /Restart OpenCode once/);
+  assert.match(repaired.stdout, /OpenCode automatic sync plugin: current/);
+  assert.match(repaired.stdout, /Usage sync: not run/);
+  const foreignPlugin = "export const ForeignPlugin = async () => ({});\n";
+  await writeFile(pluginPath, foreignPlugin);
+  const conflict = await runWithInput(
+    ["doctor", "--repair"],
+    connectorEnvironment(home, { NODE_ENV: "test" }),
+    "",
+  );
+  assert.equal(conflict.code, 1);
+  assert.match(conflict.stdout, /OpenCode automatic sync plugin: conflict/);
+  assert.match(conflict.stderr, /plugin repair is required/);
+  assert.equal(await readFile(pluginPath, "utf8"), foreignPlugin);
+  await unlink(pluginPath);
+  const removed = await execFileAsync(
+    process.execPath,
+    [connectorPath, "source", "remove", pairingBody.sources[0].clientSourceId],
+    {
+      env: connectorEnvironment(home, { NODE_ENV: "test" }),
+    },
+  );
+  assert.match(removed.stdout, /Source disconnected and removed locally/);
+  await assert.rejects(access(pluginPath), { code: "ENOENT" });
 });
 
 test("connect restores every Codex logical mapping before its initial sync", async (context) => {
@@ -5802,11 +6204,16 @@ test("doctor reports Claude availability without collecting usage", async (conte
       suggestedLabel: "Work",
     },
   ]);
+  const beforeDoctor = await snapshotStateTree(directory);
   const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
     env: connectorEnvironment(home, { PATH: "" }),
   });
   assert.match(result.stdout, /claude_code diagnostics: ok/);
   assert.doesNotMatch(result.stdout, /claude_code \(Work\): ok/);
+  assert.deepEqual(await snapshotStateTree(directory), beforeDoctor);
+  await assert.rejects(access(join(home, ".config", "opencode", "plugins")), {
+    code: "ENOENT",
+  });
 });
 
 test("doctor explains Qwen relative settings and Antigravity wrapper-only", async (context) => {
@@ -5829,7 +6236,7 @@ test("doctor explains Qwen relative settings and Antigravity wrapper-only", asyn
   );
 });
 
-test("doctor serializes remote reconciliation behind an active sync", async (context) => {
+test("doctor inspection stays read-only behind an active sync", async (context) => {
   let releaseUpload;
   let uploadStarted;
   const firstUpload = new Promise((resolve) => (uploadStarted = resolve));
@@ -5887,21 +6294,18 @@ test("doctor serializes remote reconciliation behind an active sync", async (con
     env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const doctorClosed = once(doctor, "close");
   let doctorOutput = "";
   doctor.stdout.setEncoding("utf8").on("data", (chunk) => (doctorOutput += chunk));
-  await waitFor(() => doctorOutput.includes("Connected origin:"));
-  await delay(100);
+  await waitFor(() => doctorOutput.includes("Connector:"));
+  const [doctorCode] = await doctorClosed;
+  assert.equal(doctorCode, 0);
   assert.equal(currentRequests, 0);
+  assert.match(doctorOutput, /Pairing status: stored connection; server not contacted/);
 
   releaseUpload();
   await activeSync;
-  const [doctorCode] = await once(doctor, "close");
-  assert.equal(doctorCode, 0);
-  assert.equal(currentRequests, 1);
-  assert.deepEqual(reconciliationBodies, [
-    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
-  ]);
-  assert.match(doctorOutput, /Pairing status: active/);
+  assert.deepEqual(reconciliationBodies, []);
 });
 
 test("a newer one-off CLI does not attest an older installed runtime", async (context) => {
@@ -5950,9 +6354,7 @@ test("a newer one-off CLI does not attest an older installed runtime", async (co
     env: connectorEnvironment(home, { NODE_ENV: "test", PATH: "" }),
   });
 
-  assert.deepEqual(reconciliationBodies, [
-    { sourceIds: [installation.sourceId], cliVersion: connectorVersion },
-  ]);
+  assert.deepEqual(reconciliationBodies, []);
   assert.deepEqual(
     JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"))
       .handlerAttestation,
@@ -6158,8 +6560,7 @@ test("handler inspection failure does not block token sync or overwrite attestat
 
   assert.match(`${diagnostic.stdout}\n${diagnostic.stderr}`, /handler inspection failed/i);
   assert.doesNotMatch(`${diagnostic.stdout}\n${diagnostic.stderr}`, /EACCES|Synthetic/);
-  assert.equal(reconciliationBodies.length, 1);
-  assert.equal(Object.hasOwn(reconciliationBodies[0], "handlerAttestation"), false);
+  assert.equal(reconciliationBodies.length, 0);
   state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
   assert.deepEqual(state.handlerAttestation, confirmed);
   assert.equal(state.handlerInspectionDiagnostic, "browser_handler_inspection_failed");
@@ -6398,7 +6799,7 @@ test("doctor disables a revoked installation and recommends reconnecting", async
     `${JSON.stringify({ dirtySince: new Date().toISOString(), lastEventAt: new Date().toISOString() })}\n`,
   );
 
-  const result = await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+  const result = await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: connectorEnvironment(home),
   });
 
@@ -6467,7 +6868,7 @@ test("doctor removes a hook after dashboard-side source disconnect", async (cont
       },
     }),
   );
-  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+  await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: connectorEnvironment(home),
   });
   assert.deepEqual(JSON.parse(await readFile(join(directory, "config.json"), "utf8")).sources, []);
@@ -6699,7 +7100,7 @@ test("remote reconciliation cannot restore retired runtime state from a stale sn
     })}\n`,
   );
 
-  await execFileAsync(process.execPath, [connectorPath, "doctor"], {
+  await execFileAsync(process.execPath, [connectorPath, "doctor", "--repair"], {
     env: connectorEnvironment(home),
   });
   const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));

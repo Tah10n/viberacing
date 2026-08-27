@@ -5,7 +5,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { promisify } from "node:util";
-import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
+import {
+  ensureOwnerOnlyWindowsFile,
+  ensurePrivateStateDirectory,
+  inspectOwnerOnlyWindowsFile,
+} from "../lib/windows-security.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -106,6 +110,61 @@ test("Windows ACL retries one killed timeout and remains fail-closed after a sec
   );
   assert.equal(exhaustedCalls, 2);
 });
+
+test("Windows OpenCode plugin ACL helper is file-scoped and verifies owner-only access", async () => {
+  const calls = [];
+  await ensureOwnerOnlyWindowsFile(
+    "C:\\Users\\racer\\.config\\opencode\\plugins\\viberacing-owned.js",
+    {
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows" },
+      run: async (...arguments_) => calls.push(arguments_),
+    },
+  );
+  assert.equal(calls.length, 1);
+  const decoded = Buffer.from(calls[0][1].at(-1), "base64").toString("utf16le");
+  assert.match(decoded, /Security\.AccessControl\.FileSecurity/);
+  assert.match(decoded, /\[IO\.File\]::SetAccessControl/);
+  assert.match(decoded, /\[IO\.File\]::GetAccessControl/);
+  assert.match(decoded, /SetAccessRuleProtection\(\$true,\$false\)/);
+  assert.match(decoded, /ReparsePoint/);
+  assert.doesNotMatch(decoded, /DirectorySecurity|Get-ChildItem/);
+  assert.equal(
+    calls[0][2].env.VIBERACING_WINDOWS_OWNER_ONLY_FILE,
+    "C:\\Users\\racer\\.config\\opencode\\plugins\\viberacing-owned.js",
+  );
+  assert.equal(
+    await inspectOwnerOnlyWindowsFile("C:\\Users\\racer\\plugin.js", {
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows" },
+      run: async () => {},
+    }),
+    true,
+  );
+  assert.equal(
+    await inspectOwnerOnlyWindowsFile("C:\\Users\\racer\\foreign.js", {
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows" },
+      run: async () => {
+        throw new Error("foreign ACL");
+      },
+    }),
+    false,
+  );
+});
+
+test(
+  "Windows applies and reads an owner-only ACL on one real OpenCode plugin file",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const root = await mkdtemp(join(tmpdir(), "viberacing-windows-plugin-acl-"));
+    const plugin = join(root, "viberacing-owned.js");
+    context.after(() => rm(root, { force: true, recursive: true }));
+    await writeFile(plugin, "// synthetic owned plugin\n");
+    await ensureOwnerOnlyWindowsFile(plugin);
+    assert.equal(await inspectOwnerOnlyWindowsFile(plugin), true);
+  },
+);
 
 test(
   "Windows rejects unrelated state without changing its ACL",

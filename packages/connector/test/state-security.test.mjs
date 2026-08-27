@@ -29,6 +29,7 @@ const flatLegacyRuntimeFiles = [
   "browser.mjs",
   "config.mjs",
   "executables.mjs",
+  "opencode-plugin.mjs",
   "readers.mjs",
   "registry.mjs",
   "runtime.mjs",
