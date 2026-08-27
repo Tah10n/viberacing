@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import {
+  canonicalOpenCodeStateRoot,
   generateOpenCodePlugin,
   inspectOpenCodePlugin,
   maximumOpenCodePluginBytes,
@@ -185,7 +186,7 @@ test("generated plugin reads only allowlisted environment values", async () => {
   );
   assert.deepEqual(openCodePluginEnvironment(options.stateRoot, suppliedEnvironment), {
     HOME: "/home/racer",
-    VIBERACING_STATE_DIR: options.stateRoot,
+    VIBERACING_STATE_DIR: canonicalOpenCodeStateRoot(options.stateRoot),
   });
   const source = generateOpenCodePlugin({ ...options, environment: suppliedEnvironment });
   assert.equal(preparationReads.includes("HOME"), true);

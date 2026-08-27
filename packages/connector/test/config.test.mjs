@@ -33,6 +33,7 @@ import {
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
 import { connectorProtocolVersion } from "../lib/protocol.mjs";
+import { ensureOwnerOnlyWindowsFile } from "../lib/windows-security.mjs";
 import {
   inspectOpenCodePlugin,
   openCodePluginLocation,
@@ -2435,6 +2436,7 @@ test("doctor reports a blocked stale plugin instead of not-needed", async (conte
   );
   await writeFile(join(directory, "state.json"), '{"version":2,"sequences":{}}\n');
   await writeFile(pluginPath, "export const ForeignPlugin = true;\n", { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(pluginPath);
 
   const result = await runWithInput(["doctor", "--repair"], environment, "");
   assert.equal(result.code, 1);
@@ -4907,6 +4909,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   const blockedMigrationPlugin = "export const ConcurrentPlugin = async () => ({});\n";
   await mkdir(dirname(migratedPluginPath), { recursive: true });
   await writeFile(migratedPluginPath, blockedMigrationPlugin, { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(migratedPluginPath);
   const blockedDestination = await runWithInput(["doctor", "--repair"], migratedEnvironment, "");
   assert.equal(blockedDestination.code, 1);
   assert.match(blockedDestination.stdout, /OpenCode automatic sync plugin: conflict/);
@@ -4919,6 +4922,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   await unlink(migratedPluginPath);
   await unlink(originalPluginPath);
   await writeFile(originalPluginPath, blockedMigrationPlugin, { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(originalPluginPath);
   const blockedMigration = await runWithInput(["doctor", "--repair"], migratedEnvironment, "");
   assert.equal(blockedMigration.code, 1);
   assert.match(blockedMigration.stdout, /OpenCode automatic sync plugin: conflict/);
