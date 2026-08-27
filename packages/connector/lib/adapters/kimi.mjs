@@ -7,14 +7,26 @@ import {
   diagnosePath,
   findFile,
   mergeEntries,
-  previousJsonlEntries,
   parserResult,
   utcDay,
 } from "./shared.mjs";
 
-const kimiParserVersion = 1;
+const kimiParserVersion = 3;
 
-function currentRecord(line) {
+function currentEventLocation(context) {
+  if (!context.path) return { agentId: "main", sessionId: "unknown-session" };
+  const agentDirectory = dirname(context.path);
+  const agentsDirectory = dirname(agentDirectory);
+  if (basename(agentsDirectory) === "agents") {
+    return {
+      agentId: basename(agentDirectory),
+      sessionId: basename(dirname(agentsDirectory)),
+    };
+  }
+  return { agentId: "main", sessionId: basename(agentDirectory) };
+}
+
+function currentRecord(line, context = {}) {
   try {
     const record = JSON.parse(line);
     const usage = record?.usage;
@@ -33,7 +45,17 @@ function currentRecord(line) {
             reasoningTokens: 0,
           })
         : null;
-    return entry ? { id: createHash("sha256").update(line).digest("hex"), date: day, entry } : null;
+    const legacyId = createHash("sha256").update(line).digest("hex");
+    const { agentId, sessionId } = currentEventLocation(context);
+    const identity = JSON.stringify(["kimi-current-v3", sessionId, agentId, legacyId]);
+    return entry
+      ? {
+          id: createHash("sha256").update(identity).digest("hex"),
+          aliases: [legacyId],
+          date: day,
+          entry,
+        }
+      : null;
   } catch {
     return null;
   }
@@ -80,7 +102,8 @@ function parseRecords(lines, decoder, relevant) {
   let candidateRecords = 0;
   let parsedRecords = 0;
   let unsupportedCandidates = 0;
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     let native;
     try {
       native = JSON.parse(line);
@@ -91,7 +114,7 @@ function parseRecords(lines, decoder, relevant) {
     }
     if (!relevant(native)) continue;
     candidateRecords += 1;
-    const record = decoder(line);
+    const record = decoder(line, { lineIndex: index });
     if (record === null) {
       unsupportedCandidates += 1;
       continue;
@@ -128,9 +151,16 @@ export function parseKimiLegacyLines(lines) {
 export const parseKimiLines = parseKimiCurrentLines;
 
 function eventKey(decoder) {
-  return (line) => {
-    const record = decoder(line);
-    return record === null ? null : { id: record.id, date: record.date };
+  return (line, context) => {
+    const record = decoder(line, context);
+    return record === null
+      ? null
+      : {
+          id: record.id,
+          ...(record.aliases === undefined ? {} : { aliases: record.aliases }),
+          date: record.date,
+          entry: record.entry,
+        };
   };
 }
 
@@ -188,6 +218,7 @@ export const kimiAdapter = Object.freeze({
   collectionMethods: ["kimi_wire_jsonl", "kimi_legacy_wire_jsonl"],
   collectionMethodForPath: kimiCollectionMethodForPath,
   aggregationMode: "source_sum",
+  accountSwitchMode: "combined_local_history",
   trigger: "Stop hook",
   defaultPaths: kimiDefaultPaths,
   detect: detectKimiSources,
@@ -195,7 +226,6 @@ export const kimiAdapter = Object.freeze({
     const legacy =
       source.collectionMethod === "kimi_legacy_wire_jsonl" ||
       kimiCollectionMethodForPath(source.dataPath) === "kimi_legacy_wire_jsonl";
-    const stateCompatible = state?.parserVersion === kimiParserVersion;
     const decoder = legacy ? legacyRecord : currentRecord;
     const parser = (lines) =>
       parseRecords(
@@ -214,21 +244,11 @@ export const kimiAdapter = Object.freeze({
       source,
       parser,
       (path) => basename(path) === "wire.jsonl",
-      stateCompatible ? state : {},
+      state ?? {},
       range,
       eventKey(decoder),
+      kimiParserVersion,
     ).then((result) => {
-      if (
-        !stateCompatible &&
-        result.completeness === "partial" &&
-        Object.keys(state?.files ?? {}).length > 0
-      ) {
-        return {
-          ...result,
-          entries: previousJsonlEntries(state ?? {}),
-          nextState: state ?? {},
-        };
-      }
       return {
         ...result,
         nextState: { ...result.nextState, parserVersion: kimiParserVersion },

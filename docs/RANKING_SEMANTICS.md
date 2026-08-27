@@ -20,6 +20,14 @@ are displayed as a separate exact tuple with their own sum and an explicit scope
 never scaled or estimated to fit the account total. Other agents' five components must sum exactly
 to `totalTokens`.
 
+One physical Codex profile can contribute several logical ChatGPT accounts, but its local transcript
+component events do not identify which login owned them. As soon as the profile has two logical
+identities, the connector sends account-wide totals only and the dashboard hides component
+breakdowns for every linked account. Switching accounts changes the logical destination; it never
+subtracts or overwrites another account's last accepted snapshot. Installation-wide Sync refreshes
+the active identity and reports inactive identities as partial, while account-scoped Sync asks the
+user to switch Codex when the selected identity is not active.
+
 For an `account_max` account and UTC day, the newest complete observation wins. The server finds the
 greatest `updated_at` among complete rows, excludes every older complete and partial row, and takes
 the maximum only among complete rows tied at that exact timestamp. A partial observation is eligible

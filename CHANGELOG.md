@@ -8,15 +8,57 @@ experience or protocol.
 
 ## [Unreleased]
 
-## [0.4.4] - 2026-08-27
+## [0.5.0] - 2026-08-26
+
+### Added
+
+- A read-only OpenCode upgrade preflight now guards every recovery-state mutator: source add/remove,
+  Antigravity source/executable persistence, reset, connect, manual/automatic/browser Sync,
+  doctor/repair, hooks, pending delivery, reconciliation, and source-schema migration. Mutating
+  lifecycle and sync paths recheck after exclusion, immediately before their first write or network
+  mutation. `source list`, `accounts`, `--version`, explicit `disconnect`, and explicit `uninstall`
+  remain available.
+- The OpenCode cutover proof must equal the maximum local sequence across config, runtime state,
+  pending snapshots, and a pending 0.4.4 attempt. A stale 0.4.3 Browser Sync, unconfirmed pending
+  payload, or sequence race therefore fails byte-for-byte with the exact 0.4.4 recovery command.
+  Preflight streams only selected OpenCode fields from `state.json`, so aggregate state is no longer
+  capped at 20 MiB while every selected ledger retains its own bound.
+- One physical Codex `CODEX_HOME` can now track up to eight ChatGPT accounts. The connector reads
+  local `tokens.account_id` before App Server startup and after usage, requires both
+  generated-schema account reads to return the same non-null normalized email, derives only a local
+  salt-scoped HMAC from email plus account ID, fails closed when either half is unavailable or
+  unstable, dynamically registers generic logical sources, and routes each stable snapshot to the
+  active account without sending provider identity.
+- Codex account switching currently requires file-backed `CODEX_HOME/auth.json`; keyring-only and
+  ephemeral identity remain unsupported, and separate profile roots do not substitute for the
+  missing auth file.
+- Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity usage now share a bounded 31-day
+  observed-event ledger. Hashed event identities and exact token tuples survive record deletion,
+  movement, copying, and current-database cleanup without retaining provider IDs or content.
+
+### Changed
+
+- Codex installs one hook per physical profile. Account-scoped Sync asks the user to switch Codex
+  when its logical account is inactive; installation-wide Sync refreshes the active account and
+  reports other Codex accounts as inactive. Local component breakdowns are hidden for shared
+  profiles because transcript events do not prove account ownership.
 
 ### Fixed
 
-- OpenCode keeps the existing aggregate snapshot protocol while recording bounded, content-free
-  hashes of every exact `message.id` in the rolling window. The cutover set becomes confirmed only
-  after the matching snapshot sequence is accepted by the server, preparing an exact upgrade to
-  connector 0.5.0 without double-counting or silently dropping usage inserted between scan and
-  acceptance.
+- Reusing a local event identity with different counters now keeps the first exact tuple, marks the
+  collection partial, and emits only the allowlisted `local_event_identity_conflict` diagnostic.
+- The first 0.5.0 collection migrates Claude v1 and legacy JSONL state into the bounded ledger;
+  OpenCode combines its exact server baseline only with message-ID aliases confirmed by an accepted
+  connector 0.4.4 snapshot. Direct 0.4.3 upgrades fail closed with migration guidance instead of
+  treating every current SQLite row as already accepted and losing an unsynced tail. Accepted
+  history remains non-destructive until it ages out of the rolling UTC window, and full-ledger
+  events replay after pruning.
+- Pairing now carries physical profiles only. Codex logical sources require an exact
+  server-confirmed profile relation, survive installation reset without identity drift, and
+  installation Browser Sync delivers a newly registered active account in the same operation.
+- Local source and runtime state use versioned schema v2 writes with fail-closed validation, a
+  32-source installation bound, an eight-account physical-profile bound, and no duplicate Codex hook
+  installation.
 
 ## [0.4.3] - 2026-08-26
 

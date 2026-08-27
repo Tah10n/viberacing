@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import {
@@ -8,10 +9,11 @@ import {
   mergeEntries,
   tailFingerprint,
   utcDay,
+  validateObservedEventLedger,
   walk,
 } from "./shared.mjs";
 
-const claudeParserVersion = 1;
+const claudeParserVersion = 2;
 
 function classifiedContribution(line) {
   let record;
@@ -80,18 +82,70 @@ export async function collectClaude(
   state = {},
   { maximumBytes = 100_000_000, readChunk = jsonLinesChunk, fingerprint = tailFingerprint } = {},
 ) {
-  const stateCompatible = state.parserVersion === claudeParserVersion;
-  const compatibleState = stateCompatible ? state : {};
+  const migratedLedger = {};
+  if (state.ledger !== undefined) {
+    validateObservedEventLedger(state.ledger, claudeParserVersion);
+    Object.assign(migratedLedger, state.ledger);
+  }
+  for (const [id, entry] of Object.entries(state.messages ?? {})) {
+    if (
+      typeof id !== "string" ||
+      !entry ||
+      typeof entry !== "object" ||
+      typeof entry.date !== "string" ||
+      typeof entry.totalTokens !== "string"
+    )
+      throw new Error("Claude v1 message state is invalid");
+    const key = createHash("sha256").update(id).digest("hex");
+    const { date, ...usage } = entry;
+    migratedLedger[key] = { date, usage, parserVersion: claudeParserVersion };
+  }
+  validateObservedEventLedger(migratedLedger, claudeParserVersion);
+  for (const [key, event] of Object.entries(migratedLedger))
+    if (event.date < range.rangeStart || event.date > range.rangeEnd) delete migratedLedger[key];
+  let ledgerCount = validateObservedEventLedger(migratedLedger, claudeParserVersion);
   const discovered = await walk(source.dataPath, [".jsonl"], 10_000);
   const nextState = {
-    files: { ...(compatibleState.files ?? {}) },
-    messages: Object.assign(Object.create(null), compatibleState.messages ?? {}),
+    files: Object.fromEntries(
+      Object.entries(state.files ?? {}).map(([path, file]) => {
+        const { ids: _ids, ...checkpoint } = file;
+        return [path, checkpoint];
+      }),
+    ),
+    ledger: migratedLedger,
   };
   let partial = discovered.incomplete;
   let schemaUnsupported = false;
+  let identityConflict = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
-  const provisionalMessages = Object.create(null);
+  const provisionalLedger = {};
+  let ledgerBytes = Buffer.byteLength(JSON.stringify(nextState.ledger));
+  const addRecord = (value, target = nextState.ledger) => {
+    const key = createHash("sha256").update(value.id).digest("hex");
+    const { date, ...usage } = value.entry;
+    const candidate = { date, usage, parserVersion: claudeParserVersion };
+    const existing = nextState.ledger[key] ?? provisionalLedger[key];
+    if (existing !== undefined) {
+      if (JSON.stringify(existing) !== JSON.stringify(candidate)) {
+        partial = true;
+        identityConflict = true;
+      }
+      return true;
+    }
+    const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
+    if (ledgerCount >= 65_536 || ledgerBytes + candidateBytes > 16 * 1_024 * 1_024) {
+      partial = true;
+      limited = true;
+      return false;
+    }
+    target[key] = candidate;
+    if (target === nextState.ledger) {
+      ledgerCount += 1;
+      ledgerBytes += candidateBytes;
+    }
+    return true;
+  };
   let bytes = 0;
   for (const file of discovered.files) {
     if (bytes + file.size > maximumBytes) {
@@ -123,7 +177,6 @@ export async function collectClaude(
       }
     }
     const offset = appended ? (previous.safeOffset ?? previous.size) : 0;
-    const ids = appended ? new Set(previous?.ids ?? []) : new Set();
     try {
       const chunk = await readChunk(file.path, offset, file.size);
       const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
@@ -132,26 +185,31 @@ export async function collectClaude(
         partial = true;
         limited = true;
       }
-      const provisionalLines =
-        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
-      const analysis = analyzeClaudeLines(provisionalLines);
+      const analysis = analyzeClaudeLines(chunk.lines);
       if (analysis.stats.unsupportedCandidates > 0) {
         partial = true;
         schemaUnsupported = true;
         continue;
       }
       if (hasUnterminatedTail) {
-        if (!previous || appended)
-          for (const value of analysis.records)
-            if (!ids.has(value.id)) provisionalMessages[value.id] = value.entry;
+        for (const value of analysis.records) if (!addRecord(value)) break;
+        if (chunk.tail?.trim()) {
+          const tail = analyzeClaudeLines([chunk.tail]);
+          if (tail.stats.unsupportedCandidates > 0) schemaUnsupported = true;
+          else if (!previous || appended)
+            for (const value of tail.records) addRecord(value, provisionalLedger);
+        }
         continue;
       }
-      const messages = Object.create(null);
-      for (const value of analysis.records) {
-        if (!ids.has(value.id)) {
-          messages[value.id] = value.entry;
-          ids.add(value.id);
+      let overflowed = false;
+      for (const value of analysis.records)
+        if (!addRecord(value)) {
+          overflowed = true;
+          break;
         }
+      if (overflowed) {
+        if (previous) nextState.files[file.path] = previous;
+        continue;
       }
       const fileState = {
         size: file.size,
@@ -159,10 +217,7 @@ export async function collectClaude(
         ino: file.ino,
         safeOffset: chunk.safeOffset,
         tailFingerprint: await fingerprint(file.path, chunk.safeOffset),
-        ids: [...ids],
       };
-      if (!appended) for (const id of previous?.ids ?? []) delete nextState.messages[id];
-      Object.assign(nextState.messages, messages);
       nextState.files[file.path] = fileState;
     } catch {
       partial = true;
@@ -170,48 +225,29 @@ export async function collectClaude(
     }
   }
   const activeFiles = new Set(discovered.files.map((file) => file.path));
-  for (const [path, fileState] of Object.entries(nextState.files)) {
+  for (const path of Object.keys(nextState.files)) {
     if (partial) break;
     if (!activeFiles.has(path)) {
-      for (const id of fileState.ids ?? []) delete nextState.messages[id];
       delete nextState.files[path];
     }
   }
-  for (const [id, entry] of Object.entries(nextState.messages))
-    if (entry.date < range.rangeStart || entry.date > range.rangeEnd) delete nextState.messages[id];
-  if (!stateCompatible && partial && Object.keys(state.files ?? {}).length > 0) {
-    const previousMessages = Object.values(state.messages ?? {}).filter(
-      (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
-    );
-    return {
-      entries: mergeEntries(previousMessages),
-      completeness: "partial",
-      nextState: state,
-      warnings: ["unreadable_or_unbounded_session_data"],
-      diagnostics: [
-        ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
-        ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
-        ...(schemaUnsupported
-          ? [{ code: "local_store_schema_unsupported", phase: "collect" }]
-          : []),
-      ],
-    };
-  }
   return {
     entries: mergeEntries([
-      ...Object.values(nextState.messages),
-      ...Object.values(provisionalMessages),
+      ...Object.values(nextState.ledger).map((event) => ({ date: event.date, ...event.usage })),
+      ...Object.values(provisionalLedger).map((event) => ({ date: event.date, ...event.usage })),
     ]),
     completeness: partial ? "partial" : "complete",
     nextState: { ...nextState, parserVersion: claudeParserVersion },
     warnings: [
       ...(partial ? ["unreadable_or_unbounded_session_data"] : []),
       ...(schemaUnsupported ? ["unsupported_usage_records"] : []),
+      ...(identityConflict ? ["local_event_identity_conflict"] : []),
     ],
     diagnostics: [
       ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
       ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
       ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
+      ...(identityConflict ? [{ code: "local_event_identity_conflict", phase: "collect" }] : []),
     ],
   };
 }
@@ -244,6 +280,7 @@ export const claudeAdapter = Object.freeze({
   supportedSurfaces: ["cli"],
   collectionMethods: ["claude_jsonl"],
   aggregationMode: "source_sum",
+  accountSwitchMode: "combined_local_history",
   trigger: "Stop hook",
   defaultPaths: [defaultPath],
   detect: detectClaudeSources,

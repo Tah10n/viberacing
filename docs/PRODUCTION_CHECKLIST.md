@@ -10,9 +10,10 @@
   `VIBERACING_DATABASE_SSL`, `VIBERACING_CONNECTOR_DISTRIBUTION=npm` for the official service,
   `VIBERACING_MIN_CONNECTOR_VERSION` to the current published compatibility floor, and
   `VIBERACING_MAX_DAILY_TOKENS=9999999999999999`; quote the large token value in YAML. Keep the
-  floor at `0.2.0` until the verified 0.4.3 publication, then follow the staged 0.4.3 change below.
-  Set `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out
-  of `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch. Self-hosted
+  current `0.4.3` floor unchanged throughout the 0.5.0 pull request, server deployment, and package
+  publication; follow the staged 0.5.0 change below before considering a later floor increase. Set
+  `VIBERACING_TRUST_PROXY=railway` and `VIBERACING_LOG_LEVEL=info`. Keep every TLS parameter out of
+  `DATABASE_URL` so `VIBERACING_DATABASE_SSL` remains the only database TLS switch. Self-hosted
   deployments should retain the `archive` distribution unless they deliberately accept a runtime npm
   dependency.
 - For public self-hosting, use `VIBERACING_TRUST_PROXY=trusted-x-real-ip` only behind a reverse
@@ -31,6 +32,37 @@
   `debug` to verify them and request-start correlation, then return production to `info`.
 - Inspect representative logs and confirm they contain no URL query, IP, headers, cookies, bodies,
   handles, source IDs, token totals, credentials, model names, repository names, or local paths.
+
+## OpenCode 0.4.4 -> 0.5.0 cutover
+
+- Production has accepted OpenCode usage, so do not use a clean 0.5.0 ledger bootstrap.
+- Confirm `v0.4.4` resolves to linear `main` commit `2b16b6a8ad75b6b852adc5e2189e6d4a8d93eabd`, npm
+  `latest` is `0.4.4`, and provenance binds the package `gitHead` to that commit. Do not tag the
+  former feature-branch candidate SHA.
+- Keep PR #50 linear and squash-mergeable on that `main`; neither staging commit `e291427` nor merge
+  commit `ac8e9d8` belongs in its rewritten history.
+- Require one successful OpenCode Sync with 0.4.4 for every existing installation and preserve its
+  local state. Network failure, partial collection, or merely starting the CLI is not confirmation.
+- On the real production computer, update the installed Browser Sync handler/runtime before the
+  0.5.0 preflight; a one-off 0.4.4 Sync does not replace a handler still running 0.4.3:
+
+  ```sh
+  npx --yes @viberacing/connector@0.4.4 doctor --repair
+  npx --yes @viberacing/connector@0.4.4 sync
+  node packages/connector/bin/viberacing.mjs upgrade-preflight
+  ```
+
+- Enumerate active OpenCode installations with the read-only SQL in `docs/RELEASING.md`, then run
+  `node packages/connector/bin/viberacing.mjs upgrade-preflight` on each machine. Server version and
+  last-sync fields are inventory hints, not proof of the local message-ID cutover.
+- Before 0.5.0 publication, verify that direct 0.4.3 state fails closed with
+  `opencode_cutover_required` before any local mutation or network request, confirmed 0.4.4 state
+  bootstraps, a real stale 0.4.3 Browser Sync is detected, config/state/pending sequence races make
+  zero requests, source/reset/Antigravity writes remain byte-for-byte blocked and 0.4.4-readable,
+  and a valid aggregate state above 20 MiB is streamed successfully. Also verify a scan-to-accept
+  inserted row is counted once and clock skew does not affect identity.
+- Do not raise the Railway compatibility floor merely to force this migration; coordinate affected
+  installations explicitly and keep Railway variables unchanged until separately authorized.
 
 ## Verification
 
@@ -69,15 +101,23 @@
   permanent collector/network failure ends after one generation, retains safe pending/error state,
   and retries only after a new hook/manual sync. No daemon, watcher, polling loop, system service,
   or required cron should be installed.
-- Verify two Codex profiles use distinct `CODEX_HOME` roots; Antigravity Personal and Work use
-  distinct client-source capture files and require `--source`; removing or server-retiring one
-  source removes only its hook; multi-account reassignment immediately rebuilds totals; missing
-  sequence state resumes from the server value; and offline disconnect removes hooks and the device
-  token. Race disconnect/remove/uninstall against an in-flight sync, verify dashboard disconnect is
-  reconciled during active use, and verify partial uninstall continues across later roots while
-  retaining failed-root metadata for retry. Race reconnect and doctor reconciliation against an
-  in-flight sync; verify only the replacement token survives, a repaired connector clears the 426
-  automatic-disable flag, and a lock timeout gets exactly one bounded deferred acquisition.
+- Verify separate Codex profiles use distinct `CODEX_HOME` roots. In one shared profile, run a real
+  account A -> B -> A sequence: A and B must retain separate totals, B must never overwrite A,
+  returning to A must not create a third logical source, only one physical Stop hook may exist, and
+  component breakdowns must be hidden after the second identity. Repeat a known switch without
+  manual source creation. For Claude, OpenCode, Kimi, Qwen, and Gemini, change only a synthetic auth
+  hint inside the same local store and verify later events add to the retained history without a new
+  server account. Antigravity Personal and Work must use distinct explicit capture sources and
+  require `--source`; repeated runs within one capture source add together. Remove an upstream usage
+  file and verify its observed events remain until they leave the rolling 31-day UTC range.
+- Verify removing or server-retiring one source removes only its owned hook; multi-account
+  reassignment immediately rebuilds totals; missing sequence state resumes from the server value;
+  and offline disconnect removes hooks and the device token. Race disconnect/remove/uninstall
+  against an in-flight sync, verify dashboard disconnect is reconciled during active use, and verify
+  partial uninstall continues across later roots while retaining failed-root metadata for retry.
+  Race reconnect and doctor reconciliation against an in-flight sync; verify only the replacement
+  token survives, a repaired connector clears the 426 automatic-disable flag, and a lock timeout
+  gets exactly one bounded deferred acquisition.
 - After Codex connect or the first upgrade to the stable hook launcher, run `/hooks`, inspect and
   trust the Vibe Racing `Stop` hook, then confirm `doctor` reports `codex hook: current`. Complete a
   turn and verify one dirty generation reaches the server within two minutes. Run `doctor --repair`
@@ -87,7 +127,8 @@
   weekly summary, chart, leaderboard, and component selection must all show the same corrected
   value. A later partial may provisionally advance it, and the next complete must correct it down.
   Verify an explicit complete zero inside an outer partial snapshot corrects a covered day without
-  changing an uncovered day. Verify two-day/two-distinct-total automatic matching and Undo.
+  changing an uncovered day. Verify automatic matching requires at least seven exact matched days,
+  three distinct positive totals, a span of at least six days, zero conflicts, and preserves Undo.
 - Verify protocol v4 applies a collector error only at its exact observed sequence, ignores a
   delayed error after a newer success, and clears an applied error on the next success. Re-run v2/v3
   pairing and usage compatibility scenarios, including replacement of an unsequenced pending v2/v3
@@ -158,6 +199,13 @@
   first, then set Railway `VIBERACING_MIN_CONNECTOR_VERSION=0.4.3`, wait for `/ready`, and verify
   the signed-in `/` and `/dashboard` notices before testing `doctor --repair` end to end. After this
   staged change, `0.4.3` is the current published compatibility floor in the setup checklist above.
+- For 0.5.0, merge the compatible server and migration first, wait for Railway, verify `/ready`
+  reports `007_account_switch_safety.sql`, and exercise authenticated dynamic Codex source
+  registration before creating the exact-main `v0.5.0` tag and GitHub Release. Wait for Trusted
+  Publishing, verify both the immutable `@viberacing/connector@0.5.0` package and `latest`, complete
+  Linux/Windows/macOS smoke plus a real Codex A -> B -> A run, and only then decide whether the
+  compatibility floor needs to become `0.5.0`. Do not change the floor merely because 0.5.0 is the
+  latest release.
 
 ## PostgreSQL operations
 

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import {
@@ -8,11 +9,10 @@ import {
   integer,
   mergeEntries,
   parserResult,
-  previousJsonlEntries,
   utcDay,
 } from "./shared.mjs";
 
-const geminiParserVersion = 2;
+const geminiParserVersion = 5;
 const geminiUsageContainerKeys = ["usageMetadata", "usage", "tokenUsage", "tokens"];
 
 function hasGeminiUsageContainer(record) {
@@ -110,15 +110,35 @@ function parseGeminiLines(lines) {
   return analyzeGeminiRecords(records, malformedJsonRecords);
 }
 
-function geminiEventKey(line) {
+function geminiEventKey(line, context = {}) {
   try {
     const record = JSON.parse(line);
     const id = record?.id ?? record?.messageId ?? record?.event_id;
     const date = utcDay(record?.timestamp ?? record?.time ?? record?.startTime);
     const usage = record?.usageMetadata ?? record?.usage ?? record?.tokenUsage ?? record?.tokens;
-    return record?.type === "gemini" && usage && typeof id === "string" && date
-      ? { id, date }
-      : null;
+    if (record?.type !== "gemini" || !usage || !date) return null;
+    if (id !== undefined && id !== null) {
+      const entry = parseGeminiLines([line]).entries[0];
+      return typeof id === "string" && id.length >= 1 && id.length <= 256 && entry
+        ? { id, date, entry }
+        : null;
+    }
+    if (!context.path) return null;
+    const syntheticId = "fallback-event";
+    const entry = analyzeGeminiRecords([{ ...record, id: syntheticId }]).entries[0];
+    if (!entry) return null;
+    const identity = JSON.stringify([
+      "gemini-session-event-v2",
+      basename(context.path),
+      record?.timestamp ?? record?.time ?? record?.startTime,
+      entry.totalTokens,
+      entry.inputTokens,
+      entry.outputTokens,
+      entry.cacheReadTokens,
+      entry.cacheWriteTokens,
+      entry.reasoningTokens,
+    ]);
+    return { id: createHash("sha256").update(identity).digest("hex"), date, entry };
   } catch {
     return null;
   }
@@ -153,30 +173,20 @@ export const geminiAdapter = Object.freeze({
   supportedSurfaces: ["cli"],
   collectionMethods: ["gemini_session_json"],
   aggregationMode: "source_sum",
+  accountSwitchMode: "combined_local_history",
   trigger: "SessionEnd hook",
   defaultPaths: [defaultPath],
   detect: detectGeminiSources,
   collect: async (source, range, state = {}) => {
-    const stateCompatible = state.parserVersion === geminiParserVersion;
     const result = await collectJsonl(
       source,
       parseGeminiLines,
       (path) => basename(path).startsWith("session-"),
-      stateCompatible ? state : {},
+      state,
       range,
       geminiEventKey,
+      geminiParserVersion,
     );
-    if (
-      !stateCompatible &&
-      result.completeness === "partial" &&
-      Object.keys(state.files ?? {}).length > 0
-    ) {
-      return {
-        ...result,
-        entries: previousJsonlEntries(state),
-        nextState: state,
-      };
-    }
     return {
       ...result,
       nextState: { ...result.nextState, parserVersion: geminiParserVersion },

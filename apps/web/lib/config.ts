@@ -108,8 +108,10 @@ export function isSupportedConnectorProtocolVersion(
 }
 export const browserSyncInstallationScopeProtocol = 2;
 export const maximumSourcesPerInstallation = 32;
+export const maximumActiveSourcesPerUser = 100;
+export const maximumAgentAccountsPerUser = 100;
 export const installedStateAttestationMinimumVersion = "0.4.3";
-export const expectedSchemaVersion = "005_browser_sync_protocol.sql";
+export const expectedSchemaVersion = "007_account_switch_safety.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
 

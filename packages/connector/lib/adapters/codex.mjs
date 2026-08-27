@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, lstat, open, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
@@ -40,6 +40,139 @@ const codexUsageKeys = [
   "reasoningOutputTokens",
   "totalTokens",
 ];
+const codexProviderIdentityDomain = "viberacing-provider-account-identity-v2";
+const maximumCodexAuthStateBytes = 1_048_576;
+
+function unavailableCodexIdentity() {
+  return diagnosticError(
+    "Codex account identity could not be distinguished safely. Use separate CODEX_HOME profiles for these credentials.",
+    "provider_account_identity_unavailable",
+  );
+}
+
+export function parseCodexAuthIdentity(authState) {
+  const tokens = authState?.tokens;
+  const accountId =
+    typeof tokens?.account_id === "string" ? tokens.account_id.trim().normalize("NFC") : null;
+  if (
+    authState?.auth_mode !== "chatgpt" ||
+    !tokens ||
+    typeof tokens !== "object" ||
+    Array.isArray(tokens) ||
+    accountId === null ||
+    accountId.length < 1 ||
+    accountId.length > 256
+  )
+    throw unavailableCodexIdentity();
+  return [["account", accountId]];
+}
+
+function normalizeCodexEmail(value) {
+  if (typeof value !== "string") throw unavailableCodexIdentity();
+  const email = value.trim().normalize("NFC").toLowerCase();
+  if (email.length < 3 || email.length > 254 || /[\x00-\x20\x7f]/.test(email))
+    throw unavailableCodexIdentity();
+  return email;
+}
+
+export function parseCodexAccountRead(payload) {
+  if (payload?.error) throw unavailableCodexIdentity();
+  const account = payload?.result?.account;
+  if (
+    account?.type !== "chatgpt" ||
+    typeof account.planType !== "string" ||
+    typeof payload?.result?.requiresOpenaiAuth !== "boolean"
+  )
+    throw unavailableCodexIdentity();
+  return { type: "chatgpt", email: normalizeCodexEmail(account.email) };
+}
+
+export async function readCodexAuthIdentity(source) {
+  const root = resolve(source?.dataPath ?? process.env.CODEX_HOME ?? join(homedir(), ".codex"));
+  const authPath = join(root, "auth.json");
+  let before;
+  let handle;
+  try {
+    const [realRoot, realAuth] = await Promise.all([realpath(root), realpath(authPath)]);
+    if (relative(realRoot, realAuth) !== "auth.json") throw unavailableCodexIdentity();
+    before = await lstat(authPath, { bigint: true });
+    if (
+      !before.isFile() ||
+      before.isSymbolicLink() ||
+      before.size < 2n ||
+      before.size > BigInt(maximumCodexAuthStateBytes) ||
+      (typeof process.getuid === "function" && before.uid !== BigInt(process.getuid())) ||
+      (process.platform !== "win32" && (before.mode & 0o77n) !== 0n)
+    )
+      throw unavailableCodexIdentity();
+    handle = await open(authPath, "r");
+    const opened = await handle.stat({ bigint: true });
+    if (
+      !opened.isFile() ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino ||
+      opened.size !== before.size
+    )
+      throw unavailableCodexIdentity();
+    const serialized = await handle.readFile({ encoding: "utf8" });
+    const after = await handle.stat({ bigint: true });
+    if (
+      after.dev !== opened.dev ||
+      after.ino !== opened.ino ||
+      after.size !== opened.size ||
+      after.mtimeNs !== opened.mtimeNs ||
+      Buffer.byteLength(serialized) !== Number(opened.size)
+    )
+      throw unavailableCodexIdentity();
+    return parseCodexAuthIdentity(JSON.parse(serialized));
+  } catch (error) {
+    if (error?.diagnosticCode === "provider_account_identity_unavailable") throw error;
+    throw unavailableCodexIdentity();
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+export function deriveCodexProviderAccountKey(providerIdentitySalt, identity) {
+  if (typeof providerIdentitySalt !== "string" || providerIdentitySalt.length < 32)
+    throw new Error("Local provider identity salt is unavailable");
+  if (
+    !Array.isArray(identity) ||
+    identity.length !== 2 ||
+    identity.some(
+      (field) =>
+        !Array.isArray(field) ||
+        field.length !== 2 ||
+        !["account", "email"].includes(field[0]) ||
+        typeof field[1] !== "string" ||
+        field[1].trim().length < 1 ||
+        field[1].trim().length > 256,
+    ) ||
+    new Set(identity.map(([kind]) => kind)).size !== 2
+  )
+    throw diagnosticError(
+      "Codex account identity could not be distinguished safely. Use separate CODEX_HOME profiles for these credentials.",
+      "provider_account_identity_unavailable",
+    );
+  const normalizedIdentity = identity.map(([kind, value]) => [
+    kind,
+    kind === "email" ? normalizeCodexEmail(value) : value.trim().normalize("NFC"),
+  ]);
+  const subkey = createHmac("sha256", providerIdentitySalt)
+    .update(codexProviderIdentityDomain)
+    .digest();
+  const digest = createHmac("sha256", subkey)
+    .update(JSON.stringify(["codex", "chatgpt", normalizedIdentity]))
+    .digest("base64url");
+  return `acct1_${digest}`;
+}
+
+export function parseCodexProviderAccount(authState, providerIdentitySalt, email) {
+  return deriveCodexProviderAccountKey(providerIdentitySalt, [
+    ...parseCodexAuthIdentity(authState),
+    ["email", normalizeCodexEmail(email)],
+  ]);
+}
 
 function codexUsage(value) {
   if (value === null || typeof value !== "object") return null;
@@ -1379,42 +1512,96 @@ export async function inspectCodexHookTrust(
   return parseCodexHookTrust(response, expected);
 }
 
-async function collect(source, range, state = {}) {
-  return withCodexAppServer(source, async ({ next, write }) => {
-    write({ id: 1, method: "account/usage/read", params: null });
-    for (;;) {
-      const response = await next();
-      if (response?.id === 1) {
-        let authoritative;
-        try {
-          authoritative = parseCodexUsage(response);
-        } catch (error) {
-          throw diagnosticError(
-            "Codex App Server returned invalid usage",
-            "agent_api_invalid_response",
-            { cause: error },
-          );
-        }
-        const components = await collectCodexSessionUsage(
-          source,
-          range,
-          state.componentUsage ?? {},
-        ).catch(() => ({
-          entries: [],
-          nextState: state.componentUsage ?? {},
-          warnings: ["codex_session_components_incomplete"],
-          diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
-        }));
-        const snapshot = codexUsageSnapshot(authoritative, components.entries, range.rangeEnd);
-        return {
-          ...snapshot,
-          nextState: { componentUsage: components.nextState },
-          warnings: components.warnings,
-          diagnostics: components.diagnostics,
-        };
-      }
+async function responseForId(next, id) {
+  for (;;) {
+    const response = await next();
+    if (response?.id === id) return response;
+  }
+}
+
+async function collectStableCodexAccount(
+  source,
+  providerIdentitySalt,
+  withAppServer,
+  readAuthIdentity,
+) {
+  const beforeIdentity = await readAuthIdentity(source);
+  return withAppServer(source, async ({ next, write }) => {
+    write({ id: 1, method: "account/read", params: { refreshToken: false } });
+    const beforeAccount = parseCodexAccountRead(await responseForId(next, 1));
+    write({ id: 2, method: "account/usage/read", params: null });
+    const usageResponse = await responseForId(next, 2);
+    write({ id: 3, method: "account/read", params: { refreshToken: false } });
+    const afterAccount = parseCodexAccountRead(await responseForId(next, 3));
+    const afterIdentity = await readAuthIdentity(source);
+    const before = deriveCodexProviderAccountKey(providerIdentitySalt, [
+      ...beforeIdentity,
+      ["email", beforeAccount.email],
+    ]);
+    const after = deriveCodexProviderAccountKey(providerIdentitySalt, [
+      ...afterIdentity,
+      ["email", afterAccount.email],
+    ]);
+    if (before !== after)
+      throw diagnosticError(
+        "Codex account changed while usage was being collected; retry after the switch settles.",
+        "provider_account_changed_during_collection",
+      );
+    let authoritative;
+    try {
+      authoritative = parseCodexUsage(usageResponse);
+    } catch (error) {
+      throw diagnosticError(
+        "Codex App Server returned invalid usage",
+        "agent_api_invalid_response",
+        {
+          cause: error,
+        },
+      );
     }
+    return { providerAccountKey: before, authoritative };
   });
+}
+
+async function collect(source, range, state = {}, context = {}) {
+  const providerIdentitySalt = context.providerIdentitySalt;
+  const withAppServer = context.withCodexAppServer ?? withCodexAppServer;
+  const readAuthIdentity = context.readCodexAuthIdentity ?? readCodexAuthIdentity;
+  let accountUsage;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      accountUsage = await collectStableCodexAccount(
+        source,
+        providerIdentitySalt,
+        withAppServer,
+        readAuthIdentity,
+      );
+      break;
+    } catch (error) {
+      if (error?.diagnosticCode !== "provider_account_changed_during_collection" || attempt === 1)
+        throw error;
+    }
+  }
+  const components = context.suppressComponents
+    ? { entries: [], nextState: {}, warnings: [], diagnostics: [] }
+    : await collectCodexSessionUsage(source, range, state.componentUsage ?? {}).catch(() => ({
+        entries: [],
+        nextState: state.componentUsage ?? {},
+        warnings: ["codex_session_components_incomplete"],
+        diagnostics: [{ code: "codex_components_incomplete", phase: "collect" }],
+      }));
+  const snapshot = codexUsageSnapshot(
+    accountUsage.authoritative,
+    components.entries,
+    range.rangeEnd,
+  );
+  return {
+    ...snapshot,
+    providerAccountKey: accountUsage.providerAccountKey,
+    nextState: { componentUsage: components.nextState },
+    warnings: components.warnings,
+    diagnostics: components.diagnostics,
+  };
 }
 
 export const codexAdapter = Object.freeze({
@@ -1423,6 +1610,7 @@ export const codexAdapter = Object.freeze({
   supportedSurfaces: ["cli", "desktop"],
   collectionMethods: ["codex_app_server"],
   aggregationMode: "account_max",
+  accountSwitchMode: "provider_account_snapshot",
   trigger: "Stop hook",
   detect: async () => {
     const dataPath = process.env.CODEX_HOME

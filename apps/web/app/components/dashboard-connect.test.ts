@@ -158,6 +158,24 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("Local component counters total");
   });
 
+  it("explains combined stores and shared Codex profiles without provider identity", () => {
+    expect(dashboard).toContain("All local accounts in this store");
+    expect(dashboard).toContain(
+      'agentRegistry[account.agent_id].accountSwitchMode ===\n                        "combined_local_history"',
+    );
+    expect(dashboard).toContain('accountSwitchMode === "explicit_capture"');
+    expect(dashboard).toContain("Explicit capture source");
+    expect(dashboard).not.toContain('account.aggregation_mode === "source_sum" ? (');
+    expect(dashboard).toContain(
+      "Component breakdown is hidden because this Codex profile has used multiple accounts.",
+    );
+    expect(dashboard).toContain(
+      "A new Codex account was detected on this computer and added separately.",
+    );
+    expect(dashboard).toContain('action="/api/accounts/notices/dismiss"');
+    expect(dashboard).not.toContain("providerAccountKey");
+  });
+
   it("shares authoritative account-day precedence with ranking summaries", () => {
     const usageSummary = source("../../lib/usage-summary.ts");
     expect(usageSummary).toContain("export const accountMaxObservationIsEligibleSql");

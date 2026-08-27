@@ -14,6 +14,9 @@ const codes = new Set([
   "complete",
   "unchanged",
   "partial",
+  "partial_accounts_inactive",
+  "account_setup_pending",
+  "account_not_active",
   "busy",
   "collector_failed",
   "network_failed",
@@ -22,13 +25,14 @@ const codes = new Set([
 ]);
 const resultCodesByStatus = {
   succeeded: new Set(["complete", "unchanged"]),
-  partial: new Set(["partial"]),
+  partial: new Set(["partial", "partial_accounts_inactive", "account_setup_pending"]),
   failed: new Set([
     "busy",
     "collector_failed",
     "network_failed",
     "authorization_failed",
     "invalid_request",
+    "account_not_active",
   ]),
 } as const;
 

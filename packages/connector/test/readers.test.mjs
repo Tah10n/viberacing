@@ -1,18 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  appendFile,
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zstdCompressSync } from "node:zlib";
 import {
   collectClaude,
   collectCodexSessionUsage,
   codexUsageSnapshot,
+  deriveCodexProviderAccountKey,
   materializeCodexAuthoritativeDays,
   parseClaudeLines,
   parseAntigravityLines,
   parseCodexUsage,
+  parseCodexAccountRead,
+  parseCodexAuthIdentity,
+  parseCodexProviderAccount,
   codexProfileEnvironment,
   mergeCodexUsageComponents,
   parseCodexSessionLines,
@@ -26,6 +44,7 @@ import {
   adapterFor,
   recentEntries,
   safeCaptureRecord,
+  readCodexAuthIdentity,
   wrapperInvocation,
 } from "../lib/readers.mjs";
 import { jsonLinesChunk } from "../lib/adapters/shared.mjs";
@@ -3012,6 +3031,36 @@ test("collects current Kimi main-agent and subagent wire files", async (context)
   );
 });
 
+test("Kimi deduplicates copied session events without merging independent sessions", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-kimi-session-identity-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const first = join(root, "project-a", "session-1", "agents", "main");
+  const copied = join(root, "project-b", "session-1", "agents", "main");
+  const independent = join(root, "project-a", "session-2", "agents", "main");
+  await Promise.all(
+    [first, copied, independent].map((directory) => mkdir(directory, { recursive: true })),
+  );
+  const record = `${(await fixture("kimi.jsonl")).trim().split("\n")[1]}\n`;
+  await Promise.all(
+    [first, copied, independent].map((directory) =>
+      writeFile(join(directory, "wire.jsonl"), record),
+    ),
+  );
+
+  const result = await adapterFor("kimi_code").collect(
+    { dataPath: root, collectionMethod: "kimi_wire_jsonl" },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+  );
+
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(
+    result.entries.map(({ totalTokens }) => totalTokens),
+    ["40"],
+  );
+  assert.equal(Object.keys(result.nextState.ledger).length, 2);
+});
+
 test("reads Qwen content-free stats using UTC timestamp instead of localDate", async () => {
   const lines = (await fixture("qwen.jsonl")).trim().split("\n");
   assert.deepEqual(parseQwenLines(lines), [
@@ -3036,13 +3085,8 @@ test("invalidates Qwen incremental state created with overlapping component sema
   const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
   const current = await adapterFor("qwen_code").collect(source, range, {});
   const { parserVersion: _parserVersion, ...stale } = current.nextState;
-  for (const file of Object.values(stale.files))
-    file.entries = file.entries.map((entry) => ({
-      date: entry.date,
-      totalTokens: entry.totalTokens,
-    }));
   const refreshed = await adapterFor("qwen_code").collect(source, range, stale);
-  assert.equal(refreshed.nextState.parserVersion, 4);
+  assert.equal(refreshed.nextState.parserVersion, 5);
   assert.equal(refreshed.entries[0].inputTokens, "7");
   assert.equal(refreshed.entries[0].outputTokens, "20");
 });
@@ -3112,6 +3156,37 @@ test("reads Gemini session usage metadata", async () => {
       reasoningTokens: "2",
     },
   ]);
+});
+
+test("Gemini derives a content-free identity when session records have no ID", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-gemini-fallback-identity-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const native = JSON.parse(await fixture("gemini.json"))[0];
+  const { id: _id, ...withoutId } = native;
+  const paths = [
+    join(root, "project-a", "session-shared.jsonl"),
+    join(root, "project-b", "session-shared.jsonl"),
+    join(root, "project-a", "session-independent.jsonl"),
+  ];
+  await Promise.all(paths.map((path) => mkdir(dirname(path), { recursive: true })));
+  await Promise.all(paths.map((path) => writeFile(path, `${JSON.stringify(withoutId)}\n`)));
+
+  const result = await adapterFor("gemini_cli").collect(
+    { dataPath: root },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+  );
+
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(
+    result.entries.map(({ totalTokens }) => totalTokens),
+    ["34"],
+  );
+  assert.equal(Object.keys(result.nextState.ledger).length, 2);
+  assert.doesNotMatch(
+    JSON.stringify(result.nextState.ledger),
+    /session-shared|session-independent/,
+  );
 });
 
 test("omits components when an authoritative total uses different semantics", () => {
@@ -3332,7 +3407,7 @@ test("event collectors retain their last complete state when an appended usage r
     const rescanned = await adapter.collect(source, range, staleState);
     assert.equal(rescanned.completeness, "partial", caseName);
     assert.deepEqual(rescanned.entries, first.entries, `${caseName} stale daily usage`);
-    assert.deepEqual(rescanned.nextState, staleState, `${caseName} stale file state`);
+    assert.deepEqual(rescanned.nextState, first.nextState, `${caseName} migrated stale file state`);
   }
 });
 
@@ -3359,7 +3434,7 @@ test("Gemini upgrades fail-open parser state without making unrelated records ca
   const upgraded = await adapter.collect({ dataPath: directory }, range, oldParserState);
   assert.equal(upgraded.completeness, "partial");
   assert.deepEqual(upgraded.entries, first.entries);
-  assert.deepEqual(upgraded.nextState, oldParserState);
+  assert.deepEqual(upgraded.nextState, first.nextState);
   assert.deepEqual(upgraded.diagnostics, [
     { code: "local_store_schema_unsupported", phase: "collect" },
   ]);
@@ -3453,21 +3528,37 @@ test("every event-based adapter deduplicates IDs and keeps distinct UTC days", a
   );
 });
 
-test("adapter output never carries prompt, response, model, path, or credential fields", async () => {
-  const sensitive = "synthetic-sensitive-value";
+test("adapter output excludes the complete provider-identity and content denylist", async () => {
+  const sensitive = "synthetic-sensitive-value@privacy.invalid";
   const antigravity = JSON.parse((await fixture("antigravity.jsonl")).trim());
+  const forbidden = {
+    prompt: sensitive,
+    response: sensitive,
+    model: sensitive,
+    path: sensitive,
+    email: sensitive,
+    providerAccountId: sensitive,
+    accountId: sensitive,
+    organization: sensitive,
+    workspace: sensitive,
+    planType: sensitive,
+    authMethod: sensitive,
+    apiKey: sensitive,
+    accessToken: sensitive,
+    refreshToken: sensitive,
+    credential: sensitive,
+    providerAccountKey: sensitive,
+  };
   const output = parseAntigravityLines([
     JSON.stringify({
       ...antigravity,
-      prompt: sensitive,
-      response: sensitive,
-      model: sensitive,
-      path: sensitive,
-      apiKey: sensitive,
+      ...forbidden,
     }),
   ]);
   const serialized = JSON.stringify(output);
-  assert.doesNotMatch(serialized, /prompt|response|model|path|apiKey|synthetic-sensitive-value/);
+  for (const key of Object.keys(forbidden))
+    assert.doesNotMatch(serialized, new RegExp(key, "i"), key);
+  assert.doesNotMatch(serialized, /synthetic-sensitive-value|privacy\.invalid/i);
   assert.deepEqual(Object.keys(output[0]).sort(), [
     "cacheReadTokens",
     "cacheWriteTokens",
@@ -3485,6 +3576,508 @@ test("Codex rejects duplicate authoritative day buckets", async () => {
     () => parseCodexUsage({ result: { dailyUsageBuckets: [bucket, bucket] } }),
     /unsupported/,
   );
+});
+
+test("Codex provider identities are salt-scoped, stable, and content-free", () => {
+  const salt = "local-provider-identity-salt-that-is-long-enough";
+  const first = deriveCodexProviderAccountKey(salt, [
+    ["account", "workspace-1"],
+    ["email", "CAF\u00c9@example.com"],
+  ]);
+  const second = deriveCodexProviderAccountKey(salt, [
+    ["account", "workspace-1"],
+    ["email", "cafe\u0301@example.com"],
+  ]);
+  assert.equal(first, second);
+  assert.match(first, /^acct1_[A-Za-z0-9_-]{43}$/);
+  assert.doesNotMatch(first, /user|example/i);
+  assert.notEqual(
+    first,
+    deriveCodexProviderAccountKey("another-provider-identity-salt-that-is-long-enough", [
+      ["account", "workspace-1"],
+      ["email", "caf\u00e9@example.com"],
+    ]),
+  );
+  assert.notEqual(
+    first,
+    deriveCodexProviderAccountKey(salt, [
+      ["account", "workspace-2"],
+      ["email", "caf\u00e9@example.com"],
+    ]),
+  );
+  assert.notEqual(
+    first,
+    deriveCodexProviderAccountKey(salt, [
+      ["account", "workspace-1"],
+      ["email", "other@example.com"],
+    ]),
+  );
+});
+
+test("Codex provider identity fails closed for API keys, Bedrock, and email-only accounts", () => {
+  const salt = "local-provider-identity-salt-that-is-long-enough";
+  for (const authState of [
+    { auth_mode: "apikey", tokens: { account_id: "account-a" } },
+    { auth_mode: "chatgpt", tokens: {} },
+    { auth_mode: "chatgpt", tokens: { account_id: null } },
+  ])
+    assert.throws(
+      () => parseCodexProviderAccount(authState, salt),
+      (error) => error?.diagnosticCode === "provider_account_identity_unavailable",
+    );
+});
+
+test("Codex identity uses only account_id plus normalized App Server email", () => {
+  const salt = "local-provider-identity-salt-that-is-long-enough";
+  const authState = (accountId) => ({
+    auth_mode: "chatgpt",
+    tokens: {
+      account_id: accountId,
+      id_token: "not-read",
+      access_token: "not-read",
+      refresh_token: "not-read",
+    },
+  });
+  const first = parseCodexProviderAccount(authState("account-a"), salt, "Racer@Example.com");
+  const second = parseCodexProviderAccount(authState("account-b"), salt, "racer@example.com");
+  assert.notEqual(first, second);
+  assert.doesNotMatch(`${first}${second}`, /account-[ab]|not-read/i);
+  assert.deepEqual(parseCodexAuthIdentity(authState("account-a")), [["account", "account-a"]]);
+});
+
+test("Codex account/read accepts and normalizes the official ChatGPT identity shape", () => {
+  assert.deepEqual(
+    parseCodexAccountRead({
+      result: {
+        account: { type: "chatgpt", email: " Racer@Example.com ", planType: "pro" },
+        requiresOpenaiAuth: true,
+      },
+    }),
+    { type: "chatgpt", email: "racer@example.com" },
+  );
+  for (const account of [{ type: "apiKey" }, { type: "chatgpt", email: null }])
+    assert.throws(
+      () => parseCodexAccountRead({ result: { account, requiresOpenaiAuth: true } }),
+      (error) => error?.diagnosticCode === "provider_account_identity_unavailable",
+    );
+  assert.deepEqual(
+    parseCodexAccountRead({
+      result: {
+        account: {
+          type: "chatgpt",
+          email: "racer@example.com",
+          planType: "pro",
+          userId: "synthetic-field-is-ignored",
+        },
+        requiresOpenaiAuth: true,
+      },
+    }),
+    { type: "chatgpt", email: "racer@example.com" },
+  );
+});
+
+test("Codex account/read contract matches the current official generated schema", async () => {
+  const schema = JSON.parse(
+    await readFile(
+      process.env.VIBERACING_CODEX_ACCOUNT_SCHEMA ??
+        fileURLToPath(new URL("fixtures/codex-get-account-response.schema.json", import.meta.url)),
+      "utf8",
+    ),
+  );
+  const chatgpt = schema.definitions.Account.oneOf.find(
+    (account) => account.title === "ChatgptAccount",
+  );
+  assert.deepEqual(Object.keys(chatgpt.properties).sort(), ["email", "planType", "type"]);
+  assert.deepEqual([...chatgpt.required].sort(), ["email", "planType", "type"]);
+  assert.deepEqual(schema.required, ["requiresOpenaiAuth"]);
+  assert.doesNotMatch(
+    JSON.stringify(chatgpt),
+    /accountId|account_id|userId|user_id|workspaceId|workspace_id/,
+  );
+});
+
+test("Codex auth reader requires a bounded regular file and Unix owner-only permissions", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-codex-auth-state-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const authPath = join(directory, "auth.json");
+  await writeFile(
+    authPath,
+    `${JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: "stable-account" } })}\n`,
+    { mode: 0o600 },
+  );
+  assert.deepEqual(await readCodexAuthIdentity({ dataPath: directory }), [
+    ["account", "stable-account"],
+  ]);
+  if (process.platform !== "win32") {
+    await chmod(authPath, 0o644);
+    await assert.rejects(
+      readCodexAuthIdentity({ dataPath: directory }),
+      (error) => error?.diagnosticCode === "provider_account_identity_unavailable",
+    );
+    await unlink(authPath);
+    const target = join(directory, "auth-target.json");
+    await writeFile(
+      target,
+      `${JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: "stable-account" } })}\n`,
+      { mode: 0o600 },
+    );
+    await symlink(target, authPath);
+    await assert.rejects(
+      readCodexAuthIdentity({ dataPath: directory }),
+      (error) => error?.diagnosticCode === "provider_account_identity_unavailable",
+    );
+  }
+});
+
+test("Codex collection brackets usage with one stable account and retries one switch", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-codex-account-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const attempts = [];
+  const accountIds = [
+    ["account-1", "account-2"],
+    ["account-2", "account-2"],
+  ];
+  let identityReads = 0;
+  const withCodexAppServer = async (_source, callback) => {
+    const attempt = attempts.length;
+    const writes = [];
+    attempts.push(writes);
+    const responses = [
+      {
+        id: 1,
+        result: {
+          account: { type: "chatgpt", email: "same@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+      {
+        id: 2,
+        result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "42" }] },
+      },
+      {
+        id: 3,
+        result: {
+          account: { type: "chatgpt", email: "same@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+    ][Symbol.iterator]();
+    return callback({
+      next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+      write: (message) => writes.push(message),
+    });
+  };
+  const result = await adapterFor("codex").collect(
+    { dataPath: directory },
+    { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+    {},
+    {
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      withCodexAppServer,
+      readCodexAuthIdentity: async () => {
+        const attempt = Math.floor(identityReads / 2);
+        const position = identityReads % 2;
+        identityReads += 1;
+        return [["account", accountIds[attempt][position]]];
+      },
+    },
+  );
+  assert.equal(attempts.length, 2);
+  assert.deepEqual(
+    attempts[1].map(({ method, params }) => ({ method, params })),
+    [
+      { method: "account/read", params: { refreshToken: false } },
+      { method: "account/usage/read", params: null },
+      { method: "account/read", params: { refreshToken: false } },
+    ],
+  );
+  assert.equal(result.entries[0].totalTokens, "42");
+  assert.equal(
+    result.providerAccountKey,
+    deriveCodexProviderAccountKey("local-provider-identity-salt-that-is-long-enough", [
+      ["account", "account-2"],
+      ["email", "same@example.com"],
+    ]),
+  );
+});
+
+test("Codex reads account_id before App Server startup and rejects a startup switch race", async () => {
+  const events = [];
+  let identityReads = 0;
+  let starts = 0;
+  await assert.rejects(
+    adapterFor("codex").collect(
+      { dataPath: join(tmpdir(), "codex-startup-switch") },
+      { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+      {},
+      {
+        providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+        readCodexAuthIdentity: async () => {
+          const accountId = identityReads++ % 2 === 0 ? "account-A" : "account-B";
+          events.push(`auth:${accountId}`);
+          return [["account", accountId]];
+        },
+        withCodexAppServer: async (_source, callback) => {
+          starts += 1;
+          events.push("server:start-A");
+          const responses = [
+            {
+              id: 1,
+              result: {
+                account: { type: "chatgpt", email: "a@example.com", planType: "pro" },
+                requiresOpenaiAuth: false,
+              },
+            },
+            {
+              id: 2,
+              result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "999" }] },
+            },
+            {
+              id: 3,
+              result: {
+                account: { type: "chatgpt", email: "a@example.com", planType: "pro" },
+                requiresOpenaiAuth: false,
+              },
+            },
+          ][Symbol.iterator]();
+          return callback({
+            next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+            write: () => {},
+          });
+        },
+      },
+    ),
+    (error) => error?.diagnosticCode === "provider_account_changed_during_collection",
+  );
+  assert.equal(starts, 2);
+  assert.deepEqual(events, [
+    "auth:account-A",
+    "server:start-A",
+    "auth:account-B",
+    "auth:account-A",
+    "server:start-A",
+    "auth:account-B",
+  ]);
+});
+
+test("Codex rejects App Server email drift even when account_id is stable", async () => {
+  await assert.rejects(
+    adapterFor("codex").collect(
+      { dataPath: join(tmpdir(), "codex-email-switch") },
+      { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+      {},
+      {
+        providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+        readCodexAuthIdentity: async () => [["account", "shared-workspace"]],
+        withCodexAppServer: async (_source, callback) => {
+          const responses = [
+            {
+              id: 1,
+              result: {
+                account: { type: "chatgpt", email: "a@example.com", planType: "pro" },
+                requiresOpenaiAuth: false,
+              },
+            },
+            {
+              id: 2,
+              result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "999" }] },
+            },
+            {
+              id: 3,
+              result: {
+                account: { type: "chatgpt", email: "b@example.com", planType: "pro" },
+                requiresOpenaiAuth: false,
+              },
+            },
+          ][Symbol.iterator]();
+          return callback({
+            next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+            write: () => {},
+          });
+        },
+      },
+    ),
+    (error) => error?.diagnosticCode === "provider_account_changed_during_collection",
+  );
+});
+
+test("Codex 0.4.3 state keeps the authoritative remote total after local history is deleted", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-codex-043-bootstrap-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const writes = [];
+  const responses = [
+    {
+      id: 1,
+      result: {
+        account: { type: "chatgpt", email: "racer@example.com", planType: "pro" },
+        requiresOpenaiAuth: true,
+      },
+    },
+    {
+      id: 2,
+      result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "91" }] },
+    },
+    {
+      id: 3,
+      result: {
+        account: { type: "chatgpt", email: "racer@example.com", planType: "pro" },
+        requiresOpenaiAuth: true,
+      },
+    },
+  ][Symbol.iterator]();
+  const result = await adapterFor("codex").collect(
+    { dataPath: directory },
+    { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+    { componentUsage: { files: {}, events: {} } },
+    {
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      readCodexAuthIdentity: async () => [["account", "stable-account"]],
+      withCodexAppServer: async (_source, callback) =>
+        callback({
+          next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+          write: (message) => writes.push(message),
+        }),
+    },
+  );
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(result.entries, [{ date: "2026-08-10", totalTokens: "91" }]);
+  assert.deepEqual(
+    writes.map(({ method, params }) => ({ method, params })),
+    [
+      { method: "account/read", params: { refreshToken: false } },
+      { method: "account/usage/read", params: null },
+      { method: "account/read", params: { refreshToken: false } },
+    ],
+  );
+  assert.doesNotMatch(JSON.stringify(writes), /workspace-stable|acct1_/i);
+});
+
+test("Codex discards usage when the account changes in both bounded attempts", async () => {
+  const attempts = [];
+  let identityReads = 0;
+  const withCodexAppServer = async (_source, callback) => {
+    const writes = [];
+    attempts.push(writes);
+    const responses = [
+      {
+        id: 1,
+        result: {
+          account: { type: "chatgpt", email: "same@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+      {
+        id: 2,
+        result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "999" }] },
+      },
+      {
+        id: 3,
+        result: {
+          account: { type: "chatgpt", email: "same@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+    ][Symbol.iterator]();
+    return callback({
+      next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+      write: (message) => writes.push(message),
+    });
+  };
+  const priorState = Object.freeze({ componentUsage: Object.freeze({ sentinel: "unchanged" }) });
+  await assert.rejects(
+    adapterFor("codex").collect(
+      { dataPath: join(tmpdir(), "missing-codex-switch") },
+      { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+      priorState,
+      {
+        providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+        withCodexAppServer,
+        readCodexAuthIdentity: async () => [
+          ["account", identityReads++ % 2 === 0 ? "before" : "after"],
+        ],
+      },
+    ),
+    (error) => error?.diagnosticCode === "provider_account_changed_during_collection",
+  );
+  assert.equal(attempts.length, 2);
+  assert.deepEqual(priorState, { componentUsage: { sentinel: "unchanged" } });
+});
+
+test("Codex keeps components for a separate profile and suppresses them for a shared profile", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-codex-shared-components-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const threadId = "51515151-5151-4515-8515-515151515151";
+  const sessions = join(directory, "sessions");
+  await mkdir(sessions);
+  await writeFile(
+    join(sessions, codexRolloutName(threadId)),
+    `${[
+      codexSessionMeta(threadId),
+      codexTokenCount("2026-08-10T12:00:00Z", {
+        input_tokens: 10,
+        cached_input_tokens: 3,
+        cache_write_input_tokens: 2,
+        output_tokens: 8,
+        reasoning_output_tokens: 3,
+        total_tokens: 18,
+      }),
+    ].join("\n")}\n`,
+  );
+  const withCodexAppServer = async (_source, callback) => {
+    const responses = [
+      {
+        id: 1,
+        result: {
+          account: { type: "chatgpt", email: "racer@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+      {
+        id: 2,
+        result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "42" }] },
+      },
+      {
+        id: 3,
+        result: {
+          account: { type: "chatgpt", email: "racer@example.com", planType: "pro" },
+          requiresOpenaiAuth: true,
+        },
+      },
+    ][Symbol.iterator]();
+    return callback({
+      next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+      write: () => {},
+    });
+  };
+  const collect = (suppressComponents) =>
+    adapterFor("codex").collect(
+      { dataPath: directory },
+      { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+      {},
+      {
+        providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+        suppressComponents,
+        withCodexAppServer,
+        readCodexAuthIdentity: async () => [["account", "stable-account"]],
+      },
+    );
+
+  const separate = await collect(false);
+  assert.deepEqual(separate.entries, [
+    {
+      date: "2026-08-10",
+      totalTokens: "42",
+      inputTokens: "5",
+      outputTokens: "5",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "2",
+      reasoningTokens: "3",
+    },
+  ]);
+
+  const shared = await collect(true);
+  assert.deepEqual(shared.entries, [{ date: "2026-08-10", totalTokens: "42" }]);
+  assert.deepEqual(shared.nextState, { componentUsage: {} });
 });
 
 test("capture adapter deduplicates events and aggregates multiple UTC days", async () => {
@@ -3564,7 +4157,680 @@ test("JSONL collectors reuse unchanged state and resume at the last complete byt
   const truncated = await adapter.collect({ dataPath: path }, range, duplicate.nextState);
   assert.deepEqual(
     truncated.entries.map((entry) => entry.date),
-    ["2026-08-11"],
+    ["2026-08-10", "2026-08-11"],
+  );
+});
+
+test("0.4.3 JSONL states preserve accepted baselines while adding account switches", async (context) => {
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const antigravity = JSON.stringify(
+    safeCaptureRecord("antigravity", (await fixture("antigravity.jsonl")).trim()),
+  );
+  const cases = [
+    {
+      agentId: "claude_code",
+      name: "session.jsonl",
+      record: (await fixture("claude.jsonl")).trim(),
+      nextRecord: (record) => {
+        const value = JSON.parse(record);
+        return JSON.stringify({
+          ...value,
+          timestamp: "2026-08-11T12:00:00Z",
+          message: { ...value.message, id: "m2" },
+        });
+      },
+      rawId: "m1",
+      legacyParserVersion: 1,
+    },
+    {
+      agentId: "qwen_code",
+      name: "token-usage-2026-08.jsonl",
+      record: (await fixture("qwen.jsonl")).trim(),
+      nextRecord: (record) =>
+        JSON.stringify({
+          ...JSON.parse(record),
+          id: "event-2",
+          timestamp: "2026-08-11T23:30:00Z",
+        }),
+      rawId: "event-1",
+      legacyParserVersion: 4,
+    },
+    {
+      agentId: "antigravity",
+      name: "capture.jsonl",
+      record: antigravity,
+      nextRecord: (record) => {
+        const value = JSON.parse(record);
+        return JSON.stringify({
+          ...value,
+          id: "session-2",
+          date: "2026-08-11",
+          usage: { ...value.usage, date: "2026-08-11" },
+        });
+      },
+      rawId: "session-1",
+      legacyParserVersion: 1,
+    },
+  ];
+  for (const item of cases) {
+    const directory = await mkdtemp(join(tmpdir(), `viberacing-${item.agentId}-ledger-`));
+    context.after(() => rm(directory, { force: true, recursive: true }));
+    const path = join(directory, item.name);
+    await writeFile(path, `${item.record}\n`);
+    const adapter = adapterFor(item.agentId);
+    const firstSource = {
+      dataPath: directory,
+      syntheticAuthHint: "account-a@switch.invalid",
+      ...item.source,
+    };
+    const first = await adapter.collect(firstSource, range, {});
+    const checkpoint = first.nextState.files[path];
+    const legacyState =
+      item.agentId === "claude_code"
+        ? {
+            parserVersion: item.legacyParserVersion,
+            files: { [path]: { ...checkpoint, ids: [item.rawId] } },
+            messages: { [item.rawId]: first.entries[0] },
+          }
+        : {
+            parserVersion: item.legacyParserVersion,
+            files: {
+              [path]: {
+                ...checkpoint,
+                entries: first.entries,
+                eventDays: {
+                  [Object.keys(first.nextState.ledger)[0]]: first.entries[0].date,
+                },
+              },
+            },
+          };
+    await unlink(path);
+    const nextDirectory = join(directory, "next");
+    await mkdir(nextDirectory);
+    await writeFile(join(nextDirectory, item.name), `${item.nextRecord(item.record)}\n`);
+    const switchedSource = {
+      ...firstSource,
+      syntheticAuthHint: "account-b@switch.invalid",
+    };
+    const combined = await adapter.collect(switchedSource, range, legacyState);
+    assert.equal(combined.completeness, "complete", item.agentId);
+    assert.equal(combined.entries.length, 2, item.agentId);
+    assert.deepEqual(
+      combined.entries.map(({ date }) => date),
+      ["2026-08-10", "2026-08-11"],
+      item.agentId,
+    );
+    assert.equal(
+      BigInt(combined.entries[0].totalTokens),
+      BigInt(first.entries[0].totalTokens),
+      `${item.agentId} retained account A`,
+    );
+    assert.equal(
+      Object.keys(combined.nextState.ledger ?? {}).length,
+      item.agentId === "claude_code" ? 2 : 1,
+      item.agentId,
+    );
+    if (item.agentId !== "claude_code") {
+      assert.deepEqual(combined.nextState.legacyBaseline, first.entries, item.agentId);
+      assert.equal(Object.keys(combined.nextState.legacyEventDays).length, 1, item.agentId);
+    }
+    const serialized = JSON.stringify(combined.nextState);
+    if (item.rawId) assert.doesNotMatch(serialized, new RegExp(item.rawId), item.agentId);
+    assert.doesNotMatch(serialized, /account-[ab]@switch\.invalid/i, item.agentId);
+    assert.doesNotMatch(JSON.stringify(combined.entries), /syntheticAuthHint|providerAccount/i);
+
+    const pruned = await adapter.collect(
+      switchedSource,
+      { rangeStart: "2026-08-11", rangeEnd: "2026-09-10" },
+      combined.nextState,
+    );
+    assert.deepEqual(
+      pruned.entries.map(({ date }) => date),
+      ["2026-08-11"],
+      `${item.agentId} pruned account A after the rolling window`,
+    );
+    assert.equal(Object.keys(pruned.nextState.ledger ?? {}).length, 1, item.agentId);
+    if (item.agentId !== "claude_code") {
+      assert.deepEqual(pruned.nextState.legacyBaseline, [], item.agentId);
+      assert.deepEqual(pruned.nextState.legacyEventDays, {}, item.agentId);
+    }
+  }
+});
+
+async function materialize043State(template, path) {
+  const state = structuredClone(template);
+  const checkpoint = state.files.$SOURCE_FILE;
+  delete state.files.$SOURCE_FILE;
+  const metadata = await stat(path);
+  state.files[path] = {
+    ...checkpoint,
+    modifiedAt: metadata.mtimeMs,
+    ino: metadata.ino,
+  };
+  return state;
+}
+
+test("real Kimi 0.4.3 fixture survives append, full-file move/copy, and truncation", async (context) => {
+  const migration = JSON.parse(await fixture("migration-0.4.3.json"));
+  assert.equal(migration.generatedFrom, "v0.4.3");
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-kimi-real-043-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const root = join(directory, "sessions");
+  const original = join(root, "work", "session-a", "agents", "main", "wire.jsonl");
+  await mkdir(dirname(original), { recursive: true });
+  await writeFile(original, `${migration.kimi.record}\n`);
+  const adapter = adapterFor("kimi_code");
+  const source = { dataPath: root, collectionMethod: "kimi_wire_jsonl" };
+  const legacyState = await materialize043State(migration.kimi.state, original);
+
+  const upgraded = await adapter.collect(source, migration.range, legacyState);
+  assert.deepEqual(
+    upgraded.entries.map(({ totalTokens }) => totalTokens),
+    ["20"],
+  );
+  assert.deepEqual(
+    upgraded.nextState.legacyBaseline.map(({ totalTokens }) => totalTokens),
+    ["20"],
+  );
+  assert.equal(Object.keys(upgraded.nextState.ledger).length, 0);
+
+  const appendedRecord = JSON.stringify({
+    ...JSON.parse(migration.kimi.record),
+    time: Date.parse("2026-08-11T12:00:00Z"),
+    usage: { ...JSON.parse(migration.kimi.record).usage, output: 6 },
+  });
+  await appendFile(original, `${appendedRecord}\n`);
+  const appended = await adapter.collect(source, migration.range, upgraded.nextState);
+  assert.deepEqual(
+    appended.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [
+      ["2026-08-10", "20"],
+      ["2026-08-11", "21"],
+    ],
+  );
+  assert.equal(Object.keys(appended.nextState.ledger).length, 1);
+
+  const copied = join(root, "copy", "session-a", "agents", "main", "wire.jsonl");
+  await mkdir(dirname(copied), { recursive: true });
+  await copyFile(original, copied);
+  const afterCopy = await adapter.collect(source, migration.range, appended.nextState);
+  assert.deepEqual(afterCopy.entries, appended.entries);
+  assert.equal(Object.keys(afterCopy.nextState.ledger).length, 1);
+
+  await unlink(original);
+  const afterMove = await adapter.collect(source, migration.range, afterCopy.nextState);
+  assert.deepEqual(afterMove.entries, appended.entries);
+  await writeFile(copied, `${appendedRecord}\n`);
+  const truncated = await adapter.collect(source, migration.range, afterMove.nextState);
+  assert.deepEqual(truncated.entries, appended.entries);
+  assert.equal(Object.keys(truncated.nextState.ledger).length, 1);
+});
+
+test("real Gemini 0.4.3 fixture keeps no-ID append stable through move and rescan", async (context) => {
+  const migration = JSON.parse(await fixture("migration-0.4.3.json"));
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-gemini-real-043-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const original = join(directory, "session-original.jsonl");
+  await writeFile(original, `${migration.gemini.record}\n`);
+  const adapter = adapterFor("gemini_cli");
+  const source = { dataPath: directory };
+  const legacyState = await materialize043State(migration.gemini.state, original);
+  const upgraded = await adapter.collect(source, migration.range, legacyState);
+  assert.deepEqual(
+    upgraded.entries.map(({ totalTokens }) => totalTokens),
+    ["17"],
+  );
+
+  const noId = JSON.stringify({
+    type: "gemini",
+    timestamp: "2026-08-11T12:00:00Z",
+    tokens: { input: 8, output: 5, cached: 2, thoughts: 1, total: 14 },
+  });
+  await appendFile(original, `${noId}\n`);
+  const appended = await adapter.collect(source, migration.range, upgraded.nextState);
+  assert.deepEqual(
+    appended.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [
+      ["2026-08-10", "17"],
+      ["2026-08-11", "14"],
+    ],
+  );
+  assert.equal(Object.keys(appended.nextState.ledger).length, 1);
+
+  const movedDirectory = join(directory, "moved");
+  await mkdir(movedDirectory);
+  const moved = join(movedDirectory, "session-original.jsonl");
+  await rename(original, moved);
+  const rescanned = await adapter.collect(source, migration.range, appended.nextState);
+  assert.deepEqual(rescanned.entries, appended.entries);
+  assert.equal(Object.keys(rescanned.nextState.ledger).length, 1);
+  const copiedDirectory = join(directory, "copy");
+  await mkdir(copiedDirectory);
+  const copied = join(copiedDirectory, "session-original.jsonl");
+  await copyFile(moved, copied);
+  const copiedRescan = await adapter.collect(source, migration.range, rescanned.nextState);
+  assert.deepEqual(copiedRescan.entries, appended.entries);
+  assert.equal(Object.keys(copiedRescan.nextState.ledger).length, 1);
+});
+
+test("OpenCode ledger adds an account switch after deletion from the current database view", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-ledger-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT, time_created INTEGER, data TEXT)");
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "content-free-message-id",
+    Date.parse("2026-08-10T12:00:00Z"),
+    JSON.stringify({
+      role: "assistant",
+      tokens: { input: 10, output: 5, cache: { read: 3, write: 2 }, reasoning: 0 },
+    }),
+  );
+  database.close();
+  const adapter = adapterFor("opencode");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const firstSource = {
+    dataPath: path,
+    syntheticAuthHint: "account-a@switch.invalid",
+  };
+  const first = await adapter.collect(firstSource, range, {});
+  const reopened = new DatabaseSync(path);
+  reopened.exec("DELETE FROM message");
+  reopened.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "second-content-free-message-id",
+    Date.parse("2026-08-11T12:00:00Z"),
+    JSON.stringify({
+      role: "assistant",
+      tokens: { input: 4, output: 3, cache: { read: 0, write: 0 }, reasoning: 0 },
+    }),
+  );
+  reopened.close();
+  const switchedSource = {
+    ...firstSource,
+    syntheticAuthHint: "account-b@switch.invalid",
+  };
+  const combined = await adapter.collect(switchedSource, range, first.nextState);
+  assert.deepEqual(
+    combined.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [
+      ["2026-08-10", "20"],
+      ["2026-08-11", "7"],
+    ],
+  );
+  assert.equal(Object.keys(combined.nextState.ledger).length, 2);
+  assert.doesNotMatch(
+    JSON.stringify(combined.nextState),
+    /content-free-message-id|account-[ab]@switch\.invalid/,
+  );
+  assert.doesNotMatch(JSON.stringify(combined.entries), /syntheticAuthHint|providerAccount/i);
+
+  const pruned = await adapter.collect(
+    switchedSource,
+    { rangeStart: "2026-08-11", rangeEnd: "2026-09-10" },
+    combined.nextState,
+  );
+  assert.deepEqual(
+    pruned.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [["2026-08-11", "7"]],
+  );
+  assert.equal(Object.keys(pruned.nextState.ledger).length, 1);
+});
+
+test("OpenCode direct 0.4.3 upgrade fails closed without a confirmed exact-ID cutover", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-direct-043-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database.close();
+  await assert.rejects(
+    adapterFor("opencode").collect(
+      { dataPath: path },
+      { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+      {
+        serverBaseline: {
+          acceptedAt: "2026-08-10T23:59:59.000Z",
+          acceptedSequence: "7",
+          entries: [{ date: "2026-08-10", totalTokens: "100" }],
+        },
+      },
+    ),
+    (error) =>
+      error?.diagnosticCode === "opencode_cutover_required" && /0\.4\.4/.test(error.message),
+  );
+});
+
+test("OpenCode confirmed 0.4.4 cutover counts a scan-to-accept race exactly once", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-bootstrap-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "accepted-message",
+      Date.parse("2026-08-10T12:00:00Z"),
+      JSON.stringify({ role: "assistant", tokens: { input: 60, output: 40, total: 100 } }),
+    );
+  const oldScan = parseOpenCodeMessages(
+    database.prepare("SELECT id, time_created, data FROM message").all(),
+  );
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "race-before-server-accept",
+      Date.parse("2026-08-11T12:00:00Z"),
+      JSON.stringify({ role: "assistant", tokens: { input: 4, output: 3, total: 7 } }),
+    );
+  database.close();
+  const result = await adapterFor("opencode").collect(
+    { dataPath: path },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {
+      serverBaseline: {
+        acceptedAt: "2026-08-10T23:59:59.000Z",
+        acceptedSequence: "7",
+        entries: oldScan.map(({ date, totalTokens }) => ({ date, totalTokens })),
+      },
+      cutover: {
+        version: 1,
+        confirmedSequence: "7",
+        confirmedRangeEnd: "2026-08-14",
+        aliases: {
+          [createHash("sha256").update("accepted-message").digest("hex")]: "2026-08-10",
+        },
+      },
+    },
+  );
+  assert.equal(result.completeness, "partial");
+  assert.deepEqual(
+    result.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [
+      ["2026-08-10", "100"],
+      ["2026-08-11", "7"],
+    ],
+  );
+  assert.equal(result.nextState.bootstrapComplete, true);
+  assert.equal(Object.keys(result.nextState.legacyAliases).length, 1);
+  assert.equal(Object.keys(result.nextState.ledger).length, 1);
+  assert.equal(result.nextState.legacyAcceptedAt, "2026-08-10T23:59:59.000Z");
+  assert.doesNotMatch(
+    JSON.stringify(result.nextState),
+    /accepted-message|race-before-server-accept/,
+  );
+
+  const afterCutover = new DatabaseSync(path);
+  afterCutover
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "post-cutover-message",
+      Date.parse("2026-08-12T12:00:00Z"),
+      JSON.stringify({ role: "assistant", tokens: { input: 5, output: 4, total: 9 } }),
+    );
+  afterCutover.close();
+  const next = await adapterFor("opencode").collect(
+    { dataPath: path },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    result.nextState,
+  );
+  assert.equal(next.completeness, "partial");
+  assert.deepEqual(
+    next.entries.map(({ date, totalTokens }) => [date, totalTokens]),
+    [
+      ["2026-08-10", "100"],
+      ["2026-08-11", "7"],
+      ["2026-08-12", "9"],
+    ],
+  );
+  assert.equal(Object.keys(next.nextState.ledger).length, 2);
+});
+
+test("OpenCode cutover ignores server clock skew and counts only locally unseen IDs", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-clock-skew-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  let database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  const insert = database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)");
+  const message = (total) =>
+    JSON.stringify({ role: "assistant", tokens: { input: total, output: 0, total } });
+  const acceptedAt = Date.parse("2026-08-10T12:00:00Z");
+  insert.run("legacy-minus-five", acceptedAt - 5 * 60_000, message(11));
+  insert.run("legacy-plus-five", acceptedAt + 5 * 60_000, message(13));
+  database.close();
+  const adapter = adapterFor("opencode");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const cutover = await adapter.collect({ dataPath: path }, range, {
+    serverBaseline: {
+      acceptedAt: new Date(acceptedAt).toISOString(),
+      acceptedSequence: "3",
+      entries: [{ date: "2026-08-10", totalTokens: "24" }],
+    },
+    cutover: {
+      version: 1,
+      confirmedSequence: "3",
+      confirmedRangeEnd: range.rangeEnd,
+      aliases: Object.fromEntries(
+        ["legacy-minus-five", "legacy-plus-five"].map((id) => [
+          createHash("sha256").update(id).digest("hex"),
+          "2026-08-10",
+        ]),
+      ),
+    },
+  });
+  assert.deepEqual(cutover.entries, [{ date: "2026-08-10", totalTokens: "24" }]);
+  assert.equal(Object.keys(cutover.nextState.legacyAliases).length, 2);
+
+  database = new DatabaseSync(path);
+  const append = database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)");
+  append.run("new-minus-five", acceptedAt - 5 * 60_000, message(17));
+  append.run("new-plus-five", acceptedAt + 5 * 60_000, message(19));
+  database.close();
+  const collected = await adapter.collect({ dataPath: path }, range, cutover.nextState);
+  assert.deepEqual(collected.entries, [{ date: "2026-08-10", totalTokens: "60" }]);
+  assert.equal(Object.keys(collected.nextState.ledger).length, 2);
+});
+
+test("a full JSONL ledger replays the first unsaved event exactly once after pruning", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-ledger-overflow-replay-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "capture.jsonl");
+  const native = JSON.parse((await fixture("antigravity.jsonl")).trim());
+  const appended = safeCaptureRecord(
+    "antigravity",
+    JSON.stringify({ ...native, session_id: "replay-event", timestamp: "2026-08-11T12:00:00Z" }),
+  );
+  await writeFile(path, `${JSON.stringify(appended)}\n`);
+  const ledger = {};
+  for (let index = 0; index < 65_536; index += 1)
+    ledger[index.toString(16).padStart(64, "0")] = {
+      date: "2026-08-10",
+      usage: { totalTokens: "1" },
+      parserVersion: 2,
+    };
+  const adapter = adapterFor("antigravity");
+  const full = await adapter.collect(
+    { dataPath: path },
+    { rangeStart: "2026-08-10", rangeEnd: "2026-09-09" },
+    { parserVersion: 2, files: {}, ledger },
+  );
+  assert.equal(full.completeness, "partial");
+  assert.equal(full.nextState.files[path], undefined);
+  assert.equal(Object.keys(full.nextState.ledger).length, 65_536);
+
+  const replayed = await adapter.collect(
+    { dataPath: path },
+    { rangeStart: "2026-08-11", rangeEnd: "2026-09-10" },
+    full.nextState,
+  );
+  assert.equal(replayed.completeness, "complete");
+  assert.deepEqual(replayed.entries, [
+    {
+      date: "2026-08-11",
+      totalTokens: "20",
+      inputTokens: "10",
+      outputTokens: "5",
+      cacheReadTokens: "3",
+      cacheWriteTokens: "2",
+      reasoningTokens: "0",
+    },
+  ]);
+  assert.equal(Object.keys(replayed.nextState.ledger).length, 1);
+  const unchanged = await adapter.collect(
+    { dataPath: path },
+    { rangeStart: "2026-08-11", rangeEnd: "2026-09-10" },
+    replayed.nextState,
+  );
+  assert.deepEqual(unchanged.entries, replayed.entries);
+  assert.equal(Object.keys(unchanged.nextState.ledger).length, 1);
+});
+
+test("OpenCode retains a conflicting tuple while committing unrelated new events", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-conflict-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const timestamp = Date.parse("2026-08-10T12:00:00Z");
+  let database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "stable-message",
+      timestamp,
+      JSON.stringify({ role: "assistant", tokens: { input: 10, output: 5, total: 15 } }),
+    );
+  database.close();
+  const adapter = adapterFor("opencode");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await adapter.collect({ dataPath: path }, range, {});
+
+  database = new DatabaseSync(path);
+  database
+    .prepare("UPDATE message SET data = ? WHERE id = ?")
+    .run(
+      JSON.stringify({ role: "assistant", tokens: { input: 20, output: 5, total: 25 } }),
+      "stable-message",
+    );
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "new-message",
+      timestamp + 1_000,
+      JSON.stringify({ role: "assistant", tokens: { input: 2, output: 3, total: 5 } }),
+    );
+  database.close();
+
+  const conflict = await adapter.collect({ dataPath: path }, range, first.nextState);
+  assert.equal(conflict.completeness, "partial");
+  assert.deepEqual(
+    conflict.entries.map(({ totalTokens }) => totalTokens),
+    ["20"],
+  );
+  assert.ok(conflict.diagnostics.some(({ code }) => code === "local_event_identity_conflict"));
+  assert.equal(Object.keys(conflict.nextState.ledger).length, 2);
+});
+
+test("OpenCode bounds the SQLite scan before materializing an oversized ledger", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-scan-limit-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  const { DatabaseSync } = await import("node:sqlite");
+  const database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database
+    .prepare(
+      `WITH RECURSIVE generated(value) AS (
+         SELECT 1
+         UNION ALL
+         SELECT value + 1 FROM generated WHERE value < 65537
+       )
+       INSERT INTO message (id, time_created, data)
+       SELECT printf('message-%05d', value), ?, ? FROM generated`,
+    )
+    .run(
+      Date.parse("2026-08-10T12:00:00Z"),
+      JSON.stringify({ role: "assistant", tokens: { input: 1, output: 0, total: 1 } }),
+    );
+  database.close();
+
+  const result = await adapterFor("opencode").collect(
+    { dataPath: path },
+    { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+    {},
+  );
+  assert.equal(result.completeness, "partial");
+  assert.ok(result.diagnostics.some(({ code }) => code === "local_store_scan_limit"));
+  assert.ok(Object.keys(result.nextState.ledger ?? {}).length <= 65_536);
+  assert.ok(Buffer.byteLength(JSON.stringify(result.nextState.ledger ?? {})) <= 16 * 1_024 * 1_024);
+});
+
+test("event identity conflicts retain the first exact tuple and report a partial diagnostic", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-ledger-conflict-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "capture.jsonl");
+  const native = JSON.parse((await fixture("antigravity.jsonl")).trim());
+  const firstRecord = safeCaptureRecord("antigravity", JSON.stringify(native));
+  await writeFile(path, `${JSON.stringify(firstRecord)}\n`);
+  const adapter = adapterFor("antigravity");
+  const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
+  const first = await adapter.collect({ dataPath: directory }, range, {});
+  const conflictNative = {
+    ...native,
+    usage: { ...native.usage, input_tokens: 30, total_tokens: 40 },
+  };
+  const conflictRecord = safeCaptureRecord("antigravity", JSON.stringify(conflictNative));
+  await appendFile(path, `${JSON.stringify(conflictRecord)}\n`);
+  const conflict = await adapter.collect({ dataPath: directory }, range, first.nextState);
+  assert.equal(conflict.completeness, "partial");
+  assert.deepEqual(conflict.entries, first.entries);
+  assert.ok(conflict.diagnostics.some(({ code }) => code === "local_event_identity_conflict"));
+  assert.deepEqual(conflict.nextState.ledger, first.nextState.ledger);
+});
+
+test("corrupt observed-event ledger state fails closed across parser upgrades", async () => {
+  const adapter = adapterFor("antigravity");
+  const source = { dataPath: join(tmpdir(), `missing-ledger-${Date.now().toString()}`) };
+  await assert.rejects(
+    adapter.collect(
+      source,
+      { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+      {
+        parserVersion: 2,
+        ledger: {
+          not_a_hash: {
+            date: "2026-08-10",
+            usage: { totalTokens: "1" },
+            parserVersion: 2,
+          },
+        },
+      },
+    ),
+    /Observed-event ledger is invalid/,
+  );
+  await assert.rejects(
+    adapter.collect(
+      source,
+      { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" },
+      {
+        parserVersion: 1,
+        files: { legacy: {} },
+        ledger: {
+          not_a_hash: {
+            date: "2026-08-10",
+            usage: { totalTokens: "1" },
+            parserVersion: 1,
+          },
+        },
+      },
+    ),
+    /Observed-event ledger is invalid/,
   );
 });
 

@@ -92,6 +92,17 @@ describe("compact reconciliation payload", () => {
       sourceIds: [sourceId],
       cliVersion: "0.4.3",
     });
+    expect(
+      parseReconciliationBody({
+        sourceIds: [sourceId],
+        bootstrapSourceIds: [sourceId],
+        cliVersion: "0.5.0",
+      }),
+    ).toEqual({
+      sourceIds: [sourceId],
+      bootstrapSourceIds: [sourceId],
+      cliVersion: "0.5.0",
+    });
   });
 
   it("rejects malformed versions, duplicates, and unknown fields", () => {
@@ -130,6 +141,10 @@ describe("compact reconciliation payload", () => {
       },
       { sourceIds: [sourceId, sourceId] },
       { sourceIds: [sourceId], extra: true },
+      {
+        sourceIds: [sourceId],
+        bootstrapSourceIds: ["44444444-4444-4444-8444-444444444444"],
+      },
     ]) {
       expect(parseReconciliationBody(body)).toBeNull();
     }
@@ -299,6 +314,61 @@ describe("compact reconciliation rate limiting", () => {
       acceptedHandlerAttestationId: attestationId,
       sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }],
     });
+  });
+
+  it("returns an exact bounded OpenCode accepted baseline only when requested", async () => {
+    consumeRateLimitMock.mockResolvedValue(true);
+    queryMock.mockResolvedValue([{ id: installationId }]);
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            source_id: sourceId,
+            status: "active",
+            last_accepted_sync_sequence: "7",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            source_id: sourceId,
+            accepted_at: "2026-08-10 12:00:00+00",
+            entries: [{ date: "2026-08-10", totalTokens: "123" }],
+          },
+        ],
+      });
+    transactionMock.mockImplementation(
+      (callback: (client: { query: typeof clientQuery }) => Promise<unknown>) =>
+        callback({ query: clientQuery }),
+    );
+
+    const response = await POST(
+      request({
+        sourceIds: [sourceId],
+        bootstrapSourceIds: [sourceId],
+        cliVersion: "0.5.0",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      sources: [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }],
+      sourceBaselines: [
+        {
+          sourceId,
+          acceptedAt: "2026-08-10T12:00:00.000Z",
+          entries: [{ date: "2026-08-10", totalTokens: "123" }],
+        },
+      ],
+    });
+    expect(clientQuery).toHaveBeenNthCalledWith(
+      3,
+      expect.stringMatching(/daily_usage[\s\S]*source\.agent_id = 'opencode'/),
+      [installationId, [sourceId]],
+    );
   });
 
   it("clears installed runtime when the durable attestation observes no version", async () => {

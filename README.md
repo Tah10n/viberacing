@@ -26,15 +26,25 @@ to 31 UTC days, and later JSONL reads resume from safe byte offsets. Automatic h
 unchanged normalized snapshot. Manual and browser-triggered Sync still submit a content-equivalent
 confirmation snapshot so the dashboard's **Last sync** time advances after a successful check.
 
-Codex marks its source dirty after each completed turn. While its account-wide App Server daily
-buckets lag, Sync uses every exact locally observed non-overlapping daily total after the newest
-authoritative bucket as a partial value, including across UTC rollovers. The dashboard and ranking
-therefore update immediately; later App Server buckets may correct each value up or down.
-Provider-recorded local input/output/cache/reasoning counters remain separately visible; neither
-counter is estimated. Codex runs the Vibe Racing `Stop` hook only after the user reviews and trusts
-it once through `/hooks`; `doctor` reports whether that hook is current or still needs review.
+Codex marks its physical profile dirty after each completed turn. One `CODEX_HOME` can safely track
+up to eight ChatGPT logins: each collection reads local `tokens.account_id` before starting App
+Server, brackets `account/usage/read` with two non-refreshing `account/read` calls, and reads the
+local ID again afterward. It accepts the snapshot only when both local IDs and both normalized,
+non-null App Server emails match. The connector derives an `acct1_…` HMAC locally from email plus
+account ID and a separate random salt that survives `reset-installation`; none of those values is
+sent to Vibe Racing. Either value alone is insufficient to distinguish an account. A newly observed
+stable login gets a generic logical source, while API-key, Bedrock, identifier-unavailable, and
+mid-collection account states fail closed. While its account-wide App Server daily buckets lag, Sync
+uses every exact locally observed non-overlapping daily total after the newest authoritative bucket
+as a partial value, including across UTC rollovers. The dashboard and ranking therefore update
+immediately; later App Server buckets may correct each value up or down. Provider-recorded local
+input/output/cache/reasoning counters remain separately visible for a single-login profile; they are
+hidden once a physical profile has multiple logical accounts because the local transcript components
+are not account-scoped. Neither counter is estimated. One physical Codex profile has one Vibe Racing
+`Stop` hook, which runs only after the user reviews and trusts it through `/hooks`; `doctor` reports
+whether that hook is current or still needs review.
 
-Connector 0.4.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
+Connector 0.5.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
 server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
 the rollout. A saved unsequenced v2/v3 collector error is replaced by a fresh v4 observation on its
 next in-scope collection instead of being relabeled as ordered. Account-wide sources are

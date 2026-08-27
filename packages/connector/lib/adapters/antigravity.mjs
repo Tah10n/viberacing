@@ -5,11 +5,10 @@ import {
   diagnosePath,
   mergeEntries,
   parserResult,
-  previousJsonlEntries,
   utcDay,
 } from "./shared.mjs";
 
-const antigravityParserVersion = 1;
+const antigravityParserVersion = 2;
 
 function analyzeAntigravityLines(lines) {
   const seen = new Set();
@@ -74,8 +73,12 @@ export function parseAntigravityLines(lines) {
 function captureEventKey(line) {
   try {
     const record = JSON.parse(line);
-    return record?.usage && typeof record?.id === "string" && dayPattern.test(record?.date ?? "")
-      ? { id: record.id, date: record.date }
+    const entry = analyzeAntigravityLines([line]).entries[0];
+    return record?.usage &&
+      typeof record?.id === "string" &&
+      dayPattern.test(record?.date ?? "") &&
+      entry
+      ? { id: record.id, date: record.date, entry }
       : null;
   } catch {
     return null;
@@ -88,30 +91,20 @@ export const antigravityAdapter = Object.freeze({
   supportedSurfaces: ["cli"],
   collectionMethods: ["antigravity_cli_capture"],
   aggregationMode: "source_sum",
+  accountSwitchMode: "explicit_capture",
   trigger: "viberacing run antigravity",
   defaultPaths: [],
   detect: async () => [],
   collect: async (source, range, state = {}) => {
-    const stateCompatible = state.parserVersion === antigravityParserVersion;
     const result = await collectJsonl(
       source,
       analyzeAntigravityLines,
       () => true,
-      stateCompatible ? state : {},
+      state,
       range,
       captureEventKey,
+      antigravityParserVersion,
     );
-    if (
-      !stateCompatible &&
-      result.completeness === "partial" &&
-      Object.keys(state.files ?? {}).length > 0
-    ) {
-      return {
-        ...result,
-        entries: previousJsonlEntries(state),
-        nextState: state,
-      };
-    }
     return {
       ...result,
       nextState: { ...result.nextState, parserVersion: antigravityParserVersion },

@@ -23,21 +23,17 @@ test("Claude message ids cannot mutate collector prototypes", async (context) =>
   );
   const range = { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" };
   const first = await collectClaude({ dataPath: directory }, range);
-  assert.equal(Object.getPrototypeOf(first.nextState.messages), null);
-  assert.deepEqual(Object.keys(first.nextState.messages).sort(), [
-    "__proto__",
-    "constructor",
-    "prototype",
-  ]);
+  assert.equal(Object.keys(first.nextState.ledger).length, 3);
+  assert.ok(Object.keys(first.nextState.ledger).every((key) => /^[0-9a-f]{64}$/.test(key)));
+  assert.doesNotMatch(JSON.stringify(first.nextState.ledger), /__proto__|constructor|prototype/);
   assert.doesNotThrow(() => JSON.parse(JSON.stringify(first.nextState)));
   await appendFile(path, `${message("__proto__", 100)}\n${message("ordinary", 4)}\n`);
   const second = await collectClaude({ dataPath: directory }, range, first.nextState);
-  assert.equal(Object.getPrototypeOf(second.nextState.messages), null);
-  assert.deepEqual(Object.keys(second.nextState.messages).sort(), [
-    "__proto__",
-    "constructor",
-    "ordinary",
-    "prototype",
-  ]);
+  assert.equal(Object.keys(second.nextState.ledger).length, 4);
+  assert.doesNotMatch(
+    JSON.stringify(second.nextState.ledger),
+    /__proto__|constructor|ordinary|prototype/,
+  );
+  assert.ok(second.diagnostics.some(({ code }) => code === "local_event_identity_conflict"));
   assert.equal(second.entries[0].totalTokens, "14");
 });

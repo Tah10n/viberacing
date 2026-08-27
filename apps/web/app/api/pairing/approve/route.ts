@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { agentRegistry, type SupportedAgent } from "@/lib/agents";
-import { maximumSourcesPerInstallation, publicOrigin } from "@/lib/config";
+import {
+  maximumActiveSourcesPerUser,
+  maximumAgentAccountsPerUser,
+  maximumSourcesPerInstallation,
+  publicOrigin,
+} from "@/lib/config";
 import { digest, normalizePairingCode } from "@/lib/crypto";
 import { transaction } from "@/lib/db";
 import {
@@ -48,9 +53,6 @@ class ApprovalError extends Error {
 }
 
 const maximumActiveInstallationsPerUser = 20;
-const maximumActiveSourcesPerUser = 100;
-const maximumAgentAccountsPerUser = 100;
-
 export function exceedsPairingLimits(
   counts: {
     installations: number;

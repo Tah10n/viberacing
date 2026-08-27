@@ -31,6 +31,8 @@
     "verify": "corepack pnpm run privacy:check && corepack pnpm run migrations:check && corepack pnpm run connector:package:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
   },
   "devDependencies": {
+    "@viberacing/connector-0.4.3": "npm:@viberacing/connector@0.4.3",
+    "@viberacing/connector-0.4.4": "npm:@viberacing/connector@0.4.4",
     "prettier": "3.9.4"
   }
 }

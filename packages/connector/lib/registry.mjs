@@ -7,6 +7,12 @@ import { openCodeAdapter } from "./adapters/opencode.mjs";
 import { qwenAdapter } from "./adapters/qwen.mjs";
 import { canonicalPathKey } from "./adapters/shared.mjs";
 
+export const accountSwitchModes = Object.freeze([
+  "provider_account_snapshot",
+  "combined_local_history",
+  "explicit_capture",
+]);
+
 /**
  * @typedef {object} DetectedSource
  * @property {string} dataPath

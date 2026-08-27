@@ -71,6 +71,30 @@ const captureTokenKeys = [
   "cacheWriteTokens",
   "reasoningTokens",
 ];
+const runtimeStateVersion = 2;
+
+function normalizedRuntimeState(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Connector runtime state is unsupported");
+  if (value.version !== 1 && value.version !== runtimeStateVersion)
+    throw new Error("Connector runtime state was written by an unsupported connector version");
+  if (
+    value.sequences === null ||
+    typeof value.sequences !== "object" ||
+    Array.isArray(value.sequences) ||
+    Object.entries(value.sequences).some(
+      ([sourceId, sequence]) => !sourceIdPattern.test(sourceId) || !decimalPattern.test(sequence),
+    )
+  )
+    throw new Error("Connector runtime sequences are invalid");
+  for (const key of ["adapters", "fingerprints", "quarantine", "collectionWarnings", "diagnostics"])
+    if (
+      value[key] !== undefined &&
+      (value[key] === null || typeof value[key] !== "object" || Array.isArray(value[key]))
+    )
+      throw new Error("Connector runtime state is invalid");
+  return { ...value, version: runtimeStateVersion, sequences: { ...value.sequences } };
+}
 
 function pendingPath(sourceId, kind = "snapshot") {
   if (!sourceIdPattern.test(sourceId)) throw new Error("Invalid pending source id");
@@ -500,16 +524,17 @@ export async function clearQuarantine(sourceId) {
 export async function readState() {
   await ensurePrivateStateDirectory();
   try {
-    return JSON.parse(await readFile(statePath, "utf8"));
+    const stored = JSON.parse(await readFile(statePath, "utf8"));
+    return normalizedRuntimeState(stored);
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
-    return { version: 1, sequences: {} };
+    return { version: runtimeStateVersion, sequences: {} };
   }
 }
 
 export async function writeState(value) {
   await ensurePrivateStateDirectory();
-  await atomicJson(statePath, value);
+  await atomicJson(statePath, normalizedRuntimeState(value));
 }
 
 export function lifecycleMutationActive(activeCheck = ownedLockActive) {
@@ -542,7 +567,13 @@ export async function withLifecycleMutation(callback, options = {}) {
       acquireRuntimeOwnedLock(lifecycleMarkerPath, { waitMs }),
     );
     if (!markerLock) throw new Error("Timed out waiting for a lifecycle marker");
-    const result = await withSyncLock(callback, { waitMs, allowDuringLifecycle: true });
+    const result = await withSyncLock(
+      async () => {
+        await options.afterExclusion?.();
+        return callback();
+      },
+      { waitMs, allowDuringLifecycle: true },
+    );
     if (result?.skipped) throw new Error("Timed out waiting for active sync to finish");
     return result;
   } finally {
@@ -554,10 +585,16 @@ export async function withLifecycleMutation(callback, options = {}) {
 export async function savePending(payload) {
   await mkdir(pendingDirectory, { recursive: true, mode: 0o700 });
   for (const snapshot of payload.snapshots ?? []) {
+    const pendingRegistrationSupersessions = (
+      payload.pendingRegistrationSupersessions ?? []
+    ).filter((supersession) => supersession.sourceId === snapshot.sourceId);
     await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
       sourceErrors: [],
+      ...(pendingRegistrationSupersessions.length === 0
+        ? { pendingRegistrationSupersessions: undefined }
+        : { pendingRegistrationSupersessions }),
     });
     await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
@@ -568,6 +605,7 @@ export async function savePending(payload) {
       protocolVersion: payload.protocolVersion,
       snapshots: [],
       sourceErrors: [sourceError],
+      pendingRegistrationSupersessions: undefined,
     });
 }
 

@@ -8,8 +8,10 @@ interface SameOriginActionFormProps {
   readonly className?: string;
 }
 
-function actionError(status: number): string {
+function actionError(status: number, code: unknown): string {
   if (status === 403) return "The action was rejected. Refresh the page and try again.";
+  if (code === "primary_account_has_linked_accounts")
+    return "This is the physical Codex profile for other accounts. Delete those linked accounts first.";
   return `The action failed (${status.toString()}). Please try again.`;
 }
 
@@ -50,7 +52,8 @@ export function SameOriginActionForm({ action, children, className }: SameOrigin
         return;
       }
       if (!response.ok) {
-        setError(actionError(response.status));
+        const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        setError(actionError(response.status, payload?.error));
         return;
       }
 
