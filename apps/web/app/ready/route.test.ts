@@ -23,11 +23,14 @@ describe("readiness migration ledger", () => {
       status: "ready",
       schemaVersion: expectedSchemaVersion,
     });
-    expect(expectedSchemaVersion).toBe("008_account_dedup_notice_dismissal.sql");
+    expect(expectedSchemaVersion).toBe("009_codex_hook_notice.sql");
     expect(query).toHaveBeenCalledWith(expect.stringContaining("browser_sync_protocol"), [
       expectedSchemaVersion,
     ]);
     expect(query).toHaveBeenCalledWith(expect.stringContaining("dismissed_at"), [
+      expectedSchemaVersion,
+    ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("codex_hook_notice_dismissed_at"), [
       expectedSchemaVersion,
     ]);
   });

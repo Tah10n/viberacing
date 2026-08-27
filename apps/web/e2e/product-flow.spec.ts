@@ -326,6 +326,63 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     const targetAccount = target.rows[0];
     expect(targetAccount).toBeDefined();
     if (targetAccount === undefined) throw new Error("missing E2E target account");
+
+    const codexAccountId = randomUUID();
+    const codexSourceId = randomUUID();
+    await dedupDatabase.query(
+      `INSERT INTO agent_accounts
+         (id, user_id, agent_id, label, aggregation_mode)
+       VALUES ($1, $2, 'codex', 'Codex E2E', 'account_max')`,
+      [codexAccountId, targetAccount.user_id],
+    );
+    await dedupDatabase.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, agent_id, client_source_id,
+          collection_method, supported_surface, suggested_label, status)
+       VALUES ($1, $2, $3, $4, 'codex', $5, 'codex_app_server', 'desktop', 'Codex', 'active')`,
+      [codexSourceId, installationId, targetAccount.user_id, codexAccountId, randomUUID()],
+    );
+
+    await page.reload();
+    const codexHookNotice = page.locator(".codex-hook-notice");
+    await expect(codexHookNotice).toHaveCount(0);
+
+    await dedupDatabase.query(
+      "UPDATE installation_sources SET last_successful_sync_at = now() WHERE id = $1",
+      [codexSourceId],
+    );
+    await page.reload();
+    await expect(codexHookNotice).toContainText("CODEX AUTOMATIC SYNC");
+    await expect(codexHookNotice).toContainText("Manual Codex sync is working.");
+    await expect(codexHookNotice).toContainText("Settings → Hooks");
+    await expect(codexHookNotice).toContainText("Alternatively, run /hooks.");
+    await expect(codexHookNotice.locator("code")).toHaveText("/hooks");
+    await expect(codexHookNotice.getByRole("button", { name: /copy/i })).toHaveCount(0);
+    const hookDismissButton = codexHookNotice.getByRole("button", { name: "Dismiss" });
+    await expect(hookDismissButton).toBeVisible();
+    const hookDismissBox = await hookDismissButton.boundingBox();
+    expect(hookDismissBox).not.toBeNull();
+    if (hookDismissBox !== null) {
+      expect(hookDismissBox.width).toBeGreaterThanOrEqual(44);
+      expect(hookDismissBox.height).toBeGreaterThanOrEqual(44);
+    }
+    await hookDismissButton.click();
+    await expect(codexHookNotice).toHaveCount(0);
+    await page.reload();
+    await expect(codexHookNotice).toHaveCount(0);
+
+    const hookNoticeState = await dedupDatabase.query<{ dismissed: boolean }>(
+      `SELECT codex_hook_notice_dismissed_at IS NOT NULL AS dismissed
+         FROM installation_sources
+        WHERE id = $1`,
+      [codexSourceId],
+    );
+    expect(hookNoticeState.rows[0]).toEqual({ dismissed: true });
+
+    await dedupDatabase.query("DELETE FROM installation_sources WHERE id = $1", [codexSourceId]);
+    await dedupDatabase.query("DELETE FROM agent_accounts WHERE id = $1", [codexAccountId]);
+    await page.reload();
+
     const previousAccountId = randomUUID();
     const dedupEventId = randomUUID();
     await dedupDatabase.query(

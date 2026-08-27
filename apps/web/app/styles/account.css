@@ -18,6 +18,32 @@
   gap: var(--space-3) var(--space-5);
 }
 
+.codex-hook-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: var(--space-3) var(--space-5);
+}
+
+.codex-hook-notice .eyebrow {
+  margin-bottom: var(--space-2);
+}
+
+.codex-hook-notice h2 {
+  max-width: 46rem;
+  font-size: 1.5rem;
+  line-height: 1.08;
+}
+
+.codex-hook-notice-copy {
+  max-width: 60rem;
+  margin-top: var(--space-3) !important;
+}
+
+.codex-hook-dismiss-form {
+  margin-top: calc(var(--space-1) * -1);
+}
+
 .dedup-notice-heading {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;

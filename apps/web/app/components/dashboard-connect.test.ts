@@ -181,6 +181,21 @@ describe("dashboard connection flow", () => {
     expect(dashboard).not.toContain("providerAccountKey");
   });
 
+  it("shows one dismissible hook approval notice per synced physical Codex profile", () => {
+    expect(dashboard).toContain("profile.codex_hook_notice_dismissed_at IS NULL");
+    expect(dashboard).toContain("profile.profile_source_id IS NULL");
+    expect(dashboard).toContain("coalesce(member.profile_source_id, member.id) = profile.id");
+    expect(dashboard).toContain("member.last_successful_sync_at IS NOT NULL");
+    expect(dashboard).toContain("CODEX AUTOMATIC SYNC");
+    expect(dashboard).toContain("Manual Codex sync is working.");
+    expect(dashboard).toContain("Settings → Hooks");
+    expect(dashboard).toContain("Alternatively, run <code>/hooks</code>");
+    expect(dashboard).toContain("trust the Vibe Racing Stop hook");
+    expect(dashboard).toContain('action="/api/installations/codex-hook-notice/dismiss"');
+    expect(dashboard).toContain('<input name="sourceId" type="hidden"');
+    expect(dashboard).not.toContain("Copy /hooks");
+  });
+
   it("shares authoritative account-day precedence with ranking summaries", () => {
     const usageSummary = source("../../lib/usage-summary.ts");
     expect(usageSummary).toContain("export const accountMaxObservationIsEligibleSql");
