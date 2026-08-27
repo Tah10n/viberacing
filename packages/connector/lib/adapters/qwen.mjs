@@ -9,12 +9,11 @@ import {
   integer,
   mergeEntries,
   parserResult,
-  previousJsonlEntries,
   totalEntry,
   utcDay,
 } from "./shared.mjs";
 
-const qwenParserVersion = 4;
+const qwenParserVersion = 5;
 
 function analyzeQwenLines(lines) {
   const seen = new Set();
@@ -100,8 +99,9 @@ function qwenEventKey(line) {
   try {
     const record = JSON.parse(line);
     const date = utcDay(record?.timestamp);
-    return record?.schemaVersion === 1 && typeof record?.id === "string" && date
-      ? { id: record.id, date }
+    const entry = analyzeQwenLines([line]).entries[0];
+    return record?.schemaVersion === 1 && typeof record?.id === "string" && date && entry
+      ? { id: record.id, date, entry }
       : null;
   } catch {
     return null;
@@ -334,6 +334,7 @@ export const qwenAdapter = Object.freeze({
   supportedSurfaces: ["cli"],
   collectionMethods: ["qwen_stats_jsonl"],
   aggregationMode: "source_sum",
+  accountSwitchMode: "combined_local_history",
   trigger: "usage stats file",
   defaultPaths,
   localSourceMetadata: async () => {
@@ -348,21 +349,11 @@ export const qwenAdapter = Object.freeze({
       source,
       analyzeQwenLines,
       (path) => basename(path).startsWith("token-usage-"),
-      state.parserVersion === qwenParserVersion ? state : {},
+      state,
       range,
       qwenEventKey,
+      qwenParserVersion,
     );
-    if (
-      state.parserVersion !== qwenParserVersion &&
-      result.completeness === "partial" &&
-      Object.keys(state.files ?? {}).length > 0
-    ) {
-      return {
-        ...result,
-        entries: previousJsonlEntries(state),
-        nextState: state,
-      };
-    }
     return {
       ...result,
       nextState: { ...result.nextState, parserVersion: qwenParserVersion },

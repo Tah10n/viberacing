@@ -37,11 +37,17 @@ source. An abandoned pairing therefore leaves both local configuration and serve
 Server storage separates `installations`, human-defined `agent_accounts`, and machine-local
 `installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
 Reassigning a source during pairing rebuilds only the affected user's agent summaries in that same
-transaction. Separate Codex profiles are selected with source-specific `CODEX_HOME` environments;
-the `account_max` rule prevents account-wide totals shared across computers from doubling. Capture
-sources use `captures/<clientSourceId>.jsonl`. Antigravity Personal and Work therefore have
-independent files and can map to independent accounts; the wrapper consumes `--source` locally when
-more than one profile exists.
+transaction. A nullable self-reference links a logical Codex source to its physical profile source.
+The authenticated `/api/installations/current/sources/register` transaction locks the user,
+installation, and physical profile; enforces eight accounts per profile, 32 sources per
+installation, and the shared per-user source/account limits; creates a generic account/source
+idempotently; and accepts no provider identity. A restrictive profile foreign key prevents deleting
+a physical source while logical sibling accounts still depend on it. Separate Codex profiles are
+selected with source-specific `CODEX_HOME` environments; the `account_max` rule prevents
+account-wide totals shared across computers from doubling. Capture sources use
+`captures/<clientSourceId>.jsonl`. Antigravity Personal and Work therefore have independent files
+and can map to independent accounts; the wrapper consumes `--source` locally when more than one
+profile exists.
 
 After a complete account-wide snapshot, ingestion compares up to 30 finished UTC days against other
 root accounts of the same user and agent. Only nonzero complete days count. At least seven exact
@@ -51,8 +57,9 @@ retained as a hidden alias and an event records only opaque IDs and the number o
 source retains only the timestamp of that decision, so Undo, manual reassignment, or later event
 cleanup cannot make it eligible for another automatic decision. Undo moves the source back to that
 alias. Zero-token days do not count as positive evidence, but a complete zero-versus-positive day is
-a contradiction. Partial, current-day, weak, or contradictory history never triggers a merge.
-Provider email and credentials are neither read nor transmitted.
+a contradiction. Partial, current-day, weak, or contradictory history never triggers a merge. Codex
+provider email and account ID are used together only for a local salt-scoped identity HMAC; email,
+provider identifiers, derived HMACs, and credentials are never transmitted.
 
 ## Snapshot ingestion and ranking
 
@@ -90,26 +97,32 @@ Collectors run independently with concurrency four. The first run reads at most 
 days within explicit file/count/byte bounds. Later JSONL runs reuse size, mtime, inode, and the last
 complete byte offset; unchanged files are not reopened for content, appends resume, truncation or
 replacement rereads only that file, and disappeared files leave the index. OpenCode's read-only SQL
-is range-bounded. One Codex App Server is started per actually configured profile per batch. Its
-official daily total remains authoritative; the connector incrementally extracts only cumulative
-token events from that profile's local session records, uses the exact last-call counters, removes
-cache/reasoning overlap, and deduplicates repeated or copied events with content-free hashes. The
-provider's account-wide daily total and the locally observed component sum remain separate exact
-counters. While account buckets lag, each exact local daily sum after the newest authoritative
-bucket is submitted as partial so Sync can update the ranking immediately across UTC rollovers. The
-source remains non-destructive until an authoritative bucket covers the current day. Inside a
-continuous, successfully read App Server range, a missing daily bucket is sent as an explicit
-complete zero so prior usage can be corrected; no zero is created for an incomplete result or beyond
-that proven range. Later complete account data corrects each provisional value. Missing, bounded, or
-changed transcript shapes otherwise degrade to total-only rather than an estimate.
+is range-bounded. Non-Codex observations feed a shared content-free ledger keyed by hashed event
+identity; date, exact token tuple, and parser version survive local record deletion or copying for
+the 31-day window. One Codex App Server is started per physical profile per batch. It reads the
+ChatGPT account before and after usage without refreshing credentials and routes the snapshot only
+to the matching local logical source. Its official daily total remains authoritative; the connector
+incrementally extracts only cumulative token events from that profile's local session records, uses
+the exact last-call counters, removes cache/reasoning overlap, and deduplicates repeated or copied
+events with content-free hashes. The provider's account-wide daily total and the locally observed
+component sum remain separate exact counters. While account buckets lag, each exact local daily sum
+after the newest authoritative bucket is submitted as partial so Sync can update the ranking
+immediately across UTC rollovers. The source remains non-destructive until an authoritative bucket
+covers the current day. Inside a continuous, successfully read App Server range, a missing daily
+bucket is sent as an explicit complete zero so prior usage can be corrected; no zero is created for
+an incomplete result or beyond that proven range. Later complete account data corrects each
+provisional value. Missing, bounded, or changed transcript shapes otherwise degrade to total-only
+rather than an estimate. Component counters are suppressed once a physical profile contains multiple
+identities because those local records do not prove account ownership.
 
-Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable local
-source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and other
-Vibe Racing profiles. Connect and `doctor --repair` reconcile active mappings to current hooks,
-remove hooks for known unmapped sources, and replace the one legacy v2 marker. A hook discards
-stdin, updates its entry in the version-2 `dirty.json` ledger under a short read-modify-write file
-lock, claims one scheduler lock, and exits with the provider's minimal response. Entries contain
-only source UUID, timestamps, and a generation—never a path or account label.
+Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable physical
+local source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and
+other Vibe Racing profiles. Logical Codex account sources never install another hook. Connect and
+`doctor --repair` reconcile active mappings to current hooks, remove hooks for known unmapped
+sources, and replace the one legacy v2 marker. A hook discards stdin, updates its entry in the
+version-2 `dirty.json` ledger under a short read-modify-write file lock, claims one scheduler lock,
+and exits with the provider's minimal response. Entries contain only source UUID, timestamps, and a
+generation—never a path or account label.
 
 Codex uses `Stop`, which runs after each completed turn; upgrades remove only the connector-owned
 legacy `SessionEnd` handler. Its command points to an atomically refreshed stable launcher, which

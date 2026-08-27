@@ -24,6 +24,17 @@ async function post(request: Request): Promise<Response> {
       );
       const row = account.rows[0];
       if (!row) return "missing";
+      const profileDependents = await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM installation_sources child
+           JOIN installation_sources profile
+             ON profile.id = child.profile_source_id
+            AND profile.installation_id = child.installation_id
+          WHERE profile.agent_account_id = $1
+            AND child.agent_account_id <> $1`,
+        [accountId],
+      );
+      if ((profileDependents.rows[0]?.count ?? 0) > 0) return "linked_profile";
       const sources = await client.query<{ count: number }>(
         "SELECT count(*)::int AS count FROM installation_sources WHERE agent_account_id = $1",
         [accountId],
@@ -38,6 +49,7 @@ async function post(request: Request): Promise<Response> {
       return "deleted";
     });
     if (outcome === "missing") return problem(404, "account_not_found");
+    if (outcome === "linked_profile") return problem(409, "primary_account_has_linked_accounts");
     if (outcome === "confirmation") return problem(400, "confirmation_required");
     return NextResponse.redirect(new URL("/dashboard?accountDeleted=1", publicOrigin()), 303);
   } catch (error) {

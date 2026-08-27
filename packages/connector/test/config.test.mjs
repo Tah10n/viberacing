@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import {
   access,
   appendFile,
@@ -20,7 +21,7 @@ import {
 } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { basename, delimiter, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
@@ -31,10 +32,14 @@ import {
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
 import { connectorProtocolVersion } from "../lib/protocol.mjs";
+import { deriveCodexProviderAccountKey } from "../lib/readers.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
+const connector044Path = fileURLToPath(
+  new URL("../../../node_modules/@viberacing/connector-0.4.4/bin/viberacing.mjs", import.meta.url),
+);
 const connectionStateChildPath = fileURLToPath(
   new URL("../test-support/connection-state-child.mjs", import.meta.url),
 );
@@ -164,6 +169,132 @@ async function readLocalSources(directory) {
   return JSON.parse(await readFile(join(directory, "sources.json"), "utf8")).sources;
 }
 
+async function snapshotStateTree(directory, relative = "") {
+  const result = [];
+  for (const entry of (await readdir(join(directory, relative), { withFileTypes: true })).sort(
+    (left, right) => left.name.localeCompare(right.name),
+  )) {
+    const child = join(relative, entry.name);
+    const info = await stat(join(directory, child));
+    if (entry.isDirectory()) {
+      result.push({ path: child, type: "directory", mode: info.mode & 0o777 });
+      result.push(...(await snapshotStateTree(directory, child)));
+    } else {
+      result.push({
+        path: child,
+        type: "file",
+        mode: info.mode & 0o777,
+        contents: (await readFile(join(directory, child))).toString("base64"),
+      });
+    }
+  }
+  return result;
+}
+
+async function writeOpenCode043Installation(home, origin) {
+  const sourceId = "74747474-7474-4474-8474-747474747474";
+  const clientSourceId = "75757575-7575-4575-8575-757575757575";
+  const databasePath = join(home, "opencode.db");
+  const date = new Date().toISOString().slice(0, 10);
+  const database = new DatabaseSync(databasePath);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  database
+    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
+    .run(
+      "accepted-before-upgrade",
+      Date.parse(`${date}T08:00:00.000Z`),
+      JSON.stringify({ role: "assistant", tokens: { input: 60, output: 40, total: 100 } }),
+    );
+  database.close();
+  const directory = await writeMappedInstallation(home, origin, [
+    {
+      sourceId,
+      clientSourceId,
+      agentId: "opencode",
+      dataPath: databasePath,
+      collectionMethod: "opencode_sqlite",
+      supportedSurface: "cli",
+      suggestedLabel: "OpenCode",
+      accountLabel: "OpenCode",
+    },
+  ]);
+  const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  config.sources[0].lastAcceptedSyncSequence = "1";
+  await writeFile(join(directory, "config.json"), `${JSON.stringify(config)}\n`);
+  await writeFile(
+    join(directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: { [sourceId]: "1" }, adapters: {} })}\n`,
+  );
+  return { clientSourceId, databasePath, date, directory, sourceId };
+}
+
+function openCodeUpgradeServer(currentInstallation) {
+  const requests = [];
+  const usageBodies = [];
+  let acceptedSequence = "1";
+  let acceptedAt = new Date().toISOString();
+  let baselineEntries;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const installation = currentInstallation();
+      baselineEntries ??= [{ date: installation.date, totalTokens: "100" }];
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      requests.push({ method: request.method, url: request.url });
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(
+          JSON.stringify({
+            ...reconciliationResponse([
+              { sourceId: installation.sourceId, lastAcceptedSyncSequence: acceptedSequence },
+            ]),
+            ...(body?.bootstrapSourceIds === undefined
+              ? {}
+              : {
+                  sourceBaselines: [
+                    {
+                      sourceId: installation.sourceId,
+                      acceptedAt,
+                      entries: baselineEntries,
+                    },
+                  ],
+                }),
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        const snapshot = body.snapshots?.find(
+          (candidate) => candidate.sourceId === installation.sourceId,
+        );
+        if (snapshot) {
+          acceptedSequence = snapshot.syncSequence;
+          acceptedAt = new Date().toISOString();
+          if (usageBodies.length === 1)
+            baselineEntries = snapshot.entries.map(({ date, totalTokens }) => ({
+              date,
+              totalTokens,
+            }));
+        }
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: "unexpected_request" }));
+    });
+  });
+  return { requests, server, usageBodies };
+}
+
+async function pointInstallationAtServer(installation, port) {
+  const configPath = join(installation.directory, "config.json");
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  config.origin = `http://127.0.0.1:${port}`;
+  await writeFile(configPath, `${JSON.stringify(config)}\n`);
+}
+
 async function writeCaptureInstallation(home, origin, options = {}) {
   const directory = join(home, ".viberacing");
   const clientSourceId = options.clientSourceId ?? "abababab-abab-4bab-8bab-abababababab";
@@ -265,10 +396,21 @@ async function runWithInput(arguments_, environment, input) {
   return { code, stdout, stderr, pid: child.pid };
 }
 
-async function writeFakeCodexHookServer(path) {
+async function writeExecutableNodeScript(path, contents) {
   const scriptPath = process.platform === "win32" ? path.replace(/\.cmd$/i, ".mjs") : path;
-  await writeFile(
-    scriptPath,
+  await writeFile(scriptPath, contents);
+  if (process.platform === "win32") {
+    await writeFile(
+      path,
+      `@echo off\r\n"${process.execPath}" "%~dp0${basename(scriptPath)}" %*\r\n`,
+    );
+  }
+  await chmod(path, 0o700);
+}
+
+async function writeFakeCodexHookServer(path) {
+  await writeExecutableNodeScript(
+    path,
     `#!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -309,13 +451,6 @@ for await (const line of lines) {
 }
 `,
   );
-  if (process.platform === "win32") {
-    await writeFile(
-      path,
-      `@echo off\r\n"${process.execPath}" "%~dp0${basename(scriptPath)}" %*\r\n`,
-    );
-  }
-  await chmod(path, 0o700);
 }
 
 async function waitFor(predicate, timeoutMs = 5_000) {
@@ -805,6 +940,126 @@ test("source and installation mutations invalidate a pending connect generation"
     );
     await assert.rejects(access(join(directory, "connect-attempt.json")));
     await assert.rejects(access(join(directory, "config.json")));
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("Codex source schema v2 binds at most eight local identities to one physical profile", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-identities-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?codex-identities=${encodeURIComponent(home)}`);
+    const primary = {
+      clientSourceId: "91919191-9191-4191-8191-919191919191",
+      agentId: "codex",
+      collectionMethod: "codex_app_server",
+      dataPath: join(home, ".codex"),
+      suggestedLabel: "Codex",
+      supportedSurface: "desktop",
+    };
+    await module.writeSources([primary]);
+    await writeFile(
+      join(home, ".viberacing", "sources.json"),
+      `${JSON.stringify({ version: 1, sources: [primary] })}\n`,
+    );
+    await writeFile(
+      join(home, ".viberacing", `sources.json.${process.pid}.tmp`),
+      "interrupted migration must not replace the committed registry\n",
+    );
+    assert.equal(await module.migrateSourcesSchema(), true);
+    assert.equal(await module.migrateSourcesSchema(), false);
+    const firstKey = `acct1_${"a".repeat(43)}`;
+    const first = await module.bindCodexProviderAccount(primary.clientSourceId, firstKey);
+    assert.equal(first.boundPrimary, true);
+    assert.equal(first.source.clientSourceId, primary.clientSourceId);
+    for (let index = 1; index < 8; index += 1) {
+      const key = `acct1_${String.fromCharCode(97 + index).repeat(43)}`;
+      const binding = await module.bindCodexProviderAccount(primary.clientSourceId, key);
+      assert.equal(binding.added, true);
+      assert.equal(binding.source.profileClientSourceId, primary.clientSourceId);
+      assert.equal(binding.source.suggestedLabel, "Codex account");
+    }
+    const sources = await module.readSources();
+    assert.equal(sources.length, 8);
+    assert.equal(JSON.parse(await readFile(join(home, ".viberacing", "sources.json"))).version, 2);
+    await assert.rejects(
+      module.bindCodexProviderAccount(primary.clientSourceId, `acct1_${"z".repeat(43)}`),
+      (error) => error?.diagnosticCode === "provider_account_limit_reached",
+    );
+    assert.equal(
+      await module.installHookForSource(sources[1], join(home, "installed-runtime.mjs")),
+      false,
+    );
+
+    const sourcesPath = join(home, ".viberacing", "sources.json");
+    const validRegistry = await readFile(sourcesPath, "utf8");
+    const corruptRegistry = `${JSON.stringify({
+      version: 2,
+      sources: [
+        primary,
+        {
+          ...primary,
+          clientSourceId: "92929292-9292-4292-8292-929292929292",
+          profileClientSourceId: primary.clientSourceId,
+          providerAccountKey: `acct1_${"q".repeat(43)}`,
+          supportedSurface: "cli",
+        },
+      ],
+    })}\n`;
+    await writeFile(sourcesPath, corruptRegistry);
+    await assert.rejects(module.readSources(), /unsupported/);
+    assert.equal(await readFile(sourcesPath, "utf8"), corruptRegistry);
+
+    const futureRegistry = `${JSON.stringify({ version: 3, sources: [primary] })}\n`;
+    await writeFile(sourcesPath, futureRegistry);
+    await assert.rejects(module.readSources(), /unsupported/);
+    assert.equal(await readFile(sourcesPath, "utf8"), futureRegistry);
+    await writeFile(sourcesPath, validRegistry);
+  } finally {
+    restoreEnvironment();
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("provider identity salt and exactly two Codex logical accounts survive reset-installation", async () => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-reset-identities-"));
+  const restoreEnvironment = useModuleEnvironment(home);
+  try {
+    const module = await import(`../lib/config.mjs?codex-reset=${encodeURIComponent(home)}`);
+    const primary = {
+      clientSourceId: "93939393-9393-4393-8393-939393939393",
+      agentId: "codex",
+      collectionMethod: "codex_app_server",
+      dataPath: join(home, ".codex"),
+      suggestedLabel: "Codex",
+      supportedSurface: "desktop",
+    };
+    await module.writeSources([primary]);
+    const saltBefore = await module.readOrCreateProviderIdentitySalt();
+    const firstKey = `acct1_${"a".repeat(43)}`;
+    const secondKey = `acct1_${"b".repeat(43)}`;
+    await module.bindCodexProviderAccount(primary.clientSourceId, firstKey);
+    await module.bindCodexProviderAccount(primary.clientSourceId, secondKey);
+    assert.equal((await module.readSources()).length, 2);
+
+    await module.readOrCreateInstallation();
+    await module.resetInstallation();
+    assert.equal(await module.readOrCreateProviderIdentitySalt(), saltBefore);
+    assert.equal(
+      (await module.bindCodexProviderAccount(primary.clientSourceId, firstKey)).added,
+      false,
+    );
+    assert.equal(
+      (await module.bindCodexProviderAccount(primary.clientSourceId, secondKey)).added,
+      false,
+    );
+    assert.equal((await module.readSources()).length, 2);
+    assert.equal(
+      JSON.parse(await readFile(join(home, ".viberacing", "provider-identity.json"))).salt,
+      saltBefore,
+    );
   } finally {
     restoreEnvironment();
     await rm(home, { recursive: true, force: true });
@@ -2151,8 +2406,12 @@ test("real hooks coalesce into one batch and preserve an event arriving during s
     VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
   });
 
+  // Twenty simultaneous Node startups can starve the detached scheduler itself on the
+  // smaller Windows-hosted runner. Eight hooks still exercise launch-gate contention and
+  // coalescing while leaving enough capacity for the scheduler process under test to start.
+  const concurrentHookCount = process.platform === "win32" ? 8 : 20;
   const hookResults = await Promise.all(
-    Array.from({ length: 20 }, (_, index) =>
+    Array.from({ length: concurrentHookCount }, (_, index) =>
       runWithInput(
         ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
         environment,
@@ -2693,6 +2952,530 @@ test("a Claude hook collects only its dirty source and unchanged data sends no H
     sources[0].clientSourceId,
   ]);
   await assert.rejects(access(codexLaunch));
+});
+
+test("Codex account switches register once and route snapshots without sending provider identity", async (context) => {
+  const primaryClientId = "12121212-1212-4212-8212-121212121212";
+  const primarySourceId = "13131313-1313-4313-8313-131313131313";
+  const secondarySourceId = "14141414-1414-4414-8414-141414141414";
+  const secondaryAccountId = "15151515-1515-4515-8515-151515151515";
+  const primaryAccountId = "16161616-1616-4616-8616-161616161616";
+  const browserRequestId = "18181818-1818-4818-8818-181818181818";
+  const registrationBodies = [];
+  const usageBodies = [];
+  const resultBodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(
+          JSON.stringify(reconciliationResponse(body.sourceIds.map((sourceId) => ({ sourceId })))),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sources/register") {
+        registrationBodies.push(body);
+        if (registrationBodies.length === 1) {
+          response.statusCode = 503;
+          response.end(JSON.stringify({ error: "server_error" }));
+          return;
+        }
+        response.end(
+          JSON.stringify({
+            source: {
+              clientSourceId: body.clientSourceId,
+              sourceId: secondarySourceId,
+              agentAccountId: secondaryAccountId,
+              agentId: "codex",
+              accountLabel: "Codex account 2",
+              collectionMethod: "codex_app_server",
+              lastAcceptedSyncSequence: "0",
+              profileSourceId: primarySourceId,
+            },
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(
+          JSON.stringify({
+            requestId: browserRequestId,
+            sourceIds:
+              body.scope === "installation"
+                ? [primarySourceId, secondarySourceId]
+                : [secondarySourceId],
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        resultBodies.push(body);
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      response.writeHead(404).end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-switch-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const codexHome = join(home, ".codex");
+  const bin = join(home, "bin");
+  const executablePath = join(bin, process.platform === "win32" ? "codex.cmd" : "codex");
+  await mkdir(codexHome, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await writeExecutableNodeScript(
+    executablePath,
+    `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+import { join } from "node:path";
+import { writeFileSync } from "node:fs";
+const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+for await (const line of lines) {
+  const message = JSON.parse(line);
+  if (message.id === 0) {
+    writeFileSync(join(process.env.CODEX_HOME, "auth.json"), JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: process.env.VIBERACING_TEST_CODEX_ACCOUNT_ID } }), { mode: 0o600 });
+    process.stdout.write(JSON.stringify({ id: 0, result: { userAgent: "synthetic" } }) + "\\n");
+  } else if (message.method === "account/read") {
+    process.stdout.write(JSON.stringify({ id: message.id, result: { account: { type: "chatgpt", email: "same@example.com", planType: "pro" }, requiresOpenaiAuth: false } }) + "\\n");
+  } else if (message.method === "account/usage/read") {
+    process.stdout.write(JSON.stringify({ id: message.id, result: { dailyUsageBuckets: [{ startDate: new Date().toISOString().slice(0, 10), tokens: "42" }] } }) + "\\n");
+  }
+}
+`,
+  );
+  const source = {
+    clientSourceId: primaryClientId,
+    sourceId: primarySourceId,
+    agentAccountId: primaryAccountId,
+    agentId: "codex",
+    dataPath: codexHome,
+    executablePath,
+    collectionMethod: "codex_app_server",
+    supportedSurface: "desktop",
+    suggestedLabel: "Codex",
+    accountLabel: "Codex",
+  };
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    source,
+  ]);
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: "17171717-1717-4717-8717-171717171717",
+      secret: "codex-switch-installation-secret-that-is-long-enough",
+    })}\n`,
+  );
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_CODEX_BIN: executablePath,
+  });
+  await writeFile(
+    join(codexHome, "auth.json"),
+    `${JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: "account-first" } })}\n`,
+    { mode: 0o600 },
+  );
+  const terminalOutputs = [];
+  terminalOutputs.push(
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
+    }),
+  );
+  const pendingRegistration = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-second" },
+  });
+  terminalOutputs.push(pendingRegistration);
+  assert.match(pendingRegistration.stderr, /partial sync/i);
+  const pendingState = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.equal(Object.keys(pendingState.pendingAccountRegistrations).length, 1);
+  assert.deepEqual(Object.keys(Object.values(pendingState.pendingAccountRegistrations)[0]).sort(), [
+    "completeness",
+    "entries",
+    "profileClientSourceId",
+    "rangeEnd",
+    "rangeStart",
+  ]);
+  assert.doesNotMatch(JSON.stringify(pendingState.pendingAccountRegistrations), /example|acct1_/i);
+  terminalOutputs.push(
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
+    }),
+  );
+  assert.deepEqual(
+    JSON.parse(await readFile(join(directory, "state.json"), "utf8")).pendingAccountRegistrations,
+    {},
+  );
+  terminalOutputs.push(
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-second" },
+    }),
+  );
+  terminalOutputs.push(
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
+    }),
+  );
+  terminalOutputs.push(
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-second" },
+    }),
+  );
+  const browserEnvironment = {
+    ...environment,
+    VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first",
+  };
+  const beforeBrowser = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(beforeBrowser.sources[1].agentAccountId, secondaryAccountId);
+  const dirtyPath = join(directory, "dirty.json");
+  await writeFile(
+    dirtyPath,
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [primaryClientId]: {
+          dirtySince: "2026-08-26T12:00:00.000Z",
+          lastEventAt: "2026-08-26T12:00:01.000Z",
+          generation: "19191919-1919-4919-8919-191919191919",
+        },
+      },
+    })}\n`,
+  );
+  terminalOutputs.push(
+    await execFileAsync(
+      process.execPath,
+      [
+        connectorPath,
+        "handle-url",
+        `viberacing://sync?requestId=${browserRequestId}&accountId=${secondaryAccountId}&grant=${"g".repeat(32)}`,
+      ],
+      { env: browserEnvironment },
+    ),
+  );
+  assert.equal(
+    JSON.parse(await readFile(dirtyPath, "utf8")).sources[primaryClientId].generation,
+    "19191919-1919-4919-8919-191919191919",
+  );
+  terminalOutputs.push(
+    await execFileAsync(
+      process.execPath,
+      [
+        connectorPath,
+        "handle-url",
+        `viberacing://sync?requestId=${browserRequestId}&scope=installation&grant=${"g".repeat(32)}`,
+      ],
+      { env: browserEnvironment },
+    ),
+  );
+  await assert.rejects(access(dirtyPath));
+
+  assert.equal(registrationBodies.length, 2);
+  for (const body of registrationBodies)
+    assert.deepEqual(body, {
+      agentId: "codex",
+      clientSourceId: body.clientSourceId,
+      collectionMethod: "codex_app_server",
+      profileClientSourceId: primaryClientId,
+      supportedSurface: "desktop",
+    });
+  assert.doesNotMatch(
+    JSON.stringify({ registrationBodies, usageBodies, resultBodies }),
+    /example|acct1_|account-(?:first|second)/i,
+  );
+  assert.deepEqual(
+    usageBodies.map((body) => body.snapshots.map(({ sourceId }) => sourceId)),
+    [
+      [primarySourceId],
+      [primarySourceId, secondarySourceId],
+      [secondarySourceId],
+      [primarySourceId],
+      [secondarySourceId],
+      [primarySourceId],
+    ],
+  );
+  assert.deepEqual(
+    resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
+    [
+      { status: "failed", resultCode: "account_not_active" },
+      { status: "partial", resultCode: "partial_accounts_inactive" },
+    ],
+  );
+  const localSources = await readLocalSources(directory);
+  assert.equal(localSources.length, 2);
+  assert.equal(localSources[1].profileClientSourceId, primaryClientId);
+  assert.match(localSources[0].providerAccountKey, /^acct1_[A-Za-z0-9_-]{43}$/);
+  assert.match(localSources[1].providerAccountKey, /^acct1_[A-Za-z0-9_-]{43}$/);
+  assert.doesNotMatch(JSON.stringify(localSources), /example|account-(?:first|second)/i);
+  const storedConfig = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(storedConfig.sources.length, 2);
+  assert.equal(storedConfig.sources[1].profileSourceId, primarySourceId);
+  assert.doesNotMatch(JSON.stringify(storedConfig), /acct1_|example|account-(?:first|second)/i);
+  assert.doesNotMatch(
+    terminalOutputs.map(({ stdout, stderr }) => `${stdout}\n${stderr}`).join("\n"),
+    /same@example\.com|account-(?:first|second)|acct1_/i,
+  );
+});
+
+test("a current Codex B snapshot durably supersedes a stale registration backfill", async (context) => {
+  const profileClientSourceId = "20202020-2020-4020-8020-202020202020";
+  const profileSourceId = "21212121-2121-4121-8121-212121212121";
+  const profileAccountId = "22222222-2222-4222-8222-222222222222";
+  const secondarySourceId = "23232323-2323-4323-8323-232323232323";
+  const secondaryAccountId = "24242424-2424-4424-8424-242424242424";
+  const requestId = "25252525-2525-4525-8525-252525252525";
+  const registrationBodies = [];
+  const usageBodies = [];
+  const resultBodies = [];
+  const serverTotals = new Map();
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(
+          JSON.stringify({
+            requestId,
+            sourceIds: [profileSourceId],
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sources/register") {
+        registrationBodies.push(body);
+        if (registrationBodies.length === 1) {
+          response.statusCode = 503;
+          response.end(JSON.stringify({ error: "server_error" }));
+          return;
+        }
+        response.end(
+          JSON.stringify({
+            source: {
+              clientSourceId: body.clientSourceId,
+              sourceId: secondarySourceId,
+              agentAccountId: secondaryAccountId,
+              agentId: "codex",
+              accountLabel: "Codex account 2",
+              collectionMethod: "codex_app_server",
+              lastAcceptedSyncSequence: "0",
+              profileSourceId,
+            },
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current") {
+        response.end(
+          JSON.stringify(
+            reconciliationResponse([
+              {
+                clientSourceId: profileClientSourceId,
+                sourceId: profileSourceId,
+                agentAccountId: profileAccountId,
+                agentId: "codex",
+                accountLabel: "Codex",
+                collectionMethod: "codex_app_server",
+                lastAcceptedSyncSequence: "0",
+              },
+              ...(registrationBodies.length < 2
+                ? []
+                : [
+                    {
+                      clientSourceId: registrationBodies.at(-1).clientSourceId,
+                      sourceId: secondarySourceId,
+                      agentAccountId: secondaryAccountId,
+                      agentId: "codex",
+                      accountLabel: "Codex account 2",
+                      collectionMethod: "codex_app_server",
+                      lastAcceptedSyncSequence: "0",
+                      profileSourceId,
+                    },
+                  ]),
+            ]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        for (const snapshot of body.snapshots ?? [])
+          serverTotals.set(snapshot.sourceId, snapshot.entries.at(-1)?.totalTokens ?? "0");
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        resultBodies.push(body);
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-browser-first-backfill-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const codexHome = join(home, ".codex");
+  const executablePath = join(home, "bin", process.platform === "win32" ? "codex.cmd" : "codex");
+  await mkdir(codexHome, { recursive: true });
+  await mkdir(dirname(executablePath), { recursive: true });
+  await writeExecutableNodeScript(
+    executablePath,
+    `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+import { join } from "node:path";
+import { writeFileSync } from "node:fs";
+const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+for await (const line of lines) {
+  const message = JSON.parse(line);
+  if (message.id === 0) {
+    writeFileSync(join(process.env.CODEX_HOME, "auth.json"), JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: process.env.VIBERACING_TEST_CODEX_WORKSPACE } }), { mode: 0o600 });
+    process.stdout.write(JSON.stringify({ id: 0, result: { userAgent: "synthetic" } }) + "\\n");
+  }
+  else if (message.method === "account/read") process.stdout.write(JSON.stringify({ id: message.id, result: { account: { type: "chatgpt", email: "same@example.com", planType: "pro" }, requiresOpenaiAuth: false } }) + "\\n");
+  else if (message.method === "account/usage/read") process.stdout.write(JSON.stringify({ id: message.id, result: { dailyUsageBuckets: [{ startDate: new Date().toISOString().slice(0, 10), tokens: process.env.VIBERACING_TEST_CODEX_TOKENS }] } }) + "\\n");
+}
+`,
+  );
+  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
+    {
+      clientSourceId: profileClientSourceId,
+      sourceId: profileSourceId,
+      agentAccountId: profileAccountId,
+      agentId: "codex",
+      dataPath: codexHome,
+      executablePath,
+      collectionMethod: "codex_app_server",
+      supportedSurface: "desktop",
+      suggestedLabel: "Codex",
+      accountLabel: "Codex",
+    },
+  ]);
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_CODEX_BIN: executablePath,
+  });
+  const writeAuth = (accountId) =>
+    writeFile(
+      join(codexHome, "auth.json"),
+      `${JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: accountId } })}\n`,
+      { mode: 0o600 },
+    );
+  await writeAuth("workspace-A");
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: {
+      ...environment,
+      VIBERACING_TEST_CODEX_WORKSPACE: "workspace-A",
+      VIBERACING_TEST_CODEX_TOKENS: "10",
+    },
+  });
+  usageBodies.length = 0;
+  await writeAuth("workspace-B");
+  const pendingOutput = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: {
+      ...environment,
+      VIBERACING_TEST_CODEX_WORKSPACE: "workspace-B",
+      VIBERACING_TEST_CODEX_TOKENS: "71",
+    },
+  });
+  const pendingBeforeDelivery = JSON.parse(
+    await readFile(join(directory, "state.json"), "utf8"),
+  ).pendingAccountRegistrations;
+  assert.equal(Object.keys(pendingBeforeDelivery).length, 1);
+  const deliveryOutput = await execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
+    ],
+    {
+      env: {
+        ...environment,
+        VIBERACING_TEST_CODEX_WORKSPACE: "workspace-B",
+        VIBERACING_TEST_CODEX_TOKENS: "73",
+      },
+    },
+  );
+  await writeAuth("workspace-A");
+  const laterOutput = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: {
+      ...environment,
+      VIBERACING_TEST_CODEX_WORKSPACE: "workspace-A",
+      VIBERACING_TEST_CODEX_TOKENS: "10",
+    },
+  });
+
+  assert.equal(registrationBodies.length, 2);
+  assert.equal(usageBodies.length, 2);
+  assert.deepEqual(
+    usageBodies[0].snapshots.map(({ sourceId, entries }) => ({ sourceId, entries })),
+    [
+      {
+        sourceId: secondarySourceId,
+        entries: [{ date: new Date().toISOString().slice(0, 10), totalTokens: "73" }],
+      },
+    ],
+  );
+  assert.deepEqual(
+    usageBodies
+      .flatMap((body) => body.snapshots)
+      .filter(({ sourceId }) => sourceId === secondarySourceId),
+    [
+      {
+        sourceId: secondarySourceId,
+        syncSequence: "1",
+        rangeStart: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
+        rangeEnd: new Date().toISOString().slice(0, 10),
+        completeness: "complete",
+        entries: [{ date: new Date().toISOString().slice(0, 10), totalTokens: "73" }],
+      },
+    ],
+  );
+  assert.equal(serverTotals.get(secondarySourceId), "73");
+  assert.deepEqual(
+    JSON.parse(await readFile(join(directory, "state.json"), "utf8")).pendingAccountRegistrations,
+    {},
+  );
+  assert.deepEqual(resultBodies, [
+    { requestId, status: "partial", resultCode: "partial_accounts_inactive" },
+  ]);
+  const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
+  assert.equal(config.sources.length, 2);
+  assert.equal(config.sources[1].profileSourceId, profileSourceId);
+  assert.doesNotMatch(
+    JSON.stringify({
+      registrationBodies,
+      usageBodies,
+      resultBodies,
+      config,
+      pendingOutput,
+      deliveryOutput,
+      laterOutput,
+    }),
+    /same@example\.com|workspace-B|acct1_/i,
+  );
 });
 
 test("events from Claude and Kimi coalesce without collecting other sources", async (context) => {
@@ -3312,6 +4095,8 @@ test("connect pairs only exact sources and keeps every local path out of its pay
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
   const directory = join(home, ".viberacing");
   await mkdir(directory, { recursive: true });
+  await mkdir(join(home, ".codex"), { recursive: true });
+  const codexProfileClientSourceId = "22222222-3333-4444-8555-666666666666";
   await writeLocalSources(directory, [
     {
       clientSourceId: "11111111-2222-4333-8444-555555555555",
@@ -3322,6 +4107,26 @@ test("connect pairs only exact sources and keeps every local path out of its pay
       collectionMethod: "antigravity_cli_capture",
       supportedSurface: "cli",
       suggestedLabel: "Antigravity",
+    },
+    {
+      clientSourceId: codexProfileClientSourceId,
+      agentId: "codex",
+      dataPath: join(home, ".codex"),
+      executablePath: process.execPath,
+      collectionMethod: "codex_app_server",
+      supportedSurface: "desktop",
+      suggestedLabel: "Codex",
+    },
+    {
+      clientSourceId: "33333333-4444-4555-8666-777777777777",
+      agentId: "codex",
+      dataPath: join(home, ".codex"),
+      executablePath: process.execPath,
+      collectionMethod: "codex_app_server",
+      supportedSurface: "desktop",
+      suggestedLabel: "Codex account 2",
+      profileClientSourceId: codexProfileClientSourceId,
+      providerAccountKey: `acct1_${"x".repeat(43)}`,
     },
   ]);
 
@@ -3343,7 +4148,7 @@ test("connect pairs only exact sources and keeps every local path out of its pay
   assert.equal(pairingBodies[0].browserSyncCapable, false);
   assert.equal(pairingBodies[0].browserSyncProtocol, 0);
   assert.equal(pairingBodies[0].installedRuntimeVersion, connectorVersion);
-  assert.equal(pairingBody.sources.length, 1);
+  assert.equal(pairingBody.sources.length, 2);
   assert.deepEqual(Object.keys(pairingBody.sources[0]).sort(), [
     "agentId",
     "clientSourceId",
@@ -3352,6 +4157,14 @@ test("connect pairs only exact sources and keeps every local path out of its pay
     "supportedSurface",
   ]);
   assert.equal(pairingBody.sources[0].agentId, "antigravity");
+  assert.equal(pairingBody.sources[1].agentId, "codex");
+  assert.equal(pairingBody.sources[1].clientSourceId, codexProfileClientSourceId);
+  assert.equal(
+    pairingBodies.some((body) =>
+      JSON.stringify(body).includes("33333333-4444-4555-8666-777777777777"),
+    ),
+    false,
+  );
   assert.equal(pairingBody.browserSyncCapable, false);
   assert.equal(Object.hasOwn(pairingBody, "browserSyncProtocol"), false);
   assert.equal(Object.hasOwn(pairingBody, "installedRuntimeVersion"), false);
@@ -3479,6 +4292,225 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   await assert.rejects(access(lastHookErrorPath));
   const config = JSON.parse(await readFile(join(directory, "config.json"), "utf8"));
   assert.equal(JSON.stringify(config).includes("custom-channel"), false);
+});
+
+test("connect restores every Codex logical mapping before its initial sync", async (context) => {
+  const primaryClientSourceId = "56565656-5656-4656-8656-565656565656";
+  const secondaryClientSourceId = "57575757-5757-4757-8757-575757575757";
+  const primarySourceId = "58585858-5858-4858-8858-585858585858";
+  const secondarySourceId = "59595959-5959-4959-8959-595959595959";
+  const primaryAccountId = "60606060-6060-4060-8060-606060606060";
+  const secondaryAccountId = "61616161-6161-4161-8161-616161616161";
+  const providerIdentitySalt = "p".repeat(43);
+  const events = [];
+  let stateDirectory;
+  let committedSourcesAtInitialReconcile;
+  let pairingBody;
+  const primaryMapping = () => ({
+    clientSourceId: primaryClientSourceId,
+    sourceId: primarySourceId,
+    agentAccountId: primaryAccountId,
+    agentId: "codex",
+    accountLabel: "Codex A",
+    collectionMethod: "codex_app_server",
+    lastAcceptedSyncSequence: "0",
+  });
+  const secondaryMapping = {
+    clientSourceId: secondaryClientSourceId,
+    sourceId: secondarySourceId,
+    agentAccountId: secondaryAccountId,
+    agentId: "codex",
+    accountLabel: "Codex account 2",
+    collectionMethod: "codex_app_server",
+    lastAcceptedSyncSequence: "0",
+    profileSourceId: primarySourceId,
+  };
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/pairing/start") {
+        pairingBody = body;
+        events.push("pairing");
+        response.statusCode = 201;
+        response.end(
+          JSON.stringify({
+            installationId: body.installationId,
+            code: "ABCDEFGH",
+            pollToken: "codex_logical_poll_token_that_is_long_enough",
+            verificationUrl: `http://${request.headers.host}/connect?code=ABCDEFGH`,
+            expiresInSeconds: 30,
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/pairing/poll") {
+        events.push("active");
+        response.end(
+          JSON.stringify({
+            status: "active",
+            deviceToken: "codex_logical_device_token_that_is_long_enough",
+            protocol: {
+              version: connectorProtocolVersion,
+              snapshotDays: 31,
+              maximumSources: 32,
+              maximumEntries: 1_024,
+            },
+            sources: [primaryMapping()],
+          }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sources/register") {
+        events.push("register-secondary");
+        assert.deepEqual(body, {
+          agentId: "codex",
+          clientSourceId: secondaryClientSourceId,
+          collectionMethod: "codex_app_server",
+          profileClientSourceId: primaryClientSourceId,
+          supportedSurface: "desktop",
+        });
+        response.end(JSON.stringify({ source: secondaryMapping }));
+        return;
+      }
+      if (request.url === "/api/installations/current") {
+        events.push("initial-reconcile");
+        committedSourcesAtInitialReconcile = JSON.parse(
+          readFileSync(join(stateDirectory, "config.json"), "utf8"),
+        ).sources;
+        response.end(
+          JSON.stringify(
+            reconciliationResponse([
+              { ...primaryMapping(), status: "disconnected" },
+              { ...secondaryMapping, status: "disconnected" },
+            ]),
+          ),
+        );
+        return;
+      }
+      if (request.url === "/api/usage") {
+        events.push("initial-usage");
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-logical-connect-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, ".viberacing");
+  stateDirectory = directory;
+  const codexHome = join(home, ".codex");
+  const executablePath = join(home, "bin", process.platform === "win32" ? "codex.cmd" : "codex");
+  await mkdir(directory, { recursive: true });
+  await mkdir(codexHome, { recursive: true });
+  await mkdir(dirname(executablePath), { recursive: true });
+  await writeExecutableNodeScript(
+    executablePath,
+    `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+import { join } from "node:path";
+import { writeFileSync } from "node:fs";
+const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+for await (const line of lines) {
+  const message = JSON.parse(line);
+  if (message.id === 0) {
+    writeFileSync(join(process.env.CODEX_HOME, "auth.json"), JSON.stringify({ auth_mode: "chatgpt", tokens: { account_id: "pairing-account-A" } }), { mode: 0o600 });
+    process.stdout.write(JSON.stringify({ id: 0, result: { userAgent: "synthetic" } }) + "\\n");
+  } else if (message.method === "account/read") {
+    process.stdout.write(JSON.stringify({ id: message.id, result: { account: { type: "chatgpt", email: "private@example.com", planType: "pro" }, requiresOpenaiAuth: false } }) + "\\n");
+  } else if (message.method === "account/usage/read") {
+    process.stdout.write(JSON.stringify({ id: message.id, result: { dailyUsageBuckets: [{ startDate: new Date().toISOString().slice(0, 10), tokens: "17" }] } }) + "\\n");
+  } else if (message.method === "hooks/list") {
+    process.stdout.write(JSON.stringify({ id: message.id, result: { data: [] } }) + "\\n");
+  }
+}
+`,
+  );
+  const primaryProviderKey = deriveCodexProviderAccountKey(providerIdentitySalt, [
+    ["account", "pairing-account-A"],
+    ["email", "private@example.com"],
+  ]);
+  const secondaryProviderKey = deriveCodexProviderAccountKey(providerIdentitySalt, [
+    ["account", "pairing-account-B"],
+    ["email", "private@example.com"],
+  ]);
+  const common = {
+    agentId: "codex",
+    dataPath: codexHome,
+    executablePath,
+    collectionMethod: "codex_app_server",
+    supportedSurface: "desktop",
+  };
+  await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
+  await writeFile(
+    join(directory, "provider-identity.json"),
+    `${JSON.stringify({ version: 1, salt: providerIdentitySalt })}\n`,
+    { mode: 0o600 },
+  );
+  await writeFile(
+    join(directory, "sources.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: [
+        {
+          ...common,
+          clientSourceId: primaryClientSourceId,
+          suggestedLabel: "Codex",
+          providerAccountKey: primaryProviderKey,
+        },
+        {
+          ...common,
+          clientSourceId: secondaryClientSourceId,
+          suggestedLabel: "Codex account",
+          profileClientSourceId: primaryClientSourceId,
+          providerAccountKey: secondaryProviderKey,
+        },
+      ],
+    })}\n`,
+  );
+
+  await execFileAsync(
+    process.execPath,
+    [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
+    {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        PATH: "",
+        VIBERACING_CODEX_BIN: executablePath,
+        VIBERACING_TEST_PAIRING_POLL_INTERVAL_MS: "10",
+      }),
+    },
+  );
+
+  assert.equal(pairingBody.sources.length, 1);
+  assert.equal(pairingBody.sources[0].clientSourceId, primaryClientSourceId);
+  assert.ok(events.indexOf("register-secondary") < events.indexOf("initial-reconcile"));
+  assert.equal(events.includes("initial-usage"), false);
+  assert.deepEqual(
+    committedSourcesAtInitialReconcile.map(({ clientSourceId, sourceId, profileSourceId }) => ({
+      clientSourceId,
+      sourceId,
+      ...(profileSourceId === undefined ? {} : { profileSourceId }),
+    })),
+    [
+      { clientSourceId: primaryClientSourceId, sourceId: primarySourceId },
+      {
+        clientSourceId: secondaryClientSourceId,
+        sourceId: secondarySourceId,
+        profileSourceId: primarySourceId,
+      },
+    ],
+  );
 });
 
 test("later disconnect defeats pending, active-polled, and interrupted connect attempts", async (context) => {
@@ -5900,90 +6932,169 @@ for (const legacyProtocolVersion of [2, 3])
     await assert.rejects(access(join(directory, "quarantine", `${failedSource.sourceId}.json`)));
   });
 
-test("OpenCode cutover aliases become confirmed only after server acceptance", async (context) => {
-  const sourceId = "62626262-6262-4262-8262-626262626262";
-  const clientSourceId = "63636363-6363-4363-8363-636363636363";
-  const bodies = [];
-  const acceptedBodies = [];
-  let acceptUsage = false;
-  const server = createServer((request, response) => {
-    const chunks = [];
-    request.on("data", (chunk) => chunks.push(chunk));
-    request.on("end", () => {
-      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
-      response.setHeader("content-type", "application/json");
-      if (request.url === "/api/installations/current") {
-        response.end(JSON.stringify(reconciliationResponse([{ sourceId }])));
-        return;
-      }
-      if (request.url === "/api/usage") {
-        bodies.push(body);
-        if (acceptUsage) acceptedBodies.push(body);
-        response.statusCode = acceptUsage ? 200 : 503;
-        response.end(JSON.stringify(acceptUsage ? usageResponse(body) : { error: "server_error" }));
-        return;
-      }
-      response.statusCode = 404;
-      response.end(JSON.stringify({ error: "not_found" }));
-    });
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  context.after(() => server.close());
-  const address = server.address();
-  assert.equal(typeof address, "object");
-
-  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-cutover-044-"));
+test("0.4.3 OpenCode state blocks 0.5.0 sync byte-for-byte until real 0.4.4 runs", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-preflight-sync-"));
   context.after(() => rm(home, { recursive: true, force: true }));
-  const databasePath = join(home, "opencode.db");
-  const database = new DatabaseSync(databasePath);
-  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  let installation;
+  const remote = openCodeUpgradeServer(() => installation);
+  remote.server.listen(0, "127.0.0.1");
+  await once(remote.server, "listening");
+  context.after(() => remote.server.close());
+  const address = remote.server.address();
+  assert.equal(typeof address, "object");
+  installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  await pointInstallationAtServer(installation, address.port);
+  await mkdir(join(installation.directory, "pending"));
+  await writeFile(
+    join(installation.directory, "pending", `${installation.sourceId}.error.json`),
+    `${JSON.stringify({
+      protocolVersion: connectorProtocolVersion,
+      snapshots: [],
+      sourceErrors: [
+        {
+          sourceId: installation.sourceId,
+          code: "collector_failed",
+          observedAfterSequence: "1",
+        },
+      ],
+    })}\n`,
+  );
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const before = await snapshotStateTree(installation.directory);
+
+  const status = await execFileAsync(process.execPath, [connectorPath, "upgrade-preflight"], {
+    env: environment,
+  }).then(
+    () => assert.fail("upgrade preflight unexpectedly accepted uncut 0.4.3 state"),
+    (error) => error,
+  );
+  assert.equal(status.code, 1);
+  assert.match(status.stderr, /opencode_cutover_required/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+  assert.equal(remote.requests.length, 0);
+
+  const blocked = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: environment,
+  }).then(
+    () => assert.fail("0.5.0 sync unexpectedly accepted uncut 0.4.3 OpenCode state"),
+    (error) => error,
+  );
+
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.match(blocked.stderr, /npx --yes @viberacing\/connector@0\.4\.4 sync/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+  assert.equal(remote.requests.length, 0);
+
+  const cutover = await execFileAsync(process.execPath, [connector044Path, "sync"], {
+    env: environment,
+  });
+  assert.match(cutover.stdout, /Synced/);
+  const cutoverState = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  );
+  assert.equal(cutoverState.adapters[installation.sourceId].cutover.version, 1);
+
+  const upgraded = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: environment,
+  });
+  assert.match(upgraded.stdout, /Synced/);
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "sources.json"), "utf8")).version,
+    2,
+  );
+  assert.ok(remote.usageBodies.length >= 3);
+  assert.equal(remote.usageBodies.at(-1).snapshots[0].entries[0].totalTokens, "100");
+});
+
+test("0.4.3 OpenCode state blocks 0.5.0 connect before pairing and remains 0.4.4-readable", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-preflight-connect-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  let installation;
+  const remote = openCodeUpgradeServer(() => installation);
+  remote.server.listen(0, "127.0.0.1");
+  await once(remote.server, "listening");
+  context.after(() => remote.server.close());
+  const address = remote.server.address();
+  assert.equal(typeof address, "object");
+  installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  await pointInstallationAtServer(installation, address.port);
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const before = await snapshotStateTree(installation.directory);
+
+  const blocked = await execFileAsync(
+    process.execPath,
+    [connectorPath, "connect", "--origin", `http://127.0.0.1:${address.port}`],
+    {
+      env: environment,
+    },
+  ).then(
+    () => assert.fail("0.5.0 connect unexpectedly started pairing from uncut 0.4.3 state"),
+    (error) => error,
+  );
+
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.match(blocked.stderr, /npx --yes @viberacing\/connector@0\.4\.4 sync/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+  assert.equal(remote.requests.length, 0);
+
+  const compatible = await execFileAsync(process.execPath, [connector044Path, "sync"], {
+    env: environment,
+  });
+  assert.match(compatible.stdout, /Synced/);
+  assert.equal(remote.usageBodies.length, 1);
+});
+
+test("confirmed real 0.4.4 cutover migrates once and preserves the accepted baseline", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-preflight-confirmed-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  let installation;
+  const remote = openCodeUpgradeServer(() => installation);
+  remote.server.listen(0, "127.0.0.1");
+  await once(remote.server, "listening");
+  context.after(() => remote.server.close());
+  const address = remote.server.address();
+  assert.equal(typeof address, "object");
+  installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  await pointInstallationAtServer(installation, address.port);
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+
+  await execFileAsync(process.execPath, [connector044Path, "sync"], { env: environment });
+  const confirmedTree = await snapshotStateTree(installation.directory);
+  const preflight = await execFileAsync(process.execPath, [connectorPath, "upgrade-preflight"], {
+    env: environment,
+  });
+  assert.match(preflight.stdout, /OpenCode upgrade preflight passed/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), confirmedTree);
+  const database = new DatabaseSync(installation.databasePath);
   database
     .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
     .run(
-      "private-message-id",
-      Date.now(),
-      JSON.stringify({ role: "assistant", tokens: { input: 5, output: 4, total: 9 } }),
+      "post-cutover-once",
+      Date.parse(`${installation.date}T09:00:00.000Z`),
+      JSON.stringify({ role: "assistant", tokens: { input: 4, output: 3, total: 7 } }),
     );
   database.close();
-  const directory = await writeMappedInstallation(home, `http://127.0.0.1:${address.port}`, [
-    {
-      clientSourceId,
-      sourceId,
-      agentId: "opencode",
-      dataPath: databasePath,
-      collectionMethod: "opencode_sqlite",
-      supportedSurface: "cli",
-      suggestedLabel: "OpenCode",
-      accountLabel: "OpenCode",
-    },
-  ]);
 
-  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
-  await assert.rejects(
-    execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment }),
-  );
-  let state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
-  assert.equal(state.adapters[sourceId].cutover, undefined);
-  assert.equal(state.adapters[sourceId].cutoverPending.pendingSequence, "1");
-  acceptUsage = true;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
   await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
 
-  assert.deepEqual(
-    acceptedBodies.map((body) => body.snapshots[0].syncSequence),
-    ["1", "2"],
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "sources.json"), "utf8")).version,
+    2,
   );
-  state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
-  assert.deepEqual(Object.keys(state.adapters[sourceId].cutover).sort(), [
-    "aliases",
-    "confirmedRangeEnd",
-    "confirmedSequence",
-    "version",
-  ]);
-  assert.equal(state.adapters[sourceId].cutover.confirmedSequence, "2");
-  assert.equal(Object.keys(state.adapters[sourceId].cutover.aliases).length, 1);
-  assert.equal(state.adapters[sourceId].cutoverPending, undefined);
-  assert.doesNotMatch(JSON.stringify(state.adapters[sourceId]), /private-message-id/);
+  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  const adapterState = state.adapters[installation.sourceId];
+  assert.equal(adapterState.bootstrapComplete, true);
+  assert.deepEqual(adapterState.legacyBaseline, [{ date: installation.date, totalTokens: "100" }]);
+  assert.equal(Object.keys(adapterState.legacyAliases).length, 1);
+  assert.equal(Object.keys(adapterState.ledger).length, 1);
+  assert.equal(remote.usageBodies.length, 3);
+  for (const body of remote.usageBodies.slice(1)) {
+    assert.equal(body.snapshots[0].entries.length, 1);
+    assert.equal(body.snapshots[0].entries[0].totalTokens, "107");
+  }
 });
 
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {

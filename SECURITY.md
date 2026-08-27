@@ -37,6 +37,14 @@ device, and session capabilities are stored only as SHA-256 hashes. The server a
 for an active source belonging to the authenticated installation and enforces body/range/count/
 numeric limits plus PostgreSQL-backed rate limits.
 
+Dynamic Codex account registration authenticates the device and admits only `clientSourceId`,
+`profileClientSourceId`, and the fixed Codex agent/method/surface metadata. It locks the user,
+installation, and physical profile, then validates every fixed field before creating a generic
+numbered label server-side while taking the aggregation mode from the central agent registry. It is
+idempotent and enforces eight logical accounts per profile, 32 sources per installation, and the
+existing 100-source/100-account per-user limits. Provider email and the connector's local account
+HMAC are never accepted by the endpoint.
+
 Public production also requires a trusted client-address boundary. Railway deployments use the
 edge-overwritten `X-Real-IP`; self-hosted deployments must use a reverse proxy that removes the
 client value and overwrites that header before selecting `trusted-x-real-ip`. Missing or invalid

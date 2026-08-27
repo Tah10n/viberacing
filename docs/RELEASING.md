@@ -50,6 +50,85 @@ old and new protocols, publish the compatible connector, and only then raise
 That variable is a compatibility floor, not a latest-version tracker; normal patch and minor
 releases do not change it.
 
+## Connector 0.5.0 account-switch rollout
+
+Connector 0.5.0 keeps usage protocol v4 and the server continues to accept v2 and v3. Its new
+authenticated dynamic-source endpoint must be deployed before the connector package, while the
+Railway compatibility floor remains `0.4.3`. Connector 0.4.4 was separately squash-merged and
+published first: annotated tag `v0.4.4` resolves to linear `main` commit
+`2b16b6a8ad75b6b852adc5e2189e6d4a8d93eabd`. Its source tree matches the reviewed candidate
+`e2914273e2c4105d38bcfa132c3f83d60e0debeb`, but the feature-branch SHA is not the release target.
+`dist-tags.latest` remains `0.4.4` until a separately authorized 0.5.0 release.
+
+Production already contains accepted OpenCode usage, so complete the remaining rollout in this
+order:
+
+1. Inventory every active installation with an active OpenCode source and confirm each local state
+   using the read-only `upgrade-preflight` command described below. A last-sync timestamp or
+   connector version on the server is not proof of a local cutover.
+2. Squash-merge the reviewed linear account-switch pull request. It must be based on the published
+   0.4.4 `main` commit and must not contain either the old staging commit or a merge commit.
+3. Wait for Railway to apply the server changes and migration `007_account_switch_safety.sql`.
+4. Verify `/ready` and an authenticated, content-free Codex source-registration request. The request
+   has exactly `agentId`, `clientSourceId`, `collectionMethod`, `profileClientSourceId`, and
+   `supportedSurface`; it never contains email, provider identity, credentials, or account hints.
+5. Keep `VIBERACING_MIN_CONNECTOR_VERSION=0.4.3` and confirm 0.4.4 still pairs and syncs.
+6. Confirm a direct 0.4.3 -> 0.5.0 OpenCode upgrade fails closed before pending delivery,
+   reconciliation, source-schema migration, pairing, or initial Sync, while a confirmed 0.4.4 state
+   preserves the baseline and counts rows inserted after its accepted scan.
+7. Create annotated tag `v0.5.0` and a non-draft, non-prerelease GitHub Release on the exact
+   reviewed squash-merged `main` commit.
+8. Wait for Trusted Publishing and verify both `@viberacing/connector@0.5.0` and
+   `dist-tags.latest === 0.5.0`.
+9. Run Linux, Windows, and macOS smoke tests against the immutable package, including the real macOS
+   custom-scheme handler.
+10. Run a real shared-profile Codex A -> B -> A check: two logical accounts, no overwrite, no third
+    source on return, one physical hook, and no shared-profile component breakdown.
+11. Only if production intentionally requires these local account-switch guarantees, raise
+    `VIBERACING_MIN_CONNECTOR_VERSION` to `0.5.0`, wait for deployment and `/ready`, and verify the
+    signed-in update notices. Publishing 0.5.0 alone is not a reason to raise the floor.
+
+### Read-only OpenCode cutover inventory
+
+Use a read-only production query to enumerate the active machines that require local confirmation;
+do not infer completion from `installed_connector_version` or `last_successful_sync_at`:
+
+```sql
+SELECT users.handle,
+       installations.name,
+       max(installation_sources.last_successful_sync_at) AS last_opencode_sync_at
+  FROM installations
+  JOIN users ON users.id = installations.user_id
+  JOIN installation_sources ON installation_sources.installation_id = installations.id
+ WHERE installations.status = 'active'
+   AND installation_sources.status = 'active'
+   AND installation_sources.agent_id = 'opencode'
+ GROUP BY users.handle, installations.id, installations.name
+ ORDER BY users.handle, installations.name;
+```
+
+On each returned machine, run the reviewed 0.5.0 checkout without `sync`:
+
+```sh
+node packages/connector/bin/viberacing.mjs upgrade-preflight
+```
+
+The command only reads bounded regular `config.json` and `state.json` files. It emits no source IDs,
+paths, usage, or identity. Exit 0 means every accepted OpenCode source has either a confirmed 0.4.4
+cutover or an already validated 0.5.0 migration. Exit 1 with `opencode_cutover_required` means that
+machine is still outstanding and prints exactly:
+
+```sh
+npx --yes @viberacing/connector@0.4.4 sync
+```
+
+Run that command on the affected machine and repeat `upgrade-preflight`. An offline or partial
+collection, a one-off version report, and server metadata alone do not establish confirmation.
+
+Claude, OpenCode, Kimi, Qwen, and Gemini remain combined local histories within each store;
+Antigravity separation remains explicit per capture source. This rollout must not add provider
+identity to any request or claim per-account attribution where an upstream usage event lacks it.
+
 For the 0.4.3 rollout, the all-agent browser handler is the new supported baseline. After npm
 `latest` is verified as 0.4.3, set the official Railway service to
 `VIBERACING_MIN_CONNECTOR_VERSION=0.4.3`; never make that production change before the immutable npm

@@ -325,6 +325,49 @@ test("reconciliation accepts only the matching handler attestation acknowledgeme
   );
 });
 
+test("reconciliation accepts only exact requested server bootstrap baselines", async () => {
+  const sources = [{ sourceId, status: "active", lastAcceptedSyncSequence: "7" }];
+  const sourceBaselines = [
+    {
+      sourceId,
+      acceptedAt: "2026-08-10T12:00:00.000Z",
+      entries: [{ date: "2026-08-10", totalTokens: "123" }],
+    },
+  ];
+  const result = await parseProtocolResponse(json({ sources, sourceBaselines }), {
+    kind: "reconciliation",
+    sourceIds: [sourceId],
+    bootstrapSourceIds: [sourceId],
+  });
+  assert.deepEqual(result.sourceBaselines, sourceBaselines);
+  for (const value of [
+    { sources },
+    { sources, sourceBaselines: [] },
+    {
+      sources,
+      sourceBaselines: [{ ...sourceBaselines[0], acceptedAt: "not-a-date" }],
+    },
+    {
+      sources,
+      sourceBaselines: [{ ...sourceBaselines[0], acceptedAt: null }],
+    },
+    {
+      sources,
+      sourceBaselines: [
+        { ...sourceBaselines[0], entries: [{ date: "2026-08-10", totalTokens: "-1" }] },
+      ],
+    },
+  ])
+    await assert.rejects(
+      parseProtocolResponse(json(value), {
+        kind: "reconciliation",
+        sourceIds: [sourceId],
+        bootstrapSourceIds: [sourceId],
+      }),
+      /invalid protocol response/,
+    );
+});
+
 test("accepts only the expected verification origin, path, code, and web protocols", async () => {
   const base = {
     installationId,
@@ -372,6 +415,55 @@ test("stored network mappings cannot override local collection authority", () =>
   assert.equal(restored.dataPath, local.dataPath);
   assert.equal(restored.executablePath, local.executablePath);
   assert.equal(restored.agentId, local.agentId);
+});
+
+test("dynamic source registration preserves local Codex profile authority", async () => {
+  const codex = {
+    ...local,
+    agentId: "codex",
+    collectionMethod: "codex_app_server",
+    suggestedLabel: "Codex account",
+    profileClientSourceId: "77777777-7777-4777-8777-777777777777",
+    providerAccountKey: `acct1_${"a".repeat(43)}`,
+  };
+  const response = {
+    source: {
+      ...mapping({
+        clientSourceId: codex.clientSourceId,
+        agentId: "codex",
+        accountLabel: "Codex account 2",
+        collectionMethod: "codex_app_server",
+      }),
+      profileSourceId: "88888888-8888-4888-8888-888888888888",
+    },
+  };
+  const result = await parseProtocolResponse(json(response), {
+    kind: "sourceRegistration",
+    localSource: codex,
+    profileClientSourceId: codex.profileClientSourceId,
+    profileSourceId: response.source.profileSourceId,
+  });
+  assert.equal(result.source.dataPath, codex.dataPath);
+  assert.equal(result.source.providerAccountKey, codex.providerAccountKey);
+  const renamed = await parseProtocolResponse(
+    json({ source: { ...response.source, accountLabel: "Work" } }),
+    {
+      kind: "sourceRegistration",
+      localSource: codex,
+      profileClientSourceId: codex.profileClientSourceId,
+      profileSourceId: response.source.profileSourceId,
+    },
+  );
+  assert.equal(renamed.source.accountLabel, "Work");
+  await assert.rejects(
+    parseProtocolResponse(json({ source: { ...response.source, accountLabel: "Work\u0000" } }), {
+      kind: "sourceRegistration",
+      localSource: codex,
+      profileClientSourceId: codex.profileClientSourceId,
+      profileSourceId: response.source.profileSourceId,
+    }),
+    /invalid protocol response/,
+  );
 });
 
 test("diagnostic delivery accepts only the exact acknowledged event count", async () => {

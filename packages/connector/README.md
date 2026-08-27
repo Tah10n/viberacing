@@ -90,21 +90,48 @@ the global handler.
 
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.
-Pairing configuration contains the server mapping but never a path or path hash. Separate Codex
-accounts require separate `--data-dir` profile roots; each App Server launch gets that source's
-`CODEX_HOME`, so one profile is never collected twice as two local sources. The App Server daily
-total remains authoritative. A local incremental pass extracts only cumulative `token_count` events
-from that profile's session files, uses provider-recorded `last_token_usage`, removes
-cache/reasoning overlap, and deduplicates repeated/copied events with content-free hashes. The
-account-wide total and locally observed component sum remain separate exact counters and may differ.
-While App Server account buckets lag, Sync submits every exact local daily sum after the newest
-authoritative bucket as a partial ranking value, including across UTC rollovers. Later complete
-account data can correct each day in either direction. A successful App Server result also
-materializes every UTC date between its earliest and latest returned buckets: a missing bucket is
-sent as an explicit complete zero, which is an authoritative correction marker rather than an
-estimate. The connector never extends zero coverage before the earliest returned bucket or after the
-latest one. The dashboard labels the scope difference instead of scaling either value. Every other
-transcript field is discarded, and unsupported or incomplete shapes remain total-only.
+Pairing configuration contains the server mapping but never a path or path hash. A Codex profile may
+bind up to eight locally distinguished ChatGPT accounts. Each App Server launch gets that profile's
+`CODEX_HOME`. Before starting App Server, the connector reads local `tokens.account_id`; the server
+then performs `account/read` (with `refreshToken: false`), `account/usage/read`, and the same
+account read again, followed by another local ID read. The generated App Server contract validates
+the ChatGPT response (`email` and `planType`). Both local IDs and both normalized, non-null emails
+must match. The bounded, non-symlinked auth file is read and parsed in process memory, but only
+account ID is retained from it; credentials are never persisted, logged, hashed, or transmitted.
+Unix builds also require the auth file to be owned by the current user with no group/world
+permissions; Windows does not claim an equivalent auth-file ACL check. A changed identity gets one
+bounded retry; API-key, Bedrock, identifier-unavailable, and unstable states fail closed with
+guidance to use separate `CODEX_HOME` roots. The local `acct1_…` HMAC is derived from the accepted
+normalized email plus account ID and a separate random salt that survives `reset-installation`; it
+is never serialized into `config.json` or a request. Unknown stable identities are registered as
+numbered, generic `Codex account` sources using only opaque source UUIDs and fixed Codex source
+metadata. The App Server daily total remains authoritative. A local incremental pass extracts only
+cumulative `token_count` events from that profile's session files, uses provider-recorded
+`last_token_usage`, removes cache/reasoning overlap, and deduplicates repeated/copied events with
+content-free hashes. The account-wide total and locally observed component sum remain separate exact
+counters and may differ. While App Server account buckets lag, Sync submits every exact local daily
+sum after the newest authoritative bucket as a partial ranking value, including across UTC
+rollovers. Later complete account data can correct each day in either direction. A successful App
+Server result also materializes every UTC date between its earliest and latest returned buckets: a
+missing bucket is sent as an explicit complete zero, which is an authoritative correction marker
+rather than an estimate. The connector never extends zero coverage before the earliest returned
+bucket or after the latest one. Local components are omitted when a physical profile has two or more
+logical accounts; the dashboard labels that shared profile instead of attributing components across
+identities. Every other transcript field is discarded, and unsupported or incomplete shapes remain
+total-only.
+
+Codex identity support is intentionally limited to a file-backed `CODEX_HOME/auth.json`. A login
+whose stable identity exists only in an OS keyring or ephemeral process state is not supported yet
+and fails closed. Separate `CODEX_HOME` roots help only when each root has its own readable,
+file-backed `auth.json`; they do not repair a keyring-only login. The connector does not read the OS
+keyring directly. Adding that capability requires a separate security design covering platform APIs,
+access control, lifetime, redaction, and account-switch races.
+
+Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity usage use a common 31-day observed-
+event ledger. It stores only a SHA-256 event key, UTC date, exact token tuple, and parser version,
+with explicit count and byte bounds. Observations survive local file deletion, movement, copying,
+and database-row cleanup; copies deduplicate. Reusing one event identity with different counters
+keeps the first tuple, marks the snapshot partial, and emits `local_event_identity_conflict`.
 
 Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
 add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
@@ -121,21 +148,24 @@ creates one default source when none exists.
 
 OpenCode enumerates only names matching `opencode.db` or `opencode-<channel>.db` inside the official
 data root, plus `OPENCODE_DB` (absolute or relative to that root). Every candidate must expose the
-compatible `message(id,time_created,data)` schema in read-only SQLite mode. Qwen chooses exactly one
-automatic runtime root in this order: `QWEN_RUNTIME_DIR`, `advanced.runtimeOutputDir` from the
-user-level settings, `QWEN_HOME`, then `~/.qwen`. Its JSONC settings support comments plus `$VAR`,
-`${VAR}`, and tilde expansion. `QWEN_HOME`, `QWEN_RUNTIME_DIR`, and only variables referenced by
-`runtimeOutputDir` are read from the official user-level `.env` candidates with dotenv-compatible
-quotes and inline comments; unrelated values are discarded. Relative values are not resolved from
-the connector's CWD; `doctor` prints the explicit `source add` command instead. The runtime root and
-Qwen config root are stored separately, so tokens come from `<runtime-root>/usage` while the
-additive `SessionEnd` hook always lives in `<QWEN_HOME>/settings.json`. Hook edits retain unknown
-settings and comments outside the changed `hooks` subtree. In Qwen Code 0.21.12, that hook fires on
-interactive TUI exit and is wired into ACP, but the headless `qwen -p` runner does not emit
-`SessionEnd`. Headless runs still write exact usage records; run `viberacing sync`, or wait for the
-next supported lifecycle event, to collect them. Qwen's cached count is already included in input
-and its thoughts count is already included in output, so the connector subtracts both overlaps
-before sending the five exact component fields.
+compatible `message(id,time_created,data)` schema in read-only SQLite mode. Existing installations
+with accepted OpenCode usage must run one successful connector 0.4.4 Sync before 0.5.0. Version
+0.4.4 keeps aggregate snapshot semantics but confirms content-free hashes of the exact accepted
+message-ID set; 0.5.0 refuses a direct 0.4.3 migration rather than silently losing an unsynced tail.
+Qwen chooses exactly one automatic runtime root in this order: `QWEN_RUNTIME_DIR`,
+`advanced.runtimeOutputDir` from the user-level settings, `QWEN_HOME`, then `~/.qwen`. Its JSONC
+settings support comments plus `$VAR`, `${VAR}`, and tilde expansion. `QWEN_HOME`,
+`QWEN_RUNTIME_DIR`, and only variables referenced by `runtimeOutputDir` are read from the official
+user-level `.env` candidates with dotenv-compatible quotes and inline comments; unrelated values are
+discarded. Relative values are not resolved from the connector's CWD; `doctor` prints the explicit
+`source add` command instead. The runtime root and Qwen config root are stored separately, so tokens
+come from `<runtime-root>/usage` while the additive `SessionEnd` hook always lives in
+`<QWEN_HOME>/settings.json`. Hook edits retain unknown settings and comments outside the changed
+`hooks` subtree. In Qwen Code 0.21.12, that hook fires on interactive TUI exit and is wired into
+ACP, but the headless `qwen -p` runner does not emit `SessionEnd`. Headless runs still write exact
+usage records; run `viberacing sync`, or wait for the next supported lifecycle event, to collect
+them. Qwen's cached count is already included in input and its thoughts count is already included in
+output, so the connector subtracts both overlaps before sending the five exact component fields.
 
 `disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
 scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
@@ -151,10 +181,11 @@ installation metadata, connection attempt, browser-handler record, or installed 
 
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per
-source, hook diagnostics, the installed executable/library, and usage-only CLI captures. Diagnostic
-state contains only allowlisted code keys plus pending `opened`/`resolved` transitions; it never
-stores exception messages, stack traces, paths, commands, environment values, or agent content. Its
-bounded owner-only outbox retries after a later successful server contact, independently of usage
+source, hook diagnostics, the installed executable/library, usage-only CLI captures, local Codex
+`acct1_…` bindings, and content-free observed-event ledgers. Diagnostic state contains only
+allowlisted code keys plus pending `opened`/`resolved` transitions; it never stores exception
+messages, stack traces, paths, commands, environment values, or agent content. Its bounded
+owner-only outbox retries after a later successful server contact, independently of usage
 acceptance. Delivery is at-least-once: a lost successful response can cause the same allowlisted
 transition to be retried, so local deduplication is not an exactly-once server-log guarantee.
 Pending usage records are uploaded in bounded batches without forcing another collector scan. A
@@ -173,7 +204,7 @@ lock, and it does not collect usage unless the user separately runs `viberacing 
 compatible reconnect, authenticated sync, or doctor server check clears a prior version-upgrade
 automatic-sync disable.
 
-Connector 0.4.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
+Connector 0.5.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
 allowlisted code, and `observedAfterSequence`, copied from the last server-accepted sequence known
 before collection. Saved pending errors retain that original ordering value, so retrying a delayed
 error cannot turn it into a newer observation. Servers accept legacy v2/v3 payloads during rollout;

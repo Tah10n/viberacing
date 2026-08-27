@@ -18,6 +18,7 @@ import {
 } from "../lib/diagnostics.mjs";
 import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
 import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
+import { assertOpenCodeUpgradeReady } from "../lib/opencode-cutover-preflight.mjs";
 import {
   adapters,
   adapterFor,
@@ -43,6 +44,7 @@ import {
 import {
   addSource,
   beginConnectAttempt,
+  bindCodexProviderAccount,
   clearConnectAttempt,
   commitConnectionState,
   connectedStateExists,
@@ -51,10 +53,12 @@ import {
   invalidateConnectAttempt,
   localInstallationStateExists,
   localSourceRegistryContains,
+  migrateSourcesSchema,
   prepareRuntime,
   reconcileHooks,
   readConfig,
   readOrCreateInstallation,
+  readOrCreateProviderIdentitySalt,
   readSources,
   recordConnectAttemptPairing,
   rememberSourceExecutable,
@@ -162,6 +166,8 @@ async function clearLastHookError() {
 function collectorWarningMessage(code) {
   if (code === "codex_session_components_incomplete")
     return "local Codex token components are incomplete for one or more requested UTC days; authoritative daily totals remain available";
+  if (code === "local_event_identity_conflict")
+    return "one local usage event identity was reused with different counters; the first observed tuple was retained";
   return `local usage detail warning: ${code}`;
 }
 
@@ -476,6 +482,7 @@ function publicSource(source) {
 async function exactPairingSources(sources) {
   const result = [];
   for (const source of sources) {
+    if (source.agentId === "codex" && source.profileClientSourceId !== undefined) continue;
     const adapter = adapterFor(source.agentId);
     if (!adapter || adapter.exactAccounting === false) continue;
     if (source.agentId === "antigravity") {
@@ -523,6 +530,7 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId) 
 }
 
 async function connect() {
+  await assertOpenCodeUpgradeReady(stateDirectory);
   const origin = normalizeOrigin(option("--origin", officialProductionOrigin), "--origin");
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
@@ -533,7 +541,11 @@ async function connect() {
   const localSources = await reconcileDetectedSources(detected, { persist: false });
   const localSourceIds = new Set(localSources.map((source) => source.clientSourceId));
   const supersededClientSourceIds = sourcesBeforeDiscovery
-    .filter((source) => !localSourceIds.has(source.clientSourceId))
+    .filter(
+      (source) =>
+        !localSourceIds.has(source.clientSourceId) &&
+        !(source.agentId === "codex" && source.profileClientSourceId !== undefined),
+    )
     .map((source) => source.clientSourceId);
   const exactSources = await exactPairingSources(localSources);
   const sources = new Map(exactSources.map((source) => [source.clientSourceId, source]));
@@ -555,6 +567,7 @@ async function connect() {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
     for (const previous of previousConfig.sources) {
       const local = localById.get(previous.clientSourceId);
+      if (local?.agentId === "codex" && local.profileClientSourceId !== undefined) continue;
       if (
         local &&
         local.agentId === previous.agentId &&
@@ -642,6 +655,22 @@ async function connect() {
             sources: mapped,
             protocol: result.protocol,
           };
+          for (const local of localSources) {
+            if (local.agentId !== "codex" || local.profileClientSourceId === undefined) continue;
+            const profile = nextConfig.sources.find(
+              (source) => source.clientSourceId === local.profileClientSourceId,
+            );
+            if (!profile)
+              throw new Error("Codex logical source profile was not paired on this installation");
+            const registered = await requestCodexLogicalSourceRegistration(
+              nextConfig,
+              local,
+              profile,
+            );
+            if (registered.profileSourceId !== profile.sourceId)
+              throw new Error("Codex logical source profile mapping changed during pairing");
+            nextConfig.sources.push(registered);
+          }
           const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
             connectAttempt: attempt,
             beforeCommit:
@@ -666,9 +695,14 @@ async function connect() {
                 ),
             ),
           ];
-          const hooks = await reconcileHooks(import.meta.url, mapped, knownForHookCleanup, {
-            installedScript: installedRuntime,
-          });
+          const hooks = await reconcileHooks(
+            import.meta.url,
+            nextConfig.sources,
+            knownForHookCleanup,
+            {
+              installedScript: installedRuntime,
+            },
+          );
           for (const failure of hooks.failures)
             warning(
               `Vibe Racing warning: ${failure.agentId ?? "connector"} hook: ${failure.message}.`,
@@ -832,7 +866,15 @@ async function retireMappedSources(config, sourceIds, options = {}) {
   const mappings = config.sources.filter((source) => retired.has(source.sourceId));
   for (const source of mappings)
     try {
-      await removeHookForSource(source, { removeLegacy: true });
+      const physicalStillMapped =
+        source.agentId === "codex" &&
+        source.profileClientSourceId === undefined &&
+        config.sources.some(
+          (candidate) =>
+            !retired.has(candidate.sourceId) &&
+            candidate.profileClientSourceId === source.clientSourceId,
+        );
+      if (!physicalStillMapped) await removeHookForSource(source, { removeLegacy: true });
     } catch (error) {
       warning(
         `Vibe Racing warning: hook cleanup failed for disconnected ${source.agentId} source: ${error.message}`,
@@ -845,7 +887,7 @@ async function retireMappedSources(config, sourceIds, options = {}) {
   return mappings;
 }
 
-async function requestReconciliation(config, attempts = 1) {
+async function requestReconciliation(config, attempts = 1, bootstrapSourceIds) {
   const sourceIds = config.sources.map((source) => source.sourceId);
   const inspection = await refreshInstalledHandlerAttestation();
   const handlerAttestation = inspection.inspectionFailed
@@ -853,6 +895,7 @@ async function requestReconciliation(config, attempts = 1) {
     : publicHandlerAttestation(inspection.state.handlerAttestation);
   const body = {
     sourceIds,
+    ...(bootstrapSourceIds === undefined ? {} : { bootstrapSourceIds }),
     cliVersion: connectorVersion,
     ...(handlerAttestation === null ? {} : { handlerAttestation }),
   };
@@ -869,7 +912,14 @@ async function requestReconciliation(config, attempts = 1) {
         body: JSON.stringify(payload),
       },
       requestAttempts,
-      { kind: "reconciliation", sourceIds, handlerAttestationId: attestationId },
+      {
+        kind: "reconciliation",
+        sourceIds,
+        handlerAttestationId: attestationId,
+        ...(payload.bootstrapSourceIds === undefined
+          ? {}
+          : { bootstrapSourceIds: payload.bootstrapSourceIds }),
+      },
     );
   try {
     const remote = await send(body, attempts, handlerAttestation?.attestationId);
@@ -881,6 +931,7 @@ async function requestReconciliation(config, attempts = 1) {
     if (error?.status !== 400 || error?.code !== "invalid_request") {
       throw error;
     }
+    if (bootstrapSourceIds !== undefined) throw error;
     return send({ sourceIds, connectorVersion }, 1);
   }
 }
@@ -916,11 +967,10 @@ async function rememberServerSequences(config, sequences) {
   const state = await readState();
   if (!Array.isArray(sequences) || sequences.length === 0) return state;
   state.sequences ??= {};
-  const byId = new Map(sequences.map((item) => [item.sourceId, item]));
+  const byId = new Map(sequences.map((item) => [item.sourceId, item.lastAcceptedSyncSequence]));
   let changed = false;
   for (const source of config.sources) {
-    const sequenceStatus = byId.get(source.sourceId);
-    const reported = sequenceStatus?.lastAcceptedSyncSequence;
+    const reported = byId.get(source.sourceId);
     if (typeof reported !== "string" || !/^(?:0|[1-9]\d*)$/.test(reported)) continue;
     const local = state.sequences[source.sourceId] ?? "0";
     const reconciled = BigInt(local) > BigInt(reported) ? local : reported;
@@ -930,23 +980,6 @@ async function rememberServerSequences(config, sequences) {
     }
     if (source.lastAcceptedSyncSequence !== reported) {
       source.lastAcceptedSyncSequence = reported;
-      changed = true;
-    }
-    const pendingCutover = state.adapters?.[source.sourceId]?.cutoverPending;
-    if (
-      source.agentId === "opencode" &&
-      sequenceStatus?.accepted === true &&
-      pendingCutover?.version === 1 &&
-      /^(?:0|[1-9]\d*)$/.test(pendingCutover.pendingSequence ?? "") &&
-      BigInt(reported) >= BigInt(pendingCutover.pendingSequence)
-    ) {
-      state.adapters[source.sourceId].cutover = {
-        version: 1,
-        confirmedSequence: reported,
-        confirmedRangeEnd: pendingCutover.confirmedRangeEnd,
-        aliases: pendingCutover.aliases,
-      };
-      delete state.adapters[source.sourceId].cutoverPending;
       changed = true;
     }
   }
@@ -986,15 +1019,30 @@ async function reconcileServerState(config, state) {
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
   );
+  const bootstrapSourceIds = config.sources
+    .filter(
+      (source) =>
+        source.agentId === "opencode" &&
+        typeof source.sourceId === "string" &&
+        state.adapters?.[source.sourceId]?.bootstrapComplete !== true &&
+        BigInt(state.sequences?.[source.sourceId] ?? source.lastAcceptedSyncSequence ?? "0") > 0n,
+    )
+    .map((source) => source.sourceId);
   const handlerConfirmationPending = publicHandlerAttestation(state.handlerAttestation) !== null;
   const lastReconciliation = state.lastRemoteReconciliationAt;
-  if (!missing && !handlerConfirmationPending && lastReconciliation === undefined) {
+  if (
+    !missing &&
+    bootstrapSourceIds.length === 0 &&
+    !handlerConfirmationPending &&
+    lastReconciliation === undefined
+  ) {
     state.lastRemoteReconciliationAt = Date.now();
     await writeState(state);
     return state;
   }
   if (
     !missing &&
+    bootstrapSourceIds.length === 0 &&
     !handlerConfirmationPending &&
     Number.isFinite(lastReconciliation) &&
     Date.now() - lastReconciliation < remoteReconciliationIntervalMs
@@ -1002,9 +1050,19 @@ async function reconcileServerState(config, state) {
     return state;
   let remote;
   try {
-    remote = await requestReconciliation(config, missing || handlerConfirmationPending ? 3 : 1);
+    remote = await requestReconciliation(
+      config,
+      missing || handlerConfirmationPending || bootstrapSourceIds.length > 0 ? 3 : 1,
+      bootstrapSourceIds.length === 0 ? undefined : bootstrapSourceIds,
+    );
   } catch (error) {
-    if (missing || error?.status === 401 || error?.status === 403 || error?.status === 426)
+    if (
+      missing ||
+      bootstrapSourceIds.length > 0 ||
+      error?.status === 401 ||
+      error?.status === 403 ||
+      error?.status === 426
+    )
       await lifecycleFailure(error);
     const fresh = await readState();
     fresh.lastRemoteReconciliationAt = Date.now();
@@ -1022,6 +1080,19 @@ async function reconcileServerState(config, state) {
       lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
     })),
   );
+  reconciled.adapters ??= {};
+  const acceptedSequenceBySourceId = new Map(
+    (remote.sources ?? []).map((source) => [source.sourceId, source.lastAcceptedSyncSequence]),
+  );
+  for (const baseline of remote.sourceBaselines ?? [])
+    reconciled.adapters[baseline.sourceId] = {
+      ...(reconciled.adapters[baseline.sourceId] ?? {}),
+      serverBaseline: {
+        acceptedAt: baseline.acceptedAt,
+        acceptedSequence: acceptedSequenceBySourceId.get(baseline.sourceId),
+        entries: baseline.entries,
+      },
+    };
   reconciled.lastRemoteReconciliationAt = Date.now();
   await writeState(reconciled);
   return reconciled;
@@ -1264,21 +1335,191 @@ async function settleLimited(items, worker, limit = 4) {
   return results;
 }
 
+async function requestCodexLogicalSourceRegistration(config, localSource, profileSource) {
+  const existing = config.sources.find(
+    (source) => source.clientSourceId === localSource.clientSourceId,
+  );
+  try {
+    const registered = await request(
+      config.origin,
+      "/api/installations/current/sources/register",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.deviceToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agentId: "codex",
+          clientSourceId: localSource.clientSourceId,
+          collectionMethod: "codex_app_server",
+          profileClientSourceId: profileSource.clientSourceId,
+          supportedSurface: "desktop",
+        }),
+      },
+      1,
+      {
+        kind: "sourceRegistration",
+        localSource: existing ?? localSource,
+        profileClientSourceId: profileSource.clientSourceId,
+        profileSourceId: profileSource.sourceId,
+      },
+    );
+    return registered.source;
+  } catch (error) {
+    if (error?.code === "profile_account_limit_reached" || error?.code === "source_limit_reached")
+      error.diagnosticCode = "provider_account_limit_reached";
+    else error.diagnosticCode ??= "provider_account_registration_pending";
+    throw error;
+  }
+}
+
+async function registerCodexLogicalSource(config, localSource, profileSource) {
+  const existing = config.sources.find(
+    (source) => source.clientSourceId === localSource.clientSourceId,
+  );
+  const registered = await requestCodexLogicalSourceRegistration(
+    config,
+    existing ?? localSource,
+    profileSource,
+  );
+  if (existing) Object.assign(existing, registered);
+  else config.sources.push(registered);
+  await writeConfig(config);
+  return existing ?? registered;
+}
+
+function syncTasksForSources(sources, localById, allMappedSources) {
+  const tasks = new Map();
+  for (const source of sources) {
+    const local = localById.get(source.clientSourceId) ?? source;
+    const taskId =
+      source.agentId === "codex"
+        ? (local.profileClientSourceId ?? local.clientSourceId)
+        : source.clientSourceId;
+    const current = tasks.get(taskId);
+    if (current) {
+      current.requestedSources.push(source);
+      continue;
+    }
+    const physicalLocal = localById.get(taskId) ?? local;
+    const physicalMapped =
+      allMappedSources.find((candidate) => candidate.clientSourceId === taskId) ?? physicalLocal;
+    tasks.set(taskId, {
+      physicalClientSourceId: taskId,
+      source: physicalMapped,
+      requestedSources: [source],
+    });
+  }
+  return [...tasks.values()];
+}
+
+function validPendingAccountRegistration(value) {
+  return (
+    value &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([
+        "completeness",
+        "entries",
+        "profileClientSourceId",
+        "rangeEnd",
+        "rangeStart",
+      ]) &&
+    typeof value.profileClientSourceId === "string" &&
+    uuidPattern.test(value.profileClientSourceId) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.rangeStart ?? "") &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.rangeEnd ?? "") &&
+    value.rangeStart <= value.rangeEnd &&
+    ["complete", "partial"].includes(value.completeness) &&
+    Array.isArray(value.entries) &&
+    value.entries.length <= 31 &&
+    value.entries.every(
+      (entry) =>
+        entry &&
+        JSON.stringify(Object.keys(entry).sort()) === JSON.stringify(["date", "totalTokens"]) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(entry.date ?? "") &&
+        /^(?:0|[1-9]\d{0,29})$/.test(entry.totalTokens ?? ""),
+    )
+  );
+}
+
+async function applyDurablePendingRegistrationSupersessions() {
+  const supersessions = [];
+  for (const path of await pendingPayloads()) {
+    const payload = await readPending(path);
+    const sourceId = pendingSourceId(payload);
+    for (const supersession of payload.pendingRegistrationSupersessions ?? []) {
+      if (
+        sourceId === null ||
+        supersession?.sourceId !== sourceId ||
+        !uuidPattern.test(supersession.sourceId ?? "") ||
+        !uuidPattern.test(supersession.clientSourceId ?? "") ||
+        JSON.stringify(Object.keys(supersession).sort()) !==
+          JSON.stringify(["clientSourceId", "sourceId"])
+      )
+        throw new Error("Pending Codex account supersession state is invalid");
+      supersessions.push(supersession);
+    }
+  }
+  if (supersessions.length === 0) return;
+  const state = await readState();
+  let changed = false;
+  for (const { clientSourceId } of supersessions)
+    if (state.pendingAccountRegistrations?.[clientSourceId]) {
+      delete state.pendingAccountRegistrations[clientSourceId];
+      changed = true;
+    }
+  if (changed) await writeState(state);
+}
+
 async function sync(providedConfig, options = {}) {
+  await assertOpenCodeUpgradeReady(stateDirectory);
   return withSyncLock(
     async () => {
       const config = providedConfig ?? (await readConfig());
       const requestedSourceIds = Array.isArray(options.sourceIds)
         ? new Set(options.sourceIds)
         : undefined;
+      await applyDurablePendingRegistrationSupersessions();
       const previous = await drainPending(config, true, requestedSourceIds);
       let accepted = previous.accepted;
       let state = await readState();
       state = await reconcileServerState(config, state);
+      await migrateSourcesSchema();
       const range = snapshotRange();
       state.adapters ??= {};
       state.fingerprints ??= {};
       state.collectionWarnings ??= {};
+      const localSources = await readSources();
+      const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
+      state.pendingAccountRegistrations ??= {};
+      if (
+        Object.keys(state.pendingAccountRegistrations).length > 32 ||
+        Object.values(state.pendingAccountRegistrations).some(
+          (pending) => !validPendingAccountRegistration(pending),
+        )
+      )
+        throw new Error("Pending Codex account registration state is invalid");
+      const registrationBackfills = [];
+      let backfillAccountSetupPending = false;
+      for (const [clientSourceId, pending] of Object.entries(state.pendingAccountRegistrations)) {
+        const localSource = localById.get(clientSourceId);
+        const profileSource = config.sources.find(
+          (source) => source.clientSourceId === pending.profileClientSourceId,
+        );
+        if (!localSource || typeof profileSource.sourceId !== "string") {
+          backfillAccountSetupPending = true;
+          continue;
+        }
+        try {
+          const mapped = await registerCodexLogicalSource(config, localSource, profileSource);
+          if (!requestedSourceIds || requestedSourceIds.has(mapped.sourceId)) {
+            registrationBackfills.push({ clientSourceId, source: mapped, pending });
+          } else if (!options.installationScoped) backfillAccountSetupPending = true;
+        } catch {
+          backfillAccountSetupPending = true;
+        }
+      }
       const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
       const dirty = await readDirty();
       const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
@@ -1287,37 +1528,147 @@ async function sync(providedConfig, options = {}) {
         : options.automatic
           ? mappedSources.filter(
               (source) =>
-                dirtyIds.has(source.clientSourceId) ||
-                previous.reobserveSourceIds.includes(source.sourceId),
+                dirtyIds.has(
+                  source.agentId === "codex"
+                    ? (localById.get(source.clientSourceId)?.profileClientSourceId ??
+                        source.clientSourceId)
+                    : source.clientSourceId,
+                ) || previous.reobserveSourceIds.includes(source.sourceId),
             )
           : mappedSources;
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
-      const activeIds = new Set(mappedSources.map((source) => source.clientSourceId));
+      const activeIds = new Set(
+        mappedSources.map((source) =>
+          source.agentId === "codex"
+            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
+            : source.clientSourceId,
+        ),
+      );
       const unmappedDirtyIds = [...dirtyIds].filter(
         (clientSourceId) => !activeIds.has(clientSourceId),
       );
       if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
       const claims = dirtyClaims(
         dirty,
-        syncSources.map((source) => source.clientSourceId),
+        syncSources.map((source) =>
+          source.agentId === "codex"
+            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
+            : source.clientSourceId,
+        ),
       );
       if (options.automatic && syncSources.length > 0) {
         state.lastAutomaticSyncAt = Date.now();
         await writeState(state);
       }
-      const collected = await settleLimited(syncSources, async (source) => {
+      const syncTasks = syncTasksForSources(syncSources, localById, mappedSources);
+      const providerIdentitySaltPromise = syncTasks.some((task) => task.source.agentId === "codex")
+        ? readOrCreateProviderIdentitySalt()
+        : null;
+      const collected = await settleLimited(syncTasks, async (task) => {
+        const source = task.source;
         if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
           await appendFile(
             process.env.VIBERACING_TEST_COLLECTOR_TRACE,
-            `${source.clientSourceId}\n`,
+            `${task.physicalClientSourceId}\n`,
           );
         const adapter = adapterFor(source.agentId);
         if (!adapter || !adapter.collectionMethods.includes(source.collectionMethod))
           throw new Error(`Unsupported configured source ${source.agentId}`);
+        if (source.agentId === "codex") {
+          const providerIdentitySalt = await providerIdentitySaltPromise;
+          const profileMembers = localSources.filter(
+            (candidate) =>
+              candidate.agentId === "codex" &&
+              (candidate.profileClientSourceId ?? candidate.clientSourceId) ===
+                task.physicalClientSourceId,
+          );
+          const profileMapping = mappedSources.find(
+            (candidate) => candidate.clientSourceId === task.physicalClientSourceId,
+          );
+          if (typeof profileMapping.sourceId !== "string")
+            throw new Error("Codex profile mapping is unavailable");
+          let result = await adapter.collect(
+            source,
+            range,
+            state.adapters[profileMapping.sourceId] ?? {},
+            {
+              providerIdentitySalt,
+              suppressComponents: profileMembers.length > 1,
+            },
+          );
+          const binding = await bindCodexProviderAccount(
+            task.physicalClientSourceId,
+            result.providerAccountKey,
+          );
+          let activeSource = config.sources.find(
+            (candidate) => candidate.clientSourceId === binding.source.clientSourceId,
+          );
+          let registeredAfterClaim = false;
+          const totalOnly = binding.added || profileMembers.length > 1;
+          if (totalOnly) {
+            result = {
+              ...result,
+              entries: result.entries.map(({ date, totalTokens }) => ({ date, totalTokens })),
+              nextState: {},
+            };
+          }
+          if (!activeSource)
+            try {
+              activeSource = await registerCodexLogicalSource(
+                config,
+                binding.source,
+                profileMapping,
+              );
+              registeredAfterClaim = true;
+            } catch (error) {
+              state.pendingAccountRegistrations[binding.source.clientSourceId] = {
+                profileClientSourceId: task.physicalClientSourceId,
+                ...range,
+                completeness: result.completeness,
+                entries: result.entries.map(({ date, totalTokens }) => ({ date, totalTokens })),
+              };
+              throw error;
+            }
+          const requestedClientSourceIds = new Set(
+            task.requestedSources.map((candidate) => candidate.clientSourceId),
+          );
+          if (
+            requestedSourceIds &&
+            !options.installationScoped &&
+            !requestedClientSourceIds.has(activeSource.clientSourceId)
+          ) {
+            return {
+              source: activeSource,
+              result: null,
+              inactiveSourceIds: task.requestedSources.map((candidate) => candidate.sourceId),
+              checkedClientSourceId: task.physicalClientSourceId,
+              accountSetupPending: registeredAfterClaim,
+              supersededPendingClientSourceId: null,
+            };
+          }
+          return {
+            source: activeSource,
+            result,
+            inactiveSourceIds: task.requestedSources
+              .filter((candidate) => candidate.clientSourceId !== activeSource.clientSourceId)
+              .map((candidate) => candidate.sourceId),
+            checkedClientSourceId: task.physicalClientSourceId,
+            accountSetupPending: false,
+            supersededPendingClientSourceId: state.pendingAccountRegistrations[
+              activeSource.clientSourceId
+            ]
+              ? activeSource.clientSourceId
+              : null,
+          };
+        }
         return {
           source,
           result: await adapter.collect(source, range, state.adapters[source.sourceId] ?? {}),
+          inactiveSourceIds: [],
+          checkedClientSourceId: source.clientSourceId,
+          accountSetupPending: false,
+          supersededPendingClientSourceId: null,
         };
       });
       const snapshots = [];
@@ -1327,18 +1678,29 @@ async function sync(providedConfig, options = {}) {
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
+      const inactiveSourceIds = [];
+      let accountSetupPending = backfillAccountSetupPending;
+      const pendingRegistrationSupersessions = new Map();
+      let terminalCollectorDiagnostic;
       for (const sourceId of previous.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
       for (const sourceId of previous.quarantinedSources)
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
       for (let index = 0; index < collected.length; index += 1) {
         const outcome = collected[index];
-        const source = syncSources[index];
+        const task = syncTasks[index];
+        const source = task.source;
         if (outcome.status === "rejected") {
-          failedClientSourceIds.push(source.clientSourceId);
+          failedClientSourceIds.push(task.physicalClientSourceId);
           failures.push(`${source.agentId}: ${outcome.reason?.message ?? "collector failed"}`);
+          terminalCollectorDiagnostic ??= outcome.reason?.diagnosticCode;
+          if (outcome.reason?.diagnosticCode === "provider_account_registration_pending")
+            accountSetupPending = true;
           const nextFingerprint = fingerprint({ error: "collector_failed" });
-          if (state.fingerprints[source.sourceId] !== nextFingerprint) {
+          if (
+            outcome.reason?.diagnosticCode !== "provider_account_registration_pending" &&
+            state.fingerprints[source.sourceId] !== nextFingerprint
+          ) {
             sourceErrors.push({
               sourceId: source.sourceId,
               code: "collector_failed",
@@ -1351,20 +1713,24 @@ async function sync(providedConfig, options = {}) {
           ]);
           continue;
         }
-        successfullyChecked.push(source.clientSourceId);
-        successfullyCheckedSourceIds.push(source.sourceId);
-        state.adapters[source.sourceId] = outcome.value.result.nextState ?? {};
+        inactiveSourceIds.push(...outcome.value.inactiveSourceIds);
+        if (outcome.value.accountSetupPending) accountSetupPending = true;
+        if (outcome.value.result === null) continue;
+        successfullyChecked.push(outcome.value.checkedClientSourceId);
+        const activeSource = outcome.value.source;
+        successfullyCheckedSourceIds.push(activeSource.sourceId);
+        state.adapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
         reconcileDiagnosticPhase(
           state,
-          source.sourceId,
+          activeSource.sourceId,
           "collect",
           normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
         );
         const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
-        if (resultWarnings.length) state.collectionWarnings[source.sourceId] = resultWarnings;
-        else delete state.collectionWarnings[source.sourceId];
+        if (resultWarnings.length) state.collectionWarnings[activeSource.sourceId] = resultWarnings;
+        else delete state.collectionWarnings[activeSource.sourceId];
         for (const code of resultWarnings)
-          collectionWarnings.push(`${source.agentId}: ${collectorWarningMessage(code)}`);
+          collectionWarnings.push(`${activeSource.agentId}: ${collectorWarningMessage(code)}`);
         const entries = recentEntries(outcome.value.result.entries);
         const nextFingerprint = fingerprint({
           ...range,
@@ -1372,25 +1738,48 @@ async function sync(providedConfig, options = {}) {
           entries,
           warnings: resultWarnings,
         });
-        if (options.automatic && state.fingerprints[source.sourceId] === nextFingerprint) continue;
-        const previous = BigInt(state.sequences[source.sourceId] ?? "0");
+        if (options.automatic && state.fingerprints[activeSource.sourceId] === nextFingerprint)
+          continue;
+        const previous = BigInt(state.sequences[activeSource.sourceId] ?? "0");
         const sequence = (previous + 1n).toString();
-        state.sequences[source.sourceId] = sequence;
-        state.fingerprints[source.sourceId] = nextFingerprint;
-        const cutoverCandidate = state.adapters[source.sourceId]?.cutoverCandidate;
-        if (source.agentId === "opencode" && cutoverCandidate?.version === 1) {
-          state.adapters[source.sourceId].cutoverPending = {
-            ...cutoverCandidate,
-            pendingSequence: sequence,
-          };
-          delete state.adapters[source.sourceId].cutoverCandidate;
-        }
+        state.sequences[activeSource.sourceId] = sequence;
+        state.fingerprints[activeSource.sourceId] = nextFingerprint;
         snapshots.push({
-          sourceId: source.sourceId,
+          sourceId: activeSource.sourceId,
           syncSequence: sequence,
           ...range,
           completeness: outcome.value.result.completeness,
           entries,
+        });
+        if (outcome.value.supersededPendingClientSourceId)
+          pendingRegistrationSupersessions.set(activeSource.sourceId, {
+            sourceId: activeSource.sourceId,
+            clientSourceId: outcome.value.supersededPendingClientSourceId,
+          });
+      }
+      for (const { clientSourceId, source, pending } of registrationBackfills) {
+        if (snapshots.some((snapshot) => snapshot.sourceId === source.sourceId)) {
+          pendingRegistrationSupersessions.set(source.sourceId, {
+            sourceId: source.sourceId,
+            clientSourceId,
+          });
+          continue;
+        }
+        const previousSequence = BigInt(state.sequences[source.sourceId] ?? "0");
+        const sequence = (previousSequence + 1n).toString();
+        state.sequences[source.sourceId] = sequence;
+        snapshots.push({
+          sourceId: source.sourceId,
+          syncSequence: sequence,
+          rangeStart: pending.rangeStart,
+          rangeEnd: pending.rangeEnd,
+          completeness: pending.completeness,
+          entries: pending.entries,
+        });
+        successfullyCheckedSourceIds.push(source.sourceId);
+        pendingRegistrationSupersessions.set(source.sourceId, {
+          sourceId: source.sourceId,
+          clientSourceId,
         });
       }
       if (await lifecycleMutationActive())
@@ -1421,13 +1810,37 @@ async function sync(providedConfig, options = {}) {
         );
         for (const message of collectionWarnings) warning(`Vibe Racing warning: ${message}.`);
         if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
-        return { accepted, failures, unchanged: true };
+        if (inactiveSourceIds.length > 0)
+          warning(
+            "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+          );
+        return {
+          accepted,
+          failures,
+          unchanged: true,
+          inactiveSourceIds,
+          accountSetupPending,
+        };
       }
-      const payload = { protocolVersion, snapshots, sourceErrors };
+      const payload = {
+        protocolVersion,
+        snapshots,
+        sourceErrors,
+        pendingRegistrationSupersessions: [...pendingRegistrationSupersessions.values()],
+      };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
       await savePending(payload);
-      const delivered = await drainPending(config, true, requestedSourceIds);
+      await applyDurablePendingRegistrationSupersessions();
+      const deliverySourceIds =
+        options.installationScoped && requestedSourceIds
+          ? new Set([
+              ...requestedSourceIds,
+              ...snapshots.map((snapshot) => snapshot.sourceId),
+              ...sourceErrors.map((sourceError) => sourceError.sourceId),
+            ])
+          : requestedSourceIds;
+      const delivered = await drainPending(config, true, deliverySourceIds);
       accepted += delivered.accepted;
       await clearSuccessfulDirty();
       await finishSuccessfulSourceDiagnostics(
@@ -1438,6 +1851,7 @@ async function sync(providedConfig, options = {}) {
       if (successfullyCheckedSourceIds.length === 0) {
         const error = new Error(failures.join("; ") || "No configured collectors succeeded");
         error.automaticDiagnosticClientSourceIds = failedClientSourceIds;
+        error.diagnosticCode = terminalCollectorDiagnostic;
         throw error;
       }
       output(`Synced ${accepted} daily totals from ${snapshots.length} source(s).`);
@@ -1452,7 +1866,11 @@ async function sync(providedConfig, options = {}) {
           await clearLastHookError();
       }
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
-      return { accepted, failures };
+      if (inactiveSourceIds.length > 0)
+        warning(
+          "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+        );
+      return { accepted, failures, inactiveSourceIds, accountSetupPending };
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
@@ -1510,6 +1928,7 @@ async function reportBrowserSync(config, requestId, status, resultCode) {
 }
 
 async function browserSync(value) {
+  await assertOpenCodeUpgradeReady(stateDirectory);
   const link = parseBrowserSyncUrl(value);
   const config = await readConnectedConfig();
   const claim = await request(
@@ -1537,8 +1956,18 @@ async function browserSync(value) {
     throw new Error("Browser sync source mapping changed");
   }
   try {
-    const result = await sync(config, { sourceIds: claim.sourceIds, waitMs: manualSyncLockWaitMs });
+    const result = await sync(config, {
+      sourceIds: claim.sourceIds,
+      installationScoped: link.scope === "installation",
+      waitMs: manualSyncLockWaitMs,
+    });
     if (result?.skipped) await reportBrowserSync(config, link.requestId, "failed", "busy");
+    else if (result?.accountSetupPending)
+      await reportBrowserSync(config, link.requestId, "partial", "account_setup_pending");
+    else if (link.accountId && (result?.inactiveSourceIds?.length ?? 0) > 0)
+      await reportBrowserSync(config, link.requestId, "failed", "account_not_active");
+    else if ((result?.inactiveSourceIds?.length ?? 0) > 0)
+      await reportBrowserSync(config, link.requestId, "partial", "partial_accounts_inactive");
     else if ((result?.failures?.length ?? 0) > 0)
       await reportBrowserSync(config, link.requestId, "partial", "partial");
     else
@@ -1552,10 +1981,17 @@ async function browserSync(value) {
     const resultCode =
       error?.status === 401 || error?.status === 403
         ? "authorization_failed"
-        : error?.message?.includes("collector")
-          ? "collector_failed"
-          : "network_failed";
-    await reportBrowserSync(config, link.requestId, "failed", resultCode).catch(() => {});
+        : error?.diagnosticCode === "provider_account_registration_pending"
+          ? "account_setup_pending"
+          : error?.message?.includes("collector")
+            ? "collector_failed"
+            : "network_failed";
+    await reportBrowserSync(
+      config,
+      link.requestId,
+      resultCode === "account_setup_pending" ? "partial" : "failed",
+      resultCode,
+    ).catch(() => {});
     throw error;
   }
 }
@@ -1693,6 +2129,7 @@ async function recordAutomaticSyncFailure(clientSourceIds) {
 
 async function hook() {
   try {
+    await assertOpenCodeUpgradeReady(stateDirectory);
     if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_HOOK_READY)
       await writeFile(process.env.VIBERACING_TEST_HOOK_READY, `${process.pid}\n`, { mode: 0o600 });
     for await (const _chunk of process.stdin) {
@@ -1721,6 +2158,7 @@ async function hook() {
 }
 
 async function automaticSync() {
+  await assertOpenCodeUpgradeReady(stateDirectory);
   await traceSchedulerForTest(`started:${process.pid}`);
   if (await exitAutomaticSchedulerForTest()) return;
   await waitForTestSchedulerClaimBarrier();
@@ -1821,6 +2259,7 @@ async function automaticSync() {
 }
 
 async function doctor() {
+  await assertOpenCodeUpgradeReady(stateDirectory);
   const repairRequested = arguments_.includes("--repair");
   const defaultState = resolve(stateDirectory) === resolve(join(homedir(), ".viberacing"));
   let repairIncomplete = false;
@@ -2283,8 +2722,12 @@ async function wrap(agentId) {
 
 try {
   if (command === "--version" || command === "version") output(connectorVersion);
-  else if (command === "connect") await connect();
+  else if (command === "upgrade-preflight") {
+    await assertOpenCodeUpgradeReady(stateDirectory);
+    output("OpenCode upgrade preflight passed.");
+  } else if (command === "connect") await connect();
   else if (command === "sync") {
+    await assertOpenCodeUpgradeReady(stateDirectory);
     const result = await sync(await readConnectedConfig(), { waitMs: manualSyncLockWaitMs });
     if (result?.skipped) throw new Error("Another sync is already running.");
   } else if (command === "hook") await hook();
@@ -2411,11 +2854,13 @@ try {
     }
   } else
     output(
-      "Usage: viberacing connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
+      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
     );
 } catch (error) {
-  if (quiet && !lastHookErrorRecorded) await recordLastHookError();
-  if (!quiet)
+  if (error?.diagnosticCode === "opencode_cutover_required")
+    warning(`Vibe Racing: ${error.message}`);
+  else if (quiet && !lastHookErrorRecorded) await recordLastHookError();
+  if (!quiet && error?.diagnosticCode !== "opencode_cutover_required")
     warning(`Vibe Racing: ${error instanceof Error ? error.message : "unexpected error"}`);
   process.exitCode = 1;
 }

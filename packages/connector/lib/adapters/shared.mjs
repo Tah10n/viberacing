@@ -5,6 +5,164 @@ import { join, resolve } from "node:path";
 
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
+const maximumLedgerEvents = 65_536;
+const maximumLedgerBytes = 16 * 1_024 * 1_024;
+const ledgerHashPattern = /^[0-9a-f]{64}$/;
+const ledgerUsageKeys = new Set([
+  "totalTokens",
+  "inputTokens",
+  "outputTokens",
+  "cacheReadTokens",
+  "cacheWriteTokens",
+  "reasoningTokens",
+]);
+
+export function validateObservedEventLedger(ledger, parserVersion) {
+  if (!ledger || typeof ledger !== "object" || Array.isArray(ledger))
+    throw new Error("Observed-event ledger is invalid");
+  const entries = Object.entries(ledger);
+  if (
+    entries.length > maximumLedgerEvents ||
+    Buffer.byteLength(JSON.stringify(ledger)) > maximumLedgerBytes
+  )
+    throw new Error("Observed-event ledger is invalid");
+  let ledgerParserVersion = parserVersion;
+  for (const [key, event] of entries) {
+    if (
+      !ledgerHashPattern.test(key) ||
+      !event ||
+      typeof event !== "object" ||
+      Array.isArray(event) ||
+      JSON.stringify(Object.keys(event).sort()) !==
+        JSON.stringify(["date", "parserVersion", "usage"]) ||
+      !dayPattern.test(event.date ?? "") ||
+      !Number.isInteger(event.parserVersion) ||
+      event.parserVersion < 1 ||
+      (ledgerParserVersion !== undefined && event.parserVersion !== ledgerParserVersion) ||
+      !event.usage ||
+      typeof event.usage !== "object" ||
+      Array.isArray(event.usage)
+    )
+      throw new Error("Observed-event ledger is invalid");
+    ledgerParserVersion ??= event.parserVersion;
+    const usageEntries = Object.entries(event.usage);
+    if (
+      usageEntries.length < 1 ||
+      !usageEntries.some(([name]) => name === "totalTokens") ||
+      usageEntries.some(
+        ([name, value]) =>
+          !ledgerUsageKeys.has(name) ||
+          typeof value !== "string" ||
+          !/^(?:0|[1-9]\d*)$/.test(value),
+      )
+    )
+      throw new Error("Observed-event ledger is invalid");
+  }
+  return entries.length;
+}
+
+function storedUsage(entry) {
+  if (!entry || !dayPattern.test(entry.date ?? "") || typeof entry.totalTokens !== "string")
+    return null;
+  const usage = {};
+  for (const key of ledgerUsageKeys) {
+    if (entry[key] === undefined) continue;
+    if (!/^(?:0|[1-9]\d*)$/.test(entry[key])) return null;
+    usage[key] = entry[key];
+  }
+  return usage.totalTokens === undefined ? null : usage;
+}
+
+function observedEventKeys(event) {
+  if (
+    !event ||
+    typeof event.id !== "string" ||
+    event.id.length < 1 ||
+    event.id.length > 256 ||
+    (event.aliases !== undefined &&
+      (!Array.isArray(event.aliases) ||
+        event.aliases.length > 4 ||
+        event.aliases.some(
+          (alias) => typeof alias !== "string" || alias.length < 1 || alias.length > 256,
+        )))
+  )
+    return null;
+  return [event.id, ...(event.aliases ?? [])].map((id) =>
+    createHash("sha256").update(id).digest("hex"),
+  );
+}
+
+function validateLegacyEventDays(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Legacy observed-event index is invalid");
+  const entries = Object.entries(value);
+  if (
+    entries.length > maximumLedgerEvents ||
+    Buffer.byteLength(JSON.stringify(value)) > maximumLedgerBytes ||
+    entries.some(([key, date]) => !ledgerHashPattern.test(key) || !dayPattern.test(date ?? ""))
+  )
+    throw new Error("Legacy observed-event index is invalid");
+  return value;
+}
+
+function validateLegacyBaseline(value) {
+  if (!Array.isArray(value) || value.length > 31) throw new Error("Legacy baseline is invalid");
+  for (const entry of value)
+    if (storedUsage(entry) === null) throw new Error("Legacy baseline is invalid");
+  return value;
+}
+
+function normalizedJsonlState(state, ledgerParserVersion, range) {
+  const files = {};
+  const baselineEntries = [];
+  const legacyEventDays = {
+    ...(state.legacyEventDays === undefined ? {} : validateLegacyEventDays(state.legacyEventDays)),
+  };
+  if (state.legacyBaseline !== undefined)
+    baselineEntries.push(...validateLegacyBaseline(state.legacyBaseline));
+  for (const [path, file] of Object.entries(state.files ?? {})) {
+    if (!file || typeof file !== "object" || Array.isArray(file))
+      throw new Error("JSONL file state is invalid");
+    const { entries = [], eventDays = {}, ...checkpoint } = file;
+    if (!Array.isArray(entries)) throw new Error("Legacy JSONL file baseline is invalid");
+    for (const entry of entries)
+      if (storedUsage(entry) === null) throw new Error("Legacy JSONL file baseline is invalid");
+    baselineEntries.push(...entries);
+    for (const [key, date] of Object.entries(validateLegacyEventDays(eventDays))) {
+      if (legacyEventDays[key] !== undefined && legacyEventDays[key] !== date)
+        throw new Error("Legacy observed-event identity conflicts");
+      legacyEventDays[key] = date;
+    }
+    files[path] = checkpoint;
+  }
+  let ledger = {};
+  if (state.ledger !== undefined) {
+    let compatible = true;
+    try {
+      validateObservedEventLedger(state.ledger, ledgerParserVersion);
+    } catch {
+      validateObservedEventLedger(state.ledger);
+      compatible = false;
+    }
+    if (compatible) ledger = { ...state.ledger };
+    else
+      for (const [key, event] of Object.entries(state.ledger)) {
+        legacyEventDays[key] = event.date;
+        baselineEntries.push({ date: event.date, ...event.usage });
+      }
+  }
+  const legacyBaseline = mergeEntries(baselineEntries).filter(
+    (entry) => !range || (entry.date >= range.rangeStart && entry.date <= range.rangeEnd),
+  );
+  for (const [key, date] of Object.entries(legacyEventDays))
+    if (range && (date < range.rangeStart || date > range.rangeEnd)) delete legacyEventDays[key];
+  for (const [key, event] of Object.entries(ledger))
+    if (range && (event.date < range.rangeStart || event.date > range.rangeEnd)) delete ledger[key];
+  validateLegacyEventDays(legacyEventDays);
+  validateLegacyBaseline(legacyBaseline);
+  return { files, ledger, legacyBaseline, legacyEventDays };
+}
+
 export function integer(value) {
   if (typeof value === "bigint") return value >= 0n ? value : null;
   if (typeof value === "number")
@@ -261,30 +419,37 @@ export async function collectJsonl(
   state = {},
   range,
   eventKey,
+  ledgerParserVersion = 1,
 ) {
   const discovered = await walk(source.dataPath, [".jsonl"]);
   const files = discovered.files.filter((file) => filter(file.path));
-  const nextState = { files: {} };
-  const entries = [];
+  const normalized = normalizedJsonlState(state, ledgerParserVersion, range);
+  let ledgerCount = validateObservedEventLedger(normalized.ledger, ledgerParserVersion);
+  const ledger = normalized.ledger;
+  const legacyEventDays = normalized.legacyEventDays;
+  const legacyBaseline = normalized.legacyBaseline;
+  const provisionalLedger = {};
+  const nextState = { files: {}, ledger, legacyBaseline, legacyEventDays };
   let incomplete = discovered.incomplete;
   let oversized = false;
   let schemaUnsupported = false;
+  let identityConflict = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   let bytes = 0;
+  let ledgerBytes = Buffer.byteLength(JSON.stringify(ledger));
   for (const file of files) {
     if (bytes + file.size > 100_000_000) {
       incomplete = true;
       limited = true;
-      const previous = state.files?.[file.path];
+      const previous = normalized.files[file.path];
       if (previous) {
         nextState.files[file.path] = previous;
-        entries.push(...(previous.entries ?? []));
       }
       continue;
     }
     bytes += file.size;
-    const previous = state.files?.[file.path];
+    const previous = normalized.files[file.path];
     if (
       previous &&
       previous.size === file.size &&
@@ -293,7 +458,6 @@ export async function collectJsonl(
       (previous.ino === undefined || previous.ino === file.ino)
     ) {
       nextState.files[file.path] = previous;
-      entries.push(...(previous.entries ?? []));
       continue;
     }
     let appended =
@@ -319,31 +483,99 @@ export async function collectJsonl(
         oversized = true;
         limited = true;
       }
-      const eventDays = appended ? { ...(previous.eventDays ?? {}) } : {};
       const unseenLines = [];
-      const provisionalLines =
-        hasUnterminatedTail && chunk.tail?.trim() ? [...chunk.lines, chunk.tail] : chunk.lines;
-      for (const line of provisionalLines) {
-        const event = eventKey?.(line);
+      let overflowed = false;
+      let lineCount = appended ? (previous.lineCount ?? 0) : 0;
+      for (let index = 0; index < chunk.lines.length; index += 1) {
+        const line = chunk.lines[index];
+        const event = eventKey?.(line, {
+          path: file.path,
+          lineIndex: lineCount + index,
+        });
+        const keys = observedEventKeys(event);
         if (
-          !event ||
-          typeof event.id !== "string" ||
+          keys === null ||
           !dayPattern.test(event.date ?? "") ||
+          storedUsage(event.entry) === null ||
           (range && (event.date < range.rangeStart || event.date > range.rangeEnd))
         ) {
           unseenLines.push(line);
           continue;
         }
-        const key = createHash("sha256").update(event.id).digest("hex");
-        if (eventDays[key] !== undefined) continue;
-        eventDays[key] = event.date;
-        unseenLines.push(line);
+        const [key, ...aliasKeys] = keys;
+        const candidate = {
+          date: event.date,
+          usage: storedUsage(event.entry),
+          parserVersion: ledgerParserVersion,
+        };
+        const legacyDates = [key, ...aliasKeys]
+          .map((candidateKey) => legacyEventDays[candidateKey])
+          .filter((date) => date !== undefined);
+        if (legacyDates.length > 0) {
+          if (legacyDates.some((date) => date !== event.date)) {
+            incomplete = true;
+            identityConflict = true;
+          }
+          continue;
+        }
+        if (ledger[key] !== undefined) {
+          if (JSON.stringify(ledger[key]) !== JSON.stringify(candidate)) {
+            incomplete = true;
+            identityConflict = true;
+          }
+          continue;
+        }
+        const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
+        if (
+          ledgerCount >= maximumLedgerEvents ||
+          ledgerBytes + candidateBytes > maximumLedgerBytes
+        ) {
+          incomplete = true;
+          limited = true;
+          overflowed = true;
+          break;
+        }
+        ledger[key] = candidate;
+        ledgerCount += 1;
+        ledgerBytes += candidateBytes;
       }
-      if (range)
-        for (const [key, date] of Object.entries(eventDays))
-          if (date < range.rangeStart || date > range.rangeEnd) delete eventDays[key];
+      if (overflowed) {
+        if (previous) nextState.files[file.path] = previous;
+        continue;
+      }
+      if (hasUnterminatedTail && chunk.tail?.trim() && (!previous || appended)) {
+        const event = eventKey?.(chunk.tail, {
+          path: file.path,
+          lineIndex: lineCount + chunk.lines.length,
+        });
+        const usage = event ? storedUsage(event.entry) : null;
+        const keys = observedEventKeys(event);
+        if (
+          keys !== null &&
+          dayPattern.test(event.date ?? "") &&
+          usage !== null &&
+          (!range || (event.date >= range.rangeStart && event.date <= range.rangeEnd))
+        ) {
+          const [key, ...aliasKeys] = keys;
+          const candidate = { date: event.date, usage, parserVersion: ledgerParserVersion };
+          const legacyDates = [key, ...aliasKeys]
+            .map((candidateKey) => legacyEventDays[candidateKey])
+            .filter((date) => date !== undefined);
+          const existing = ledger[key] ?? provisionalLedger[key];
+          if (legacyDates.length > 0) {
+            if (legacyDates.some((date) => date !== event.date)) {
+              incomplete = true;
+              identityConflict = true;
+            }
+          } else if (existing === undefined) provisionalLedger[key] = candidate;
+          else if (JSON.stringify(existing) !== JSON.stringify(candidate)) {
+            incomplete = true;
+            identityConflict = true;
+          }
+        } else unseenLines.push(chunk.tail);
+      } else if (hasUnterminatedTail && chunk.tail?.trim()) unseenLines.push(chunk.tail);
+      lineCount += chunk.lines.length;
       const parserOutput = parser(unseenLines);
-      const parsed = Array.isArray(parserOutput) ? parserOutput : parserOutput.entries;
       const unsupportedRecords = Array.isArray(parserOutput)
         ? 0
         : parserOutput.stats.unsupportedCandidates;
@@ -352,25 +584,11 @@ export async function collectJsonl(
         schemaUnsupported = true;
         if (previous) {
           nextState.files[file.path] = previous;
-          entries.push(
-            ...(appended
-              ? mergeEntries([...(previous.entries ?? []), ...parsed])
-              : (previous.entries ?? [])),
-          );
-        } else {
-          entries.push(...parsed);
         }
         continue;
       }
-      const fileEntries = mergeEntries([...(appended ? (previous.entries ?? []) : []), ...parsed]);
-      const ranged = range
-        ? fileEntries.filter(
-            (entry) => entry.date >= range.rangeStart && entry.date <= range.rangeEnd,
-          )
-        : fileEntries;
       if (hasUnterminatedTail) {
         if (previous) nextState.files[file.path] = previous;
-        entries.push(...(previous && !appended ? (previous.entries ?? []) : ranged));
         continue;
       }
       nextState.files[file.path] = {
@@ -379,31 +597,35 @@ export async function collectJsonl(
         ino: file.ino,
         safeOffset: chunk.safeOffset,
         tailFingerprint: await tailFingerprint(file.path, chunk.safeOffset),
-        eventDays,
-        entries: ranged,
+        lineCount,
       };
-      entries.push(...ranged);
     } catch {
       incomplete = true;
       unreadable = true;
       if (previous) {
         nextState.files[file.path] = previous;
-        entries.push(...(previous.entries ?? []));
       }
     }
   }
   if (incomplete)
-    for (const [path, previous] of Object.entries(state.files ?? {}))
+    for (const [path, previous] of Object.entries(normalized.files))
       if (nextState.files[path] === undefined) {
         nextState.files[path] = previous;
-        entries.push(...(previous.entries ?? []));
       }
   const warnings = [];
   if (incomplete) warnings.push("collector_limits_or_unreadable_files");
   if (oversized) warnings.push("oversized_jsonl_records");
   if (schemaUnsupported) warnings.push("unsupported_usage_records");
+  if (identityConflict) warnings.push("local_event_identity_conflict");
+  const entries = mergeEntries([
+    ...legacyBaseline,
+    ...[...Object.values(ledger), ...Object.values(provisionalLedger)].map((event) => ({
+      date: event.date,
+      ...event.usage,
+    })),
+  ]);
   return {
-    entries: mergeEntries(entries),
+    entries,
     completeness: incomplete ? "partial" : "complete",
     nextState,
     warnings,
@@ -411,6 +633,7 @@ export async function collectJsonl(
       ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
       ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
       ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
+      ...(identityConflict ? [{ code: "local_event_identity_conflict", phase: "collect" }] : []),
     ],
   };
 }
@@ -423,6 +646,14 @@ export function parserResult(entries, candidateRecords, parsedRecords, unsupport
 }
 
 export function previousJsonlEntries(state) {
+  if (state.legacyBaseline) validateLegacyBaseline(state.legacyBaseline);
+  if (state.ledger) {
+    validateObservedEventLedger(state.ledger);
+    return mergeEntries([
+      ...(state.legacyBaseline ?? []),
+      ...Object.values(state.ledger).map((event) => ({ date: event.date, ...(event.usage ?? {}) })),
+    ]);
+  }
   return mergeEntries(Object.values(state.files ?? {}).flatMap((file) => file.entries ?? []));
 }
 

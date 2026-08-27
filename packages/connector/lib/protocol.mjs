@@ -205,16 +205,18 @@ function parsePairingPoll(value, context) {
 
 function parseReconciliation(value, context) {
   const expectedAttestationId = context.handlerAttestationId;
-  const actualKeys = new Set(Object.keys(value));
-  const keysValid =
-    requiredExactKeys(value, new Set(["sources"])) ||
-    (expectedAttestationId !== undefined &&
-      requiredExactKeys(value, new Set(["acceptedHandlerAttestationId", "sources"])));
+  const expectedBootstrapIds = new Set(context.bootstrapSourceIds ?? []);
+  const allowedKeys = new Set(["sources"]);
+  if (expectedAttestationId !== undefined) allowedKeys.add("acceptedHandlerAttestationId");
+  if (context.bootstrapSourceIds !== undefined) allowedKeys.add("sourceBaselines");
   if (
-    !keysValid ||
+    !exactKeys(value, allowedKeys) ||
+    !Object.hasOwn(value, "sources") ||
     !Array.isArray(value.sources) ||
-    (actualKeys.has("acceptedHandlerAttestationId") &&
-      value.acceptedHandlerAttestationId !== expectedAttestationId)
+    (Object.hasOwn(value, "acceptedHandlerAttestationId") &&
+      value.acceptedHandlerAttestationId !== expectedAttestationId) ||
+    (context.bootstrapSourceIds !== undefined &&
+      (!Object.hasOwn(value, "sourceBaselines") || !Array.isArray(value.sourceBaselines)))
   )
     throw invalid();
   const expected = new Set(context.sourceIds ?? []);
@@ -232,7 +234,46 @@ function parseReconciliation(value, context) {
     seen.add(source.sourceId);
   }
   if ([...expected].some((sourceId) => !seen.has(sourceId))) throw invalid();
+  if (context.bootstrapSourceIds !== undefined) {
+    if (value.sourceBaselines.length !== expectedBootstrapIds.size) throw invalid();
+    const baselineSeen = new Set();
+    for (const baseline of value.sourceBaselines) {
+      if (
+        !requiredExactKeys(baseline, new Set(["sourceId", "acceptedAt", "entries"])) ||
+        !expectedBootstrapIds.has(baseline.sourceId) ||
+        baselineSeen.has(baseline.sourceId) ||
+        !safeText(baseline.acceptedAt, 40, 20) ||
+        !Number.isFinite(Date.parse(baseline.acceptedAt)) ||
+        new Date(baseline.acceptedAt).toISOString() !== baseline.acceptedAt ||
+        !Array.isArray(baseline.entries) ||
+        baseline.entries.length > 31 ||
+        baseline.entries.some(
+          (entry) =>
+            !requiredExactKeys(entry, new Set(["date", "totalTokens"])) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
+            !decimalPattern.test(entry.totalTokens),
+        )
+      )
+        throw invalid();
+      baselineSeen.add(baseline.sourceId);
+    }
+  }
   return value;
+}
+
+function parseSourceRegistration(value, context) {
+  if (!requiredExactKeys(value, new Set(["source"]))) throw invalid();
+  if (
+    !requiredExactKeys(value.source, new Set([...mappingKeys, "profileSourceId"])) ||
+    value.source.profileSourceId !== context.profileSourceId ||
+    !uuidPattern.test(value.source.profileSourceId)
+  )
+    throw invalid();
+  const { profileSourceId, ...mapping } = value.source;
+  const source = { ...parseMapping(mapping, context.localSource), profileSourceId };
+  if (source.agentId !== "codex" || source.profileClientSourceId !== context.profileClientSourceId)
+    throw invalid();
+  return { source };
 }
 
 function parseUsage(value, context) {
@@ -310,12 +351,20 @@ export function mergeStoredSourceMapping(local, mapping) {
     throw invalid("Connector configuration contains an invalid source mapping");
   if (mapping.agentAccountId !== undefined && !uuidPattern.test(mapping.agentAccountId))
     throw invalid("Connector configuration contains an invalid account mapping");
+  if (
+    mapping.profileSourceId !== undefined &&
+    (local.agentId !== "codex" ||
+      local.profileClientSourceId === undefined ||
+      !uuidPattern.test(mapping.profileSourceId))
+  )
+    throw invalid("Connector configuration contains an invalid profile mapping");
   return {
     ...local,
     sourceId: mapping.sourceId,
     ...(mapping.agentAccountId === undefined ? {} : { agentAccountId: mapping.agentAccountId }),
     accountLabel: mapping.accountLabel,
     lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence ?? "0",
+    ...(mapping.profileSourceId === undefined ? {} : { profileSourceId: mapping.profileSourceId }),
   };
 }
 
@@ -338,6 +387,7 @@ export async function parseProtocolResponse(response, context) {
   if (context.kind === "pairingStart") return parsePairingStart(value, context);
   if (context.kind === "pairingPoll") return parsePairingPoll(value, context);
   if (context.kind === "reconciliation") return parseReconciliation(value, context);
+  if (context.kind === "sourceRegistration") return parseSourceRegistration(value, context);
   if (context.kind === "usage") return parseUsage(value, context);
   if (context.kind === "browserSyncClaim") return parseBrowserSyncClaim(value);
   if (context.kind === "diagnostics") return parseDiagnostics(value, context);

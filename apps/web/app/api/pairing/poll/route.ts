@@ -122,6 +122,7 @@ async function post(request: Request): Promise<Response> {
          JOIN installations i ON i.id = s.installation_id
         WHERE s.installation_id = $1
           AND s.status = 'active'
+          AND s.profile_source_id IS NULL
           AND i.device_token_hash = $2
         ORDER BY s.created_at, s.id`,
       [body.installationId, digest(deviceToken)],

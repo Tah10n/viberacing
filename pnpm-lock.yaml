@@ -14,6 +14,9 @@ importers:
 
   .:
     devDependencies:
+      '@viberacing/connector-0.4.4':
+        specifier: npm:@viberacing/connector@0.4.4
+        version: '@viberacing/connector@0.4.4'
       prettier:
         specifier: 3.9.4
         version: 3.9.4
@@ -433,6 +436,11 @@ packages:
   '@typescript-eslint/visitor-keys@8.67.0':
     resolution: {integrity: sha512-fkv8dHRDqfGtTHuJeebdrQ7cX6Ad4WAS00rgHh9UGvMycF1mjBfsxry1XsLIFhWZ6Judlh6UdzK+TYlbpCXgnA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@viberacing/connector@0.4.4':
+    resolution: {integrity: sha512-M1hiHXeqyOB+EbqT/nEUoYjTyevoZg+oVwFL1S2fMiAGcgVBA5oNutJ5tH0JDHERzziGg7AfQRpWDjAF05KdwA==}
+    engines: {node: '>=24.14.0 <25'}
+    hasBin: true
 
   '@vitest/expect@4.1.10':
     resolution: {integrity: sha512-YsCn+qAk1GWjQOWFEsEcL2gNQ0zmVmQu3T03qP6UyjhtmdtwtbuI+DASn/7iQB3HGTXkdBwGddzxPlmiql5vlA==}
@@ -1576,6 +1584,8 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.67.0
       eslint-visitor-keys: 5.0.1
+
+  '@viberacing/connector@0.4.4': {}
 
   '@vitest/expect@4.1.10':
     dependencies:

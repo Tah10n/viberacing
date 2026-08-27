@@ -17,7 +17,7 @@ import {
   BrowserSyncProvider,
   InstallationSyncControl,
 } from "../components/account-controls";
-import { agentNames, isSupportedAgent } from "@/lib/agents";
+import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import {
   browserSyncInstallationScopeProtocol,
   installedConnectorUpdateRequired,
@@ -62,6 +62,8 @@ interface AccountRow {
   partial: boolean;
   has_error: boolean;
   can_browser_sync: boolean;
+  shared_profile: boolean;
+  new_account_notice_pending: boolean;
 }
 
 interface SourceRow {
@@ -152,6 +154,12 @@ function hasReassignmentTarget(accounts: readonly AccountRow[], account: Account
 }
 
 function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
+  if (account.shared_profile)
+    return (
+      <p className="token-breakdown-note">
+        Component breakdown is hidden because this Codex profile has used multiple accounts.
+      </p>
+    );
   if (
     account.input_tokens === null ||
     account.output_tokens === null ||
@@ -246,6 +254,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               a.agent_id,
               a.label,
               a.aggregation_mode,
+              a.new_account_notice_pending,
               coalesce(usage.tokens, 0)::text AS tokens,
               usage.component_tokens::text AS component_tokens,
               usage.input_tokens::text AS input_tokens,
@@ -257,7 +266,17 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               max(s.last_successful_sync_at) AS last_sync_at,
               coalesce(bool_or(s.last_completeness = 'partial'), false) AS partial,
               coalesce(bool_or(s.last_error_summary IS NOT NULL), false) AS has_error
-              ,coalesce(bool_or(s.installation_id = $3::uuid AND installation.browser_sync_capable), false) AS can_browser_sync
+              ,coalesce(bool_or(s.installation_id = $3::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
+              coalesce(bool_or(
+                s.agent_id = 'codex' AND (
+                  SELECT count(*)
+                    FROM installation_sources sibling
+                   WHERE sibling.installation_id = s.installation_id
+                     AND sibling.status = 'active'
+                     AND coalesce(sibling.profile_source_id, sibling.id) =
+                         coalesce(s.profile_source_id, s.id)
+                ) > 1
+              ), false) AS shared_profile
          FROM agent_accounts a
          LEFT JOIN installation_sources s
            ON s.agent_account_id = a.id AND s.status = 'active'
@@ -464,6 +483,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
   const browserSyncEnabled =
     accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
+  const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -507,6 +527,17 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
       )}
+
+      {hasNewCodexAccountNotice ? (
+        <Panel className="dedup-notice">
+          <p>A new Codex account was detected on this computer and added separately.</p>
+          <SameOriginActionForm action="/api/accounts/notices/dismiss">
+            <button className="text-button" type="submit">
+              Dismiss
+            </button>
+          </SameOriginActionForm>
+        </Panel>
+      ) : null}
 
       {dedupEvents.map((event) => (
         <Panel className="dedup-notice" key={event.id}>
@@ -671,6 +702,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       <span className="agent-chip">
                         {account.aggregation_mode === "account_max" ? "Deduplicated" : "Summed"}
                       </span>
+                      {isSupportedAgent(account.agent_id) &&
+                      agentRegistry[account.agent_id].accountSwitchMode ===
+                        "combined_local_history" ? (
+                        <span className="agent-chip">All local accounts in this store</span>
+                      ) : null}
+                      {isSupportedAgent(account.agent_id) &&
+                      agentRegistry[account.agent_id].accountSwitchMode === "explicit_capture" ? (
+                        <span className="agent-chip">Explicit capture source</span>
+                      ) : null}
+                      {account.shared_profile ? (
+                        <span className="agent-chip">Shared Codex profile</span>
+                      ) : null}
                     </div>
                     <WeeklyTokenBreakdown account={account} />
                   </div>

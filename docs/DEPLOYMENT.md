@@ -110,6 +110,12 @@ that accepts both the old and new protocols, publish the compatible connector, a
 `VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed or a
 reviewed installed capability is deliberately made the supported baseline.
 
+Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains
+accepted aggregate snapshots. First publish and run connector 0.4.4, which keeps the old wire
+semantics while confirming a bounded content-free hash set for the exact accepted SQLite rows. Only
+then publish 0.5.0. A direct 0.4.3 OpenCode upgrade fails closed; it must never infer accepted rows
+from server time or alias every row visible at upgrade time.
+
 `VIBERACING_MIN_CONNECTOR_VERSION` is a compatibility floor, not the latest package version. Raise
 it only after a server-first rollout and publication of a compatible npm package. Optional patch
 updates normally do not change it. Connector 0.4.3 is an explicit exception: after npm `latest` is

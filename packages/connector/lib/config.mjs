@@ -36,6 +36,7 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
   : defaultStateDirectory;
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
+const providerIdentityPath = join(stateDirectory, "provider-identity.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
 const connectAttemptPath = join(stateDirectory, "connect-attempt.json");
@@ -50,6 +51,7 @@ let stateDirectorySecurity;
 const stateFiles = new Set([
   "config.json",
   "installation.json",
+  "provider-identity.json",
   "sources.json",
   "connection-commit.json",
   "connect-attempt.json",
@@ -63,6 +65,7 @@ const legacyRuntimeFiles = new Set([
   "config.mjs",
   "diagnostics.mjs",
   "executables.mjs",
+  "opencode-cutover-preflight.mjs",
   "readers.mjs",
   "registry.mjs",
   "runtime.mjs",
@@ -82,12 +85,16 @@ const legacyRuntimeAdapterFiles = new Set([
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
-  /^(?:config|installation|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
+  /^(?:config|installation|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
 const hookLauncherTemporaryPattern = /^viberacing-hook\.mjs\.\d+\.tmp$/i;
 const sourceIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+const providerAccountKeyPattern = /^acct1_[A-Za-z0-9_-]{43}$/;
+const sourcesSchemaVersion = 2;
+const maximumLocalSources = 32;
+const maximumCodexAccountsPerProfile = 8;
 const legacyCollectionMethods = new Set([
   "antigravity\0antigravity_cli_capture",
   "claude_code\0claude_jsonl",
@@ -601,21 +608,62 @@ function serializedConfig(config) {
       accountLabel: source.accountLabel,
       collectionMethod: source.collectionMethod,
       lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
+      ...(source.profileSourceId === undefined ? {} : { profileSourceId: source.profileSourceId }),
     })),
   };
 }
 
 async function normalizedSources(sources) {
   if (!Array.isArray(sources)) throw new Error("Local source configuration is unsupported");
+  if (sources.length > maximumLocalSources)
+    throw new Error("Local source configuration exceeds the installation limit");
   const normalized = sources.map((source) =>
     normalizedLocalSource(source, source.clientSourceId ?? randomUUID()),
   );
-  const roots = new Set();
+  const byId = new Map(normalized.map((source) => [source.clientSourceId, source]));
+  if (byId.size !== normalized.length)
+    throw new Error("Local source configuration contains duplicate source identities");
+  const primaryRoots = new Set();
+  const profileMembers = new Map();
   for (const source of normalized) {
     if (!validLocalSource(source)) throw new Error("Local source configuration is unsupported");
-    const key = `${source.agentId}\0${await canonicalPathKey(source.dataPath)}`;
-    if (roots.has(key)) throw new Error("That local source is already configured");
-    roots.add(key);
+    const root = await canonicalPathKey(source.dataPath);
+    if (source.profileClientSourceId === undefined) {
+      const key = `${source.agentId}\0${root}`;
+      if (primaryRoots.has(key)) throw new Error("That local source is already configured");
+      primaryRoots.add(key);
+      continue;
+    }
+    const primary = byId.get(source.profileClientSourceId);
+    if (
+      source.agentId !== "codex" ||
+      primary?.agentId !== "codex" ||
+      primary.profileClientSourceId !== undefined ||
+      primary.clientSourceId === source.clientSourceId ||
+      (await canonicalPathKey(primary.dataPath)) !== root ||
+      primary.collectionMethod !== source.collectionMethod ||
+      primary.supportedSurface !== source.supportedSurface ||
+      primary.executablePath !== source.executablePath ||
+      primary.hookConfigRoot !== source.hookConfigRoot ||
+      source.providerAccountKey === undefined
+    ) {
+      throw new Error("Codex logical source configuration is unsupported");
+    }
+  }
+  for (const source of normalized) {
+    const primaryId = source.profileClientSourceId ?? source.clientSourceId;
+    const members = profileMembers.get(primaryId) ?? [];
+    members.push(source);
+    profileMembers.set(primaryId, members);
+  }
+  for (const members of profileMembers.values()) {
+    if (members.length > maximumCodexAccountsPerProfile)
+      throw new Error("Codex profile exceeds the logical account limit");
+    const accountKeys = members
+      .map((source) => source.providerAccountKey)
+      .filter((value) => value !== undefined);
+    if (new Set(accountKeys).size !== accountKeys.length)
+      throw new Error("Codex profile contains a duplicate provider account key");
   }
   return normalized;
 }
@@ -717,6 +765,23 @@ async function readInstallationUnlocked() {
   }
 }
 
+async function readProviderIdentitySaltUnlocked() {
+  try {
+    const value = JSON.parse(await readFile(providerIdentityPath, "utf8"));
+    if (
+      value?.version === 1 &&
+      Object.keys(value).length === 2 &&
+      typeof value.salt === "string" &&
+      /^[A-Za-z0-9_-]{43}$/.test(value.salt)
+    )
+      return value.salt;
+    throw new Error("Local provider identity salt is invalid");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 async function assertCurrentConnectAttemptUnlocked(expected) {
   const current = await readConnectAttemptUnlocked();
   const installation = await readInstallationUnlocked();
@@ -739,7 +804,7 @@ async function recoverConnectionCommitUnlocked() {
   await waitForTestConnectionBarrier("recovery_after_read");
   if (
     commit?.version !== 1 ||
-    commit.sources?.version !== 1 ||
+    ![1, sourcesSchemaVersion].includes(commit.sources?.version) ||
     !Array.isArray(commit.sources.sources)
   )
     throw new Error("Interrupted connector connection state is invalid");
@@ -756,7 +821,7 @@ async function recoverConnectionCommitUnlocked() {
     }
   }
   await atomicJson(configPath, config);
-  await atomicJson(sourcesPath, { version: 1, sources });
+  await atomicJson(sourcesPath, { version: sourcesSchemaVersion, sources });
   await unlink(connectionCommitPath).catch((error) => {
     if (error?.code !== "ENOENT") throw error;
   });
@@ -767,13 +832,9 @@ async function recoverConnectionCommitUnlocked() {
 async function readSourcesUnlocked() {
   try {
     const value = JSON.parse(await readFile(sourcesPath, "utf8"));
-    if (
-      value?.version !== 1 ||
-      !Array.isArray(value.sources) ||
-      !value.sources.every(validLocalSource)
-    )
+    if (![1, sourcesSchemaVersion].includes(value?.version) || !Array.isArray(value.sources))
       throw new Error("Local source configuration is unsupported");
-    return value.sources.map((source) => normalizedLocalSource(source, source.clientSourceId));
+    return normalizedSources(value.sources);
   } catch (error) {
     if (error?.code === "ENOENT") return [];
     throw error;
@@ -877,7 +938,7 @@ export async function localSourceRegistryContains(clientSourceId) {
   try {
     const value = JSON.parse(await readFile(sourcesPath, "utf8"));
     return (
-      value?.version === 1 &&
+      [1, sourcesSchemaVersion].includes(value?.version) &&
       Array.isArray(value.sources) &&
       value.sources.some((source) => source?.clientSourceId === clientSourceId)
     );
@@ -940,7 +1001,11 @@ function validLocalSource(source) {
     !hasTerminalControlCharacters(source.suggestedLabel) &&
     typeof source.supportedSurface === "string" &&
     (source.executablePath === undefined || typeof source.executablePath === "string") &&
-    (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string")
+    (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string") &&
+    (source.profileClientSourceId === undefined ||
+      (source.agentId === "codex" && sourceIdPattern.test(source.profileClientSourceId))) &&
+    (source.providerAccountKey === undefined ||
+      (source.agentId === "codex" && providerAccountKeyPattern.test(source.providerAccountKey)))
   );
 }
 
@@ -968,6 +1033,12 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
     ...(typeof source.hookConfigRoot === "string"
       ? { hookConfigRoot: resolve(source.hookConfigRoot) }
       : {}),
+    ...(typeof source.profileClientSourceId === "string"
+      ? { profileClientSourceId: source.profileClientSourceId }
+      : {}),
+    ...(typeof source.providerAccountKey === "string"
+      ? { providerAccountKey: source.providerAccountKey }
+      : {}),
   };
 }
 
@@ -975,6 +1046,25 @@ export async function readSources() {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
     return readSourcesUnlocked();
+  });
+}
+
+export async function migrateSourcesSchema() {
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    let stored;
+    try {
+      stored = JSON.parse(await readFile(sourcesPath, "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") return false;
+      throw error;
+    }
+    if (stored?.version === sourcesSchemaVersion) return false;
+    if (stored?.version !== 1 || !Array.isArray(stored.sources))
+      throw new Error("Local source configuration is unsupported");
+    const sources = await normalizedSources(stored.sources);
+    await atomicJson(sourcesPath, { version: sourcesSchemaVersion, sources });
+    return true;
   });
 }
 
@@ -988,7 +1078,7 @@ export async function writeSources(sources) {
 async function writeSourcesUnlocked(sources) {
   const normalized = await normalizedSources(sources);
   await invalidateConnectAttemptUnlocked();
-  await atomicJson(sourcesPath, { version: 1, sources: normalized });
+  await atomicJson(sourcesPath, { version: sourcesSchemaVersion, sources: normalized });
   return normalized;
 }
 
@@ -1071,11 +1161,11 @@ export async function commitConnectionState(config, sources, options = {}) {
       version: 1,
       ...(connectAttempt === undefined ? {} : { connectAttempt }),
       config: storedConfig,
-      sources: { version: 1, sources: normalized },
+      sources: { version: sourcesSchemaVersion, sources: normalized },
     });
     await atomicJson(configPath, storedConfig);
     await options.afterConfigCommit?.();
-    await atomicJson(sourcesPath, { version: 1, sources: normalized });
+    await atomicJson(sourcesPath, { version: sourcesSchemaVersion, sources: normalized });
     await unlink(connectionCommitPath).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
     });
@@ -1112,6 +1202,66 @@ export async function addSource(source) {
     sources.push(normalized);
     await writeSourcesUnlocked(sources);
     return { source: normalized, added: true };
+  });
+}
+
+export function codexPrimaryClientSourceId(source) {
+  return source?.agentId === "codex"
+    ? (source.profileClientSourceId ?? source.clientSourceId)
+    : source?.clientSourceId;
+}
+
+export async function bindCodexProviderAccount(clientSourceId, providerAccountKey) {
+  if (!sourceIdPattern.test(clientSourceId) || !providerAccountKeyPattern.test(providerAccountKey))
+    throw new Error("Invalid Codex provider account binding");
+  return withConnectionStateLock(async () => {
+    await recoverConnectionCommitUnlocked();
+    const sources = await readSourcesUnlocked();
+    const selected = sources.find((source) => source.clientSourceId === clientSourceId);
+    if (selected?.agentId !== "codex") throw new Error("Codex profile source is unavailable");
+    const primaryId = selected.profileClientSourceId ?? selected.clientSourceId;
+    const primary = sources.find((source) => source.clientSourceId === primaryId);
+    if (primary?.agentId !== "codex" || primary.profileClientSourceId !== undefined)
+      throw new Error("Codex profile source is invalid");
+    const members = sources.filter(
+      (source) =>
+        source.agentId === "codex" &&
+        (source.profileClientSourceId ?? source.clientSourceId) === primary.clientSourceId,
+    );
+    const existing = members.find((source) => source.providerAccountKey === providerAccountKey);
+    if (existing) return { source: existing, primary, added: false, boundPrimary: false };
+    if (primary.providerAccountKey === undefined) {
+      primary.providerAccountKey = providerAccountKey;
+      const normalized = await writeSourcesUnlocked(sources);
+      return {
+        source: normalized.find((source) => source.clientSourceId === primary.clientSourceId),
+        primary: normalized.find((source) => source.clientSourceId === primary.clientSourceId),
+        added: false,
+        boundPrimary: true,
+      };
+    }
+    if (members.length >= maximumCodexAccountsPerProfile) {
+      const error = new Error("Codex profile has reached the logical account limit");
+      error.diagnosticCode = "provider_account_limit_reached";
+      throw error;
+    }
+    const secondary = normalizedLocalSource(
+      {
+        ...primary,
+        clientSourceId: undefined,
+        suggestedLabel: "Codex account",
+        profileClientSourceId: primary.clientSourceId,
+        providerAccountKey,
+      },
+      randomUUID(),
+    );
+    const normalized = await writeSourcesUnlocked([...sources, secondary]);
+    return {
+      source: normalized.find((source) => source.clientSourceId === secondary.clientSourceId),
+      primary: normalized.find((source) => source.clientSourceId === primary.clientSourceId),
+      added: true,
+      boundPrimary: false,
+    };
   });
 }
 
@@ -1193,6 +1343,12 @@ export async function removeSource(clientSourceId) {
     const sources = await readSourcesUnlocked();
     const removed = sources.find((source) => source.clientSourceId === clientSourceId);
     if (!removed) return null;
+    if (
+      removed.agentId === "codex" &&
+      removed.profileClientSourceId === undefined &&
+      sources.some((source) => source.profileClientSourceId === removed.clientSourceId)
+    )
+      throw new Error("Remove the logical Codex accounts before removing their physical profile");
     await writeSourcesUnlocked(
       sources.filter((source) => source.clientSourceId !== clientSourceId),
     );
@@ -1207,6 +1363,24 @@ export async function readOrCreateInstallation() {
     const value = { version: 1, id: randomUUID(), secret: randomBytes(32).toString("base64url") };
     await atomicJson(installationPath, value);
     return value;
+  });
+}
+
+export async function readInstallation() {
+  return withConnectionStateLock(async () => {
+    const installation = await readInstallationUnlocked();
+    if (installation === null) throw new Error("Local installation identity is unavailable");
+    return installation;
+  });
+}
+
+export async function readOrCreateProviderIdentitySalt() {
+  return withConnectionStateLock(async () => {
+    const current = await readProviderIdentitySaltUnlocked();
+    if (current !== null) return current;
+    const salt = randomBytes(32).toString("base64url");
+    await atomicJson(providerIdentityPath, { version: 1, salt });
+    return salt;
   });
 }
 
@@ -1404,6 +1578,7 @@ const installedRuntimeFiles = [
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
+  "opencode-cutover-preflight.mjs",
   "origin.mjs",
   "readers.mjs",
   "registry.mjs",
@@ -1571,6 +1746,7 @@ export function quoteHookArgument(value, platform = process.platform) {
 }
 
 export async function installHookForSource(source, installedScript) {
+  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(
     source.agentId === "codex" ? installedHookLauncherScript() : installedScript,
@@ -1615,8 +1791,31 @@ export async function installHookForSource(source, installedScript) {
 export async function installHooks(sourceUrl, sources) {
   const installedScript = await installRuntime(sourceUrl);
   const result = {};
-  for (const source of sources)
+  for (const source of physicalHookSources(sources))
     result[source.clientSourceId] = await installHookForSource(source, installedScript);
+  return result;
+}
+
+function physicalHookSource(source) {
+  if (source.agentId !== "codex" || source.profileClientSourceId === undefined) return source;
+  const { profileClientSourceId, providerAccountKey: _providerAccountKey, ...rest } = source;
+  return { ...rest, clientSourceId: profileClientSourceId };
+}
+
+function physicalHookSources(sources, knownLocalSources = sources) {
+  const knownById = new Map(knownLocalSources.map((source) => [source.clientSourceId, source]));
+  const result = [];
+  const seen = new Set();
+  for (const source of sources) {
+    const hookSource =
+      source.agentId === "codex" && source.profileClientSourceId !== undefined
+        ? (knownById.get(source.profileClientSourceId) ?? physicalHookSource(source))
+        : source;
+    const key = `${hookSource.agentId}\0${hookSource.clientSourceId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(hookSource);
+  }
   return result;
 }
 
@@ -1691,7 +1890,7 @@ export async function diagnoseHookForSource(source, options = {}) {
 
 export async function diagnoseHooks(sources, options = {}) {
   const result = {};
-  for (const source of sources) {
+  for (const source of physicalHookSources(sources)) {
     const status = await diagnoseHookForSource(source, options);
     if (status) result[source.agentId] = mergeHookStatus(result[source.agentId], status);
   }
@@ -1714,6 +1913,7 @@ function mergeHookStatus(previous, next) {
 }
 
 export async function removeHookForSource(source, options = {}) {
+  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
   const marker = hookMarkerForSource(source.clientSourceId);
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
@@ -1762,7 +1962,8 @@ export async function reconcileHooks(
       });
     }
   }
-  const activeIds = new Set(activeSources.map((source) => source.clientSourceId));
+  const hookSources = physicalHookSources(activeSources, knownLocalSources);
+  const activeIds = new Set(hookSources.map((source) => source.clientSourceId));
   for (const source of knownLocalSources)
     if (!activeIds.has(source.clientSourceId))
       try {
@@ -1777,7 +1978,7 @@ export async function reconcileHooks(
       }
   const result = {};
   if (installedScript)
-    for (const source of activeSources)
+    for (const source of hookSources)
       try {
         result[source.clientSourceId] = await installHookForSource(source, installedScript);
       } catch (error) {

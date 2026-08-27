@@ -15,4 +15,20 @@ describe("counted agent capabilities", () => {
     ]);
     expect(supportedAgents).toHaveLength(7);
   });
+
+  it("declares the account-switch contract for every supported agent", () => {
+    expect(
+      Object.fromEntries(
+        supportedAgents.map((agentId) => [agentId, agentRegistry[agentId].accountSwitchMode]),
+      ),
+    ).toEqual({
+      codex: "provider_account_snapshot",
+      claude_code: "combined_local_history",
+      opencode: "combined_local_history",
+      kimi_code: "combined_local_history",
+      qwen_code: "combined_local_history",
+      antigravity: "explicit_capture",
+      gemini_cli: "combined_local_history",
+    });
+  });
 });

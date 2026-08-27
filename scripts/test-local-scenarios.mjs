@@ -2087,6 +2087,259 @@ try {
     "ok - per-user and per-installation installation, source, and agent-account caps are transactional",
   );
 
+  const dynamicCodexInstallation = { id: randomUUID(), secret: token() };
+  const primaryClientSourceId = randomUUID();
+  const dynamicCodexPairing = await pair(dynamicCodexInstallation, [
+    source(primaryClientSourceId, "codex"),
+  ]);
+  const primaryMapping = dynamicCodexPairing.sources[0];
+  const secondaryClientSourceId = randomUUID();
+  const registration = await connectorSyncRequest(
+    "/api/installations/current/sources/register",
+    dynamicCodexPairing.deviceToken,
+    {
+      agentId: "codex",
+      clientSourceId: secondaryClientSourceId,
+      collectionMethod: "codex_app_server",
+      profileClientSourceId: primaryClientSourceId,
+      supportedSurface: "desktop",
+    },
+  );
+  check(registration.status === 200, `dynamic Codex registration failed: ${registration.status}`);
+  const secondaryMapping = (await registration.json()).source;
+  const secondaryUsage = await usage(dynamicCodexPairing.deviceToken, [
+    snapshot(secondaryMapping.sourceId, 1, [[today, 42]]),
+  ]);
+  check(secondaryUsage.status === 200, "dynamic Codex source could not upload usage");
+  let profileDeleteRejected = false;
+  try {
+    await pool.query("DELETE FROM installation_sources WHERE id = $1", [primaryMapping.sourceId]);
+  } catch (error) {
+    profileDeleteRejected = error?.code === "23503";
+  }
+  const protectedAccountDeletion = await form("/api/accounts/delete", {
+    accountId: primaryMapping.agentAccountId,
+    confirm: "delete",
+  });
+  const protectedSecondary = await pool.query(
+    `SELECT account.new_account_notice_pending,
+            (SELECT count(*)::int FROM daily_usage WHERE source_id = source.id) AS usage_rows
+       FROM installation_sources source
+       JOIN agent_accounts account ON account.id = source.agent_account_id
+      WHERE source.id = $1`,
+    [secondaryMapping.sourceId],
+  );
+  check(
+    profileDeleteRejected &&
+      protectedAccountDeletion.status === 409 &&
+      protectedSecondary.rows[0]?.usage_rows === 1 &&
+      protectedSecondary.rows[0]?.new_account_notice_pending === true,
+    "primary Codex deletion did not preserve its logical sibling and notice",
+  );
+  const dismissedNotice = await form("/api/accounts/notices/dismiss", {});
+  const noticeState = await pool.query(
+    "SELECT new_account_notice_pending FROM agent_accounts WHERE id = $1",
+    [secondaryMapping.agentAccountId],
+  );
+  check(
+    dismissedNotice.status === 303 && noticeState.rows[0]?.new_account_notice_pending === false,
+    "dynamic Codex notice was not acknowledged safely",
+  );
+  const secondaryDeletion = await form("/api/accounts/delete", {
+    accountId: secondaryMapping.agentAccountId,
+    confirm: "delete",
+  });
+  const primaryDeletion = await form("/api/accounts/delete", {
+    accountId: primaryMapping.agentAccountId,
+    confirm: "delete",
+  });
+  check(
+    secondaryDeletion.status === 303 && primaryDeletion.status === 303,
+    "explicit leaf-first Codex account deletion failed",
+  );
+  await pool.query("DELETE FROM installations WHERE id = $1", [dynamicCodexInstallation.id]);
+  console.log(
+    "ok - dynamic Codex registration, notice acknowledgement, and profile deletion remain fail-closed",
+  );
+
+  const stablePrimaryClientSourceId = randomUUID();
+  const stableSecondaryClientSourceId = randomUUID();
+  const reconnectInstallation = { id: randomUUID(), secret: token() };
+  const initialLogicalPairing = await pair(reconnectInstallation, [
+    source(stablePrimaryClientSourceId, "codex"),
+  ]);
+  const initialPrimary = initialLogicalPairing.sources[0];
+  const registerStableSecondary = (deviceToken) =>
+    connectorSyncRequest("/api/installations/current/sources/register", deviceToken, {
+      agentId: "codex",
+      clientSourceId: stableSecondaryClientSourceId,
+      collectionMethod: "codex_app_server",
+      profileClientSourceId: stablePrimaryClientSourceId,
+      supportedSurface: "desktop",
+    });
+  let stableRegistration = await registerStableSecondary(initialLogicalPairing.deviceToken);
+  check(stableRegistration.status === 200, "initial logical Codex B registration failed");
+  const initialSecondary = (await stableRegistration.json()).source;
+  check(
+    (
+      await usage(initialLogicalPairing.deviceToken, [
+        snapshot(initialSecondary.sourceId, 1, [[today, 42]]),
+      ])
+    ).status === 200,
+    "initial logical Codex B usage failed",
+  );
+  const renamedSecondary = await form("/api/accounts/rename", {
+    accountId: initialSecondary.agentAccountId,
+    label: "Work",
+  });
+  check(renamedSecondary.status === 303, "logical Codex B rename failed");
+  const accountsAfterInitial = await pool.query(
+    "SELECT count(*)::int AS count FROM agent_accounts WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  const weeklyAfterInitial = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    [userId],
+  );
+
+  const sameInstallationReconnect = await pair(
+    reconnectInstallation,
+    [source(stablePrimaryClientSourceId, "codex")],
+    { [stablePrimaryClientSourceId]: initialPrimary.agentAccountId },
+  );
+  stableRegistration = await registerStableSecondary(sameInstallationReconnect.deviceToken);
+  check(stableRegistration.status === 200, "same-installation logical Codex B reconnect failed");
+  const reconnectedSecondary = (await stableRegistration.json()).source;
+  check(
+    reconnectedSecondary.sourceId === initialSecondary.sourceId &&
+      reconnectedSecondary.agentAccountId === initialSecondary.agentAccountId &&
+      reconnectedSecondary.accountLabel === "Work",
+    "same-installation reconnect changed logical Codex B mapping",
+  );
+  await pool.query(
+    "UPDATE installations SET browser_sync_capable = true, browser_sync_protocol = 2 WHERE id = $1",
+    [reconnectInstallation.id],
+  );
+  const reconnectGrantResponse = await browserSyncGrant(reconnectInstallation.id);
+  check(reconnectGrantResponse.status === 200, "reconnect Browser Sync grant failed");
+  const reconnectGrant = await reconnectGrantResponse.json();
+  const reconnectRequestId = randomUUID();
+  const reconnectClaim = await connectorSyncRequest(
+    "/api/installations/current/sync/claim",
+    sameInstallationReconnect.deviceToken,
+    {
+      requestId: reconnectRequestId,
+      scope: "installation",
+      grant: reconnectGrant.token,
+    },
+  );
+  const reconnectClaimBody = await reconnectClaim.json();
+  check(
+    reconnectClaim.status === 200 &&
+      new Set(reconnectClaimBody.sourceIds).size === 2 &&
+      reconnectClaimBody.sourceIds.includes(initialPrimary.sourceId) &&
+      reconnectClaimBody.sourceIds.includes(initialSecondary.sourceId),
+    "Browser Sync claim after logical reconnect omitted A or B",
+  );
+  check(
+    (
+      await connectorSyncRequest(
+        "/api/installations/current/sync/result",
+        sameInstallationReconnect.deviceToken,
+        { requestId: reconnectRequestId, status: "succeeded", resultCode: "unchanged" },
+      )
+    ).status === 204,
+    "Browser Sync reconnect result failed",
+  );
+
+  await pool.query(
+    "UPDATE installation_sources SET status = 'disconnected' WHERE installation_id = $1",
+    [reconnectInstallation.id],
+  );
+  await pool.query(
+    "UPDATE installations SET status = 'revoked', revoked_at = now() WHERE id = $1",
+    [reconnectInstallation.id],
+  );
+  const resetInstallation = { id: randomUUID(), secret: token() };
+  const resetPairing = await pair(
+    resetInstallation,
+    [source(stablePrimaryClientSourceId, "codex")],
+    { [stablePrimaryClientSourceId]: initialPrimary.agentAccountId },
+  );
+  const resetPrimary = resetPairing.sources[0];
+  const resetRegistration = await registerStableSecondary(resetPairing.deviceToken);
+  check(resetRegistration.status === 200, "reset-installation logical Codex B registration failed");
+  const resetSecondary = (await resetRegistration.json()).source;
+  check(
+    resetPrimary.agentAccountId === initialPrimary.agentAccountId &&
+      resetSecondary.agentAccountId === initialSecondary.agentAccountId &&
+      resetSecondary.accountLabel === "Work",
+    "reset installation created new logical Codex accounts",
+  );
+  check(
+    (await usage(resetPairing.deviceToken, [snapshot(resetSecondary.sourceId, 1, [[today, 42]])]))
+      .status === 200,
+    "reset-installation logical Codex B usage failed",
+  );
+  const accountStateAfterReset = await pool.query(
+    `SELECT count(DISTINCT account.id)::int AS relevant_accounts,
+            count(*) FILTER (WHERE source.installation_id = $2)::int AS old_sources,
+            count(*) FILTER (WHERE source.installation_id = $3)::int AS new_sources
+       FROM installation_sources source
+      JOIN agent_accounts account ON account.id = source.agent_account_id
+      WHERE source.user_id = $1
+        AND source.client_source_id = ANY($4::text[])`,
+    [
+      userId,
+      reconnectInstallation.id,
+      resetInstallation.id,
+      [stablePrimaryClientSourceId, stableSecondaryClientSourceId],
+    ],
+  );
+  const accountsAfterReset = await pool.query(
+    "SELECT count(*)::int AS count FROM agent_accounts WHERE user_id = $1 AND agent_id = 'codex'",
+    [userId],
+  );
+  const weeklyAfterReset = await pool.query(
+    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    [userId],
+  );
+  check(
+    accountStateAfterReset.rows[0]?.relevant_accounts === 2 &&
+      accountStateAfterReset.rows[0]?.old_sources === 2 &&
+      accountStateAfterReset.rows[0]?.new_sources === 2 &&
+      accountsAfterReset.rows[0]?.count === accountsAfterInitial.rows[0]?.count &&
+      weeklyAfterReset.rows[0]?.tokens === weeklyAfterInitial.rows[0]?.tokens,
+    `logical Codex reset duplicated accounts, sources, or weekly usage: ${JSON.stringify({
+      accountState: accountStateAfterReset.rows[0],
+      accountsAfterInitial: accountsAfterInitial.rows[0],
+      accountsAfterReset: accountsAfterReset.rows[0],
+      weeklyAfterInitial: weeklyAfterInitial.rows[0],
+      weeklyAfterReset: weeklyAfterReset.rows[0],
+    })}`,
+  );
+  await pool.query("DELETE FROM installations WHERE id = ANY($1::uuid[])", [
+    [reconnectInstallation.id, resetInstallation.id],
+  ]);
+  check(
+    (
+      await form("/api/accounts/delete", {
+        accountId: initialSecondary.agentAccountId,
+        confirm: "delete",
+      })
+    ).status === 303 &&
+      (
+        await form("/api/accounts/delete", {
+          accountId: initialPrimary.agentAccountId,
+          confirm: "delete",
+        })
+      ).status === 303,
+    "logical Codex reconnect fixture cleanup failed",
+  );
+  console.log(
+    'ok - renamed Codex A+B reconnect/reset preserves label "Work", reuses two accounts, claims both sources, and does not double weekly usage',
+  );
+
   const pendingBeforeQuotaRace = await pool.query(
     "SELECT count(*)::int AS count FROM installations WHERE status = 'pending' AND pairing_expires_at > now()",
   );

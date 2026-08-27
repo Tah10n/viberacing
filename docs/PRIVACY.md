@@ -76,6 +76,39 @@ label and never derives network metadata from the local data-root path. Each cap
 keyed by its random client source ID, not an account label, provider identity, or agent name.
 Multiple Antigravity accounts therefore remain in separate local files.
 
+For Codex ChatGPT logins, the connector reads the size-bounded, non-symlinked `CODEX_HOME/auth.json`
+before starting App Server, retains only `tokens.account_id`, brackets usage with two
+generated-contract `account/read` calls, and reads the local ID again afterward. Both local IDs and
+both normalized, non-null App Server emails must match. The whole bounded auth JSON is parsed in
+process memory; JWT, access token, and refresh token values are never persisted, logged, hashed, or
+transmitted. Unix builds additionally require current-user ownership and no group/world file
+permissions; this document does not claim an equivalent Windows auth-file ACL validation. A missing
+or changing ID/email fails closed with guidance to use a separate `CODEX_HOME`. The accepted values
+are discarded after deriving an `acct1_…` HMAC under a separate random local salt. That salt
+survives `reset-installation` so reconnecting cannot manufacture duplicate logical accounts. The
+HMAC stays only in owner-readable `sources.json`; email, account ID, and HMAC are excluded from
+`config.json`, pairing, dynamic registration, usage, diagnostics, terminal output, and server logs.
+Dynamic registration sends only the new random client source UUID, the approved physical profile
+client UUID, and fixed Codex agent/method/surface metadata. The server validates those fixed fields
+and derives the user and aggregation mode inside a user- and installation-locked transaction. It
+reuses the canonical logical account for the same user, agent, and stable client source UUID across
+reset installations. No provider identity or fingerprint is stored server-side.
+
+This contract supports only file-backed `CODEX_HOME/auth.json` identity. Keyring-only and ephemeral
+identity are currently unsupported. Separate `CODEX_HOME` guidance applies only when every profile
+has its own readable auth file and must not be presented as a fix for keyring-only state. The
+connector does not access an OS keyring directly; such access requires a separate security design
+before implementation.
+
+Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity contribute to a local observed-event
+ledger containing only a SHA-256 event key, UTC date, exact aggregate token tuple, and parser
+version. Raw provider IDs, filenames, models, and record bodies are not retained. Ledger entries are
+limited to the 31-day ingestion range and bounded by count and serialized bytes. They intentionally
+survive file deletion, movement, copying, and current-database cleanup so already observed usage is
+not silently subtracted; duplicate copies collapse to the same hash. If one identity appears with a
+different tuple, the original tuple wins and only the allowlisted `local_event_identity_conflict`
+diagnostic is emitted.
+
 Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
 by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value
 is saved in connector state, diagnostics, pairing, or sync payloads.

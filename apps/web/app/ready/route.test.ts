@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as ConfigModule from "@/lib/config";
 
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 
-vi.mock("@/lib/config", () => ({
-  expectedSchemaVersion: "005_browser_sync_protocol.sql",
+vi.mock("@/lib/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof ConfigModule>()),
   validateRuntimeConfig: vi.fn(),
 }));
 vi.mock("@/lib/db", () => ({ query }));
 
+import { expectedSchemaVersion } from "@/lib/config";
 import { GET } from "./route";
 
 beforeEach(() => query.mockReset());
@@ -19,10 +21,11 @@ describe("readiness migration ledger", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       status: "ready",
-      schemaVersion: "005_browser_sync_protocol.sql",
+      schemaVersion: expectedSchemaVersion,
     });
+    expect(expectedSchemaVersion).toBe("007_account_switch_safety.sql");
     expect(query).toHaveBeenCalledWith(expect.stringContaining("browser_sync_protocol"), [
-      "005_browser_sync_protocol.sql",
+      expectedSchemaVersion,
     ]);
   });
 

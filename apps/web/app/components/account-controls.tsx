@@ -236,7 +236,12 @@ export function BrowserSyncProvider({
       if (outcome.kind === "terminal" && outcome.status === "partial") {
         setState({
           target,
-          message: "Sync completed with warnings. Run viberacing doctor.",
+          message:
+            outcome.resultCode === "partial_accounts_inactive"
+              ? "Active accounts were synced. Switch Codex accounts to refresh the inactive ones."
+              : outcome.resultCode === "account_setup_pending"
+                ? "Codex account setup is pending. Try Sync again."
+                : "Sync completed with warnings. Run viberacing doctor.",
           tone: "error",
         });
         void prepare();
@@ -248,7 +253,9 @@ export function BrowserSyncProvider({
           message:
             outcome.resultCode === "busy"
               ? "Another sync is already running."
-              : "Sync failed. Run viberacing doctor.",
+              : outcome.resultCode === "account_not_active"
+                ? "Switch Codex to this account and try again."
+                : "Sync failed. Run viberacing doctor.",
           tone: "error",
         });
         void prepare();

@@ -29,6 +29,7 @@ interface ReconciliationBody {
   connectorVersion?: string;
   handlerAttestation?: HandlerAttestation;
   sourceIds: string[];
+  bootstrapSourceIds?: string[];
 }
 
 interface HandlerAttestation {
@@ -69,15 +70,23 @@ function parseHandlerAttestation(value: unknown): HandlerAttestation | null {
 
 export function parseReconciliationBody(value: unknown): ReconciliationBody | null {
   if (!isRecord(value)) return null;
-  const keys = Object.keys(value).sort();
+  const keys = new Set(Object.keys(value));
   if (
-    JSON.stringify(keys) !== JSON.stringify(["sourceIds"]) &&
-    JSON.stringify(keys) !== JSON.stringify(["connectorVersion", "sourceIds"]) &&
-    JSON.stringify(keys) !== JSON.stringify(["cliVersion", "sourceIds"]) &&
-    JSON.stringify(keys) !== JSON.stringify(["cliVersion", "handlerAttestation", "sourceIds"])
-  ) {
+    !keys.has("sourceIds") ||
+    [...keys].some(
+      (key) =>
+        ![
+          "sourceIds",
+          "bootstrapSourceIds",
+          "connectorVersion",
+          "cliVersion",
+          "handlerAttestation",
+        ].includes(key),
+    ) ||
+    (keys.has("connectorVersion") && keys.has("cliVersion")) ||
+    (keys.has("handlerAttestation") && !keys.has("cliVersion"))
+  )
     return null;
-  }
   if (
     !Array.isArray(value.sourceIds) ||
     value.sourceIds.length > 100 ||
@@ -86,6 +95,16 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   ) {
     return null;
   }
+  const sourceIds: string[] = value.sourceIds;
+  if (
+    value.bootstrapSourceIds !== undefined &&
+    (!Array.isArray(value.bootstrapSourceIds) ||
+      value.bootstrapSourceIds.length > 32 ||
+      !value.bootstrapSourceIds.every(isUuid) ||
+      new Set(value.bootstrapSourceIds).size !== value.bootstrapSourceIds.length ||
+      value.bootstrapSourceIds.some((sourceId) => !sourceIds.includes(sourceId)))
+  )
+    return null;
   if (
     value.cliVersion !== undefined &&
     (typeof value.cliVersion !== "string" ||
@@ -108,7 +127,10 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
       : parseHandlerAttestation(value.handlerAttestation);
   if (handlerAttestation === null) return null;
   return {
-    sourceIds: value.sourceIds,
+    sourceIds,
+    ...(value.bootstrapSourceIds === undefined
+      ? {}
+      : { bootstrapSourceIds: value.bootstrapSourceIds }),
     ...(value.cliVersion === undefined ? {} : { cliVersion: value.cliVersion }),
     ...(value.connectorVersion === undefined ? {} : { connectorVersion: value.connectorVersion }),
     ...(handlerAttestation === undefined ? {} : { handlerAttestation }),
@@ -148,7 +170,7 @@ async function post(request: Request): Promise<Response> {
     const body = parseReconciliationBody(await readBoundedJson(request, 8_192));
     if (body === null) return problem(400, "invalid_request");
     const cliVersion = body.cliVersion ?? body.connectorVersion;
-    const rows = await transaction(async (client) => {
+    const result = await transaction(async (client) => {
       if (cliVersion !== undefined && body.handlerAttestation !== undefined) {
         await client.query(
           `UPDATE installations
@@ -200,15 +222,59 @@ async function post(request: Request): Promise<Response> {
           ORDER BY requested.position`,
         [installation.id, body.sourceIds],
       );
-      return result.rows;
+      const baselines =
+        (body.bootstrapSourceIds?.length ?? 0) === 0
+          ? []
+          : (
+              await client.query<{
+                accepted_at: string | null;
+                entries: Array<{ date: string; totalTokens: string }>;
+                source_id: string;
+              }>(
+                `SELECT source.id::text AS source_id,
+                        source.last_successful_sync_at::text AS accepted_at,
+                        coalesce(
+                          jsonb_agg(
+                            jsonb_build_object(
+                              'date', usage.usage_date::text,
+                              'totalTokens', usage.total_tokens::text
+                            ) ORDER BY usage.usage_date
+                          ) FILTER (WHERE usage.usage_date IS NOT NULL),
+                          '[]'::jsonb
+                        ) AS entries
+                   FROM installation_sources source
+                   LEFT JOIN daily_usage usage
+                     ON usage.source_id = source.id
+                    AND usage.usage_date BETWEEN current_date - 30 AND current_date
+                  WHERE source.installation_id = $1
+                    AND source.id = ANY($2::uuid[])
+                    AND source.agent_id = 'opencode'
+                  GROUP BY source.id, source.last_successful_sync_at
+                  ORDER BY source.id`,
+                [installation.id, body.bootstrapSourceIds],
+              )
+            ).rows;
+      return { rows: result.rows, baselines };
     });
     return Response.json(
       {
-        sources: rows.map((source) => ({
+        sources: result.rows.map((source) => ({
           sourceId: source.source_id,
           status: source.status,
           lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
         })),
+        ...(body.bootstrapSourceIds === undefined
+          ? {}
+          : {
+              sourceBaselines: result.baselines.map((baseline) => ({
+                sourceId: baseline.source_id,
+                acceptedAt:
+                  baseline.accepted_at === null
+                    ? null
+                    : new Date(baseline.accepted_at).toISOString(),
+                entries: baseline.entries,
+              })),
+            }),
         ...(body.handlerAttestation === undefined
           ? {}
           : { acceptedHandlerAttestationId: body.handlerAttestation.attestationId }),
