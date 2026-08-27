@@ -65,6 +65,7 @@ const legacyRuntimeFiles = new Set([
   "config.mjs",
   "diagnostics.mjs",
   "executables.mjs",
+  "opencode-plugin.mjs",
   "opencode-cutover-preflight.mjs",
   "readers.mjs",
   "registry.mjs",
@@ -872,6 +873,10 @@ export async function readConfig(options = {}) {
   return withConnectionConfig((config) => config, options);
 }
 
+export function inspectConfig() {
+  return readConfigUnlocked();
+}
+
 export async function connectedStateExists() {
   try {
     const [rootInfo, markerInfo, configInfo] = await Promise.all([
@@ -977,6 +982,30 @@ export async function connectedSourceMappingMatches(clientSourceId, agentId) {
   }
 }
 
+export async function connectedAgentSourceIdsIfInstallationMatches(installationId, agentId) {
+  if (!sourceIdPattern.test(installationId ?? "") || typeof agentId !== "string" || !agentId)
+    throw new Error("Invalid connected agent source query");
+  if (!(await connectedStateExists())) return [];
+  try {
+    const [installation, config] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+    ]);
+    if (
+      installation?.id !== installationId ||
+      config.installationId !== installationId ||
+      !(await connectedStateExists())
+    )
+      return [];
+    return config.sources
+      .filter((source) => source.agentId === agentId && sourceIdPattern.test(source.sourceId ?? ""))
+      .map((source) => source.clientSourceId);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return [];
+    throw error;
+  }
+}
+
 export async function writeConfig(config, options) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
@@ -1047,6 +1076,10 @@ export async function readSources() {
     await recoverConnectionCommitUnlocked();
     return readSourcesUnlocked();
   });
+}
+
+export function inspectSources() {
+  return readSourcesUnlocked();
 }
 
 export async function migrateSourcesSchema() {
@@ -1374,6 +1407,10 @@ export async function readInstallation() {
   });
 }
 
+export function readExistingInstallation() {
+  return readInstallationUnlocked();
+}
+
 export async function readOrCreateProviderIdentitySalt() {
   return withConnectionStateLock(async () => {
     const current = await readProviderIdentitySaltUnlocked();
@@ -1578,6 +1615,7 @@ const installedRuntimeFiles = [
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
+  "opencode-plugin.mjs",
   "opencode-cutover-preflight.mjs",
   "origin.mjs",
   "readers.mjs",
@@ -1614,6 +1652,7 @@ function hookLauncherContents(version = connectorVersion) {
     'import { fileURLToPath, pathToFileURL } from "node:url";',
     "",
     'const stateDirectory = resolve(fileURLToPath(new URL("..", import.meta.url)));',
+    "process.env.VIBERACING_STATE_DIR = stateDirectory;",
     `const runtime = join(stateDirectory, "runtime", ${JSON.stringify(version)}, "bin", "viberacing.mjs");`,
     "await import(pathToFileURL(runtime).href);",
   ].join("\n");
@@ -1883,7 +1922,7 @@ export async function diagnoseHookForSource(source, options = {}) {
       return error?.code === "ENOENT" ? "missing" : "invalid-settings";
     }
   }
-  if (source.agentId === "opencode") return "manual-sync";
+  if (source.agentId === "opencode") return undefined;
   if (captureAgents.has(source.agentId)) return "capture-wrapper";
   return undefined;
 }

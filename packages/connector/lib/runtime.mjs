@@ -14,6 +14,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  connectedAgentSourceIdsIfInstallationMatches,
   connectedSourceMappingMatches,
   connectedStateExists,
   ensurePrivateStateDirectory,
@@ -217,6 +218,48 @@ export async function markDirtyIfConnected(clientSourceId, agentId, now = new Da
     if (!(await connectedSourceMappingMatches(clientSourceId, agentId))) return false;
     await writeDirtyEntry(clientSourceId, now, true);
     return true;
+  });
+}
+
+export async function markAgentSourcesDirtyIfConnected({
+  agentId,
+  installationId,
+  now = new Date(),
+}) {
+  if (typeof agentId !== "string" || agentId.length === 0)
+    throw new Error("Invalid dirty agent id");
+  if (!sourceIdPattern.test(installationId ?? "")) throw new Error("Invalid dirty installation id");
+  if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return [];
+  return withExistingDirtyLock(async () => {
+    if ((await lifecycleMutationActive()) || !(await connectedStateExists())) return [];
+    const clientSourceIds = await connectedAgentSourceIdsIfInstallationMatches(
+      installationId,
+      agentId,
+    );
+    if (clientSourceIds.length === 0) return [];
+    let previous;
+    try {
+      previous = JSON.parse(await readFile(dirtyPath, "utf8"));
+    } catch (error) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+      previous = null;
+    }
+    const dirty =
+      previous?.version === 2 && previous.sources && typeof previous.sources === "object"
+        ? previous
+        : { version: 2, sources: {} };
+    const previousEntries = new Map(dirtyEntries(previous));
+    const timestamp = now.toISOString();
+    for (const clientSourceId of clientSourceIds) {
+      const previousEntry = previousEntries.get(clientSourceId);
+      dirty.sources[clientSourceId] = {
+        dirtySince: previousEntry?.dirtySince ?? timestamp,
+        lastEventAt: timestamp,
+        generation: randomUUID(),
+      };
+    }
+    await atomicJsonExisting(dirtyPath, dirty);
+    return clientSourceIds;
   });
 }
 
@@ -526,6 +569,15 @@ export async function readState() {
   try {
     const stored = JSON.parse(await readFile(statePath, "utf8"));
     return normalizedRuntimeState(stored);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    return { version: runtimeStateVersion, sequences: {} };
+  }
+}
+
+export async function inspectState() {
+  try {
+    return normalizedRuntimeState(JSON.parse(await readFile(statePath, "utf8")));
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
     return { version: runtimeStateVersion, sequences: {} };
