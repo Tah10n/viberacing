@@ -916,10 +916,11 @@ async function rememberServerSequences(config, sequences) {
   const state = await readState();
   if (!Array.isArray(sequences) || sequences.length === 0) return state;
   state.sequences ??= {};
-  const byId = new Map(sequences.map((item) => [item.sourceId, item.lastAcceptedSyncSequence]));
+  const byId = new Map(sequences.map((item) => [item.sourceId, item]));
   let changed = false;
   for (const source of config.sources) {
-    const reported = byId.get(source.sourceId);
+    const sequenceStatus = byId.get(source.sourceId);
+    const reported = sequenceStatus?.lastAcceptedSyncSequence;
     if (typeof reported !== "string" || !/^(?:0|[1-9]\d*)$/.test(reported)) continue;
     const local = state.sequences[source.sourceId] ?? "0";
     const reconciled = BigInt(local) > BigInt(reported) ? local : reported;
@@ -929,6 +930,23 @@ async function rememberServerSequences(config, sequences) {
     }
     if (source.lastAcceptedSyncSequence !== reported) {
       source.lastAcceptedSyncSequence = reported;
+      changed = true;
+    }
+    const pendingCutover = state.adapters?.[source.sourceId]?.cutoverPending;
+    if (
+      source.agentId === "opencode" &&
+      sequenceStatus?.accepted === true &&
+      pendingCutover?.version === 1 &&
+      /^(?:0|[1-9]\d*)$/.test(pendingCutover.pendingSequence ?? "") &&
+      BigInt(reported) >= BigInt(pendingCutover.pendingSequence)
+    ) {
+      state.adapters[source.sourceId].cutover = {
+        version: 1,
+        confirmedSequence: reported,
+        confirmedRangeEnd: pendingCutover.confirmedRangeEnd,
+        aliases: pendingCutover.aliases,
+      };
+      delete state.adapters[source.sourceId].cutoverPending;
       changed = true;
     }
   }
@@ -1359,6 +1377,14 @@ async function sync(providedConfig, options = {}) {
         const sequence = (previous + 1n).toString();
         state.sequences[source.sourceId] = sequence;
         state.fingerprints[source.sourceId] = nextFingerprint;
+        const cutoverCandidate = state.adapters[source.sourceId]?.cutoverCandidate;
+        if (source.agentId === "opencode" && cutoverCandidate?.version === 1) {
+          state.adapters[source.sourceId].cutoverPending = {
+            ...cutoverCandidate,
+            pendingSequence: sequence,
+          };
+          delete state.adapters[source.sourceId].cutoverCandidate;
+        }
         snapshots.push({
           sourceId: source.sourceId,
           syncSequence: sequence,
