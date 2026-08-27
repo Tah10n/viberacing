@@ -50,6 +50,16 @@ old and new protocols, publish the compatible connector, and only then raise
 That variable is a compatibility floor, not a latest-version tracker; normal patch and minor
 releases do not change it.
 
+## Connector 0.5.1 OpenCode plugin staging
+
+Connector 0.5.1 adds only the local installation-owned OpenCode automatic-Sync plugin and retains
+protocol v4, the existing PostgreSQL schema, ranking semantics, browser pairing, and the deployed
+minimum connector version. The feature PR stages package bytes and cross-platform evidence only.
+Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, Railway variable change,
+or compatibility-floor increase. Perform those release actions only through the separately approved
+stable release process above, then verify the immutable tarball, provenance, `latest`, a clean
+consumer install, and real OpenCode restart behavior before considering any later floor change.
+
 ## Connector 0.5.0 account-switch rollout
 
 Connector 0.5.0 keeps usage protocol v4 and the server continues to accept v2 and v3. Its new

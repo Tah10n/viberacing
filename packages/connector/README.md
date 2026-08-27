@@ -20,6 +20,14 @@ one-time review is complete, manual Sync remains available but the hook cannot r
 turn. A full uninstall and reconnect creates a new source identity and requires a new review;
 routine `doctor --repair` preserves the stable trusted command identity.
 
+For OpenCode, `connect` installs one global plugin file owned by this Vibe Racing installation under
+`$XDG_CONFIG_HOME/opencode/plugins` (default `~/.config/opencode/plugins`, including on Windows).
+Restart OpenCode once after the connector reports that the plugin was created or updated. The
+primary trigger is `session.status` with `status.type === "idle"`; `session.idle` is a two-second
+process-local deduplicated fallback. The plugin starts the stable local launcher and returns
+immediately. It never reads or forwards a session ID, prompt, response, code, model, project path,
+working directory, or other event payload.
+
 Refresh the installed runtime and repair owned hooks explicitly:
 
 ```bash
@@ -175,6 +183,14 @@ collect them. Qwen's cached count is already included in input and its thoughts 
 included in output, so the connector subtracts both overlaps before sending the five exact component
 fields.
 
+At an OpenCode idle event, the installation-owned plugin invokes the stable launcher with the
+installation UUID and no OpenCode context. One atomic dirty-ledger update selects the intersection
+of active server mappings and existing local OpenCode sources, so every mapped `opencode*.db` for
+that installation is checked together. The existing scheduler still provides single-flight,
+15-second debounce, two-minute cooldown/maximum delay, and fingerprint suppression. Unchanged
+profiles therefore send no new usage payload. A crash or kill before idle is covered by the next
+idle event or manual `viberacing sync`; no daemon, watcher, or OpenCode polling is installed.
+
 ### Teardown commands
 
 `disconnect` and `uninstall` are explicit teardown operations and intentionally remain available
@@ -188,7 +204,10 @@ installed runtime so an ordinary repeated `uninstall` can finish safely. Provide
 hooks are untouched. Run `uninstall` once for every connector installation. If an installation used
 `VIBERACING_STATE_DIR`, set it to the same value when uninstalling; the command refuses to report
 success when the selected state directory contains only a state marker or no substantive
-installation metadata, connection attempt, browser-handler record, or installed runtime.
+installation metadata, connection attempt, browser-handler record, or installed runtime. They also
+remove only the strictly owned OpenCode plugin file. A foreign, linked, ACL-unsafe, or newer-schema
+plugin is never overwritten or deleted; teardown still removes authorization and local secrets,
+while the stale installation guard makes any already-loaded plugin event a no-op.
 `reset-installation` is not teardown: it is the explicit escape hatch for creating a new
 installation identity. It remains blocked byte-for-byte while accepted OpenCode history lacks a
 current confirmed 0.4.4 cutover, so deleting config/state cannot bypass the 0.5.0 migration gate.
@@ -205,13 +224,13 @@ transition to be retried, so local deduplication is not an exactly-once server-l
 Pending usage records are uploaded in bounded batches without forcing another collector scan. A
 source already disconnected on the server loses its mapping, pending/runtime state, dirty entry, and
 owned hook without deleting its local definition or blocking other agents. Directories are
-owner-only where the OS supports permissions; secrets are `0600`. `doctor` reconciles the last
-server-accepted sequence and reports hook freshness, mapped accounts, supported surfaces, excluded
-desktop surfaces, data availability, partial warnings, and the last unresolved hook error. A fully
-successful authenticated usage delivery clears that hook error; partial syncs and automatic checks
-that send no usage request retain it. A successful initial pending retry counts as that delivery
-even when the following automatic collection is unchanged. `doctor --repair` refreshes the installed
-runtime, owned hooks, and the default-state browser protocol handler under the lifecycle lock. Its
+owner-only where the OS supports permissions; secrets are `0600`. `doctor` is read-only and reports
+local plugin/hook freshness, mapped accounts, supported surfaces, excluded desktop surfaces, data
+availability, partial warnings, and the last unresolved hook error. A fully successful authenticated
+usage delivery clears that hook error; partial syncs and automatic checks that send no usage request
+retain it. A successful initial pending retry counts as that delivery even when the following
+automatic collection is unchanged. `doctor --repair` refreshes the installed runtime, owned hooks,
+the OpenCode plugin, and the default-state browser protocol handler under the lifecycle lock. Its
 pending handler attestation survives a failed reconciliation and is repeated by a later normal
 contact until the server acknowledges the same random ID. Server reconciliation shares the sync
 lock, and it does not collect usage unless the user separately runs `viberacing sync`. A successful
@@ -233,21 +252,22 @@ Connect and `doctor` report the exact status from Codex; when review is required
 run `/hooks`, inspect the Vibe Racing `Stop` command, and trust it. The command targets a stable
 local launcher, so later connector runtime updates preserve that trusted identity. The connector
 never writes Codex trust state or enables a trust-bypass flag. Qwen's trigger currently covers
-interactive TUI and ACP lifecycle events, not headless `qwen -p` exits. OpenCode uses its read-only
-SQLite store and a documented `sync`; Antigravity requires the opt-in `run` wrapper. Every installed
-hook contains its stable `clientSourceId` and a source-owned v3 marker. Hooks only discard stdin,
-atomically update that source's locked dirty entry, start/reuse one short-lived timer process, and
-return the provider's minimal response. Automatic collection first drains pending payloads and then
-scans only active dirty sources; events for other sources do not start Codex, open OpenCode SQLite,
-or read unrelated histories. It is debounced for 15 seconds, limited to roughly one attempt per 120
-seconds, and forced by 120 seconds of continuous activity. Each dirty generation receives at most
-one automatic attempt; collector errors complete that generation, while failed uploads remain
-compactly pending until another hook or manual sync. A generation created during the attempt
-schedules the next finite batch; if a manual sync still owns the single-flight lock, that automatic
-batch makes at most two bounded 60-second lock acquisitions. If both expire, it exits with the dirty
-generation intact for the next hook or manual sync. During already-triggered activity, a TTL-bounded
-installation check removes dashboard-disconnected mappings and hooks even when counters are
-unchanged. There is no resident daemon, polling loop, or file watcher. Manual sync and initial
+interactive TUI and ACP lifecycle events, not headless `qwen -p` exits. OpenCode uses its generated
+global idle plugin to bulk-mark every active mapped SQLite store, then the same scheduler performs
+collection; manual `sync` remains available. Antigravity requires the opt-in `run` wrapper. Every
+installed hook contains its stable `clientSourceId` and a source-owned v3 marker. Hooks only discard
+stdin, atomically update that source's locked dirty entry, start/reuse one short-lived timer
+process, and return the provider's minimal response. Automatic collection first drains pending
+payloads and then scans only active dirty sources; events for other sources do not start Codex, open
+OpenCode SQLite, or read unrelated histories. It is debounced for 15 seconds, limited to roughly one
+attempt per 120 seconds, and forced by 120 seconds of continuous activity. Each dirty generation
+receives at most one automatic attempt; collector errors complete that generation, while failed
+uploads remain compactly pending until another hook or manual sync. A generation created during the
+attempt schedules the next finite batch; if a manual sync still owns the single-flight lock, that
+automatic batch makes at most two bounded 60-second lock acquisitions. If both expire, it exits with
+the dirty generation intact for the next hook or manual sync. During already-triggered activity, a
+TTL-bounded installation check removes dashboard-disconnected mappings and hooks even when counters
+are unchanged. There is no resident daemon, polling loop, or file watcher. Manual sync and initial
 connect bypass the cooldown and collect all active sources; a direct manual sync waits up to 60
 seconds for an existing sync and reports a busy error if the lock remains occupied. Unchanged data
 sends no request.

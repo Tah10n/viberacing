@@ -16,7 +16,8 @@ Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen C
 CLI, and Gemini CLI. Antigravity Desktop is not supported. See
 [agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
-Supported lifecycle hooks mark only their owning local source dirty. One short-lived detached
+Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
+all active mapped OpenCode databases for that installation together. One short-lived detached
 scheduler coalesces source events and sends at most about one automatic batch every two minutes; it
 drains saved payloads first and runs collectors only for currently dirty sources. There is no retry
 loop: one dirty generation gets one automatic attempt, and a later hook or manual sync retries saved
@@ -44,7 +45,15 @@ are not account-scoped. Neither counter is estimated. One physical Codex profile
 `Stop` hook, which runs only after the user reviews and trusts it through `/hooks`; `doctor` reports
 whether that hook is current or still needs review.
 
-Connector 0.5.0 uses protocol v4 to sequence its allowlisted collector-error state against the last
+OpenCode automatic Sync uses one installation-owned global plugin at
+`$XDG_CONFIG_HOME/opencode/plugins` (default `~/.config/opencode/plugins`). `connect` or
+`doctor --repair` creates it, and OpenCode must be restarted once after a create or update. The
+plugin reacts primarily to `session.status` becoming `idle`, with `session.idle` as a two-second
+deduplicated fallback, then starts the stable local Vibe Racing launcher without waiting for Sync.
+It does not read or forward the session ID, prompt, response, code, model, project path, or event
+payload. Manual `viberacing sync` remains available, including when OpenCode is killed before idle.
+
+Connector 0.5.x uses protocol v4 to sequence its allowlisted collector-error state against the last
 server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
 the rollout. A saved unsequenced v2/v3 collector error is replaced by a fresh v4 observation on its
 next in-scope collection instead of being relabeled as ordered. Account-wide sources are
@@ -79,6 +88,11 @@ trust it. Until that one-time review is complete, manual Sync remains available 
 after a completed turn does not run. A full uninstall and reconnect creates a new source identity
 and therefore requires a new review; routine `doctor --repair` keeps the trusted command identity
 stable.
+
+After connecting an OpenCode source, restart OpenCode once when the connector asks. Multiple Vibe
+Racing installations use separate plugin files, and custom `VIBERACING_STATE_DIR` roots remain
+isolated. An unchanged OpenCode SQLite profile may be checked locally after idle, but fingerprint
+suppression prevents another usage payload.
 
 Self-hosted deployments default to a same-origin connector archive and show their exact command on
 the dashboard. Set `VIBERACING_CONNECTOR_DISTRIBUTION=npm` only after the public package is

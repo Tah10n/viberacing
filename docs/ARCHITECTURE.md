@@ -124,6 +124,22 @@ version-2 `dirty.json` ledger under a short read-modify-write file lock, claims 
 and exits with the provider's minimal response. Entries contain only source UUID, timestamps, and a
 generation—never a path or account label.
 
+OpenCode is the one installation-scoped exception to the per-source trigger. `connect` and
+`doctor --repair` reconcile an owned global file named `viberacing-<installation-id>.js` under the
+XDG OpenCode `plugins` directory. Its strict marker binds the installation UUID to a local hash of
+the absolute state root. The dependency-free module reads only `event.type` and
+`event.properties.status.type`; `session.status: idle` is primary and `session.idle` is a
+process-local two-second fallback. It synchronously calls `Bun.spawn` with a fixed argv array,
+sanitized environment, neutral state-root cwd, detached stdio, and the stable launcher, then
+returns. No OpenCode session, project, or event payload crosses that boundary.
+
+The hidden bulk hook validates the installation identity and committed config before creating any
+lock or state. Under one existing-only dirty lock it intersects active mapped sources with existing
+local OpenCode sources, advances every selected generation with one timestamp and one atomic write,
+then makes one scheduler-launch claim. A stale plugin from a disconnected, reset, uninstalled, or
+replaced installation is therefore a complete no-op. The scheduler and fingerprint rules below are
+unchanged.
+
 Codex uses `Stop`, which runs after each completed turn; upgrades remove only the connector-owned
 legacy `SessionEnd` handler. Its command points to an atomically refreshed stable launcher, which
 selects the explicitly installed versioned runtime. Codex still requires the user to review and
@@ -189,10 +205,11 @@ source is retired too. Lifecycle mutations set a revocation marker and wait on t
 sync lock before cleanup; an in-flight sync checks the marker before saving or starting another
 delivery. Uninstall attempts all known roots and retains failed-root metadata/runtime until a repeat
 succeeds. Reconnect performs its final config/token/hook replacement under that lifecycle lock;
-doctor performs mutable remote reconciliation under the sync lock. Authorization revocation removes
-hooks/token/automatic state, and HTTP 426 disables automatic attempts until a compatible reconnect
-or authenticated server response confirms the updated connector. Successful capture syncs retain
-only 35 days and atomically compact oversized source-specific files.
+`doctor` performs local read-only inspection; `doctor --repair` performs mutable remote
+reconciliation under the sync lock. Authorization revocation removes hooks/token/automatic state,
+and HTTP 426 disables automatic attempts until a compatible reconnect or authenticated server
+response confirms the updated connector. Successful capture syncs retain only 35 days and atomically
+compact oversized source-specific files.
 
 Approval is serialized on the user row and caps each user at 20 active installations, 100 active
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so
