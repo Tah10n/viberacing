@@ -5,6 +5,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   symlink,
@@ -16,6 +17,7 @@ import { join, win32 } from "node:path";
 import {
   generateOpenCodePlugin,
   inspectOpenCodePlugin,
+  maximumOpenCodePluginBytes,
   openCodePluginEnvironment,
   openCodePluginLocation,
   openCodeStateRootHash,
@@ -163,6 +165,55 @@ test("generated plugin is deterministic, dependency-free, escaped, and privacy-m
   assert.doesNotMatch(first, /0\.5\.[01]/);
   const module = await import(`data:text/javascript,${encodeURIComponent(first)}`);
   assert.deepEqual(Object.keys(module), ["VibeRacingPlugin"]);
+});
+
+test("generated plugin reads only allowlisted environment values", async () => {
+  const options = pluginOptions("/tmp/viberacing-environment-read");
+  const preparationReads = [];
+  const suppliedEnvironment = new Proxy(
+    {
+      HOME: "/home/racer",
+      OPENAI_API_KEY: "provider-secret",
+      PROJECT_SECRET: "project-secret",
+    },
+    {
+      get(target, property, receiver) {
+        if (typeof property === "string") preparationReads.push(property);
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+  assert.deepEqual(openCodePluginEnvironment(options.stateRoot, suppliedEnvironment), {
+    HOME: "/home/racer",
+    VIBERACING_STATE_DIR: options.stateRoot,
+  });
+  const source = generateOpenCodePlugin({ ...options, environment: suppliedEnvironment });
+  assert.equal(preparationReads.includes("HOME"), true);
+  assert.equal(preparationReads.includes("OPENAI_API_KEY"), false);
+  assert.equal(preparationReads.includes("PROJECT_SECRET"), false);
+  const originalEnvironment = process.env;
+  const reads = [];
+  process.env = new Proxy(
+    {
+      HOME: "/home/racer",
+      OPENAI_API_KEY: "provider-secret",
+      PROJECT_SECRET: "project-secret",
+    },
+    {
+      get(target, property, receiver) {
+        if (typeof property === "string") reads.push(property);
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+  try {
+    await import(`data:text/javascript,${encodeURIComponent(source)}#environment-read`);
+  } finally {
+    process.env = originalEnvironment;
+  }
+  assert.equal(reads.includes("HOME"), true);
+  assert.equal(reads.includes("OPENAI_API_KEY"), false);
+  assert.equal(reads.includes("PROJECT_SECRET"), false);
 });
 
 test("generated plugin sanitizes environment with Windows case-insensitive matching", () => {
@@ -329,7 +380,7 @@ test("spawn failure is suppressed and does not block fallback retry", async (con
   assert.equal(attempts, 2);
 });
 
-test("owned plugin lifecycle is atomic, private, idempotent, and preserves siblings", async (context) => {
+test("owned plugin lifecycle is exclusive, private, idempotent, and preserves siblings", async (context) => {
   const root = await temporaryRoot(context);
   const options = pluginOptions(root);
   const location = openCodePluginLocation(options);
@@ -361,7 +412,168 @@ test("owned plugin lifecycle is atomic, private, idempotent, and preserves sibli
   });
   assert.equal(removed.action, "removed");
   assert.equal((await inspectOpenCodePlugin(options)).status, "missing");
+  await assert.rejects(readFile(location.path, "utf8"), { code: "ENOENT" });
   assert.equal(await readFile(sibling, "utf8"), "foreign bytes\n");
+  assert.deepEqual(await readdir(location.directory), ["foreign-plugin.js"]);
+});
+
+test("atomic publish never overwrites a foreign file raced into the target path", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const foreign = "export const ForeignPlugin = true;\n";
+  let raced = false;
+  await assert.rejects(
+    reconcileOpenCodePlugin({
+      ...options,
+      desired: true,
+      link: async (source, target) => {
+        if (!raced && target === location.path) {
+          raced = true;
+          await writeFile(target, foreign, { mode: 0o600 });
+        }
+        return link(source, target);
+      },
+    }),
+    /changed during installation \(conflict\)/,
+  );
+  assert.equal(await readFile(location.path, "utf8"), foreign);
+});
+
+test("owned updates fail closed when exclusive hardlink publication is unavailable", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  const before = await readFile(location.path, "utf8");
+  await assert.rejects(
+    reconcileOpenCodePlugin({
+      ...options,
+      nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+      link: async () => {
+        const error = new Error("hardlinks unavailable");
+        error.code = "ENOTSUP";
+        throw error;
+      },
+      desired: true,
+    }),
+    /hardlinks unavailable/,
+  );
+  assert.equal(await readFile(location.path, "utf8"), before);
+  assert.equal((await inspectOpenCodePlugin(options)).status, "current");
+});
+
+test("an interrupted owned update restores the prior plugin bytes", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  const before = await readFile(location.path, "utf8");
+  let interrupted = false;
+  await assert.rejects(
+    reconcileOpenCodePlugin({
+      ...options,
+      nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+      link: async (source, target) => {
+        if (!interrupted && target === location.path) {
+          interrupted = true;
+          throw new Error("synthetic interrupted owned update");
+        }
+        return link(source, target);
+      },
+      desired: true,
+    }),
+    /synthetic interrupted owned update/,
+  );
+  assert.equal(await readFile(location.path, "utf8"), before);
+  assert.equal((await inspectOpenCodePlugin(options)).status, "current");
+});
+
+test("identity-bound removal preserves a foreign file raced into the target path", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const ownedBackup = join(root, "owned-plugin-backup");
+  const foreign = "export const ForeignPlugin = true;\n";
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let raced = false;
+  await assert.rejects(
+    reconcileOpenCodePlugin({
+      ...options,
+      desired: false,
+      rename: async (source, target) => {
+        if (!raced && source === location.path) {
+          raced = true;
+          await rename(source, ownedBackup);
+          await writeFile(source, foreign, { mode: 0o600 });
+        }
+        return rename(source, target);
+      },
+    }),
+    /changed during removal/,
+  );
+  assert.equal(await readFile(location.path, "utf8"), foreign);
+  assert.match(await readFile(ownedBackup, "utf8"), /viberacing-opencode-plugin/);
+  assert.equal(
+    (await readdir(location.directory)).some((name) => name.includes(".quarantine-")),
+    false,
+  );
+});
+
+test("identity-bound removal preserves a directory raced into the target path", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const ownedBackup = join(root, "owned-plugin-directory-race-backup");
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let raced = false;
+  let caught;
+  try {
+    await reconcileOpenCodePlugin({
+      ...options,
+      desired: false,
+      rename: async (source, target) => {
+        if (!raced && source === location.path) {
+          raced = true;
+          await rename(source, ownedBackup);
+          await mkdir(source);
+        }
+        return rename(source, target);
+      },
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert.match(caught?.message ?? "", /changed during removal.*preserved at/);
+  assert.equal((await stat(caught.recoveryPath)).isDirectory(), true);
+  await assert.rejects(stat(location.path), { code: "ENOENT" });
+  assert.match(await readFile(ownedBackup, "utf8"), /viberacing-opencode-plugin/);
+});
+
+test("an explicit recorded plugin path survives XDG environment changes", async (context) => {
+  const root = await temporaryRoot(context);
+  const installed = pluginOptions(root, join(root, "config-a"));
+  const laterEnvironment = { ...installed.environment, XDG_CONFIG_HOME: "relative/config-b" };
+  const originalPath = openCodePluginLocation(installed).path;
+  await reconcileOpenCodePlugin({ ...installed, desired: true });
+  const removed = await reconcileOpenCodePlugin({
+    ...installed,
+    environment: laterEnvironment,
+    pluginPath: originalPath,
+    desired: false,
+  });
+  assert.equal(removed.action, "removed");
+  assert.equal(
+    (
+      await inspectOpenCodePlugin({
+        ...installed,
+        environment: laterEnvironment,
+        pluginPath: originalPath,
+      })
+    ).status,
+    "missing",
+  );
+  await assert.rejects(readFile(originalPath, "utf8"), { code: "ENOENT" });
 });
 
 test("copied installation identity cannot overwrite a plugin from another state root", async (context) => {
@@ -471,7 +683,46 @@ test(
   },
 );
 
-test("interrupted atomic install removes its temporary file", async (context) => {
+test("inspection remains handle-bounded when the plugin grows after open", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const contents = generateOpenCodePlugin(options);
+  await mkdir(location.directory, { recursive: true });
+  await writeFile(location.path, contents, { mode: 0o600 });
+  const real = await stat(location.path);
+  let statCalls = 0;
+  let requestedBytes = 0;
+  const handle = {
+    async stat() {
+      statCalls += 1;
+      if (statCalls === 1) return real;
+      return {
+        ...real,
+        size: maximumOpenCodePluginBytes + 1,
+        mtimeMs: real.mtimeMs + 1,
+        isFile: () => true,
+        isSymbolicLink: () => false,
+      };
+    },
+    async read(buffer, offset, length, position) {
+      requestedBytes += length;
+      const bytes = Buffer.from(contents);
+      bytes.copy(buffer, offset, position, position + length);
+      return { bytesRead: length };
+    },
+    async close() {},
+  };
+  const inspected = await inspectOpenCodePlugin({
+    ...options,
+    open: async () => handle,
+  });
+  assert.equal(inspected.status, "unreadable");
+  assert.equal(requestedBytes, real.size);
+  assert.ok(requestedBytes <= maximumOpenCodePluginBytes);
+});
+
+test("interrupted atomic publish removes its private stage", async (context) => {
   const root = await temporaryRoot(context);
   const options = pluginOptions(root);
   const location = openCodePluginLocation(options);
@@ -479,16 +730,14 @@ test("interrupted atomic install removes its temporary file", async (context) =>
     reconcileOpenCodePlugin({
       ...options,
       desired: true,
-      rename: async () => {
-        throw new Error("synthetic interrupted rename");
+      link: async () => {
+        throw new Error("synthetic interrupted publish");
       },
     }),
-    /synthetic interrupted rename/,
+    /synthetic interrupted publish/,
   );
-  assert.deepEqual(
-    (await readdir(location.directory)).filter((name) => name.includes(".tmp")),
-    [],
-  );
+  assert.deepEqual(await readdir(location.directory), []);
+  await assert.rejects(readFile(location.path), { code: "ENOENT" });
 });
 
 test("Windows plugin reconciliation invokes owner-only ACL checks without chmod", async () => {
@@ -516,7 +765,11 @@ test("Windows plugin reconciliation invokes owner-only ACL checks without chmod"
       calls.push(["lstat", path]);
       return fakeStats;
     },
-    readFile: async () => "foreign\n",
+    open: async () => ({
+      stat: async () => fakeStats,
+      read: async () => assert.fail("unsafe Windows plugin must not be read"),
+      close: async () => {},
+    }),
     inspectWindowsFile: async (path) => {
       calls.push(["inspect", path]);
       return false;

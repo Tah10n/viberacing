@@ -12,6 +12,7 @@ export async function disableLocalConnection(clearPending = false) {
       reconcileOpenCodePlugin({
         installationId: installation.id,
         stateRoot: stateDirectory,
+        pluginPath: installation.openCodePluginPath,
         desired: false,
       }),
     );

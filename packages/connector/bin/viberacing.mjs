@@ -19,7 +19,11 @@ import {
 import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
 import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
 import { assertOpenCodeUpgradeReady } from "../lib/opencode-cutover-preflight.mjs";
-import { inspectOpenCodePlugin, reconcileOpenCodePlugin } from "../lib/opencode-plugin.mjs";
+import {
+  inspectOpenCodePlugin,
+  openCodePluginLocation,
+  reconcileOpenCodePlugin,
+} from "../lib/opencode-plugin.mjs";
 import {
   adapters,
   adapterFor,
@@ -61,9 +65,13 @@ import {
   reconcileHooks,
   readConfig,
   readExistingInstallation,
+  readOpenCodePluginCleanup,
   readOrCreateInstallation,
   readOrCreateProviderIdentitySalt,
   readSources,
+  clearOpenCodePluginCleanup,
+  rememberOpenCodePluginCleanup,
+  rememberOpenCodePluginPath,
   recordConnectAttemptPairing,
   rememberSourceExecutable,
   reconcileDetectedSources,
@@ -197,19 +205,151 @@ function configWantsOpenCodePlugin(config, installationId) {
   );
 }
 
+function sameOpenCodePluginPath(left, right) {
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+async function rollbackUnrecordedOpenCodePlugin({
+  installationId,
+  currentPath,
+  previousInspection,
+  recordedPath,
+}) {
+  const failures = [];
+  try {
+    const removed = await reconcileOpenCodePlugin({
+      installationId,
+      stateRoot: stateDirectory,
+      pluginPath: currentPath,
+      desired: false,
+    });
+    if (openCodePluginBlocked(removed))
+      failures.push(`new plugin cleanup was blocked (${removed.status})`);
+  } catch (error) {
+    failures.push(`new plugin cleanup failed (${error.message})`);
+  }
+  if (previousInspection?.owned && recordedPath)
+    try {
+      const restored = await reconcileOpenCodePlugin({
+        installationId,
+        stateRoot: stateDirectory,
+        pluginPath: recordedPath,
+        desired: true,
+      });
+      if (openCodePluginBlocked(restored))
+        failures.push(`prior plugin restoration was blocked (${restored.status})`);
+    } catch (error) {
+      failures.push(`prior plugin restoration failed (${error.message})`);
+    }
+  return failures;
+}
+
 async function reconcilePluginForConfig(config, options = {}) {
-  const installationId =
-    options.installationId ??
-    config?.installationId ??
-    (await readExistingInstallation().catch(() => null))?.id;
+  let installation = null;
+  let installationError = null;
+  try {
+    installation = await readExistingInstallation();
+  } catch (error) {
+    installationError = error;
+  }
+  const installationId = options.installationId ?? config?.installationId ?? installation?.id;
   if (!uuidPattern.test(installationId ?? ""))
     return { status: "missing", action: "none", changed: false, path: null };
   const desired = options.desired ?? configWantsOpenCodePlugin(config, installationId);
-  return reconcileOpenCodePlugin({
+  if (desired && installationError) throw installationError;
+  if (desired && installation?.id !== installationId)
+    throw new Error(
+      "OpenCode plugin installation requires the matching local installation identity",
+    );
+  const recordedPath =
+    options.pluginPath ??
+    (installation?.id === installationId ? installation.openCodePluginPath : undefined);
+  const currentPath = desired ? openCodePluginLocation({ installationId }).path : null;
+  let previousInspection = null;
+  if (desired && recordedPath && !sameOpenCodePluginPath(recordedPath, currentPath)) {
+    previousInspection = await inspectOpenCodePlugin({
+      installationId,
+      stateRoot: stateDirectory,
+      pluginPath: recordedPath,
+    });
+    if (!previousInspection.owned && previousInspection.status !== "missing")
+      return {
+        status: previousInspection.status,
+        action: "blocked",
+        changed: false,
+        path: recordedPath,
+      };
+  }
+  const result = await reconcileOpenCodePlugin({
     installationId,
     stateRoot: stateDirectory,
+    ...(desired ? {} : { pluginPath: recordedPath }),
     desired,
   });
+  if (
+    desired &&
+    result.status === "current" &&
+    recordedPath &&
+    !sameOpenCodePluginPath(recordedPath, result.path)
+  ) {
+    try {
+      const previous = await reconcileOpenCodePlugin({
+        installationId,
+        stateRoot: stateDirectory,
+        pluginPath: recordedPath,
+        desired: false,
+      });
+      if (openCodePluginBlocked(previous)) {
+        await reconcileOpenCodePlugin({
+          installationId,
+          stateRoot: stateDirectory,
+          pluginPath: result.path,
+          desired: false,
+        });
+        return previous;
+      }
+    } catch (error) {
+      await reconcileOpenCodePlugin({
+        installationId,
+        stateRoot: stateDirectory,
+        pluginPath: result.path,
+        desired: false,
+      });
+      throw error;
+    }
+  }
+  if (desired && result.status === "current")
+    try {
+      await rememberOpenCodePluginPath(
+        installationId,
+        result.path,
+        process.env.NODE_ENV === "test" &&
+          process.env.VIBERACING_TEST_FAIL_OPENCODE_PLUGIN_PATH_COMMIT === "1"
+          ? {
+              beforeRename() {
+                throw new Error("Synthetic OpenCode plugin path commit failure");
+              },
+            }
+          : undefined,
+      );
+    } catch (error) {
+      const rollbackFailures = await rollbackUnrecordedOpenCodePlugin({
+        installationId,
+        currentPath: result.path,
+        previousInspection,
+        recordedPath,
+      });
+      const rollback = rollbackFailures.length
+        ? `; rollback incomplete: ${rollbackFailures.join("; ")}`
+        : "; plugin changes were rolled back";
+      const failure = new Error(
+        `OpenCode plugin path could not be recorded: ${error.message}${rollback}`,
+      );
+      failure.pluginPath = result.path;
+      failure.cause = error;
+      throw failure;
+    }
+  return result;
 }
 
 function openCodePluginBlocked(result) {
@@ -2643,24 +2783,33 @@ async function doctor() {
     const hooks = await diagnoseHooks(config.sources);
     for (const [agentId, status] of Object.entries(hooks)) output(`${agentId} hook: ${status}`);
     const wantsOpenCodePlugin = configWantsOpenCodePlugin(config, config.installationId);
-    let openCodePluginStatus = "not-needed";
-    if (wantsOpenCodePlugin) {
-      if (repairedPlugin) openCodePluginStatus = repairedPlugin.status;
-      else
-        try {
-          openCodePluginStatus = (
-            await inspectOpenCodePlugin({
-              installationId: config.installationId,
-              stateRoot: stateDirectory,
-            })
-          ).status;
-        } catch {
-          openCodePluginStatus = "unreadable";
-        }
-    }
+    let openCodePluginStatus;
+    if (repairedPlugin)
+      openCodePluginStatus =
+        !wantsOpenCodePlugin && repairedPlugin.status === "missing"
+          ? "not-needed"
+          : repairedPlugin.status;
+    else
+      try {
+        const installation = await readExistingInstallation().catch(() => null);
+        const inspected = await inspectOpenCodePlugin({
+          installationId: config.installationId,
+          stateRoot: stateDirectory,
+          ...(installation?.id === config.installationId && installation.openCodePluginPath
+            ? { pluginPath: installation.openCodePluginPath }
+            : {}),
+        });
+        openCodePluginStatus = wantsOpenCodePlugin
+          ? inspected.status
+          : inspected.status === "missing"
+            ? "not-needed"
+            : inspected.owned
+              ? "orphaned"
+              : inspected.status;
+      } catch {
+        openCodePluginStatus = "unreadable";
+      }
     output(`OpenCode automatic sync plugin: ${openCodePluginStatus}`);
-    if (repairRequested && wantsOpenCodePlugin && openCodePluginStatus !== "current")
-      repairIncomplete = true;
     const codexGuidance = codexHookGuidance(hooks.codex);
     if (codexGuidance) {
       output(codexGuidance);
@@ -3090,6 +3239,7 @@ try {
         try {
           plugin = await reconcilePluginForConfig(null, {
             installationId: installation.id,
+            pluginPath: installation.openCodePluginPath,
             desired: false,
           });
         } catch (error) {
@@ -3113,6 +3263,13 @@ try {
       );
     const cleanup = await withLifecycleMutation(async () => {
       const installation = await readExistingInstallation().catch(() => null);
+      let pluginCleanup = null;
+      let pluginCleanupReadError = null;
+      try {
+        pluginCleanup = await readOpenCodePluginCleanup();
+      } catch (error) {
+        pluginCleanupReadError = error;
+      }
       await invalidateAndCancelConnectAttempt();
       try {
         const config = await readConfig();
@@ -3135,25 +3292,72 @@ try {
         browserCleanupFailed = true;
       }
       let plugin = null;
-      if (installation)
+      let pluginCleanupRetentionFailed = false;
+      const pluginTarget = installation
+        ? {
+            installationId: installation.id,
+            openCodePluginPath:
+              installation.openCodePluginPath ??
+              openCodePluginLocation({ installationId: installation.id }).path,
+          }
+        : pluginCleanup;
+      if (pluginTarget)
         try {
           plugin = await reconcilePluginForConfig(null, {
-            installationId: installation.id,
+            installationId: pluginTarget.installationId,
+            pluginPath: pluginTarget.openCodePluginPath,
             desired: false,
           });
         } catch (error) {
-          plugin = { status: "unreadable", action: "blocked", error, path: null };
+          plugin = {
+            status: "unreadable",
+            action: "blocked",
+            error,
+            path: error?.pluginPath ?? pluginTarget.openCodePluginPath,
+          };
         }
-      if (result.failures.length === 0 && !browserCleanupFailed)
-        await clearAutomaticState({ afterStopped: removeLocalState });
+      else if (pluginCleanupReadError)
+        plugin = {
+          status: "unreadable",
+          action: "blocked",
+          error: pluginCleanupReadError,
+          path: null,
+        };
+      const pluginCleanupFailed = openCodePluginBlocked(plugin);
+      if (pluginTarget && pluginCleanupFailed)
+        try {
+          if (pluginCleanupReadError) await clearOpenCodePluginCleanup();
+          await rememberOpenCodePluginCleanup(
+            pluginTarget.installationId,
+            pluginTarget.openCodePluginPath,
+          );
+        } catch (error) {
+          pluginCleanupRetentionFailed = true;
+          plugin.error ??= error;
+        }
+      else if (!pluginCleanupFailed && (pluginCleanup || pluginCleanupReadError))
+        await clearOpenCodePluginCleanup();
+      const complete =
+        result.failures.length === 0 &&
+        !browserCleanupFailed &&
+        !pluginCleanupFailed &&
+        !pluginCleanupRetentionFailed;
+      if (complete) await clearAutomaticState({ afterStopped: removeLocalState });
       else {
         await resetInstallation();
         await clearAutomaticState();
       }
-      return { ...result, browserCleanupFailed, plugin };
+      return {
+        ...result,
+        browserCleanupFailed,
+        plugin,
+        pluginCleanupFailed,
+        pluginCleanupRetentionFailed,
+        complete,
+      };
     });
     reportOpenCodePluginTransition(cleanup.plugin);
-    if (cleanup.failures.length === 0 && !cleanup.browserCleanupFailed)
+    if (cleanup.complete)
       output(
         "Vibe Racing hooks, installed copy, secrets, and local state removed. Provider data was not changed.",
       );
@@ -3162,8 +3366,12 @@ try {
         "Vibe Racing network access and secrets were removed; cleanup metadata and runtime were retained for retry.",
       );
       warning(
-        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s) and ${cleanup.browserCleanupFailed ? 1 : 0} browser handler(s) could not be cleaned. Fix the reported settings and run \`viberacing uninstall\` again.`,
+        `Vibe Racing warning: ${cleanup.failures.length} owned hook root(s), ${cleanup.browserCleanupFailed ? 1 : 0} browser handler(s), and ${cleanup.pluginCleanupFailed ? 1 : 0} OpenCode plugin(s) could not be cleaned. Fix the reported settings and run \`viberacing uninstall\` again.`,
       );
+      if (cleanup.pluginCleanupRetentionFailed)
+        warning(
+          "Vibe Racing warning: OpenCode cleanup metadata could not be retained; keep the reported plugin path for manual cleanup.",
+        );
       for (const failure of cleanup.failures)
         warning(`- ${failure.agentId ?? "sources"}: ${failure.path} (${failure.message})`);
       process.exitCode = 1;

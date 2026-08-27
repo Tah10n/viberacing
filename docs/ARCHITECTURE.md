@@ -13,20 +13,22 @@ queue, cache, worker, proxy, ORM, or second service.
 
 ## Identity and pairing
 
-`installation.json` contains a random UUID and secret that survive reconnect. Local `sources.json`
-contains random stable client source UUIDs, normalized data roots, collection methods, surfaces,
-safe labels, and adapter-specific roots needed for local hook cleanup. Qwen keeps its runtime data
-root and config root separate there. `config.json` contains only the origin, device capability, and
-server mapping; it contains no path or path hash. Source discovery reconciles by
-`(agent, normalized data root)`, so discovery order and reconnect do not change identity. The
-connector sends only opaque client source IDs and allowlisted source metadata during pairing. In one
-browser transaction, each source is mapped to an `agent_account` of the same user and agent.
-Account-wide sources start in a separate account and are matched automatically after complete usage
-arrives; machine-local sources retain the explicit new/existing account control. Reconnect stages
-source mappings with the hashed pairing code without changing an existing source's active status, so
-an abandoned or expired browser approval cannot interrupt the current connector. Approval atomically
-activates the staged mappings and rotates the device token; a transaction lock serializes
-reconnects. Usage authentication rechecks that token under the same installation row lock.
+`installation.json` contains a random UUID and secret that survive reconnect, plus the exact local
+OpenCode plugin path after a verified install so later cleanup is independent of the current XDG
+environment. Local `sources.json` contains random stable client source UUIDs, normalized data roots,
+collection methods, surfaces, safe labels, and adapter-specific roots needed for local hook cleanup.
+Qwen keeps its runtime data root and config root separate there. `config.json` contains only the
+origin, device capability, and server mapping; it contains no path or path hash. Source discovery
+reconciles by `(agent, normalized data root)`, so discovery order and reconnect do not change
+identity. The connector sends only opaque client source IDs and allowlisted source metadata during
+pairing. In one browser transaction, each source is mapped to an `agent_account` of the same user
+and agent. Account-wide sources start in a separate account and are matched automatically after
+complete usage arrives; machine-local sources retain the explicit new/existing account control.
+Reconnect stages source mappings with the hashed pairing code without changing an existing source's
+active status, so an abandoned or expired browser approval cannot interrupt the current connector.
+Approval atomically activates the staged mappings and rotates the device token; a transaction lock
+serializes reconnects. Usage authentication rechecks that token under the same installation row
+lock.
 
 Current Kimi discovery previews removal of a migrated legacy root without changing `sources.json`.
 The pairing carries only its opaque client source ID, and the approval page discloses the

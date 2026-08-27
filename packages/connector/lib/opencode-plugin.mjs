@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { chmod, lstat, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
+import { link, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { ensureOwnerOnlyWindowsFile, inspectOwnerOnlyWindowsFile } from "./windows-security.mjs";
@@ -100,18 +100,21 @@ export function openCodePluginEnvironment(
   environment = process.env,
   platform = process.platform,
 ) {
-  const entries = Object.entries(environment).filter(([, value]) => typeof value === "string");
-  const testMode = entries.some(
-    ([name, value]) => environmentNameKey(name, platform) === "NODE_ENV" && value === "test",
+  const names = Object.keys(environment);
+  const nodeEnvironmentName = names.find(
+    (name) => environmentNameKey(name, platform) === "NODE_ENV",
   );
+  const testMode = nodeEnvironmentName !== undefined && environment[nodeEnvironmentName] === "test";
   const result = {};
   const retained = new Set();
-  for (const [name, value] of entries) {
+  for (const name of names) {
     const key = environmentNameKey(name, platform);
     const allowed =
       safeEnvironmentNames.has(key) ||
       (testMode && (key === "NODE_ENV" || key.startsWith("VIBERACING_TEST_")));
     if (!allowed || retained.has(key)) continue;
+    const value = environment[name];
+    if (typeof value !== "string") continue;
     retained.add(key);
     result[name] = value;
   }
@@ -140,9 +143,11 @@ export function generateOpenCodePlugin({
     installationId: id,
     stateRootHash: openCodeStateRootHash(root, platform),
   };
-  const allowTestEnvironment = Object.entries(environment).some(
-    ([name, value]) => environmentNameKey(name, platform) === "NODE_ENV" && value === "test",
+  const nodeEnvironmentName = Object.keys(environment).find(
+    (name) => environmentNameKey(name, platform) === "NODE_ENV",
   );
+  const allowTestEnvironment =
+    nodeEnvironmentName !== undefined && environment[nodeEnvironmentName] === "test";
   const debounceSymbol = `viberacing.opencode.idle.${id}`;
   const command = [
     node,
@@ -159,18 +164,21 @@ export function generateOpenCodePlugin({
     `const debounceKey = Symbol.for(${JSON.stringify(debounceSymbol)});`,
     `const command = ${JSON.stringify(command)};`,
     `const stateDirectory = ${JSON.stringify(root)};`,
-    `const environmentNames = new Set(${JSON.stringify([...safeEnvironmentNames])});`,
+    `const allowlistedEnvironmentNames = new Set(${JSON.stringify([...safeEnvironmentNames])});`,
     `const windowsEnvironment = ${platform === "win32"};`,
     `const allowTestEnvironment = ${allowTestEnvironment};`,
-    'const environmentEntries = Object.entries(process.env).filter(([, value]) => typeof value === "string");',
     "const environmentKey = (name) => windowsEnvironment ? name.toUpperCase() : name;",
-    'const testEnvironment = allowTestEnvironment && environmentEntries.some(([name, value]) => environmentKey(name) === "NODE_ENV" && value === "test");',
+    "const processEnvironmentNames = Object.keys(process.env);",
+    'const nodeEnvironmentName = processEnvironmentNames.find((name) => environmentKey(name) === "NODE_ENV");',
+    'const testEnvironment = allowTestEnvironment && nodeEnvironmentName !== undefined && process.env[nodeEnvironmentName] === "test";',
     "const childEnvironment = {};",
     "const retainedEnvironmentNames = new Set();",
-    "for (const [name, value] of environmentEntries) {",
+    "for (const name of processEnvironmentNames) {",
     "  const key = environmentKey(name);",
-    '  const allowed = environmentNames.has(key) || (testEnvironment && (key === "NODE_ENV" || key.startsWith("VIBERACING_TEST_")));',
+    '  const allowed = allowlistedEnvironmentNames.has(key) || (testEnvironment && (key === "NODE_ENV" || key.startsWith("VIBERACING_TEST_")));',
     "  if (!allowed || retainedEnvironmentNames.has(key)) continue;",
+    "  const value = process.env[name];",
+    '  if (typeof value !== "string") continue;',
     "  retainedEnvironmentNames.add(key);",
     "  childEnvironment[name] = value;",
     "}",
@@ -232,55 +240,86 @@ function sameFile(left, right) {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
+function safePluginInfo(info, platform, getuid) {
+  if (
+    !info.isFile() ||
+    info.isSymbolicLink?.() ||
+    info.nlink !== 1 ||
+    info.size > maximumOpenCodePluginBytes
+  )
+    return false;
+  if (platform === "win32") return true;
+  const uid = getuid?.();
+  return (uid === undefined || info.uid === uid) && (info.mode & 0o777) === 0o600;
+}
+
+function samePluginSnapshot(left, right) {
+  return (
+    sameFile(left, right) &&
+    left.nlink === right.nlink &&
+    left.size === right.size &&
+    left.uid === right.uid &&
+    left.mode === right.mode &&
+    left.mtimeMs === right.mtimeMs &&
+    left.ctimeMs === right.ctimeMs
+  );
+}
+
 async function inspectPluginFile(
   path,
   expected,
-  { platform, getuid, statFile, read, inspectWindowsFile },
+  { platform, getuid, statFile, openFile, inspectWindowsFile },
 ) {
-  let info;
+  let pathInfo;
   try {
-    info = await statFile(path);
+    pathInfo = await statFile(path);
   } catch (error) {
     if (error?.code === "ENOENT") return { status: "missing", path, owned: false };
     return { status: "unreadable", path, owned: false };
   }
-  if (
-    !info.isFile() ||
-    info.isSymbolicLink() ||
-    info.nlink !== 1 ||
-    info.size > maximumOpenCodePluginBytes
-  )
-    return { status: "unsafe", path, owned: false };
-  if (platform === "win32") {
-    if (!(await inspectWindowsFile(path))) return { status: "unsafe", path, owned: false };
-  } else {
-    const uid = getuid?.();
-    if ((uid !== undefined && info.uid !== uid) || (info.mode & 0o777) !== 0o600)
-      return { status: "unsafe", path, owned: false };
-  }
-  let contents;
+  if (!safePluginInfo(pathInfo, platform, getuid)) return { status: "unsafe", path, owned: false };
+  let handle;
   try {
-    contents = await read(path, "utf8");
+    handle = await openFile(
+      path,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),
+    );
+    const opened = await handle.stat();
+    if (!sameFile(pathInfo, opened) || !safePluginInfo(opened, platform, getuid))
+      return { status: "unsafe", path, owned: false };
+    if (platform === "win32") {
+      if (!(await inspectWindowsFile(path))) return { status: "unsafe", path, owned: false };
+      const checkedPath = await statFile(path);
+      if (!sameFile(opened, checkedPath) || !safePluginInfo(checkedPath, platform, getuid))
+        return { status: "unsafe", path, owned: false };
+    }
+    const contents = await readFileHandleContents(handle, opened.size, "inspection");
+    const afterRead = await handle.stat();
+    if (!samePluginSnapshot(opened, afterRead) || !safePluginInfo(afterRead, platform, getuid))
+      return { status: "unreadable", path, owned: false };
+    const marker = parseMarker(contents);
+    if (marker === null) return { status: "conflict", path, owned: false };
+    if (marker.schema > openCodePluginMarkerSchema)
+      return { status: "unsupported-newer", path, owned: false, marker };
+    if (
+      marker.schema !== openCodePluginMarkerSchema ||
+      marker.installationId !== expected.installationId ||
+      marker.stateRootHash !== expected.stateRootHash
+    )
+      return { status: "conflict", path, owned: false, marker };
+    return {
+      status: contents === expected.contents ? "current" : "outdated",
+      path,
+      owned: true,
+      marker,
+      info: afterRead,
+      contents,
+    };
   } catch {
     return { status: "unreadable", path, owned: false };
+  } finally {
+    await handle?.close().catch(() => {});
   }
-  const marker = parseMarker(contents);
-  if (marker === null) return { status: "conflict", path, owned: false };
-  if (marker.schema > openCodePluginMarkerSchema)
-    return { status: "unsupported-newer", path, owned: false, marker };
-  if (
-    marker.schema !== openCodePluginMarkerSchema ||
-    marker.installationId !== expected.installationId ||
-    marker.stateRootHash !== expected.stateRootHash
-  )
-    return { status: "conflict", path, owned: false, marker };
-  return {
-    status: contents === expected.contents ? "current" : "outdated",
-    path,
-    owned: true,
-    marker,
-    info,
-  };
 }
 
 function inspectionDependencies(options) {
@@ -289,7 +328,7 @@ function inspectionDependencies(options) {
     getuid:
       options.getuid ?? (typeof process.getuid === "function" ? () => process.getuid() : null),
     statFile: options.lstat ?? lstat,
-    read: options.readFile ?? readFile,
+    openFile: options.open ?? open,
     inspectWindowsFile:
       options.inspectWindowsFile ??
       ((path) => inspectOwnerOnlyWindowsFile(path, { platform: options.platform })),
@@ -302,6 +341,16 @@ function expectedPlugin(options) {
   const stateRoot = safeAbsolutePath(options.stateRoot, "Vibe Racing state directory", platform);
   const launcherPath =
     options.launcherPath ?? pathApi(platform).join(stateRoot, "bin", "viberacing-hook.mjs");
+  const location =
+    options.pluginPath === undefined
+      ? openCodePluginLocation({ ...options, installationId, platform })
+      : (() => {
+          const paths = pathApi(platform);
+          const pluginPath = safeAbsolutePath(options.pluginPath, "OpenCode plugin path", platform);
+          if (paths.basename(pluginPath) !== `viberacing-${installationId}.js`)
+            throw new Error("OpenCode plugin path does not match the installation id");
+          return { directory: paths.dirname(pluginPath), path: pluginPath };
+        })();
   return {
     installationId,
     stateRoot,
@@ -313,7 +362,7 @@ function expectedPlugin(options) {
       launcherPath,
       platform,
     }),
-    location: openCodePluginLocation({ ...options, installationId, platform }),
+    location,
   };
 }
 
@@ -355,45 +404,188 @@ async function syncDirectory(directory, options) {
   }
 }
 
+async function readFileHandleContents(handle, size, operation) {
+  const bytes = Buffer.alloc(size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const result = await handle.read(bytes, offset, bytes.length - offset, offset);
+    if (result.bytesRead <= 0) throw new Error(`OpenCode plugin changed during ${operation}`);
+    offset += result.bytesRead;
+  }
+  return bytes.toString("utf8");
+}
+
+function pluginMutationError(message, expected, recoveryPath = null) {
+  const error = new Error(message);
+  error.pluginPath = expected.location.path;
+  if (recoveryPath) error.recoveryPath = recoveryPath;
+  return error;
+}
+
+async function verifyQuarantinedPlugin(expected, previous, quarantinePath, options, operation) {
+  const openFile = options.open ?? open;
+  let handle;
+  try {
+    handle = await openFile(quarantinePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    const opened = await handle.stat();
+    const platform = options.platform ?? process.platform;
+    const getuid =
+      options.getuid ?? (typeof process.getuid === "function" ? () => process.getuid() : null);
+    const uid = getuid?.();
+    if (
+      !sameFile(previous.info, opened) ||
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.size > maximumOpenCodePluginBytes ||
+      (platform !== "win32" &&
+        ((uid !== undefined && opened.uid !== uid) || (opened.mode & 0o777) !== 0o600)) ||
+      (await readFileHandleContents(handle, opened.size, operation)) !== previous.contents
+    )
+      throw pluginMutationError(
+        `OpenCode plugin changed during ${operation}`,
+        expected,
+        quarantinePath,
+      );
+    if (
+      platform === "win32" &&
+      !(await inspectionDependencies(options).inspectWindowsFile(quarantinePath))
+    )
+      throw pluginMutationError(
+        `OpenCode plugin security changed during ${operation}`,
+        expected,
+        quarantinePath,
+      );
+    return opened;
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+async function pathInfo(filePath, options) {
+  try {
+    return await (options.lstat ?? lstat)(filePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function restoreQuarantinedRegularFile(expected, quarantinePath, options) {
+  const info = await pathInfo(quarantinePath, options);
+  if (!info?.isFile() || info.isSymbolicLink()) return false;
+  try {
+    await (options.link ?? link)(quarantinePath, expected.location.path);
+  } catch (error) {
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  }
+  await (options.unlink ?? unlink)(quarantinePath);
+  await syncDirectory(expected.location.directory, options);
+  return true;
+}
+
+async function quarantineOwnedPlugin(expected, previous, options, operation) {
+  const quarantinePath = `${expected.location.path}.quarantine-${randomUUID()}`;
+  await (options.rename ?? rename)(expected.location.path, quarantinePath);
+  try {
+    const info = await verifyQuarantinedPlugin(
+      expected,
+      previous,
+      quarantinePath,
+      options,
+      operation,
+    );
+    return { path: quarantinePath, info };
+  } catch (error) {
+    let restored;
+    try {
+      restored = await restoreQuarantinedRegularFile(expected, quarantinePath, options);
+    } catch {
+      throw pluginMutationError(
+        `${error.message}; the raced file was preserved at ${quarantinePath}`,
+        expected,
+        quarantinePath,
+      );
+    }
+    if (restored) throw error;
+    throw pluginMutationError(
+      `${error.message}; the raced file was preserved at ${quarantinePath}`,
+      expected,
+      quarantinePath,
+    );
+  }
+}
+
+async function unlinkVerifiedPrivateFile(filePath, expectedInfo, options) {
+  const current = await pathInfo(filePath, options);
+  if (!current || !sameFile(current, expectedInfo))
+    throw new Error(`OpenCode plugin quarantine changed; preserved at ${filePath}`);
+  await (options.unlink ?? unlink)(filePath);
+}
+
+async function verifyHardlinkSupport(stagePath, options) {
+  const probePath = `${stagePath}.probe-${randomUUID()}`;
+  try {
+    await (options.link ?? link)(stagePath, probePath);
+  } finally {
+    await (options.unlink ?? unlink)(probePath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
+}
+
 async function installPlugin(expected, previous, options) {
   const openFile = options.open ?? open;
-  const move = options.rename ?? rename;
+  const publish = options.link ?? link;
   const remove = options.unlink ?? unlink;
-  const setMode = options.chmod ?? chmod;
   const secureWindowsFile =
     options.secureWindowsFile ??
     ((path) => ensureOwnerOnlyWindowsFile(path, { platform: options.platform }));
-  const temporary = `${expected.location.path}.${process.pid}.${randomUUID()}.tmp`;
+  const stage = `${expected.location.path}.${process.pid}.${randomUUID()}.stage`;
   let handle;
+  let stagePresent = false;
+  let quarantine = null;
   try {
-    handle = await openFile(temporary, "wx", 0o600);
+    handle = await openFile(stage, "wx", 0o600);
+    stagePresent = true;
     await handle.writeFile(expected.contents, "utf8");
     if ((options.platform ?? process.platform) !== "win32") await handle.chmod(0o600);
     await handle.sync();
     await handle.close();
     handle = null;
-    if ((options.platform ?? process.platform) === "win32") await secureWindowsFile(temporary);
-    const current = await inspectPluginFile(
-      expected.location.path,
-      expected,
-      inspectionDependencies(options),
-    );
-    if (
-      current.status !== previous.status &&
-      !(previous.status === "missing" && current.status === "missing") &&
-      !(previous.owned && current.owned)
-    )
-      throw new Error(`OpenCode plugin changed during installation (${current.status})`);
-    if (
-      !["missing", "current", "outdated"].includes(current.status) ||
-      (!current.owned && current.status !== "missing")
-    )
-      throw new Error(`OpenCode plugin cannot be replaced (${current.status})`);
-    if (current.status === "current") return false;
-    await move(temporary, expected.location.path);
-    if ((options.platform ?? process.platform) === "win32")
-      await secureWindowsFile(expected.location.path);
-    else await setMode(expected.location.path, 0o600);
+    if ((options.platform ?? process.platform) === "win32") await secureWindowsFile(stage);
+    const staged = await inspectPluginFile(stage, expected, inspectionDependencies(options));
+    if (staged.status !== "current")
+      throw new Error(`OpenCode plugin staging verification failed (${staged.status})`);
+    if (previous.owned) {
+      await verifyHardlinkSupport(stage, options);
+      quarantine = await quarantineOwnedPlugin(expected, previous, options, "installation");
+    }
+    try {
+      await publish(stage, expected.location.path);
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const raced = await inspectPluginFile(
+        expected.location.path,
+        expected,
+        inspectionDependencies(options),
+      );
+      if (raced.status === "current") {
+        if (quarantine) {
+          await unlinkVerifiedPrivateFile(quarantine.path, quarantine.info, options);
+          quarantine = null;
+          await syncDirectory(expected.location.directory, options);
+        }
+        return false;
+      }
+      throw pluginMutationError(
+        `OpenCode plugin changed during installation (${raced.status})`,
+        expected,
+        quarantine?.path ?? null,
+      );
+    }
+    await remove(stage);
+    stagePresent = false;
     await syncDirectory(expected.location.directory, options);
     const installed = await inspectPluginFile(
       expected.location.path,
@@ -402,26 +594,40 @@ async function installPlugin(expected, previous, options) {
     );
     if (installed.status !== "current")
       throw new Error(`OpenCode plugin installation verification failed (${installed.status})`);
+    if (quarantine) {
+      await unlinkVerifiedPrivateFile(quarantine.path, quarantine.info, options);
+      quarantine = null;
+      await syncDirectory(expected.location.directory, options);
+    }
     return true;
+  } catch (error) {
+    if (quarantine && !(await pathInfo(expected.location.path, options))) {
+      try {
+        const restored = await restoreQuarantinedRegularFile(expected, quarantine.path, options);
+        if (restored) quarantine = null;
+      } catch {
+        throw pluginMutationError(
+          `${error.message}; the prior plugin was preserved at ${quarantine.path}`,
+          expected,
+          quarantine.path,
+        );
+      }
+    }
+    throw error;
   } finally {
     await handle?.close().catch(() => {});
-    await remove(temporary).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
-    });
+    if (stagePresent) {
+      await remove(stage).catch((error) => {
+        if (error?.code !== "ENOENT") throw error;
+      });
+    }
   }
 }
 
 async function removePlugin(expected, previous, options) {
   if (!previous.owned) return false;
-  const remove = options.unlink ?? unlink;
-  const current = await inspectPluginFile(
-    expected.location.path,
-    expected,
-    inspectionDependencies(options),
-  );
-  if (!current.owned || !sameFile(previous.info, current.info))
-    throw new Error(`OpenCode plugin changed during removal (${current.status})`);
-  await remove(expected.location.path);
+  const quarantine = await quarantineOwnedPlugin(expected, previous, options, "removal");
+  await unlinkVerifiedPrivateFile(quarantine.path, quarantine.info, options);
   await syncDirectory(expected.location.directory, options);
   return true;
 }
@@ -443,11 +649,11 @@ export async function reconcileOpenCodePlugin(options = {}) {
         changed: false,
         path: expected.location.path,
       };
-    const changed = await removePlugin(expected, inspection, options);
+    await removePlugin(expected, inspection, options);
     return {
       status: "missing",
-      action: changed ? "removed" : "none",
-      changed,
+      action: "removed",
+      changed: true,
       path: expected.location.path,
     };
   }

@@ -23,8 +23,11 @@ experience or protocol.
   and a stale plugin cannot recreate state after disconnect, source retirement, reset, or uninstall.
 - Plugin ownership uses a strict schema marker bound to the installation and a local state-root
   hash, bounded regular-file inspection, no symlinks/hardlinks/reparse points, POSIX owner/mode
-  checks, owner-only Windows ACLs, and atomic same-directory replacement. Foreign and newer-schema
-  plugins are never overwritten or deleted; multiple installations use separate files.
+  checks, owner-only Windows ACLs, and exclusive same-directory publication. Owned updates and
+  removals first move the public entry to a unique quarantine and verify the same inode and bytes
+  through an open file handle. A raced foreign regular file is restored without replacement; other
+  raced file types are preserved at the reported recovery path. Foreign and newer-schema plugins are
+  never overwritten or deleted, and multiple installations use separate files.
 - Connector CI now runs a pinned Bun smoke for the OpenCode 1.18.23 compatibility target on Ubuntu,
   Windows, and macOS with spaces/Unicode paths and a real detached Node launcher.
 

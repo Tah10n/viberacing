@@ -125,9 +125,10 @@ The generated OpenCode plugin does not receive a Vibe Racing payload and never r
 It inspects only the public idle event shape (`type`, `properties.status.type`) and does not access
 `sessionID`, message IDs, project/worktree/directory values, prompts, responses, code, models, or
 credentials. It launches the stable local connector with a fixed installation UUID and a minimal
-allowlisted environment; OpenCode and project variables, `PWD`, `NODE_OPTIONS`, and provider keys
-are excluded. The absolute state path and its ownership hash remain local and are never included in
-diagnostics or network requests.
+allowlisted environment. Environment names are filtered before their values are read, so OpenCode
+and project variables, `PWD`, `NODE_OPTIONS`, and provider keys are neither materialized by the
+plugin nor passed to the child. The absolute state path, recorded plugin path, and ownership hash
+remain local and are never included in diagnostics or network requests.
 
 GitHub OAuth requests `read:user`. The access token is used once to obtain immutable GitHub ID and
 current handle and is not stored. Browser, installation, poll, and device secrets are SHA-256 hashed

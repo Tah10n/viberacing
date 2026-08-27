@@ -36,6 +36,7 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
   : defaultStateDirectory;
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
+const openCodePluginCleanupPath = join(stateDirectory, "opencode-plugin-cleanup.json");
 const providerIdentityPath = join(stateDirectory, "provider-identity.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
@@ -51,6 +52,7 @@ let stateDirectorySecurity;
 const stateFiles = new Set([
   "config.json",
   "installation.json",
+  "opencode-plugin-cleanup.json",
   "provider-identity.json",
   "sources.json",
   "connection-commit.json",
@@ -86,7 +88,7 @@ const legacyRuntimeAdapterFiles = new Set([
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
-  /^(?:config|installation|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
+  /^(?:config|installation|opencode-plugin-cleanup|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
 const hookLauncherTemporaryPattern = /^viberacing-hook\.mjs\.\d+\.tmp$/i;
 const sourceIdPattern =
@@ -756,10 +758,47 @@ async function readInstallationUnlocked() {
       sourceIdPattern.test(value.id) &&
       typeof value.secret === "string" &&
       value.secret.length >= 32 &&
-      value.secret.length <= 128
+      value.secret.length <= 128 &&
+      (value.openCodePluginPath === undefined ||
+        (typeof value.openCodePluginPath === "string" &&
+          value.openCodePluginPath.length <= 4_096 &&
+          isAbsolute(value.openCodePluginPath) &&
+          basename(value.openCodePluginPath) === `viberacing-${value.id.toLowerCase()}.js` &&
+          !hasTerminalControlCharacters(value.openCodePluginPath)))
     )
       return value;
     throw new Error("Local installation identity is invalid");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function normalizedOpenCodePluginCleanup(value) {
+  if (
+    value?.version !== 1 ||
+    Object.keys(value).sort().join("\0") !==
+      ["installationId", "openCodePluginPath", "version"].sort().join("\0") ||
+    !sourceIdPattern.test(value.installationId ?? "") ||
+    typeof value.openCodePluginPath !== "string" ||
+    value.openCodePluginPath.length > 4_096 ||
+    !isAbsolute(value.openCodePluginPath) ||
+    basename(value.openCodePluginPath) !== `viberacing-${value.installationId.toLowerCase()}.js` ||
+    hasTerminalControlCharacters(value.openCodePluginPath)
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return {
+    version: 1,
+    installationId: value.installationId.toLowerCase(),
+    openCodePluginPath: resolve(value.openCodePluginPath),
+  };
+}
+
+async function readOpenCodePluginCleanupUnlocked() {
+  try {
+    return normalizedOpenCodePluginCleanup(
+      JSON.parse(await readFile(openCodePluginCleanupPath, "utf8")),
+    );
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -906,6 +945,7 @@ export async function connectedStateExists() {
 export async function localInstallationStateExists() {
   for (const path of [
     installationPath,
+    openCodePluginCleanupPath,
     configPath,
     sourcesPath,
     connectAttemptPath,
@@ -1409,6 +1449,61 @@ export async function readInstallation() {
 
 export function readExistingInstallation() {
   return readInstallationUnlocked();
+}
+
+export function readOpenCodePluginCleanup() {
+  return readOpenCodePluginCleanupUnlocked();
+}
+
+export async function rememberOpenCodePluginCleanup(installationId, pluginPath, options = {}) {
+  const cleanup = normalizedOpenCodePluginCleanup({
+    version: 1,
+    installationId,
+    openCodePluginPath: pluginPath,
+  });
+  return withConnectionStateLock(async () => {
+    const current = await readOpenCodePluginCleanupUnlocked();
+    if (
+      current?.installationId === cleanup.installationId &&
+      current.openCodePluginPath === cleanup.openCodePluginPath
+    )
+      return false;
+    await atomicJson(openCodePluginCleanupPath, cleanup, options);
+    return true;
+  });
+}
+
+export async function clearOpenCodePluginCleanup() {
+  await withConnectionStateLock(async () => {
+    await unlink(openCodePluginCleanupPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  });
+}
+
+export async function rememberOpenCodePluginPath(installationId, pluginPath, options = {}) {
+  if (
+    !sourceIdPattern.test(installationId ?? "") ||
+    typeof pluginPath !== "string" ||
+    pluginPath.length > 4_096 ||
+    !isAbsolute(pluginPath) ||
+    basename(pluginPath) !== `viberacing-${installationId.toLowerCase()}.js` ||
+    hasTerminalControlCharacters(pluginPath)
+  )
+    throw new Error("Invalid OpenCode plugin path");
+  return withConnectionStateLock(async () => {
+    const installation = await readInstallationUnlocked();
+    if (installation?.id !== installationId)
+      throw new Error("Installation identity changed while recording the OpenCode plugin path");
+    const normalizedPath = resolve(pluginPath);
+    if (installation.openCodePluginPath === normalizedPath) return false;
+    await atomicJson(
+      installationPath,
+      { ...installation, openCodePluginPath: normalizedPath },
+      options,
+    );
+    return true;
+  });
 }
 
 export async function readOrCreateProviderIdentitySalt() {

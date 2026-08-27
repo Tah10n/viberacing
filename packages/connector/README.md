@@ -205,8 +205,13 @@ hooks are untouched. Run `uninstall` once for every connector installation. If a
 `VIBERACING_STATE_DIR`, set it to the same value when uninstalling; the command refuses to report
 success when the selected state directory contains only a state marker or no substantive
 installation metadata, connection attempt, browser-handler record, or installed runtime. They also
-remove only the strictly owned OpenCode plugin file. A foreign, linked, ACL-unsafe, or newer-schema
-plugin is never overwritten or deleted; teardown still removes authorization and local secrets,
+remove only the strictly owned OpenCode plugin. Initial and replacement publication is exclusive.
+Updates and teardown quarantine the public entry first and verify the same inode and bytes through
+an open file handle before deleting anything. A raced foreign regular file is restored without
+replacement; a raced non-regular entry is preserved at the error's recovery path. Foreign, linked,
+ACL-unsafe, or newer-schema plugins are never overwritten or deleted. The exact installed plugin
+path is kept only in owner-only `installation.json`, so cleanup still reaches the verified old
+location after `XDG_CONFIG_HOME` changes. Teardown still removes authorization and local secrets,
 while the stale installation guard makes any already-loaded plugin event a no-op.
 `reset-installation` is not teardown: it is the explicit escape hatch for creating a new
 installation identity. It remains blocked byte-for-byte while accepted OpenCode history lacks a
