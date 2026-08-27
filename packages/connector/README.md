@@ -152,32 +152,46 @@ compatible `message(id,time_created,data)` schema in read-only SQLite mode. Exis
 with accepted OpenCode usage must run one successful connector 0.4.4 Sync before 0.5.0. Version
 0.4.4 keeps aggregate snapshot semantics but confirms content-free hashes of the exact accepted
 message-ID set; 0.5.0 refuses a direct 0.4.3 migration rather than silently losing an unsynced tail.
-Qwen chooses exactly one automatic runtime root in this order: `QWEN_RUNTIME_DIR`,
-`advanced.runtimeOutputDir` from the user-level settings, `QWEN_HOME`, then `~/.qwen`. Its JSONC
-settings support comments plus `$VAR`, `${VAR}`, and tilde expansion. `QWEN_HOME`,
-`QWEN_RUNTIME_DIR`, and only variables referenced by `runtimeOutputDir` are read from the official
-user-level `.env` candidates with dotenv-compatible quotes and inline comments; unrelated values are
-discarded. Relative values are not resolved from the connector's CWD; `doctor` prints the explicit
-`source add` command instead. The runtime root and Qwen config root are stored separately, so tokens
-come from `<runtime-root>/usage` while the additive `SessionEnd` hook always lives in
-`<QWEN_HOME>/settings.json`. Hook edits retain unknown settings and comments outside the changed
-`hooks` subtree. In Qwen Code 0.21.12, that hook fires on interactive TUI exit and is wired into
-ACP, but the headless `qwen -p` runner does not emit `SessionEnd`. Headless runs still write exact
-usage records; run `viberacing sync`, or wait for the next supported lifecycle event, to collect
-them. Qwen's cached count is already included in input and its thoughts count is already included in
-output, so the connector subtracts both overlaps before sending the five exact component fields.
+For every unmigrated OpenCode source, the confirmed sequence must exactly equal the maximum found in
+the server mapping stored in `config.json`, runtime `state.sequences`, every pending snapshot, and
+any unfinished 0.4.4 cutover attempt. Preflight streams only the selected source fields and accepts
+a large aggregate `state.json` assembled from individually bounded ledgers. A pending OpenCode
+snapshot is never delivered by 0.5.0 before that proof is current. Source changes, reset, connect,
+manual/automatic/browser Sync, doctor/repair, hooks, Antigravity metadata writes, reconciliation,
+and schema migration all check before mutation; lock-owning paths check again after exclusion to
+catch a stale runtime that finishes between checks. Qwen chooses exactly one automatic runtime root
+in this order: `QWEN_RUNTIME_DIR`, `advanced.runtimeOutputDir` from the user-level settings,
+`QWEN_HOME`, then `~/.qwen`. Its JSONC settings support comments plus `$VAR`, `${VAR}`, and tilde
+expansion. `QWEN_HOME`, `QWEN_RUNTIME_DIR`, and only variables referenced by `runtimeOutputDir` are
+read from the official user-level `.env` candidates with dotenv-compatible quotes and inline
+comments; unrelated values are discarded. Relative values are not resolved from the connector's CWD;
+`doctor` prints the explicit `source add` command instead. The runtime root and Qwen config root are
+stored separately, so tokens come from `<runtime-root>/usage` while the additive `SessionEnd` hook
+always lives in `<QWEN_HOME>/settings.json`. Hook edits retain unknown settings and comments outside
+the changed `hooks` subtree. In Qwen Code 0.21.12, that hook fires on interactive TUI exit and is
+wired into ACP, but the headless `qwen -p` runner does not emit `SessionEnd`. Headless runs still
+write exact usage records; run `viberacing sync`, or wait for the next supported lifecycle event, to
+collect them. Qwen's cached count is already included in input and its thoughts count is already
+included in output, so the connector subtracts both overlaps before sending the five exact component
+fields.
 
-`disconnect` attempts remote revocation and always removes owned hooks, the device token, dirty and
-scheduler state, and pending automatic uploads locally—even while offline—while preserving stable
-local source identities. Lifecycle removal commands serialize with an active sync before revoking or
-deleting state. `uninstall` removes every cleanable owned hook even if another profile is damaged;
-on a partial failure it removes network credentials but retains source/root metadata and the small
+### Teardown commands
+
+`disconnect` and `uninstall` are explicit teardown operations and intentionally remain available
+when the OpenCode migration guard blocks ordinary recovery-state changes. `disconnect` attempts
+remote revocation and always removes owned hooks, the device token, dirty and scheduler state, and
+pending automatic uploads locally—even while offline—while preserving stable local source
+identities. Lifecycle removal commands serialize with an active sync before revoking or deleting
+state. `uninstall` removes every cleanable owned hook even if another profile is damaged; on a
+partial failure it removes network credentials but retains source/root metadata and the small
 installed runtime so an ordinary repeated `uninstall` can finish safely. Provider data and foreign
 hooks are untouched. Run `uninstall` once for every connector installation. If an installation used
 `VIBERACING_STATE_DIR`, set it to the same value when uninstalling; the command refuses to report
 success when the selected state directory contains only a state marker or no substantive
 installation metadata, connection attempt, browser-handler record, or installed runtime.
-`reset-installation` is the explicit escape hatch for creating a new installation identity.
+`reset-installation` is not teardown: it is the explicit escape hatch for creating a new
+installation identity. It remains blocked byte-for-byte while accepted OpenCode history lacks a
+current confirmed 0.4.4 cutover, so deleting config/state cannot bypass the 0.5.0 migration gate.
 
 State lives under `VIBERACING_STATE_DIR` (default `~/.viberacing`): `installation.json`,
 `sources.json`, `config.json`, `state.json`, one compact pending snapshot and safe diagnostic per

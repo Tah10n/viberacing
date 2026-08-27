@@ -37,6 +37,9 @@ import { connectorVersion } from "../lib/version.mjs";
 
 const execFileAsync = promisify(execFile);
 const connectorPath = fileURLToPath(new URL("../bin/viberacing.mjs", import.meta.url));
+const connector043Path = fileURLToPath(
+  new URL("../../../node_modules/@viberacing/connector-0.4.3/bin/viberacing.mjs", import.meta.url),
+);
 const connector044Path = fileURLToPath(
   new URL("../../../node_modules/@viberacing/connector-0.4.4/bin/viberacing.mjs", import.meta.url),
 );
@@ -243,6 +246,17 @@ function openCodeUpgradeServer(currentInstallation) {
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
       requests.push({ method: request.method, url: request.url });
       response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(
+          JSON.stringify({ requestId: body.requestId, sourceIds: [installation.sourceId] }),
+        );
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
       if (request.url === "/api/installations/current") {
         response.end(
           JSON.stringify({
@@ -7095,6 +7109,363 @@ test("confirmed real 0.4.4 cutover migrates once and preserves the accepted base
     assert.equal(body.snapshots[0].entries.length, 1);
     assert.equal(body.snapshots[0].entries[0].totalTokens, "107");
   }
+});
+
+test("a real 0.4.3 Browser Sync advancing past the cutover is blocked until 0.4.4 reconfirms", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-stale-browser-runtime-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  let installation;
+  const remote = openCodeUpgradeServer(() => installation);
+  remote.server.listen(0, "127.0.0.1");
+  await once(remote.server, "listening");
+  context.after(() => remote.server.close());
+  const address = remote.server.address();
+  assert.equal(typeof address, "object");
+  installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  await pointInstallationAtServer(installation, address.port);
+  const statePath = join(installation.directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.adapters[installation.sourceId] = {
+    cutover: {
+      version: 1,
+      confirmedSequence: "1",
+      confirmedRangeEnd: installation.date,
+      aliases: {
+        [createHash("sha256").update("accepted-before-upgrade").digest("hex")]: installation.date,
+      },
+    },
+  };
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const requestId = "78787878-7878-4878-8878-787878787878";
+
+  const oldBrowser = await execFileAsync(
+    process.execPath,
+    [
+      connector043Path,
+      "handle-url",
+      `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
+    ],
+    { env: environment },
+  );
+  assert.match(oldBrowser.stdout, /Synced/);
+  assert.equal(JSON.parse(await readFile(statePath, "utf8")).sequences[installation.sourceId], "2");
+  const afterOldBrowser = await snapshotStateTree(installation.directory);
+  const requestCount = remote.requests.length;
+
+  const blocked = await execFileAsync(process.execPath, [connectorPath, "upgrade-preflight"], {
+    env: environment,
+  }).then(
+    () => assert.fail("0.5.0 accepted a sequence newer than the confirmed cutover"),
+    (error) => error,
+  );
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.match(blocked.stderr, /@viberacing\/connector@0\.4\.4 sync/);
+  assert.equal(remote.requests.length, requestCount);
+  assert.deepEqual(await snapshotStateTree(installation.directory), afterOldBrowser);
+
+  await execFileAsync(process.execPath, [connector044Path, "sync"], { env: environment });
+  const repaired = JSON.parse(await readFile(statePath, "utf8"));
+  assert.equal(
+    repaired.adapters[installation.sourceId].cutover.confirmedSequence,
+    repaired.sequences[installation.sourceId],
+  );
+  const passed = await execFileAsync(process.execPath, [connectorPath, "upgrade-preflight"], {
+    env: environment,
+  });
+  assert.match(passed.stdout, /preflight passed/);
+});
+
+test("state and pending OpenCode sequences block delivery even when config still reports zero", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-pending-sequence-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  let requests = 0;
+  const server = createServer((request, response) => {
+    requests += 1;
+    request.resume();
+    response.statusCode = 500;
+    response.end();
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  const installation = await writeOpenCode043Installation(home, `http://127.0.0.1:${address.port}`);
+  const configPath = join(installation.directory, "config.json");
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  config.sources[0].lastAcceptedSyncSequence = "0";
+  await writeFile(configPath, `${JSON.stringify(config)}\n`);
+  await mkdir(join(installation.directory, "pending"));
+  await writeFile(
+    join(installation.directory, "pending", `${installation.sourceId}.json`),
+    `${JSON.stringify({
+      protocolVersion: connectorProtocolVersion,
+      snapshots: [{ sourceId: installation.sourceId, syncSequence: "1", entries: [] }],
+      sourceErrors: [],
+    })}\n`,
+  );
+  const before = await snapshotStateTree(installation.directory);
+
+  const blocked = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test" }),
+  }).then(
+    () => assert.fail("0.5.0 delivered an unconfirmed pending OpenCode snapshot"),
+    (error) => error,
+  );
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.equal(requests, 0);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+});
+
+test("a higher read-only server sequence blocks before reconciliation persistence", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-server-sequence-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  let installation;
+  const remote = openCodeUpgradeServer(() => installation);
+  remote.server.listen(0, "127.0.0.1");
+  await once(remote.server, "listening");
+  context.after(() => remote.server.close());
+  const address = remote.server.address();
+  assert.equal(typeof address, "object");
+  installation = await writeOpenCode043Installation(home, `http://127.0.0.1:${address.port}`);
+  const configPath = join(installation.directory, "config.json");
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  config.sources[0].lastAcceptedSyncSequence = "0";
+  await writeFile(configPath, `${JSON.stringify(config)}\n`);
+  await writeFile(
+    join(installation.directory, "state.json"),
+    `${JSON.stringify({ version: 1, sequences: {}, adapters: {} })}\n`,
+  );
+  for (const name of [".viberacing-state", "config.json", "sources.json", "state.json"])
+    await chmod(join(installation.directory, name), 0o600);
+  const before = await snapshotStateTree(installation.directory);
+
+  const blocked = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test" }),
+  }).then(
+    () => assert.fail("0.5.0 persisted an unconfirmed server sequence"),
+    (error) => error,
+  );
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.deepEqual(remote.requests, [{ method: "POST", url: "/api/installations/current" }]);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+});
+
+test("inner lifecycle preflight catches a sequence advanced after the outer preflight", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-preflight-race-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  const statePath = join(installation.directory, "state.json");
+  const configPath = join(installation.directory, "config.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.adapters[installation.sourceId] = {
+    cutover: {
+      version: 1,
+      confirmedSequence: "1",
+      confirmedRangeEnd: installation.date,
+      aliases: {},
+    },
+  };
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  for (const name of [".viberacing-state", "config.json", "sources.json", "state.json"])
+    await chmod(join(installation.directory, name), 0o600);
+  const barrier = join(home, "preflight-race");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_OPENCODE_PREFLIGHT_PAUSE: "after_outer",
+    VIBERACING_TEST_OPENCODE_PREFLIGHT_BARRIER: barrier,
+  });
+  const commandPromise = execFileAsync(
+    process.execPath,
+    [
+      connectorPath,
+      "source",
+      "add",
+      "--agent",
+      "qwen_code",
+      "--name",
+      "Concurrent",
+      "--data-dir",
+      join(home, "qwen-usage"),
+    ],
+    { env: environment },
+  ).catch((error) => error);
+  await waitFor(() =>
+    access(`${barrier}.ready`).then(
+      () => true,
+      () => false,
+    ),
+  );
+
+  const advancedConfig = JSON.parse(await readFile(configPath, "utf8"));
+  advancedConfig.sources[0].lastAcceptedSyncSequence = "2";
+  await writeFile(configPath, `${JSON.stringify(advancedConfig)}\n`);
+  const advancedState = JSON.parse(await readFile(statePath, "utf8"));
+  advancedState.sequences[installation.sourceId] = "2";
+  await writeFile(statePath, `${JSON.stringify(advancedState)}\n`);
+  const afterOldSync = await snapshotStateTree(installation.directory);
+  await writeFile(`${barrier}.continue`, "continue\n");
+
+  const blocked = await commandPromise;
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), afterOldSync);
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "sources.json"), "utf8")).version,
+    1,
+  );
+});
+
+test("all local source registry mutations block before schema v2 and remain 0.4.4-readable", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-global-guard-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_ANTIGRAVITY_BIN: process.execPath,
+  });
+  const commands = [
+    [
+      "source",
+      "add",
+      "--agent",
+      "qwen_code",
+      "--name",
+      "Blocked add",
+      "--data-dir",
+      join(home, "qwen-usage"),
+    ],
+    ["source", "remove", installation.clientSourceId],
+    ["run", "antigravity", "--", "--version"],
+  ];
+  for (const arguments_ of commands) {
+    const before = await snapshotStateTree(installation.directory);
+    const blocked = await execFileAsync(process.execPath, [connectorPath, ...arguments_], {
+      env: environment,
+    }).then(
+      () => assert.fail(`${arguments_.join(" ")} unexpectedly changed uncut state`),
+      (error) => error,
+    );
+    assert.equal(blocked.code, 1);
+    assert.match(blocked.stderr, /opencode_cutover_required/);
+    assert.deepEqual(await snapshotStateTree(installation.directory), before);
+    const legacy = await execFileAsync(process.execPath, [connector044Path, "source", "list"], {
+      env: environment,
+    });
+    assert.match(legacy.stdout, /opencode/);
+    assert.equal(
+      JSON.parse(await readFile(join(installation.directory, "sources.json"), "utf8")).version,
+      1,
+    );
+  }
+
+  for (const arguments_ of [
+    ["auto-sync"],
+    ["doctor"],
+    [
+      "handle-url",
+      `viberacing://sync?requestId=79797979-7979-4979-8979-797979797979&scope=installation&grant=${"g".repeat(32)}`,
+    ],
+  ]) {
+    const before = await snapshotStateTree(installation.directory);
+    const blocked = await execFileAsync(process.execPath, [connectorPath, ...arguments_], {
+      env: environment,
+    }).then(
+      () => assert.fail(`${arguments_[0]} unexpectedly entered uncut recovery state`),
+      (error) => error,
+    );
+    assert.equal(blocked.code, 1);
+    assert.match(blocked.stderr, /opencode_cutover_required/);
+    assert.deepEqual(await snapshotStateTree(installation.directory), before);
+  }
+
+  const beforeHook = await snapshotStateTree(installation.directory);
+  const hook = await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "opencode"],
+    environment,
+    '{"private":"discarded"}\n',
+  );
+  assert.equal(hook.code, 0);
+  assert.equal(hook.stdout, "");
+  assert.equal(hook.stderr, "");
+  assert.deepEqual(await snapshotStateTree(installation.directory), beforeHook);
+});
+
+test("read-only commands remain available while OpenCode recovery is blocked", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-read-only-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const listed = await execFileAsync(process.execPath, [connectorPath, "source", "list"], {
+    env: environment,
+  });
+  assert.match(listed.stdout, /opencode/);
+  const accounts = await execFileAsync(process.execPath, [connectorPath, "accounts"], {
+    env: environment,
+  });
+  assert.match(accounts.stdout, /opencode: OpenCode/);
+  const version = await execFileAsync(process.execPath, [connectorPath, "--version"], {
+    env: environment,
+  });
+  assert.equal(version.stdout.trim(), connectorVersion);
+  assert.equal(
+    JSON.parse(await readFile(join(installation.directory, "sources.json"), "utf8")).version,
+    1,
+  );
+});
+
+test("reset-installation blocks byte-for-byte until OpenCode cutover is current", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-reset-guard-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  const before = await snapshotStateTree(installation.directory);
+  const blocked = await execFileAsync(process.execPath, [connectorPath, "reset-installation"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test" }),
+  }).then(
+    () => assert.fail("reset-installation bypassed the OpenCode cutover"),
+    (error) => error,
+  );
+  assert.equal(blocked.code, 1);
+  assert.match(blocked.stderr, /opencode_cutover_required/);
+  assert.deepEqual(await snapshotStateTree(installation.directory), before);
+});
+
+test("upgrade preflight streams selected OpenCode fields from valid state larger than 20 MiB", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-opencode-large-state-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeOpenCode043Installation(home, "http://127.0.0.1:1");
+  const filler = "x".repeat(11 * 1_024 * 1_024);
+  const statePath = join(installation.directory, "state.json");
+  await writeFile(
+    statePath,
+    `${JSON.stringify({
+      version: 1,
+      sequences: { [installation.sourceId]: "1" },
+      adapters: {
+        "11111111-1111-4111-8111-111111111111": { boundedLedger: filler },
+        "22222222-2222-4222-8222-222222222222": { boundedLedger: filler },
+        [installation.sourceId]: {
+          cutover: {
+            version: 1,
+            confirmedSequence: "1",
+            confirmedRangeEnd: installation.date,
+            aliases: {},
+          },
+        },
+      },
+    })}\n`,
+  );
+  assert.ok((await stat(statePath)).size > 20 * 1_024 * 1_024);
+
+  const preflight = await execFileAsync(process.execPath, [connectorPath, "upgrade-preflight"], {
+    env: connectorEnvironment(home, { NODE_ENV: "test" }),
+    maxBuffer: 1_000_000,
+  });
+  assert.match(preflight.stdout, /preflight passed/);
 });
 
 test("repairs one stale pending snapshot and still delivers the newly collected snapshot", async (context) => {

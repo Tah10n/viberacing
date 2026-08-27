@@ -204,6 +204,43 @@ async function waitForTestConnectBarrier(stage) {
   throw new Error("Timed out at connect test barrier");
 }
 
+async function waitForTestOpenCodePreflightBarrier(stage) {
+  if (
+    process.env.NODE_ENV !== "test" ||
+    process.env.VIBERACING_TEST_OPENCODE_PREFLIGHT_PAUSE !== stage ||
+    !process.env.VIBERACING_TEST_OPENCODE_PREFLIGHT_BARRIER
+  )
+    return;
+  const barrier = resolve(process.env.VIBERACING_TEST_OPENCODE_PREFLIGHT_BARRIER);
+  await writeFile(`${barrier}.ready`, `${process.pid}\n`, { mode: 0o600 });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      await readFile(`${barrier}.continue`);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (Date.now() >= deadline) throw new Error("Timed out at OpenCode preflight test barrier");
+    await delay(10);
+  }
+}
+
+async function withOpenCodeLifecycleMutation(callback, options = {}) {
+  return withLifecycleMutation(callback, {
+    ...options,
+    afterExclusion: () => assertOpenCodeUpgradeReady(stateDirectory),
+  });
+}
+
+function commandRequiresOpenCodeGuard() {
+  if (command === "connect" || command === "sync") return true;
+  if (command === "auto-sync" || command === "handle-url" || command === "doctor") return true;
+  if (command === "reset-installation") return true;
+  if (command === "run" && arguments_[1] === "antigravity") return true;
+  return command === "source" && ["add", "remove"].includes(arguments_[1]);
+}
+
 async function readConnectedConfig() {
   try {
     return await readConfig();
@@ -499,7 +536,7 @@ async function exactPairingSources(sources) {
 }
 
 async function reconcilePreviousConnectionBeforePairing(origin, installationId) {
-  return withLifecycleMutation(async () => {
+  return withOpenCodeLifecycleMutation(async () => {
     let previousConfig;
     try {
       previousConfig = await readConfig();
@@ -511,7 +548,9 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId) 
       return null;
     let remote;
     try {
-      remote = await requestReconciliation(previousConfig);
+      remote = await requestReconciliation(previousConfig, 1, undefined, {
+        beforeResponseMutation: assertOpenCodeRemoteSequenceReady,
+      });
     } catch (error) {
       if (error?.status === 401 || error?.status === 403) {
         const cleanupWarnings = await disableLocalConnection(true);
@@ -553,14 +592,22 @@ async function connect() {
     throw new Error(
       "No exact token source was found yet. Run a supported agent at least once, or add its token data root explicitly. Try `viberacing doctor` or `viberacing source add --agent <agent> --name <label> --data-dir <usage-root>`.",
     );
-  const installedRuntime = await prepareRuntime(import.meta.url);
-  const browserSyncCapable = await registerBrowserSync(installedRuntime);
+  const { installedRuntime, browserSyncCapable, installation } =
+    await withOpenCodeLifecycleMutation(async () => {
+      const runtime = await prepareRuntime(import.meta.url);
+      const browserCapable = await registerBrowserSync(runtime);
+      const localInstallation = await readOrCreateInstallation();
+      await invalidateAndCancelConnectAttempt();
+      return {
+        installedRuntime: runtime,
+        browserSyncCapable: browserCapable,
+        installation: localInstallation,
+      };
+    });
   if (!browserSyncCapable)
     warning(
       "Vibe Racing warning: browser Sync could not be registered; CLI sync remains available.",
     );
-  const installation = await readOrCreateInstallation();
-  await invalidateAndCancelConnectAttempt();
   const previousConfig = await reconcilePreviousConnectionBeforePairing(origin, installation.id);
   const pairingLocalSources = new Map(sources);
   if (previousConfig !== null) {
@@ -581,27 +628,34 @@ async function connect() {
     }
   }
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
-  const initialAttempt = await beginConnectAttempt({
-    installationId: installation.id,
-    origin,
-    expectedSources: sourcesBeforeDiscovery,
-  });
+  const initialAttempt = await withOpenCodeLifecycleMutation(() =>
+    beginConnectAttempt({
+      installationId: installation.id,
+      origin,
+      expectedSources: sourcesBeforeDiscovery,
+    }),
+  );
   let attempt = initialAttempt;
   let pairing;
   let committed = false;
   try {
-    pairing = await requestPairingStart(origin, installation.id, {
-      protocolVersion,
-      connectorVersion,
-      installationId: installation.id,
-      installationSecret: installation.secret,
-      sources: [...sources.values()].map(publicSource),
-      supersededClientSourceIds,
-      browserSyncCapable,
-      browserSyncProtocol: browserSyncCapable ? browserSyncProtocolVersion : 0,
-      installedRuntimeVersion: connectorVersion,
-    });
-    attempt = await recordConnectAttemptPairing(initialAttempt, pairing.pollToken);
+    ({ pairing, attempt } = await withOpenCodeLifecycleMutation(async () => {
+      const started = await requestPairingStart(origin, installation.id, {
+        protocolVersion,
+        connectorVersion,
+        installationId: installation.id,
+        installationSecret: installation.secret,
+        sources: [...sources.values()].map(publicSource),
+        supersededClientSourceIds,
+        browserSyncCapable,
+        browserSyncProtocol: browserSyncCapable ? browserSyncProtocolVersion : 0,
+        installedRuntimeVersion: connectorVersion,
+      });
+      return {
+        pairing: started,
+        attempt: await recordConnectAttemptPairing(initialAttempt, started.pollToken),
+      };
+    }));
     await waitForTestConnectBarrier("after_pairing_start");
     output(`Open ${pairing.verificationUrl}`);
     output(`Pairing code: ${pairing.code}`);
@@ -629,7 +683,7 @@ async function connect() {
       );
       if (result.status === "active") {
         await waitForTestConnectBarrier("after_active_poll");
-        const config = await withLifecycleMutation(async () => {
+        const config = await withOpenCodeLifecycleMutation(async () => {
           const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
           const mapped = result.sources.map((mapping) => {
             const local = localById.get(mapping.clientSourceId);
@@ -887,7 +941,19 @@ async function retireMappedSources(config, sourceIds, options = {}) {
   return mappings;
 }
 
-async function requestReconciliation(config, attempts = 1, bootstrapSourceIds) {
+function openCodeServerSequences(remote) {
+  return Object.fromEntries(
+    (remote.sources ?? []).map((source) => [source.sourceId, source.lastAcceptedSyncSequence]),
+  );
+}
+
+function assertOpenCodeRemoteSequenceReady(remote) {
+  return assertOpenCodeUpgradeReady(stateDirectory, {
+    serverSequences: openCodeServerSequences(remote),
+  });
+}
+
+async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, options = {}) {
   const sourceIds = config.sources.map((source) => source.sourceId);
   const inspection = await refreshInstalledHandlerAttestation();
   const handlerAttestation = inspection.inspectionFailed
@@ -923,6 +989,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds) {
     );
   try {
     const remote = await send(body, attempts, handlerAttestation?.attestationId);
+    await options.beforeResponseMutation?.(remote);
     if (handlerAttestation !== null) {
       await acknowledgeInstalledHandlerAttestation(remote.acceptedHandlerAttestationId);
     }
@@ -932,7 +999,9 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds) {
       throw error;
     }
     if (bootstrapSourceIds !== undefined) throw error;
-    return send({ sourceIds, connectorVersion }, 1);
+    const remote = await send({ sourceIds, connectorVersion }, 1);
+    await options.beforeResponseMutation?.(remote);
+    return remote;
   }
 }
 
@@ -1054,6 +1123,7 @@ async function reconcileServerState(config, state) {
       config,
       missing || handlerConfirmationPending || bootstrapSourceIds.length > 0 ? 3 : 1,
       bootstrapSourceIds.length === 0 ? undefined : bootstrapSourceIds,
+      { beforeResponseMutation: assertOpenCodeRemoteSequenceReady },
     );
   } catch (error) {
     if (
@@ -1476,6 +1546,7 @@ async function sync(providedConfig, options = {}) {
   await assertOpenCodeUpgradeReady(stateDirectory);
   return withSyncLock(
     async () => {
+      await assertOpenCodeUpgradeReady(stateDirectory);
       const config = providedConfig ?? (await readConfig());
       const requestedSourceIds = Array.isArray(options.sourceIds)
         ? new Set(options.sourceIds)
@@ -1930,21 +2001,30 @@ async function reportBrowserSync(config, requestId, status, resultCode) {
 async function browserSync(value) {
   await assertOpenCodeUpgradeReady(stateDirectory);
   const link = parseBrowserSyncUrl(value);
-  const config = await readConnectedConfig();
-  const claim = await request(
-    config.origin,
-    "/api/installations/current/sync/claim",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.deviceToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(link),
+  const claimed = await withSyncLock(
+    async () => {
+      await assertOpenCodeUpgradeReady(stateDirectory);
+      const config = await readConnectedConfig();
+      const claim = await request(
+        config.origin,
+        "/api/installations/current/sync/claim",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.deviceToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(link),
+        },
+        1,
+        { kind: "browserSyncClaim" },
+      );
+      return { claim, config };
     },
-    1,
-    { kind: "browserSyncClaim" },
+    { waitMs: manualSyncLockWaitMs },
   );
+  if (claimed?.skipped) throw new Error("Another sync is already running");
+  const { claim, config } = claimed;
   const requested = new Set(claim.sourceIds);
   const local = config.sources.filter(
     (source) =>
@@ -1956,7 +2036,7 @@ async function browserSync(value) {
     throw new Error("Browser sync source mapping changed");
   }
   try {
-    const result = await sync(config, {
+    const result = await sync(undefined, {
       sourceIds: claim.sourceIds,
       installationScoped: link.scope === "installation",
       waitMs: manualSyncLockWaitMs,
@@ -2112,6 +2192,7 @@ async function recordAutomaticSyncFailure(clientSourceIds) {
   if (selected.size === 0) return;
   const recorded = await withSyncLock(
     async () => {
+      await assertOpenCodeUpgradeReady(stateDirectory);
       const config = await readConfig();
       const state = await readState();
       for (const source of config.sources) {
@@ -2137,6 +2218,7 @@ async function hook() {
     }
     const clientSourceId = option("--source");
     const agentId = option("--agent");
+    await assertOpenCodeUpgradeReady(stateDirectory);
     if (await markDirtyIfConnected(clientSourceId, agentId)) {
       const launch = await claimSchedulerLaunch({ waitMs: 0 });
       await traceSchedulerForTest(`hook-launch-${launch ? "claimed" : "busy"}:${process.pid}`);
@@ -2214,6 +2296,10 @@ async function automaticSync() {
       try {
         result = await sync(undefined, { automatic: true });
       } catch (error) {
+        if (error?.diagnosticCode === "opencode_cutover_required") {
+          attempted = false;
+          throw error;
+        }
         const sourceLocalFailures = Array.isArray(error?.automaticDiagnosticClientSourceIds)
           ? error.automaticDiagnosticClientSourceIds.filter((clientSourceId) =>
               Object.hasOwn(attemptedClaims, clientSourceId),
@@ -2236,7 +2322,7 @@ async function automaticSync() {
       return;
     }
   } catch (error) {
-    if (quiet) await recordLastHookError();
+    if (quiet && error?.diagnosticCode !== "opencode_cutover_required") await recordLastHookError();
     throw error;
   } finally {
     if (attempted) await clearDirty(attemptedClaims).catch(() => {});
@@ -2285,14 +2371,27 @@ async function doctor() {
   const discovery = await discoverSources();
   const detected = discovery.sources;
   const localSources = await readSources().catch(() => []);
-  const handlerInspection = await refreshInstalledHandlerAttestation();
+  let handlerInspection = await withSyncLock(
+    async () => {
+      await assertOpenCodeUpgradeReady(stateDirectory);
+      return refreshInstalledHandlerAttestation();
+    },
+    { waitMs: 0 },
+  );
+  if (handlerInspection?.skipped)
+    handlerInspection = { inspectionFailed: true, deferred: true, observed: null };
   output(`Connector: ${connectorVersion}; protocol: ${protocolVersion}`);
   if (!defaultState) output("Browser Sync handler: unavailable for custom state root");
   else if (handlerInspection.inspectionFailed) {
-    output("Browser Sync handler: inspection failed");
-    warning(
-      "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+    output(
+      handlerInspection.deferred
+        ? "Browser Sync handler: inspection deferred while sync is active"
+        : "Browser Sync handler: inspection failed",
     );
+    if (!handlerInspection.deferred)
+      warning(
+        "Vibe Racing warning: Browser Sync handler inspection failed; installed state was not changed and token Sync remains available.",
+      );
   } else output(`Browser Sync handler: ${handlerInspection.observed.status}`);
   output(
     `Detected exact sources: ${detected.length ? detected.map((source) => `${source.agentId}/${source.collectionMethod}`).join(", ") : "none"}`,
@@ -2350,7 +2449,7 @@ async function doctor() {
       let repaired;
       repairStarted = true;
       try {
-        repaired = await withLifecycleMutation(async () => {
+        repaired = await withOpenCodeLifecycleMutation(async () => {
           const installedRuntime = await prepareRuntime(import.meta.url, { force: true });
           const hooks = await reconcileHooks(import.meta.url, config.sources, await readSources(), {
             installedScript: installedRuntime,
@@ -2405,10 +2504,14 @@ async function doctor() {
     output(`Connected origin: ${config.origin}`);
     const reconciliation = await withSyncLock(
       async () => {
+        await assertOpenCodeUpgradeReady(stateDirectory);
+        if (handlerInspection.deferred) await refreshInstalledHandlerAttestation();
         const lockedConfig = await readConfig();
         let remote;
         try {
-          remote = await requestReconciliation(lockedConfig);
+          remote = await requestReconciliation(lockedConfig, 1, undefined, {
+            beforeResponseMutation: assertOpenCodeRemoteSequenceReady,
+          });
         } catch (error) {
           if (await lifecycleMutationActive()) return { status: "lifecycle" };
           if (error?.status === 401 || error?.status === 403) {
@@ -2649,7 +2752,20 @@ async function wrapperSource(agentId) {
 }
 
 async function wrap(agentId) {
-  const { source, separator, sourceOption } = await wrapperSource(agentId);
+  const { source, separator, sourceOption, executable } = await withOpenCodeLifecycleMutation(
+    async () => {
+      const selected = await wrapperSource(agentId);
+      const resolvedExecutable =
+        selected.source.executablePath ?? (await resolveAgentExecutable(agentId));
+      if (!resolvedExecutable)
+        throw new Error(
+          `${adapterFor(agentId).displayName} executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride(agentId)} to its absolute path`,
+        );
+      if (selected.source.executablePath !== resolvedExecutable)
+        await rememberSourceExecutable(selected.source.clientSourceId, resolvedExecutable);
+      return { ...selected, executable: resolvedExecutable };
+    },
+  );
   const passed =
     separator >= 0
       ? arguments_.slice(separator + 1)
@@ -2659,13 +2775,6 @@ async function wrap(agentId) {
             .filter((_, index) => index !== sourceOption && index !== sourceOption + 1)
         : arguments_.slice(2);
   const { args } = wrapperInvocation(agentId, passed);
-  const executable = source.executablePath ?? (await resolveAgentExecutable(agentId));
-  if (!executable)
-    throw new Error(
-      `${adapterFor(agentId).displayName} executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride(agentId)} to its absolute path`,
-    );
-  if (source.executablePath !== executable)
-    await rememberSourceExecutable(source.clientSourceId, executable);
   const child = spawnResolvedExecutable(executable, args, {
     stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
@@ -2701,16 +2810,14 @@ async function wrap(agentId) {
     const launch = await claimSchedulerLaunch({ waitMs: 5_000 });
     if (launch)
       try {
-        if (
-          !(await lifecycleMutationActive()) &&
-          (await localSourceRegistryContains(source.clientSourceId))
-        ) {
+        const shouldSchedule = await withOpenCodeLifecycleMutation(async () => {
+          if (!(await localSourceRegistryContains(source.clientSourceId))) return false;
           await appendCapture(source, safe);
-          if (await connectedSourceMappingExists(source.clientSourceId)) {
-            await markDirty(source.clientSourceId);
-            await launchAutomaticScheduler(launch);
-          }
-        }
+          if (!(await connectedSourceMappingExists(source.clientSourceId))) return false;
+          await markDirty(source.clientSourceId);
+          return true;
+        });
+        if (shouldSchedule) await launchAutomaticScheduler(launch);
       } catch {
       } finally {
         await releaseSchedulerLaunch(launch);
@@ -2721,6 +2828,10 @@ async function wrap(agentId) {
 }
 
 try {
+  if (commandRequiresOpenCodeGuard()) {
+    await assertOpenCodeUpgradeReady(stateDirectory);
+    await waitForTestOpenCodePreflightBarrier("after_outer");
+  }
   if (command === "--version" || command === "version") output(connectorVersion);
   else if (command === "upgrade-preflight") {
     await assertOpenCodeUpgradeReady(stateDirectory);
@@ -2738,7 +2849,7 @@ try {
     const config = await readConnectedConfig();
     for (const source of config.sources) output(`${source.agentId}: ${source.accountLabel}`);
   } else if (command === "source" && (arguments_[1] === "add" || arguments_[1] === "remove"))
-    await withLifecycleMutation(() => sourceCommand());
+    await withOpenCodeLifecycleMutation(() => sourceCommand());
   else if (command === "source") await sourceCommand();
   else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
   else if (command === "disconnect") {
@@ -2788,7 +2899,7 @@ try {
         "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.",
       );
   } else if (command === "reset-installation") {
-    const cleanup = await withLifecycleMutation(async () => {
+    const cleanup = await withOpenCodeLifecycleMutation(async () => {
       await invalidateAndCancelConnectAttempt();
       const result = await removeHooks();
       await resetInstallation();

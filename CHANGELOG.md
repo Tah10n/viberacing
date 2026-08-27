@@ -12,10 +12,17 @@ experience or protocol.
 
 ### Added
 
-- A read-only OpenCode upgrade preflight now blocks `sync`, automatic/browser Sync, connection,
-  source migration, reconciliation, and pending delivery before any local mutation or network
-  request when accepted 0.4.3 history lacks a confirmed 0.4.4 message-ID cutover. The
-  `upgrade-preflight` command reports the same status without exposing local identifiers.
+- A read-only OpenCode upgrade preflight now guards every recovery-state mutator: source add/remove,
+  Antigravity source/executable persistence, reset, connect, manual/automatic/browser Sync,
+  doctor/repair, hooks, pending delivery, reconciliation, and source-schema migration. Mutating
+  lifecycle and sync paths recheck after exclusion, immediately before their first write or network
+  mutation. `source list`, `accounts`, `--version`, explicit `disconnect`, and explicit `uninstall`
+  remain available.
+- The OpenCode cutover proof must equal the maximum local sequence across config, runtime state,
+  pending snapshots, and a pending 0.4.4 attempt. A stale 0.4.3 Browser Sync, unconfirmed pending
+  payload, or sequence race therefore fails byte-for-byte with the exact 0.4.4 recovery command.
+  Preflight streams only selected OpenCode fields from `state.json`, so aggregate state is no longer
+  capped at 20 MiB while every selected ledger retains its own bound.
 - One physical Codex `CODEX_HOME` can now track up to eight ChatGPT accounts. The connector reads
   local `tokens.account_id` before App Server startup and after usage, requires both
   generated-schema account reads to return the same non-null normalized email, derives only a local

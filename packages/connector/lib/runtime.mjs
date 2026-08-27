@@ -567,7 +567,13 @@ export async function withLifecycleMutation(callback, options = {}) {
       acquireRuntimeOwnedLock(lifecycleMarkerPath, { waitMs }),
     );
     if (!markerLock) throw new Error("Timed out waiting for a lifecycle marker");
-    const result = await withSyncLock(callback, { waitMs, allowDuringLifecycle: true });
+    const result = await withSyncLock(
+      async () => {
+        await options.afterExclusion?.();
+        return callback();
+      },
+      { waitMs, allowDuringLifecycle: true },
+    );
     if (result?.skipped) throw new Error("Timed out waiting for active sync to finish");
     return result;
   } finally {

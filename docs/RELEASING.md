@@ -63,9 +63,11 @@ published first: annotated tag `v0.4.4` resolves to linear `main` commit
 Production already contains accepted OpenCode usage, so complete the remaining rollout in this
 order:
 
-1. Inventory every active installation with an active OpenCode source and confirm each local state
-   using the read-only `upgrade-preflight` command described below. A last-sync timestamp or
-   connector version on the server is not proof of a local cutover.
+1. Inventory every active installation with an active OpenCode source. On each real production
+   computer, run immutable 0.4.4 `doctor --repair`, then 0.4.4 `sync`, then the reviewed read-only
+   0.5.0 `upgrade-preflight` described below. The repair is required because a one-off 0.4.4 Sync
+   can leave the installed Browser Sync handler/runtime on 0.4.3. A last-sync timestamp or connector
+   version on the server is not proof of a local cutover.
 2. Squash-merge the reviewed linear account-switch pull request. It must be based on the published
    0.4.4 `main` commit and must not contain either the old staging commit or a merge commit.
 3. Wait for Railway to apply the server changes and migration `007_account_switch_safety.sql`.
@@ -113,8 +115,10 @@ On each returned machine, run the reviewed 0.5.0 checkout without `sync`:
 node packages/connector/bin/viberacing.mjs upgrade-preflight
 ```
 
-The command only reads bounded regular `config.json` and `state.json` files. It emits no source IDs,
-paths, usage, or identity. Exit 0 means every accepted OpenCode source has either a confirmed 0.4.4
+The command reads bounded regular `config.json` and pending files, and streams `state.json` without
+a whole-file size cap. It extracts only each configured OpenCode source's sequence and individually
+bounded migration fields; unrelated ledgers are skipped. It emits no source IDs, paths, usage, or
+identity. Exit 0 means every accepted OpenCode source has either an exact current confirmed 0.4.4
 cutover or an already validated 0.5.0 migration. Exit 1 with `opencode_cutover_required` means that
 machine is still outstanding and prints exactly:
 
@@ -122,8 +126,10 @@ machine is still outstanding and prints exactly:
 npx --yes @viberacing/connector@0.4.4 sync
 ```
 
-Run that command on the affected machine and repeat `upgrade-preflight`. An offline or partial
-collection, a one-off version report, and server metadata alone do not establish confirmation.
+On the affected machine run `npx --yes @viberacing/connector@0.4.4 doctor --repair`, then the
+command above, then repeat `upgrade-preflight`. An offline or partial collection, a one-off version
+report, and server metadata alone do not establish confirmation. A pending snapshot, unfinished
+cutover, or local sequence above the confirmed sequence also requires the same 0.4.4 recovery.
 
 Claude, OpenCode, Kimi, Qwen, and Gemini remain combined local histories within each store;
 Antigravity separation remains explicit per capture source. This rollout must not add provider

@@ -9,9 +9,9 @@ strictPeerDependencies: true
 savePrefix: ""
 injectWorkspacePackages: true
 minimumReleaseAge: 1440
-# Exact immutable release fixture used by the 0.4.3 -> 0.5.0 upgrade regressions.
+# Exact immutable release fixtures used by the 0.4.3 -> 0.5.0 upgrade regressions.
 minimumReleaseAgeExclude:
-  - "@viberacing/connector@0.4.4"
+  - "@viberacing/connector"
 strictDepBuilds: true
 allowBuilds: {}
 

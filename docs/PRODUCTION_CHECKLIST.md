@@ -43,13 +43,24 @@
   commit `ac8e9d8` belongs in its rewritten history.
 - Require one successful OpenCode Sync with 0.4.4 for every existing installation and preserve its
   local state. Network failure, partial collection, or merely starting the CLI is not confirmation.
+- On the real production computer, update the installed Browser Sync handler/runtime before the
+  0.5.0 preflight; a one-off 0.4.4 Sync does not replace a handler still running 0.4.3:
+
+  ```sh
+  npx --yes @viberacing/connector@0.4.4 doctor --repair
+  npx --yes @viberacing/connector@0.4.4 sync
+  node packages/connector/bin/viberacing.mjs upgrade-preflight
+  ```
+
 - Enumerate active OpenCode installations with the read-only SQL in `docs/RELEASING.md`, then run
   `node packages/connector/bin/viberacing.mjs upgrade-preflight` on each machine. Server version and
   last-sync fields are inventory hints, not proof of the local message-ID cutover.
 - Before 0.5.0 publication, verify that direct 0.4.3 state fails closed with
   `opencode_cutover_required` before any local mutation or network request, confirmed 0.4.4 state
-  bootstraps, a scan-to-accept inserted row is counted once, and clock skew does not affect
-  identity.
+  bootstraps, a real stale 0.4.3 Browser Sync is detected, config/state/pending sequence races make
+  zero requests, source/reset/Antigravity writes remain byte-for-byte blocked and 0.4.4-readable,
+  and a valid aggregate state above 20 MiB is streamed successfully. Also verify a scan-to-accept
+  inserted row is counted once and clock skew does not affect identity.
 - Do not raise the Railway compatibility floor merely to force this migration; coordinate affected
   installations explicitly and keep Railway variables unchanged until separately authorized.
 
