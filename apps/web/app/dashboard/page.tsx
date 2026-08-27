@@ -78,8 +78,10 @@ interface SourceRow {
 interface DedupEventRow {
   id: string;
   agent_id: string;
+  dismissed: boolean;
   matched_days: number;
   installation_name: string;
+  target_account_id: string;
   target_label: string;
 }
 
@@ -95,6 +97,13 @@ interface UsageChartDay {
   level: number;
   tokens: string;
   weekday: string;
+}
+
+interface UsageChart {
+  days: UsageChartDay[];
+  maximum: string;
+  midpoint: string;
+  total: string;
 }
 
 const usageChartLevels = 20n;
@@ -194,7 +203,47 @@ function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
   );
 }
 
-function usageChartDays(weekStart: string, usage: readonly DailyUsageRow[]): UsageChartDay[] {
+function AccountMatchHistory({
+  accountId,
+  events,
+}: {
+  readonly accountId: string;
+  readonly events: readonly DedupEventRow[];
+}) {
+  const dismissedMatches = events.filter(
+    (event) => event.dismissed && event.target_account_id === accountId,
+  );
+  if (dismissedMatches.length === 0) return null;
+  return (
+    <details className="account-match-history">
+      <summary>
+        <span>Automatic matches · {countLabel(dismissedMatches.length, "match", "matches")}</span>
+        <span aria-hidden="true">
+          <span className="account-match-history-closed">Show</span>
+          <span className="account-match-history-open">Hide</span>
+        </span>
+      </summary>
+      <div className="account-match-history-list">
+        {dismissedMatches.map((event) => (
+          <div className="account-match-history-row" key={event.id}>
+            <p>
+              {agentLabel(event.agent_id)} on {event.installation_name} ·{" "}
+              {countLabel(event.matched_days, "matching day")}
+            </p>
+            <SameOriginActionForm action="/api/accounts/dedup/undo">
+              <input name="eventId" type="hidden" value={event.id} />
+              <button className="text-button" type="submit">
+                Undo automatic match
+              </button>
+            </SameOriginActionForm>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function usageChart(weekStart: string, usage: readonly DailyUsageRow[]): UsageChart {
   const totals = new Map(usage.map((entry) => [entry.usage_date, entry.tokens]));
   const start = new Date(`${weekStart}T00:00:00.000Z`);
   const days = Array.from({ length: 7 }, (_, index) => {
@@ -213,12 +262,19 @@ function usageChartDays(weekStart: string, usage: readonly DailyUsageRow[]): Usa
     const tokens = BigInt(day.tokens);
     return tokens > value ? tokens : value;
   }, 0n);
-  return days.map((day) => {
+  const chartDays = days.map((day) => {
     const tokens = BigInt(day.tokens);
     const rounded = maximum === 0n ? 0n : (tokens * usageChartLevels + maximum / 2n) / maximum;
     const level = tokens === 0n ? 0n : rounded > 0n ? rounded : 1n;
     return { ...day, level: Number(level) };
   });
+  const total = days.reduce((value, day) => value + BigInt(day.tokens), 0n);
+  return {
+    days: chartDays,
+    maximum: maximum.toString(),
+    midpoint: (maximum / 2n).toString(),
+    total: total.toString(),
+  };
 }
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
@@ -423,8 +479,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     query<DedupEventRow>(
       `SELECT event.id::text,
               event.agent_id,
+              event.dismissed_at IS NOT NULL AS dismissed,
               event.matched_days,
               installation.name AS installation_name,
+              event.target_account_id::text,
               target.label AS target_label
          FROM account_dedup_events event
          JOIN installation_sources source ON source.id = event.source_id
@@ -468,7 +526,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id, weekStart],
     ),
   ]);
-  const chartDays = usageChartDays(weekStart, dailyUsage);
+  const chart = usageChart(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
   const updateCommand = connectorRepairCommand(origin);
@@ -529,7 +587,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       )}
 
       {hasNewCodexAccountNotice ? (
-        <Panel className="dedup-notice">
+        <Panel className="dashboard-notice new-account-notice">
           <p>A new Codex account was detected on this computer and added separately.</p>
           <SameOriginActionForm action="/api/accounts/notices/dismiss">
             <button className="text-button" type="submit">
@@ -539,25 +597,42 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </Panel>
       ) : null}
 
-      {dedupEvents.map((event) => (
-        <Panel className="dedup-notice" key={event.id}>
-          <p className="eyebrow">AUTOMATIC ACCOUNT MATCH</p>
-          <h2>
-            {agentLabel(event.agent_id)} on {event.installation_name} was combined with{" "}
-            {event.target_label}
-          </h2>
-          <p>
-            {event.matched_days} completed daily totals matched exactly. Provider email and
-            credentials were not used.
-          </p>
-          <SameOriginActionForm action="/api/accounts/dedup/undo">
-            <input name="eventId" type="hidden" value={event.id} />
-            <button className="text-button" type="submit">
-              Undo automatic match
-            </button>
-          </SameOriginActionForm>
-        </Panel>
-      ))}
+      {dedupEvents
+        .filter((event) => !event.dismissed)
+        .map((event) => (
+          <Panel className="dashboard-notice dedup-notice" key={event.id}>
+            <div className="dedup-notice-heading">
+              <div>
+                <p className="eyebrow">AUTOMATIC ACCOUNT MATCH</p>
+                <h2>
+                  {agentLabel(event.agent_id)} on {event.installation_name} was combined with{" "}
+                  {event.target_label}
+                </h2>
+              </div>
+              <SameOriginActionForm
+                action="/api/accounts/dedup/dismiss"
+                className="dedup-dismiss-form"
+              >
+                <input name="eventId" type="hidden" value={event.id} />
+                <button className="text-button dedup-dismiss-button" type="submit">
+                  Dismiss
+                </button>
+              </SameOriginActionForm>
+            </div>
+            <p className="dedup-notice-copy">
+              {event.matched_days} completed daily totals matched exactly. Provider email and
+              credentials were not used.
+            </p>
+            <div className="dedup-notice-actions">
+              <SameOriginActionForm action="/api/accounts/dedup/undo">
+                <input name="eventId" type="hidden" value={event.id} />
+                <button className="text-button" type="submit">
+                  Undo automatic match
+                </button>
+              </SameOriginActionForm>
+            </div>
+          </Panel>
+        ))}
 
       <details
         className="panel connect-disclosure"
@@ -612,6 +687,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <span>Leaderboard</span>
           <strong>{installations.length > 0 ? "Active" : "Not connected"}</strong>
         </div>
+        <div>
+          <span>This week</span>
+          <strong title={`${formatExactTokens(chart.total)} tokens`}>
+            {formatCompactTokens(chart.total)}
+          </strong>
+        </div>
       </section>
 
       <section className="dashboard-section" aria-labelledby="usage-chart-title">
@@ -624,30 +705,41 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </div>
         <figure aria-labelledby="usage-chart-title" className="usage-chart">
           <figcaption className="sr-only">
-            {chartDays
+            {chart.days
               .map((day) => `${day.fullLabel}: ${formatExactTokens(day.tokens)} tokens`)
               .join("; ")}
           </figcaption>
-          <div aria-hidden="true" className="usage-chart-plot">
-            {chartDays.map((day) => (
-              <div className="usage-chart-day" key={day.date}>
-                <span
-                  className="usage-chart-value"
-                  title={`${formatExactTokens(day.tokens)} tokens`}
-                >
-                  {formatCompactTokens(day.tokens)}
-                </span>
-                <div className="usage-chart-track">
+          <div aria-hidden="true" className="usage-chart-layout">
+            <div className="usage-chart-scale">
+              <span title={`${formatExactTokens(chart.maximum)} tokens`}>
+                {formatCompactTokens(chart.maximum)}
+              </span>
+              <span title={`${formatExactTokens(chart.midpoint)} tokens`}>
+                {formatCompactTokens(chart.midpoint)}
+              </span>
+              <span>0</span>
+            </div>
+            <div className="usage-chart-plot">
+              {chart.days.map((day) => (
+                <div className="usage-chart-day" key={day.date}>
                   <span
-                    className={`usage-chart-bar usage-chart-bar-level-${day.level.toString()}`}
-                  />
+                    className="usage-chart-value"
+                    title={`${formatExactTokens(day.tokens)} tokens`}
+                  >
+                    {formatCompactTokens(day.tokens)}
+                  </span>
+                  <div className="usage-chart-bar-area">
+                    <span
+                      className={`usage-chart-bar usage-chart-bar-level-${day.level.toString()}`}
+                    />
+                  </div>
+                  <time dateTime={day.date}>
+                    <strong>{day.weekday}</strong>
+                    <span>{day.day}</span>
+                  </time>
                 </div>
-                <time dateTime={day.date}>
-                  <strong>{day.weekday}</strong>
-                  <span>{day.day}</span>
-                </time>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </figure>
       </section>
@@ -795,6 +887,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       </button>
                     </SameOriginActionForm>
                   </AccountControls>
+                  <AccountMatchHistory accountId={account.id} events={dedupEvents} />
                 </article>
               ))}
             </div>

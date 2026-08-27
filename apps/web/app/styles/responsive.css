@@ -300,7 +300,7 @@
   }
 
   .summary-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-grid {
@@ -309,6 +309,10 @@
 
   .settings-grid .privacy-panel {
     grid-column: auto;
+  }
+
+  .settings-grid .privacy-panel ul {
+    grid-template-columns: 1fr;
   }
 
   .score-card > div,
@@ -331,18 +335,19 @@
     padding: var(--space-4);
   }
 
+  .usage-chart-layout {
+    grid-template-columns: 2.75rem minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
   .usage-chart-plot {
     height: 12rem;
     gap: var(--space-1);
   }
 
-  .usage-chart-track {
-    min-height: 0;
-  }
-
   .usage-chart-bar {
-    right: 15%;
-    left: 15%;
+    right: 18%;
+    left: 18%;
   }
 
   .device-card {
@@ -389,19 +394,33 @@
   .account-actions .account-delete-form .confirm-row {
     margin: 0;
   }
+
+  .account-match-history-row {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
 }
 
 @media (max-width: 32.5rem) {
-  .usage-chart-plot {
-    height: 9rem;
+  .new-account-notice {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
   }
 
-  .usage-chart-day {
-    grid-template-rows: minmax(0, 1fr) 2rem;
+  .usage-chart {
+    padding: var(--space-3);
+  }
+
+  .usage-chart-layout {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+
+  .usage-chart-plot {
+    height: 10.5rem;
   }
 
   .usage-chart-value {
-    display: none;
+    visibility: hidden;
   }
 
   footer div {

@@ -28,6 +28,12 @@ async function get(): Promise<Response> {
                    WHERE table_schema = 'public'
                      AND table_name = 'installations'
                      AND column_name = 'browser_sync_protocol'
+                )
+                AND EXISTS (
+                  SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'account_dedup_events'
+                     AND column_name = 'dismissed_at'
                 ) AS required_tables`,
       [expectedSchemaVersion],
     );

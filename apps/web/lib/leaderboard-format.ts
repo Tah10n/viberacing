@@ -10,6 +10,18 @@ export function formatExactTokens(value: string): string {
 
 export function formatCompactTokens(value: string): string {
   const tokens = BigInt(value);
+  if (tokens >= 1_000_000_000_000_000n) {
+    let exponent = tokens.toString().length - 1;
+    const divisor = 10n ** BigInt(exponent);
+    let tenths = (tokens * 10n + divisor / 2n) / divisor;
+    if (tenths === 100n) {
+      exponent += 1;
+      tenths = 10n;
+    }
+    const whole = tenths / 10n;
+    const decimal = tenths % 10n;
+    return `${whole.toString()}${decimal === 0n ? "" : `,${decimal.toString()}`}E${String(exponent)}`;
+  }
   const units = [
     { divisor: 1n, suffix: "" },
     { divisor: 1_000n, suffix: "K" },

@@ -22,6 +22,8 @@ describe("leaderboard helpers", () => {
     expect(formatCompactTokens("2550000")).toBe("2,6M");
     expect(formatCompactTokens("999999")).toBe("1M");
     expect(formatCompactTokens("999")).toBe("999");
+    expect(formatCompactTokens("1000000000000000")).toBe("1E15");
+    expect(formatCompactTokens("999999999999999999999999999999")).toBe("1E30");
   });
 
   it("prints a compact UTC week range", () => {

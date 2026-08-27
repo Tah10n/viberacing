@@ -142,8 +142,13 @@ describe("dashboard connection flow", () => {
     expect(connect).toContain("after enough completed");
     expect(connect).toContain("Provider email and credentials");
     expect(dashboard).toContain("AUTOMATIC ACCOUNT MATCH");
+    expect(dashboard).toContain('action="/api/accounts/dedup/dismiss"');
+    expect(dashboard).toContain("event.dismissed_at IS NOT NULL AS dismissed");
+    expect(dashboard).toContain("Dismiss");
     expect(dashboard).toContain('action="/api/accounts/dedup/undo"');
     expect(dashboard).toContain("Undo automatic match");
+    expect(dashboard).toContain("event.dismissed && event.target_account_id === accountId");
+    expect(dashboard).toContain('className="account-match-history"');
     expect(pairingApproval).toContain("dedupEventsToSupersede");
     expect(pairingApproval).toContain("UPDATE account_dedup_events");
     expect(pairingApproval).toContain("auto_dedup_decided_at");
@@ -160,8 +165,8 @@ describe("dashboard connection flow", () => {
 
   it("explains combined stores and shared Codex profiles without provider identity", () => {
     expect(dashboard).toContain("All local accounts in this store");
-    expect(dashboard).toContain(
-      'agentRegistry[account.agent_id].accountSwitchMode ===\n                        "combined_local_history"',
+    expect(dashboard).toMatch(
+      /agentRegistry\[account\.agent_id\]\.accountSwitchMode ===\s+"combined_local_history"/,
     );
     expect(dashboard).toContain('accountSwitchMode === "explicit_capture"');
     expect(dashboard).toContain("Explicit capture source");
@@ -186,5 +191,15 @@ describe("dashboard connection flow", () => {
     expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(2);
     expect(dashboard).toContain("AND candidate.account_max_selected");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
+  });
+
+  it("renders a shared-scale weekly chart and exact weekly summary without number coercion", () => {
+    expect(dashboard).toContain("maximum: maximum.toString()");
+    expect(dashboard).toContain("midpoint: (maximum / 2n).toString()");
+    expect(dashboard).toContain("value + BigInt(day.tokens)");
+    expect(dashboard).toContain('className="usage-chart-scale"');
+    expect(dashboard).toContain('className="usage-chart-bar-area"');
+    expect(dashboard).toContain("formatExactTokens(chart.total)");
+    expect(dashboard).not.toContain("Number(day.tokens)");
   });
 });
