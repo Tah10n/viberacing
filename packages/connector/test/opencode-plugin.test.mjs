@@ -15,7 +15,6 @@ import {
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import {
-  canonicalOpenCodeStateRoot,
   generateOpenCodePlugin,
   inspectOpenCodePlugin,
   maximumOpenCodePluginBytes,
@@ -169,7 +168,7 @@ test("generated plugin is deterministic, dependency-free, escaped, and privacy-m
 });
 
 test("generated plugin reads only allowlisted environment values", async () => {
-  const options = pluginOptions("/tmp/viberacing-environment-read");
+  const options = pluginOptions(join(tmpdir(), "viberacing-environment-read"));
   const preparationReads = [];
   const suppliedEnvironment = new Proxy(
     {
@@ -186,7 +185,7 @@ test("generated plugin reads only allowlisted environment values", async () => {
   );
   assert.deepEqual(openCodePluginEnvironment(options.stateRoot, suppliedEnvironment), {
     HOME: "/home/racer",
-    VIBERACING_STATE_DIR: canonicalOpenCodeStateRoot(options.stateRoot),
+    VIBERACING_STATE_DIR: options.stateRoot,
   });
   const source = generateOpenCodePlugin({ ...options, environment: suppliedEnvironment });
   assert.equal(preparationReads.includes("HOME"), true);
