@@ -402,7 +402,8 @@
 }
 
 @media (max-width: 32.5rem) {
-  .new-account-notice {
+  .new-account-notice,
+  .codex-hook-notice {
     grid-template-columns: 1fr;
     gap: var(--space-2);
   }

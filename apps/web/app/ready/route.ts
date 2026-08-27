@@ -34,6 +34,12 @@ async function get(): Promise<Response> {
                    WHERE table_schema = 'public'
                      AND table_name = 'account_dedup_events'
                      AND column_name = 'dismissed_at'
+                )
+                AND EXISTS (
+                  SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'installation_sources'
+                     AND column_name = 'codex_hook_notice_dismissed_at'
                 ) AS required_tables`,
       [expectedSchemaVersion],
     );

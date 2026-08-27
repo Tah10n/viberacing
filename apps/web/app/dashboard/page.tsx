@@ -75,6 +75,11 @@ interface SourceRow {
   status: string;
 }
 
+interface CodexHookNoticeRow {
+  source_id: string;
+  installation_name: string;
+}
+
 interface DedupEventRow {
   id: string;
   agent_id: string;
@@ -291,9 +296,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
   const weekStart = currentWeekStart();
-  const [installations, accounts, sources, dedupEvents, dailyUsage] = await Promise.all([
-    query<InstallationRow>(
-      `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
+  const [installations, accounts, sources, codexHookNotices, dedupEvents, dailyUsage] =
+    await Promise.all([
+      query<InstallationRow>(
+        `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
               i.browser_sync_capable,
               i.browser_sync_protocol,
               count(s.id)::int AS source_count
@@ -303,10 +309,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE i.user_id = $1 AND i.status = 'active'
         GROUP BY i.id
         ORDER BY i.created_at DESC`,
-      [current.id],
-    ),
-    query<AccountRow>(
-      `SELECT a.id::text,
+        [current.id],
+      ),
+      query<AccountRow>(
+        `SELECT a.id::text,
               a.agent_id,
               a.label,
               a.aggregation_mode,
@@ -465,19 +471,42 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         GROUP BY a.id, usage.tokens, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-      [current.id, weekStart, browserInstallationId],
-    ),
-    query<SourceRow>(
-      `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
+        [current.id, weekStart, browserInstallationId],
+      ),
+      query<SourceRow>(
+        `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
               s.collection_method, s.supported_surface, s.status
          FROM installation_sources s
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
-      [current.id],
-    ),
-    query<DedupEventRow>(
-      `SELECT event.id::text,
+        [current.id],
+      ),
+      query<CodexHookNoticeRow>(
+        `SELECT profile.id::text AS source_id,
+              installation.name AS installation_name
+         FROM installation_sources profile
+         JOIN installations installation ON installation.id = profile.installation_id
+        WHERE profile.user_id = $1
+          AND profile.agent_id = 'codex'
+          AND profile.status = 'active'
+          AND profile.profile_source_id IS NULL
+          AND profile.codex_hook_notice_dismissed_at IS NULL
+          AND EXISTS (
+                SELECT 1
+                  FROM installation_sources member
+                 WHERE member.installation_id = profile.installation_id
+                   AND member.user_id = profile.user_id
+                   AND member.agent_id = 'codex'
+                   AND member.status = 'active'
+                   AND coalesce(member.profile_source_id, member.id) = profile.id
+                   AND member.last_successful_sync_at IS NOT NULL
+              )
+        ORDER BY installation.created_at, profile.created_at`,
+        [current.id],
+      ),
+      query<DedupEventRow>(
+        `SELECT event.id::text,
               event.agent_id,
               event.dismissed_at IS NOT NULL AS dismissed,
               event.matched_days,
@@ -491,10 +520,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE event.user_id = $1 AND event.status = 'active'
           AND source.agent_account_id = event.target_account_id
         ORDER BY event.created_at DESC`,
-      [current.id],
-    ),
-    query<DailyUsageRow>(
-      `WITH source_days AS (
+        [current.id],
+      ),
+      query<DailyUsageRow>(
+        `WITH source_days AS (
          SELECT a.id,
                 a.aggregation_mode,
                 d.usage_date,
@@ -523,9 +552,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          FROM account_daily
         GROUP BY usage_date
         ORDER BY usage_date`,
-      [current.id, weekStart],
-    ),
-  ]);
+        [current.id, weekStart],
+      ),
+    ]);
   const chart = usageChart(weekStart, dailyUsage);
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
@@ -596,6 +625,30 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           </SameOriginActionForm>
         </Panel>
       ) : null}
+
+      {codexHookNotices.map((hookNotice) => (
+        <Panel className="dashboard-notice codex-hook-notice" key={hookNotice.source_id}>
+          <div>
+            <p className="eyebrow">CODEX AUTOMATIC SYNC</p>
+            <h2>Approve automatic sync on {hookNotice.installation_name}</h2>
+            <p className="codex-hook-notice-copy">
+              Manual Codex sync is working. To enable automatic sync when a Codex turn stops, open
+              Codex <strong>Settings → Hooks</strong> and trust the Vibe Racing Stop hook.
+              Alternatively, run <code>/hooks</code>. If you already approved it, dismiss this
+              message.
+            </p>
+          </div>
+          <SameOriginActionForm
+            action="/api/installations/codex-hook-notice/dismiss"
+            className="codex-hook-dismiss-form"
+          >
+            <input name="sourceId" type="hidden" value={hookNotice.source_id} />
+            <button className="text-button" type="submit">
+              Dismiss
+            </button>
+          </SameOriginActionForm>
+        </Panel>
+      ))}
 
       {dedupEvents
         .filter((event) => !event.dismissed)
