@@ -111,7 +111,7 @@ export const maximumSourcesPerInstallation = 32;
 export const maximumActiveSourcesPerUser = 100;
 export const maximumAgentAccountsPerUser = 100;
 export const installedStateAttestationMinimumVersion = "0.4.3";
-export const expectedSchemaVersion = "007_account_switch_safety.sql";
+export const expectedSchemaVersion = "008_account_dedup_notice_dismissal.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
 

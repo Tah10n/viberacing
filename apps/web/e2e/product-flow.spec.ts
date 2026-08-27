@@ -292,9 +292,151 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.goto("/dashboard");
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
   await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
+  await expect(page.locator(".summary-grid > div")).toHaveCount(4);
+  const desktopSummaryColumns = await page
+    .locator(".summary-grid")
+    .evaluate((element) =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean),
+    );
+  expect(desktopSummaryColumns).toHaveLength(4);
+  await expect(usageChart.locator(".usage-chart-scale > span")).toHaveCount(3);
   const todayBar = usageChart.locator(`.usage-chart-day:has(time[datetime="${today}"])`);
   await expect(todayBar).toContainText(/12[.,]3K/);
   await expect(todayBar.locator(".usage-chart-bar-level-20")).toHaveCount(1);
+  await expect(page.locator(".summary-grid").getByText(/12[.,]3K/, { exact: true })).toBeVisible();
+
+  const dedupDatabase = new Client({ connectionString: databaseUrl });
+  await dedupDatabase.connect();
+  try {
+    const target = await dedupDatabase.query<{
+      agent_id: string;
+      aggregation_mode: string;
+      target_account_id: string;
+      user_id: string;
+    }>(
+      `SELECT account.agent_id,
+              account.aggregation_mode,
+              account.id::text AS target_account_id,
+              source.user_id::text
+         FROM installation_sources source
+         JOIN agent_accounts account ON account.id = source.agent_account_id
+        WHERE source.id = $1`,
+      [mapped.sourceId],
+    );
+    const targetAccount = target.rows[0];
+    expect(targetAccount).toBeDefined();
+    if (targetAccount === undefined) throw new Error("missing E2E target account");
+    const previousAccountId = randomUUID();
+    const dedupEventId = randomUUID();
+    await dedupDatabase.query(
+      `INSERT INTO agent_accounts
+         (id, user_id, agent_id, label, aggregation_mode, merged_into_account_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        previousAccountId,
+        targetAccount.user_id,
+        targetAccount.agent_id,
+        "Matched E2E account",
+        targetAccount.aggregation_mode,
+        targetAccount.target_account_id,
+      ],
+    );
+    await dedupDatabase.query(
+      `INSERT INTO account_dedup_events
+         (id, user_id, agent_id, source_id, previous_account_id, target_account_id,
+          matched_days, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 3, 'active')`,
+      [
+        dedupEventId,
+        targetAccount.user_id,
+        targetAccount.agent_id,
+        mapped.sourceId,
+        previousAccountId,
+        targetAccount.target_account_id,
+      ],
+    );
+
+    await page.reload();
+    const dedupNotice = page.locator(".dedup-notice");
+    await expect(dedupNotice).toContainText("AUTOMATIC ACCOUNT MATCH");
+    await expect(dedupNotice.getByRole("button", { name: "Undo automatic match" })).toBeVisible();
+    const dismissButton = dedupNotice.getByRole("button", { name: "Dismiss" });
+    await expect(dismissButton).toBeVisible();
+    const dismissBox = await dismissButton.boundingBox();
+    expect(dismissBox).not.toBeNull();
+    if (dismissBox !== null) {
+      expect(dismissBox.width).toBeGreaterThanOrEqual(44);
+      expect(dismissBox.height).toBeGreaterThanOrEqual(44);
+    }
+    await dismissButton.click();
+    await expect(dedupNotice).toHaveCount(0);
+    await page.reload();
+    await expect(dedupNotice).toHaveCount(0);
+
+    const dismissed = await dedupDatabase.query<{
+      current_account_id: string;
+      dismissed: boolean;
+      merged_into_account_id: string;
+      status: string;
+    }>(
+      `SELECT event.status,
+              event.dismissed_at IS NOT NULL AS dismissed,
+              source.agent_account_id::text AS current_account_id,
+              previous.merged_into_account_id::text
+         FROM account_dedup_events event
+         JOIN installation_sources source ON source.id = event.source_id
+         JOIN agent_accounts previous ON previous.id = event.previous_account_id
+        WHERE event.id = $1`,
+      [dedupEventId],
+    );
+    expect(dismissed.rows[0]).toEqual({
+      current_account_id: targetAccount.target_account_id,
+      dismissed: true,
+      merged_into_account_id: targetAccount.target_account_id,
+      status: "active",
+    });
+
+    const matchHistory = page.locator(".account-match-history");
+    await expect(matchHistory.locator("summary")).toContainText("Automatic matches · 1 match");
+    await matchHistory.locator("summary").click();
+    const durableUndo = matchHistory.getByRole("button", { name: "Undo automatic match" });
+    await expect(durableUndo).toBeVisible();
+    await durableUndo.click();
+    await expect(
+      page.getByText("Automatic account match undone. These totals are separate again."),
+    ).toBeVisible();
+
+    const undone = await dedupDatabase.query<{
+      current_account_id: string;
+      merged_into_account_id: string | null;
+      status: string;
+    }>(
+      `SELECT event.status,
+              source.agent_account_id::text AS current_account_id,
+              previous.merged_into_account_id::text
+         FROM account_dedup_events event
+         JOIN installation_sources source ON source.id = event.source_id
+         JOIN agent_accounts previous ON previous.id = event.previous_account_id
+        WHERE event.id = $1`,
+      [dedupEventId],
+    );
+    expect(undone.rows[0]).toEqual({
+      current_account_id: previousAccountId,
+      merged_into_account_id: null,
+      status: "undone",
+    });
+
+    await dedupDatabase.query(
+      "UPDATE installation_sources SET agent_account_id = $1 WHERE id = $2",
+      [targetAccount.target_account_id, mapped.sourceId],
+    );
+    await dedupDatabase.query("DELETE FROM account_dedup_events WHERE id = $1", [dedupEventId]);
+    await dedupDatabase.query("DELETE FROM agent_accounts WHERE id = $1", [previousAccountId]);
+    await page.goto("/dashboard");
+  } finally {
+    await dedupDatabase.end();
+  }
+
   const tokenBreakdown = page.locator('dl[aria-label="Weekly token breakdown"]');
   await expect(tokenBreakdown.locator("div")).toHaveText([
     "Input7K",
@@ -380,6 +522,15 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toBeVisible();
   await expect(page.locator(".usage-chart-day")).toHaveCount(7);
+  const mobileSummaryBoxes = await page.locator(".summary-grid > div").evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      return { left: Math.round(box.left), top: Math.round(box.top) };
+    }),
+  );
+  expect(mobileSummaryBoxes).toHaveLength(4);
+  expect(new Set(mobileSummaryBoxes.map((box) => box.left)).size).toBe(2);
+  expect(new Set(mobileSummaryBoxes.map((box) => box.top)).size).toBe(2);
   const [usagePlotBox, usageDayBox] = await Promise.all([
     page.locator(".usage-chart-plot").boundingBox(),
     page.locator(".usage-chart-day").first().boundingBox(),
