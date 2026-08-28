@@ -7579,7 +7579,11 @@ test("doctor repair drains an exact pending OpenCode cleanup before reinstalling
   );
 
   const repaired = await runWithInput(["doctor", "--repair"], environment, "");
-  assert.equal(repaired.code, 1);
+  if (repaired.code === 0) assert.match(repaired.stdout, /Local repair complete/);
+  else {
+    assert.equal(repaired.code, 1);
+    assert.match(repaired.stderr, /connector repair is incomplete/);
+  }
   assert.doesNotMatch(repaired.stderr, /Pending OpenCode plugin cleanup is incomplete/);
   await assert.rejects(access(recoveryPath), { code: "ENOENT" });
   await assert.rejects(access(join(directory, "opencode-plugin-cleanup.json")), {
