@@ -4966,6 +4966,7 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
   const originalPluginPath = pluginPath;
   const migratedEnvironment = connectorEnvironment(home, {
     NODE_ENV: "test",
+    PATH: "",
     XDG_CONFIG_HOME: join(home, "migrated config"),
   });
   const migratedPluginPath = openCodePluginLocation({
