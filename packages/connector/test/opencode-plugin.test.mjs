@@ -576,7 +576,13 @@ test("owned update retries a one-shot stage unlink failure and removes its quara
   assert.equal(failed, true);
   assert.deepEqual(await readdir(location.directory), [basename(location.path)]);
   assert.equal(
-    (await inspectOpenCodePlugin({ ...options, nodeExecutable: "/different/node" })).status,
+    (
+      await inspectOpenCodePlugin({
+        ...options,
+        nodeExecutable:
+          process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+      })
+    ).status,
     "current",
   );
 });

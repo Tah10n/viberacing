@@ -650,13 +650,13 @@ async function installPlugin(expected, previous, options) {
       throw error;
     }
     stagePresent = true;
+    if ((options.platform ?? process.platform) === "win32") await secureWindowsFile(stage);
     interruptPluginMutationForTest("after-stage-create");
     await handle.writeFile(expected.contents, "utf8");
     if ((options.platform ?? process.platform) !== "win32") await handle.chmod(0o600);
     await handle.sync();
     await handle.close();
     handle = null;
-    if ((options.platform ?? process.platform) === "win32") await secureWindowsFile(stage);
     const staged = await inspectPluginFile(stage, expected, inspectionDependencies(options));
     if (staged.status !== "current")
       throw new Error(`OpenCode plugin staging verification failed (${staged.status})`);
