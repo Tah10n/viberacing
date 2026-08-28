@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import {
   mkdtemp,
   mkdir,
@@ -9,11 +10,13 @@ import {
   rm,
   stat,
   symlink,
+  unlink,
   writeFile,
   link,
+  open,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, win32 } from "node:path";
+import { basename, join, win32 } from "node:path";
 import {
   generateOpenCodePlugin,
   inspectOpenCodePlugin,
@@ -417,6 +420,204 @@ test("owned plugin lifecycle is exclusive, private, idempotent, and preserves si
   assert.deepEqual(await readdir(location.directory), ["foreign-plugin.js"]);
 });
 
+test("plugin mutations journal private artifacts before creation or rename", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const retained = new Set();
+  const observed = [];
+  const journal = {
+    retainRecoveryPath: async (path) => {
+      retained.add(path);
+      observed.push(["retain", path]);
+    },
+    releaseRecoveryPath: async (path) => {
+      assert.equal(retained.has(path), true);
+      retained.delete(path);
+      observed.push(["release", path]);
+    },
+    open: async (path, ...arguments_) => {
+      if (path.endsWith(".stage")) assert.equal(retained.has(path), true);
+      return open(path, ...arguments_);
+    },
+    rename: async (source, target) => {
+      if (source === location.path) assert.equal(retained.has(target), true);
+      return rename(source, target);
+    },
+  };
+  await reconcileOpenCodePlugin({ ...options, ...journal, desired: true });
+  await reconcileOpenCodePlugin({
+    ...options,
+    ...journal,
+    nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+    desired: true,
+  });
+  assert.equal(retained.size, 0);
+  assert.equal(
+    observed.some(([event, path]) => event === "retain" && path.endsWith(".stage")),
+    true,
+  );
+  assert.equal(
+    observed.some(([event, path]) => event === "retain" && path.includes(".quarantine-")),
+    true,
+  );
+});
+
+test("cleanup removes both links from an uncommitted published stage", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  const stage = `${location.path}.${process.pid}.${randomUUID()}.stage`;
+  await link(location.path, stage);
+  assert.equal((await stat(location.path)).nlink, 2);
+
+  const result = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: stage,
+    allowRecoveryPath: true,
+    desired: false,
+  });
+  assert.deepEqual(result, {
+    status: "missing",
+    action: "removed",
+    changed: true,
+    path: stage,
+  });
+  await assert.rejects(stat(stage), { code: "ENOENT" });
+  await assert.rejects(stat(location.path), { code: "ENOENT" });
+  assert.equal((await inspectOpenCodePlugin(options)).status, "missing");
+});
+
+test("cleanup recovers a restored quarantine hardlink without deleting the canonical plugin", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  const quarantine = `${location.path}.quarantine-${randomUUID()}`;
+  await rename(location.path, quarantine);
+  await link(quarantine, location.path);
+  assert.equal((await stat(quarantine)).nlink, 2);
+
+  const result = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: quarantine,
+    allowRecoveryPath: true,
+    desired: false,
+  });
+  assert.equal(result.action, "removed");
+  await assert.rejects(stat(quarantine), { code: "ENOENT" });
+  assert.equal((await stat(location.path)).nlink, 1);
+  assert.equal((await inspectOpenCodePlugin(options)).status, "current");
+});
+
+test("journal-authorized cleanup removes only a private partial stage prefix", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const stage = `${location.path}.${process.pid}.${randomUUID()}.stage`;
+  const contents = generateOpenCodePlugin(options);
+  await mkdir(location.directory, { recursive: true });
+  await writeFile(stage, contents.slice(0, 80), { mode: 0o600 });
+
+  const blocked = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: stage,
+    allowRecoveryPath: true,
+    desired: false,
+  });
+  assert.equal(blocked.action, "blocked");
+  await stat(stage);
+
+  const removed = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: stage,
+    allowRecoveryPath: true,
+    allowIncompleteStageCleanup: true,
+    desired: false,
+  });
+  assert.equal(removed.action, "removed");
+  await assert.rejects(stat(stage), { code: "ENOENT" });
+
+  const foreignStage = `${location.path}.${process.pid}.${randomUUID()}.stage`;
+  await writeFile(foreignStage, "foreign plugin bytes\n", { mode: 0o600 });
+  const foreign = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: foreignStage,
+    allowRecoveryPath: true,
+    allowIncompleteStageCleanup: true,
+    desired: false,
+  });
+  assert.equal(foreign.action, "blocked");
+  assert.equal(await readFile(foreignStage, "utf8"), "foreign plugin bytes\n");
+});
+
+test("owned update retries a one-shot stage unlink failure and removes its quarantine", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let failed = false;
+  const updated = await reconcileOpenCodePlugin({
+    ...options,
+    nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+    unlink: async (path) => {
+      if (!failed && path.endsWith(".stage")) {
+        failed = true;
+        const error = new Error("synthetic one-shot stage unlink failure");
+        error.code = "EPERM";
+        throw error;
+      }
+      return unlink(path);
+    },
+    desired: true,
+  });
+  assert.equal(updated.action, "updated");
+  assert.equal(failed, true);
+  assert.deepEqual(await readdir(location.directory), [basename(location.path)]);
+  assert.equal(
+    (await inspectOpenCodePlugin({ ...options, nodeExecutable: "/different/node" })).status,
+    "current",
+  );
+});
+
+test("persistent stage unlink failure reports both exact recovery artifacts", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let caught;
+  try {
+    await reconcileOpenCodePlugin({
+      ...options,
+      nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+      unlink: async (path) => {
+        if (path.endsWith(".stage")) {
+          const error = new Error("synthetic persistent stage unlink failure");
+          error.code = "EPERM";
+          throw error;
+        }
+        return unlink(path);
+      },
+      desired: true,
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert.match(caught?.message ?? "", /persistent stage unlink failure.*preserved at/);
+  assert.equal(caught.pluginPath, location.path);
+  assert.equal(caught.recoveryPaths.length, 2);
+  assert.equal(
+    caught.recoveryPaths.some((path) => path.endsWith(".stage")),
+    true,
+  );
+  assert.equal(
+    caught.recoveryPaths.some((path) => path.includes(".quarantine-")),
+    true,
+  );
+  for (const path of caught.recoveryPaths) await stat(path);
+});
+
 test("atomic publish never overwrites a foreign file raced into the target path", async (context) => {
   const root = await temporaryRoot(context);
   const options = pluginOptions(root);
@@ -548,6 +749,105 @@ test("identity-bound removal preserves a directory raced into the target path", 
   assert.equal((await stat(caught.recoveryPath)).isDirectory(), true);
   await assert.rejects(stat(location.path), { code: "ENOENT" });
   assert.match(await readFile(ownedBackup, "utf8"), /viberacing-opencode-plugin/);
+});
+
+test("removal reports and retries the exact quarantine path after unlink fails", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let caught;
+  try {
+    await reconcileOpenCodePlugin({
+      ...options,
+      desired: false,
+      unlink: async (target) => {
+        if (target.includes(".quarantine-")) throw new Error("synthetic quarantine unlink failure");
+        return unlink(target);
+      },
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert.match(caught?.message ?? "", /synthetic quarantine unlink failure.*preserved at/);
+  assert.equal(caught.pluginPath, location.path);
+  assert.match(caught.recoveryPath, /\.quarantine-[0-9a-f-]{36}$/);
+  await assert.rejects(readFile(location.path, "utf8"), { code: "ENOENT" });
+  assert.match(await readFile(caught.recoveryPath, "utf8"), /viberacing-opencode-plugin/);
+  await assert.rejects(
+    inspectOpenCodePlugin({ ...options, pluginPath: caught.recoveryPath }),
+    /does not match the installation id/,
+  );
+
+  const retried = await reconcileOpenCodePlugin({
+    ...options,
+    pluginPath: caught.recoveryPath,
+    allowRecoveryPath: true,
+    desired: false,
+  });
+  assert.deepEqual(retried, {
+    status: "missing",
+    action: "removed",
+    changed: true,
+    path: caught.recoveryPath,
+  });
+  await assert.rejects(readFile(caught.recoveryPath, "utf8"), { code: "ENOENT" });
+  assert.deepEqual(await readdir(location.directory), []);
+});
+
+test("owned update reports the prior quarantine path when its unlink fails", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  const updatedOptions = {
+    ...options,
+    nodeExecutable: process.platform === "win32" ? "C:\\different\\node.exe" : "/different/node",
+  };
+  let caught;
+  try {
+    await reconcileOpenCodePlugin({
+      ...updatedOptions,
+      desired: true,
+      unlink: async (target) => {
+        if (target.includes(".quarantine-")) throw new Error("synthetic prior unlink failure");
+        return unlink(target);
+      },
+    });
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught.pluginPath, location.path);
+  assert.match(caught.recoveryPath, /\.quarantine-[0-9a-f-]{36}$/);
+  assert.match(await readFile(caught.recoveryPath, "utf8"), /viberacing-opencode-plugin/);
+  assert.equal((await inspectOpenCodePlugin(updatedOptions)).status, "current");
+});
+
+test("post-removal inspection blocks when a foreign target appears during quarantine unlink", async (context) => {
+  const root = await temporaryRoot(context);
+  const options = pluginOptions(root);
+  const location = openCodePluginLocation(options);
+  const foreign = "export const ForeignPlugin = true;\n";
+  await reconcileOpenCodePlugin({ ...options, desired: true });
+  let raced = false;
+  const result = await reconcileOpenCodePlugin({
+    ...options,
+    desired: false,
+    unlink: async (target) => {
+      if (!raced && target.includes(".quarantine-")) {
+        raced = true;
+        await writeFile(location.path, foreign, { mode: 0o600 });
+      }
+      return unlink(target);
+    },
+  });
+  assert.deepEqual(result, {
+    status: "conflict",
+    action: "blocked",
+    changed: true,
+    path: location.path,
+  });
+  assert.equal(await readFile(location.path, "utf8"), foreign);
 });
 
 test("an explicit recorded plugin path survives XDG environment changes", async (context) => {

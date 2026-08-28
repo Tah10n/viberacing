@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import {
   clearOpenCodePluginCleanupTarget,
   readConfig,
@@ -28,13 +29,14 @@ export function openCodePluginBlocked(result) {
 }
 
 function cleanupTargetKey(installationId, pluginPath) {
+  const normalizedInstallationId = installationId.toLowerCase();
   const normalizedPath =
     pluginPath === undefined
       ? "<unresolved>"
       : process.platform === "win32"
-        ? pluginPath.toLowerCase()
-        : pluginPath;
-  return `${installationId}\0${normalizedPath}`;
+        ? resolve(pluginPath).toLowerCase()
+        : resolve(pluginPath);
+  return `${normalizedInstallationId}\0${normalizedPath}`;
 }
 
 function sameOpenCodePluginFile(left, right) {
@@ -49,19 +51,36 @@ function sameOpenCodePluginFile(left, right) {
 export async function captureOpenCodePluginCleanupContext() {
   let config = null;
   let configError = null;
+  let configStatus = "missing";
   let installation = null;
   let installationError = null;
+  let installationStatus = "missing";
   try {
     config = await readConfig();
+    configStatus = "valid";
   } catch (error) {
-    configError = error;
+    if (error?.code !== "ENOENT") {
+      configError = error;
+      configStatus = "unreadable";
+    }
   }
   try {
     installation = await readExistingInstallation();
+    if (installation) installationStatus = "valid";
   } catch (error) {
-    installationError = error;
+    if (error?.code !== "ENOENT") {
+      installationError = error;
+      installationStatus = "unreadable";
+    }
   }
-  return { config, configError, installation, installationError };
+  return {
+    config,
+    configError,
+    configStatus,
+    installation,
+    installationError,
+    installationStatus,
+  };
 }
 
 function addDistinctTarget(targets, candidate) {
@@ -111,9 +130,23 @@ async function clearPendingTargets(targets, path, failures, results) {
 export async function cleanupOpenCodePluginTargets({
   includeInstallation = false,
   cleanupContext,
+  preserveCommittedPlugin,
 } = {}) {
   const targets = [];
   const failures = [];
+  const results = [];
+  let preserveInstallationIdentity = false;
+  let committedPluginTarget = null;
+  let committedPluginReadError = null;
+  const preserveCurrentPlugin = preserveCommittedPlugin ?? !includeInstallation;
+  if (preserveCurrentPlugin)
+    try {
+      const installation = await readExistingInstallation();
+      if (installation?.openCodePluginPath)
+        committedPluginTarget = cleanupTargetKey(installation.id, installation.openCodePluginPath);
+    } catch (error) {
+      committedPluginReadError = error;
+    }
   try {
     for (const target of await readOpenCodePluginCleanups())
       addDistinctTarget(targets, {
@@ -122,6 +155,7 @@ export async function cleanupOpenCodePluginTargets({
         retainIfLocationFails: false,
       });
   } catch (error) {
+    preserveInstallationIdentity = true;
     failures.push({
       status: "unreadable",
       action: "blocked",
@@ -129,14 +163,42 @@ export async function cleanupOpenCodePluginTargets({
       path: null,
       message: error instanceof Error ? error.message : "Cleanup metadata is unreadable",
     });
+    return {
+      failures,
+      results,
+      preserveInstallationIdentity,
+      preserveInstallationIdentityReason: "cleanup-metadata-unreadable",
+    };
+  }
+  if (committedPluginReadError && targets.length > 0) {
+    preserveInstallationIdentity = true;
+    failures.push({
+      status: "unreadable",
+      action: "blocked",
+      error: committedPluginReadError,
+      path: null,
+      message:
+        committedPluginReadError instanceof Error
+          ? committedPluginReadError.message
+          : "Installation identity is unreadable",
+    });
+    return {
+      failures,
+      results,
+      preserveInstallationIdentity,
+      preserveInstallationIdentityReason: "installation-unreadable",
+    };
   }
 
   if (includeInstallation) {
     const context = cleanupContext ?? (await captureOpenCodePluginCleanupContext());
     const installation = context.installation;
+    const installationId = uuidPattern.test(installation?.id ?? "")
+      ? installation.id.toLowerCase()
+      : null;
     if (installation?.openCodePluginPath)
       addDistinctTarget(targets, {
-        installationId: installation.id,
+        installationId,
         openCodePluginPath: installation.openCodePluginPath,
         pendingTargets: [],
         retainIfLocationFails: false,
@@ -145,15 +207,52 @@ export async function cleanupOpenCodePluginTargets({
     const configInstallationId = uuidPattern.test(context.config?.installationId ?? "")
       ? context.config.installationId.toLowerCase()
       : null;
-    if (
+    const configNeedsPlugin =
       configInstallationId &&
-      configWantsOpenCodePlugin(context.config, context.config.installationId)
-    )
+      configWantsOpenCodePlugin(context.config, context.config.installationId);
+    if (configNeedsPlugin)
       addDistinctTarget(targets, {
         installationId: configInstallationId,
         pendingTargets: [],
         retainIfLocationFails: true,
       });
+    if (installationId && (context.configStatus !== "valid" || configNeedsPlugin))
+      addDistinctTarget(targets, {
+        installationId,
+        pendingTargets: [],
+        retainIfLocationFails: Boolean(context.configStatus === "unreadable" || configNeedsPlugin),
+      });
+    if (context.configStatus === "unreadable" && !installation?.openCodePluginPath) {
+      const retentionError = installationId ? await retainCleanupTarget(installationId) : null;
+      failures.push({
+        status: "unreadable",
+        action: "blocked",
+        error: context.configError,
+        retentionError,
+        path: null,
+        message:
+          context.configError instanceof Error
+            ? context.configError.message
+            : "Connection configuration is unreadable",
+      });
+    }
+    if (context.installationStatus === "unreadable") {
+      preserveInstallationIdentity = true;
+      const retentionError = configInstallationId
+        ? await retainCleanupTarget(configInstallationId)
+        : null;
+      failures.push({
+        status: "unreadable",
+        action: "blocked",
+        error: context.installationError,
+        retentionError,
+        path: null,
+        message:
+          context.installationError instanceof Error
+            ? context.installationError.message
+            : "Installation identity is unreadable",
+      });
+    }
   }
 
   const resolvedTargets = [];
@@ -188,11 +287,26 @@ export async function cleanupOpenCodePluginTargets({
         installationId: target.installationId,
         stateRoot: stateDirectory,
         pluginPath: target.pluginPath,
+        allowRecoveryPath: true,
       });
     } catch {}
 
   const physicalTargets = [];
   for (const target of resolvedTargets) {
+    if (
+      target.key === committedPluginTarget &&
+      target.inspection?.owned === true &&
+      target.pendingTargets.length > 0
+    ) {
+      results.push({
+        status: target.inspection.status,
+        action: "retained-committed",
+        changed: false,
+        path: target.pluginPath,
+      });
+      await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
+      continue;
+    }
     const existing = physicalTargets.find(
       (candidate) =>
         candidate.installationId === target.installationId &&
@@ -204,7 +318,6 @@ export async function cleanupOpenCodePluginTargets({
     } else physicalTargets.push({ ...target, aliasPaths: [target.pluginPath] });
   }
 
-  const results = [];
   for (const target of physicalTargets) {
     let result;
     try {
@@ -212,14 +325,31 @@ export async function cleanupOpenCodePluginTargets({
         installationId: target.installationId,
         stateRoot: stateDirectory,
         pluginPath: target.pluginPath,
+        allowRecoveryPath: true,
+        allowIncompleteStageCleanup: target.pendingTargets.some(
+          (pending) => pending.openCodePluginPath === target.pluginPath,
+        ),
+        journaledRecoveryPeerPaths: resolvedTargets
+          .filter(
+            (candidate) =>
+              candidate.installationId === target.installationId &&
+              candidate.pluginPath !== target.pluginPath &&
+              candidate.pendingTargets.length > 0,
+          )
+          .map((candidate) => candidate.pluginPath),
         desired: false,
+        retainRecoveryPath: (path) => rememberOpenCodePluginCleanup(target.installationId, path),
+        releaseRecoveryPath: (path) =>
+          clearOpenCodePluginCleanupTarget(target.installationId, path),
       });
     } catch (error) {
       result = {
         status: "unreadable",
         action: "blocked",
         error,
-        path: error?.pluginPath ?? target.pluginPath,
+        path: error?.recoveryPath ?? error?.pluginPath ?? target.pluginPath,
+        recoveryPath: error?.recoveryPath,
+        recoveryPaths: error?.recoveryPaths,
       };
     }
     results.push(result);
@@ -243,7 +373,14 @@ export async function cleanupOpenCodePluginTargets({
       continue;
     }
     if (openCodePluginBlocked(result)) {
-      result.retentionError = await retainCleanupTarget(target.installationId, target.pluginPath);
+      const retentionPath = result.path ?? target.pluginPath;
+      result.retentionError = await retainCleanupTarget(target.installationId, retentionPath);
+      if (
+        !result.retentionError &&
+        cleanupTargetKey(target.installationId, retentionPath) !==
+          cleanupTargetKey(target.installationId, target.pluginPath)
+      )
+        await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
       failures.push({
         ...result,
         message: result.error instanceof Error ? result.error.message : result.status,
@@ -252,5 +389,5 @@ export async function cleanupOpenCodePluginTargets({
     }
     await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
   }
-  return { failures, results };
+  return { failures, results, preserveInstallationIdentity };
 }

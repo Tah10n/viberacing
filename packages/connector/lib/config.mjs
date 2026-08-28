@@ -791,8 +791,10 @@ function normalizedOpenCodePluginCleanupTarget(value, { requirePath = false } = 
       (typeof value.openCodePluginPath !== "string" ||
         value.openCodePluginPath.length > 4_096 ||
         !isAbsolute(value.openCodePluginPath) ||
-        basename(value.openCodePluginPath) !==
-          `viberacing-${value.installationId.toLowerCase()}.js` ||
+        !isOpenCodePluginCleanupBasename(
+          basename(value.openCodePluginPath),
+          value.installationId.toLowerCase(),
+        ) ||
         hasTerminalControlCharacters(value.openCodePluginPath)))
   )
     throw new Error("Local OpenCode plugin cleanup metadata is invalid");
@@ -802,6 +804,30 @@ function normalizedOpenCodePluginCleanupTarget(value, { requirePath = false } = 
       ? {}
       : { openCodePluginPath: resolve(value.openCodePluginPath) }),
   };
+}
+
+function isOpenCodePluginCleanupBasename(name, installationId) {
+  const canonical = `viberacing-${installationId}.js`;
+  const [base, ...quarantineSuffixes] = name.split(".quarantine-");
+  const probeIndex = base.lastIndexOf(".probe-");
+  const probeSuffix = probeIndex < 0 ? null : base.slice(probeIndex + ".probe-".length);
+  const stageBase = probeIndex < 0 ? base : base.slice(0, probeIndex);
+  const stagePrefix = `${canonical}.`;
+  const stageSuffix = ".stage";
+  const stageIdentity =
+    stageBase.startsWith(stagePrefix) && stageBase.endsWith(stageSuffix)
+      ? stageBase.slice(stagePrefix.length, -stageSuffix.length)
+      : null;
+  const separator = stageIdentity?.indexOf(".") ?? -1;
+  const stageValid =
+    separator > 0 &&
+    /^\d+$/.test(stageIdentity.slice(0, separator)) &&
+    sourceIdPattern.test(stageIdentity.slice(separator + 1));
+  return (
+    (base === canonical ||
+      (stageValid && (probeSuffix === null || sourceIdPattern.test(probeSuffix)))) &&
+    quarantineSuffixes.every((suffix) => sourceIdPattern.test(suffix))
+  );
 }
 
 function sameOpenCodePluginCleanupTarget(left, right) {
@@ -2287,6 +2313,8 @@ export async function removeHooks() {
 async function removeConfigUnlocked() {
   const attempt = await invalidateConnectAttemptUnlocked();
   await waitForTestConnectionBarrier("remove_after_lock");
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_FAIL_CONFIG_REMOVAL === "1")
+    throw new Error("Synthetic local token removal failure");
   for (const path of [configPath, connectionCommitPath])
     try {
       await unlink(path);
