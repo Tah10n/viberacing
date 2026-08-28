@@ -97,6 +97,7 @@ const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const providerAccountKeyPattern = /^acct1_[A-Za-z0-9_-]{43}$/;
 const sourcesSchemaVersion = 2;
 const maximumLocalSources = 32;
+const maximumOpenCodePluginCleanupTargets = 32;
 const maximumCodexAccountsPerProfile = 8;
 const legacyCollectionMethods = new Set([
   "antigravity\0antigravity_cli_capture",
@@ -774,35 +775,105 @@ async function readInstallationUnlocked() {
   }
 }
 
-function normalizedOpenCodePluginCleanup(value) {
+function normalizedOpenCodePluginCleanupTarget(value, { requirePath = false } = {}) {
+  const keys = Object.keys(value ?? {})
+    .sort()
+    .join("\0");
+  const expectedKeys =
+    typeof value?.openCodePluginPath === "string"
+      ? ["installationId", "openCodePluginPath"].sort().join("\0")
+      : ["installationId"].join("\0");
   if (
-    value?.version !== 1 ||
-    Object.keys(value).sort().join("\0") !==
-      ["installationId", "openCodePluginPath", "version"].sort().join("\0") ||
+    keys !== expectedKeys ||
     !sourceIdPattern.test(value.installationId ?? "") ||
-    typeof value.openCodePluginPath !== "string" ||
-    value.openCodePluginPath.length > 4_096 ||
-    !isAbsolute(value.openCodePluginPath) ||
-    basename(value.openCodePluginPath) !== `viberacing-${value.installationId.toLowerCase()}.js` ||
-    hasTerminalControlCharacters(value.openCodePluginPath)
+    (requirePath && typeof value.openCodePluginPath !== "string") ||
+    (value.openCodePluginPath !== undefined &&
+      (typeof value.openCodePluginPath !== "string" ||
+        value.openCodePluginPath.length > 4_096 ||
+        !isAbsolute(value.openCodePluginPath) ||
+        basename(value.openCodePluginPath) !==
+          `viberacing-${value.installationId.toLowerCase()}.js` ||
+        hasTerminalControlCharacters(value.openCodePluginPath)))
   )
     throw new Error("Local OpenCode plugin cleanup metadata is invalid");
   return {
-    version: 1,
     installationId: value.installationId.toLowerCase(),
-    openCodePluginPath: resolve(value.openCodePluginPath),
+    ...(value.openCodePluginPath === undefined
+      ? {}
+      : { openCodePluginPath: resolve(value.openCodePluginPath) }),
   };
 }
 
-async function readOpenCodePluginCleanupUnlocked() {
+function sameOpenCodePluginCleanupTarget(left, right) {
+  if (left.installationId !== right.installationId) return false;
+  if (left.openCodePluginPath === undefined || right.openCodePluginPath === undefined)
+    return left.openCodePluginPath === right.openCodePluginPath;
+  return process.platform === "win32"
+    ? left.openCodePluginPath.toLowerCase() === right.openCodePluginPath.toLowerCase()
+    : left.openCodePluginPath === right.openCodePluginPath;
+}
+
+function normalizedOpenCodePluginCleanups(value) {
+  let targets;
+  if (value?.version === 1) {
+    if (
+      Object.keys(value).sort().join("\0") !==
+      ["installationId", "openCodePluginPath", "version"].sort().join("\0")
+    )
+      throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+    targets = [
+      normalizedOpenCodePluginCleanupTarget(
+        {
+          installationId: value.installationId,
+          openCodePluginPath: value.openCodePluginPath,
+        },
+        { requirePath: true },
+      ),
+    ];
+  } else if (value?.version === 2) {
+    if (
+      Object.keys(value).sort().join("\0") !== ["targets", "version"].sort().join("\0") ||
+      !Array.isArray(value.targets) ||
+      value.targets.length === 0 ||
+      value.targets.length > maximumOpenCodePluginCleanupTargets
+    )
+      throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+    targets = value.targets.map((target) => normalizedOpenCodePluginCleanupTarget(target));
+  } else throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  if (
+    targets.some((target, index) =>
+      targets.slice(0, index).some((previous) => sameOpenCodePluginCleanupTarget(previous, target)),
+    )
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return targets;
+}
+
+function serializedOpenCodePluginCleanups(targets) {
+  if (targets.length === 1 && targets[0].openCodePluginPath !== undefined)
+    return { version: 1, ...targets[0] };
+  return { version: 2, targets };
+}
+
+async function readOpenCodePluginCleanupsUnlocked() {
   try {
-    return normalizedOpenCodePluginCleanup(
+    return normalizedOpenCodePluginCleanups(
       JSON.parse(await readFile(openCodePluginCleanupPath, "utf8")),
     );
   } catch (error) {
-    if (error?.code === "ENOENT") return null;
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
+}
+
+async function writeOpenCodePluginCleanupsUnlocked(targets, options = {}) {
+  if (targets.length === 0) {
+    await unlink(openCodePluginCleanupPath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+    return;
+  }
+  await atomicJson(openCodePluginCleanupPath, serializedOpenCodePluginCleanups(targets), options);
 }
 
 async function readProviderIdentitySaltUnlocked() {
@@ -1451,33 +1522,49 @@ export function readExistingInstallation() {
   return readInstallationUnlocked();
 }
 
-export function readOpenCodePluginCleanup() {
-  return readOpenCodePluginCleanupUnlocked();
+export async function readOpenCodePluginCleanup() {
+  const targets = await readOpenCodePluginCleanupsUnlocked();
+  if (targets.length === 0) return null;
+  return targets[0].openCodePluginPath === undefined
+    ? { version: 2, targets: [targets[0]] }
+    : { version: 1, ...targets[0] };
+}
+
+export function readOpenCodePluginCleanups() {
+  return readOpenCodePluginCleanupsUnlocked();
 }
 
 export async function rememberOpenCodePluginCleanup(installationId, pluginPath, options = {}) {
-  const cleanup = normalizedOpenCodePluginCleanup({
-    version: 1,
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
     installationId,
-    openCodePluginPath: pluginPath,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
   });
   return withConnectionStateLock(async () => {
-    const current = await readOpenCodePluginCleanupUnlocked();
-    if (
-      current?.installationId === cleanup.installationId &&
-      current.openCodePluginPath === cleanup.openCodePluginPath
-    )
-      return false;
-    await atomicJson(openCodePluginCleanupPath, cleanup, options);
+    const current = await readOpenCodePluginCleanupsUnlocked();
+    if (current.some((target) => sameOpenCodePluginCleanupTarget(target, cleanup))) return false;
+    const next = [...current, cleanup];
+    if (next.length > maximumOpenCodePluginCleanupTargets)
+      throw new Error("Local OpenCode plugin cleanup target limit was reached");
+    await writeOpenCodePluginCleanupsUnlocked(next, options);
     return true;
   });
 }
 
 export async function clearOpenCodePluginCleanup() {
-  await withConnectionStateLock(async () => {
-    await unlink(openCodePluginCleanupPath).catch((error) => {
-      if (error?.code !== "ENOENT") throw error;
-    });
+  await withConnectionStateLock(() => writeOpenCodePluginCleanupsUnlocked([]));
+}
+
+export async function clearOpenCodePluginCleanupTarget(installationId, pluginPath) {
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
+    installationId,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+  });
+  return withConnectionStateLock(async () => {
+    const current = await readOpenCodePluginCleanupsUnlocked();
+    const next = current.filter((target) => !sameOpenCodePluginCleanupTarget(target, cleanup));
+    if (next.length === current.length) return false;
+    await writeOpenCodePluginCleanupsUnlocked(next);
+    return true;
   });
 }
 
