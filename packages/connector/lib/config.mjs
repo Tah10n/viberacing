@@ -1797,6 +1797,7 @@ const installedRuntimeFiles = [
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
+  "opencode-cleanup.mjs",
   "opencode-plugin.mjs",
   "opencode-cutover-preflight.mjs",
   "origin.mjs",
@@ -2297,6 +2298,18 @@ async function removeConfigUnlocked() {
 
 export async function removeConfig() {
   return withConnectionStateLock(() => removeConfigUnlocked());
+}
+
+export async function removeInstallationIdentity() {
+  return withConnectionStateLock(async () => {
+    try {
+      await unlink(installationPath);
+      return true;
+    } catch (error) {
+      if (error?.code === "ENOENT") return false;
+      throw error;
+    }
+  });
 }
 
 export async function resetInstallation() {
