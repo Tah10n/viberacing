@@ -8087,6 +8087,123 @@ test("doctor disables a revoked installation and recommends reconnecting", async
   await assert.rejects(access(join(installation.directory, "dirty.json")));
 });
 
+test("doctor does not report a local disconnect when revocation recovery cannot be prepared", async (context) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(401, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "unauthorized" }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-doctor-revocation-prepare-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    NODE_ENV: "test",
+    VIBERACING_TEST_FAIL_OPENCODE_REVOCATION_PREPARE: "1",
+  });
+  const { directory, source } = await writeMappedOpenCodeInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    installationId,
+  );
+  await mkdir(dirname(source.dataPath), { recursive: true });
+  const database = new DatabaseSync(source.dataPath);
+  database.exec("CREATE TABLE message (id TEXT, time_created INTEGER, data TEXT)");
+  database.close();
+  const installed = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+
+  const result = await runWithInput(["doctor", "--repair"], environment, "");
+  assert.equal(result.code, 1);
+  assert.match(result.stdout + result.stderr, /local token file could not be removed/i);
+  assert.doesNotMatch(result.stdout, /Pairing status: disconnected/i);
+  await access(join(directory, "config.json"));
+  await access(installed.path);
+});
+
+test("reconnect drains a crash-journaled revoked OpenCode target before creating a new identity", async (context) => {
+  let pairingStarts = 0;
+  const server = createServer((request, response) => {
+    response.setHeader("content-type", "application/json");
+    if (request.url === "/api/installations/current") {
+      response.writeHead(401);
+      response.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    if (request.url === "/api/pairing/start") pairingStarts += 1;
+    response.writeHead(500);
+    response.end(JSON.stringify({ error: "server_error" }));
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  const origin = `http://127.0.0.1:${address.port}`;
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-reconnect-revocation-crash-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const retiredInstallationId = randomUUID();
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    NODE_ENV: "test",
+    PATH: "",
+    VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "1",
+  });
+  const { directory, source } = await writeMappedOpenCodeInstallation(
+    home,
+    origin,
+    retiredInstallationId,
+  );
+  await mkdir(dirname(source.dataPath), { recursive: true });
+  const database = new DatabaseSync(source.dataPath);
+  database.exec("CREATE TABLE message (id TEXT, time_created INTEGER, data TEXT)");
+  database.close();
+  const installed = await reconcileOpenCodePlugin({
+    installationId: retiredInstallationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+
+  const interrupted = await runWithInput(["connect", "--origin", origin], environment, "");
+  assert.equal(interrupted.code, 86, interrupted.stderr);
+  await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
+  await assert.rejects(access(join(directory, "installation.json")), { code: "ENOENT" });
+  await access(installed.path);
+  await access(join(directory, "opencode-plugin-cleanup.json"));
+  assert.equal(pairingStarts, 0);
+
+  const recovered = await runWithInput(
+    ["connect", "--origin", origin],
+    { ...environment, VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0" },
+    "",
+  );
+  assert.equal(recovered.code, 1);
+  assert.equal(pairingStarts, 1);
+  await assert.rejects(access(installed.path), { code: "ENOENT" });
+  await assert.rejects(access(join(directory, "opencode-plugin-cleanup.json")), {
+    code: "ENOENT",
+  });
+  const replacement = JSON.parse(await readFile(join(directory, "installation.json"), "utf8"));
+  assert.notEqual(replacement.id, retiredInstallationId);
+});
+
 test("doctor and reconnect retain OpenCode cleanup when authorization is revoked without identity", async (context) => {
   for (const variant of [
     { command: ["doctor", "--repair"], identity: "missing", status: 401 },
@@ -10353,6 +10470,47 @@ test("disconnect fails closed and retains installation identity when the local t
   await access(join(directory, "installation.json"));
 });
 
+test("disconnect retains the token when durable OpenCode revocation preparation fails", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-disconnect-revocation-prepare-failure-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    NODE_ENV: "test",
+    VIBERACING_TEST_FAIL_OPENCODE_REVOCATION_PREPARE: "1",
+  });
+  const { directory } = await writeMappedOpenCodeInstallation(
+    home,
+    "http://127.0.0.1:1",
+    installationId,
+  );
+  const installed = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+
+  const result = await runWithInput(["disconnect"], environment, "");
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /local token file could not be removed/i);
+  assert.match(result.stderr, /revocation journal failure/i);
+  assert.doesNotMatch(
+    result.stdout + result.stderr,
+    /Installation disconnected locally;|local token and hooks were removed/i,
+  );
+  await access(join(directory, "config.json"));
+  await access(installed.path);
+  await assert.rejects(access(join(directory, "opencode-plugin-cleanup.json")), {
+    code: "ENOENT",
+  });
+  await assert.rejects(access(join(directory, "opencode-plugin-revocation.json")), {
+    code: "ENOENT",
+  });
+});
+
 test("disconnected commands are clear and disconnect remains idempotent", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-already-disconnected-"));
   context.after(() => import("node:fs/promises").then(({ rm }) => rm(home, { recursive: true })));
@@ -10764,6 +10922,235 @@ test("uninstall preserves owned plugin recovery evidence when cleanup metadata i
   await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
 });
 
+test("disconnect durably recovers OpenCode teardown after config-removal crashes", async (context) => {
+  for (const identity of ["missing", "corrupt"])
+    for (const cleanupJournal of ["missing", "corrupt"]) {
+      const home = await mkdtemp(
+        join(tmpdir(), `viberacing-disconnect-crash-${identity}-${cleanupJournal}-`),
+      );
+      context.after(() => rm(home, { recursive: true, force: true }));
+      const installationId = randomUUID();
+      const environment = connectorEnvironment(home, {
+        HOME: home,
+        USERPROFILE: home,
+        NODE_ENV: "test",
+        VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "1",
+      });
+      const { directory } = await writeMappedOpenCodeInstallation(
+        home,
+        "http://127.0.0.1:1",
+        installationId,
+      );
+      const installed = await reconcileOpenCodePlugin({
+        installationId,
+        stateRoot: directory,
+        environment,
+        homeDirectory: home,
+        desired: true,
+      });
+      if (identity === "corrupt")
+        await writeFile(join(directory, "installation.json"), "{not-json\n", { mode: 0o600 });
+      const cleanupPath = join(directory, "opencode-plugin-cleanup.json");
+      const revocationPath = join(directory, "opencode-plugin-revocation.json");
+      const corruptBytes = Buffer.from("{corrupt-cleanup-journal\n");
+      if (cleanupJournal === "corrupt") await writeFile(cleanupPath, corruptBytes, { mode: 0o600 });
+
+      const interrupted = await runWithInput(["disconnect"], environment, "");
+      assert.equal(interrupted.code, 86, `${identity}/${cleanupJournal}: ${interrupted.stderr}`);
+      assert.doesNotMatch(interrupted.stdout + interrupted.stderr, /disconnected locally/i);
+      await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
+      await access(installed.path);
+      const recoveryPath = cleanupJournal === "corrupt" ? revocationPath : cleanupPath;
+      const recoveryBytes = await readFile(recoveryPath);
+      const recovery = openCodeCleanupTargets(JSON.parse(recoveryBytes));
+      assert.deepEqual(recovery, [{ installationId, openCodePluginPath: installed.path }]);
+      assert.doesNotMatch(
+        recoveryBytes.toString("utf8"),
+        /deviceToken|installationSecret|origin|provider|sourceId|usage|prompt|session|project/i,
+      );
+      if (process.platform !== "win32")
+        assert.equal((await stat(recoveryPath)).mode & 0o777, 0o600);
+      if (cleanupJournal === "corrupt") {
+        assert.deepEqual(await readFile(cleanupPath), corruptBytes);
+        const partialRecovery = await runWithInput(
+          ["uninstall"],
+          { ...environment, VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0" },
+          "",
+        );
+        assert.equal(partialRecovery.code, 1);
+        assert.deepEqual(await readFile(cleanupPath), corruptBytes);
+        await assert.rejects(access(installed.path), { code: "ENOENT" });
+        await assert.rejects(access(revocationPath), { code: "ENOENT" });
+        await unlink(cleanupPath);
+      } else await assert.rejects(access(revocationPath), { code: "ENOENT" });
+
+      const recovered = await runWithInput(
+        ["uninstall"],
+        { ...environment, VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0" },
+        "",
+      );
+      assert.equal(recovered.code, identity === "missing" ? 0 : 1, recovered.stderr);
+      await assert.rejects(access(installed.path), { code: "ENOENT" });
+      await assert.rejects(access(recoveryPath), { code: "ENOENT" });
+    }
+});
+
+test("crash recovery records distinct current-XDG and installation OpenCode paths", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-disconnect-crash-distinct-paths-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const recordedEnvironment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: join(home, "recorded-config"),
+  });
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: join(home, "current-config"),
+    NODE_ENV: "test",
+    VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "1",
+  });
+  const { directory } = await writeMappedOpenCodeInstallation(
+    home,
+    "http://127.0.0.1:1",
+    installationId,
+  );
+  const recorded = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment: recordedEnvironment,
+    homeDirectory: home,
+    desired: true,
+  });
+  const current = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+  await writeFile(
+    join(directory, "installation.json"),
+    `${JSON.stringify({
+      version: 1,
+      id: installationId,
+      secret: "distinct_crash_recovery_secret_that_is_long_enough",
+      openCodePluginPath: recorded.path,
+    })}\n`,
+    { mode: 0o600 },
+  );
+
+  const interrupted = await runWithInput(["disconnect"], environment, "");
+  assert.equal(interrupted.code, 86, interrupted.stderr);
+  const cleanupPath = join(directory, "opencode-plugin-cleanup.json");
+  assert.deepEqual(
+    openCodeCleanupTargets(JSON.parse(await readFile(cleanupPath, "utf8")))
+      .map((target) => target.openCodePluginPath)
+      .sort(),
+    [recorded.path, current.path].sort(),
+  );
+  await access(recorded.path);
+  await access(current.path);
+
+  const recovered = await runWithInput(
+    ["uninstall"],
+    {
+      ...environment,
+      XDG_CONFIG_HOME: join(home, "later-config"),
+      VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0",
+    },
+    "",
+  );
+  assert.equal(recovered.code, 0, recovered.stderr);
+  await assert.rejects(access(recorded.path), { code: "ENOENT" });
+  await assert.rejects(access(current.path), { code: "ENOENT" });
+  await assert.rejects(access(cleanupPath), { code: "ENOENT" });
+});
+
+test("mapped OpenCode teardown records an unresolved target when current XDG is unsafe", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-disconnect-unsafe-xdg-recovery-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const { directory } = await writeMappedOpenCodeInstallation(
+    home,
+    "http://127.0.0.1:1",
+    installationId,
+  );
+  const result = await runWithInput(
+    ["disconnect"],
+    connectorEnvironment(home, {
+      HOME: home,
+      USERPROFILE: home,
+      XDG_CONFIG_HOME: "relative-config",
+      NODE_ENV: "test",
+      VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "1",
+    }),
+    "",
+    connectorPath,
+    { cwd: home },
+  );
+  assert.equal(result.code, 86, result.stderr);
+  assert.deepEqual(
+    openCodeCleanupTargets(
+      JSON.parse(await readFile(join(directory, "opencode-plugin-cleanup.json"), "utf8")),
+    ),
+    [{ installationId }],
+  );
+});
+
+test("a foreign file at a crash-journaled OpenCode path remains pending and blocks connect", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-crash-journal-foreign-plugin-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+    NODE_ENV: "test",
+    VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "1",
+  });
+  const { directory } = await writeMappedOpenCodeInstallation(
+    home,
+    "http://127.0.0.1:1",
+    installationId,
+  );
+  const installed = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+  const interrupted = await runWithInput(["disconnect"], environment, "");
+  assert.equal(interrupted.code, 86, interrupted.stderr);
+  const cleanupPath = join(directory, "opencode-plugin-cleanup.json");
+  await access(cleanupPath);
+
+  const foreign = "export const KeepForeignPlugin = async () => ({});\n";
+  await writeFile(installed.path, foreign, { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(installed.path);
+  const uninstall = await runWithInput(
+    ["uninstall"],
+    { ...environment, VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0" },
+    "",
+  );
+  assert.equal(uninstall.code, 1);
+  assert.equal(await readFile(installed.path, "utf8"), foreign);
+  assert.deepEqual(openCodeCleanupTargets(JSON.parse(await readFile(cleanupPath, "utf8"))), [
+    { installationId, openCodePluginPath: installed.path },
+  ]);
+
+  const connect = await runWithInput(
+    ["connect", "--origin", "http://127.0.0.1:1"],
+    { ...environment, VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL: "0" },
+    "",
+  );
+  assert.equal(connect.code, 1);
+  assert.match(connect.stderr, /Pending OpenCode plugin cleanup is incomplete/);
+  assert.equal(await readFile(installed.path, "utf8"), foreign);
+  await assert.rejects(access(join(directory, "installation.json")), { code: "ENOENT" });
+});
+
 test("uninstall retries an exact OpenCode quarantine recovery path", async (context) => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-uninstall-opencode-quarantine-"));
   context.after(() => rm(home, { recursive: true, force: true }));
@@ -10918,6 +11305,51 @@ test("reset-installation preserves an unreadable identity that may contain the o
   assert.doesNotMatch(reset.stdout, /Installation identity reset/i);
   await access(join(directory, "installation.json"));
   await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
+});
+
+test("connect cannot replace a missing identity while its active OpenCode target is pending", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-connect-missing-identity-pending-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installationId = randomUUID();
+  const environment = connectorEnvironment(home, {
+    HOME: home,
+    USERPROFILE: home,
+  });
+  const { directory } = await writeMappedOpenCodeInstallation(
+    home,
+    "http://127.0.0.1:1",
+    installationId,
+  );
+  const installed = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment,
+    homeDirectory: home,
+    desired: true,
+  });
+  const cleanupPath = join(directory, "opencode-plugin-cleanup.json");
+  await writeFile(
+    cleanupPath,
+    `${JSON.stringify({
+      version: 1,
+      installationId,
+      openCodePluginPath: installed.path,
+    })}\n`,
+    { mode: 0o600 },
+  );
+
+  const connect = await runWithInput(
+    ["connect", "--origin", "http://127.0.0.1:1"],
+    environment,
+    "",
+  );
+  assert.equal(connect.code, 1);
+  assert.match(connect.stderr, /Pending OpenCode plugin cleanup is incomplete/);
+  await assert.rejects(access(join(directory, "installation.json")), { code: "ENOENT" });
+  await access(installed.path);
+  assert.deepEqual(openCodeCleanupTargets(JSON.parse(await readFile(cleanupPath, "utf8"))), [
+    { installationId, openCodePluginPath: installed.path },
+  ]);
 });
 
 test("pending OpenCode cleanup blocks connect until it succeeds", async (context) => {
@@ -11290,6 +11722,9 @@ test("non-OpenCode installations do not create unresolved cleanup at a relative 
     await assert.rejects(access(join(directory, "opencode-plugin-cleanup.json")), {
       code: "ENOENT",
     });
+    await assert.rejects(access(join(directory, "opencode-plugin-revocation.json")), {
+      code: "ENOENT",
+    });
 
     const reconnect = await runWithInput(
       ["connect", "--origin", "http://127.0.0.1:1"],
@@ -11300,6 +11735,9 @@ test("non-OpenCode installations do not create unresolved cleanup at a relative 
     );
     assert.doesNotMatch(reconnect.stderr, /Pending OpenCode plugin cleanup is incomplete/);
     await assert.rejects(access(join(directory, "opencode-plugin-cleanup.json")), {
+      code: "ENOENT",
+    });
+    await assert.rejects(access(join(directory, "opencode-plugin-revocation.json")), {
       code: "ENOENT",
     });
   }

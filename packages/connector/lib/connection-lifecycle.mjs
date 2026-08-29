@@ -2,12 +2,49 @@ import { removeConfig, removeHooks, removeInstallationIdentity } from "./config.
 import {
   captureOpenCodePluginCleanupContext,
   cleanupOpenCodePluginTargets,
+  prepareOpenCodePluginRevocation,
 } from "./opencode-cleanup.mjs";
 import { clearAutomaticState, clearPendingPayloads } from "./runtime.mjs";
 
 export async function disableLocalConnection(clearPending = false) {
   const cleanupContext = await captureOpenCodePluginCleanupContext();
+  let revocationPrepare;
+  try {
+    revocationPrepare = await prepareOpenCodePluginRevocation(cleanupContext);
+  } catch (error) {
+    const failure = {
+      status: "unreadable",
+      action: "blocked",
+      error,
+      path: null,
+      message:
+        error instanceof Error
+          ? error.message
+          : "OpenCode revocation recovery could not be prepared",
+    };
+    return {
+      authorizationRemoved: false,
+      authorizationError: error,
+      installationIdentityPreserved: true,
+      warningCount: 1,
+      plugin: failure,
+      pluginCleanup: {
+        failures: [failure],
+        results: [],
+        preserveInstallationIdentity: true,
+        preserveInstallationIdentityReason: "revocation-prepare-failed",
+      },
+      revocationPrepare: null,
+    };
+  }
   const [config] = await Promise.allSettled([removeConfig()]);
+  if (
+    config.status === "fulfilled" &&
+    cleanupContext.configStatus === "valid" &&
+    process.env.NODE_ENV === "test" &&
+    process.env.VIBERACING_TEST_INTERRUPT_AFTER_CONFIG_REMOVAL === "1"
+  )
+    process.exit(86);
   const operations = [
     removeHooks(),
     clearAutomaticState(),
@@ -59,5 +96,6 @@ export async function disableLocalConnection(clearPending = false) {
     warningCount,
     plugin: pluginResult,
     pluginCleanup,
+    revocationPrepare,
   };
 }

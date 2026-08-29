@@ -37,6 +37,7 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
 const openCodePluginCleanupPath = join(stateDirectory, "opencode-plugin-cleanup.json");
+const openCodePluginRevocationPath = join(stateDirectory, "opencode-plugin-revocation.json");
 const providerIdentityPath = join(stateDirectory, "provider-identity.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
@@ -53,6 +54,7 @@ const stateFiles = new Set([
   "config.json",
   "installation.json",
   "opencode-plugin-cleanup.json",
+  "opencode-plugin-revocation.json",
   "provider-identity.json",
   "sources.json",
   "connection-commit.json",
@@ -88,7 +90,7 @@ const legacyRuntimeAdapterFiles = new Set([
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
-  /^(?:config|installation|opencode-plugin-cleanup|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
+  /^(?:config|installation|opencode-plugin-(?:cleanup|revocation)|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
 const hookLauncherTemporaryPattern = /^viberacing-hook\.mjs\.\d+\.tmp$/i;
 const sourceIdPattern =
@@ -525,15 +527,35 @@ function geminiRoot() {
   return join(home, ".gemini");
 }
 
-async function atomicJson(path, value, { beforeRename } = {}) {
+async function syncDirectoryEntry(path) {
+  if (process.platform === "win32") return;
+  const handle = await open(dirname(path), fsConstants.O_RDONLY);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function atomicJson(path, value, { beforeRename, durable = false } = {}) {
   await ensurePrivateStateDirectory();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.tmp`;
   try {
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    await chmod(temporary, 0o600);
+    if (durable) {
+      const handle = await open(temporary, "r+");
+      try {
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    }
     await beforeRename?.(temporary, path);
     await rename(temporary, path);
     await chmod(path, 0o600);
+    if (durable) await syncDirectoryEntry(path);
   } finally {
     await rm(temporary, { force: true });
   }
@@ -881,10 +903,21 @@ function serializedOpenCodePluginCleanups(targets) {
   return { version: 2, targets };
 }
 
-async function readOpenCodePluginCleanupsUnlocked() {
+const openCodePluginJournalPaths = {
+  cleanup: openCodePluginCleanupPath,
+  revocation: openCodePluginRevocationPath,
+};
+
+function openCodePluginJournalPath(journal) {
+  const path = openCodePluginJournalPaths[journal];
+  if (!path) throw new Error("Unknown OpenCode plugin cleanup journal");
+  return path;
+}
+
+async function readOpenCodePluginJournalUnlocked(journal) {
   try {
     return normalizedOpenCodePluginCleanups(
-      JSON.parse(await readFile(openCodePluginCleanupPath, "utf8")),
+      JSON.parse(await readFile(openCodePluginJournalPath(journal), "utf8")),
     );
   } catch (error) {
     if (error?.code === "ENOENT") return [];
@@ -892,14 +925,23 @@ async function readOpenCodePluginCleanupsUnlocked() {
   }
 }
 
-async function writeOpenCodePluginCleanupsUnlocked(targets, options = {}) {
+async function writeOpenCodePluginJournalUnlocked(journal, targets, options = {}) {
+  const path = openCodePluginJournalPath(journal);
   if (targets.length === 0) {
-    await unlink(openCodePluginCleanupPath).catch((error) => {
+    await unlink(path).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
     });
     return;
   }
-  await atomicJson(openCodePluginCleanupPath, serializedOpenCodePluginCleanups(targets), options);
+  await atomicJson(path, serializedOpenCodePluginCleanups(targets), options);
+}
+
+function readOpenCodePluginCleanupsUnlocked() {
+  return readOpenCodePluginJournalUnlocked("cleanup");
+}
+
+function writeOpenCodePluginCleanupsUnlocked(targets, options = {}) {
+  return writeOpenCodePluginJournalUnlocked("cleanup", targets, options);
 }
 
 async function readProviderIdentitySaltUnlocked() {
@@ -1043,6 +1085,7 @@ export async function localInstallationStateExists() {
   for (const path of [
     installationPath,
     openCodePluginCleanupPath,
+    openCodePluginRevocationPath,
     configPath,
     sourcesPath,
     connectAttemptPath,
@@ -1560,6 +1603,60 @@ export function readOpenCodePluginCleanups() {
   return readOpenCodePluginCleanupsUnlocked();
 }
 
+export async function readOpenCodePluginCleanupJournals() {
+  const entries = [];
+  const failures = [];
+  for (const journal of Object.keys(openCodePluginJournalPaths))
+    try {
+      for (const target of await readOpenCodePluginJournalUnlocked(journal))
+        entries.push({ journal, target });
+    } catch (error) {
+      failures.push({ journal, error });
+    }
+  return { entries, failures };
+}
+
+function mergeOpenCodePluginCleanupTargets(current, additions) {
+  const next = [...current];
+  for (const addition of additions)
+    if (!next.some((target) => sameOpenCodePluginCleanupTarget(target, addition)))
+      next.push(addition);
+  if (next.length > maximumOpenCodePluginCleanupTargets)
+    throw new Error("Local OpenCode plugin cleanup target limit was reached");
+  return next;
+}
+
+export async function rememberOpenCodePluginRevocationTargets(targets, options = {}) {
+  const additions = targets.map((target) => normalizedOpenCodePluginCleanupTarget(target));
+  if (additions.length === 0) return { changed: false, journal: null };
+  if (
+    additions.some((target, index) =>
+      additions
+        .slice(0, index)
+        .some((previous) => sameOpenCodePluginCleanupTarget(previous, target)),
+    )
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return withConnectionStateLock(async () => {
+    let current;
+    let journal = "cleanup";
+    try {
+      current = await readOpenCodePluginJournalUnlocked(journal);
+    } catch {
+      journal = "revocation";
+      current = await readOpenCodePluginJournalUnlocked(journal);
+    }
+    const next = mergeOpenCodePluginCleanupTargets(current, additions);
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.VIBERACING_TEST_FAIL_OPENCODE_REVOCATION_PREPARE === "1"
+    )
+      throw new Error("Synthetic OpenCode revocation journal failure");
+    await writeOpenCodePluginJournalUnlocked(journal, next, { ...options, durable: true });
+    return { changed: next.length !== current.length, journal };
+  });
+}
+
 export async function rememberOpenCodePluginCleanup(installationId, pluginPath, options = {}) {
   const cleanup = normalizedOpenCodePluginCleanupTarget({
     installationId,
@@ -1580,17 +1677,46 @@ export async function clearOpenCodePluginCleanup() {
   await withConnectionStateLock(() => writeOpenCodePluginCleanupsUnlocked([]));
 }
 
-export async function clearOpenCodePluginCleanupTarget(installationId, pluginPath) {
+export async function clearOpenCodePluginCleanupTarget(
+  installationId,
+  pluginPath,
+  { journal = "cleanup" } = {},
+) {
   const cleanup = normalizedOpenCodePluginCleanupTarget({
     installationId,
     ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
   });
   return withConnectionStateLock(async () => {
-    const current = await readOpenCodePluginCleanupsUnlocked();
+    const current = await readOpenCodePluginJournalUnlocked(journal);
     const next = current.filter((target) => !sameOpenCodePluginCleanupTarget(target, cleanup));
     if (next.length === current.length) return false;
-    await writeOpenCodePluginCleanupsUnlocked(next);
+    await writeOpenCodePluginJournalUnlocked(journal, next);
     return true;
+  });
+}
+
+export async function clearOpenCodePluginRecoveryTarget(installationId, pluginPath) {
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
+    installationId,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+  });
+  return withConnectionStateLock(async () => {
+    let changed = false;
+    const failures = [];
+    for (const journal of Object.keys(openCodePluginJournalPaths)) {
+      let current;
+      try {
+        current = await readOpenCodePluginJournalUnlocked(journal);
+      } catch (error) {
+        failures.push({ journal, error });
+        continue;
+      }
+      const next = current.filter((target) => !sameOpenCodePluginCleanupTarget(target, cleanup));
+      if (next.length === current.length) continue;
+      await writeOpenCodePluginJournalUnlocked(journal, next);
+      changed = true;
+    }
+    return { changed, failures };
   });
 }
 

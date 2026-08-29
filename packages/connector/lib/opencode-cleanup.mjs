@@ -1,10 +1,11 @@
 import { resolve } from "node:path";
 import {
   clearOpenCodePluginCleanupTarget,
+  clearOpenCodePluginRecoveryTarget,
   readConfig,
   readExistingInstallation,
-  readOpenCodePluginCleanups,
-  rememberOpenCodePluginCleanup,
+  readOpenCodePluginCleanupJournals,
+  rememberOpenCodePluginRevocationTargets,
   stateDirectory,
 } from "./config.mjs";
 import {
@@ -83,6 +84,52 @@ export async function captureOpenCodePluginCleanupContext() {
   };
 }
 
+export function openCodePluginRevocationTargets(cleanupContext) {
+  const targets = [];
+  const installationId = uuidPattern.test(cleanupContext.installation?.id ?? "")
+    ? cleanupContext.installation.id.toLowerCase()
+    : null;
+  if (installationId && cleanupContext.installation.openCodePluginPath)
+    targets.push({
+      installationId,
+      openCodePluginPath: cleanupContext.installation.openCodePluginPath,
+    });
+
+  const configInstallationId = uuidPattern.test(cleanupContext.config?.installationId ?? "")
+    ? cleanupContext.config.installationId.toLowerCase()
+    : null;
+  if (
+    cleanupContext.configStatus === "valid" &&
+    configInstallationId &&
+    configWantsOpenCodePlugin(cleanupContext.config, configInstallationId)
+  ) {
+    let openCodePluginPath;
+    try {
+      openCodePluginPath = openCodePluginLocation({ installationId: configInstallationId }).path;
+    } catch {}
+    const target = {
+      installationId: configInstallationId,
+      ...(openCodePluginPath === undefined ? {} : { openCodePluginPath }),
+    };
+    if (
+      !targets.some(
+        (candidate) =>
+          cleanupTargetKey(candidate.installationId, candidate.openCodePluginPath) ===
+          cleanupTargetKey(target.installationId, target.openCodePluginPath),
+      )
+    )
+      targets.push(target);
+  }
+  return targets;
+}
+
+export async function prepareOpenCodePluginRevocation(cleanupContext) {
+  const targets = openCodePluginRevocationTargets(cleanupContext);
+  if (targets.length === 0) return { changed: false, journal: null, targets };
+  const result = await rememberOpenCodePluginRevocationTargets(targets);
+  return { ...result, targets };
+}
+
 function addDistinctTarget(targets, candidate) {
   const normalizedCandidate = {
     ...candidate,
@@ -103,7 +150,12 @@ function addDistinctTarget(targets, candidate) {
 
 async function retainCleanupTarget(installationId, pluginPath) {
   try {
-    await rememberOpenCodePluginCleanup(installationId, pluginPath);
+    await rememberOpenCodePluginRevocationTargets([
+      {
+        installationId,
+        ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+      },
+    ]);
     return null;
   } catch (error) {
     return error;
@@ -113,7 +165,9 @@ async function retainCleanupTarget(installationId, pluginPath) {
 async function clearPendingTargets(targets, path, failures, results) {
   for (const pending of targets)
     try {
-      await clearOpenCodePluginCleanupTarget(pending.installationId, pending.openCodePluginPath);
+      await clearOpenCodePluginCleanupTarget(pending.installationId, pending.openCodePluginPath, {
+        journal: pending.journal ?? "cleanup",
+      });
     } catch (error) {
       const failure = {
         status: "unreadable",
@@ -136,42 +190,63 @@ export async function cleanupOpenCodePluginTargets({
   const failures = [];
   const results = [];
   let preserveInstallationIdentity = false;
+  let preserveInstallationIdentityReason;
   let committedPluginTarget = null;
   let committedPluginReadError = null;
+  let retainCommittedPending = false;
   const preserveCurrentPlugin = preserveCommittedPlugin ?? !includeInstallation;
-  if (preserveCurrentPlugin)
-    try {
-      const installation = await readExistingInstallation();
-      if (installation?.openCodePluginPath)
-        committedPluginTarget = cleanupTargetKey(installation.id, installation.openCodePluginPath);
-    } catch (error) {
-      committedPluginReadError = error;
-    }
-  try {
-    for (const target of await readOpenCodePluginCleanups())
-      addDistinctTarget(targets, {
-        ...target,
-        pendingTargets: [target],
-        retainIfLocationFails: false,
-      });
-  } catch (error) {
+  const context =
+    cleanupContext ??
+    (preserveCurrentPlugin || includeInstallation
+      ? await captureOpenCodePluginCleanupContext()
+      : null);
+  if (preserveCurrentPlugin && context) {
+    const configInstallationId = uuidPattern.test(context.config?.installationId ?? "")
+      ? context.config.installationId.toLowerCase()
+      : null;
+    if (
+      context.configStatus === "valid" &&
+      configInstallationId &&
+      configWantsOpenCodePlugin(context.config, configInstallationId)
+    ) {
+      try {
+        committedPluginTarget = cleanupTargetKey(
+          configInstallationId,
+          openCodePluginLocation({ installationId: configInstallationId }).path,
+        );
+        retainCommittedPending = context.installationStatus !== "valid";
+      } catch (error) {
+        committedPluginReadError = error;
+      }
+    } else if (context.installationStatus === "unreadable")
+      committedPluginReadError = context.installationError;
+  }
+  const journalState = await readOpenCodePluginCleanupJournals();
+  const unreadableJournals = new Set(journalState.failures.map(({ journal }) => journal));
+  for (const { journal, target } of journalState.entries)
+    addDistinctTarget(targets, {
+      ...target,
+      pendingTargets: [{ ...target, journal }],
+      retainIfLocationFails: false,
+    });
+  for (const { journal, error } of journalState.failures) {
     preserveInstallationIdentity = true;
+    preserveInstallationIdentityReason ??= "cleanup-metadata-unreadable";
     failures.push({
       status: "unreadable",
       action: "blocked",
       error,
       path: null,
-      message: error instanceof Error ? error.message : "Cleanup metadata is unreadable",
+      journal,
+      message:
+        error instanceof Error
+          ? error.message
+          : `${journal === "cleanup" ? "Cleanup" : "Revocation"} metadata is unreadable`,
     });
-    return {
-      failures,
-      results,
-      preserveInstallationIdentity,
-      preserveInstallationIdentityReason: "cleanup-metadata-unreadable",
-    };
   }
   if (committedPluginReadError && targets.length > 0) {
     preserveInstallationIdentity = true;
+    preserveInstallationIdentityReason ??= "installation-unreadable";
     failures.push({
       status: "unreadable",
       action: "blocked",
@@ -182,16 +257,9 @@ export async function cleanupOpenCodePluginTargets({
           ? committedPluginReadError.message
           : "Installation identity is unreadable",
     });
-    return {
-      failures,
-      results,
-      preserveInstallationIdentity,
-      preserveInstallationIdentityReason: "installation-unreadable",
-    };
   }
 
-  if (includeInstallation) {
-    const context = cleanupContext ?? (await captureOpenCodePluginCleanupContext());
+  if (includeInstallation && journalState.failures.length === 0) {
     const installation = context.installation;
     const installationId = uuidPattern.test(installation?.id ?? "")
       ? installation.id.toLowerCase()
@@ -238,6 +306,7 @@ export async function cleanupOpenCodePluginTargets({
     }
     if (context.installationStatus === "unreadable") {
       preserveInstallationIdentity = true;
+      preserveInstallationIdentityReason ??= "installation-unreadable";
       const retentionError = configInstallationId
         ? await retainCleanupTarget(configInstallationId)
         : null;
@@ -298,13 +367,23 @@ export async function cleanupOpenCodePluginTargets({
       target.inspection?.owned === true &&
       target.pendingTargets.length > 0
     ) {
-      results.push({
+      const retained = {
         status: target.inspection.status,
         action: "retained-committed",
         changed: false,
         path: target.pluginPath,
-      });
-      await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
+      };
+      results.push(retained);
+      if (retainCommittedPending) {
+        preserveInstallationIdentity = true;
+        preserveInstallationIdentityReason ??= "installation-unavailable";
+        failures.push({
+          ...retained,
+          action: "blocked",
+          message:
+            "The active OpenCode plugin cleanup target was retained because its installation identity is unavailable",
+        });
+      } else await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
       continue;
     }
     const existing = physicalTargets.find(
@@ -338,9 +417,17 @@ export async function cleanupOpenCodePluginTargets({
           )
           .map((candidate) => candidate.pluginPath),
         desired: false,
-        retainRecoveryPath: (path) => rememberOpenCodePluginCleanup(target.installationId, path),
-        releaseRecoveryPath: (path) =>
-          clearOpenCodePluginCleanupTarget(target.installationId, path),
+        retainRecoveryPath: async (path) => {
+          const error = await retainCleanupTarget(target.installationId, path);
+          if (error) throw error;
+        },
+        releaseRecoveryPath: async (path) => {
+          const cleared = await clearOpenCodePluginRecoveryTarget(target.installationId, path);
+          const newFailure = cleared.failures.find(
+            ({ journal }) => !unreadableJournals.has(journal),
+          );
+          if (newFailure) throw newFailure.error;
+        },
       });
     } catch (error) {
       result = {
@@ -389,5 +476,10 @@ export async function cleanupOpenCodePluginTargets({
     }
     await clearPendingTargets(target.pendingTargets, target.pluginPath, failures, results);
   }
-  return { failures, results, preserveInstallationIdentity };
+  return {
+    failures,
+    results,
+    preserveInstallationIdentity,
+    preserveInstallationIdentityReason,
+  };
 }
