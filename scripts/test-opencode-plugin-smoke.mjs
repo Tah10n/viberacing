@@ -117,7 +117,7 @@ try {
     throw new Error(`Detached launcher argv mismatch: ${JSON.stringify(trace.argv)}`);
   if ((await realpath(trace.cwd)) !== (await realpath(stateRoot)))
     throw new Error("Detached launcher used the wrong cwd");
-  if (trace.environment.VIBERACING_STATE_DIR !== stateRoot)
+  if ((await realpath(trace.environment.VIBERACING_STATE_DIR)) !== (await realpath(stateRoot)))
     throw new Error("Detached launcher used the wrong state root");
   if (trace.environment.VIBERACING_TEST_OPENCODE_SMOKE_TRACE !== tracePath)
     throw new Error("Detached launcher lost its allowlisted test trace");
