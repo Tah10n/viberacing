@@ -21,7 +21,7 @@ import {
 import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import {
   browserSyncInstallationScopeProtocol,
-  connectorProtocolVersion,
+  currentYearHistoryProtocolVersion,
   installedConnectorUpdateRequired,
   maximumSourcesPerInstallation,
   minimumConnectorVersion,
@@ -31,11 +31,13 @@ import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
+import { usageChartStatus } from "@/lib/history-coverage";
 import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
 import {
   addUtcDays,
   parseUsagePeriod,
   resolveUsagePeriod,
+  utcToday,
   usagePeriodRangeLabel,
   usagePeriodTitle,
 } from "@/lib/usage-period";
@@ -259,6 +261,7 @@ function usageSeries(
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
+  const now = new Date();
   const requestHeaders = await headers();
   const commandShell = connectorCommandShell(
     requestHeaders.get("sec-ch-ua-platform"),
@@ -270,8 +273,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     localInstallationId(),
   ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
-  const period = parseUsagePeriod(params);
-  const resolvedPeriod = resolveUsagePeriod(period);
+  const period = parseUsagePeriod(params, now);
+  const resolvedPeriod = resolveUsagePeriod(period, now);
+  const today = utcToday(now);
   const periodTitle = usagePeriodTitle(period);
   const periodRange = usagePeriodRangeLabel(resolvedPeriod);
   const currentYear = Number(resolvedPeriod.toInclusive.slice(0, 4));
@@ -521,12 +525,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       (source.history_backfill_year !== currentYear ||
         source.history_backfill_status !== "complete"),
   );
-  const chartStatus =
-    dailyUsage.length === 0
-      ? "no-data"
-      : accounts.some((account) => account.partial) || (period.kind !== "week" && historyIncomplete)
-        ? "partial"
-        : "complete";
+  const chartStatus = usageChartStatus(resolvedPeriod, today, {
+    hasUsage: dailyUsage.length > 0,
+    hasPartialAccount: accounts.some((account) => account.partial),
+    historyIncomplete,
+  });
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
   const updateCommand = connectorRepairCommand(origin);
@@ -542,7 +545,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const browserSyncEnabled =
     accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
   const historyUpgradeRequired = installations.some(
-    (installation) => installation.protocol_version < connectorProtocolVersion,
+    (installation) => installation.protocol_version < currentYearHistoryProtocolVersion,
   );
   const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
   const notice =

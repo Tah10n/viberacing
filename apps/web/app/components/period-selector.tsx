@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  currentUtcYearStart,
-  utcToday,
-  usagePeriodSearch,
-  type ResolvedUsagePeriod,
-  type UsagePeriod,
-} from "@/lib/usage-period";
+import { usagePeriodSearch, type ResolvedUsagePeriod, type UsagePeriod } from "@/lib/usage-period";
 
 interface PeriodSelectorProps {
   readonly basePath: "/" | "/dashboard";
@@ -20,8 +14,8 @@ const presets = [
 ] as const;
 
 export function PeriodSelector({ basePath, period, resolved }: PeriodSelectorProps) {
-  const today = utcToday();
-  const yearStart = currentUtcYearStart();
+  const today = resolved.toInclusive;
+  const yearStart = `${today.slice(0, 4)}-01-01`;
   return (
     <div className="period-selector" aria-label="Usage period">
       <nav aria-label="Preset usage periods" className="period-presets">
@@ -51,7 +45,13 @@ export function PeriodSelector({ basePath, period, resolved }: PeriodSelectorPro
           <label>
             <span>From</span>
             <input
-              defaultValue={period.kind === "custom" ? period.from : resolved.from}
+              defaultValue={
+                period.kind === "custom"
+                  ? period.from
+                  : resolved.from < yearStart
+                    ? yearStart
+                    : resolved.from
+              }
               max={today}
               min={yearStart}
               name="from"

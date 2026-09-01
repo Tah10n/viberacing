@@ -4,8 +4,8 @@ const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 
 vi.mock("./db", () => ({ query: queryMock }));
 
-import { currentWeekStart, leaderboard } from "./leaderboard";
-import { addUtcDays } from "./usage-period";
+import { currentWeekStart, leaderboard, publicProfile } from "./leaderboard";
+import { addUtcDays, resolveUsagePeriod } from "./usage-period";
 
 describe("leaderboard query", () => {
   afterEach(() => {
@@ -28,5 +28,22 @@ describe("leaderboard query", () => {
   it("rejects requests that could return an unbounded page", async () => {
     await expect(leaderboard({ limit: 102 })).rejects.toThrow(RangeError);
     expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it("returns a known racer with zero usage instead of treating the handle as missing", async () => {
+    queryMock.mockResolvedValue([{ handle: "Known", rank: null, total: "0", breakdown: null }]);
+    const resolved = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-01", to: "2026-08-02" },
+      new Date("2026-09-01T12:00:00Z"),
+    );
+
+    await expect(publicProfile("known", resolved)).resolves.toEqual({
+      handle: "Known",
+      rank: null,
+      total: "0",
+      breakdown: [],
+    });
+    expect(queryMock.mock.calls[0]?.[0]).toMatch(/FROM users u LEFT JOIN ranked r/);
+    expect(queryMock.mock.calls[0]?.[1]).toEqual(["2026-08-01", "2026-08-03", "known"]);
   });
 });

@@ -20,6 +20,21 @@ describe("usage period domain", () => {
       toInclusive: "2026-09-06",
       toExclusive: "2026-09-07",
     });
+    expect(resolveUsagePeriod({ kind: "week" }, new Date("2027-01-01T12:00:00Z"))).toEqual({
+      period: { kind: "week" },
+      from: "2026-12-28",
+      toInclusive: "2027-01-03",
+      toExclusive: "2027-01-04",
+    });
+  });
+
+  it.each([
+    ["2026-09-01T12:00:00Z", "2026-09-30"],
+    ["2027-01-01T12:00:00Z", "2027-01-31"],
+    ["2027-02-01T12:00:00Z", "2027-02-28"],
+    ["2027-10-01T12:00:00Z", "2027-10-31"],
+  ])("keeps calendar ranges stable at %s", (clock, monthEnd) => {
+    expect(resolveUsagePeriod({ kind: "month" }, new Date(clock)).toInclusive).toBe(monthEnd);
   });
 
   it("resolves the first and last day of a calendar UTC month", () => {

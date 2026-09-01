@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type { SupportedAgent } from "./agents";
 
-export const accountDedupLookbackDays = 30;
+export const accountDedupRollingBoundaryDays = 30;
 export const minimumAccountDedupMatchedDays = 7;
 export const minimumAccountDedupDistinctPositiveTotals = 3;
 export const minimumAccountDedupMatchedSpanDays = 6;
@@ -95,7 +95,10 @@ export async function autoDeduplicateAccountWideSource(
         WHERE source_id = $1
           AND completeness = 'complete'
           AND usage_date < $4::date
-          AND usage_date >= $4::date - $5::int
+          AND usage_date >= LEAST(
+                date_trunc('year', $4::date)::date,
+                $4::date - $5::int
+              )
      ), candidate_days AS (
        SELECT account.id AS account_id,
               candidate_source.id AS source_id,
@@ -121,7 +124,10 @@ export async function autoDeduplicateAccountWideSource(
                  WHERE event.source_id = candidate_source.id
               )
           AND usage.usage_date < $4::date
-          AND usage.usage_date >= $4::date - $5::int
+          AND usage.usage_date >= LEAST(
+                date_trunc('year', $4::date)::date,
+                $4::date - $5::int
+              )
         GROUP BY account.id, candidate_source.id, account.created_at, usage.usage_date
        HAVING bool_and(usage.completeness = 'complete')
      )
@@ -154,7 +160,7 @@ export async function autoDeduplicateAccountWideSource(
       userId,
       source.agent_id,
       todayUtc,
-      accountDedupLookbackDays,
+      accountDedupRollingBoundaryDays,
       source.account_id,
     ],
   );

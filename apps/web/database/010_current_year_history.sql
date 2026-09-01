@@ -5,7 +5,7 @@ CREATE TABLE daily_agent_usage (
     'codex', 'claude_code', 'opencode', 'kimi_code',
     'qwen_code', 'antigravity', 'gemini_cli'
   )),
-  tokens numeric(30,0) NOT NULL CHECK (tokens >= 0),
+  tokens numeric NOT NULL CHECK (tokens >= 0),
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (usage_date, user_id, agent_id)
 );

@@ -122,6 +122,7 @@ export async function collectClaude(
   const provisionalLedger = {};
   let ledgerBytes = Buffer.byteLength(JSON.stringify(nextState.ledger));
   const addRecord = (value, target = nextState.ledger) => {
+    if (value.entry.date < range.rangeStart || value.entry.date > range.rangeEnd) return true;
     const key = createHash("sha256").update(value.id).digest("hex");
     const { date, ...usage } = value.entry;
     const candidate = { date, usage, parserVersion: claudeParserVersion };

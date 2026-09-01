@@ -3,6 +3,7 @@ import { Client } from "pg";
 import {
   connectorDistribution,
   connectorProtocolVersion,
+  currentYearHistoryProtocolVersion,
   databaseClientConfig,
   databaseSslEnabled,
   githubWebOrigin,
@@ -61,6 +62,7 @@ afterEach(() => {
 describe("connector protocol compatibility", () => {
   it("keeps legacy v2-v4 available during the v5 rollout", () => {
     expect(connectorProtocolVersion).toBe(5);
+    expect(currentYearHistoryProtocolVersion).toBe(5);
     expect(isSupportedConnectorProtocolVersion(2)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(3)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(4)).toBe(true);

@@ -321,7 +321,9 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     "page",
   );
   const monthChart = page.getByRole("figure", { name: "Tokens by day" });
-  await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(30);
+  const [year, month] = today.split("-").map(Number);
+  const daysInCurrentMonth = new Date(Date.UTC(year ?? 0, month ?? 0, 0)).getUTCDate();
+  await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(daysInCurrentMonth);
   const viewport = monthChart.locator(".usage-explorer-controls output");
   const fullMonthViewport = await viewport.textContent();
   await monthChart.getByRole("button", { name: "Zoom in on usage chart" }).click();

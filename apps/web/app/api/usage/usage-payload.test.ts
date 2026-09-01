@@ -70,6 +70,41 @@ describe("usage payload privacy and numeric contract", () => {
     ).toThrow("invalid_snapshot");
   });
 
+  it("accepts a v5 rolling window and completion metadata across New Year", () => {
+    const now = new Date("2027-01-01T12:00:00.000Z");
+    const rolling = {
+      sourceId,
+      syncSequence: "1",
+      kind: "rolling",
+      rangeStart: "2026-12-02",
+      rangeEnd: "2027-01-01",
+      completeness: "complete",
+      historyYearComplete: "complete",
+      entries: [
+        { date: "2026-12-31", totalTokens: "10" },
+        { date: "2027-01-01", totalTokens: "11" },
+      ],
+    };
+    expect(parseVersionedSnapshots([rolling], 5, now)[0]).toMatchObject({
+      kind: "rolling",
+      historyYearComplete: "complete",
+      rangeStart: "2026-12-02",
+    });
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...rolling,
+            historyYearComplete: undefined,
+            entries: [{ date: "2026-12-31", totalTokens: "12" }],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).not.toThrow();
+  });
+
   it("rejects future history, incomplete completion metadata, and unknown history fields", () => {
     const now = new Date("2026-09-01T12:00:00.000Z");
     const snapshot = {

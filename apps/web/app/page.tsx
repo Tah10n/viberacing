@@ -60,10 +60,11 @@ function pageHref(page: number, periodSearch: string): string {
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();
+  const now = new Date();
   const params = await searchParams;
   const page = parsePage(params.page);
-  const period = parseUsagePeriod(params);
-  const resolvedPeriod = resolveUsagePeriod(period);
+  const period = parseUsagePeriod(params, now);
+  const resolvedPeriod = resolveUsagePeriod(period, now);
   const periodSearch = usagePeriodSearch(period);
   const periodTitle = usagePeriodTitle(period);
   const periodRange = usagePeriodRangeLabel(resolvedPeriod);
@@ -78,8 +79,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]);
   const accountDeleted = current === null && accountDeletionReceipt;
   const [pageRows, profile, connectorVersions] = await Promise.all([
-    leaderboard({ limit: leaderboardPageSize + 1, offset }, period),
-    current === null ? Promise.resolve(null) : publicProfile(current.handle, period),
+    leaderboard({ limit: leaderboardPageSize + 1, offset }, resolvedPeriod),
+    current === null ? Promise.resolve(null) : publicProfile(current.handle, resolvedPeriod),
     current === null
       ? Promise.resolve([] as ConnectorVersionRow[])
       : query<ConnectorVersionRow>(
@@ -148,7 +149,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </div>
             ) : (
               <div className="user-score-line">
-                <span className="user-rank">{profile === null ? "—" : `#${profile.rank}`}</span>
+                <span className="user-rank">
+                  {profile === null || profile.rank === null ? "—" : `#${profile.rank}`}
+                </span>
                 <RacerLink handle={current.handle} />
                 {profile === null ? null : (
                   <span className="user-agent">

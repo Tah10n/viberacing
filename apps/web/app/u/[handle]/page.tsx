@@ -18,13 +18,14 @@ interface ProfileProps {
 
 export default async function ProfilePage({ params, searchParams }: ProfileProps) {
   await connection();
+  const now = new Date();
   const [{ handle }, query] = await Promise.all([params, searchParams]);
   if (!/^[A-Za-z0-9-]{1,39}$/.test(handle)) notFound();
-  const period = parseUsagePeriod(query);
-  const resolved = resolveUsagePeriod(period);
+  const period = parseUsagePeriod(query, now);
+  const resolved = resolveUsagePeriod(period, now);
   const periodTitle = usagePeriodTitle(period);
   const periodSearch = usagePeriodSearch(period);
-  const profile = await publicProfile(handle, period);
+  const profile = await publicProfile(handle, resolved);
   if (profile === null) notFound();
   return (
     <PageShell className="profile-page" width="narrow">
@@ -39,7 +40,7 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
       <section className="score-card" aria-label={`${periodTitle} score`}>
         <div>
           <span>{periodTitle} rank</span>
-          <strong>#{profile.rank}</strong>
+          <strong>{profile.rank === null ? "—" : `#${profile.rank}`}</strong>
         </div>
         <div>
           <span>Total usage</span>
@@ -54,6 +55,9 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
           <h2>Usage by agent</h2>
           <span>{profile.breakdown.length} connected</span>
         </div>
+        {profile.breakdown.length === 0 ? (
+          <p className="muted">No recorded usage in this period.</p>
+        ) : null}
         {profile.breakdown.map((item) => (
           <div className="breakdown" key={item.agent}>
             <div>

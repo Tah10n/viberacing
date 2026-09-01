@@ -344,17 +344,17 @@ async function writeCaptureInstallation(home, origin, options = {}) {
   const clientSourceId = options.clientSourceId ?? "abababab-abab-4bab-8bab-abababababab";
   const capture = join(directory, "captures", `${clientSourceId}.jsonl`);
   const sourceId = options.sourceId ?? "89898989-8989-4989-8989-898989898989";
-  const date = new Date().toISOString().slice(0, 10);
+  const date = options.date ?? new Date().toISOString().slice(0, 10);
   await mkdir(join(directory, "captures"), { recursive: true });
   await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
-  await writeFile(
-    capture,
-    `${JSON.stringify({
+  const events = options.events ?? [
+    {
       id: options.eventId ?? "synthetic-network-event",
       date,
       usage: { date, totalTokens: "3", inputTokens: "1", outputTokens: "2" },
-    })}\n`,
-  );
+    },
+  ];
+  await writeFile(capture, `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
   await writeLocalSources(directory, [
     {
       clientSourceId,
@@ -4914,6 +4914,8 @@ test("manual sync collects every active source and clears only its prior dirty g
 });
 
 test("automatic sync advances one current-year chunk and manual sync resumes through January", async (context) => {
+  const fixedNow = "2026-09-01T12:00:00.000Z";
+  const historicalDates = ["2026-07-15", "2026-06-15", "2026-05-15"];
   const bodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
@@ -4934,6 +4936,13 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   const home = await mkdtemp(join(tmpdir(), "viberacing-history-resume-"));
   context.after(() => rm(home, { recursive: true, force: true }));
   const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: ["2026-09-01", ...historicalDates].map((date, index) => ({
+      id: `history-range-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 1) },
+    })),
+    historyBackfillYear: 2026,
     historyBackfillStatus: "pending",
   });
   await writeFile(
@@ -4949,7 +4958,10 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
       },
     })}\n`,
   );
-  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: fixedNow,
+  });
 
   await execFileAsync(process.execPath, [connectorPath, "auto-sync"], { env: environment });
   assert.deepEqual(
@@ -4960,12 +4972,9 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
     await readFile(join(installation.directory, "state.json"), "utf8"),
   );
   const cursorAfterAutomatic = afterAutomatic.history[installation.sourceId];
-  assert.equal(cursorAfterAutomatic.year, new Date().getUTCFullYear());
+  assert.equal(cursorAfterAutomatic.year, 2026);
   assert.equal(cursorAfterAutomatic.hadPartialChunk, true);
-  assert.notDeepEqual(
-    afterAutomatic.adapters[installation.sourceId],
-    afterAutomatic.historyAdapters[installation.sourceId],
-  );
+  assert.equal(afterAutomatic.historyAdapters?.[installation.sourceId], undefined);
   const rollingAdapterState = afterAutomatic.adapters[installation.sourceId];
 
   const bodyCountAfterAutomatic = bodies.length;
@@ -4985,8 +4994,18 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
     if (index > 0) assert.ok(snapshot.rangeEnd < historical[index - 1].rangeStart);
   }
   const terminal = historical.at(-1);
-  assert.equal(terminal.rangeStart, `${String(new Date().getUTCFullYear())}-01-01`);
+  assert.equal(terminal.rangeStart, "2026-01-01");
   assert.equal(terminal.historyYearComplete, "partial");
+  const deliveredHistoryDates = bodies
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.kind === "year_backfill")
+    .flatMap((snapshot) => snapshot.entries.map((entry) => entry.date));
+  for (const date of historicalDates)
+    assert.equal(
+      deliveredHistoryDates.filter((delivered) => delivered === date).length,
+      1,
+      `${date} was not delivered exactly once from the shared capture file`,
+    );
 
   const finalState = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
   assert.equal(finalState.history?.[installation.sourceId], undefined);
@@ -4995,8 +5014,124 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   const finalConfig = JSON.parse(
     await readFile(join(installation.directory, "config.json"), "utf8"),
   );
-  assert.equal(finalConfig.sources[0].historyBackfillYear, new Date().getUTCFullYear());
+  assert.equal(finalConfig.sources[0].historyBackfillYear, 2026);
   assert.equal(finalConfig.sources[0].historyBackfillStatus, "partial");
+});
+
+test("a thrown historical collector retries the same range on the next sync", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-history-throw-once-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: ["2026-09-01", "2026-07-15"].map((date, index) => ({
+      id: `throw-once-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 10) },
+    })),
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  });
+  const marker = join(installation.directory, ".test-fail-history-once");
+  await writeFile(marker, "fail once\n");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    VIBERACING_TEST_FAIL_HISTORY_ONCE: "1",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  const afterFailure = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  );
+  assert.equal(afterFailure.sequences[installation.sourceId], "1");
+  assert.equal(afterFailure.history[installation.sourceId].nextRangeEnd, "2026-08-01");
+  assert.equal(
+    bodies.some((body) => body.snapshots.some((item) => item.kind === "year_backfill")),
+    false,
+  );
+  assert.match(await readFile(installation.capture, "utf8"), /2026-07-15/);
+
+  const beforeRetry = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  const retriedHistory = bodies
+    .slice(beforeRetry)
+    .flatMap((body) => body.snapshots)
+    .find((snapshot) => snapshot.kind === "year_backfill");
+  assert.equal(retriedHistory.rangeEnd, "2026-08-01");
+  assert.deepEqual(retriedHistory.entries, [{ date: "2026-07-15", totalTokens: "11" }]);
+});
+
+test("a January first sync keeps the cross-year rolling window without a redundant history chunk", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-january-rolling-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2027-01-01",
+    events: ["2026-12-31", "2027-01-01"].map((date, index) => ({
+      id: `new-year-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 20) },
+    })),
+    historyBackfillYear: 2027,
+    historyBackfillStatus: "pending",
+  });
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2027-01-01T12:00:00.000Z",
+    }),
+  });
+
+  assert.equal(bodies.length, 1);
+  assert.deepEqual(bodies[0].snapshots[0], {
+    sourceId: installation.sourceId,
+    syncSequence: "1",
+    kind: "rolling",
+    rangeStart: "2026-12-02",
+    rangeEnd: "2027-01-01",
+    completeness: "complete",
+    entries: [
+      { date: "2026-12-31", totalTokens: "20" },
+      { date: "2027-01-01", totalTokens: "21" },
+    ],
+    historyYearComplete: "complete",
+  });
+  const config = JSON.parse(await readFile(join(installation.directory, "config.json"), "utf8"));
+  assert.equal(config.sources[0].historyBackfillYear, 2027);
+  assert.equal(config.sources[0].historyBackfillStatus, "complete");
 });
 
 test("an event arriving during manual sync survives for the next targeted batch", async (context) => {

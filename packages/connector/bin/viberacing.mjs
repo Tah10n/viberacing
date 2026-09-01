@@ -1306,12 +1306,18 @@ async function connect() {
   }
 }
 
-function snapshotRange(now = new Date()) {
+function connectorNow() {
+  const override = process.env.NODE_ENV === "test" ? process.env.VIBERACING_TEST_NOW : undefined;
+  if (override === undefined) return new Date();
+  const now = new Date(override);
+  if (Number.isNaN(now.valueOf())) throw new Error("VIBERACING_TEST_NOW must be a valid timestamp");
+  return now;
+}
+
+function snapshotRange(now = connectorNow()) {
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - 30);
-  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
-  if (start < yearStart) start.setTime(yearStart.valueOf());
   return { rangeStart: start.toISOString().slice(0, 10), rangeEnd: end.toISOString().slice(0, 10) };
 }
 
@@ -1328,7 +1334,7 @@ function addUtcDays(date, days) {
   return parsed.toISOString().slice(0, 10);
 }
 
-function currentHistoryYear(now = new Date()) {
+function currentHistoryYear(now = connectorNow()) {
   return now.getUTCFullYear();
 }
 
@@ -1346,7 +1352,8 @@ function historySnapshotState(sourceId, range, completeness, state, kind) {
   const year = Number(range.rangeEnd.slice(0, 4));
   const yearStart = historyYearStart(year);
   if (kind === "rolling") {
-    if (range.rangeStart !== yearStart) return { snapshot: {}, advance: null };
+    if (range.rangeStart > yearStart || range.rangeEnd < yearStart)
+      return { snapshot: {}, advance: null };
     return {
       snapshot: { historyYearComplete: completeness },
       advance: {
@@ -1664,10 +1671,11 @@ async function rememberServerSequences(config, sequences) {
   return state;
 }
 
-function reconcileHistoryCursors(config, state, now = new Date()) {
+function reconcileHistoryCursors(config, state, now = connectorNow()) {
   const year = currentHistoryYear(now);
   const yearStart = historyYearStart(year);
-  const firstHistoricalEnd = addUtcDays(snapshotRange(now).rangeStart, -1);
+  const rollingStart = snapshotRange(now).rangeStart;
+  const firstHistoricalEnd = addUtcDays(rollingStart < yearStart ? yearStart : rollingStart, -1);
   state.history ??= {};
   state.historyAdapters ??= {};
   const configured = new Set(config.sources.map((source) => source.sourceId));
@@ -1868,6 +1876,7 @@ async function applyHistoryAdvance(config, item) {
       nextRangeEnd: advance.nextRangeEnd,
       hadPartialChunk: advance.hadPartialChunk,
     };
+    delete state.historyAdapters[item.sourceId];
   } else {
     delete state.history[item.sourceId];
     delete state.historyAdapters[item.sourceId];
@@ -2371,6 +2380,18 @@ async function syncRange(providedConfig, options = {}) {
         const adapter = adapterFor(source.agentId);
         if (!adapter || !adapter.collectionMethods.includes(source.collectionMethod))
           throw new Error(`Unsupported configured source ${source.agentId}`);
+        if (
+          snapshotKind === "year_backfill" &&
+          process.env.NODE_ENV === "test" &&
+          process.env.VIBERACING_TEST_FAIL_HISTORY_ONCE === "1"
+        ) {
+          try {
+            await unlink(join(stateDirectory, ".test-fail-history-once"));
+            throw new Error("synthetic one-shot historical collector failure");
+          } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+          }
+        }
         if (source.agentId === "codex") {
           const providerIdentitySalt = await providerIdentitySaltPromise;
           const profileMembers = localSources.filter(
@@ -2478,6 +2499,7 @@ async function syncRange(providedConfig, options = {}) {
       const sourceErrors = [];
       const failures = [];
       const failedClientSourceIds = [];
+      const failedHistorySourceIds = [];
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
@@ -2501,30 +2523,9 @@ async function syncRange(providedConfig, options = {}) {
           if (outcome.reason?.diagnosticCode === "provider_account_registration_pending")
             accountSetupPending = true;
           if (snapshotKind === "year_backfill") {
-            for (const target of task.requestedSources) {
-              if (state.history?.[target.sourceId]?.nextRangeEnd !== range.rangeEnd) continue;
-              const previousSequence = BigInt(state.sequences[target.sourceId] ?? "0");
-              const sequence = (previousSequence + 1n).toString();
-              state.sequences[target.sourceId] = sequence;
-              const history = historySnapshotState(
-                target.sourceId,
-                range,
-                "partial",
-                state,
-                snapshotKind,
-              );
-              snapshots.push({
-                sourceId: target.sourceId,
-                syncSequence: sequence,
-                kind: snapshotKind,
-                ...range,
-                completeness: "partial",
-                entries: [],
-                ...history.snapshot,
-              });
-              historyAdvances.push(history.advance);
-              successfullyCheckedSourceIds.push(target.sourceId);
-            }
+            for (const target of task.requestedSources)
+              if (state.history?.[target.sourceId]?.nextRangeEnd === range.rangeEnd)
+                failedHistorySourceIds.push(target.sourceId);
             continue;
           }
           const nextFingerprint = fingerprint({ error: "collector_failed" });
@@ -2685,6 +2686,7 @@ async function syncRange(providedConfig, options = {}) {
           unchanged: true,
           inactiveSourceIds,
           accountSetupPending,
+          failedHistorySourceIds,
         };
       }
       const payload = {
@@ -2738,7 +2740,7 @@ async function syncRange(providedConfig, options = {}) {
         warning(
           "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
         );
-      return { accepted, failures, inactiveSourceIds, accountSetupPending };
+      return { accepted, failures, inactiveSourceIds, accountSetupPending, failedHistorySourceIds };
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
@@ -2755,6 +2757,7 @@ async function sync(providedConfig, options = {}) {
   let accepted = rolling?.accepted ?? 0;
   const failures = [...(rolling?.failures ?? [])];
   const inactiveSourceIds = new Set(rolling?.inactiveSourceIds ?? []);
+  const failedHistorySourceIds = new Set();
   let accountSetupPending = rolling?.accountSetupPending ?? false;
   let historyChunks = 0;
   const maximumHistoryChunks = options.automatic || options.browser ? 1 : Number.POSITIVE_INFINITY;
@@ -2770,6 +2773,7 @@ async function sync(providedConfig, options = {}) {
           typeof source.sourceId === "string" &&
           (allowed === null || allowed.has(source.sourceId)) &&
           !inactiveSourceIds.has(source.sourceId) &&
+          !failedHistorySourceIds.has(source.sourceId) &&
           state.history?.[source.sourceId]?.year === year,
       )
       .map((source) => ({ source, cursor: state.history[source.sourceId] }))
@@ -2796,6 +2800,8 @@ async function sync(providedConfig, options = {}) {
     accepted += historical?.accepted ?? 0;
     failures.push(...(historical?.failures ?? []));
     for (const sourceId of historical?.inactiveSourceIds ?? []) inactiveSourceIds.add(sourceId);
+    for (const sourceId of historical?.failedHistorySourceIds ?? [])
+      failedHistorySourceIds.add(sourceId);
     accountSetupPending ||= historical?.accountSetupPending ?? false;
     historyChunks += 1;
   }
@@ -2805,6 +2811,7 @@ async function sync(providedConfig, options = {}) {
     (source) =>
       source.collectionMethod === "antigravity_cli_capture" &&
       (allowed === null || allowed.has(source.sourceId)) &&
+      !failedHistorySourceIds.has(source.sourceId) &&
       source.historyBackfillYear === currentHistoryYear() &&
       ["complete", "partial"].includes(source.historyBackfillStatus),
   );

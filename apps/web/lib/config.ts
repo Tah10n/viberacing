@@ -99,6 +99,7 @@ export function databaseSslEnabled(): boolean {
 export { databaseClientConfig };
 
 export const connectorProtocolVersion = 5;
+export const currentYearHistoryProtocolVersion = 5;
 export type SupportedConnectorProtocolVersion = 2 | 3 | 4 | typeof connectorProtocolVersion;
 
 export function isSupportedConnectorProtocolVersion(

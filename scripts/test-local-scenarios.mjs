@@ -283,6 +283,21 @@ function snapshot(
   };
 }
 
+function currentYearHistorySnapshot(sourceId, sequence, entries, completeness = "complete") {
+  return {
+    ...snapshot(
+      sourceId,
+      sequence,
+      entries,
+      completeness,
+      januaryFirst,
+      entries.at(-1)?.[0] ?? januaryFirst,
+    ),
+    kind: "year_backfill",
+    historyYearComplete: completeness,
+  };
+}
+
 try {
   const inserted = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -299,6 +314,24 @@ try {
   );
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
+
+  const wideAggregateUser = await pool.query(
+    "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+    [(githubId + 1n).toString(), `${handle}-wide`],
+  );
+  const wideAggregate = await pool.query(
+    `INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+     SELECT $1::date, $2, 'codex', sum(value)
+       FROM (VALUES ($3::numeric), ($3::numeric)) totals(value)
+     RETURNING tokens::text`,
+    [today, wideAggregateUser.rows[0].id, "999999999999999999999999999999"],
+  );
+  check(
+    wideAggregate.rows[0]?.tokens === "1999999999999999999999999999998",
+    "daily agent aggregate lost precision above 30 digits",
+  );
+  await pool.query("DELETE FROM users WHERE id = $1", [wideAggregateUser.rows[0].id]);
+  console.log("ok - daily agent aggregates support more than 30 digits");
 
   const legacyInstallation = { id: randomUUID(), secret: token() };
   const legacy = await pair(
@@ -441,22 +474,13 @@ try {
       historyState.rows[0]?.january_tokens === "15",
     `complete history did not correct the daily summary down: ${JSON.stringify(historyState.rows[0])}`,
   );
-  const v4January = await usage(
+  const v4TooOld = await usage(
     historyPairing.deviceToken,
-    [
-      snapshot(
-        historySource.sourceId,
-        5,
-        [[januaryFirst, 1]],
-        "complete",
-        januaryFirst,
-        januaryFirst,
-      ),
-    ],
+    [snapshot(historySource.sourceId, 5, [[tooOld, 1]], "complete", tooOld, tooOld)],
     [],
     4,
   );
-  check(v4January.status === 400, "protocol v4 accepted a current-year historical range");
+  check(v4TooOld.status === 400, "protocol v4 accepted a date outside its rolling window");
   const legacyCleanup = await form("/api/accounts/delete", {
     accountId: historySource.agentAccountId,
     confirm: "delete",
@@ -1132,32 +1156,22 @@ try {
   const guardSecond = await pair(guardSecondInstallation, [source("guard-codex-b", "codex")]);
   const guardFirstSource = guardFirst.sources[0];
   const guardSecondSource = guardSecond.sources[0];
-  const guardDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
+  const guardDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(`${januaryFirst}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
   const guardSameEntries = guardDates.map((date) => [date, 11111]);
   check(
     guardFirstSource !== undefined && guardSecondSource !== undefined,
     "deduplication guard pairing omitted a source",
   );
   let guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      1,
-      guardSameEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 1, guardSameEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "deduplication guard history was rejected");
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      1,
-      guardSameEntries,
-      "partial",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 1, guardSameEntries, "partial"),
   ]);
   let guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1168,13 +1182,11 @@ try {
     "partial history triggered automatic account matching",
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       guardSecondSource.sourceId,
       2,
       guardSameEntries.slice(0, 2),
       "complete",
-      guardDates[0],
-      guardDates[1],
     ),
   ]);
   guardEvents = await pool.query(
@@ -1186,14 +1198,7 @@ try {
     "two coincident complete days with one repeated total triggered automatic account matching",
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      3,
-      guardSameEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 3, guardSameEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1205,25 +1210,11 @@ try {
   );
   const guardZeroEntries = guardDates.map((date, index) => [date, index === 6 ? 0 : 11111]);
   guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      2,
-      guardZeroEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 2, guardZeroEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "zero-evidence baseline was rejected");
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      4,
-      guardZeroEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 4, guardZeroEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1238,28 +1229,14 @@ try {
     [11111, 22222, 33333][index % 3],
   ]);
   guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      3,
-      guardVariedEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 3, guardVariedEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "mismatch guard baseline was rejected");
   const guardMismatchEntries = guardVariedEntries.map((entry, index) =>
     index === 3 ? [entry[0], Number(entry[1]) + 1] : entry,
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      5,
-      guardMismatchEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 5, guardMismatchEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1303,9 +1280,7 @@ try {
   const dedupSecond = await pair(dedupSecondInstallation, [source("dedup-codex-b", "codex")]);
   const dedupFirstSource = dedupFirst.sources[0];
   const dedupSecondSource = dedupSecond.sources[0];
-  const dedupDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
-  const dedupStart = dedupDates[0];
-  const dedupEnd = dedupDates.at(-1);
+  const dedupDates = guardDates;
   const dedupEntries = dedupDates.map((date, index) => [
     date,
     dedupValues[index],
@@ -1317,14 +1292,7 @@ try {
     "deduplication pairing omitted a source",
   );
   let dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
-      dedupSecondSource.sourceId,
-      1,
-      [...dedupEntries, [today, 0, undefined, "partial"]],
-      "partial",
-      dedupStart,
-      today,
-    ),
+    currentYearHistorySnapshot(dedupSecondSource.sourceId, 1, dedupEntries, "complete"),
   ]);
   const dedupEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1335,14 +1303,7 @@ try {
     "a source was matched before another account had comparable history",
   );
   dedupUsage = await usage(dedupFirst.deviceToken, [
-    snapshot(
-      dedupFirstSource.sourceId,
-      1,
-      [...dedupEntries, [today, 0, undefined, "partial"]],
-      "partial",
-      dedupStart,
-      today,
-    ),
+    currentYearHistorySnapshot(dedupFirstSource.sourceId, 1, dedupEntries, "complete"),
   ]);
   const dedupEvent = await pool.query(
     `SELECT event.id::text,
@@ -1372,7 +1333,7 @@ try {
       activeDedup.current_account_id === activeDedup.target_account_id &&
       activeDedup.has_durable_decision === true &&
       BigInt(mergedCodexTotals.rows[0].tokens) === dedupBaselineTokens + dedupFixtureTokens,
-    "matching finished Codex histories were not combined when today's row was partial",
+    "matching January Codex histories were not combined without recent usage",
   );
   const dedupDashboard = await authenticatedGet("/dashboard");
   const dedupDashboardHtml = await dedupDashboard.text();
@@ -1409,13 +1370,11 @@ try {
     "Undo did not restore the original account mapping",
   );
   dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       dedupSecondSource.sourceId,
       2,
       dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
-      dedupStart,
-      dedupEnd,
     ),
   ]);
   const remerged = await pool.query("SELECT status FROM account_dedup_events WHERE id = $1", [
@@ -1427,13 +1386,11 @@ try {
   );
   await pool.query("DELETE FROM account_dedup_events WHERE id = $1", [activeDedup.id]);
   dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       dedupSecondSource.sourceId,
       3,
       dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
-      dedupStart,
-      dedupEnd,
     ),
   ]);
   const durableDecision = await pool.query(

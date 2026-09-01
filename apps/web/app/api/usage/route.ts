@@ -184,13 +184,15 @@ export function parseSnapshots(
       (protocolVersion >= 5 && snapshot.kind === undefined) ||
       start > end ||
       start < earliest ||
-      (protocolVersion >= 5 && start < yearEarliest) ||
+      (protocolVersion >= 5 && kind === "year_backfill" && start < yearEarliest) ||
       end > todayUtc ||
       (end.valueOf() - start.valueOf()) / 86_400_000 > 30 ||
       (snapshot.completeness !== "complete" && snapshot.completeness !== "partial") ||
       (historyYearComplete !== null &&
         (!(["rolling", "year_backfill"] as const).includes(kind) ||
-          start.valueOf() !== yearEarliest.valueOf() ||
+          (kind === "year_backfill"
+            ? start.valueOf() !== yearEarliest.valueOf()
+            : start > yearEarliest || end < yearEarliest) ||
           (historyYearComplete !== "complete" && historyYearComplete !== "partial"))) ||
       !Array.isArray(snapshot.entries)
     ) {

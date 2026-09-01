@@ -36,6 +36,20 @@ const plotRight = 18;
 const plotTop = 18;
 const plotBottom = 48;
 
+export function usageChartPointerIndex(
+  clientX: number,
+  boundsLeft: number,
+  boundsWidth: number,
+  length: number,
+): number {
+  const viewBoxX = ((clientX - boundsLeft) / Math.max(1, boundsWidth)) * chartWidth;
+  const ratio = Math.max(
+    0,
+    Math.min(1, (viewBoxX - plotLeft) / (chartWidth - plotLeft - plotRight)),
+  );
+  return Math.round(ratio * Math.max(0, length - 1));
+}
+
 const DailyValues = memo(function DailyValues({
   days,
 }: {
@@ -135,8 +149,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
 
   function pointerIndex(event: PointerEvent<SVGSVGElement>): number {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-    return Math.round(ratio * Math.max(0, visible.length - 1));
+    return usageChartPointerIndex(event.clientX, bounds.left, bounds.width, visible.length);
   }
 
   function onPointerDown(event: PointerEvent<SVGSVGElement>) {
@@ -152,9 +165,8 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
     }
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     const bounds = event.currentTarget.getBoundingClientRect();
-    const delta = Math.round(
-      ((active.x - event.clientX) / Math.max(1, bounds.width)) * bounded.size,
-    );
+    const renderedPlotWidth = Math.max(1, bounds.width * (plotWidth / chartWidth));
+    const delta = Math.round(((active.x - event.clientX) / renderedPlotWidth) * bounded.size);
     frame.current = requestAnimationFrame(() => {
       setViewport((current) =>
         clampViewport({ ...current, start: active.start + delta }, days.length),

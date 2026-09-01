@@ -211,7 +211,7 @@ describe("dashboard connection flow", () => {
 
   it("renders one period-consistent exact daily explorer without number coercion", () => {
     const explorer = source("../dashboard/usage-explorer.tsx");
-    expect(dashboard).toContain("parseUsagePeriod(params)");
+    expect(dashboard).toContain("parseUsagePeriod(params, now)");
     expect(dashboard).toContain("resolvedPeriod.from");
     expect(dashboard).toContain("resolvedPeriod.toExclusive");
     expect(dashboard).toContain("total + BigInt(day.tokens)");
@@ -227,7 +227,9 @@ describe("dashboard connection flow", () => {
 
   it("uses the connector protocol for the current-year history upgrade notice", () => {
     expect(dashboard).toContain("i.protocol_version");
-    expect(dashboard).toContain("installation.protocol_version < connectorProtocolVersion");
+    expect(dashboard).toContain(
+      "installation.protocol_version < currentYearHistoryProtocolVersion",
+    );
     expect(dashboard).not.toContain("installation.browser_sync_protocol < 5");
   });
 });
