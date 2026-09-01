@@ -19,7 +19,7 @@ async function get(): Promise<Response> {
               ) AS expected_version,
               to_regclass('public.installation_sources') IS NOT NULL
                 AND to_regclass('public.daily_usage') IS NOT NULL
-                AND to_regclass('public.weekly_agent_usage') IS NOT NULL
+                AND to_regclass('public.daily_agent_usage') IS NOT NULL
                 AND to_regclass('public.account_dedup_events') IS NOT NULL
                 AND to_regclass('public.browser_sync_runs') IS NOT NULL
                 AND to_regclass('public.browser_sync_grants') IS NOT NULL
@@ -40,6 +40,12 @@ async function get(): Promise<Response> {
                    WHERE table_schema = 'public'
                      AND table_name = 'installation_sources'
                      AND column_name = 'codex_hook_notice_dismissed_at'
+                )
+                AND EXISTS (
+                  SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'installation_sources'
+                     AND column_name = 'history_backfill_status'
                 ) AS required_tables`,
       [expectedSchemaVersion],
     );

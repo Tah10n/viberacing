@@ -18,7 +18,7 @@ import {
   sameOrigin,
 } from "@/lib/http";
 import { bindLocalInstallation, viewer } from "@/lib/session";
-import { rebuildAgentSummaries } from "@/lib/usage-summary";
+import { rebuildAgentDailySummaries } from "@/lib/usage-summary";
 import { withRequestLogging } from "@/lib/request-log";
 import {
   clientAddress,
@@ -329,7 +329,7 @@ async function post(request: Request): Promise<Response> {
         );
       }
       for (const agentId of summariesToRebuild) {
-        await rebuildAgentSummaries(client, current.id, agentId);
+        await rebuildAgentDailySummaries(client, current.id, agentId);
       }
       return installation.id;
     });

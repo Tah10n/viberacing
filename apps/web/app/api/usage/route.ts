@@ -8,7 +8,6 @@ import { agentRegistry, isSupportedAgent } from "@/lib/agents";
 import { autoDeduplicateAccountWideSource } from "@/lib/account-dedup";
 import { digest } from "@/lib/crypto";
 import { query, transaction } from "@/lib/db";
-import { currentWeekStart } from "@/lib/leaderboard";
 import { annotateResponse, isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import {
   clientAddress,
@@ -16,7 +15,8 @@ import {
   consumeAdmissionRateLimit,
   consumeRateLimit,
 } from "@/lib/rate-limit";
-import { rebuildAgentSummaries, refreshAgentWeek } from "@/lib/usage-summary";
+import { rebuildAgentDailySummaries, refreshAgentRange } from "@/lib/usage-summary";
+import { addUtcDays } from "@/lib/usage-period";
 import { withRequestLogging } from "@/lib/request-log";
 
 interface UsageBody {
@@ -32,6 +32,8 @@ interface SnapshotInput {
   rangeEnd?: unknown;
   completeness?: unknown;
   entries?: unknown;
+  kind?: unknown;
+  historyYearComplete?: unknown;
 }
 
 interface EntryInput {
@@ -82,6 +84,8 @@ interface ParsedSnapshot {
   rangeEnd: string;
   completeness: "complete" | "partial";
   entries: ParsedEntry[];
+  kind: "rolling" | "year_backfill";
+  historyYearComplete: "complete" | "partial" | null;
 }
 
 interface ParsedSourceError {
@@ -103,7 +107,7 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const tokenPattern = /^(?:0|[1-9]\d{0,29})$/;
 const sequencePattern = /^[1-9]\d{0,29}$/;
 const bodyKeys = new Set(["protocolVersion", "snapshots", "sourceErrors"]);
-const snapshotKeys = new Set([
+const legacySnapshotKeys = new Set([
   "sourceId",
   "syncSequence",
   "rangeStart",
@@ -111,6 +115,7 @@ const snapshotKeys = new Set([
   "completeness",
   "entries",
 ]);
+const snapshotKeys = new Set([...legacySnapshotKeys, "kind", "historyYearComplete"]);
 const legacyEntryKeys = new Set([
   "date",
   "totalTokens",
@@ -142,26 +147,32 @@ function optionalToken(value: unknown): string | null | undefined {
 export function parseSnapshots(
   value: unknown,
   protocolVersion: SupportedConnectorProtocolVersion,
+  now = new Date(),
 ): ParsedSnapshot[] {
   if (!Array.isArray(value) || value.length > 32) {
     throw new UsageError(400, "invalid_snapshots");
   }
   const maximum = maximumDailyTokens();
-  const today = new Date();
-  const todayUtc = new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
-  );
-  const earliest = new Date(todayUtc);
-  earliest.setUTCDate(earliest.getUTCDate() - 30);
+  const todayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const rollingEarliest = new Date(todayUtc);
+  rollingEarliest.setUTCDate(rollingEarliest.getUTCDate() - 30);
+  const yearEarliest = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
   const sourceIds = new Set<string>();
   let totalEntries = 0;
   return value.map((raw): ParsedSnapshot => {
-    if (!isRecord(raw) || !onlyKeys(raw, snapshotKeys)) {
+    const allowedSnapshotKeys = protocolVersion >= 5 ? snapshotKeys : legacySnapshotKeys;
+    if (!isRecord(raw) || !onlyKeys(raw, allowedSnapshotKeys)) {
       throw new UsageError(400, "invalid_snapshot");
     }
     const snapshot = raw as SnapshotInput;
     const start = utcDate(snapshot.rangeStart);
     const end = utcDate(snapshot.rangeEnd);
+    const kind = protocolVersion >= 5 ? snapshot.kind : "rolling";
+    const historyYearComplete =
+      protocolVersion >= 5 && snapshot.historyYearComplete !== undefined
+        ? snapshot.historyYearComplete
+        : null;
+    const earliest = kind === "year_backfill" ? yearEarliest : rollingEarliest;
     if (
       !isUuid(snapshot.sourceId) ||
       sourceIds.has(snapshot.sourceId) ||
@@ -169,11 +180,18 @@ export function parseSnapshots(
       !sequencePattern.test(snapshot.syncSequence) ||
       start === null ||
       end === null ||
+      (kind !== "rolling" && kind !== "year_backfill") ||
+      (protocolVersion >= 5 && snapshot.kind === undefined) ||
       start > end ||
       start < earliest ||
+      (protocolVersion >= 5 && start < yearEarliest) ||
       end > todayUtc ||
       (end.valueOf() - start.valueOf()) / 86_400_000 > 30 ||
       (snapshot.completeness !== "complete" && snapshot.completeness !== "partial") ||
+      (historyYearComplete !== null &&
+        (!(["rolling", "year_backfill"] as const).includes(kind) ||
+          start.valueOf() !== yearEarliest.valueOf() ||
+          (historyYearComplete !== "complete" && historyYearComplete !== "partial"))) ||
       !Array.isArray(snapshot.entries)
     ) {
       throw new UsageError(400, "invalid_snapshot");
@@ -248,6 +266,8 @@ export function parseSnapshots(
       rangeEnd: snapshot.rangeEnd as string,
       completeness: snapshot.completeness,
       entries,
+      kind,
+      historyYearComplete,
     };
   });
 }
@@ -312,23 +332,16 @@ export function parseSourceErrors(
   });
 }
 
-function affectedWeeks(
+function affectedRanges(
   snapshot: ParsedSnapshot,
   completeness: "complete" | "partial",
 ): Set<string> {
   const result = new Set<string>();
   if (completeness === "partial") {
-    for (const entry of snapshot.entries)
-      result.add(currentWeekStart(new Date(`${entry.date}T00:00:00Z`)));
+    for (const entry of snapshot.entries) result.add(`${entry.date}\0${addUtcDays(entry.date, 1)}`);
     return result;
   }
-  const cursor = new Date(`${snapshot.rangeStart}T00:00:00Z`);
-  const end = new Date(`${snapshot.rangeEnd}T00:00:00Z`);
-  while (cursor <= end) {
-    result.add(currentWeekStart(cursor));
-    cursor.setUTCDate(cursor.getUTCDate() + 7);
-  }
-  result.add(currentWeekStart(end));
+  result.add(`${snapshot.rangeStart}\0${addUtcDays(snapshot.rangeEnd, 1)}`);
   return result;
 }
 
@@ -384,7 +397,7 @@ async function post(request: Request): Promise<Response> {
         { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } },
       );
     }
-    const rawBody = await readBoundedJson(request, 131_072);
+    const rawBody = await readBoundedJson(request, 524_288);
     if (!isRecord(rawBody) || !onlyKeys(rawBody, bodyKeys)) return problem(400, "invalid_request");
     const body = rawBody as UsageBody;
     const requestProtocolVersion = body.protocolVersion;
@@ -468,10 +481,7 @@ async function post(request: Request): Promise<Response> {
           !agentRegistry[source.agent_id].countsExactTokens
         ) {
           await client.query("DELETE FROM daily_usage WHERE source_id = $1", [snapshot.sourceId]);
-          await client.query(
-            "DELETE FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = $2",
-            [source.user_id, source.agent_id],
-          );
+          await rebuildAgentDailySummaries(client, source.user_id, source.agent_id);
           await client.query(
             `UPDATE installation_sources
                 SET last_accepted_sync_sequence = $2::numeric,
@@ -489,7 +499,7 @@ async function post(request: Request): Promise<Response> {
           continue;
         }
         const dates = snapshot.entries.map((entry) => entry.date);
-        if (sourceCompleteness === "complete") {
+        if (snapshot.kind === "rolling" && sourceCompleteness === "complete") {
           await client.query(
             `DELETE FROM daily_usage
               WHERE source_id = $1
@@ -563,22 +573,53 @@ async function post(request: Request): Promise<Response> {
             [snapshot.sourceId, JSON.stringify(snapshot.entries), acceptedAt],
           );
         }
-        await client.query(
-          `UPDATE installation_sources
-              SET last_accepted_sync_sequence = $2::numeric,
-                  last_successful_sync_at = now(),
-                  last_completeness = $3,
-                  last_error_summary = NULL,
-                  last_warning_summary = $4,
-                  updated_at = now()
-            WHERE id = $1`,
-          [
-            snapshot.sourceId,
-            snapshot.syncSequence,
-            sourceCompleteness,
-            sourceCompleteness === "partial" ? "Collector reported a partial snapshot" : null,
-          ],
-        );
+        if (snapshot.kind === "rolling") {
+          await client.query(
+            `UPDATE installation_sources
+                SET last_accepted_sync_sequence = $2::numeric,
+                    last_successful_sync_at = now(),
+                    last_completeness = $3,
+                    last_error_summary = NULL,
+                    last_warning_summary = $4,
+                    history_backfill_year = CASE
+                      WHEN $5::text IS NULL THEN history_backfill_year
+                      ELSE extract(year FROM ($6::date))::integer
+                    END,
+                    history_backfill_status = coalesce($5, history_backfill_status),
+                    history_backfill_completed_at = CASE
+                      WHEN $5::text IS NULL THEN history_backfill_completed_at ELSE now()
+                    END,
+                    updated_at = now()
+              WHERE id = $1`,
+            [
+              snapshot.sourceId,
+              snapshot.syncSequence,
+              sourceCompleteness,
+              sourceCompleteness === "partial" ? "Collector reported a partial snapshot" : null,
+              snapshot.historyYearComplete,
+              snapshot.rangeEnd,
+            ],
+          );
+        } else {
+          await client.query(
+            `UPDATE installation_sources
+                SET last_accepted_sync_sequence = $2::numeric,
+                    last_successful_sync_at = now(),
+                    history_backfill_year = extract(year FROM ($3::date))::integer,
+                    history_backfill_status = coalesce($4, 'pending'),
+                    history_backfill_completed_at = CASE
+                      WHEN $4::text IS NULL THEN NULL ELSE now()
+                    END,
+                    updated_at = now()
+              WHERE id = $1`,
+            [
+              snapshot.sourceId,
+              snapshot.syncSequence,
+              snapshot.rangeStart,
+              snapshot.historyYearComplete,
+            ],
+          );
+        }
         acceptedEntries += snapshot.entries.length;
         acceptedSnapshots += 1;
         acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
@@ -589,8 +630,8 @@ async function post(request: Request): Promise<Response> {
         ) {
           sourcesWithCompleteEntriesForDedup.add(snapshot.sourceId);
         }
-        for (const week of affectedWeeks(snapshot, sourceCompleteness)) {
-          summaries.add(`${source.user_id}\0${source.agent_id}\0${week}`);
+        for (const range of affectedRanges(snapshot, sourceCompleteness)) {
+          summaries.add(`${source.user_id}\0${source.agent_id}\0${range}`);
         }
       }
       for (const sourceError of sourceErrors) {
@@ -629,12 +670,17 @@ async function post(request: Request): Promise<Response> {
         }
       }
       for (const summary of [...summaries].sort()) {
-        const [userId, agentId, week] = summary.split("\0");
-        if (userId === undefined || agentId === undefined || week === undefined) {
+        const [userId, agentId, from, toExclusive] = summary.split("\0");
+        if (
+          userId === undefined ||
+          agentId === undefined ||
+          from === undefined ||
+          toExclusive === undefined
+        ) {
           throw new Error("Invalid internal summary key");
         }
         if (!rebuiltAgents.has(`${userId}\0${agentId}`)) {
-          await refreshAgentWeek(client, userId, agentId, week);
+          await refreshAgentRange(client, userId, agentId, from, toExclusive);
         }
       }
       for (const rebuilt of [...rebuiltAgents].sort()) {
@@ -642,7 +688,7 @@ async function post(request: Request): Promise<Response> {
         if (userId === undefined || agentId === undefined) {
           throw new Error("Invalid internal account deduplication key");
         }
-        await rebuildAgentSummaries(client, userId, agentId);
+        await rebuildAgentDailySummaries(client, userId, agentId);
       }
       if (acceptedSnapshots > 0) {
         await client.query(

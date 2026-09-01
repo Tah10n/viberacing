@@ -30,6 +30,8 @@ interface SourceRow {
   account_label: string;
   collection_method: string;
   last_accepted_sync_sequence: string;
+  history_backfill_year: number;
+  history_backfill_status: "pending" | "complete" | "partial";
 }
 
 async function post(request: Request): Promise<Response> {
@@ -109,6 +111,7 @@ async function post(request: Request): Promise<Response> {
       throw new Error("Installation has an unsupported connector protocol version");
     }
     const deviceToken = deviceTokenFromPollToken(body.pollToken);
+    const currentHistoryYear = new Date().getUTCFullYear();
     const mappings = await query<SourceRow>(
       `SELECT s.client_source_id,
               s.id::text AS source_id,
@@ -116,7 +119,9 @@ async function post(request: Request): Promise<Response> {
               s.agent_id,
               a.label AS account_label,
               s.collection_method,
-              s.last_accepted_sync_sequence::text
+              s.last_accepted_sync_sequence::text,
+              s.history_backfill_year,
+              s.history_backfill_status
          FROM installation_sources s
          JOIN agent_accounts a ON a.id = s.agent_account_id
          JOIN installations i ON i.id = s.installation_id
@@ -143,6 +148,18 @@ async function post(request: Request): Promise<Response> {
             accountLabel: source.account_label,
             collectionMethod: source.collection_method,
             lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
+            ...(installation.protocol_version >= 5
+              ? {
+                  historyBackfillYear:
+                    source.history_backfill_year === currentHistoryYear
+                      ? source.history_backfill_year
+                      : currentHistoryYear,
+                  historyBackfillStatus:
+                    source.history_backfill_year === currentHistoryYear
+                      ? source.history_backfill_status
+                      : "pending",
+                }
+              : {}),
           })),
           protocol: {
             version: installation.protocol_version,

@@ -4,7 +4,7 @@ import { transaction } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
-import { rebuildAgentSummaries } from "@/lib/usage-summary";
+import { rebuildAgentDailySummaries } from "@/lib/usage-summary";
 
 interface DedupEventRow {
   source_id: string;
@@ -71,7 +71,7 @@ async function post(request: Request): Promise<Response> {
           WHERE id = $1`,
         [eventId],
       );
-      await rebuildAgentSummaries(client, current.id, event.agent_id);
+      await rebuildAgentDailySummaries(client, current.id, event.agent_id);
       return "undone";
     });
     if (outcome === "missing") return problem(404, "dedup_event_not_found");

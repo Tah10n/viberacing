@@ -78,9 +78,11 @@ type SourceMapping = {
   last_accepted_sync_sequence: string;
   source_id: string;
   profile_source_id: string;
+  history_backfill_year: number;
+  history_backfill_status: "pending" | "complete" | "partial";
 };
 
-function response(mapping: SourceMapping): Response {
+function response(mapping: SourceMapping, protocolVersion: number): Response {
   return Response.json(
     {
       source: {
@@ -92,6 +94,12 @@ function response(mapping: SourceMapping): Response {
         collectionMethod: mapping.collection_method,
         lastAcceptedSyncSequence: mapping.last_accepted_sync_sequence,
         profileSourceId: mapping.profile_source_id,
+        ...(protocolVersion >= 5
+          ? {
+              historyBackfillYear: mapping.history_backfill_year,
+              historyBackfillStatus: mapping.history_backfill_status,
+            }
+          : {}),
       },
     },
     { headers: { "Cache-Control": "no-store" } },
@@ -116,8 +124,8 @@ async function post(request: Request): Promise<Response> {
     ) {
       return rateLimited();
     }
-    const installations = await query<{ id: string; user_id: string }>(
-      `SELECT id::text, user_id::text
+    const installations = await query<{ id: string; user_id: string; protocol_version: number }>(
+      `SELECT id::text, user_id::text, protocol_version
          FROM installations
         WHERE device_token_hash = $1 AND status = 'active' AND user_id IS NOT NULL
         LIMIT 1`,
@@ -156,6 +164,8 @@ async function post(request: Request): Promise<Response> {
                 source.collection_method,
                 source.last_accepted_sync_sequence::text,
                 source.profile_source_id::text,
+                source.history_backfill_year,
+                source.history_backfill_status,
                 source.status
            FROM installation_sources source
            JOIN agent_accounts account ON account.id = source.agent_account_id
@@ -281,7 +291,8 @@ async function post(request: Request): Promise<Response> {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10)
          RETURNING id::text AS source_id, client_source_id, agent_account_id::text, agent_id,
                    $9::text AS account_label, collection_method,
-                   last_accepted_sync_sequence::text, profile_source_id::text`,
+                   last_accepted_sync_sequence::text, profile_source_id::text,
+                   history_backfill_year, history_backfill_status`,
         [
           sourceId,
           owner.id,
@@ -305,7 +316,7 @@ async function post(request: Request): Promise<Response> {
     if (outcome.kind === "unsupported_profile") return problem(400, "unsupported_profile");
     if (outcome.kind === "source_limit") return problem(409, "source_limit_reached");
     if (outcome.kind === "account_limit") return problem(409, "profile_account_limit_reached");
-    return response(outcome.mapping);
+    return response(outcome.mapping, installation.protocol_version);
   } catch (error) {
     return error instanceof SyntaxError || error instanceof RangeError
       ? problem(400, "invalid_request")

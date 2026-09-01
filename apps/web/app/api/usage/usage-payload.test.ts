@@ -14,6 +14,104 @@ const sourceId = "11111111-1111-4111-8111-111111111111";
 const parseSnapshots = (value: unknown) => parseVersionedSnapshots(value, 3);
 
 describe("usage payload privacy and numeric contract", () => {
+  it("allows bounded v5 current-year chunks while v4 remains rolling-only", () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const januaryChunk = {
+      sourceId,
+      syncSequence: "1",
+      kind: "year_backfill",
+      rangeStart: "2026-01-01",
+      rangeEnd: "2026-01-31",
+      completeness: "complete",
+      historyYearComplete: "complete",
+      entries: [{ date: "2026-01-01", totalTokens: "1" }],
+    };
+    expect(parseVersionedSnapshots([januaryChunk], 5, now)[0]).toMatchObject({
+      kind: "year_backfill",
+      historyYearComplete: "complete",
+    });
+    expect(() => parseVersionedSnapshots([januaryChunk], 4, now)).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [{ ...januaryChunk, rangeStart: "2025-12-31", historyYearComplete: undefined }],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...januaryChunk,
+            rangeStart: "2026-08-02",
+            rangeEnd: "2026-09-01",
+            historyYearComplete: undefined,
+            entries: [],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...januaryChunk,
+            rangeStart: "2026-08-01",
+            rangeEnd: "2026-09-01",
+            historyYearComplete: undefined,
+            entries: [],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+  });
+
+  it("rejects future history, incomplete completion metadata, and unknown history fields", () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const snapshot = {
+      sourceId,
+      syncSequence: "1",
+      kind: "year_backfill",
+      rangeStart: "2026-09-01",
+      rangeEnd: "2026-09-02",
+      completeness: "partial",
+      entries: [],
+    };
+    expect(() => parseVersionedSnapshots([snapshot], 5, now)).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...snapshot,
+            rangeStart: "2026-08-01",
+            rangeEnd: "2026-08-31",
+            historyYearComplete: "partial",
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...snapshot,
+            rangeStart: "2026-01-01",
+            rangeEnd: "2026-01-31",
+            historyCursor: "private",
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+  });
+
   it("accepts canonical decimal strings beyond JavaScript integer precision", () => {
     const date = today();
     expect(

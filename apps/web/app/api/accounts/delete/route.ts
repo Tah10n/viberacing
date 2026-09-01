@@ -4,7 +4,7 @@ import { transaction } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
-import { rebuildAgentSummaries } from "@/lib/usage-summary";
+import { rebuildAgentDailySummaries } from "@/lib/usage-summary";
 
 async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
@@ -45,7 +45,7 @@ async function post(request: Request): Promise<Response> {
         accountId,
         current.id,
       ]);
-      await rebuildAgentSummaries(client, current.id, row.agent_id);
+      await rebuildAgentDailySummaries(client, current.id, row.agent_id);
       return "deleted";
     });
     if (outcome === "missing") return problem(404, "account_not_found");

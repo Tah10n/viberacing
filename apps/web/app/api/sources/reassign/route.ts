@@ -5,7 +5,7 @@ import { transaction } from "@/lib/db";
 import { isUuid, problem, readBoundedForm, sameOrigin } from "@/lib/http";
 import { withRequestLogging } from "@/lib/request-log";
 import { viewer } from "@/lib/session";
-import { rebuildAgentSummaries } from "@/lib/usage-summary";
+import { rebuildAgentDailySummaries } from "@/lib/usage-summary";
 
 async function post(request: Request): Promise<Response> {
   if (!sameOrigin(request)) return new Response(null, { status: 403 });
@@ -56,7 +56,7 @@ async function post(request: Request): Promise<Response> {
           WHERE source_id = $1 AND user_id = $2 AND status = 'active'`,
         [sourceId, current.id],
       );
-      await rebuildAgentSummaries(client, current.id, source.agent_id);
+      await rebuildAgentDailySummaries(client, current.id, source.agent_id);
       return true;
     });
     if (!changed) return problem(404, "source_or_account_not_found");
