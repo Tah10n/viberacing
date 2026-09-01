@@ -4,15 +4,20 @@ import { CopyCommandButton } from "./components/copy-command-button";
 import { ConnectorUpdateNotice } from "./components/connector-update-notice";
 import { RacerLink } from "./components/racer-link";
 import { StandingsTable } from "./components/standings-table";
-import { UserLocalTime } from "./components/user-local-time";
+import { PeriodSelector } from "./components/period-selector";
 import {
-  currentWeekEndsAt,
-  currentWeekLabel,
   formatCompactTokens,
   formatExactTokens,
   leaderboard,
   publicProfile,
 } from "@/lib/leaderboard";
+import {
+  parseUsagePeriod,
+  resolveUsagePeriod,
+  usagePeriodRangeLabel,
+  usagePeriodSearch,
+  usagePeriodTitle,
+} from "@/lib/usage-period";
 import { hasAccountDeletionReceipt, viewer } from "@/lib/session";
 import { agentNames, supportedAgents } from "@/lib/agents";
 import { connectorRepairCommand, connectorUninstallCommand } from "@/lib/connector";
@@ -25,7 +30,10 @@ import { query } from "@/lib/db";
 
 interface HomePageProps {
   readonly searchParams: Promise<{
+    from?: string | string[];
     page?: string | string[];
+    period?: string | string[];
+    to?: string | string[];
   }>;
 }
 
@@ -44,17 +52,23 @@ function parsePage(value: string | string[] | undefined): number {
   return Number.isSafeInteger(page) && page >= 1 && page <= maximumPageNumber ? page : 1;
 }
 
-function pageHref(page: number): string {
-  return page === 1 ? "/" : `/?page=${page.toString()}`;
+function pageHref(page: number, periodSearch: string): string {
+  const params = new URLSearchParams(periodSearch);
+  if (page > 1) params.set("page", page.toString());
+  return `/?${params.toString()}`;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   await connection();
   const params = await searchParams;
   const page = parsePage(params.page);
+  const period = parseUsagePeriod(params);
+  const resolvedPeriod = resolveUsagePeriod(period);
+  const periodSearch = usagePeriodSearch(period);
+  const periodTitle = usagePeriodTitle(period);
+  const periodRange = usagePeriodRangeLabel(resolvedPeriod);
   const origin = publicOrigin().origin;
   const minimumVersion = minimumConnectorVersion();
-  const raceEndsAt = currentWeekEndsAt();
   const updateCommand = connectorRepairCommand(origin);
   const uninstallCommand = connectorUninstallCommand(origin);
   const offset = (page - 1) * leaderboardPageSize;
@@ -64,8 +78,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]);
   const accountDeleted = current === null && accountDeletionReceipt;
   const [pageRows, profile, connectorVersions] = await Promise.all([
-    leaderboard({ limit: leaderboardPageSize + 1, offset }),
-    current === null ? Promise.resolve(null) : publicProfile(current.handle),
+    leaderboard({ limit: leaderboardPageSize + 1, offset }, period),
+    current === null ? Promise.resolve(null) : publicProfile(current.handle, period),
     current === null
       ? Promise.resolve([] as ConnectorVersionRow[])
       : query<ConnectorVersionRow>(
@@ -121,11 +135,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <section className="hero" aria-labelledby="race-title">
         <div className="hero-primary">
           <div className="hero-copy">
-            <h1 id="race-title">The weekly token race</h1>
+            <h1 id="race-title">The coding-agent token race</h1>
           </div>
           <div
             className={`user-callout${current === null ? " user-callout-guest" : ""}`}
-            aria-label="Your weekly position"
+            aria-label={`Your ${periodTitle.toLowerCase()} position`}
           >
             <span className="eyebrow meta-label">Your position</span>
             {current === null ? (
@@ -151,15 +165,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             )}
           </div>
           <div className="hero-race" aria-label="Current race">
-            <span className="meta-label">Current race</span>
-            <strong className="meta-value">{currentWeekLabel()}</strong>
-            <small className="meta-value">
-              <UserLocalTime
-                dateTime={raceEndsAt}
-                fallback="Ends Sun, 23:59 UTC"
-                format="race-end"
-              />
-            </small>
+            <span className="meta-label">Selected period</span>
+            <strong className="meta-value">{periodTitle}</strong>
+            <small className="meta-value">{periodRange}</small>
           </div>
         </div>
         <aside className="hero-summary" aria-label="How Vibe Racing works">
@@ -184,11 +192,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <section className="leaderboard" aria-labelledby="leaderboard-title">
         <div className="leaderboard-heading">
           <div>
-            <h2 id="leaderboard-title">Weekly standings</h2>
-            <p>Community totals reported by local connectors; not proof of cost or productivity.</p>
+            <h2 id="leaderboard-title">{periodTitle} standings</h2>
+            <p>
+              {period.kind === "year" ? "Current calendar year · " : ""}
+              {periodRange}. Community totals are self-reported, not proof of cost or productivity.
+            </p>
           </div>
           <span className="badge">Self-reported</span>
         </div>
+        <PeriodSelector basePath="/" period={period} resolved={resolvedPeriod} />
         {rows.length === 0 ? (
           <div className="empty">
             <strong>
@@ -201,12 +213,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           </div>
         ) : (
-          <StandingsTable currentHandle={current?.handle} rows={rows} />
+          <StandingsTable
+            currentHandle={current?.handle}
+            periodLabel={periodTitle}
+            periodSearch={periodSearch}
+            rows={rows}
+          />
         )}
         {page > 1 || hasNextPage ? (
           <nav className="standings-pagination" aria-label="Standings pages">
             {page > 1 ? (
-              <Link className="button button-secondary" href={pageHref(page - 1)}>
+              <Link className="button button-secondary" href={pageHref(page - 1, periodSearch)}>
                 Previous 100
               </Link>
             ) : (
@@ -214,7 +231,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             )}
             <span>Page {page}</span>
             {hasNextPage ? (
-              <Link className="button button-secondary" href={pageHref(page + 1)}>
+              <Link className="button button-secondary" href={pageHref(page + 1, periodSearch)}>
                 Next 100
               </Link>
             ) : (

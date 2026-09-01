@@ -303,6 +303,25 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dashboard-period {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dashboard-period .period-selector {
+    justify-content: flex-start;
+  }
+
+  .custom-period-form {
+    right: auto;
+    left: 0;
+  }
+
+  .usage-explorer-controls output {
+    width: 100%;
+    margin-left: 0;
+  }
+
   .settings-grid {
     grid-template-columns: 1fr;
   }
@@ -410,6 +429,24 @@
 
   .usage-chart {
     padding: var(--space-3);
+  }
+
+  .custom-period-form {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-period-form .button {
+    grid-column: auto;
+  }
+
+  .usage-explorer {
+    padding: var(--space-3);
+  }
+
+  .usage-explorer-canvas,
+  .usage-explorer-canvas svg {
+    min-height: 14rem;
+    height: 14rem;
   }
 
   .usage-chart-layout {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import Link from "next/link";
 import {
   formatAgentShare,
   formatCompactTokens,
@@ -13,6 +14,8 @@ import { isProfileShortcut, shouldOpenProfile, syncProfileDialog } from "./stand
 
 interface StandingsTableProps {
   readonly currentHandle: string | undefined;
+  readonly periodLabel: string;
+  readonly periodSearch: string;
   readonly rows: readonly LeaderboardRow[];
 }
 
@@ -32,10 +35,18 @@ function AgentMix({ row }: Readonly<{ row: LeaderboardRow }>) {
 interface RacerProfileDialogProps {
   readonly currentHandle: string | undefined;
   readonly onClose: () => void;
+  readonly periodLabel: string;
+  readonly periodSearch: string;
   readonly row: LeaderboardRow | null;
 }
 
-function RacerProfileDialog({ currentHandle, onClose, row }: RacerProfileDialogProps) {
+function RacerProfileDialog({
+  currentHandle,
+  onClose,
+  periodLabel,
+  periodSearch,
+  row,
+}: RacerProfileDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -81,11 +92,11 @@ function RacerProfileDialog({ currentHandle, onClose, row }: RacerProfileDialogP
           </div>
           <div className="racer-profile-score">
             <div>
-              <span>Weekly rank</span>
+              <span>{periodLabel} rank</span>
               <strong>#{row.rank}</strong>
             </div>
             <div>
-              <span>Tokens this week</span>
+              <span>Tokens · {periodLabel}</span>
               <strong title={`${formatExactTokens(row.total)} tokens`}>
                 {formatCompactTokens(row.total)}
               </strong>
@@ -110,6 +121,12 @@ function RacerProfileDialog({ currentHandle, onClose, row }: RacerProfileDialogP
           >
             Open GitHub profile ↗
           </a>
+          <Link
+            className="button button-secondary racer-leaderboard-profile-button"
+            href={`/u/${encodeURIComponent(row.handle)}?${periodSearch}`}
+          >
+            View leaderboard profile
+          </Link>
           {currentHandle?.toLowerCase() === row.handle.toLowerCase() ? (
             <span className="profile-you-label">This is your leaderboard profile</span>
           ) : null}
@@ -119,7 +136,12 @@ function RacerProfileDialog({ currentHandle, onClose, row }: RacerProfileDialogP
   );
 }
 
-export function StandingsTable({ currentHandle, rows }: StandingsTableProps) {
+export function StandingsTable({
+  currentHandle,
+  periodLabel,
+  periodSearch,
+  rows,
+}: StandingsTableProps) {
   const [selectedRow, setSelectedRow] = useState<LeaderboardRow | null>(null);
   const normalizedHandle = currentHandle?.toLowerCase();
 
@@ -139,7 +161,7 @@ export function StandingsTable({ currentHandle, rows }: StandingsTableProps) {
 
   return (
     <>
-      <div className="table-scroll" tabIndex={0} aria-label="Scrollable weekly standings">
+      <div className="table-scroll" tabIndex={0} aria-label={`Scrollable ${periodLabel} standings`}>
         <table className="ranking-table">
           <thead>
             <tr>
@@ -147,7 +169,7 @@ export function StandingsTable({ currentHandle, rows }: StandingsTableProps) {
               <th scope="col">Racer</th>
               <th scope="col">Agent mix</th>
               <th aria-sort="descending" scope="col">
-                Tokens this week
+                Tokens · {periodLabel}
               </th>
             </tr>
           </thead>
@@ -172,6 +194,12 @@ export function StandingsTable({ currentHandle, rows }: StandingsTableProps) {
                   <td className="racer-cell">
                     <div className="racer-line">
                       <RacerLink handle={row.handle} />
+                      <Link
+                        className="leaderboard-profile-link"
+                        href={`/u/${encodeURIComponent(row.handle)}?${periodSearch}`}
+                      >
+                        View profile
+                      </Link>
                       {isCurrent ? <Badge>You</Badge> : null}
                     </div>
                     <div className="mobile-agent-mix">
@@ -195,6 +223,8 @@ export function StandingsTable({ currentHandle, rows }: StandingsTableProps) {
         onClose={() => {
           setSelectedRow(null);
         }}
+        periodLabel={periodLabel}
+        periodSearch={periodSearch}
         row={selectedRow}
       />
     </>

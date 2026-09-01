@@ -2,36 +2,43 @@ import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, PageShell, Panel } from "../../components/ui";
+import { formatCompactTokens, formatExactTokens, publicProfile } from "@/lib/leaderboard";
 import {
-  currentWeekLabel,
-  formatCompactTokens,
-  formatExactTokens,
-  publicProfile,
-} from "@/lib/leaderboard";
+  parseUsagePeriod,
+  resolveUsagePeriod,
+  usagePeriodRangeLabel,
+  usagePeriodSearch,
+  usagePeriodTitle,
+} from "@/lib/usage-period";
 
 interface ProfileProps {
   params: Promise<{ handle: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function ProfilePage({ params }: ProfileProps) {
+export default async function ProfilePage({ params, searchParams }: ProfileProps) {
   await connection();
-  const { handle } = await params;
+  const [{ handle }, query] = await Promise.all([params, searchParams]);
   if (!/^[A-Za-z0-9-]{1,39}$/.test(handle)) notFound();
-  const profile = await publicProfile(handle);
+  const period = parseUsagePeriod(query);
+  const resolved = resolveUsagePeriod(period);
+  const periodTitle = usagePeriodTitle(period);
+  const periodSearch = usagePeriodSearch(period);
+  const profile = await publicProfile(handle, period);
   if (profile === null) notFound();
   return (
     <PageShell className="profile-page" width="narrow">
-      <Link className="back-link" href="/">
+      <Link className="back-link" href={`/?${periodSearch}`}>
         Back to standings
       </Link>
       <PageHeader
-        description={`Self-reported weekly usage · ${currentWeekLabel()}`}
+        description={`Self-reported usage · ${usagePeriodRangeLabel(resolved)}`}
         eyebrow="Racer profile"
         title={`@${profile.handle}`}
       />
-      <section className="score-card" aria-label="Weekly score">
+      <section className="score-card" aria-label={`${periodTitle} score`}>
         <div>
-          <span>Weekly rank</span>
+          <span>{periodTitle} rank</span>
           <strong>#{profile.rank}</strong>
         </div>
         <div>
@@ -51,7 +58,7 @@ export default async function ProfilePage({ params }: ProfileProps) {
           <div className="breakdown" key={item.agent}>
             <div>
               <strong>{item.label}</strong>
-              <span>Weekly aggregate</span>
+              <span>{periodTitle} aggregate</span>
             </div>
             <strong title={`${formatExactTokens(item.tokens)} tokens`}>
               {formatCompactTokens(item.tokens)}

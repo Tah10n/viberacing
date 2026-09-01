@@ -9,6 +9,7 @@ import {
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { ConnectorUpdateNotice } from "../components/connector-update-notice";
+import { PeriodSelector } from "../components/period-selector";
 import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { UserLocalTime } from "../components/user-local-time";
@@ -27,9 +28,17 @@ import {
 } from "@/lib/config";
 import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
-import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
+import { formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
 import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
+import {
+  addUtcDays,
+  parseUsagePeriod,
+  resolveUsagePeriod,
+  usagePeriodRangeLabel,
+  usagePeriodTitle,
+} from "@/lib/usage-period";
+import { UsageExplorer, type UsageExplorerDay } from "./usage-explorer";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -73,6 +82,8 @@ interface SourceRow {
   collection_method: string;
   supported_surface: string;
   status: string;
+  history_backfill_year: number | null;
+  history_backfill_status: "pending" | "complete" | "partial";
 }
 
 interface CodexHookNoticeRow {
@@ -95,32 +106,11 @@ interface DailyUsageRow {
   tokens: string;
 }
 
-interface UsageChartDay {
-  date: string;
-  day: string;
-  fullLabel: string;
-  level: number;
-  tokens: string;
-  weekday: string;
-}
-
-interface UsageChart {
-  days: UsageChartDay[];
-  maximum: string;
-  midpoint: string;
-  total: string;
-}
-
-const usageChartLevels = 20n;
-const weekdayFormatter = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  timeZone: "UTC",
-});
 const fullDayFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   timeZone: "UTC",
-  weekday: "long",
+  year: "numeric",
 });
 
 function agentLabel(agent: string): string {
@@ -167,7 +157,7 @@ function hasReassignmentTarget(accounts: readonly AccountRow[], account: Account
   );
 }
 
-function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
+function PeriodTokenBreakdown({ account }: { readonly account: AccountRow }) {
   if (account.shared_profile)
     return (
       <p className="token-breakdown-note">
@@ -190,7 +180,7 @@ function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
   const componentTotal = account.component_tokens;
   return (
     <>
-      <dl aria-label="Weekly token breakdown" className="token-breakdown">
+      <dl aria-label="Token breakdown for selected period" className="token-breakdown">
         {counters.map(([label, tokens]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -248,38 +238,21 @@ function AccountMatchHistory({
   );
 }
 
-function usageChart(weekStart: string, usage: readonly DailyUsageRow[]): UsageChart {
+function usageSeries(
+  from: string,
+  toExclusive: string,
+  usage: readonly DailyUsageRow[],
+): readonly UsageExplorerDay[] {
   const totals = new Map(usage.map((entry) => [entry.usage_date, entry.tokens]));
-  const start = new Date(`${weekStart}T00:00:00.000Z`);
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(start);
-    date.setUTCDate(start.getUTCDate() + index);
-    const dateKey = date.toISOString().slice(0, 10);
-    return {
-      date: dateKey,
-      day: date.getUTCDate().toString(),
-      fullLabel: fullDayFormatter.format(date),
-      tokens: totals.get(dateKey) ?? "0",
-      weekday: weekdayFormatter.format(date),
-    };
-  });
-  const maximum = days.reduce((value, day) => {
-    const tokens = BigInt(day.tokens);
-    return tokens > value ? tokens : value;
-  }, 0n);
-  const chartDays = days.map((day) => {
-    const tokens = BigInt(day.tokens);
-    const rounded = maximum === 0n ? 0n : (tokens * usageChartLevels + maximum / 2n) / maximum;
-    const level = tokens === 0n ? 0n : rounded > 0n ? rounded : 1n;
-    return { ...day, level: Number(level) };
-  });
-  const total = days.reduce((value, day) => value + BigInt(day.tokens), 0n);
-  return {
-    days: chartDays,
-    maximum: maximum.toString(),
-    midpoint: (maximum / 2n).toString(),
-    total: total.toString(),
-  };
+  const days: UsageExplorerDay[] = [];
+  for (let date = from; date < toExclusive; date = addUtcDays(date, 1)) {
+    days.push({
+      date,
+      label: fullDayFormatter.format(new Date(`${date}T00:00:00.000Z`)),
+      tokens: totals.get(date) ?? "0",
+    });
+  }
+  return days;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
@@ -295,7 +268,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     localInstallationId(),
   ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
-  const weekStart = currentWeekStart();
+  const period = parseUsagePeriod(params);
+  const resolvedPeriod = resolveUsagePeriod(period);
+  const periodTitle = usagePeriodTitle(period);
+  const periodRange = usagePeriodRangeLabel(resolvedPeriod);
+  const currentYear = Number(resolvedPeriod.toInclusive.slice(0, 4));
   const [installations, accounts, sources, codexHookNotices, dedupEvents, dailyUsage] =
     await Promise.all([
       query<InstallationRow>(
@@ -328,7 +305,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               max(s.last_successful_sync_at) AS last_sync_at,
               coalesce(bool_or(s.last_completeness = 'partial'), false) AS partial,
               coalesce(bool_or(s.last_error_summary IS NOT NULL), false) AS has_error
-              ,coalesce(bool_or(s.installation_id = $3::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
+              ,coalesce(bool_or(s.installation_id = $4::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
               coalesce(bool_or(
                 s.agent_id = 'codex' AND (
                   SELECT count(*)
@@ -461,7 +438,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                          JOIN daily_usage d ON d.source_id = source_usage.id
                         WHERE source_usage.agent_account_id = a.id
                           AND source_usage.user_id = a.user_id
-                          AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+                          AND d.usage_date >= $2::date AND d.usage_date < $3::date
                      ) precedence
                  ) candidate
                 GROUP BY candidate.usage_date
@@ -471,11 +448,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         GROUP BY a.id, usage.tokens, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-        [current.id, weekStart, browserInstallationId],
+        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
       ),
       query<SourceRow>(
         `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
-              s.collection_method, s.supported_surface, s.status
+              s.collection_method, s.supported_surface, s.status,
+              s.history_backfill_year, s.history_backfill_status
          FROM installation_sources s
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
@@ -523,39 +501,29 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         [current.id],
       ),
       query<DailyUsageRow>(
-        `WITH source_days AS (
-         SELECT a.id,
-                a.aggregation_mode,
-                d.usage_date,
-                d.total_tokens,
-                d.completeness,
-                d.updated_at,
-                max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
-                  OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
-           FROM agent_accounts a
-           JOIN installation_sources s
-             ON s.agent_account_id = a.id AND s.user_id = a.user_id
-           JOIN daily_usage d ON d.source_id = s.id
-          WHERE a.user_id = $1
-            AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
-       ), account_daily AS (
-         SELECT id,
-                usage_date,
-                CASE aggregation_mode
-                  WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
-                  ELSE sum(total_tokens)
-                END AS tokens
-           FROM source_days
-          GROUP BY id, aggregation_mode, usage_date
-       )
-       SELECT usage_date::text, sum(tokens)::text AS tokens
-         FROM account_daily
+        `SELECT usage_date::text, sum(tokens)::text AS tokens
+         FROM daily_agent_usage
+        WHERE user_id = $1
+          AND usage_date >= $2::date AND usage_date < $3::date
         GROUP BY usage_date
         ORDER BY usage_date`,
-        [current.id, weekStart],
+        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
       ),
     ]);
-  const chart = usageChart(weekStart, dailyUsage);
+  const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, dailyUsage);
+  const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
+  const historyIncomplete = sources.some(
+    (source) =>
+      source.status === "active" &&
+      (source.history_backfill_year !== currentYear ||
+        source.history_backfill_status !== "complete"),
+  );
+  const chartStatus =
+    dailyUsage.length === 0
+      ? "no-data"
+      : accounts.some((account) => account.partial) || (period.kind !== "week" && historyIncomplete)
+        ? "partial"
+        : "complete";
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
   const updateCommand = connectorRepairCommand(origin);
@@ -570,6 +538,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
   const browserSyncEnabled =
     accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
+  const historyUpgradeRequired = installations.some(
+    (installation) => installation.browser_sync_protocol < 5,
+  );
   const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
   const notice =
     params.connected === "1"
@@ -614,6 +585,27 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
       )}
+
+      {historyUpgradeRequired ? (
+        <Panel className="dashboard-notice connector-history-notice">
+          <div>
+            <p className="eyebrow">CURRENT-YEAR HISTORY</p>
+            <h2>Update the connector to import current-year history</h2>
+            <p>
+              Existing connectors continue recent sync. Protocol v5 is required only for the
+              resumable import from 1 January of the current UTC year.
+            </p>
+            <pre>
+              <code>{updateCommand}</code>
+            </pre>
+          </div>
+          <CopyCommandButton
+            command={updateCommand}
+            copiedLabel="Update command copied"
+            label="Copy update command"
+          />
+        </Panel>
+      ) : null}
 
       {hasNewCodexAccountNotice ? (
         <Panel className="dashboard-notice new-account-notice">
@@ -727,6 +719,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </div>
       </details>
 
+      <section className="dashboard-period" aria-labelledby="dashboard-period-title">
+        <div>
+          <p className="eyebrow">USAGE PERIOD</p>
+          <h2 id="dashboard-period-title">{periodTitle}</h2>
+          <p>
+            {period.kind === "year" ? "Current calendar year · " : ""}
+            {periodRange}
+          </p>
+        </div>
+        <PeriodSelector basePath="/dashboard" period={period} resolved={resolvedPeriod} />
+      </section>
+
       <section className="summary-grid" aria-label="Connection summary">
         <div>
           <span>Computers</span>
@@ -741,9 +745,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <strong>{installations.length > 0 ? "Active" : "Not connected"}</strong>
         </div>
         <div>
-          <span>This week</span>
-          <strong title={`${formatExactTokens(chart.total)} tokens`}>
-            {formatCompactTokens(chart.total)}
+          <span>{periodTitle}</span>
+          <strong title={`${formatExactTokens(periodTotal)} tokens`}>
+            {formatCompactTokens(periodTotal)}
           </strong>
         </div>
       </section>
@@ -751,50 +755,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       <section className="dashboard-section" aria-labelledby="usage-chart-title">
         <div className="section-heading plain-heading">
           <div>
-            <p className="eyebrow">WEEKLY USAGE</p>
+            <p className="eyebrow">{periodTitle.toUpperCase()} USAGE</p>
             <h2 id="usage-chart-title">Tokens by day</h2>
           </div>
-          <span>UTC · MON–SUN</span>
+          <span>{periodRange}</span>
         </div>
-        <figure aria-labelledby="usage-chart-title" className="usage-chart">
-          <figcaption className="sr-only">
-            {chart.days
-              .map((day) => `${day.fullLabel}: ${formatExactTokens(day.tokens)} tokens`)
-              .join("; ")}
-          </figcaption>
-          <div aria-hidden="true" className="usage-chart-layout">
-            <div className="usage-chart-scale">
-              <span title={`${formatExactTokens(chart.maximum)} tokens`}>
-                {formatCompactTokens(chart.maximum)}
-              </span>
-              <span title={`${formatExactTokens(chart.midpoint)} tokens`}>
-                {formatCompactTokens(chart.midpoint)}
-              </span>
-              <span>0</span>
-            </div>
-            <div className="usage-chart-plot">
-              {chart.days.map((day) => (
-                <div className="usage-chart-day" key={day.date}>
-                  <span
-                    className="usage-chart-value"
-                    title={`${formatExactTokens(day.tokens)} tokens`}
-                  >
-                    {formatCompactTokens(day.tokens)}
-                  </span>
-                  <div className="usage-chart-bar-area">
-                    <span
-                      className={`usage-chart-bar usage-chart-bar-level-${day.level.toString()}`}
-                    />
-                  </div>
-                  <time dateTime={day.date}>
-                    <strong>{day.weekday}</strong>
-                    <span>{day.day}</span>
-                  </time>
-                </div>
-              ))}
-            </div>
-          </div>
-        </figure>
+        <UsageExplorer
+          days={chartDays}
+          key={`${resolvedPeriod.from}:${resolvedPeriod.toExclusive}`}
+          periodLabel={periodTitle}
+          rangeLabel={periodRange}
+          status={chartStatus}
+        />
       </section>
 
       <BrowserSyncProvider enabled={browserSyncEnabled}>
@@ -860,7 +832,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         <span className="agent-chip">Shared Codex profile</span>
                       ) : null}
                     </div>
-                    <WeeklyTokenBreakdown account={account} />
+                    <PeriodTokenBreakdown account={account} />
                   </div>
                   <div className="device-meta">
                     <span>Last sync</span>

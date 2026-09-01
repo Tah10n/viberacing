@@ -202,19 +202,26 @@ describe("dashboard connection flow", () => {
     expect(usageSummary).toContain("export const accountMaxDailyTokensSql");
     expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
-    expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(2);
+    expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(1);
     expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(2);
     expect(dashboard).toContain("AND candidate.account_max_selected");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
+    expect(dashboard).toContain("FROM daily_agent_usage");
   });
 
-  it("renders a shared-scale weekly chart and exact weekly summary without number coercion", () => {
-    expect(dashboard).toContain("maximum: maximum.toString()");
-    expect(dashboard).toContain("midpoint: (maximum / 2n).toString()");
-    expect(dashboard).toContain("value + BigInt(day.tokens)");
-    expect(dashboard).toContain('className="usage-chart-scale"');
-    expect(dashboard).toContain('className="usage-chart-bar-area"');
-    expect(dashboard).toContain("formatExactTokens(chart.total)");
-    expect(dashboard).not.toContain("Number(day.tokens)");
+  it("renders one period-consistent exact daily explorer without number coercion", () => {
+    const explorer = source("../dashboard/usage-explorer.tsx");
+    expect(dashboard).toContain("parseUsagePeriod(params)");
+    expect(dashboard).toContain("resolvedPeriod.from");
+    expect(dashboard).toContain("resolvedPeriod.toExclusive");
+    expect(dashboard).toContain("total + BigInt(day.tokens)");
+    expect(dashboard).toContain("formatExactTokens(periodTotal)");
+    expect(dashboard).toContain("<UsageExplorer");
+    expect(explorer).toContain("Zoom in");
+    expect(explorer).toContain("Zoom out");
+    expect(explorer).toContain("Reset view");
+    expect(explorer).toContain("requestAnimationFrame");
+    expect(explorer).toContain("BigInt(day.tokens)");
+    expect(explorer).not.toContain("Number(day.tokens)");
   });
 });
