@@ -16,7 +16,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zstdCompressSync } from "node:zlib";
 import {
@@ -42,7 +42,7 @@ import {
   parseQwenLines,
   adapters,
   adapterFor,
-  recentEntries,
+  entriesWithinRange,
   safeCaptureRecord,
   readCodexAuthIdentity,
   wrapperInvocation,
@@ -3076,6 +3076,29 @@ test("reads Qwen content-free stats using UTC timestamp instead of localDate", a
   ]);
 });
 
+test("Qwen scans only monthly usage files intersecting the requested range", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-qwen-range-months-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  await writeFile(join(root, "token-usage-2026-07.jsonl"), "not-json\n");
+  await writeFile(join(root, "token-usage-2026-08.jsonl"), await fixture("qwen.jsonl"));
+
+  const result = await adapterFor("qwen_code").collect(
+    { dataPath: root },
+    { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+    {},
+  );
+
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(
+    result.entries.map((entry) => entry.date),
+    ["2026-08-10"],
+  );
+  assert.deepEqual(
+    Object.keys(result.nextState.files).map((path) => basename(path)),
+    ["token-usage-2026-08.jsonl"],
+  );
+});
+
 test("invalidates Qwen incremental state created with overlapping component semantics", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-qwen-parser-version-"));
   context.after(() => rm(root, { force: true, recursive: true }));
@@ -3144,6 +3167,29 @@ test("reads Antigravity CLI snake-case usage", async () => {
   ]);
 });
 
+test("Antigravity historical capture stays partial even when every retained record is readable", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-antigravity-history-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  await writeFile(
+    join(root, "capture.jsonl"),
+    `${JSON.stringify({
+      date: "2026-08-10",
+      id: "capture-1",
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`,
+  );
+
+  const result = await adapterFor("antigravity").collect(
+    { dataPath: root },
+    { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+    {},
+    { historical: true },
+  );
+
+  assert.equal(result.completeness, "partial");
+  assert.equal(result.entries.length, 1);
+});
+
 test("reads Gemini session usage metadata", async () => {
   assert.deepEqual(parseGeminiRecords(JSON.parse(await fixture("gemini.json"))), [
     {
@@ -3209,7 +3255,10 @@ test("keeps exactly the 31 UTC dates accepted by ingestion", () => {
     { date: "2026-08-13", totalTokens: "3" },
     { date: "2026-08-14", totalTokens: "4" },
   ];
-  assert.deepEqual(recentEntries(entries, new Date("2026-08-13T23:00:00Z")), entries.slice(1, 3));
+  assert.deepEqual(
+    entriesWithinRange(entries, { rangeStart: "2026-07-14", rangeEnd: "2026-08-13" }),
+    entries.slice(1, 3),
+  );
 });
 
 test("all seven adapters expose the complete collection contract", () => {

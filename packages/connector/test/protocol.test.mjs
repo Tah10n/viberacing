@@ -42,6 +42,8 @@ function mapping(overrides = {}) {
     accountLabel: "Antigravity",
     collectionMethod: local.collectionMethod,
     lastAcceptedSyncSequence: "0",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
     ...overrides,
   };
 }
@@ -303,6 +305,32 @@ test("compact reconciliation requires every requested source and supports 100 ma
     }),
     /invalid protocol response/,
   );
+});
+
+test("protocol v5 reconciliation requires bounded per-source history status", async () => {
+  const context = { kind: "reconciliation", sourceIds: [sourceId], protocolVersion: 5 };
+  const source = {
+    sourceId,
+    status: "active",
+    lastAcceptedSyncSequence: "7",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  };
+  assert.deepEqual(await parseProtocolResponse(json({ sources: [source] }), context), {
+    sources: [source],
+  });
+  for (const invalid of [
+    { ...source, historyBackfillYear: 2026.5 },
+    { ...source, historyBackfillYear: 10_000 },
+    { ...source, historyBackfillStatus: "lifetime" },
+    Object.fromEntries(Object.entries(source).filter(([key]) => key !== "historyBackfillStatus")),
+    { ...source, historyPath: "/private/provider" },
+  ]) {
+    await assert.rejects(
+      parseProtocolResponse(json({ sources: [invalid] }), context),
+      /invalid protocol response/,
+    );
+  }
 });
 
 test("reconciliation accepts only the matching handler attestation acknowledgement", async () => {

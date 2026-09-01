@@ -55,18 +55,19 @@ export function safeCaptureRecord(agentId, line) {
   }
 }
 
-export function recentEntries(entries, now = new Date()) {
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const firstDay = new Date(today);
-  firstDay.setUTCDate(firstDay.getUTCDate() - 30);
-  const firstDate = firstDay.toISOString().slice(0, 10);
-  const lastDate = today.toISOString().slice(0, 10);
+export function entriesWithinRange(entries, range) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(range?.rangeStart ?? "") ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(range?.rangeEnd ?? "") ||
+    range.rangeStart > range.rangeEnd
+  )
+    throw new Error("Invalid collection range");
   return entries
     .filter(
       (entry) =>
         /^\d{4}-\d{2}-\d{2}$/.test(entry?.date ?? "") &&
-        entry.date >= firstDate &&
-        entry.date <= lastDate,
+        entry.date >= range.rangeStart &&
+        entry.date <= range.rangeEnd,
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 }

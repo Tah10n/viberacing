@@ -15,6 +15,15 @@ import {
 
 const qwenParserVersion = 5;
 
+function qwenUsageFileWithinRange(path, range) {
+  const match = /^token-usage-(\d{4}-\d{2})\.jsonl$/.exec(basename(path));
+  return (
+    match !== null &&
+    match[1] >= range.rangeStart.slice(0, 7) &&
+    match[1] <= range.rangeEnd.slice(0, 7)
+  );
+}
+
 function analyzeQwenLines(lines) {
   const seen = new Set();
   const entries = [];
@@ -348,7 +357,7 @@ export const qwenAdapter = Object.freeze({
     const result = await collectJsonl(
       source,
       analyzeQwenLines,
-      (path) => basename(path).startsWith("token-usage-"),
+      (path) => qwenUsageFileWithinRange(path, range),
       state,
       range,
       qwenEventKey,

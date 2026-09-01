@@ -34,7 +34,7 @@ import {
   adapters,
   adapterFor,
   discoverSources,
-  recentEntries,
+  entriesWithinRange,
   safeCaptureRecord,
   wrapperInvocation,
 } from "../lib/readers.mjs";
@@ -1194,6 +1194,8 @@ async function connect() {
               agentAccountId: mapping.agentAccountId,
               accountLabel: mapping.accountLabel,
               lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence,
+              historyBackfillYear: mapping.historyBackfillYear,
+              historyBackfillStatus: mapping.historyBackfillStatus,
             };
           });
           const nextConfig = {
@@ -1308,7 +1310,70 @@ function snapshotRange(now = new Date()) {
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - 30);
+  const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  if (start < yearStart) start.setTime(yearStart.valueOf());
   return { rangeStart: start.toISOString().slice(0, 10), rangeEnd: end.toISOString().slice(0, 10) };
+}
+
+function addUtcDays(date, days) {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ||
+    Number.isNaN(parsed.valueOf()) ||
+    parsed.toISOString().slice(0, 10) !== date ||
+    !Number.isSafeInteger(days)
+  )
+    throw new Error("Invalid UTC date range");
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function currentHistoryYear(now = new Date()) {
+  return now.getUTCFullYear();
+}
+
+function historyYearStart(year) {
+  return `${String(year).padStart(4, "0")}-01-01`;
+}
+
+function historyRangeEndingAt(rangeEnd, year) {
+  const firstCandidate = addUtcDays(rangeEnd, -30);
+  const yearStart = historyYearStart(year);
+  return { rangeStart: firstCandidate < yearStart ? yearStart : firstCandidate, rangeEnd };
+}
+
+function historySnapshotState(sourceId, range, completeness, state, kind) {
+  const year = Number(range.rangeEnd.slice(0, 4));
+  const yearStart = historyYearStart(year);
+  if (kind === "rolling") {
+    if (range.rangeStart !== yearStart) return { snapshot: {}, advance: null };
+    return {
+      snapshot: { historyYearComplete: completeness },
+      advance: {
+        sourceId,
+        year,
+        nextRangeEnd: null,
+        hadPartialChunk: completeness === "partial",
+        terminalStatus: completeness,
+      },
+    };
+  }
+  const cursor = state.history?.[sourceId];
+  if (cursor?.year !== year || cursor.nextRangeEnd !== range.rangeEnd)
+    throw new Error("Current-year history cursor changed during collection");
+  const hadPartialChunk = cursor.hadPartialChunk || completeness === "partial";
+  const terminalStatus =
+    range.rangeStart === yearStart ? (hadPartialChunk ? "partial" : "complete") : null;
+  return {
+    snapshot: terminalStatus === null ? {} : { historyYearComplete: terminalStatus },
+    advance: {
+      sourceId,
+      year,
+      nextRangeEnd: terminalStatus === null ? addUtcDays(range.rangeStart, -1) : null,
+      hadPartialChunk,
+      terminalStatus,
+    },
+  };
 }
 
 function fingerprint(value) {
@@ -1489,6 +1554,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, o
     sourceIds,
     ...(bootstrapSourceIds === undefined ? {} : { bootstrapSourceIds }),
     cliVersion: connectorVersion,
+    protocolVersion,
     ...(handlerAttestation === null ? {} : { handlerAttestation }),
   };
   const send = (payload, requestAttempts, attestationId) =>
@@ -1507,6 +1573,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, o
       {
         kind: "reconciliation",
         sourceIds,
+        protocolVersion: payload.protocolVersion ?? 4,
         handlerAttestationId: attestationId,
         ...(payload.bootstrapSourceIds === undefined
           ? {}
@@ -1563,6 +1630,7 @@ async function rememberServerSequences(config, sequences) {
   if (!Array.isArray(sequences) || sequences.length === 0) return state;
   state.sequences ??= {};
   const byId = new Map(sequences.map((item) => [item.sourceId, item.lastAcceptedSyncSequence]));
+  const statusById = new Map(sequences.map((item) => [item.sourceId, item]));
   let changed = false;
   for (const source of config.sources) {
     const reported = byId.get(source.sourceId);
@@ -1577,12 +1645,63 @@ async function rememberServerSequences(config, sequences) {
       source.lastAcceptedSyncSequence = reported;
       changed = true;
     }
+    const status = statusById.get(source.sourceId);
+    if (
+      Number.isSafeInteger(status?.historyBackfillYear) &&
+      ["pending", "complete", "partial"].includes(status?.historyBackfillStatus) &&
+      (source.historyBackfillYear !== status.historyBackfillYear ||
+        source.historyBackfillStatus !== status.historyBackfillStatus)
+    ) {
+      source.historyBackfillYear = status.historyBackfillYear;
+      source.historyBackfillStatus = status.historyBackfillStatus;
+      changed = true;
+    }
   }
   if (changed) {
     await writeState(state);
     await writeConfig(config);
   }
   return state;
+}
+
+function reconcileHistoryCursors(config, state, now = new Date()) {
+  const year = currentHistoryYear(now);
+  const yearStart = historyYearStart(year);
+  const firstHistoricalEnd = addUtcDays(snapshotRange(now).rangeStart, -1);
+  state.history ??= {};
+  state.historyAdapters ??= {};
+  const configured = new Set(config.sources.map((source) => source.sourceId));
+  let changed = false;
+  for (const sourceId of Object.keys(state.history))
+    if (!configured.has(sourceId)) {
+      delete state.history[sourceId];
+      delete state.historyAdapters[sourceId];
+      changed = true;
+    }
+  for (const source of config.sources) {
+    if (typeof source.sourceId !== "string") continue;
+    const terminal =
+      source.historyBackfillYear === year &&
+      ["complete", "partial"].includes(source.historyBackfillStatus);
+    if (terminal || firstHistoricalEnd < yearStart) {
+      if (state.history[source.sourceId] !== undefined) {
+        delete state.history[source.sourceId];
+        delete state.historyAdapters[source.sourceId];
+        changed = true;
+      }
+      continue;
+    }
+    const current = state.history[source.sourceId];
+    if (current?.year === year) continue;
+    state.history[source.sourceId] = {
+      year,
+      nextRangeEnd: firstHistoricalEnd,
+      hadPartialChunk: false,
+    };
+    delete state.historyAdapters[source.sourceId];
+    changed = true;
+  }
+  return changed;
 }
 
 async function confirmAutomaticCompatibility() {
@@ -1619,6 +1738,11 @@ async function reconcileServerState(config, state) {
     (source) =>
       typeof source.sourceId === "string" && state.sequences?.[source.sourceId] === undefined,
   );
+  const historyStatusMissing = config.sources.some(
+    (source) =>
+      !Number.isSafeInteger(source.historyBackfillYear) ||
+      !["pending", "complete", "partial"].includes(source.historyBackfillStatus),
+  );
   const bootstrapSourceIds = config.sources
     .filter(
       (source) =>
@@ -1630,8 +1754,10 @@ async function reconcileServerState(config, state) {
     .map((source) => source.sourceId);
   const handlerConfirmationPending = publicHandlerAttestation(state.handlerAttestation) !== null;
   const lastReconciliation = state.lastRemoteReconciliationAt;
+  const historyStateChanged = reconcileHistoryCursors(config, state);
   if (
     !missing &&
+    !historyStatusMissing &&
     bootstrapSourceIds.length === 0 &&
     !handlerConfirmationPending &&
     lastReconciliation === undefined
@@ -1642,23 +1768,29 @@ async function reconcileServerState(config, state) {
   }
   if (
     !missing &&
+    !historyStatusMissing &&
     bootstrapSourceIds.length === 0 &&
     !handlerConfirmationPending &&
     Number.isFinite(lastReconciliation) &&
     Date.now() - lastReconciliation < remoteReconciliationIntervalMs
-  )
+  ) {
+    if (historyStateChanged) await writeState(state);
     return state;
+  }
   let remote;
   try {
     remote = await requestReconciliation(
       config,
-      missing || handlerConfirmationPending || bootstrapSourceIds.length > 0 ? 3 : 1,
+      missing || historyStatusMissing || handlerConfirmationPending || bootstrapSourceIds.length > 0
+        ? 3
+        : 1,
       bootstrapSourceIds.length === 0 ? undefined : bootstrapSourceIds,
       { beforeResponseMutation: assertOpenCodeRemoteSequenceReady },
     );
   } catch (error) {
     if (
       missing ||
+      historyStatusMissing ||
       bootstrapSourceIds.length > 0 ||
       error?.status === 401 ||
       error?.status === 403 ||
@@ -1674,13 +1806,7 @@ async function reconcileServerState(config, state) {
     throw new Error("Remote reconciliation stopped by a local lifecycle operation");
   await confirmAutomaticCompatibility();
   await reconcileRemoteSources(config, remote.sources);
-  const reconciled = await rememberServerSequences(
-    config,
-    remote.sources?.map((source) => ({
-      sourceId: source.sourceId,
-      lastAcceptedSyncSequence: source.lastAcceptedSyncSequence,
-    })),
-  );
+  const reconciled = await rememberServerSequences(config, remote.sources);
   reconciled.adapters ??= {};
   const acceptedSequenceBySourceId = new Map(
     (remote.sources ?? []).map((source) => [source.sourceId, source.lastAcceptedSyncSequence]),
@@ -1694,9 +1820,65 @@ async function reconcileServerState(config, state) {
         entries: baseline.entries,
       },
     };
+  reconcileHistoryCursors(config, reconciled);
   reconciled.lastRemoteReconciliationAt = Date.now();
   await writeState(reconciled);
   return reconciled;
+}
+
+function validatedHistoryAdvance(payload, sourceId) {
+  const advances = payload.historyAdvances ?? [];
+  if (!Array.isArray(advances) || advances.length > 1) {
+    throw new Error("Pending history advancement state is invalid");
+  }
+  const advance = advances[0];
+  if (advance === undefined) return null;
+  if (
+    advance?.sourceId !== sourceId ||
+    !uuidPattern.test(advance.sourceId ?? "") ||
+    !Number.isSafeInteger(advance.year) ||
+    advance.year < 1970 ||
+    advance.year > 9999 ||
+    !(
+      advance.nextRangeEnd === null ||
+      (/^\d{4}-\d{2}-\d{2}$/.test(advance.nextRangeEnd ?? "") &&
+        advance.nextRangeEnd.startsWith(`${String(advance.year).padStart(4, "0")}-`))
+    ) ||
+    typeof advance.hadPartialChunk !== "boolean" ||
+    !(
+      advance.terminalStatus === null || ["complete", "partial"].includes(advance.terminalStatus)
+    ) ||
+    (advance.nextRangeEnd === null) !== (advance.terminalStatus !== null) ||
+    JSON.stringify(Object.keys(advance).sort()) !==
+      JSON.stringify(["hadPartialChunk", "nextRangeEnd", "sourceId", "terminalStatus", "year"])
+  )
+    throw new Error("Pending history advancement state is invalid");
+  return advance;
+}
+
+async function applyHistoryAdvance(config, item) {
+  const advance = validatedHistoryAdvance(item.payload, item.sourceId);
+  if (advance === null) return;
+  const state = await readState();
+  state.history ??= {};
+  state.historyAdapters ??= {};
+  if (advance.terminalStatus === null) {
+    state.history[item.sourceId] = {
+      year: advance.year,
+      nextRangeEnd: advance.nextRangeEnd,
+      hadPartialChunk: advance.hadPartialChunk,
+    };
+  } else {
+    delete state.history[item.sourceId];
+    delete state.historyAdapters[item.sourceId];
+    const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
+    if (source) {
+      source.historyBackfillYear = advance.year;
+      source.historyBackfillStatus = advance.terminalStatus;
+    }
+  }
+  await writeState(state);
+  if (advance.terminalStatus !== null) await writeConfig(config);
 }
 
 async function deliverPendingGroup(config, items, retired) {
@@ -1749,6 +1931,7 @@ async function deliverPendingGroup(config, items, retired) {
         staleSources.push(item.sourceId);
       } else {
         await removePending(item.path);
+        if (snapshot) await applyHistoryAdvance(config, item);
         if (snapshot && sequenceStatus?.accepted !== false) {
           await clearQuarantine(item.sourceId);
           const state = await readState();
@@ -1823,7 +2006,7 @@ function pendingGroups(items) {
     const tooLarge =
       candidate.length > 32 ||
       entries > 1_024 ||
-      Buffer.byteLength(JSON.stringify(payload)) > 120_000;
+      Buffer.byteLength(JSON.stringify(payload)) > 500_000;
     if (current.length > 0 && tooLarge) {
       groups.push(current);
       current = [item];
@@ -1860,7 +2043,14 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
       legacyPendingErrors.push({ path, sourceId });
       continue;
     }
-    const payload = { ...storedPayload, protocolVersion };
+    const payload = {
+      ...storedPayload,
+      protocolVersion,
+      snapshots: (storedPayload.snapshots ?? []).map((snapshot) => ({
+        ...snapshot,
+        kind: snapshot.kind ?? "rolling",
+      })),
+    };
     items.push({ path, payload, sourceId });
   }
   if (legacyPendingErrors.length > 0) {
@@ -2073,7 +2263,7 @@ async function applyDurablePendingRegistrationSupersessions() {
   if (changed) await writeState(state);
 }
 
-async function sync(providedConfig, options = {}) {
+async function syncRange(providedConfig, options = {}) {
   await assertOpenCodeUpgradeReady(stateDirectory);
   return withSyncLock(
     async () => {
@@ -2088,8 +2278,12 @@ async function sync(providedConfig, options = {}) {
       let state = await readState();
       state = await reconcileServerState(config, state);
       await migrateSourcesSchema();
-      const range = snapshotRange();
+      const snapshotKind = options.kind ?? "rolling";
+      if (!["rolling", "year_backfill"].includes(snapshotKind))
+        throw new Error("Invalid sync snapshot kind");
+      const range = options.range ?? snapshotRange();
       state.adapters ??= {};
+      state.historyAdapters ??= {};
       state.fingerprints ??= {};
       state.collectionWarnings ??= {};
       const localSources = await readSources();
@@ -2190,15 +2384,15 @@ async function sync(providedConfig, options = {}) {
           );
           if (typeof profileMapping.sourceId !== "string")
             throw new Error("Codex profile mapping is unavailable");
-          let result = await adapter.collect(
-            source,
-            range,
-            state.adapters[profileMapping.sourceId] ?? {},
-            {
-              providerIdentitySalt,
-              suppressComponents: profileMembers.length > 1,
-            },
-          );
+          const adapterState =
+            snapshotKind === "year_backfill"
+              ? (state.historyAdapters[profileMapping.sourceId] ?? {})
+              : (state.adapters[profileMapping.sourceId] ?? {});
+          let result = await adapter.collect(source, range, adapterState, {
+            providerIdentitySalt,
+            suppressComponents: profileMembers.length > 1,
+            historical: snapshotKind === "year_backfill",
+          });
           const binding = await bindCodexProviderAccount(
             task.physicalClientSourceId,
             result.providerAccountKey,
@@ -2266,7 +2460,14 @@ async function sync(providedConfig, options = {}) {
         }
         return {
           source,
-          result: await adapter.collect(source, range, state.adapters[source.sourceId] ?? {}),
+          result: await adapter.collect(
+            source,
+            range,
+            snapshotKind === "year_backfill"
+              ? (state.historyAdapters[source.sourceId] ?? {})
+              : (state.adapters[source.sourceId] ?? {}),
+            { historical: snapshotKind === "year_backfill" },
+          ),
           inactiveSourceIds: [],
           checkedClientSourceId: source.clientSourceId,
           accountSetupPending: false,
@@ -2283,6 +2484,7 @@ async function sync(providedConfig, options = {}) {
       const inactiveSourceIds = [];
       let accountSetupPending = backfillAccountSetupPending;
       const pendingRegistrationSupersessions = new Map();
+      const historyAdvances = [];
       let terminalCollectorDiagnostic;
       for (const sourceId of previous.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
@@ -2298,6 +2500,33 @@ async function sync(providedConfig, options = {}) {
           terminalCollectorDiagnostic ??= outcome.reason?.diagnosticCode;
           if (outcome.reason?.diagnosticCode === "provider_account_registration_pending")
             accountSetupPending = true;
+          if (snapshotKind === "year_backfill") {
+            for (const target of task.requestedSources) {
+              if (state.history?.[target.sourceId]?.nextRangeEnd !== range.rangeEnd) continue;
+              const previousSequence = BigInt(state.sequences[target.sourceId] ?? "0");
+              const sequence = (previousSequence + 1n).toString();
+              state.sequences[target.sourceId] = sequence;
+              const history = historySnapshotState(
+                target.sourceId,
+                range,
+                "partial",
+                state,
+                snapshotKind,
+              );
+              snapshots.push({
+                sourceId: target.sourceId,
+                syncSequence: sequence,
+                kind: snapshotKind,
+                ...range,
+                completeness: "partial",
+                entries: [],
+                ...history.snapshot,
+              });
+              historyAdvances.push(history.advance);
+              successfullyCheckedSourceIds.push(target.sourceId);
+            }
+            continue;
+          }
           const nextFingerprint = fingerprint({ error: "collector_failed" });
           if (
             outcome.reason?.diagnosticCode !== "provider_account_registration_pending" &&
@@ -2321,45 +2550,68 @@ async function sync(providedConfig, options = {}) {
         successfullyChecked.push(outcome.value.checkedClientSourceId);
         const activeSource = outcome.value.source;
         successfullyCheckedSourceIds.push(activeSource.sourceId);
-        state.adapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
-        reconcileDiagnosticPhase(
-          state,
-          activeSource.sourceId,
-          "collect",
-          normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
-        );
+        if (snapshotKind === "year_backfill")
+          state.historyAdapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
+        else {
+          state.adapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
+          reconcileDiagnosticPhase(
+            state,
+            activeSource.sourceId,
+            "collect",
+            normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
+          );
+        }
         const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
-        if (resultWarnings.length) state.collectionWarnings[activeSource.sourceId] = resultWarnings;
-        else delete state.collectionWarnings[activeSource.sourceId];
+        if (snapshotKind === "rolling") {
+          if (resultWarnings.length)
+            state.collectionWarnings[activeSource.sourceId] = resultWarnings;
+          else delete state.collectionWarnings[activeSource.sourceId];
+        }
         for (const code of resultWarnings)
           collectionWarnings.push(`${activeSource.agentId}: ${collectorWarningMessage(code)}`);
-        const entries = recentEntries(outcome.value.result.entries);
+        const entries = entriesWithinRange(outcome.value.result.entries, range);
         const nextFingerprint = fingerprint({
           ...range,
           completeness: outcome.value.result.completeness,
           entries,
           warnings: resultWarnings,
         });
-        if (options.automatic && state.fingerprints[activeSource.sourceId] === nextFingerprint)
+        if (
+          snapshotKind === "rolling" &&
+          options.automatic &&
+          state.fingerprints[activeSource.sourceId] === nextFingerprint
+        )
           continue;
         const previous = BigInt(state.sequences[activeSource.sourceId] ?? "0");
         const sequence = (previous + 1n).toString();
         state.sequences[activeSource.sourceId] = sequence;
-        state.fingerprints[activeSource.sourceId] = nextFingerprint;
+        if (snapshotKind === "rolling") state.fingerprints[activeSource.sourceId] = nextFingerprint;
+        const history = historySnapshotState(
+          activeSource.sourceId,
+          range,
+          outcome.value.result.completeness,
+          state,
+          snapshotKind,
+        );
         snapshots.push({
           sourceId: activeSource.sourceId,
           syncSequence: sequence,
+          kind: snapshotKind,
           ...range,
           completeness: outcome.value.result.completeness,
           entries,
+          ...history.snapshot,
         });
+        if (history.advance !== null) historyAdvances.push(history.advance);
         if (outcome.value.supersededPendingClientSourceId)
           pendingRegistrationSupersessions.set(activeSource.sourceId, {
             sourceId: activeSource.sourceId,
             clientSourceId: outcome.value.supersededPendingClientSourceId,
           });
       }
-      for (const { clientSourceId, source, pending } of registrationBackfills) {
+      for (const { clientSourceId, source, pending } of snapshotKind === "rolling"
+        ? registrationBackfills
+        : []) {
         if (snapshots.some((snapshot) => snapshot.sourceId === source.sourceId)) {
           pendingRegistrationSupersessions.set(source.sourceId, {
             sourceId: source.sourceId,
@@ -2370,14 +2622,24 @@ async function sync(providedConfig, options = {}) {
         const previousSequence = BigInt(state.sequences[source.sourceId] ?? "0");
         const sequence = (previousSequence + 1n).toString();
         state.sequences[source.sourceId] = sequence;
+        const history = historySnapshotState(
+          source.sourceId,
+          { rangeStart: pending.rangeStart, rangeEnd: pending.rangeEnd },
+          pending.completeness,
+          state,
+          snapshotKind,
+        );
         snapshots.push({
           sourceId: source.sourceId,
           syncSequence: sequence,
+          kind: snapshotKind,
           rangeStart: pending.rangeStart,
           rangeEnd: pending.rangeEnd,
           completeness: pending.completeness,
           entries: pending.entries,
+          ...history.snapshot,
         });
+        if (history.advance !== null) historyAdvances.push(history.advance);
         successfullyCheckedSourceIds.push(source.sourceId);
         pendingRegistrationSupersessions.set(source.sourceId, {
           sourceId: source.sourceId,
@@ -2397,13 +2659,14 @@ async function sync(providedConfig, options = {}) {
         );
       if (snapshots.length === 0 && sourceErrors.length === 0) {
         await clearSuccessfulDirty();
-        if (failures.length === 0 && syncSources.length > 0)
-          await compactSuccessfulCaptures({ ...config, sources: syncSources });
-        const diagnosticDelivery = await finishSuccessfulSourceDiagnostics(
-          config,
-          successfullyCheckedSourceIds,
-          requestedSourceIds,
-        );
+        const diagnosticDelivery =
+          snapshotKind === "rolling"
+            ? await finishSuccessfulSourceDiagnostics(
+                config,
+                successfullyCheckedSourceIds,
+                requestedSourceIds,
+              )
+            : { attempted: false };
         if (failures.length === 0 && previous.successfulDeliveries > 0) await clearLastHookError();
         output(
           diagnosticDelivery.attempted
@@ -2429,6 +2692,7 @@ async function sync(providedConfig, options = {}) {
         snapshots,
         sourceErrors,
         pendingRegistrationSupersessions: [...pendingRegistrationSupersessions.values()],
+        historyAdvances,
       };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
@@ -2445,11 +2709,12 @@ async function sync(providedConfig, options = {}) {
       const delivered = await drainPending(config, true, deliverySourceIds);
       accepted += delivered.accepted;
       await clearSuccessfulDirty();
-      await finishSuccessfulSourceDiagnostics(
-        config,
-        successfullyCheckedSourceIds,
-        requestedSourceIds,
-      );
+      if (snapshotKind === "rolling")
+        await finishSuccessfulSourceDiagnostics(
+          config,
+          successfullyCheckedSourceIds,
+          requestedSourceIds,
+        );
       if (successfullyCheckedSourceIds.length === 0) {
         const error = new Error(failures.join("; ") || "No configured collectors succeeded");
         error.automaticDiagnosticClientSourceIds = failedClientSourceIds;
@@ -2462,11 +2727,12 @@ async function sync(providedConfig, options = {}) {
         failures.push(`server disconnected source ${sourceId}`);
       for (const sourceId of delivered.quarantinedSources)
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
-      if (failures.length === 0) {
-        await compactSuccessfulCaptures({ ...config, sources: syncSources });
-        if (previous.successfulDeliveries + delivered.successfulDeliveries > 0)
-          await clearLastHookError();
-      }
+      if (
+        snapshotKind === "rolling" &&
+        failures.length === 0 &&
+        previous.successfulDeliveries + delivered.successfulDeliveries > 0
+      )
+        await clearLastHookError();
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       if (inactiveSourceIds.length > 0)
         warning(
@@ -2476,6 +2742,83 @@ async function sync(providedConfig, options = {}) {
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
+}
+
+async function sync(providedConfig, options = {}) {
+  const rolling = await syncRange(providedConfig, {
+    ...options,
+    kind: "rolling",
+    range: snapshotRange(),
+  });
+  if (rolling?.skipped) return rolling;
+
+  let accepted = rolling?.accepted ?? 0;
+  const failures = [...(rolling?.failures ?? [])];
+  const inactiveSourceIds = new Set(rolling?.inactiveSourceIds ?? []);
+  let accountSetupPending = rolling?.accountSetupPending ?? false;
+  let historyChunks = 0;
+  const maximumHistoryChunks = options.automatic || options.browser ? 1 : Number.POSITIVE_INFINITY;
+  const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
+
+  while (historyChunks < maximumHistoryChunks) {
+    const config = providedConfig ?? (await readConfig());
+    const state = await readState();
+    const year = currentHistoryYear();
+    const candidates = config.sources
+      .filter(
+        (source) =>
+          typeof source.sourceId === "string" &&
+          (allowed === null || allowed.has(source.sourceId)) &&
+          !inactiveSourceIds.has(source.sourceId) &&
+          state.history?.[source.sourceId]?.year === year,
+      )
+      .map((source) => ({ source, cursor: state.history[source.sourceId] }))
+      .sort(
+        (left, right) =>
+          right.cursor.nextRangeEnd.localeCompare(left.cursor.nextRangeEnd) ||
+          left.source.sourceId.localeCompare(right.source.sourceId),
+      );
+    const nextRangeEnd = candidates[0]?.cursor.nextRangeEnd;
+    if (nextRangeEnd === undefined) break;
+    const selected = candidates.filter(
+      (candidate) => candidate.cursor.nextRangeEnd === nextRangeEnd,
+    );
+    const range = historyRangeEndingAt(nextRangeEnd, year);
+    const historical = await syncRange(config, {
+      ...options,
+      automatic: false,
+      browser: false,
+      sourceIds: selected.map((candidate) => candidate.source.sourceId),
+      kind: "year_backfill",
+      range,
+    });
+    if (historical?.skipped) break;
+    accepted += historical?.accepted ?? 0;
+    failures.push(...(historical?.failures ?? []));
+    for (const sourceId of historical?.inactiveSourceIds ?? []) inactiveSourceIds.add(sourceId);
+    accountSetupPending ||= historical?.accountSetupPending ?? false;
+    historyChunks += 1;
+  }
+
+  const finalConfig = providedConfig ?? (await readConfig());
+  const terminalCaptureSources = finalConfig.sources.filter(
+    (source) =>
+      source.collectionMethod === "antigravity_cli_capture" &&
+      (allowed === null || allowed.has(source.sourceId)) &&
+      source.historyBackfillYear === currentHistoryYear() &&
+      ["complete", "partial"].includes(source.historyBackfillStatus),
+  );
+  if (terminalCaptureSources.length > 0)
+    await compactSuccessfulCaptures({ ...finalConfig, sources: terminalCaptureSources });
+
+  return {
+    ...rolling,
+    accepted,
+    failures,
+    inactiveSourceIds: [...inactiveSourceIds],
+    accountSetupPending,
+    historyChunks,
+  };
 }
 
 function parseBrowserSyncUrl(value) {
@@ -2570,6 +2913,7 @@ async function browserSync(value) {
     const result = await sync(undefined, {
       sourceIds: claim.sourceIds,
       installationScoped: link.scope === "installation",
+      browser: true,
       waitMs: manualSyncLockWaitMs,
     });
     if (result?.skipped) await reportBrowserSync(config, link.requestId, "failed", "busy");

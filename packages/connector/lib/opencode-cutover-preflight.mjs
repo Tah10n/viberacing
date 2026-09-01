@@ -414,7 +414,7 @@ export async function assertOpenCodeUpgradeReady(stateDirectory, options = {}) {
     if (error instanceof SyntaxError) throw cutoverRequired();
     throw error;
   }
-  if (state.version !== null && ![1, 2].includes(state.version)) throw cutoverRequired();
+  if (state.version !== null && ![1, 2, 3].includes(state.version)) throw cutoverRequired();
 
   for (const source of sources) {
     const evidence = state.adapters.get(source.sourceId);

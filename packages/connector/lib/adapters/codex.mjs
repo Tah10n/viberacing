@@ -1597,6 +1597,7 @@ async function collect(source, range, state = {}, context = {}) {
   );
   return {
     ...snapshot,
+    completeness: context.historical ? "partial" : snapshot.completeness,
     providerAccountKey: accountUsage.providerAccountKey,
     nextState: { componentUsage: components.nextState },
     warnings: components.warnings,

@@ -95,7 +95,7 @@ export const antigravityAdapter = Object.freeze({
   trigger: "viberacing run antigravity",
   defaultPaths: [],
   detect: async () => [],
-  collect: async (source, range, state = {}) => {
+  collect: async (source, range, state = {}, context = {}) => {
     const result = await collectJsonl(
       source,
       analyzeAntigravityLines,
@@ -107,6 +107,7 @@ export const antigravityAdapter = Object.freeze({
     );
     return {
       ...result,
+      completeness: context.historical ? "partial" : result.completeness,
       nextState: { ...result.nextState, parserVersion: antigravityParserVersion },
     };
   },

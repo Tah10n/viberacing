@@ -72,12 +72,35 @@ const captureTokenKeys = [
   "cacheWriteTokens",
   "reasoningTokens",
 ];
-const runtimeStateVersion = 2;
+const runtimeStateVersion = 3;
+
+function validHistoryState(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, cursor]) =>
+        sourceIdPattern.test(sourceId) &&
+        cursor !== null &&
+        typeof cursor === "object" &&
+        !Array.isArray(cursor) &&
+        JSON.stringify(Object.keys(cursor).sort()) ===
+          JSON.stringify(["hadPartialChunk", "nextRangeEnd", "year"]) &&
+        Number.isSafeInteger(cursor.year) &&
+        cursor.year >= 1970 &&
+        cursor.year <= 9999 &&
+        dayPattern.test(cursor.nextRangeEnd ?? "") &&
+        cursor.nextRangeEnd.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
+        typeof cursor.hadPartialChunk === "boolean",
+    )
+  );
+}
 
 function normalizedRuntimeState(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("Connector runtime state is unsupported");
-  if (value.version !== 1 && value.version !== runtimeStateVersion)
+  if (![1, 2, runtimeStateVersion].includes(value.version))
     throw new Error("Connector runtime state was written by an unsupported connector version");
   if (
     value.sequences === null ||
@@ -88,12 +111,21 @@ function normalizedRuntimeState(value) {
     )
   )
     throw new Error("Connector runtime sequences are invalid");
-  for (const key of ["adapters", "fingerprints", "quarantine", "collectionWarnings", "diagnostics"])
+  for (const key of [
+    "adapters",
+    "historyAdapters",
+    "fingerprints",
+    "quarantine",
+    "collectionWarnings",
+    "diagnostics",
+  ])
     if (
       value[key] !== undefined &&
       (value[key] === null || typeof value[key] !== "object" || Array.isArray(value[key]))
     )
       throw new Error("Connector runtime state is invalid");
+  if (value.history !== undefined && !validHistoryState(value.history))
+    throw new Error("Connector runtime history state is invalid");
   return { ...value, version: runtimeStateVersion, sequences: { ...value.sequences } };
 }
 
@@ -640,6 +672,9 @@ export async function savePending(payload) {
     const pendingRegistrationSupersessions = (
       payload.pendingRegistrationSupersessions ?? []
     ).filter((supersession) => supersession.sourceId === snapshot.sourceId);
+    const historyAdvances = (payload.historyAdvances ?? []).filter(
+      (advance) => advance.sourceId === snapshot.sourceId,
+    );
     await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
@@ -647,6 +682,7 @@ export async function savePending(payload) {
       ...(pendingRegistrationSupersessions.length === 0
         ? { pendingRegistrationSupersessions: undefined }
         : { pendingRegistrationSupersessions }),
+      ...(historyAdvances.length === 0 ? { historyAdvances: undefined } : { historyAdvances }),
     });
     await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
       if (error?.code !== "ENOENT") throw error;

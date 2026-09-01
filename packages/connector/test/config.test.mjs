@@ -120,6 +120,8 @@ function reconciliationResponse(sources) {
       sourceId: source.sourceId,
       status: source.status ?? "active",
       lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
+      historyBackfillYear: source.historyBackfillYear ?? new Date().getUTCFullYear(),
+      historyBackfillStatus: source.historyBackfillStatus ?? "complete",
     })),
   };
 }
@@ -378,6 +380,8 @@ async function writeCaptureInstallation(home, origin, options = {}) {
           accountLabel: "Antigravity",
           collectionMethod: "antigravity_cli_capture",
           lastAcceptedSyncSequence: "0",
+          historyBackfillYear: options.historyBackfillYear ?? new Date().getUTCFullYear(),
+          historyBackfillStatus: options.historyBackfillStatus ?? "complete",
         },
       ],
     })}\n`,
@@ -395,7 +399,15 @@ async function writeMappedInstallation(home, origin, sources) {
   await writeFile(join(directory, ".viberacing-state"), '{"format":1}\n');
   await writeLocalSources(
     directory,
-    sources.map(({ sourceId: _sourceId, accountLabel: _accountLabel, ...source }) => source),
+    sources.map(
+      ({
+        sourceId: _sourceId,
+        accountLabel: _accountLabel,
+        historyBackfillYear: _historyBackfillYear,
+        historyBackfillStatus: _historyBackfillStatus,
+        ...source
+      }) => source,
+    ),
   );
   await writeFile(
     join(directory, "config.json"),
@@ -411,6 +423,8 @@ async function writeMappedInstallation(home, origin, sources) {
         accountLabel: source.accountLabel ?? source.suggestedLabel,
         collectionMethod: source.collectionMethod,
         lastAcceptedSyncSequence: "0",
+        historyBackfillYear: source.historyBackfillYear ?? new Date().getUTCFullYear(),
+        historyBackfillStatus: source.historyBackfillStatus ?? "complete",
       })),
     })}\n`,
   );
@@ -2852,7 +2866,7 @@ test("a blocked relocation rollback retains its exact new OpenCode path for unin
 
   const failed = await runWithInput(["doctor", "--repair"], currentEnvironment, "");
   assert.equal(failed.code, 1);
-  assert.match(failed.stdout, /OpenCode automatic sync plugin: unreadable/);
+  assert.match(failed.stdout, /OpenCode automatic sync plugin: unreadable/, failed.stderr);
   assert.match(failed.stderr, new RegExp(currentPath.replaceAll("\\", "\\\\")));
   await access(currentPath);
   await access(recorded.path);
@@ -2908,6 +2922,8 @@ test("connect stays committed and inactive when plugin path recording and rollba
         accountLabel: "OpenCode",
         collectionMethod: "opencode_sqlite",
         lastAcceptedSyncSequence: "0",
+        historyBackfillYear: new Date().getUTCFullYear(),
+        historyBackfillStatus: "complete",
       };
       if (request.url === "/api/pairing/poll") {
         response.end(
@@ -4066,6 +4082,8 @@ test("Codex account switches register once and route snapshots without sending p
               accountLabel: "Codex account 2",
               collectionMethod: "codex_app_server",
               lastAcceptedSyncSequence: "0",
+              historyBackfillYear: new Date().getUTCFullYear(),
+              historyBackfillStatus: "pending",
               profileSourceId: primarySourceId,
             },
           }),
@@ -4270,7 +4288,11 @@ for await (const line of lines) {
     /example|acct1_|account-(?:first|second)/i,
   );
   assert.deepEqual(
-    usageBodies.map((body) => body.snapshots.map(({ sourceId }) => sourceId)),
+    usageBodies
+      .map((body) =>
+        body.snapshots.filter(({ kind }) => kind === "rolling").map(({ sourceId }) => sourceId),
+      )
+      .filter((sourceIds) => sourceIds.length > 0),
     [
       [primarySourceId],
       [primarySourceId, secondarySourceId],
@@ -4346,6 +4368,8 @@ test("a current Codex B snapshot durably supersedes a stale registration backfil
               accountLabel: "Codex account 2",
               collectionMethod: "codex_app_server",
               lastAcceptedSyncSequence: "0",
+              historyBackfillYear: new Date().getUTCFullYear(),
+              historyBackfillStatus: "pending",
               profileSourceId,
             },
           }),
@@ -4519,6 +4543,7 @@ for await (const line of lines) {
       {
         sourceId: secondarySourceId,
         syncSequence: "1",
+        kind: "rolling",
         rangeStart: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
         rangeEnd: new Date().toISOString().slice(0, 10),
         completeness: "complete",
@@ -4886,6 +4911,92 @@ test("manual sync collects every active source and clears only its prior dirty g
     ["2", "2"],
   );
   assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 4);
+});
+
+test("automatic sync advances one current-year chunk and manual sync resumes through January", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-history-resume-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    historyBackfillStatus: "pending",
+  });
+  await writeFile(
+    join(installation.directory, "dirty.json"),
+    `${JSON.stringify({
+      version: 2,
+      sources: {
+        [installation.clientSourceId]: {
+          dirtySince: new Date().toISOString(),
+          lastEventAt: new Date().toISOString(),
+          generation: randomUUID(),
+        },
+      },
+    })}\n`,
+  );
+  const environment = connectorEnvironment(home, { NODE_ENV: "test" });
+
+  await execFileAsync(process.execPath, [connectorPath, "auto-sync"], { env: environment });
+  assert.deepEqual(
+    bodies.map((body) => body.snapshots[0]?.kind),
+    ["rolling", "year_backfill"],
+  );
+  const afterAutomatic = JSON.parse(
+    await readFile(join(installation.directory, "state.json"), "utf8"),
+  );
+  const cursorAfterAutomatic = afterAutomatic.history[installation.sourceId];
+  assert.equal(cursorAfterAutomatic.year, new Date().getUTCFullYear());
+  assert.equal(cursorAfterAutomatic.hadPartialChunk, true);
+  assert.notDeepEqual(
+    afterAutomatic.adapters[installation.sourceId],
+    afterAutomatic.historyAdapters[installation.sourceId],
+  );
+  const rollingAdapterState = afterAutomatic.adapters[installation.sourceId];
+
+  const bodyCountAfterAutomatic = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  const resumedBodies = bodies.slice(bodyCountAfterAutomatic);
+  assert.equal(resumedBodies[0].snapshots[0].kind, "rolling");
+  const historical = resumedBodies.slice(1).map((body) => body.snapshots[0]);
+  assert.ok(historical.length > 0);
+  for (const [index, snapshot] of historical.entries()) {
+    assert.equal(snapshot.kind, "year_backfill");
+    const days =
+      (Date.parse(`${snapshot.rangeEnd}T00:00:00.000Z`) -
+        Date.parse(`${snapshot.rangeStart}T00:00:00.000Z`)) /
+        86_400_000 +
+      1;
+    assert.ok(days >= 1 && days <= 31);
+    if (index > 0) assert.ok(snapshot.rangeEnd < historical[index - 1].rangeStart);
+  }
+  const terminal = historical.at(-1);
+  assert.equal(terminal.rangeStart, `${String(new Date().getUTCFullYear())}-01-01`);
+  assert.equal(terminal.historyYearComplete, "partial");
+
+  const finalState = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(finalState.history?.[installation.sourceId], undefined);
+  assert.deepEqual(finalState.adapters[installation.sourceId], rollingAdapterState);
+  assert.equal(finalState.historyAdapters?.[installation.sourceId], undefined);
+  const finalConfig = JSON.parse(
+    await readFile(join(installation.directory, "config.json"), "utf8"),
+  );
+  assert.equal(finalConfig.sources[0].historyBackfillYear, new Date().getUTCFullYear());
+  assert.equal(finalConfig.sources[0].historyBackfillStatus, "partial");
 });
 
 test("an event arriving during manual sync survives for the next targeted batch", async (context) => {
@@ -5270,6 +5381,8 @@ test("connect replaces a legacy OpenCode filename label before pairing and local
       accountLabel: paired.suggestedLabel,
       collectionMethod: "opencode_sqlite",
       lastAcceptedSyncSequence: "0",
+      historyBackfillYear: new Date().getUTCFullYear(),
+      historyBackfillStatus: "complete",
     };
   };
   const server = createServer((request, response) => {
@@ -5698,6 +5811,8 @@ test("connect restores every Codex logical mapping before its initial sync", asy
     accountLabel: "Codex A",
     collectionMethod: "codex_app_server",
     lastAcceptedSyncSequence: "0",
+    historyBackfillYear: new Date().getUTCFullYear(),
+    historyBackfillStatus: "pending",
   });
   const secondaryMapping = {
     clientSourceId: secondaryClientSourceId,
@@ -5707,6 +5822,8 @@ test("connect restores every Codex logical mapping before its initial sync", asy
     accountLabel: "Codex account 2",
     collectionMethod: "codex_app_server",
     lastAcceptedSyncSequence: "0",
+    historyBackfillYear: new Date().getUTCFullYear(),
+    historyBackfillStatus: "pending",
     profileSourceId: primarySourceId,
   };
   const server = createServer((request, response) => {
@@ -5912,6 +6029,8 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
     accountLabel: "Antigravity",
     collectionMethod: "antigravity_cli_capture",
     lastAcceptedSyncSequence: "0",
+    historyBackfillYear: new Date().getUTCFullYear(),
+    historyBackfillStatus: "complete",
   };
   let serverState = "pending";
   let nextPairingState = "pending";
@@ -6278,6 +6397,8 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
       accountLabel: "Active",
       collectionMethod: "antigravity_cli_capture",
       lastAcceptedSyncSequence: "0",
+      historyBackfillYear: new Date().getUTCFullYear(),
+      historyBackfillStatus: "complete",
     },
     {
       clientSourceId: retainedClientSourceId,
@@ -6287,6 +6408,8 @@ test("reconnect rejects omission and retains a temporarily unavailable source", 
       accountLabel: "Retained",
       collectionMethod: "claude_jsonl",
       lastAcceptedSyncSequence: "0",
+      historyBackfillYear: new Date().getUTCFullYear(),
+      historyBackfillStatus: "complete",
     },
   ];
   const server = createServer((request, response) => {
@@ -6488,6 +6611,8 @@ test("reconnect preserves transient failures, retires disconnected sources, and 
     accountLabel: "Available",
     collectionMethod: "antigravity_cli_capture",
     lastAcceptedSyncSequence: "3",
+    historyBackfillYear: new Date().getUTCFullYear(),
+    historyBackfillStatus: "complete",
   };
   const retiredMapping = {
     clientSourceId: retiredClientSourceId,
@@ -6497,6 +6622,8 @@ test("reconnect preserves transient failures, retires disconnected sources, and 
     accountLabel: "Unavailable",
     collectionMethod: "claude_jsonl",
     lastAcceptedSyncSequence: "2",
+    historyBackfillYear: new Date().getUTCFullYear(),
+    historyBackfillStatus: "complete",
   };
   const server = createServer((request, response) => {
     const chunks = [];
@@ -8081,17 +8208,15 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
         }
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
-          JSON.stringify(
-            reconciliationResponse([
+          JSON.stringify({
+            sources: [
               {
                 sourceId: installation.sourceId,
-                agentId: "antigravity",
-                collectionMethod: "antigravity_cli_capture",
                 status: "active",
                 lastAcceptedSyncSequence: "0",
               },
-            ]),
-          ),
+            ],
+          }),
         );
         return;
       }
@@ -8142,6 +8267,7 @@ test("doctor repair re-enables automatic sync after a connector upgrade", async 
     {
       sourceIds: [installation.sourceId],
       cliVersion: connectorVersion,
+      protocolVersion: connectorProtocolVersion,
       handlerAttestation: {
         attestationId: "<uuid>",
         installedRuntimeVersion: null,
@@ -10205,6 +10331,8 @@ test("uploads the supported 32 sources in bounded batches below the server rate 
       collectionMethod: "unsupported",
       supportedSurface: "cli",
       accountLabel: `Unsupported ${index}`,
+      historyBackfillYear: new Date().getUTCFullYear(),
+      historyBackfillStatus: "complete",
     };
   });
   await writeFile(
@@ -10304,6 +10432,8 @@ test("reconnect replaces authorization after an in-flight sync without token res
                 accountLabel: "Antigravity",
                 collectionMethod: "antigravity_cli_capture",
                 lastAcceptedSyncSequence: "0",
+                historyBackfillYear: new Date().getUTCFullYear(),
+                historyBackfillStatus: "complete",
               },
             ],
           }),
