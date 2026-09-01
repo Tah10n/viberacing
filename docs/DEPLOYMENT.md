@@ -104,11 +104,13 @@ already immutable npm version. Staging 0.4.3 in the server-first pull request do
 the official service remains on npm `latest`, and publication still requires the later reviewed tag
 and GitHub Release after the compatible server deployment is healthy.
 
-The protocol v4 rollout completed with connector 0.4.0; the server remains compatible with v2, v3,
-and v4. For every future protocol change, preserve server-first ordering: deploy and verify a server
-that accepts both the old and new protocols, publish the compatible connector, and only then raise
-`VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed or a
-reviewed installed capability is deliberately made the supported baseline.
+Protocol v5 is staged with connector 0.6.0 for bounded current-UTC-year history. The server remains
+compatible with v2, v3, and v4 rolling snapshots. Preserve server-first ordering: deploy migration
+`010_current_year_history.sql` and verify a server that accepts both the old rolling protocols and
+v5 before publishing the compatible connector. Only then raise `VIBERACING_MIN_CONNECTOR_VERSION` if
+support for an older protocol is intentionally removed or a reviewed installed capability is
+deliberately made the supported baseline. Merging the feature pull request itself does not authorize
+deployment, npm publication, a tag, a GitHub Release, or a Railway variable change.
 
 Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains
 accepted aggregate snapshots. First publish and run connector 0.4.4, which keeps the old wire

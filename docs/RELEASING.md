@@ -50,6 +50,22 @@ old and new protocols, publish the compatible connector, and only then raise
 That variable is a compatibility floor, not a latest-version tracker; normal patch and minor
 releases do not change it.
 
+## Connector 0.6.0 current-year history staging
+
+Connector 0.6.0 adds bounded protocol v5 history snapshots while the server continues accepting
+protocols v2, v3, and v4 for rolling usage. Migration `010_current_year_history.sql` and the v5
+server must be deployed and verified before the connector package is published: older connectors
+keep their recent rolling sync, while only v5 connectors can resume the current UTC year's history
+in at-most-31-day chunks. The legacy `weekly_agent_usage` table remains during this rollout solely
+as a rollback-compatible schema artifact; v5 reads and writes use `daily_agent_usage`.
+
+The feature pull request stages the migration, server, package bytes, tests, and documentation only.
+Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, or Railway variable
+change. After a separately approved server deployment is healthy, follow the stable release process
+above for 0.6.0. Keep the compatibility floor unchanged unless a later, separate rollout decision
+intentionally makes v5 history support mandatory; the web UI already lets older connectors continue
+recent sync and explains that an update is needed only for current-year history.
+
 ## Connector 0.5.1 OpenCode plugin staging
 
 Connector 0.5.1 adds only the local installation-owned OpenCode automatic-Sync plugin and retains

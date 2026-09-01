@@ -20,12 +20,14 @@ a safe protocol downgrade or handler removal discovered from the OS registration
 an installed update from the version of a newer `npx` process. Legacy connectors may omit these
 reports. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
 aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
-may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
-carry only snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
-`collector_failed` code, source ID, and the last server-accepted sequence known before collection.
-That ordering value is an opaque canonical counter, not local content. Delayed errors are ignored;
-legacy v2/v3 errors are accepted but cannot overwrite persistent status. Exception messages are
-never sent.
+may also mark an individual UTC date complete or partial. Protocol v5 adds only a fixed rolling or
+current-year-history kind and, on the final January chunk, a fixed `complete` or `partial` year
+status. The resumable year, next range end, partial bit, and isolated adapter checkpoint stay in
+owner-only local state; no filename, provider identity, or content is added. The server still
+accepts v2-v4 payloads. If collection fails, v4+ may instead send only the fixed `collector_failed`
+code, source ID, and the last server-accepted sequence known before collection. That ordering value
+is an opaque canonical counter, not local content. Delayed errors are ignored; legacy v2/v3 errors
+are accepted but cannot overwrite persistent status. Exception messages are never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
@@ -103,11 +105,12 @@ before implementation.
 Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity contribute to a local observed-event
 ledger containing only a SHA-256 event key, UTC date, exact aggregate token tuple, and parser
 version. Raw provider IDs, filenames, models, and record bodies are not retained. Ledger entries are
-limited to the 31-day ingestion range and bounded by count and serialized bytes. They intentionally
-survive file deletion, movement, copying, and current-database cleanup so already observed usage is
-not silently subtracted; duplicate copies collapse to the same hash. If one identity appears with a
-different tuple, the original tuple wins and only the allowlisted `local_event_identity_conflict`
-diagnostic is emitted.
+limited to the requested rolling or historical range and bounded by count and serialized bytes;
+historical state is isolated from rolling incremental state. Entries intentionally survive file
+deletion, movement, copying, and current-database cleanup within the retained range so already
+observed usage is not silently subtracted; duplicate copies collapse to the same hash. If one
+identity appears with a different tuple, the original tuple wins and only the allowlisted
+`local_event_identity_conflict` diagnostic is emitted.
 
 Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
 by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value
@@ -135,10 +138,11 @@ current handle and is not stored. Browser, installation, poll, and device secret
 in PostgreSQL. Local Vibe Racing directories are owner-only; secrets/config files are `0600` and the
 installed executable is `0700`.
 
-Public pages expose GitHub handle, current UTC-week rank, total, and agent breakdown. They do not
-expose daily data, account labels, source/installation details, or credentials. Local data is under
-the user's control, so the leaderboard is explicitly self-reported and grants no authorization,
-reward, or access.
+Public pages expose GitHub handle, selected UTC-period rank, total, and agent breakdown. Week,
+Month, current-year All time, and current-year Custom views all read aggregate daily summaries; they
+do not expose daily source data, account labels, source/installation details, or credentials. Local
+data is under the user's control, so the leaderboard is explicitly self-reported and grants no
+authorization, reward, or access.
 
 Browser sync stores only an installation capability, independently hashed five-minute grants, an
 opaque request ID, a closed account/installation scope, an optional opaque account ID for

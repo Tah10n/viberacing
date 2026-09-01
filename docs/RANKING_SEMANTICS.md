@@ -1,8 +1,11 @@
 # Ranking semantics
 
-The leaderboard measures exact token volume reported by paired local connectors during the current
-Monday–Sunday UTC week. It does not measure cost, requests, productivity, output quality, or work
-value. A user-controlled machine can alter its local data, so results are self-reported rather than
+The leaderboard measures exact token volume reported by paired local connectors for one selected UTC
+period. **Week** is the current Monday-Sunday UTC week, **Month** is the current UTC calendar month,
+**All time** is January 1 through today in the current UTC calendar year, and **Custom** is an
+inclusive date range restricted to that same year through today. “All time” never means lifetime
+usage. It does not measure cost, requests, productivity, output quality, or work value. A
+user-controlled machine can alter its local data, so results are self-reported rather than
 cryptographically verified.
 
 For each source and UTC date, `totalTokens` is an authoritative provider total when available;
@@ -37,10 +40,11 @@ rows and may correct the total either up or down. This prevents an account-wide 
 reported from two computers from doubling without letting an offline computer's older complete value
 mask a later correction. For a `source_sum` account, daily usage is the sum across machine-local
 histories. Daily account totals then sum across multiple accounts of the same agent; agent totals
-sum into the user's weekly total. An `account_max` component breakdown uses only the observations
-eligible under the same precedence rule. It selects the largest available local component sum and is
-hidden for the day if equally preferred component tuples disagree. A `source_sum` breakdown still
-requires complete components whose sum matches each authoritative source total.
+sum into the user's selected-period total. An `account_max` component breakdown uses only the
+observations eligible under the same precedence rule. It selects the largest available local
+component sum and is hidden for the day if equally preferred component tuples disagree. A
+`source_sum` breakdown still requires complete components whose sum matches each authoritative
+source total.
 
 Local sources have random stable identities independent of discovery order. Pairing can assign two
 profiles of the same agent to different accounts, which makes their account totals additive, or to
@@ -48,9 +52,10 @@ one account, which applies that account's `account_max`/`source_sum` rule. Reass
 affected user's agent summaries in the approval transaction, so the public total changes immediately
 without waiting for another upload.
 
-Ranks use SQL `dense_rank` by weekly total descending, so ties share a rank. Display order within a
-tie is deterministic by case-folded handle and user ID. Public profiles and leaderboard pages read
-the same weekly summary table.
+Ranks use SQL `dense_rank` by selected-period total descending, so ties share a rank. Display order
+within a tie is deterministic by case-folded handle and user ID. Public profiles, leaderboard pages,
+and the signed-in dashboard resolve the same validated half-open UTC range and sum the same
+`daily_agent_usage` rows. Changing period never changes source ownership or correction semantics.
 
 ## Corrections
 
@@ -66,14 +71,18 @@ provisional value up or down without deleting other absent dates. When Codex App
 continuous authoritative range, the connector materializes every covered UTC date: a missing bucket
 becomes an explicit complete entry with `totalTokens="0"`. That zero is an authoritative correction
 marker, not estimated usage. The connector never synthesizes it outside the proven range or after an
-incomplete provider result. Only weeks touched by an accepted snapshot are rebuilt.
+incomplete provider result. Only dates touched by an accepted snapshot are rebuilt in
+`daily_agent_usage`.
 
 Automatic scheduling changes delivery timing, not ranking semantics. Source-owned hooks coalesce
 events into at most about one batch every two minutes; only dirty sources are collected, while
 pending aggregates can upload without a rescan. Manual sync and first connect collect all active
-sources immediately. Automatic hooks make no usage request for an unchanged normalized snapshot.
-Manual and browser-triggered Sync submit a content-equivalent snapshot with the next sequence, so a
-successful check advances **Last sync** and the refreshed dashboard immediately confirms it.
+sources immediately and then finish their remaining current-year history chunks. Automatic and
+browser-triggered runs process at most one history chunk. Automatic hooks make no usage request for
+an unchanged normalized rolling snapshot. Manual and browser-triggered Sync submit a
+content-equivalent rolling snapshot with the next sequence, so a successful check advances **Last
+sync** and the refreshed dashboard immediately confirms it. Historical partial status is tracked
+separately and never overwrites rolling operational completeness.
 
 Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
 Code, Qwen Code, Antigravity, and Gemini CLI.

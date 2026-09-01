@@ -11,7 +11,7 @@ const appUrl = process.env.VIBERACING_TEST_ORIGIN ?? "http://127.0.0.1:3000";
 const browserOrigin = new URL(process.env.VIBERACING_PUBLIC_ORIGIN ?? "http://localhost:3000")
   .origin;
 const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-const connectorProtocolVersion = 4;
+const connectorProtocolVersion = 5;
 const legacyConnectorProtocolVersion = 2;
 const legacyConnectorProtocolVersion3 = 3;
 const digest = (value) => createHash("sha256").update(value, "utf8").digest();
@@ -20,6 +20,8 @@ const check = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 const today = new Date().toISOString().slice(0, 10);
+const currentUtcYear = new Date(`${today}T00:00:00Z`).getUTCFullYear();
+const januaryFirst = `${currentUtcYear}-01-01`;
 const dateOffset = (days) => {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -209,9 +211,12 @@ async function usage(
   sourceErrors = [],
   protocolVersion = connectorProtocolVersion,
 ) {
+  const wireSnapshots = snapshots.map((item) =>
+    protocolVersion >= 5 && item.kind === undefined ? { ...item, kind: "rolling" } : item,
+  );
   return json(
     "/api/usage",
-    { protocolVersion, snapshots, sourceErrors },
+    { protocolVersion, snapshots: wireSnapshots, sourceErrors },
     { authorization: `Bearer ${deviceToken}` },
   );
 }
@@ -222,7 +227,12 @@ function rawUsage(
   sourceErrors = [],
   protocolVersion = connectorProtocolVersion,
 ) {
-  const payload = Buffer.from(JSON.stringify({ protocolVersion, snapshots, sourceErrors }));
+  const wireSnapshots = snapshots.map((item) =>
+    protocolVersion >= 5 && item.kind === undefined ? { ...item, kind: "rolling" } : item,
+  );
+  const payload = Buffer.from(
+    JSON.stringify({ protocolVersion, snapshots: wireSnapshots, sourceErrors }),
+  );
   const target = new URL("/api/usage", appUrl);
   return new Promise((resolve, reject) => {
     const request = httpRequest(
@@ -314,16 +324,7 @@ try {
   );
   check(
     upgradedLegacy.deviceToken !== legacy.deviceToken,
-    "v2 installation did not renegotiate protocol v4 during reconnect",
-  );
-  const legacyCleanup = await form("/api/accounts/delete", {
-    accountId: legacySource.agentAccountId,
-    confirm: "delete",
-  });
-  check(legacyCleanup.status === 303, "legacy v2 account cleanup failed");
-  await pool.query("DELETE FROM installations WHERE id = $1", [legacyInstallation.id]);
-  await pool.query(
-    "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'pairing_approve_user', 'pairing_approve_global')",
+    "v2 installation did not renegotiate protocol v5 during reconnect",
   );
   const legacyV3Installation = { id: randomUUID(), secret: token() };
   const legacyV3 = await pair(
@@ -353,6 +354,121 @@ try {
   check(legacyV3Cleanup.status === 303, "legacy v3 account cleanup failed");
   await pool.query("DELETE FROM installations WHERE id = $1", [legacyV3Installation.id]);
   console.log("ok - legacy protocol v2/v3 pairing and usage remain compatible");
+
+  const historyPairing = upgradedLegacy;
+  const historySource = historyPairing.sources[0];
+  check(
+    historySource?.historyBackfillYear === currentUtcYear &&
+      historySource.historyBackfillStatus === "pending",
+    "protocol v5 pairing omitted current-year history state",
+  );
+  check(
+    (
+      await usage(historyPairing.deviceToken, [
+        snapshot(historySource.sourceId, 2, [[today, 100]], "complete", today, today),
+      ])
+    ).status === 200,
+    "protocol v5 rolling baseline was rejected",
+  );
+  const partialHistorySnapshot = {
+    ...snapshot(
+      historySource.sourceId,
+      3,
+      [[januaryFirst, 20]],
+      "partial",
+      januaryFirst,
+      januaryFirst,
+    ),
+    kind: "year_backfill",
+    historyYearComplete: "partial",
+  };
+  check(
+    (await usage(historyPairing.deviceToken, [partialHistorySnapshot])).status === 200,
+    "protocol v5 January history chunk was rejected",
+  );
+  let historyState = await pool.query(
+    `SELECT history_backfill_year,
+            history_backfill_status,
+            last_completeness,
+            (SELECT tokens::text FROM daily_agent_usage
+              WHERE user_id = source.user_id
+                AND agent_id = source.agent_id
+                AND usage_date = $2::date) AS january_tokens
+       FROM installation_sources source
+      WHERE id = $1`,
+    [historySource.sourceId, januaryFirst],
+  );
+  check(
+    historyState.rows[0]?.history_backfill_year === currentUtcYear &&
+      historyState.rows[0]?.history_backfill_status === "partial" &&
+      historyState.rows[0]?.last_completeness === "complete" &&
+      historyState.rows[0]?.january_tokens === "20",
+    `historical partial state corrupted rolling completeness: ${JSON.stringify(historyState.rows[0])}`,
+  );
+  check(
+    (
+      await usage(historyPairing.deviceToken, [
+        {
+          ...snapshot(
+            historySource.sourceId,
+            4,
+            [[januaryFirst, 15]],
+            "complete",
+            januaryFirst,
+            januaryFirst,
+          ),
+          kind: "year_backfill",
+          historyYearComplete: "complete",
+        },
+      ])
+    ).status === 200,
+    "complete historical correction was rejected",
+  );
+  historyState = await pool.query(
+    `SELECT history_backfill_status,
+            last_completeness,
+            (SELECT tokens::text FROM daily_agent_usage
+              WHERE user_id = source.user_id
+                AND agent_id = source.agent_id
+                AND usage_date = $2::date) AS january_tokens
+       FROM installation_sources source
+      WHERE id = $1`,
+    [historySource.sourceId, januaryFirst],
+  );
+  check(
+    historyState.rows[0]?.history_backfill_status === "complete" &&
+      historyState.rows[0]?.last_completeness === "complete" &&
+      historyState.rows[0]?.january_tokens === "15",
+    `complete history did not correct the daily summary down: ${JSON.stringify(historyState.rows[0])}`,
+  );
+  const v4January = await usage(
+    historyPairing.deviceToken,
+    [
+      snapshot(
+        historySource.sourceId,
+        5,
+        [[januaryFirst, 1]],
+        "complete",
+        januaryFirst,
+        januaryFirst,
+      ),
+    ],
+    [],
+    4,
+  );
+  check(v4January.status === 400, "protocol v4 accepted a current-year historical range");
+  const legacyCleanup = await form("/api/accounts/delete", {
+    accountId: historySource.agentAccountId,
+    confirm: "delete",
+  });
+  check(legacyCleanup.status === 303, "legacy v2/current-year history account cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [legacyInstallation.id]);
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'pairing_approve_user', 'pairing_approve_global')",
+  );
+  console.log(
+    "ok - protocol v5 imports January, stores terminal status, preserves rolling completeness, and corrects daily summaries",
+  );
 
   if (!trustedProxyScenario) {
     const directInstallation = { id: randomUUID(), secret: token() };
@@ -690,7 +806,7 @@ try {
     "equal-timestamp account_max observations in one request were not deterministic",
   );
   const totals = await pool.query(
-    "SELECT agent_id, tokens::text FROM weekly_agent_usage WHERE user_id = $1 ORDER BY agent_id",
+    "SELECT agent_id, sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 GROUP BY agent_id ORDER BY agent_id",
     [userId],
   );
   check(
@@ -709,7 +825,7 @@ try {
   let componentDashboard = await authenticatedGet("/dashboard");
   let componentDashboardHtml = await componentDashboard.text();
   let componentBreakdownCount = (
-    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+    componentDashboardHtml.match(/aria-label="Token breakdown for selected period"/g) ?? []
   ).length;
   let independentComponentNoteCount = (
     componentDashboardHtml.match(/Local component counters total/g) ?? []
@@ -758,7 +874,7 @@ try {
   componentDashboard = await authenticatedGet("/dashboard");
   componentDashboardHtml = await componentDashboard.text();
   componentBreakdownCount = (
-    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+    componentDashboardHtml.match(/aria-label="Token breakdown for selected period"/g) ?? []
   ).length;
   check(
     componentDashboard.status === 200 && componentBreakdownCount === 2,
@@ -778,7 +894,7 @@ try {
   );
   const currentCodexTotal = async () => {
     const result = await pool.query(
-      "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+      "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
       [userId],
     );
     return BigInt(result.rows[0].tokens);
@@ -846,25 +962,31 @@ try {
   );
   const currentWeekTotal = await pool.query(
     `SELECT coalesce(sum(tokens), 0)::text AS tokens
-       FROM weekly_agent_usage
+       FROM daily_agent_usage
       WHERE user_id = $1
-        AND week_start = date_trunc('week', $2::date)::date`,
+        AND usage_date >= date_trunc('week', $2::date)::date
+        AND usage_date < date_trunc('week', $2::date)::date + 7`,
     [userId, today],
   );
   const todayLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    month: "long",
     day: "numeric",
+    month: "long",
     timeZone: "UTC",
+    year: "numeric",
   }).format(new Date(`${today}T00:00:00.000Z`));
+  const todayRowStart = precedenceDashboardHtml.indexOf(`<td>${todayLabel}</td>`);
+  const todayRowEnd = precedenceDashboardHtml.indexOf("</tr>", todayRowStart);
+  const todayRowHtml = precedenceDashboardHtml.slice(todayRowStart, todayRowEnd);
   check(
     precedenceDashboard.status === 200 &&
       precedenceAccountStart >= 0 &&
       precedenceAccountEnd > precedenceAccountStart &&
       /90(?:<!-- -->)? tokens/.test(precedenceAccountHtml) &&
-      !precedenceAccountHtml.includes('aria-label="Weekly token breakdown"') &&
-      precedenceDashboardHtml.includes(`${todayLabel}: ${currentWeekTotal.rows[0].tokens} tokens`),
-    "dashboard account total, components, chart, and weekly summary diverged on precedence",
+      !precedenceAccountHtml.includes('aria-label="Token breakdown for selected period"') &&
+      todayRowStart >= 0 &&
+      todayRowEnd > todayRowStart &&
+      todayRowHtml.includes(`<td>${currentWeekTotal.rows[0].tokens}</td>`),
+    "dashboard account total, components, chart, and daily summary diverged on precedence",
   );
   let precedenceRestore = await usage(second.deviceToken, [
     snapshot(precedenceSecondSource.sourceId, 7, [[today, 80]], "complete", today, today),
@@ -966,7 +1088,7 @@ try {
   );
   check(
     authoritativeZeroCodexTotal === precedenceBaselineTokens + 65n,
-    `authoritative-zero weekly summary mismatch: expected ${precedenceBaselineTokens + 65n}, received ${authoritativeZeroCodexTotal}`,
+    `authoritative-zero daily summary mismatch: expected ${precedenceBaselineTokens + 65n}, received ${authoritativeZeroCodexTotal}`,
   );
   check(
     authoritativeZeroDashboard.status === 200 &&
@@ -976,7 +1098,15 @@ try {
     "authoritative-zero dashboard weekly account total diverged from the fixture",
   );
   check(
-    authoritativeZeroHtml.includes(`${todayLabel}: 157 tokens`),
+    (() => {
+      const rowStart = authoritativeZeroHtml.indexOf(`<td>${todayLabel}</td>`);
+      const rowEnd = authoritativeZeroHtml.indexOf("</tr>", rowStart);
+      return (
+        rowStart >= 0 &&
+        rowEnd > rowStart &&
+        authoritativeZeroHtml.slice(rowStart, rowEnd).includes("<td>157</td>")
+      );
+    })(),
     "authoritative-zero chart total diverged from the fixture",
   );
   const authoritativeZeroRestore = await usage(first.deviceToken, [
@@ -992,7 +1122,7 @@ try {
   );
 
   const dedupBaseline = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   const dedupBaselineTokens = BigInt(dedupBaseline.rows[0].tokens);
@@ -1147,7 +1277,7 @@ try {
     [guardFirstInstallation.id, guardSecondInstallation.id],
   ]);
   const guardCleanupTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1230,7 +1360,7 @@ try {
   );
   const activeDedup = dedupEvent.rows[0];
   const mergedCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1266,7 +1396,7 @@ try {
     [activeDedup.id],
   );
   const undoneCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1330,7 +1460,7 @@ try {
     [dedupFirstInstallation.id, dedupSecondInstallation.id],
   ]);
   const cleanedCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1365,18 +1495,18 @@ try {
     ]),
   ]);
   const concurrentClaudeSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND week_start = date_trunc('week', $2::date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND usage_date >= date_trunc('week', $2::date)::date AND usage_date < date_trunc('week', $2::date)::date + 7",
     [userId, previousWeek],
   );
   check(
     concurrentWeeklyUpdates.every((item) => item.status === 200) &&
       concurrentClaudeSummary.rows[0]?.tokens === "54",
-    `concurrent weekly summary update was lost: ${JSON.stringify({
+    `concurrent daily summary update was lost: ${JSON.stringify({
       statuses: concurrentWeeklyUpdates.map((item) => item.status),
       summary: concurrentClaudeSummary.rows[0]?.tokens,
     })}`,
   );
-  console.log("ok - concurrent usage from two installations preserves the weekly summary");
+  console.log("ok - concurrent usage from two installations preserves the daily summary");
 
   const orderClient = await pool.connect();
   let orderedUsage;
@@ -1480,7 +1610,7 @@ try {
     diagnostic.status === 200 &&
       diagnosticBody.acceptedSourceErrors === 1 &&
       diagnosticBody.staleSourceErrors === 0,
-    "current protocol v4 source error was not accepted",
+    "current ordered source error was not accepted",
   );
   let diagnosticRow = await pool.query(
     "SELECT last_error_summary FROM installation_sources WHERE id = $1",
@@ -1517,7 +1647,7 @@ try {
       diagnosticBody.acceptedSourceErrors === 0 &&
       diagnosticBody.staleSourceErrors === 1 &&
       diagnosticRow.rows[0]?.last_error_summary === null,
-    "delayed protocol v4 source error overwrote a newer success",
+    "delayed ordered source error overwrote a newer success",
   );
   diagnostic = await usage(
     first.deviceToken,
@@ -1570,7 +1700,7 @@ try {
     diagnosticRow.rows[0]?.last_error_summary === null,
     "legacy unordered source error overwrote a newer success",
   );
-  console.log("ok - protocol v4 source errors are sequence-ordered while v2/v3 remain safe");
+  console.log("ok - protocol v5 retains ordered source errors while v2/v3 remain safe");
   response = await usage(first.deviceToken, [snapshot(target, 7, [[today, 999]])]);
   const staleBody = await response.json();
   check(
@@ -1648,7 +1778,7 @@ try {
     "a lower partial snapshot replaced or refreshed previously authoritative evidence",
   );
   const beforeProvisionalSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   response = await usage(first.deviceToken, [
@@ -1666,7 +1796,7 @@ try {
     "a mixed snapshot deleted an absent date despite its partial effective completeness",
   );
   const provisionalSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1679,7 +1809,7 @@ try {
   ]);
   check(response.status === 200, "authoritative entry correction in a partial snapshot failed");
   const authoritativeSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1698,12 +1828,12 @@ try {
     "complete snapshot did not delete absent dates",
   );
   const correctedSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
     correctedSummary.rows[0]?.tokens === "120",
-    "weekly summary did not decrease after correction",
+    "daily summary did not decrease after correction",
   );
   console.log(
     "ok - snapshots decrease values and weekly summaries, reject stale writes, and distinguish complete from partial",
@@ -1778,7 +1908,7 @@ try {
   ]);
   check(response.status === 200, "UTC week-boundary snapshot failed");
   const boundary = await pool.query(
-    "SELECT week_start::text, tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'opencode' AND week_start IN ($2::date - 7, $2::date) ORDER BY week_start",
+    "SELECT date_trunc('week', usage_date)::date::text AS week_start, sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'opencode' AND date_trunc('week', usage_date)::date IN ($2::date - 7, $2::date) GROUP BY date_trunc('week', usage_date)::date ORDER BY date_trunc('week', usage_date)::date",
     [userId, monday],
   );
   check(
@@ -1837,7 +1967,7 @@ try {
     "reconnect duplicated installation or lost history",
   );
   let pairingSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1896,7 +2026,7 @@ try {
     [migratedKimi.sourceId],
   );
   const kimiSummary = await pool.query(
-    "SELECT count(*)::int AS count FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'kimi_code'",
+    "SELECT count(*)::int AS count FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'kimi_code'",
     [userId],
   );
   check(
@@ -1929,7 +2059,7 @@ try {
   );
   check(countAfterConcurrent.rows[0].count === 1, "concurrent reconnect created a duplicate");
   pairingSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -2198,7 +2328,7 @@ try {
     [userId],
   );
   const weeklyAfterInitial = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
 
@@ -2301,7 +2431,7 @@ try {
     [userId],
   );
   const weeklyAfterReset = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -2310,7 +2440,7 @@ try {
       accountStateAfterReset.rows[0]?.new_sources === 2 &&
       accountsAfterReset.rows[0]?.count === accountsAfterInitial.rows[0]?.count &&
       weeklyAfterReset.rows[0]?.tokens === weeklyAfterInitial.rows[0]?.tokens,
-    `logical Codex reset duplicated accounts, sources, or weekly usage: ${JSON.stringify({
+    `logical Codex reset duplicated accounts, sources, or daily usage: ${JSON.stringify({
       accountState: accountStateAfterReset.rows[0],
       accountsAfterInitial: accountsAfterInitial.rows[0],
       accountsAfterReset: accountsAfterReset.rows[0],
@@ -2337,7 +2467,7 @@ try {
     "logical Codex reconnect fixture cleanup failed",
   );
   console.log(
-    'ok - renamed Codex A+B reconnect/reset preserves label "Work", reuses two accounts, claims both sources, and does not double weekly usage',
+    'ok - renamed Codex A+B reconnect/reset preserves label "Work", reuses two accounts, claims both sources, and does not double daily usage',
   );
 
   const pendingBeforeQuotaRace = await pool.query(
@@ -2465,7 +2595,7 @@ try {
     "source reassignment was not persisted",
   );
   let codexSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(codexSummary.rows[0]?.tokens === "20", "account_max was not rebuilt after reassign");
@@ -2480,7 +2610,7 @@ try {
     "source move back was not persisted",
   );
   codexSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(codexSummary.rows[0]?.tokens === "120", "summary was not restored after reassign");
@@ -2500,17 +2630,19 @@ try {
   console.log("ok - owned account rename and source reassignment rebuild summaries");
 
   const currentTotal = await pool.query(
-    "SELECT sum(tokens)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND week_start = date_trunc('week', current_date)::date",
+    "SELECT sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   await pool.query(
-    "INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens) VALUES (date_trunc('week', current_date)::date, $1, 'codex', $2)",
+    "INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens) VALUES (current_date, $1, 'codex', $2)",
     [other.rows[0].id, currentTotal.rows[0].tokens],
   );
   const ranking = await pool.query(
     `WITH totals AS (
-       SELECT user_id, sum(tokens) AS total FROM weekly_agent_usage
-        WHERE week_start = date_trunc('week', current_date)::date GROUP BY user_id
+       SELECT user_id, sum(tokens) AS total FROM daily_agent_usage
+        WHERE usage_date >= date_trunc('week', current_date)::date
+          AND usage_date < date_trunc('week', current_date)::date + 7
+        GROUP BY user_id
      ), ranked AS (
        SELECT user_id, dense_rank() OVER (ORDER BY total DESC)::int AS rank FROM totals
      )
