@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const stateRootEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_ROOT";
 const statePathsEnvironmentVariable = "VIBERACING_WINDOWS_STATE_ACL_PATHS";
+const ownerOnlyFileEnvironmentVariable = "VIBERACING_WINDOWS_OWNER_ONLY_FILE";
 const secureDirectoryScript = [
   "$ErrorActionPreference='Stop'",
   `$root=$env:${stateRootEnvironmentVariable}`,
@@ -46,9 +47,105 @@ const secureDirectoryScript = [
 const encodedSecureDirectoryScript = Buffer.from(secureDirectoryScript, "utf16le").toString(
   "base64",
 );
+const ownerOnlyFileVerification = [
+  `$path=$env:${ownerOnlyFileEnvironmentVariable}`,
+  "if ([string]::IsNullOrWhiteSpace($path)) { throw 'Missing owner-only file path' }",
+  "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+  "if ($entry.PSIsContainer) { throw 'Owner-only file target is a directory' }",
+  "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Owner-only file is a reparse point' }",
+  "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
+  "$verified=[IO.File]::GetAccessControl($entry.FullName)",
+  "$rules=@($verified.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier]))",
+  "if (-not $verified.AreAccessRulesProtected) { throw 'Owner-only file ACL inherits access rules' }",
+  "if ($verified.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $identity.User.Value) { throw 'Owner-only file ACL owner mismatch' }",
+  "if ($rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $identity.User.Value -or $rules[0].AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or (($rules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl)) { throw 'Owner-only file ACL is not owner-only' }",
+];
+const inspectOwnerOnlyFileScript = [
+  "$ErrorActionPreference='Stop'",
+  ...ownerOnlyFileVerification,
+].join("; ");
+const secureOwnerOnlyFileScript = [
+  "$ErrorActionPreference='Stop'",
+  `$path=$env:${ownerOnlyFileEnvironmentVariable}`,
+  "if ([string]::IsNullOrWhiteSpace($path)) { throw 'Missing owner-only file path' }",
+  "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+  "if ($entry.PSIsContainer) { throw 'Owner-only file target is a directory' }",
+  "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Owner-only file is a reparse point' }",
+  "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
+  "$acl=New-Object Security.AccessControl.FileSecurity",
+  "$rule=New-Object Security.AccessControl.FileSystemAccessRule($identity.User,'FullControl','None','None','Allow')",
+  "$acl.SetOwner($identity.User)",
+  "$acl.SetAccessRuleProtection($true,$false)",
+  "[void]$acl.AddAccessRule($rule)",
+  "[IO.File]::SetAccessControl($entry.FullName,$acl)",
+  ...ownerOnlyFileVerification,
+].join("; ");
+const encodedInspectOwnerOnlyFileScript = Buffer.from(
+  inspectOwnerOnlyFileScript,
+  "utf16le",
+).toString("base64");
+const encodedSecureOwnerOnlyFileScript = Buffer.from(secureOwnerOnlyFileScript, "utf16le").toString(
+  "base64",
+);
 
 function timedOutWindowsProcess(error) {
   return error?.killed === true && error?.signal === "SIGTERM";
+}
+
+async function runWindowsSecurityScript(
+  path,
+  encodedScript,
+  { platform = process.platform, run = execFileAsync, environment = process.env } = {},
+) {
+  if (platform !== "win32") return;
+  const systemRoot = environment.SystemRoot?.trim();
+  if (!systemRoot || !win32.isAbsolute(systemRoot))
+    throw new Error("SystemRoot is unavailable or is not absolute");
+  if (typeof path !== "string" || !win32.isAbsolute(path))
+    throw new Error("The Windows owner-only file path must be absolute");
+  const powershell = win32.join(
+    systemRoot,
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  const arguments_ = ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encodedScript];
+  const options = {
+    env: {
+      ...environment,
+      [ownerOnlyFileEnvironmentVariable]: win32.resolve(path),
+    },
+    windowsHide: true,
+    timeout: 15_000,
+  };
+  try {
+    await run(powershell, arguments_, options);
+  } catch (error) {
+    if (!timedOutWindowsProcess(error)) throw error;
+    await run(powershell, arguments_, options);
+  }
+}
+
+export async function inspectOwnerOnlyWindowsFile(path, options = {}) {
+  if ((options.platform ?? process.platform) !== "win32") return true;
+  try {
+    await runWindowsSecurityScript(path, encodedInspectOwnerOnlyFileScript, options);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureOwnerOnlyWindowsFile(path, options = {}) {
+  if ((options.platform ?? process.platform) !== "win32") return;
+  try {
+    await runWindowsSecurityScript(path, encodedSecureOwnerOnlyFileScript, options);
+  } catch (error) {
+    throw new Error("Vibe Racing cannot enforce an owner-only Windows ACL on its OpenCode plugin", {
+      cause: error,
+    });
+  }
 }
 
 export async function ensurePrivateStateDirectory(

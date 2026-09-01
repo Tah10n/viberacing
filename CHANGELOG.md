@@ -8,6 +8,44 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Added
+
+- `connect` and `doctor --repair` now reconcile one strict installation-owned OpenCode plugin under
+  the global XDG `opencode/plugins` directory. After one OpenCode restart it handles
+  `session.status: idle`, deduplicates the `session.idle` fallback for two seconds, synchronously
+  starts the stable detached launcher, and returns without reading session IDs, project context, or
+  any private event payload.
+- One hidden bulk hook atomically marks every active mapped OpenCode SQLite source for the current
+  installation under the existing dirty lock, then reuses the existing scheduler single-flight,
+  debounce, cooldown/maximum-delay, and fingerprint suppression. Custom state roots are explicit,
+  and a stale plugin cannot recreate state after disconnect, source retirement, reset, or uninstall.
+- Plugin ownership uses a strict schema marker bound to the installation and a local state-root
+  hash, bounded regular-file inspection, no symlinks/hardlinks/reparse points, POSIX owner/mode
+  checks, owner-only Windows ACLs, and exclusive same-directory publication. Owned updates and
+  removals first move the public entry to a unique quarantine and verify the same inode and bytes
+  through an open file handle. A raced foreign regular file is restored without replacement; other
+  raced file types are preserved at the reported recovery path. Foreign and newer-schema plugins are
+  never overwritten or deleted, and multiple installations use separate files.
+- Connector CI now runs a pinned Bun smoke for the OpenCode 1.18.23 compatibility target on Ubuntu,
+  Windows, and macOS with spaces/Unicode paths and a real detached Node launcher.
+
+### Changed
+
+- The stable launcher sets `VIBERACING_STATE_DIR` from its own absolute location before importing
+  the versioned runtime, preventing custom installations from falling back to `~/.viberacing`.
+- `doctor` inspection is read-only and reports `OpenCode automatic sync plugin: <status>`; repair
+  updates runtime/hooks/plugin without running usage Sync and requests a restart only after plugin
+  creation or update.
+
+### Fixed
+
+- `connect` now revalidates the prior connection generation, installation identity, source registry,
+  and pending OpenCode cleanup under the pre-pairing lifecycle boundary. A stale process therefore
+  cannot recreate local authorization after a concurrent `disconnect` has removed it.
+
+These changes are staged only. This work does not publish npm, create a tag or GitHub Release,
+deploy, change Railway variables, or raise the minimum connector version.
+
 ## [0.5.0] - 2026-08-26
 
 ### Added

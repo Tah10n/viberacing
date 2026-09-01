@@ -101,6 +101,14 @@
   permanent collector/network failure ends after one generation, retains safe pending/error state,
   and retries only after a new hook/manual sync. No daemon, watcher, polling loop, system service,
   or required cron should be installed.
+- On Linux, macOS, and Windows, connect an OpenCode source with home/config/state paths containing
+  spaces and Unicode. Confirm the installation-owned plugin is under
+  `<XDG_CONFIG_HOME>/opencode/plugins` (Windows defaults to `%USERPROFILE%\.config`, never APPDATA),
+  has private mode/owner-only ACL, and does not replace another plugin. Restart OpenCode and verify
+  both TUI and `opencode run` idle events return immediately, `session.status: idle` is primary,
+  `session.idle` is deduplicated, and every active mapped `opencode*.db` is checked in one scheduler
+  generation. Unchanged profiles must send no usage payload. Repeat with custom
+  `VIBERACING_STATE_DIR`, then disconnect/reset/uninstall and prove a late event creates no state.
 - Verify separate Codex profiles use distinct `CODEX_HOME` roots. In one shared profile, run a real
   account A -> B -> A sequence: A and B must retain separate totals, B must never overwrite A,
   returning to A must not create a third logical source, only one physical Stop hook may exist, and

@@ -133,6 +133,8 @@ const requiredFiles = [
   "package.json",
   "bin/viberacing.mjs",
   "lib/diagnostics.mjs",
+  "lib/opencode-cleanup.mjs",
+  "lib/opencode-plugin.mjs",
   "lib/protocol.mjs",
   "lib/terminal.mjs",
   "lib/version.mjs",

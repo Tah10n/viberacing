@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import {
   access,
@@ -36,6 +36,8 @@ export const stateDirectory = process.env.VIBERACING_STATE_DIR
   : defaultStateDirectory;
 const configPath = join(stateDirectory, "config.json");
 const installationPath = join(stateDirectory, "installation.json");
+const openCodePluginCleanupPath = join(stateDirectory, "opencode-plugin-cleanup.json");
+const openCodePluginRevocationPath = join(stateDirectory, "opencode-plugin-revocation.json");
 const providerIdentityPath = join(stateDirectory, "provider-identity.json");
 const sourcesPath = join(stateDirectory, "sources.json");
 const connectionCommitPath = join(stateDirectory, "connection-commit.json");
@@ -51,6 +53,8 @@ let stateDirectorySecurity;
 const stateFiles = new Set([
   "config.json",
   "installation.json",
+  "opencode-plugin-cleanup.json",
+  "opencode-plugin-revocation.json",
   "provider-identity.json",
   "sources.json",
   "connection-commit.json",
@@ -65,6 +69,7 @@ const legacyRuntimeFiles = new Set([
   "config.mjs",
   "diagnostics.mjs",
   "executables.mjs",
+  "opencode-plugin.mjs",
   "opencode-cutover-preflight.mjs",
   "readers.mjs",
   "registry.mjs",
@@ -85,7 +90,7 @@ const legacyRuntimeAdapterFiles = new Set([
 const ownedLockPattern =
   /^(?:\.viberacing-state|connection-state|sync|dirty|scheduler|scheduler-launch|lifecycle|lifecycle-revoking)\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i;
 const stateTemporaryPattern =
-  /^(?:config|installation|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
+  /^(?:config|installation|opencode-plugin-(?:cleanup|revocation)|provider-identity|sources|connection-commit|connect-attempt|state|dirty)\.json\.\d+(?:\.[0-9a-f-]{36})?\.tmp$/i;
 const markerTemporaryPattern = /^\.viberacing-state\.\d+\.[0-9a-f-]{36}\.tmp$/i;
 const hookLauncherTemporaryPattern = /^viberacing-hook\.mjs\.\d+\.tmp$/i;
 const sourceIdPattern =
@@ -94,6 +99,7 @@ const runtimeVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const providerAccountKeyPattern = /^acct1_[A-Za-z0-9_-]{43}$/;
 const sourcesSchemaVersion = 2;
 const maximumLocalSources = 32;
+const maximumOpenCodePluginCleanupTargets = 32;
 const maximumCodexAccountsPerProfile = 8;
 const legacyCollectionMethods = new Set([
   "antigravity\0antigravity_cli_capture",
@@ -521,15 +527,35 @@ function geminiRoot() {
   return join(home, ".gemini");
 }
 
-async function atomicJson(path, value, { beforeRename } = {}) {
+async function syncDirectoryEntry(path) {
+  if (process.platform === "win32") return;
+  const handle = await open(dirname(path), fsConstants.O_RDONLY);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function atomicJson(path, value, { beforeRename, durable = false } = {}) {
   await ensurePrivateStateDirectory();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.tmp`;
   try {
     await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    await chmod(temporary, 0o600);
+    if (durable) {
+      const handle = await open(temporary, "r+");
+      try {
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    }
     await beforeRename?.(temporary, path);
     await rename(temporary, path);
     await chmod(path, 0o600);
+    if (durable) await syncDirectoryEntry(path);
   } finally {
     await rm(temporary, { force: true });
   }
@@ -611,6 +637,45 @@ function serializedConfig(config) {
       ...(source.profileSourceId === undefined ? {} : { profileSourceId: source.profileSourceId }),
     })),
   };
+}
+
+export function connectionSnapshot(config) {
+  if (config === null) return { exists: false };
+  const stored = serializedConfig(config);
+  return {
+    exists: true,
+    installationId: stored.installationId,
+    origin: stored.origin,
+    deviceTokenFingerprint: createHash("sha256")
+      .update(typeof stored.deviceToken === "string" ? stored.deviceToken : "")
+      .digest("hex"),
+  };
+}
+
+function sameConnectionSnapshot(left, right) {
+  if (left?.exists !== right?.exists) return false;
+  if (left?.exists === false) return true;
+  return (
+    left?.exists === true &&
+    left.installationId === right.installationId &&
+    left.origin === right.origin &&
+    left.deviceTokenFingerprint === right.deviceTokenFingerprint
+  );
+}
+
+function connectAttemptStale(message, cause) {
+  const error = new Error(message, cause === undefined ? undefined : { cause });
+  error.code = "connect_attempt_stale";
+  return error;
+}
+
+async function currentConnectionSnapshotUnlocked() {
+  try {
+    return connectionSnapshot(await readConfigUnlocked());
+  } catch (error) {
+    if (error?.code === "ENOENT") return connectionSnapshot(null);
+    throw connectAttemptStale("Local connection changed while preparing the connection", error);
+  }
 }
 
 async function normalizedSources(sources) {
@@ -755,7 +820,13 @@ async function readInstallationUnlocked() {
       sourceIdPattern.test(value.id) &&
       typeof value.secret === "string" &&
       value.secret.length >= 32 &&
-      value.secret.length <= 128
+      value.secret.length <= 128 &&
+      (value.openCodePluginPath === undefined ||
+        (typeof value.openCodePluginPath === "string" &&
+          value.openCodePluginPath.length <= 4_096 &&
+          isAbsolute(value.openCodePluginPath) &&
+          basename(value.openCodePluginPath) === `viberacing-${value.id.toLowerCase()}.js` &&
+          !hasTerminalControlCharacters(value.openCodePluginPath)))
     )
       return value;
     throw new Error("Local installation identity is invalid");
@@ -763,6 +834,153 @@ async function readInstallationUnlocked() {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
+}
+
+function normalizedOpenCodePluginCleanupTarget(value, { requirePath = false } = {}) {
+  const keys = Object.keys(value ?? {})
+    .sort()
+    .join("\0");
+  const expectedKeys =
+    typeof value?.openCodePluginPath === "string"
+      ? ["installationId", "openCodePluginPath"].sort().join("\0")
+      : ["installationId"].join("\0");
+  if (
+    keys !== expectedKeys ||
+    !sourceIdPattern.test(value.installationId ?? "") ||
+    (requirePath && typeof value.openCodePluginPath !== "string") ||
+    (value.openCodePluginPath !== undefined &&
+      (typeof value.openCodePluginPath !== "string" ||
+        value.openCodePluginPath.length > 4_096 ||
+        !isAbsolute(value.openCodePluginPath) ||
+        !isOpenCodePluginCleanupBasename(
+          basename(value.openCodePluginPath),
+          value.installationId.toLowerCase(),
+        ) ||
+        hasTerminalControlCharacters(value.openCodePluginPath)))
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return {
+    installationId: value.installationId.toLowerCase(),
+    ...(value.openCodePluginPath === undefined
+      ? {}
+      : { openCodePluginPath: resolve(value.openCodePluginPath) }),
+  };
+}
+
+function isOpenCodePluginCleanupBasename(name, installationId) {
+  const canonical = `viberacing-${installationId}.js`;
+  const [base, ...quarantineSuffixes] = name.split(".quarantine-");
+  const probeIndex = base.lastIndexOf(".probe-");
+  const probeSuffix = probeIndex < 0 ? null : base.slice(probeIndex + ".probe-".length);
+  const stageBase = probeIndex < 0 ? base : base.slice(0, probeIndex);
+  const stagePrefix = `${canonical}.`;
+  const stageSuffix = ".stage";
+  const stageIdentity =
+    stageBase.startsWith(stagePrefix) && stageBase.endsWith(stageSuffix)
+      ? stageBase.slice(stagePrefix.length, -stageSuffix.length)
+      : null;
+  const separator = stageIdentity?.indexOf(".") ?? -1;
+  const stageValid =
+    separator > 0 &&
+    /^\d+$/.test(stageIdentity.slice(0, separator)) &&
+    sourceIdPattern.test(stageIdentity.slice(separator + 1));
+  return (
+    (base === canonical ||
+      (stageValid && (probeSuffix === null || sourceIdPattern.test(probeSuffix)))) &&
+    quarantineSuffixes.every((suffix) => sourceIdPattern.test(suffix))
+  );
+}
+
+function sameOpenCodePluginCleanupTarget(left, right) {
+  if (left.installationId !== right.installationId) return false;
+  if (left.openCodePluginPath === undefined || right.openCodePluginPath === undefined)
+    return left.openCodePluginPath === right.openCodePluginPath;
+  return process.platform === "win32"
+    ? left.openCodePluginPath.toLowerCase() === right.openCodePluginPath.toLowerCase()
+    : left.openCodePluginPath === right.openCodePluginPath;
+}
+
+function normalizedOpenCodePluginCleanups(value) {
+  let targets;
+  if (value?.version === 1) {
+    if (
+      Object.keys(value).sort().join("\0") !==
+      ["installationId", "openCodePluginPath", "version"].sort().join("\0")
+    )
+      throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+    targets = [
+      normalizedOpenCodePluginCleanupTarget(
+        {
+          installationId: value.installationId,
+          openCodePluginPath: value.openCodePluginPath,
+        },
+        { requirePath: true },
+      ),
+    ];
+  } else if (value?.version === 2) {
+    if (
+      Object.keys(value).sort().join("\0") !== ["targets", "version"].sort().join("\0") ||
+      !Array.isArray(value.targets) ||
+      value.targets.length === 0 ||
+      value.targets.length > maximumOpenCodePluginCleanupTargets
+    )
+      throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+    targets = value.targets.map((target) => normalizedOpenCodePluginCleanupTarget(target));
+  } else throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  if (
+    targets.some((target, index) =>
+      targets.slice(0, index).some((previous) => sameOpenCodePluginCleanupTarget(previous, target)),
+    )
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return targets;
+}
+
+function serializedOpenCodePluginCleanups(targets) {
+  if (targets.length === 1 && targets[0].openCodePluginPath !== undefined)
+    return { version: 1, ...targets[0] };
+  return { version: 2, targets };
+}
+
+const openCodePluginJournalPaths = {
+  cleanup: openCodePluginCleanupPath,
+  revocation: openCodePluginRevocationPath,
+};
+
+function openCodePluginJournalPath(journal) {
+  const path = openCodePluginJournalPaths[journal];
+  if (!path) throw new Error("Unknown OpenCode plugin cleanup journal");
+  return path;
+}
+
+async function readOpenCodePluginJournalUnlocked(journal) {
+  try {
+    return normalizedOpenCodePluginCleanups(
+      JSON.parse(await readFile(openCodePluginJournalPath(journal), "utf8")),
+    );
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function writeOpenCodePluginJournalUnlocked(journal, targets, options = {}) {
+  const path = openCodePluginJournalPath(journal);
+  if (targets.length === 0) {
+    await unlink(path).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+    return;
+  }
+  await atomicJson(path, serializedOpenCodePluginCleanups(targets), options);
+}
+
+function readOpenCodePluginCleanupsUnlocked() {
+  return readOpenCodePluginJournalUnlocked("cleanup");
+}
+
+function writeOpenCodePluginCleanupsUnlocked(targets, options = {}) {
+  return writeOpenCodePluginJournalUnlocked("cleanup", targets, options);
 }
 
 async function readProviderIdentitySaltUnlocked() {
@@ -872,6 +1090,10 @@ export async function readConfig(options = {}) {
   return withConnectionConfig((config) => config, options);
 }
 
+export function inspectConfig() {
+  return readConfigUnlocked();
+}
+
 export async function connectedStateExists() {
   try {
     const [rootInfo, markerInfo, configInfo] = await Promise.all([
@@ -901,6 +1123,8 @@ export async function connectedStateExists() {
 export async function localInstallationStateExists() {
   for (const path of [
     installationPath,
+    openCodePluginCleanupPath,
+    openCodePluginRevocationPath,
     configPath,
     sourcesPath,
     connectAttemptPath,
@@ -977,6 +1201,30 @@ export async function connectedSourceMappingMatches(clientSourceId, agentId) {
   }
 }
 
+export async function connectedAgentSourceIdsIfInstallationMatches(installationId, agentId) {
+  if (!sourceIdPattern.test(installationId ?? "") || typeof agentId !== "string" || !agentId)
+    throw new Error("Invalid connected agent source query");
+  if (!(await connectedStateExists())) return [];
+  try {
+    const [installation, config] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+    ]);
+    if (
+      installation?.id !== installationId ||
+      config.installationId !== installationId ||
+      !(await connectedStateExists())
+    )
+      return [];
+    return config.sources
+      .filter((source) => source.agentId === agentId && sourceIdPattern.test(source.sourceId ?? ""))
+      .map((source) => source.clientSourceId);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error instanceof SyntaxError) return [];
+    throw error;
+  }
+}
+
 export async function writeConfig(config, options) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
@@ -1049,6 +1297,10 @@ export async function readSources() {
   });
 }
 
+export function inspectSources() {
+  return readSourcesUnlocked();
+}
+
 export async function migrateSourcesSchema() {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
@@ -1082,22 +1334,24 @@ async function writeSourcesUnlocked(sources) {
   return normalized;
 }
 
-export async function beginConnectAttempt({ installationId, origin, expectedSources }) {
+export async function beginConnectAttempt({
+  installationId,
+  origin,
+  expectedSources,
+  expectedConnectionSnapshot,
+}) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
+    const currentConnectionSnapshot = await currentConnectionSnapshotUnlocked();
+    if (!sameConnectionSnapshot(currentConnectionSnapshot, expectedConnectionSnapshot))
+      throw connectAttemptStale("Local connection changed while preparing the connection");
     const installation = await readInstallationUnlocked();
-    if (installation?.id !== installationId) {
-      const error = new Error("Installation identity changed while preparing the connection");
-      error.code = "connect_attempt_stale";
-      throw error;
-    }
+    if (installation?.id !== installationId)
+      throw connectAttemptStale("Installation identity changed while preparing the connection");
     const currentSources = await readSourcesUnlocked();
     const expected = await normalizedSources(expectedSources);
-    if (JSON.stringify(currentSources) !== JSON.stringify(expected)) {
-      const error = new Error("Local source registry changed while preparing the connection");
-      error.code = "connect_attempt_stale";
-      throw error;
-    }
+    if (JSON.stringify(currentSources) !== JSON.stringify(expected))
+      throw connectAttemptStale("Local source registry changed while preparing the connection");
     const attempt = {
       version: 1,
       attemptId: randomUUID(),
@@ -1374,6 +1628,164 @@ export async function readInstallation() {
   });
 }
 
+export function readExistingInstallation() {
+  return readInstallationUnlocked();
+}
+
+export async function readOpenCodePluginCleanup() {
+  const targets = await readOpenCodePluginCleanupsUnlocked();
+  if (targets.length === 0) return null;
+  return targets[0].openCodePluginPath === undefined
+    ? { version: 2, targets: [targets[0]] }
+    : { version: 1, ...targets[0] };
+}
+
+export function readOpenCodePluginCleanups() {
+  return readOpenCodePluginCleanupsUnlocked();
+}
+
+export async function readOpenCodePluginCleanupJournals() {
+  const entries = [];
+  const failures = [];
+  for (const journal of Object.keys(openCodePluginJournalPaths))
+    try {
+      for (const target of await readOpenCodePluginJournalUnlocked(journal))
+        entries.push({ journal, target });
+    } catch (error) {
+      failures.push({ journal, error });
+    }
+  return { entries, failures };
+}
+
+function mergeOpenCodePluginCleanupTargets(current, additions) {
+  const next = [...current];
+  for (const addition of additions)
+    if (!next.some((target) => sameOpenCodePluginCleanupTarget(target, addition)))
+      next.push(addition);
+  if (next.length > maximumOpenCodePluginCleanupTargets)
+    throw new Error("Local OpenCode plugin cleanup target limit was reached");
+  return next;
+}
+
+export async function rememberOpenCodePluginRevocationTargets(targets, options = {}) {
+  const additions = targets.map((target) => normalizedOpenCodePluginCleanupTarget(target));
+  if (additions.length === 0) return { changed: false, journal: null };
+  if (
+    additions.some((target, index) =>
+      additions
+        .slice(0, index)
+        .some((previous) => sameOpenCodePluginCleanupTarget(previous, target)),
+    )
+  )
+    throw new Error("Local OpenCode plugin cleanup metadata is invalid");
+  return withConnectionStateLock(async () => {
+    let current;
+    let journal = "cleanup";
+    try {
+      current = await readOpenCodePluginJournalUnlocked(journal);
+    } catch {
+      journal = "revocation";
+      current = await readOpenCodePluginJournalUnlocked(journal);
+    }
+    const next = mergeOpenCodePluginCleanupTargets(current, additions);
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.VIBERACING_TEST_FAIL_OPENCODE_REVOCATION_PREPARE === "1"
+    )
+      throw new Error("Synthetic OpenCode revocation journal failure");
+    await writeOpenCodePluginJournalUnlocked(journal, next, { ...options, durable: true });
+    return { changed: next.length !== current.length, journal };
+  });
+}
+
+export async function rememberOpenCodePluginCleanup(installationId, pluginPath, options = {}) {
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
+    installationId,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+  });
+  return withConnectionStateLock(async () => {
+    const current = await readOpenCodePluginCleanupsUnlocked();
+    if (current.some((target) => sameOpenCodePluginCleanupTarget(target, cleanup))) return false;
+    const next = [...current, cleanup];
+    if (next.length > maximumOpenCodePluginCleanupTargets)
+      throw new Error("Local OpenCode plugin cleanup target limit was reached");
+    await writeOpenCodePluginCleanupsUnlocked(next, options);
+    return true;
+  });
+}
+
+export async function clearOpenCodePluginCleanup() {
+  await withConnectionStateLock(() => writeOpenCodePluginCleanupsUnlocked([]));
+}
+
+export async function clearOpenCodePluginCleanupTarget(
+  installationId,
+  pluginPath,
+  { journal = "cleanup" } = {},
+) {
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
+    installationId,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+  });
+  return withConnectionStateLock(async () => {
+    const current = await readOpenCodePluginJournalUnlocked(journal);
+    const next = current.filter((target) => !sameOpenCodePluginCleanupTarget(target, cleanup));
+    if (next.length === current.length) return false;
+    await writeOpenCodePluginJournalUnlocked(journal, next);
+    return true;
+  });
+}
+
+export async function clearOpenCodePluginRecoveryTarget(installationId, pluginPath) {
+  const cleanup = normalizedOpenCodePluginCleanupTarget({
+    installationId,
+    ...(pluginPath === undefined ? {} : { openCodePluginPath: pluginPath }),
+  });
+  return withConnectionStateLock(async () => {
+    let changed = false;
+    const failures = [];
+    for (const journal of Object.keys(openCodePluginJournalPaths)) {
+      let current;
+      try {
+        current = await readOpenCodePluginJournalUnlocked(journal);
+      } catch (error) {
+        failures.push({ journal, error });
+        continue;
+      }
+      const next = current.filter((target) => !sameOpenCodePluginCleanupTarget(target, cleanup));
+      if (next.length === current.length) continue;
+      await writeOpenCodePluginJournalUnlocked(journal, next);
+      changed = true;
+    }
+    return { changed, failures };
+  });
+}
+
+export async function rememberOpenCodePluginPath(installationId, pluginPath, options = {}) {
+  if (
+    !sourceIdPattern.test(installationId ?? "") ||
+    typeof pluginPath !== "string" ||
+    pluginPath.length > 4_096 ||
+    !isAbsolute(pluginPath) ||
+    basename(pluginPath) !== `viberacing-${installationId.toLowerCase()}.js` ||
+    hasTerminalControlCharacters(pluginPath)
+  )
+    throw new Error("Invalid OpenCode plugin path");
+  return withConnectionStateLock(async () => {
+    const installation = await readInstallationUnlocked();
+    if (installation?.id !== installationId)
+      throw new Error("Installation identity changed while recording the OpenCode plugin path");
+    const normalizedPath = resolve(pluginPath);
+    if (installation.openCodePluginPath === normalizedPath) return false;
+    await atomicJson(
+      installationPath,
+      { ...installation, openCodePluginPath: normalizedPath },
+      options,
+    );
+    return true;
+  });
+}
+
 export async function readOrCreateProviderIdentitySalt() {
   return withConnectionStateLock(async () => {
     const current = await readProviderIdentitySaltUnlocked();
@@ -1578,6 +1990,8 @@ const installedRuntimeFiles = [
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
+  "opencode-cleanup.mjs",
+  "opencode-plugin.mjs",
   "opencode-cutover-preflight.mjs",
   "origin.mjs",
   "readers.mjs",
@@ -1614,6 +2028,7 @@ function hookLauncherContents(version = connectorVersion) {
     'import { fileURLToPath, pathToFileURL } from "node:url";',
     "",
     'const stateDirectory = resolve(fileURLToPath(new URL("..", import.meta.url)));',
+    "process.env.VIBERACING_STATE_DIR = stateDirectory;",
     `const runtime = join(stateDirectory, "runtime", ${JSON.stringify(version)}, "bin", "viberacing.mjs");`,
     "await import(pathToFileURL(runtime).href);",
   ].join("\n");
@@ -1883,7 +2298,7 @@ export async function diagnoseHookForSource(source, options = {}) {
       return error?.code === "ENOENT" ? "missing" : "invalid-settings";
     }
   }
-  if (source.agentId === "opencode") return "manual-sync";
+  if (source.agentId === "opencode") return undefined;
   if (captureAgents.has(source.agentId)) return "capture-wrapper";
   return undefined;
 }
@@ -2065,6 +2480,8 @@ export async function removeHooks() {
 async function removeConfigUnlocked() {
   const attempt = await invalidateConnectAttemptUnlocked();
   await waitForTestConnectionBarrier("remove_after_lock");
+  if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_FAIL_CONFIG_REMOVAL === "1")
+    throw new Error("Synthetic local token removal failure");
   for (const path of [configPath, connectionCommitPath])
     try {
       await unlink(path);
@@ -2076,6 +2493,23 @@ async function removeConfigUnlocked() {
 
 export async function removeConfig() {
   return withConnectionStateLock(() => removeConfigUnlocked());
+}
+
+export async function removeInstallationIdentity() {
+  return withConnectionStateLock(async () => {
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.VIBERACING_TEST_FAIL_INSTALLATION_IDENTITY_REMOVAL === "1"
+    )
+      throw new Error("Synthetic installation identity removal failure");
+    try {
+      await unlink(installationPath);
+      return true;
+    } catch (error) {
+      if (error?.code === "ENOENT") return false;
+      throw error;
+    }
+  });
 }
 
 export async function resetInstallation() {
