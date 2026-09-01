@@ -1,16 +1,15 @@
 import { removeConfig, removeHooks, removeInstallationIdentity } from "./config.mjs";
 import {
-  captureOpenCodePluginCleanupContext,
   cleanupOpenCodePluginTargets,
-  prepareOpenCodePluginRevocation,
+  prepareOpenCodePluginTeardown,
 } from "./opencode-cleanup.mjs";
 import { clearAutomaticState, clearPendingPayloads } from "./runtime.mjs";
 
 export async function disableLocalConnection(clearPending = false) {
-  const cleanupContext = await captureOpenCodePluginCleanupContext();
+  let cleanupContext;
   let revocationPrepare;
   try {
-    revocationPrepare = await prepareOpenCodePluginRevocation(cleanupContext);
+    ({ cleanupContext, revocationPrepare } = await prepareOpenCodePluginTeardown());
   } catch (error) {
     const failure = {
       status: "unreadable",

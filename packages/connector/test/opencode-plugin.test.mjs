@@ -896,6 +896,52 @@ test("copied installation identity cannot overwrite a plugin from another state 
   assert.notEqual(openCodeStateRootHash(first.stateRoot), openCodeStateRootHash(second.stateRoot));
 });
 
+test("one physical state root keeps plugin ownership through an equivalent path alias", async (context) => {
+  const root = await temporaryRoot(context, "viberacing-opencode-state-alias-");
+  const physicalStateRoot = join(root, "physical-state");
+  const aliasStateRoot = join(root, "state-alias");
+  const physicalLauncher = join(physicalStateRoot, "bin", "viberacing-hook.mjs");
+  await mkdir(join(physicalStateRoot, "bin"), { recursive: true });
+  await writeFile(physicalLauncher, "// stable launcher\n", { mode: 0o600 });
+  await symlink(
+    physicalStateRoot,
+    aliasStateRoot,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  const shared = {
+    installationId: installationA,
+    nodeExecutable: process.execPath,
+    environment: {
+      XDG_CONFIG_HOME: join(root, "global-config"),
+      HOME: root,
+    },
+    homeDirectory: root,
+    ...(process.platform === "win32"
+      ? { inspectWindowsFile: async () => true, secureWindowsFile: async () => {} }
+      : {}),
+  };
+  const throughAlias = {
+    ...shared,
+    stateRoot: aliasStateRoot,
+    launcherPath: join(aliasStateRoot, "bin", "viberacing-hook.mjs"),
+  };
+  const throughPhysicalPath = {
+    ...shared,
+    stateRoot: physicalStateRoot,
+    launcherPath: physicalLauncher,
+  };
+
+  const installed = await reconcileOpenCodePlugin({ ...throughAlias, desired: true });
+  const before = await readFile(installed.path, "utf8");
+  assert.equal(openCodeStateRootHash(aliasStateRoot), openCodeStateRootHash(physicalStateRoot));
+  assert.equal((await inspectOpenCodePlugin(throughPhysicalPath)).status, "current");
+
+  const repaired = await reconcileOpenCodePlugin({ ...throughPhysicalPath, desired: true });
+  assert.equal(repaired.status, "current");
+  assert.equal(repaired.action, "none");
+  assert.equal(await readFile(installed.path, "utf8"), before);
+});
+
 test("independent installations coexist in one global OpenCode plugin directory", async (context) => {
   const root = await temporaryRoot(context);
   const configRoot = join(root, "global-config");

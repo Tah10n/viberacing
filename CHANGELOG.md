@@ -8,8 +8,6 @@ experience or protocol.
 
 ## [Unreleased]
 
-## [0.5.1] - 2026-08-27
-
 ### Added
 
 - `connect` and `doctor --repair` now reconcile one strict installation-owned OpenCode plugin under
@@ -39,7 +37,7 @@ experience or protocol.
   updates runtime/hooks/plugin without running usage Sync and requests a restart only after plugin
   creation or update.
 
-This version is staged only. This change does not publish npm, create a tag or GitHub Release,
+These changes are staged only. This work does not publish npm, create a tag or GitHub Release,
 deploy, change Railway variables, or raise the minimum connector version.
 
 ## [0.5.0] - 2026-08-26

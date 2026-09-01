@@ -130,6 +130,12 @@ export async function prepareOpenCodePluginRevocation(cleanupContext) {
   return { ...result, targets };
 }
 
+export async function prepareOpenCodePluginTeardown() {
+  const cleanupContext = await captureOpenCodePluginCleanupContext();
+  const revocationPrepare = await prepareOpenCodePluginRevocation(cleanupContext);
+  return { cleanupContext, revocationPrepare };
+}
+
 function addDistinctTarget(targets, candidate) {
   const normalizedCandidate = {
     ...candidate,
@@ -185,6 +191,7 @@ export async function cleanupOpenCodePluginTargets({
   includeInstallation = false,
   cleanupContext,
   preserveCommittedPlugin,
+  preserveTargetsOnUnreadableJournals = false,
 } = {}) {
   const targets = [];
   const failures = [];
@@ -258,6 +265,17 @@ export async function cleanupOpenCodePluginTargets({
           : "Installation identity is unreadable",
     });
   }
+  if (
+    preserveTargetsOnUnreadableJournals &&
+    context?.configStatus === "valid" &&
+    journalState.failures.length > 0
+  )
+    return {
+      failures,
+      results,
+      preserveInstallationIdentity,
+      preserveInstallationIdentityReason,
+    };
 
   if (includeInstallation && journalState.failures.length === 0) {
     const installation = context.installation;

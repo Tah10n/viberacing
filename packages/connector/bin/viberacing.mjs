@@ -28,6 +28,7 @@ import {
   cleanupOpenCodePluginTargets,
   configWantsOpenCodePlugin,
   openCodePluginBlocked,
+  prepareOpenCodePluginTeardown,
 } from "../lib/opencode-cleanup.mjs";
 import {
   adapters,
@@ -955,18 +956,44 @@ async function exactPairingSources(sources) {
   return result;
 }
 
-async function reconcilePreviousConnectionBeforePairing(origin, installationId) {
+async function existingConnectionIdentityForPairing() {
+  let previousConfig;
+  try {
+    previousConfig = await readConfig();
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!uuidPattern.test(previousConfig.installationId ?? "")) return null;
+
+  let installation = null;
+  let identityError = null;
+  try {
+    installation = await readExistingInstallation();
+  } catch (error) {
+    identityError = error;
+  }
+  return { previousConfig, installation, identityError };
+}
+
+function existingConnectionIdentityMismatchError(identityError) {
+  const error = new Error(
+    "The existing connection has no strictly matching local installation identity. Run `viberacing disconnect` or `viberacing uninstall` to revoke and clean up the previous installation before connecting again.",
+  );
+  if (identityError) error.cause = identityError;
+  return error;
+}
+
+async function reconcilePreviousConnectionBeforePairing(origin) {
   return withOpenCodeLifecycleMutation(async () => {
-    let previousConfig;
-    try {
-      previousConfig = await readConfig();
-    } catch (error) {
-      if (error?.code === "ENOENT") return null;
-      throw error;
+    const previous = await existingConnectionIdentityForPairing();
+    if (previous === null) return null;
+    const { previousConfig, installation, identityError } = previous;
+    const matchingInstallation = installation?.id === previousConfig.installationId;
+    if (previousConfig.origin !== origin) {
+      if (!matchingInstallation) throw existingConnectionIdentityMismatchError(identityError);
+      return { previousConfig: null, installation };
     }
-    if (!uuidPattern.test(previousConfig.installationId ?? "")) return null;
-    const matchingInstallation = previousConfig.installationId === installationId;
-    if (previousConfig.origin !== origin || (installationId && !matchingInstallation)) return null;
     let remote;
     try {
       remote = await requestReconciliation(previousConfig, 1, undefined, {
@@ -989,9 +1016,9 @@ async function reconcilePreviousConnectionBeforePairing(origin, installationId) 
       }
       throw error;
     }
-    if (!matchingInstallation) return null;
+    if (!matchingInstallation) throw existingConnectionIdentityMismatchError(identityError);
     await reconcileRemoteSources(previousConfig, remote.sources, { allowDuringLifecycle: true });
-    return previousConfig;
+    return { previousConfig, installation };
   });
 }
 
@@ -1000,6 +1027,8 @@ async function connect() {
   const pendingCleanup = await withOpenCodeLifecycleMutation(() => cleanupOpenCodePluginTargets());
   if (pendingCleanup.failures.length > 0) throw pendingOpenCodeCleanupError(pendingCleanup);
   const origin = normalizeOrigin(option("--origin", officialProductionOrigin), "--origin");
+  const previousConnection = await reconcilePreviousConnectionBeforePairing(origin);
+  const previousConfig = previousConnection?.previousConfig ?? null;
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
   const detected = discovery.sources;
@@ -1036,16 +1065,13 @@ async function connect() {
     warning(
       "Vibe Racing warning: browser Sync could not be registered; CLI sync remains available.",
     );
-  const existingInstallation = await readExistingInstallation().catch(() => null);
-  const previousConfig = await reconcilePreviousConnectionBeforePairing(
-    origin,
-    existingInstallation?.id ?? null,
-  );
-  const installation = await withOpenCodeLifecycleMutation(async () => {
-    const pending = await cleanupOpenCodePluginTargets();
-    if (pending.failures.length > 0) throw pendingOpenCodeCleanupError(pending);
-    return readOrCreateInstallation();
-  });
+  const installation =
+    previousConnection?.installation ??
+    (await withOpenCodeLifecycleMutation(async () => {
+      const pending = await cleanupOpenCodePluginTargets();
+      if (pending.failures.length > 0) throw pendingOpenCodeCleanupError(pending);
+      return readOrCreateInstallation();
+    }));
   const pairingLocalSources = new Map(sources);
   if (previousConfig !== null) {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
@@ -3512,15 +3538,18 @@ try {
       );
   } else if (command === "reset-installation") {
     const cleanup = await withOpenCodeLifecycleMutation(async () => {
+      const { cleanupContext, revocationPrepare } = await prepareOpenCodePluginTeardown();
       await invalidateAndCancelConnectAttempt();
       const result = await removeHooks();
       const pluginCleanup = await cleanupOpenCodePluginTargets({
         includeInstallation: true,
+        cleanupContext,
+        preserveTargetsOnUnreadableJournals: true,
       });
       if (pluginCleanup.preserveInstallationIdentity) await removeConfig();
       else await resetInstallation();
       await clearAutomaticState();
-      return { ...result, pluginCleanup };
+      return { ...result, pluginCleanup, revocationPrepare };
     });
     if (cleanup.pluginCleanup.preserveInstallationIdentity)
       warning(
@@ -3552,6 +3581,7 @@ try {
         "No Vibe Racing installation was found in the selected state directory. Set VIBERACING_STATE_DIR to the value used during connect.",
       );
     const cleanup = await withLifecycleMutation(async () => {
+      const { cleanupContext, revocationPrepare } = await prepareOpenCodePluginTeardown();
       await invalidateAndCancelConnectAttempt();
       let config = null;
       try {
@@ -3576,6 +3606,8 @@ try {
       }
       const pluginCleanup = await cleanupOpenCodePluginTargets({
         includeInstallation: true,
+        cleanupContext,
+        preserveTargetsOnUnreadableJournals: true,
       });
       const complete =
         result.failures.length === 0 &&
@@ -3591,6 +3623,7 @@ try {
         ...result,
         browserCleanupFailed,
         pluginCleanup,
+        revocationPrepare,
         complete,
       };
     });

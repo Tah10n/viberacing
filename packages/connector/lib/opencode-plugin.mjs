@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, realpathSync } from "node:fs";
 import { link, lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
@@ -87,9 +87,33 @@ function isExpectedPluginBasename(name, installationId, allowRecoveryPath = fals
   );
 }
 
-export function canonicalOpenCodeStateRoot(stateRoot, platform = process.platform) {
+function physicalOpenCodeStateRoot(stateRoot, platform = process.platform) {
   const resolved = safeAbsolutePath(stateRoot, "Vibe Racing state directory", platform);
-  return platform === "win32" ? resolved.toLowerCase() : resolved;
+  let canonical = resolved;
+  if (platform === process.platform)
+    try {
+      canonical = realpathSync.native(resolved);
+    } catch (error) {
+      if (!["ENOENT", "ENOTDIR"].includes(error?.code)) throw error;
+    }
+  canonical = safeAbsolutePath(canonical, "Vibe Racing state directory", platform);
+  return canonical;
+}
+
+export function canonicalOpenCodeStateRoot(stateRoot, platform = process.platform) {
+  const physical = physicalOpenCodeStateRoot(stateRoot, platform);
+  return platform === "win32" ? physical.toLowerCase() : physical;
+}
+
+function canonicalOpenCodeLauncherPath(launcherPath, platform) {
+  const resolved = safeAbsolutePath(launcherPath, "Vibe Racing launcher", platform);
+  if (platform !== process.platform) return resolved;
+  try {
+    return safeAbsolutePath(realpathSync.native(resolved), "Vibe Racing launcher", platform);
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR"].includes(error?.code)) return resolved;
+    throw error;
+  }
 }
 
 export function openCodeStateRootHash(stateRoot, platform = process.platform) {
@@ -145,11 +169,7 @@ export function openCodePluginEnvironment(
     retained.add(key);
     result[name] = value;
   }
-  result.VIBERACING_STATE_DIR = safeAbsolutePath(
-    stateRoot,
-    "Vibe Racing state directory",
-    platform,
-  );
+  result.VIBERACING_STATE_DIR = physicalOpenCodeStateRoot(stateRoot, platform);
   return result;
 }
 
@@ -162,9 +182,9 @@ export function generateOpenCodePlugin({
   platform = process.platform,
 } = {}) {
   const id = normalizedInstallationId(installationId);
-  const root = safeAbsolutePath(stateRoot, "Vibe Racing state directory", platform);
+  const root = physicalOpenCodeStateRoot(stateRoot, platform);
   const node = safeAbsolutePath(nodeExecutable, "Node executable", platform);
-  const launcher = safeAbsolutePath(launcherPath, "Vibe Racing launcher", platform);
+  const launcher = canonicalOpenCodeLauncherPath(launcherPath, platform);
   const marker = {
     schema: openCodePluginMarkerSchema,
     installationId: id,
@@ -365,9 +385,11 @@ function inspectionDependencies(options) {
 function expectedPlugin(options) {
   const platform = options.platform ?? process.platform;
   const installationId = normalizedInstallationId(options.installationId);
-  const stateRoot = safeAbsolutePath(options.stateRoot, "Vibe Racing state directory", platform);
+  const stateRoot = physicalOpenCodeStateRoot(options.stateRoot, platform);
   const launcherPath =
-    options.launcherPath ?? pathApi(platform).join(stateRoot, "bin", "viberacing-hook.mjs");
+    options.launcherPath === undefined
+      ? pathApi(platform).join(stateRoot, "bin", "viberacing-hook.mjs")
+      : canonicalOpenCodeLauncherPath(options.launcherPath, platform);
   const location =
     options.pluginPath === undefined
       ? openCodePluginLocation({ ...options, installationId, platform })
