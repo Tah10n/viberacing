@@ -219,7 +219,8 @@
   text-anchor: middle;
 }
 
-.usage-hover-point {
+.usage-hover-point,
+.usage-series-point {
   fill: var(--color-action);
   stroke: var(--color-track-raised);
   stroke-width: 3;

@@ -309,6 +309,14 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
             0
           </text>
           {line === "" ? null : <polyline className="usage-series-line" points={line} />}
+          {visible.length === 1 && maximum > 0n ? (
+            <circle
+              className="usage-series-point"
+              cx={x(0)}
+              cy={y(BigInt(visible[0]?.tokens ?? "0"))}
+              r="6"
+            />
+          ) : null}
           {tickIndexes.map((index) => (
             <text
               className="usage-date-label"

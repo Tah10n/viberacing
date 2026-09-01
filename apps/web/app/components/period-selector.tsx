@@ -5,6 +5,7 @@ interface PeriodSelectorProps {
   readonly basePath: "/" | "/dashboard";
   readonly period: UsagePeriod;
   readonly resolved: ResolvedUsagePeriod;
+  readonly today: string;
 }
 
 const presets = [
@@ -13,9 +14,20 @@ const presets = [
   ["year", "All time"],
 ] as const;
 
-export function PeriodSelector({ basePath, period, resolved }: PeriodSelectorProps) {
-  const today = resolved.toInclusive;
+export function periodSelectorDefaults(
+  period: UsagePeriod,
+  resolved: ResolvedUsagePeriod,
+  today: string,
+): { from: string; to: string; yearStart: string } {
   const yearStart = `${today.slice(0, 4)}-01-01`;
+  const to = resolved.toInclusive < today ? resolved.toInclusive : today;
+  const from =
+    period.kind === "custom" ? period.from : resolved.from < yearStart ? yearStart : resolved.from;
+  return { from, to, yearStart };
+}
+
+export function PeriodSelector({ basePath, period, resolved, today }: PeriodSelectorProps) {
+  const defaults = periodSelectorDefaults(period, resolved, today);
   return (
     <div className="period-selector" aria-label="Usage period">
       <nav aria-label="Preset usage periods" className="period-presets">
@@ -45,15 +57,9 @@ export function PeriodSelector({ basePath, period, resolved }: PeriodSelectorPro
           <label>
             <span>From</span>
             <input
-              defaultValue={
-                period.kind === "custom"
-                  ? period.from
-                  : resolved.from < yearStart
-                    ? yearStart
-                    : resolved.from
-              }
+              defaultValue={defaults.from}
               max={today}
-              min={yearStart}
+              min={defaults.yearStart}
               name="from"
               required
               type="date"
@@ -62,9 +68,9 @@ export function PeriodSelector({ basePath, period, resolved }: PeriodSelectorPro
           <label>
             <span>To</span>
             <input
-              defaultValue={period.kind === "custom" ? period.to : today}
+              defaultValue={defaults.to}
               max={today}
-              min={yearStart}
+              min={defaults.yearStart}
               name="to"
               required
               type="date"

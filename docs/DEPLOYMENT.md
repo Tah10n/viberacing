@@ -112,6 +112,11 @@ support for an older protocol is intentionally removed or a reviewed installed c
 deliberately made the supported baseline. Merging the feature pull request itself does not authorize
 deployment, npm publication, a tag, a GitHub Release, or a Railway variable change.
 
+Migration 010 is an application forward-only boundary: it drops the legacy `weekly_agent_usage`
+table after rebuilding the maintained daily summary. Once applied, recover application failures by
+rolling forward to a compatible build; an older build whose query path reads the weekly table is not
+a valid rollback target. Connector distribution rollback remains independent of this schema rule.
+
 Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains
 accepted aggregate snapshots. First publish and run connector 0.4.4, which keeps the old wire
 semantics while confirming a bounded content-free hash set for the exact accepted SQLite rows. Only

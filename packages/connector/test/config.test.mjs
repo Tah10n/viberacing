@@ -4299,7 +4299,6 @@ for await (const line of lines) {
       [secondarySourceId],
       [primarySourceId],
       [secondarySourceId],
-      [primarySourceId],
     ],
   );
   assert.deepEqual(
@@ -5016,6 +5015,137 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   );
   assert.equal(finalConfig.sources[0].historyBackfillYear, 2026);
   assert.equal(finalConfig.sources[0].historyBackfillStatus, "partial");
+});
+
+test("a rejected historical chunk is quarantined once per manual run without advancing its cursor", async (context) => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      const historical = body.snapshots.some((snapshot) => snapshot.kind === "year_backfill");
+      response.writeHead(historical ? 400 : 200, { "content-type": "application/json" });
+      response.end(JSON.stringify(historical ? { error: "invalid_history" } : usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-history-quarantine-once-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: ["2026-09-01", "2026-07-15"].map((date, index) => ({
+      id: `rejected-history-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 1) },
+    })),
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  });
+
+  const result = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    }),
+  });
+  const historical = bodies.filter((body) =>
+    body.snapshots.some((snapshot) => snapshot.kind === "year_backfill"),
+  );
+  assert.equal(historical.length, 1);
+  assert.match(result.stderr, /payload quarantined/);
+  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history[installation.sourceId].nextRangeEnd, "2026-08-01");
+});
+
+test("one rejected historical source does not block older chunks for healthy sources", async (context) => {
+  const invalidSourceId = "51515151-5151-4515-8515-515151515151";
+  const healthySourceId = "52525252-5252-4525-8525-525252525252";
+  const historicalBodies = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      const historical = body.snapshots.some((snapshot) => snapshot.kind === "year_backfill");
+      if (historical) historicalBodies.push(body);
+      const rejected =
+        historical && body.snapshots.some((snapshot) => snapshot.sourceId === invalidSourceId);
+      response.writeHead(rejected ? 400 : 200, { "content-type": "application/json" });
+      response.end(JSON.stringify(rejected ? { error: "invalid_history" } : usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-history-quarantine-group-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const captures = join(home, ".viberacing", "captures");
+  await mkdir(captures, { recursive: true });
+  const sources = [
+    {
+      clientSourceId: "53535353-5353-4535-8535-535353535353",
+      sourceId: invalidSourceId,
+      suggestedLabel: "Invalid",
+      dataPath: join(captures, "invalid.jsonl"),
+    },
+    {
+      clientSourceId: "54545454-5454-4545-8545-545454545454",
+      sourceId: healthySourceId,
+      suggestedLabel: "Healthy",
+      dataPath: join(captures, "healthy.jsonl"),
+    },
+  ].map((source) => ({
+    ...source,
+    agentId: "antigravity",
+    collectionMethod: "antigravity_cli_capture",
+    supportedSurface: "cli",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  }));
+  for (const source of sources)
+    await writeFile(
+      source.dataPath,
+      `${JSON.stringify({
+        id: `${source.suggestedLabel.toLowerCase()}-history`,
+        date: "2026-07-15",
+        usage: { date: "2026-07-15", totalTokens: "7" },
+      })}\n`,
+    );
+  const directory = await writeMappedInstallation(
+    home,
+    `http://127.0.0.1:${address.port}`,
+    sources,
+  );
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    }),
+  });
+
+  const invalidRanges = historicalBodies
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.sourceId === invalidSourceId)
+    .map((snapshot) => snapshot.rangeEnd);
+  const healthySnapshots = historicalBodies
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.sourceId === healthySourceId);
+  assert.deepEqual([...new Set(invalidRanges)], ["2026-08-01"]);
+  assert.ok(healthySnapshots.some((snapshot) => snapshot.rangeStart === "2026-01-01"));
+  const state = JSON.parse(await readFile(join(directory, "state.json"), "utf8"));
+  assert.equal(state.history[invalidSourceId].nextRangeEnd, "2026-08-01");
+  assert.equal(state.history?.[healthySourceId], undefined);
 });
 
 test("a thrown historical collector retries the same range on the next sync", async (context) => {
@@ -7116,6 +7246,9 @@ test("removes a source online with all local state and remains idempotent", asyn
       version: 1,
       sequences: { [sourceId]: "4" },
       adapters: { [sourceId]: { qwen: 1 } },
+      history: {
+        [sourceId]: { year: 2026, nextRangeEnd: "2026-08-01", hadPartialChunk: false },
+      },
       fingerprints: { [sourceId]: "fingerprint" },
       quarantine: { [sourceId]: "invalid_payload" },
       collectionWarnings: { [sourceId]: ["codex_session_components_incomplete"] },
@@ -7172,6 +7305,7 @@ test("removes a source online with all local state and remains idempotent", asyn
   assert.deepEqual(config.sources, []);
   assert.equal(localState.sequences[sourceId], undefined);
   assert.equal(localState.adapters[sourceId], undefined);
+  assert.equal(localState.history[sourceId], undefined);
   assert.equal(localState.fingerprints[sourceId], undefined);
   assert.equal(localState.quarantine[sourceId], undefined);
   assert.equal(localState.collectionWarnings[sourceId], undefined);
@@ -8950,6 +9084,7 @@ test("remote reconciliation cannot restore retired runtime state from a stale sn
       version: 1,
       sequences: { [retiredSourceId]: "4", [activeSourceId]: "0" },
       adapters: { [retiredSourceId]: { offset: 99 } },
+      historyAdapters: { [retiredSourceId]: { files: { orphan: true } } },
       fingerprints: { [retiredSourceId]: "retired-fingerprint" },
       quarantine: { [retiredSourceId]: "invalid_payload" },
     })}\n`,
@@ -8962,6 +9097,7 @@ test("remote reconciliation cannot restore retired runtime state from a stale sn
   assert.equal(state.sequences[activeSourceId], "7");
   assert.equal(state.sequences[retiredSourceId], undefined);
   assert.equal(state.adapters?.[retiredSourceId], undefined);
+  assert.equal(state.historyAdapters?.[retiredSourceId], undefined);
   assert.equal(state.fingerprints?.[retiredSourceId], undefined);
   assert.equal(state.quarantine?.[retiredSourceId], undefined);
   assert.doesNotMatch(await readFile(join(qwenRoot, "settings.json"), "utf8"), /viberacing/);
@@ -10221,22 +10357,96 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
   );
   assert.deepEqual(
     usageBodies.map((body) => body.snapshots[0]?.syncSequence),
-    ["1", "2", "3"],
+    ["1", "1"],
   );
   assert.deepEqual(
-    new Set(usageBodies[2].snapshots.map((snapshot) => snapshot.sourceId)),
-    new Set([selectedSourceId, otherSourceId]),
+    new Set(usageBodies[1].snapshots.map((snapshot) => snapshot.sourceId)),
+    new Set([otherSourceId]),
+  );
+  assert.deepEqual(
+    resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
+    [
+      { status: "succeeded", resultCode: "complete" },
+      { status: "succeeded", resultCode: "unchanged" },
+      { status: "succeeded", resultCode: "complete" },
+    ],
+  );
+  const finalState = JSON.parse(await readFile(statePath, "utf8"));
+  assert.deepEqual(finalState.diagnostics.outboxBySource, {});
+});
+
+test("browser Sync reports useful work when an unchanged rolling snapshot imports history", async (context) => {
+  const requestId = "61616161-6161-4616-8616-616161616161";
+  const resultBodies = [];
+  const usageBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(JSON.stringify({ requestId, sourceIds: [installation.sourceId] }));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        resultBodies.push(body);
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-browser-history-progress-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: ["2026-09-01", "2026-07-15", "2026-06-15"].map((date, index) => ({
+      id: `browser-history-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 1) },
+    })),
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  });
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+  });
+  const url = `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`;
+  await execFileAsync(process.execPath, [connectorPath, "handle-url", url], { env: environment });
+  await execFileAsync(process.execPath, [connectorPath, "handle-url", url], { env: environment });
+
+  const secondCallSnapshots = usageBodies.slice(2).flatMap((body) => body.snapshots);
+  assert.equal(
+    secondCallSnapshots.some((snapshot) => snapshot.kind === "rolling"),
+    false,
+  );
+  assert.equal(
+    secondCallSnapshots.some((snapshot) => snapshot.kind === "year_backfill"),
+    true,
   );
   assert.deepEqual(
     resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
     [
       { status: "succeeded", resultCode: "complete" },
       { status: "succeeded", resultCode: "complete" },
-      { status: "succeeded", resultCode: "complete" },
     ],
   );
-  const finalState = JSON.parse(await readFile(statePath, "utf8"));
-  assert.deepEqual(finalState.diagnostics.outboxBySource, {});
 });
 
 test("one successful contact sends at most one bounded diagnostic batch", async (context) => {

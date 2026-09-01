@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
+import { adapterFor } from "../packages/connector/lib/readers.mjs";
 
 const requireFromWeb = createRequire(new URL("../apps/web/package.json", import.meta.url));
 const pg = requireFromWeb("pg");
@@ -298,6 +299,64 @@ function currentYearHistorySnapshot(sourceId, sequence, entries, completeness = 
   };
 }
 
+async function syntheticCodexHistoricalCollection(entries, account = "synthetic-history") {
+  const rangeEnd = entries.at(-1)?.[0] ?? januaryFirst;
+  const responses = [
+    {
+      id: 1,
+      result: {
+        account: { type: "chatgpt", email: `${account}@example.com`, planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+    {
+      id: 2,
+      result: {
+        dailyUsageBuckets: entries.map(([date, totalTokens]) => ({
+          startDate: date,
+          tokens: String(totalTokens),
+        })),
+      },
+    },
+    {
+      id: 3,
+      result: {
+        account: { type: "chatgpt", email: `${account}@example.com`, planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+  ][Symbol.iterator]();
+  return adapterFor("codex").collect(
+    {},
+    { rangeStart: januaryFirst, rangeEnd },
+    {},
+    {
+      historical: true,
+      suppressComponents: true,
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      readCodexAuthIdentity: async () => [["account", account]],
+      withCodexAppServer: async (_source, callback) =>
+        callback({
+          next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+          write: () => {},
+        }),
+    },
+  );
+}
+
+function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
+  return {
+    sourceId,
+    syncSequence: String(sequence),
+    rangeStart: januaryFirst,
+    rangeEnd: collected.entries.at(-1)?.date ?? januaryFirst,
+    completeness: collected.completeness,
+    entries: collected.entries,
+    kind: "year_backfill",
+    historyYearComplete: "partial",
+  };
+}
+
 try {
   const inserted = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -314,6 +373,21 @@ try {
   );
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
+
+  const legacyWeeklyTable = await pool.query(
+    "SELECT to_regclass('public.weekly_agent_usage')::text AS relation",
+  );
+  let legacyWeeklyQueryError;
+  try {
+    await pool.query("SELECT tokens FROM weekly_agent_usage LIMIT 1");
+  } catch (error) {
+    legacyWeeklyQueryError = error;
+  }
+  check(
+    legacyWeeklyTable.rows[0]?.relation === null && legacyWeeklyQueryError?.code === "42P01",
+    "migration 010 did not enforce its forward-only legacy weekly query boundary",
+  );
+  console.log("ok - migration 010 drops the stale weekly summary and old query path");
 
   const wideAggregateUser = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -1145,6 +1219,162 @@ try {
     "ok - an explicit authoritative zero corrects a mixed partial snapshot without touching uncovered days",
   );
 
+  const coverageInstallation = { id: randomUUID(), secret: token() };
+  const coverageConnection = await pair(coverageInstallation, [
+    source("period-coverage-claude", "claude_code"),
+  ]);
+  const coverageSource = coverageConnection.sources[0];
+  let coverageUsage = await usage(coverageConnection.deviceToken, [
+    currentYearHistorySnapshot(
+      coverageSource.sourceId,
+      1,
+      [[januaryFirst, 10, undefined, "complete"]],
+      "complete",
+    ),
+  ]);
+  coverageUsage = await usage(coverageConnection.deviceToken, [
+    snapshot(
+      coverageSource.sourceId,
+      2,
+      [[today, 5, undefined, "partial"]],
+      "partial",
+      today,
+      today,
+    ),
+  ]);
+  const otherCoverageStatuses = await pool.query(
+    `SELECT id::text, history_backfill_year, history_backfill_status,
+            history_backfill_completed_at
+       FROM installation_sources
+      WHERE user_id = $1 AND id <> $2 AND status = 'active'`,
+    [userId, coverageSource.sourceId],
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_year = $2,
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = coalesce(history_backfill_completed_at, now())
+      WHERE user_id = $1 AND id <> $3 AND status = 'active'`,
+    [userId, currentUtcYear, coverageSource.sourceId],
+  );
+  const oldCustomCoverage = await authenticatedGet(
+    `/dashboard?period=custom&from=${januaryFirst}&to=${januaryFirst}`,
+  );
+  const oldCustomCoverageHtml = await oldCustomCoverage.text();
+  check(
+    coverageUsage.status === 200 &&
+      oldCustomCoverage.status === 200 &&
+      !oldCustomCoverageHtml.includes("Partial current-year history"),
+    "a current rolling partial incorrectly marked an imported historical Custom range partial",
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_status = 'partial', history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [coverageSource.sourceId],
+  );
+  const disconnectedCoverage = await form("/api/sources/disconnect", {
+    sourceId: coverageSource.sourceId,
+  });
+  const disconnectedYear = await authenticatedGet("/dashboard?period=year");
+  const disconnectedYearHtml = await disconnectedYear.text();
+  const disconnectedCoverageState = await pool.query(
+    `SELECT source.status, source.history_backfill_status,
+            jsonb_agg(jsonb_build_object(
+              'date', usage.usage_date::text,
+              'completeness', usage.completeness,
+              'tokens', usage.total_tokens::text
+            ) ORDER BY usage.usage_date) AS days
+       FROM installation_sources source
+       JOIN daily_usage usage ON usage.source_id = source.id
+      WHERE source.id = $1
+      GROUP BY source.status, source.history_backfill_status`,
+    [coverageSource.sourceId],
+  );
+  check(
+    coverageUsage.status === 200 &&
+      disconnectedCoverage.status === 303 &&
+      disconnectedYear.status === 200 &&
+      disconnectedYearHtml.includes("Partial current-year history"),
+    `a disconnected source with retained partial totals was presented as complete: ${JSON.stringify(
+      {
+        state: disconnectedCoverageState.rows[0],
+        status: disconnectedYear.status,
+        hasPartialText: disconnectedYearHtml.includes("Partial current-year history"),
+      },
+    )}`,
+  );
+  const coverageDeletion = await form("/api/accounts/delete", {
+    accountId: coverageSource.agentAccountId,
+    confirm: "delete",
+  });
+  check(coverageDeletion.status === 303, "period coverage fixture cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [coverageInstallation.id]);
+  for (const sourceStatus of otherCoverageStatuses.rows)
+    await pool.query(
+      `UPDATE installation_sources
+          SET history_backfill_year = $2,
+              history_backfill_status = $3,
+              history_backfill_completed_at = $4
+        WHERE id = $1`,
+      [
+        sourceStatus.id,
+        sourceStatus.history_backfill_year,
+        sourceStatus.history_backfill_status,
+        sourceStatus.history_backfill_completed_at,
+      ],
+    );
+  console.log(
+    "ok - chart completeness follows the selected range and retained disconnected source data",
+  );
+
+  const adapterCorrectionInstallation = { id: randomUUID(), secret: token() };
+  const adapterCorrection = await pair(adapterCorrectionInstallation, [
+    source("adapter-correction-codex", "codex"),
+  ]);
+  const adapterCorrectionSource = adapterCorrection.sources[0];
+  const adapterBaseline = await syntheticCodexHistoricalCollection(
+    [[januaryFirst, 100]],
+    "adapter-correction",
+  );
+  check(
+    adapterBaseline.completeness === "partial" &&
+      adapterBaseline.entries[0]?.completeness === "complete",
+    "historical Codex adapter did not preserve authoritative entry completeness",
+  );
+  let adapterCorrectionUsage = await usage(adapterCorrection.deviceToken, [
+    collectedCodexHistorySnapshot(adapterCorrectionSource.sourceId, 1, adapterBaseline),
+  ]);
+  const adapterCorrected = await syntheticCodexHistoricalCollection(
+    [[januaryFirst, 80]],
+    "adapter-correction",
+  );
+  adapterCorrectionUsage = await usage(adapterCorrection.deviceToken, [
+    collectedCodexHistorySnapshot(adapterCorrectionSource.sourceId, 2, adapterCorrected),
+  ]);
+  const adapterCorrectionRow = await pool.query(
+    `SELECT total_tokens::text, completeness
+       FROM daily_usage
+      WHERE source_id = $1 AND usage_date = $2`,
+    [adapterCorrectionSource.sourceId, januaryFirst],
+  );
+  check(
+    adapterCorrectionUsage.status === 200 &&
+      adapterCorrectionRow.rows[0]?.total_tokens === "80" &&
+      adapterCorrectionRow.rows[0].completeness === "complete",
+    "full Codex adapter wire ingestion did not apply an authoritative downward correction",
+  );
+  const adapterCorrectionDeletion = await form("/api/accounts/delete", {
+    accountId: adapterCorrectionSource.agentAccountId,
+    confirm: "delete",
+  });
+  check(adapterCorrectionDeletion.status === 303, "adapter correction fixture cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [adapterCorrectionInstallation.id]);
+  await pool.query("DELETE FROM rate_limit_buckets WHERE scope = 'pairing_approve_user'");
+  console.log(
+    "ok - synthetic Codex App Server history stays complete per day and corrects PostgreSQL totals downward",
+  );
+
   const dedupBaseline = await pool.query(
     "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
@@ -1281,18 +1511,20 @@ try {
   const dedupFirstSource = dedupFirst.sources[0];
   const dedupSecondSource = dedupSecond.sources[0];
   const dedupDates = guardDates;
-  const dedupEntries = dedupDates.map((date, index) => [
-    date,
-    dedupValues[index],
-    undefined,
-    "complete",
-  ]);
   check(
     dedupFirstSource !== undefined && dedupSecondSource !== undefined,
     "deduplication pairing omitted a source",
   );
+  const collectedDedupHistory = await syntheticCodexHistoricalCollection(
+    dedupDates.map((date, index) => [date, dedupValues[index]]),
+    "adapter-dedup",
+  );
+  check(
+    collectedDedupHistory.entries.every((entry) => entry.completeness === "complete"),
+    "Codex adapter did not provide complete evidence for January account matching",
+  );
   let dedupUsage = await usage(dedupSecond.deviceToken, [
-    currentYearHistorySnapshot(dedupSecondSource.sourceId, 1, dedupEntries, "complete"),
+    collectedCodexHistorySnapshot(dedupSecondSource.sourceId, 1, collectedDedupHistory),
   ]);
   const dedupEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1303,7 +1535,7 @@ try {
     "a source was matched before another account had comparable history",
   );
   dedupUsage = await usage(dedupFirst.deviceToken, [
-    currentYearHistorySnapshot(dedupFirstSource.sourceId, 1, dedupEntries, "complete"),
+    collectedCodexHistorySnapshot(dedupFirstSource.sourceId, 1, collectedDedupHistory),
   ]);
   const dedupEvent = await pool.query(
     `SELECT event.id::text,
@@ -3050,6 +3282,29 @@ try {
   ]);
   check(afterDisconnect.status === 401, "disconnected installation could still sync");
   console.log("ok - readiness and authorization lifecycle behave as expected");
+
+  const profileBeforeLeave = await authenticatedGet(`/u/${handle}?period=year`);
+  const leaveLeaderboard = await form("/api/leaderboard/leave", { confirm: "leave" });
+  const profileAfterLeave = await authenticatedGet(`/u/${handle}?period=year`);
+  const retainedUsageAfterLeave = await pool.query(
+    `SELECT
+       (SELECT count(*)::int FROM daily_usage usage
+         JOIN installation_sources source ON source.id = usage.source_id
+        WHERE source.user_id = $1) AS source_days,
+       (SELECT count(*)::int FROM daily_agent_usage WHERE user_id = $1) AS agent_days,
+       to_regclass('public.weekly_agent_usage')::text AS weekly_relation`,
+    [userId],
+  );
+  check(
+    profileBeforeLeave.status === 200 &&
+      leaveLeaderboard.status === 303 &&
+      profileAfterLeave.status === 404 &&
+      retainedUsageAfterLeave.rows[0]?.source_days === 0 &&
+      retainedUsageAfterLeave.rows[0].agent_days === 0 &&
+      retainedUsageAfterLeave.rows[0].weekly_relation === null,
+    "Leave leaderboard retained public participation or a usage aggregate",
+  );
+  console.log("ok - Leave removes all usage and the retained bare identity has no public profile");
 
   const fullAccountDeletion = await form("/api/account/delete", { confirm: "delete-account" });
   const deletedUser = await pool.query("SELECT count(*)::int AS count FROM users WHERE id = $1", [

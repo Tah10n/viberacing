@@ -88,6 +88,7 @@ interface SourceRow {
   status: string;
   history_backfill_year: number | null;
   history_backfill_status: "pending" | "complete" | "partial";
+  has_period_usage: boolean;
 }
 
 interface CodexHookNoticeRow {
@@ -278,7 +279,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const today = utcToday(now);
   const periodTitle = usagePeriodTitle(period);
   const periodRange = usagePeriodRangeLabel(resolvedPeriod);
-  const currentYear = Number(resolvedPeriod.toInclusive.slice(0, 4));
+  const currentYear = Number(today.slice(0, 4));
   const [installations, accounts, sources, codexHookNotices, dedupEvents, dailyUsage] =
     await Promise.all([
       query<InstallationRow>(
@@ -310,7 +311,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               count(s.id)::int AS source_count,
               count(DISTINCT s.installation_id)::int AS installation_count,
               max(s.last_successful_sync_at) AS last_sync_at,
-              coalesce(bool_or(s.last_completeness = 'partial'), false) AS partial,
+              coalesce(usage.partial, false) AS partial,
               coalesce(bool_or(s.last_error_summary IS NOT NULL), false) AS has_error
               ,coalesce(bool_or(s.installation_id = $4::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
               coalesce(bool_or(
@@ -329,6 +330,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          LEFT JOIN installations installation ON installation.id = s.installation_id
          LEFT JOIN LATERAL (
            SELECT sum(day.tokens) AS tokens,
+                  bool_or(day.partial) AS partial,
                   CASE WHEN (a.aggregation_mode = 'account_max'
                               AND bool_or(day.components_complete))
                               OR (a.aggregation_mode = 'source_sum'
@@ -365,6 +367,15 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
                         ELSE sum(candidate.total_tokens)
                       END AS tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN NOT coalesce(bool_or(
+                          candidate.completeness = 'complete'
+                        ) FILTER (
+                          WHERE candidate.account_max_selected
+                            AND candidate.total_tokens = candidate.maximum_total_tokens
+                        ), false)
+                        ELSE coalesce(bool_or(candidate.completeness = 'partial'), false)
+                      END AS partial,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.input_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
@@ -424,7 +435,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                           max(precedence.component_tokens) FILTER (
                             WHERE ${accountMaxObservationIsEligibleSql})
                             OVER (PARTITION BY precedence.usage_date)
-                            AS maximum_component_tokens
+                            AS maximum_component_tokens,
+                          max(precedence.total_tokens) FILTER (
+                            WHERE ${accountMaxObservationIsEligibleSql})
+                            OVER (PARTITION BY precedence.usage_date)
+                            AS maximum_total_tokens
                      FROM (
                        SELECT d.*,
                               CASE WHEN d.input_tokens IS NOT NULL
@@ -452,7 +467,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
              ) day
          ) usage ON true
         WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
-        GROUP BY a.id, usage.tokens, usage.component_tokens, usage.input_tokens, usage.output_tokens,
+        GROUP BY a.id, usage.tokens, usage.partial, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
         [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
@@ -460,12 +475,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       query<SourceRow>(
         `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
               s.collection_method, s.supported_surface, s.status,
-              s.history_backfill_year, s.history_backfill_status
+              s.history_backfill_year, s.history_backfill_status,
+              EXISTS (
+                SELECT 1 FROM daily_usage retained
+                 WHERE retained.source_id = s.id
+                   AND retained.usage_date >= $2::date
+                   AND retained.usage_date < $3::date
+              ) AS has_period_usage
          FROM installation_sources s
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
-        [current.id],
+        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
       ),
       query<CodexHookNoticeRow>(
         `SELECT profile.id::text AS source_id,
@@ -521,7 +542,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
   const historyIncomplete = sources.some(
     (source) =>
-      source.status === "active" &&
+      (source.status === "active" || source.has_period_usage) &&
       (source.history_backfill_year !== currentYear ||
         source.history_backfill_status !== "complete"),
   );
@@ -734,7 +755,12 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             {periodRange}
           </p>
         </div>
-        <PeriodSelector basePath="/dashboard" period={period} resolved={resolvedPeriod} />
+        <PeriodSelector
+          basePath="/dashboard"
+          period={period}
+          resolved={resolvedPeriod}
+          today={today}
+        />
       </section>
 
       <section className="summary-grid" aria-label="Connection summary">

@@ -33,6 +33,7 @@ import {
 import {
   adapters,
   adapterFor,
+  codexTotalOnlyEntries,
   discoverSources,
   entriesWithinRange,
   safeCaptureRecord,
@@ -1485,12 +1486,16 @@ async function forgetSourceState(sourceIds) {
   const state = await readState();
   state.sequences ??= {};
   state.adapters ??= {};
+  state.history ??= {};
+  state.historyAdapters ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
   state.collectionWarnings ??= {};
   for (const sourceId of sourceIds) {
     delete state.sequences[sourceId];
     delete state.adapters[sourceId];
+    delete state.history[sourceId];
+    delete state.historyAdapters[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
     delete state.collectionWarnings[sourceId];
@@ -1902,6 +1907,7 @@ async function deliverPendingGroup(config, items, retired) {
       successfulDeliveries: 0,
       staleSources: [],
       quarantinedSources: [],
+      historyDeliveries: 0,
     };
   try {
     if (await lifecycleMutationActive())
@@ -1918,6 +1924,7 @@ async function deliverPendingGroup(config, items, retired) {
       (result.sourceSequences ?? []).map((item) => [item.sourceId, item]),
     );
     const staleSources = [];
+    let historyDeliveries = 0;
     for (const item of eligible) {
       const snapshot = item.payload.snapshots?.[0];
       const sequenceStatus = sequenceById.get(item.sourceId);
@@ -1941,6 +1948,7 @@ async function deliverPendingGroup(config, items, retired) {
       } else {
         await removePending(item.path);
         if (snapshot) await applyHistoryAdvance(config, item);
+        if (snapshot?.kind === "year_backfill") historyDeliveries += 1;
         if (snapshot && sequenceStatus?.accepted !== false) {
           await clearQuarantine(item.sourceId);
           const state = await readState();
@@ -1957,6 +1965,7 @@ async function deliverPendingGroup(config, items, retired) {
       successfulDeliveries: staleSources.length === 0 ? 1 : 0,
       staleSources,
       quarantinedSources: [],
+      historyDeliveries,
     };
   } catch (error) {
     if (error?.status === 400 && eligible.length > 1) {
@@ -1968,6 +1977,7 @@ async function deliverPendingGroup(config, items, retired) {
         successfulDeliveries: left.successfulDeliveries + right.successfulDeliveries,
         staleSources: [...left.staleSources, ...right.staleSources],
         quarantinedSources: [...left.quarantinedSources, ...right.quarantinedSources],
+        historyDeliveries: left.historyDeliveries + right.historyDeliveries,
       };
     }
     if (error?.status === 400 && error?.code === "unsupported_source") {
@@ -1978,6 +1988,7 @@ async function deliverPendingGroup(config, items, retired) {
         successfulDeliveries: 0,
         staleSources: [],
         quarantinedSources: [],
+        historyDeliveries: 0,
       };
     }
     if (error?.status === 400) {
@@ -1996,6 +2007,7 @@ async function deliverPendingGroup(config, items, retired) {
         successfulDeliveries: 0,
         staleSources: [],
         quarantinedSources: [item.sourceId],
+        historyDeliveries: 0,
       };
     }
     await lifecycleFailure(error);
@@ -2078,6 +2090,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   const reobserveSourceIds = new Set(legacyPendingErrors.map(({ sourceId }) => sourceId));
   let accepted = 0;
   let successfulDeliveries = 0;
+  let historyDeliveries = 0;
   const staleSources = new Set();
   const quarantinedSources = new Set();
   const groups = [
@@ -2091,6 +2104,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
       const delivered = await deliverPendingGroup(config, group, retired);
       accepted += delivered.accepted;
       successfulDeliveries += delivered.successfulDeliveries;
+      historyDeliveries += delivered.historyDeliveries;
       for (const sourceId of delivered.staleSources) staleSources.add(sourceId);
       for (const sourceId of delivered.quarantinedSources) quarantinedSources.add(sourceId);
     }
@@ -2102,6 +2116,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
     const retried = await drainPending(config, false, allowedSourceIds);
     accepted += retried.accepted;
     successfulDeliveries += retried.successfulDeliveries;
+    historyDeliveries += retried.historyDeliveries;
     for (const sourceId of retried.retiredSources) retired.add(sourceId);
     for (const sourceId of retried.quarantinedSources) quarantinedSources.add(sourceId);
     for (const sourceId of retried.reobserveSourceIds) reobserveSourceIds.add(sourceId);
@@ -2109,6 +2124,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   return {
     accepted,
     successfulDeliveries,
+    historyDeliveries,
     reobserveSourceIds: [...reobserveSourceIds],
     retiredSources: [...retired],
     staleSources: [...staleSources],
@@ -2426,7 +2442,7 @@ async function syncRange(providedConfig, options = {}) {
           if (totalOnly) {
             result = {
               ...result,
-              entries: result.entries.map(({ date, totalTokens }) => ({ date, totalTokens })),
+              entries: codexTotalOnlyEntries(result.entries),
               nextState: {},
             };
           }
@@ -2500,6 +2516,10 @@ async function syncRange(providedConfig, options = {}) {
       const failures = [];
       const failedClientSourceIds = [];
       const failedHistorySourceIds = [];
+      const blockedHistorySourceIds = new Set([
+        ...previous.retiredSources,
+        ...previous.quarantinedSources,
+      ]);
       const collectionWarnings = [];
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
@@ -2524,8 +2544,10 @@ async function syncRange(providedConfig, options = {}) {
             accountSetupPending = true;
           if (snapshotKind === "year_backfill") {
             for (const target of task.requestedSources)
-              if (state.history?.[target.sourceId]?.nextRangeEnd === range.rangeEnd)
+              if (state.history?.[target.sourceId]?.nextRangeEnd === range.rangeEnd) {
                 failedHistorySourceIds.push(target.sourceId);
+                blockedHistorySourceIds.add(target.sourceId);
+              }
             continue;
           }
           const nextFingerprint = fingerprint({ error: "collector_failed" });
@@ -2546,6 +2568,8 @@ async function syncRange(providedConfig, options = {}) {
           continue;
         }
         inactiveSourceIds.push(...outcome.value.inactiveSourceIds);
+        for (const sourceId of outcome.value.inactiveSourceIds)
+          blockedHistorySourceIds.add(sourceId);
         if (outcome.value.accountSetupPending) accountSetupPending = true;
         if (outcome.value.result === null) continue;
         successfullyChecked.push(outcome.value.checkedClientSourceId);
@@ -2579,7 +2603,7 @@ async function syncRange(providedConfig, options = {}) {
         });
         if (
           snapshotKind === "rolling" &&
-          options.automatic &&
+          (options.automatic || options.browser) &&
           state.fingerprints[activeSource.sourceId] === nextFingerprint
         )
           continue;
@@ -2687,6 +2711,8 @@ async function syncRange(providedConfig, options = {}) {
           inactiveSourceIds,
           accountSetupPending,
           failedHistorySourceIds,
+          blockedHistorySourceIds: [...blockedHistorySourceIds],
+          historyProgress: previous.historyDeliveries > 0,
         };
       }
       const payload = {
@@ -2729,6 +2755,8 @@ async function syncRange(providedConfig, options = {}) {
         failures.push(`server disconnected source ${sourceId}`);
       for (const sourceId of delivered.quarantinedSources)
         failures.push(`server rejected source ${sourceId}; payload quarantined`);
+      for (const sourceId of delivered.retiredSources) blockedHistorySourceIds.add(sourceId);
+      for (const sourceId of delivered.quarantinedSources) blockedHistorySourceIds.add(sourceId);
       if (
         snapshotKind === "rolling" &&
         failures.length === 0 &&
@@ -2740,7 +2768,15 @@ async function syncRange(providedConfig, options = {}) {
         warning(
           "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
         );
-      return { accepted, failures, inactiveSourceIds, accountSetupPending, failedHistorySourceIds };
+      return {
+        accepted,
+        failures,
+        inactiveSourceIds,
+        accountSetupPending,
+        failedHistorySourceIds,
+        blockedHistorySourceIds: [...blockedHistorySourceIds],
+        historyProgress: previous.historyDeliveries + delivered.historyDeliveries > 0,
+      };
     },
     { waitMs: options.waitMs ?? (options.automatic ? automaticSyncLockWaitMs : 0) },
   );
@@ -2758,8 +2794,10 @@ async function sync(providedConfig, options = {}) {
   const failures = [...(rolling?.failures ?? [])];
   const inactiveSourceIds = new Set(rolling?.inactiveSourceIds ?? []);
   const failedHistorySourceIds = new Set();
+  const blockedHistorySourceIds = new Set(rolling?.blockedHistorySourceIds ?? []);
   let accountSetupPending = rolling?.accountSetupPending ?? false;
   let historyChunks = 0;
+  let historyProgress = rolling?.historyProgress === true;
   const maximumHistoryChunks = options.automatic || options.browser ? 1 : Number.POSITIVE_INFINITY;
   const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
 
@@ -2774,6 +2812,7 @@ async function sync(providedConfig, options = {}) {
           (allowed === null || allowed.has(source.sourceId)) &&
           !inactiveSourceIds.has(source.sourceId) &&
           !failedHistorySourceIds.has(source.sourceId) &&
+          !blockedHistorySourceIds.has(source.sourceId) &&
           state.history?.[source.sourceId]?.year === year,
       )
       .map((source) => ({ source, cursor: state.history[source.sourceId] }))
@@ -2788,6 +2827,7 @@ async function sync(providedConfig, options = {}) {
       (candidate) => candidate.cursor.nextRangeEnd === nextRangeEnd,
     );
     const range = historyRangeEndingAt(nextRangeEnd, year);
+    const blockedBefore = blockedHistorySourceIds.size;
     const historical = await syncRange(config, {
       ...options,
       automatic: false,
@@ -2802,8 +2842,22 @@ async function sync(providedConfig, options = {}) {
     for (const sourceId of historical?.inactiveSourceIds ?? []) inactiveSourceIds.add(sourceId);
     for (const sourceId of historical?.failedHistorySourceIds ?? [])
       failedHistorySourceIds.add(sourceId);
+    for (const sourceId of historical?.blockedHistorySourceIds ?? [])
+      blockedHistorySourceIds.add(sourceId);
+    historyProgress ||= historical?.historyProgress === true;
     accountSetupPending ||= historical?.accountSetupPending ?? false;
     historyChunks += 1;
+    const [afterConfig, afterState] = await Promise.all([readConfig(), readState()]);
+    const cursorChanged = selected.some(
+      ({ source, cursor }) =>
+        afterState.history?.[source.sourceId]?.nextRangeEnd !== cursor.nextRangeEnd,
+    );
+    const sourceRetired = selected.some(
+      ({ source }) =>
+        !afterConfig.sources.some((candidate) => candidate.sourceId === source.sourceId),
+    );
+    if (!cursorChanged && !sourceRetired && blockedHistorySourceIds.size === blockedBefore)
+      throw new Error("Historical sync made no progress; retry in a separate run.");
   }
 
   const finalConfig = providedConfig ?? (await readConfig());
@@ -2825,6 +2879,7 @@ async function sync(providedConfig, options = {}) {
     inactiveSourceIds: [...inactiveSourceIds],
     accountSetupPending,
     historyChunks,
+    unchanged: rolling?.unchanged === true && !historyProgress,
   };
 }
 

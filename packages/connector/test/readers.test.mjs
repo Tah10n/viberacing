@@ -23,6 +23,7 @@ import {
   collectClaude,
   collectCodexSessionUsage,
   codexUsageSnapshot,
+  codexTotalOnlyEntries,
   deriveCodexProviderAccountKey,
   materializeCodexAuthoritativeDays,
   parseClaudeLines,
@@ -474,6 +475,67 @@ test("prefers the Codex account total once the current UTC bucket is available",
       completeness: "complete",
       entries: [{ ...current, totalTokens: "30" }],
     },
+  );
+});
+
+test("historical Codex collection keeps authoritative range-end entries explicitly complete", async () => {
+  const responses = [
+    {
+      id: 1,
+      result: {
+        account: { type: "chatgpt", email: "history@example.com", planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+    {
+      id: 2,
+      result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "80" }] },
+    },
+    {
+      id: 3,
+      result: {
+        account: { type: "chatgpt", email: "history@example.com", planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+  ][Symbol.iterator]();
+  const result = await adapterFor("codex").collect(
+    { dataPath: join(tmpdir(), "missing-codex-history") },
+    { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+    {},
+    {
+      historical: true,
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      readCodexAuthIdentity: async () => [["account", "stable-history-account"]],
+      withCodexAppServer: async (_source, callback) =>
+        callback({
+          next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+          write: () => {},
+        }),
+    },
+  );
+  assert.equal(result.completeness, "partial");
+  assert.deepEqual(result.entries, [
+    { date: "2026-08-10", totalTokens: "80", completeness: "complete" },
+  ]);
+});
+
+test("Codex total-only projection preserves per-entry completeness", () => {
+  assert.deepEqual(
+    codexTotalOnlyEntries([
+      {
+        date: "2026-08-10",
+        totalTokens: "80",
+        inputTokens: "40",
+        outputTokens: "40",
+        completeness: "complete",
+      },
+      { date: "2026-08-11", totalTokens: "5" },
+    ]),
+    [
+      { date: "2026-08-10", totalTokens: "80", completeness: "complete" },
+      { date: "2026-08-11", totalTokens: "5" },
+    ],
   );
 });
 

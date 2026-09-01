@@ -14,6 +14,7 @@ import {
 import {
   parseUsagePeriod,
   resolveUsagePeriod,
+  utcToday,
   usagePeriodRangeLabel,
   usagePeriodSearch,
   usagePeriodTitle,
@@ -65,6 +66,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const page = parsePage(params.page);
   const period = parseUsagePeriod(params, now);
   const resolvedPeriod = resolveUsagePeriod(period, now);
+  const today = utcToday(now);
   const periodSearch = usagePeriodSearch(period);
   const periodTitle = usagePeriodTitle(period);
   const periodRange = usagePeriodRangeLabel(resolvedPeriod);
@@ -203,7 +205,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
           <span className="badge">Self-reported</span>
         </div>
-        <PeriodSelector basePath="/" period={period} resolved={resolvedPeriod} />
+        <PeriodSelector basePath="/" period={period} resolved={resolvedPeriod} today={today} />
         {rows.length === 0 ? (
           <div className="empty">
             <strong>

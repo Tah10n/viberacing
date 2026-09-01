@@ -53,7 +53,7 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
       <Panel>
         <div className="panel-heading">
           <h2>Usage by agent</h2>
-          <span>{profile.breakdown.length} connected</span>
+          <span>{profile.breakdown.length} with usage</span>
         </div>
         {profile.breakdown.length === 0 ? (
           <p className="muted">No recorded usage in this period.</p>

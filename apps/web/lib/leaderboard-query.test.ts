@@ -44,6 +44,10 @@ describe("leaderboard query", () => {
       breakdown: [],
     });
     expect(queryMock.mock.calls[0]?.[0]).toMatch(/FROM users u LEFT JOIN ranked r/);
+    expect(queryMock.mock.calls[0]?.[0]).toMatch(
+      /EXISTS \(SELECT 1 FROM daily_agent_usage retained/,
+    );
+    expect(queryMock.mock.calls[0]?.[0]).toMatch(/installation\.status = 'active'/);
     expect(queryMock.mock.calls[0]?.[1]).toEqual(["2026-08-01", "2026-08-03", "known"]);
   });
 });

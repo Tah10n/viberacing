@@ -71,3 +71,11 @@ export function entriesWithinRange(entries, range) {
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 }
+
+export function codexTotalOnlyEntries(entries) {
+  return entries.map(({ date, totalTokens, completeness }) => ({
+    date,
+    totalTokens,
+    ...(completeness === undefined ? {} : { completeness }),
+  }));
+}

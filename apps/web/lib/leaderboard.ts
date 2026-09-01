@@ -134,6 +134,13 @@ export async function publicProfile(
                ) agent) AS breakdown
        FROM users u LEFT JOIN ranked r ON r.user_id = u.id
       WHERE lower(u.handle) = lower($3)
+        AND (
+          EXISTS (SELECT 1 FROM daily_agent_usage retained WHERE retained.user_id = u.id)
+          OR EXISTS (
+            SELECT 1 FROM installations installation
+             WHERE installation.user_id = u.id AND installation.status = 'active'
+          )
+        )
       LIMIT 1`,
     [resolved.from, resolved.toExclusive, handle],
   );

@@ -1595,8 +1595,15 @@ async function collect(source, range, state = {}, context = {}) {
     components.entries,
     range.rangeEnd,
   );
+  const entries = context.historical
+    ? snapshot.entries.map((entry) => ({
+        ...entry,
+        completeness: entry.completeness ?? "complete",
+      }))
+    : snapshot.entries;
   return {
     ...snapshot,
+    entries,
     completeness: context.historical ? "partial" : snapshot.completeness,
     providerAccountKey: accountUsage.providerAccountKey,
     nextState: { componentUsage: components.nextState },

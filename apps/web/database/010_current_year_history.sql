@@ -62,3 +62,8 @@ ALTER TABLE installation_sources
     OR (history_backfill_status IN ('complete', 'partial')
       AND history_backfill_completed_at IS NOT NULL)
   );
+
+-- From this migration onward the application reads and writes daily summaries only. Keeping an
+-- unmaintained weekly summary would retain deleted usage and make an application rollback return
+-- stale totals, so the schema transition is intentionally forward-only.
+DROP TABLE weekly_agent_usage;

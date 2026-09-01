@@ -203,8 +203,9 @@ describe("dashboard connection flow", () => {
     expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
     expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(1);
-    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(2);
+    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(3);
     expect(dashboard).toContain("AND candidate.account_max_selected");
+    expect(dashboard).toContain("candidate.total_tokens = candidate.maximum_total_tokens");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
     expect(dashboard).toContain("FROM daily_agent_usage");
   });
