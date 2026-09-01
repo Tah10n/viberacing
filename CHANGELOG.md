@@ -37,6 +37,12 @@ experience or protocol.
   updates runtime/hooks/plugin without running usage Sync and requests a restart only after plugin
   creation or update.
 
+### Fixed
+
+- `connect` now revalidates the prior connection generation, installation identity, source registry,
+  and pending OpenCode cleanup under the pre-pairing lifecycle boundary. A stale process therefore
+  cannot recreate local authorization after a concurrent `disconnect` has removed it.
+
 These changes are staged only. This work does not publish npm, create a tag or GitHub Release,
 deploy, change Railway variables, or raise the minimum connector version.
 

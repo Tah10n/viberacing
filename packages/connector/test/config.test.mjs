@@ -920,7 +920,7 @@ test("recovers a connection commit interrupted before the source registry is pub
   }
 });
 
-test("source and installation mutations invalidate a pending connect generation", async () => {
+test("connection, source, and installation mutations invalidate a pending connect generation", async () => {
   const home = await mkdtemp(join(tmpdir(), "viberacing-connect-generation-"));
   const restoreEnvironment = useModuleEnvironment(home);
   try {
@@ -964,6 +964,7 @@ test("source and installation mutations invalidate a pending connect generation"
       installationId,
       origin: nextConfig.origin,
       expectedSources: [localSource],
+      expectedConnectionSnapshot: module.connectionSnapshot(null),
     });
     const addedSource = {
       clientSourceId: "85858585-8585-4585-8585-858585858585",
@@ -984,6 +985,7 @@ test("source and installation mutations invalidate a pending connect generation"
       installationId,
       origin: nextConfig.origin,
       expectedSources: sourcesWithAddition,
+      expectedConnectionSnapshot: module.connectionSnapshot(null),
     });
     await module.removeSource(addedSource.clientSourceId);
     await assert.rejects(
@@ -991,10 +993,37 @@ test("source and installation mutations invalidate a pending connect generation"
       { code: "connect_attempt_stale" },
     );
 
+    await module.writeConfig(nextConfig);
+    await assert.rejects(
+      module.beginConnectAttempt({
+        installationId,
+        origin: nextConfig.origin,
+        expectedSources: [localSource],
+        expectedConnectionSnapshot: module.connectionSnapshot(null),
+      }),
+      { code: "connect_attempt_stale" },
+    );
+    const previousConnectionSnapshot = module.connectionSnapshot(nextConfig);
+    await module.writeConfig({
+      ...nextConfig,
+      deviceToken: "replacement_generation_device_token_that_is_long_enough",
+    });
+    await assert.rejects(
+      module.beginConnectAttempt({
+        installationId,
+        origin: nextConfig.origin,
+        expectedSources: [localSource],
+        expectedConnectionSnapshot: previousConnectionSnapshot,
+      }),
+      { code: "connect_attempt_stale" },
+    );
+    await module.removeConfig();
+
     const resetAttempt = await module.beginConnectAttempt({
       installationId,
       origin: nextConfig.origin,
       expectedSources: [localSource],
+      expectedConnectionSnapshot: module.connectionSnapshot(null),
     });
     await module.resetInstallation();
     await assert.rejects(
@@ -5886,6 +5915,7 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
   };
   let serverState = "pending";
   let nextPairingState = "pending";
+  let pairingStarts = 0;
   let cancellations = 0;
   let deletes = 0;
   let deleteFailure = false;
@@ -5917,6 +5947,7 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
         return;
       }
       if (request.url === "/api/pairing/start") {
+        pairingStarts += 1;
         serverState = nextPairingState;
         response.writeHead(201, { "content-type": "application/json" });
         response.end(
@@ -5984,16 +6015,30 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
     suggestedLabel: "Antigravity",
   };
   await writeLocalSources(directory, [localSource]);
-  const writeInstallationIdentity = () =>
+  const writeInstallationIdentity = (openCodePluginPath) =>
     writeFile(
       join(directory, "installation.json"),
       `${JSON.stringify({
         version: 1,
         id: installationId,
         secret: "race_installation_secret_that_is_long_enough",
+        ...(openCodePluginPath === undefined ? {} : { openCodePluginPath }),
       })}\n`,
     );
-  await writeInstallationIdentity();
+  const writePreviousConnection = async () => {
+    await writeLocalSources(directory, [localSource]);
+    await writeFile(
+      join(directory, "config.json"),
+      `${JSON.stringify({
+        version: 2,
+        origin,
+        installationId,
+        deviceToken: "race_previous_device_token_that_is_long_enough",
+        sources: [mapping],
+        protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
+      })}\n`,
+    );
+  };
   const baseEnvironment = connectorEnvironment(home, {
     NODE_ENV: "test",
     PATH: "",
@@ -6028,6 +6073,90 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
     await writeFile(`${barrier}.continue`, "continue\n");
     return connect.result;
   };
+
+  const installedPlugin = await reconcileOpenCodePlugin({
+    installationId,
+    stateRoot: directory,
+    environment: baseEnvironment,
+    homeDirectory: home,
+    desired: true,
+  });
+  await writeInstallationIdentity(installedPlugin.path);
+  await writePreviousConnection();
+  serverState = "active";
+  const reconciliationBarrier = join(home, `connect-reconciliation-${randomUUID()}`);
+  const staleConnect = spawnConnect({
+    VIBERACING_TEST_CONNECT_PAUSE: "after_previous_connection_reconciliation",
+    VIBERACING_TEST_CONNECT_BARRIER: reconciliationBarrier,
+  });
+  await waitFor(() =>
+    access(`${reconciliationBarrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const startsBeforeDisconnect = pairingStarts;
+  const disconnected = await execFileAsync(process.execPath, [connectorPath, "disconnect"], {
+    env: {
+      ...baseEnvironment,
+      VIBERACING_TEST_FAIL_INSTALLATION_IDENTITY_REMOVAL: "1",
+    },
+  });
+  assert.match(disconnected.stderr, /local authorization was removed.*manual inspection/i);
+  await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
+  await access(join(directory, "installation.json"));
+  await assert.rejects(access(installedPlugin.path), { code: "ENOENT" });
+  await writeFile(`${reconciliationBarrier}.continue`, "continue\n");
+  const staleResult = await staleConnect.result;
+  assert.equal(staleResult.code, 1);
+  assert.match(staleResult.stderr, /Local connection changed while preparing the connection/);
+  assert.equal(pairingStarts, startsBeforeDisconnect);
+  await assert.rejects(access(join(directory, "config.json")), { code: "ENOENT" });
+  await assert.rejects(access(join(directory, "connect-attempt.json")), { code: "ENOENT" });
+  await access(join(directory, "installation.json"));
+
+  await writeInstallationIdentity();
+  await writePreviousConnection();
+  serverState = "active";
+  const preAttemptBarrier = join(home, `connect-pre-attempt-${randomUUID()}`);
+  const pendingCleanupConnect = spawnConnect({
+    VIBERACING_TEST_CONNECT_PAUSE: "before_begin_connect_attempt",
+    VIBERACING_TEST_CONNECT_BARRIER: preAttemptBarrier,
+  });
+  await waitFor(() =>
+    access(`${preAttemptBarrier}.ready`)
+      .then(() => true)
+      .catch(() => false),
+  );
+  const pendingInstallationId = "23232323-2323-4232-8232-232323232323";
+  const pendingPath = openCodePluginLocation({
+    installationId: pendingInstallationId,
+    environment: baseEnvironment,
+    homeDirectory: home,
+  }).path;
+  await mkdir(dirname(pendingPath), { recursive: true });
+  await writeFile(pendingPath, "export const KeepForeignPlugin = true;\n", { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(pendingPath);
+  await writeFile(
+    join(directory, "opencode-plugin-cleanup.json"),
+    `${JSON.stringify({
+      version: 1,
+      installationId: pendingInstallationId,
+      openCodePluginPath: pendingPath,
+    })}\n`,
+    { mode: 0o600 },
+  );
+  const startsBeforePendingCleanup = pairingStarts;
+  await writeFile(`${preAttemptBarrier}.continue`, "continue\n");
+  const pendingCleanupResult = await pendingCleanupConnect.result;
+  assert.equal(pendingCleanupResult.code, 1);
+  assert.match(pendingCleanupResult.stderr, /Pending OpenCode plugin cleanup is incomplete/);
+  assert.equal(pairingStarts, startsBeforePendingCleanup);
+  await assert.rejects(access(join(directory, "connect-attempt.json")), { code: "ENOENT" });
+  await access(join(directory, "config.json"));
+  await unlink(pendingPath);
+  await unlink(join(directory, "opencode-plugin-cleanup.json"));
+  await unlink(join(directory, "config.json"));
+  await writeInstallationIdentity();
 
   const pendingResult = await runBarrierRace("after_pairing_start");
   assert.equal(pendingResult.code, 1);
@@ -6073,20 +6202,6 @@ test("later disconnect defeats pending, active-polled, and interrupted connect a
   );
   await assert.rejects(access(join(directory, "config.json")));
 
-  const writePreviousConnection = async () => {
-    await writeLocalSources(directory, [localSource]);
-    await writeFile(
-      join(directory, "config.json"),
-      `${JSON.stringify({
-        version: 2,
-        origin,
-        installationId,
-        deviceToken: "race_previous_device_token_that_is_long_enough",
-        sources: [mapping],
-        protocol: { version: 2, snapshotDays: 31, maximumSources: 32, maximumEntries: 1_024 },
-      })}\n`,
-    );
-  };
   await writeInstallationIdentity();
   await writePreviousConnection();
   serverState = "active";

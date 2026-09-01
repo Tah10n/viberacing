@@ -59,6 +59,7 @@ import {
   clearConnectAttempt,
   clearOpenCodePluginCleanupTarget,
   commitConnectionState,
+  connectionSnapshot,
   connectedStateExists,
   connectedSourceMappingExists,
   diagnoseHooks,
@@ -964,7 +965,8 @@ async function existingConnectionIdentityForPairing() {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
-  if (!uuidPattern.test(previousConfig.installationId ?? "")) return null;
+  if (!uuidPattern.test(previousConfig.installationId ?? ""))
+    return { previousConfig, installation: null, identityError: null, reconcilable: false };
 
   let installation = null;
   let identityError = null;
@@ -973,7 +975,7 @@ async function existingConnectionIdentityForPairing() {
   } catch (error) {
     identityError = error;
   }
-  return { previousConfig, installation, identityError };
+  return { previousConfig, installation, identityError, reconcilable: true };
 }
 
 function existingConnectionIdentityMismatchError(identityError) {
@@ -987,12 +989,27 @@ function existingConnectionIdentityMismatchError(identityError) {
 async function reconcilePreviousConnectionBeforePairing(origin) {
   return withOpenCodeLifecycleMutation(async () => {
     const previous = await existingConnectionIdentityForPairing();
-    if (previous === null) return null;
-    const { previousConfig, installation, identityError } = previous;
+    if (previous === null)
+      return {
+        previousConfig: null,
+        installation: null,
+        connectionSnapshot: connectionSnapshot(null),
+      };
+    const { previousConfig, installation, identityError, reconcilable } = previous;
+    if (!reconcilable)
+      return {
+        previousConfig: null,
+        installation: null,
+        connectionSnapshot: connectionSnapshot(previousConfig),
+      };
     const matchingInstallation = installation?.id === previousConfig.installationId;
     if (previousConfig.origin !== origin) {
       if (!matchingInstallation) throw existingConnectionIdentityMismatchError(identityError);
-      return { previousConfig: null, installation };
+      return {
+        previousConfig: null,
+        installation,
+        connectionSnapshot: connectionSnapshot(previousConfig),
+      };
     }
     let remote;
     try {
@@ -1012,13 +1029,21 @@ async function reconcilePreviousConnectionBeforePairing(origin) {
           warning(
             "Vibe Racing warning: local authorization was removed, but one or more auxiliary cleanup steps need manual inspection.",
           );
-        return null;
+        return {
+          previousConfig: null,
+          installation: null,
+          connectionSnapshot: connectionSnapshot(null),
+        };
       }
       throw error;
     }
     if (!matchingInstallation) throw existingConnectionIdentityMismatchError(identityError);
     await reconcileRemoteSources(previousConfig, remote.sources, { allowDuringLifecycle: true });
-    return { previousConfig, installation };
+    return {
+      previousConfig,
+      installation,
+      connectionSnapshot: connectionSnapshot(previousConfig),
+    };
   });
 }
 
@@ -1028,6 +1053,7 @@ async function connect() {
   if (pendingCleanup.failures.length > 0) throw pendingOpenCodeCleanupError(pendingCleanup);
   const origin = normalizeOrigin(option("--origin", officialProductionOrigin), "--origin");
   const previousConnection = await reconcilePreviousConnectionBeforePairing(origin);
+  await waitForTestConnectBarrier("after_previous_connection_reconciliation");
   const previousConfig = previousConnection?.previousConfig ?? null;
   output("Detecting supported agent sources…");
   const discovery = await discoverSources();
@@ -1091,13 +1117,18 @@ async function connect() {
     }
   }
   output(`Found: ${[...sources.values()].map((source) => source.suggestedLabel).join(", ")}`);
-  const initialAttempt = await withOpenCodeLifecycleMutation(() =>
-    beginConnectAttempt({
+  await waitForTestConnectBarrier("before_begin_connect_attempt");
+  const initialAttempt = await withOpenCodeLifecycleMutation(async () => {
+    const pending = await cleanupOpenCodePluginTargets();
+    if (pending.failures.length > 0) throw pendingOpenCodeCleanupError(pending);
+    return beginConnectAttempt({
       installationId: installation.id,
       origin,
       expectedSources: sourcesBeforeDiscovery,
-    }),
-  );
+      expectedConnectionSnapshot:
+        previousConnection?.connectionSnapshot ?? connectionSnapshot(null),
+    });
+  });
   let attempt = initialAttempt;
   let pairing;
   let committed = false;

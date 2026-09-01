@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import {
   access,
@@ -637,6 +637,45 @@ function serializedConfig(config) {
       ...(source.profileSourceId === undefined ? {} : { profileSourceId: source.profileSourceId }),
     })),
   };
+}
+
+export function connectionSnapshot(config) {
+  if (config === null) return { exists: false };
+  const stored = serializedConfig(config);
+  return {
+    exists: true,
+    installationId: stored.installationId,
+    origin: stored.origin,
+    deviceTokenFingerprint: createHash("sha256")
+      .update(typeof stored.deviceToken === "string" ? stored.deviceToken : "")
+      .digest("hex"),
+  };
+}
+
+function sameConnectionSnapshot(left, right) {
+  if (left?.exists !== right?.exists) return false;
+  if (left?.exists === false) return true;
+  return (
+    left?.exists === true &&
+    left.installationId === right.installationId &&
+    left.origin === right.origin &&
+    left.deviceTokenFingerprint === right.deviceTokenFingerprint
+  );
+}
+
+function connectAttemptStale(message, cause) {
+  const error = new Error(message, cause === undefined ? undefined : { cause });
+  error.code = "connect_attempt_stale";
+  return error;
+}
+
+async function currentConnectionSnapshotUnlocked() {
+  try {
+    return connectionSnapshot(await readConfigUnlocked());
+  } catch (error) {
+    if (error?.code === "ENOENT") return connectionSnapshot(null);
+    throw connectAttemptStale("Local connection changed while preparing the connection", error);
+  }
 }
 
 async function normalizedSources(sources) {
@@ -1295,22 +1334,24 @@ async function writeSourcesUnlocked(sources) {
   return normalized;
 }
 
-export async function beginConnectAttempt({ installationId, origin, expectedSources }) {
+export async function beginConnectAttempt({
+  installationId,
+  origin,
+  expectedSources,
+  expectedConnectionSnapshot,
+}) {
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
+    const currentConnectionSnapshot = await currentConnectionSnapshotUnlocked();
+    if (!sameConnectionSnapshot(currentConnectionSnapshot, expectedConnectionSnapshot))
+      throw connectAttemptStale("Local connection changed while preparing the connection");
     const installation = await readInstallationUnlocked();
-    if (installation?.id !== installationId) {
-      const error = new Error("Installation identity changed while preparing the connection");
-      error.code = "connect_attempt_stale";
-      throw error;
-    }
+    if (installation?.id !== installationId)
+      throw connectAttemptStale("Installation identity changed while preparing the connection");
     const currentSources = await readSourcesUnlocked();
     const expected = await normalizedSources(expectedSources);
-    if (JSON.stringify(currentSources) !== JSON.stringify(expected)) {
-      const error = new Error("Local source registry changed while preparing the connection");
-      error.code = "connect_attempt_stale";
-      throw error;
-    }
+    if (JSON.stringify(currentSources) !== JSON.stringify(expected))
+      throw connectAttemptStale("Local source registry changed while preparing the connection");
     const attempt = {
       version: 1,
       attemptId: randomUUID(),
@@ -2456,6 +2497,11 @@ export async function removeConfig() {
 
 export async function removeInstallationIdentity() {
   return withConnectionStateLock(async () => {
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.VIBERACING_TEST_FAIL_INSTALLATION_IDENTITY_REMOVAL === "1"
+    )
+      throw new Error("Synthetic installation identity removal failure");
     try {
       await unlink(installationPath);
       return true;
