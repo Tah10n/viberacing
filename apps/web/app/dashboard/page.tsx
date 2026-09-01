@@ -21,6 +21,7 @@ import {
 import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import {
   browserSyncInstallationScopeProtocol,
+  connectorProtocolVersion,
   installedConnectorUpdateRequired,
   maximumSourcesPerInstallation,
   minimumConnectorVersion,
@@ -47,6 +48,7 @@ interface DashboardProps {
 interface InstallationRow {
   browser_sync_capable: boolean;
   browser_sync_protocol: number;
+  protocol_version: number;
   installed_connector_version: string | null;
   id: string;
   name: string;
@@ -279,6 +281,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
               i.browser_sync_capable,
               i.browser_sync_protocol,
+              i.protocol_version,
               count(s.id)::int AS source_count
          FROM installations i
          LEFT JOIN installation_sources s
@@ -539,7 +542,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const browserSyncEnabled =
     accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
   const historyUpgradeRequired = installations.some(
-    (installation) => installation.browser_sync_protocol < 5,
+    (installation) => installation.protocol_version < connectorProtocolVersion,
   );
   const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
   const notice =

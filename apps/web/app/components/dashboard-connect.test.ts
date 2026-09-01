@@ -224,4 +224,10 @@ describe("dashboard connection flow", () => {
     expect(explorer).toContain("BigInt(day.tokens)");
     expect(explorer).not.toContain("Number(day.tokens)");
   });
+
+  it("uses the connector protocol for the current-year history upgrade notice", () => {
+    expect(dashboard).toContain("i.protocol_version");
+    expect(dashboard).toContain("installation.protocol_version < connectorProtocolVersion");
+    expect(dashboard).not.toContain("installation.browser_sync_protocol < 5");
+  });
 });

@@ -652,6 +652,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     data: {
       sourceIds: [mapped.sourceId],
       cliVersion: bundledConnectorVersion,
+      protocolVersion: 5,
       handlerAttestation: {
         attestationId: handlerAttestationId,
         installedRuntimeVersion: bundledConnectorVersion,
@@ -665,6 +666,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   });
   await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toHaveCount(0);
+  await expect(page.locator(".connector-history-notice")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
   await page.goto("/");
   await expect(page.locator(".connector-update-prominent")).toHaveCount(0);
