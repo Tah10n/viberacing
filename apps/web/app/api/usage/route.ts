@@ -347,6 +347,23 @@ function affectedRanges(
   return result;
 }
 
+export function rollingIncompleteDates(
+  snapshot: Readonly<ParsedSnapshot>,
+  completeness: "complete" | "partial",
+): string[] {
+  if (snapshot.kind !== "rolling" || completeness === "complete") return [];
+  const completeDates = new Set(
+    snapshot.entries
+      .filter((entry) => entry.completeness === "complete")
+      .map((entry) => entry.date),
+  );
+  const incompleteDates: string[] = [];
+  for (let date = snapshot.rangeStart; date <= snapshot.rangeEnd; date = addUtcDays(date, 1)) {
+    if (!completeDates.has(date)) incompleteDates.push(date);
+  }
+  return incompleteDates;
+}
+
 async function post(request: Request): Promise<Response> {
   const authorization = request.headers.get("authorization");
   if (authorization === null || !authorization.startsWith("Bearer ")) {
@@ -583,6 +600,7 @@ async function post(request: Request): Promise<Response> {
                     last_completeness = $3,
                     last_rolling_range_start = $7::date,
                     last_rolling_range_end = $8::date,
+                    last_rolling_incomplete_dates = $9::date[],
                     last_error_summary = NULL,
                     last_warning_summary = $4,
                     history_backfill_year = CASE
@@ -604,6 +622,7 @@ async function post(request: Request): Promise<Response> {
               snapshot.rangeEnd,
               snapshot.rangeStart,
               snapshot.rangeEnd,
+              rollingIncompleteDates(snapshot, sourceCompleteness),
             ],
           );
         } else {

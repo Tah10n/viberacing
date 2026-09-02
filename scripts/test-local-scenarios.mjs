@@ -159,6 +159,206 @@ async function verifyExpandMigrationCompatibility() {
     await client.query("ROLLBACK").catch(() => {});
     client.release();
   }
+
+  await verifyMigrationWriteInterleaving("before_lock");
+  await verifyMigrationWriteInterleaving("after_lock");
+}
+
+const compatibilityMigrations = [
+  "001_initial.sql",
+  "002_account_deduplication.sql",
+  "003_browser_sync.sql",
+  "004_browser_sync_rate_guard.sql",
+  "005_browser_sync_protocol.sql",
+  "006_account_switch_sources.sql",
+  "007_account_switch_safety.sql",
+  "008_account_dedup_notice_dismissal.sql",
+  "009_codex_hook_notice.sql",
+];
+
+async function migrationCompatibilityFixture(schema) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    for (const migration of compatibilityMigrations)
+      await client.query(
+        await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
+      );
+    const user = await client.query(
+      "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+      [
+        `9${randomBytes(8).readBigUInt64BE().toString().slice(0, 17)}`,
+        `race-${randomBytes(4).toString("hex")}`,
+      ],
+    );
+    const fixture = {
+      userId: user.rows[0].id,
+      installationId: randomUUID(),
+      accountId: randomUUID(),
+      sourceId: randomUUID(),
+      usageDate: "2026-08-31",
+      weekStart: "2026-08-31",
+    };
+    await client.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Racing old release', 'active', $3, $4, '0.5.0', 4)`,
+      [fixture.installationId, fixture.userId, digest(token()), digest(token())],
+    );
+    await client.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+       VALUES ($1, $2, 'codex', 'Racing Codex', 'account_max')`,
+      [fixture.accountId, fixture.userId],
+    );
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Racing Codex', 'codex_app_server', 'cli', 'active')`,
+      [fixture.sourceId, fixture.installationId, fixture.userId, fixture.accountId, randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO daily_usage (source_id, usage_date, total_tokens, completeness)
+       VALUES ($1, $2, 40, 'complete')`,
+      [fixture.sourceId, fixture.usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       VALUES ($1, $2, 'codex', 40)`,
+      [fixture.weekStart, fixture.userId],
+    );
+    await client.query("COMMIT");
+    return fixture;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function waitForDatabaseWait(observer, applicationName, predicate, label) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const activity = await observer.query(
+      `SELECT wait_event_type, wait_event
+         FROM pg_stat_activity
+        WHERE application_name = $1 AND state = 'active'`,
+      [applicationName],
+    );
+    if (activity.rows.some(predicate)) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`timed out waiting for controlled migration point: ${label}`);
+}
+
+async function oldReleaseWrite(client, schema, fixture, applicationName) {
+  await client.query("SELECT set_config('application_name', $1, false)", [applicationName]);
+  await client.query("BEGIN");
+  try {
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    await client.query(
+      `UPDATE daily_usage SET total_tokens = 73, updated_at = now()
+        WHERE source_id = $1 AND usage_date = $2`,
+      [fixture.sourceId, fixture.usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       SELECT $1::date, $2, 'codex', sum(total_tokens)
+         FROM daily_usage
+        WHERE source_id = $3 AND usage_date >= $1::date AND usage_date < $1::date + 7
+       ON CONFLICT (week_start, user_id, agent_id) DO UPDATE
+         SET tokens = EXCLUDED.tokens, updated_at = now()`,
+      [fixture.weekStart, fixture.userId, fixture.sourceId],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  }
+}
+
+async function verifyMigrationWriteInterleaving(position) {
+  const schema = `migration_010_race_${randomBytes(6).toString("hex")}`;
+  const fixture = await migrationCompatibilityFixture(schema);
+  const [migrationClient, writer, control, observer] = await Promise.all([
+    pool.connect(),
+    pool.connect(),
+    pool.connect(),
+    pool.connect(),
+  ]);
+  const lockKey = randomBytes(4).readUInt32BE() & 0x7fffffff;
+  const migrationName = `migration-${position}-${randomBytes(3).toString("hex")}`;
+  const writerName = `writer-${position}-${randomBytes(3).toString("hex")}`;
+  try {
+    await control.query("SELECT pg_advisory_lock($1)", [lockKey]);
+    const rawMigration = await readFile(
+      new URL("../apps/web/database/010_current_year_history.sql", import.meta.url),
+      "utf8",
+    );
+    const marker =
+      position === "before_lock"
+        ? "-- Compatibility lock boundary:"
+        : "-- Final authoritative backfill begins";
+    check(rawMigration.includes(marker), `migration interleaving marker missing: ${position}`);
+    const controlledMigration = rawMigration.replace(
+      marker,
+      `SELECT pg_advisory_xact_lock(${lockKey});\n${marker}`,
+    );
+    await migrationClient.query("SELECT set_config('application_name', $1, false)", [
+      migrationName,
+    ]);
+    await migrationClient.query("BEGIN");
+    await migrationClient.query(`SET LOCAL search_path TO ${schema}`);
+    const migrationPromise = migrationClient
+      .query(controlledMigration)
+      .then(() => migrationClient.query("COMMIT"));
+    await waitForDatabaseWait(
+      observer,
+      migrationName,
+      (row) => row.wait_event_type === "Lock" && row.wait_event === "advisory",
+      `${position} migration advisory lock`,
+    );
+
+    const writePromise = oldReleaseWrite(writer, schema, fixture, writerName);
+    if (position === "before_lock") await writePromise;
+    else
+      await waitForDatabaseWait(
+        observer,
+        writerName,
+        (row) => row.wait_event_type === "Lock",
+        "old writer blocked behind compatibility lock",
+      );
+    await control.query("SELECT pg_advisory_unlock($1)", [lockKey]);
+    await migrationPromise;
+    await writePromise;
+
+    const totals = await observer.query(
+      `SELECT
+         (SELECT tokens::text FROM ${schema}.weekly_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex' AND week_start = $2) AS weekly_tokens,
+         (SELECT coalesce(sum(tokens), 0)::text FROM ${schema}.daily_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex'
+             AND usage_date >= $2::date AND usage_date < $2::date + 7) AS daily_tokens`,
+      [fixture.userId, fixture.weekStart],
+    );
+    check(
+      totals.rows[0]?.weekly_tokens === "73" && totals.rows[0]?.daily_tokens === "73",
+      `${position} migration interleaving lost an old-release write: ${JSON.stringify(totals.rows[0])}`,
+    );
+  } finally {
+    await control.query("SELECT pg_advisory_unlock($1)", [lockKey]).catch(() => {});
+    await migrationClient.query("ROLLBACK").catch(() => {});
+    await writer.query("ROLLBACK").catch(() => {});
+    await observer.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`).catch(() => {});
+    migrationClient.release();
+    writer.release();
+    control.release();
+    observer.release();
+  }
 }
 
 function syntheticEdgeHeader(address) {
@@ -476,7 +676,9 @@ function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
 
 try {
   await verifyExpandMigrationCompatibility();
-  console.log("ok - migration 010 preserves main-era weekly reads and writes during rollout");
+  console.log(
+    "ok - migration 010 preserves sequential and two-session before/after-lock old-version writes",
+  );
 
   const inserted = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -2082,35 +2284,77 @@ try {
     "new ingestion did not keep weekly and daily compatibility summaries equal",
   );
   console.log("ok - unchanged confirmation advances account and computer Last sync timestamps");
+  const omittedPartialDay = dateOffset(-8);
+  const explicitCompleteZeroDay = dateOffset(-7);
+  const authoritativeMixedDay = dateOffset(-6);
+  const explicitPartialDay = dateOffset(-5);
+  response = await usage(first.deviceToken, [
+    snapshot(
+      target,
+      9,
+      [
+        [explicitCompleteZeroDay, 0, undefined, "complete"],
+        [authoritativeMixedDay, 12, undefined, "complete"],
+        [explicitPartialDay, 4, undefined, "partial"],
+      ],
+      "partial",
+      omittedPartialDay,
+      explicitPartialDay,
+    ),
+  ]);
+  check(response.status === 200, "mixed rolling completeness snapshot failed");
+  const rollingCoverage = await pool.query(
+    `SELECT last_rolling_incomplete_dates::text[] AS incomplete_dates
+       FROM installation_sources WHERE id = $1`,
+    [target],
+  );
+  check(
+    JSON.stringify(rollingCoverage.rows[0]?.incomplete_dates) ===
+      JSON.stringify([omittedPartialDay, explicitPartialDay]),
+    `mixed rolling coverage was not persisted per day: ${JSON.stringify(rollingCoverage.rows[0])}`,
+  );
+  const coveragePages = await Promise.all(
+    [explicitCompleteZeroDay, authoritativeMixedDay, explicitPartialDay, omittedPartialDay].map(
+      async (date) => {
+        const page = await authenticatedGet(`/dashboard?period=custom&from=${date}&to=${date}`);
+        return { date, status: page.status, html: await page.text() };
+      },
+    ),
+  );
+  const coverageByDate = new Map(coveragePages.map((page) => [page.date, page]));
+  check(
+    coveragePages.every((page) => page.status === 200) &&
+      !coverageByDate.get(explicitCompleteZeroDay)?.html.includes("Partial current-year history") &&
+      !coverageByDate.get(authoritativeMixedDay)?.html.includes("Partial current-year history") &&
+      coverageByDate.get(explicitPartialDay)?.html.includes("Partial current-year history") &&
+      coverageByDate.get(omittedPartialDay)?.html.includes("Partial current-year history"),
+    "mixed rolling complete, zero, partial, and omitted dates rendered incorrect coverage",
+  );
+  response = await usage(first.deviceToken, [
+    snapshot(target, 10, [], "complete", omittedPartialDay, explicitPartialDay),
+  ]);
+  check(response.status === 200, "mixed rolling coverage cleanup failed");
+
   const authoritativeDayBeforePartial = await pool.query(
     "SELECT completeness, updated_at FROM daily_usage WHERE source_id = $1 AND usage_date = $2::date",
     [target, today],
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
-  const omittedPartialDay = dateOffset(-5);
   response = await usage(first.deviceToken, [
-    snapshot(target, 9, [[today, 25]], "partial", omittedPartialDay, today),
+    snapshot(target, 11, [[today, 25]], "partial", dateOffset(-4), today),
   ]);
   check(response.status === 200, "partial correction failed");
   let rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text, completeness, updated_at FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
     [target],
   );
+  const currentDayAfterPartial = rows.rows.find((row) => row.usage_date === today);
   check(
-    rows.rows.length === 2 &&
-      rows.rows[1].total_tokens === "35" &&
-      rows.rows[1].completeness === "complete" &&
-      rows.rows[1].updated_at.getTime() ===
+    currentDayAfterPartial?.total_tokens === "35" &&
+      currentDayAfterPartial.completeness === "complete" &&
+      currentDayAfterPartial.updated_at.getTime() ===
         authoritativeDayBeforePartial.rows[0].updated_at.getTime(),
     "a lower partial snapshot replaced or refreshed previously authoritative evidence",
-  );
-  const omittedPartialDashboard = await authenticatedGet(
-    `/dashboard?period=custom&from=${omittedPartialDay}&to=${omittedPartialDay}`,
-  );
-  check(
-    omittedPartialDashboard.status === 200 &&
-      (await omittedPartialDashboard.text()).includes("Partial current-year history"),
-    "a missing day inside the last partial rolling range became trusted no-data",
   );
   await pool.query(
     `UPDATE installation_sources
@@ -2137,13 +2381,15 @@ try {
       WHERE id = $1`,
     [target],
   );
-  console.log("ok - missing rolling and retained historical coverage stays explicitly partial");
+  console.log(
+    "ok - mixed rolling dates and retained historical coverage keep exact complete/partial status",
+  );
   const beforeProvisionalSummary = await pool.query(
     "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 10, [[today, 40, undefined, "partial"]], "complete"),
+    snapshot(target, 12, [[today, 40, undefined, "partial"]], "complete"),
   ]);
   check(response.status === 200, "current-day partial snapshot failed");
   rows = await pool.query(
@@ -2166,7 +2412,7 @@ try {
     "current-day partial total did not immediately update the weekly ranking summary",
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 11, [[today, 20, undefined, "complete"]], "partial"),
+    snapshot(target, 13, [[today, 20, undefined, "complete"]], "partial"),
   ]);
   check(response.status === 200, "authoritative entry correction in a partial snapshot failed");
   const authoritativeSummary = await pool.query(
@@ -2178,7 +2424,7 @@ try {
       BigInt(provisionalSummary.rows[0]?.tokens ?? "0") - 20n,
     "authoritative entry did not correct the provisional weekly ranking total",
   );
-  response = await usage(first.deviceToken, [snapshot(target, 12, [[today, 20]])]);
+  response = await usage(first.deviceToken, [snapshot(target, 14, [[today, 20]])]);
   check(response.status === 200, "final complete correction failed");
   rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
@@ -2200,23 +2446,31 @@ try {
     "ok - snapshots decrease values and weekly summaries, reject stale writes, and distinguish complete from partial",
   );
 
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('usage_sync', 'usage_sync_user')",
+  );
   const randomSource = randomUUID();
   const future = await usage(first.deviceToken, [
-    snapshot(target, 13, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
+    snapshot(target, 15, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
   ]);
   const old = await usage(first.deviceToken, [
-    snapshot(target, 13, [[tooOld, 1]], "complete", tooOld, tooOld),
+    snapshot(target, 15, [[tooOld, 1]], "complete", tooOld, tooOld),
   ]);
   const unsupported = await usage(first.deviceToken, [snapshot(randomSource, 1, [[today, 1]])]);
   const excessive = await usage(first.deviceToken, [
-    snapshot(target, 13, [[today, "10000000000000000"]]),
+    snapshot(target, 15, [[today, "10000000000000000"]]),
   ]);
   check(
     future.status === 400 &&
       old.status === 400 &&
       unsupported.status === 400 &&
       excessive.status === 400,
-    "usage bounds were not enforced",
+    `usage bounds were not enforced: ${JSON.stringify({
+      future: future.status,
+      old: old.status,
+      unsupported: unsupported.status,
+      excessive: excessive.status,
+    })}`,
   );
   console.log("ok - date, source, and technical token bounds are enforced");
 

@@ -47,15 +47,15 @@ lost, the connector may retry the same allowlisted transition. This can duplicat
 structured event and does not add raw diagnostic data. The original `collector_failed` source error
 remains in usage sync for dashboard compatibility.
 
-For account-wide agents, the server may compare already stored complete daily totals from the last
-30 finished UTC days. Seven exact nonzero days spanning at least a week and containing three
-distinct positive totals, with no conflicting complete overlap, can automatically map two computer
-sources to one logical account. Partial and zero days are not evidence. The decision stores opaque
-source/account IDs and the number of matching days, not the daily values themselves, and can be
-undone from the dashboard. No email, username, account ID from the provider, or derived email
-fingerprint is used. The source also retains the timestamp of an automatic match or later explicit
-reassignment, preventing a background match from overriding that decision after temporary Undo
-metadata is cleaned up.
+For account-wide agents, the server may compare already stored complete daily totals from the
+current UTC year plus the prior-year part of the rolling 30-day boundary. Seven exact nonzero days
+spanning at least a week and containing three distinct positive totals, with no conflicting complete
+overlap, can automatically map two computer sources to one logical account. Partial and zero days
+are not evidence. The decision stores opaque source/account IDs and the number of matching days, not
+the daily values themselves, and can be undone from the dashboard. No email, username, account ID
+from the provider, or derived email fingerprint is used. The source also retains the timestamp of an
+automatic match or later explicit reassignment, preventing a background match from overriding that
+decision after temporary Undo metadata is cleaned up.
 
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
@@ -72,11 +72,14 @@ authoritative correction marker rather than an inferred usage value. No zero is 
 incomplete result or beyond the proven range. These remain date-level aggregate counters; it never
 retains or transmits any other transcript field. The Antigravity wrapper passes native output
 through to the terminal and persists only the stable event ID, UTC date, and exact token counters
-needed for deduplication. Capture records older than 35 days are removed after a successful sync and
-large files are rewritten atomically with the same allowlist. `source add` requires an explicit
-label and never derives network metadata from the local data-root path. Each capture profile is
-keyed by its random client source ID, not an account label, provider identity, or agent name.
-Multiple Antigravity accounts therefore remain in separate local files.
+needed for deduplication. Capture records older than 35 days are removed only after every available
+record has been safely read and the terminal historical payload has been acknowledged; public
+Antigravity history can still remain partial. Failed or limited reads retain the capture for repair,
+and acknowledged cleanup is retried after a crash. Large files are rewritten atomically with the
+same allowlist. `source add` requires an explicit label and never derives network metadata from the
+local data-root path. Each capture profile is keyed by its random client source ID, not an account
+label, provider identity, or agent name. Multiple Antigravity accounts therefore remain in separate
+local files.
 
 For Codex ChatGPT logins, the connector reads the size-bounded, non-symlinked `CODEX_HOME/auth.json`
 before starting App Server, retains only `tokens.account_id`, brackets usage with two

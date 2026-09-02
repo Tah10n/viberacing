@@ -55,6 +55,12 @@ async function get(): Promise<Response> {
                      AND column_name = 'last_rolling_range_start'
                 )
                 AND EXISTS (
+                  SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'installation_sources'
+                     AND column_name = 'last_rolling_incomplete_dates'
+                )
+                AND EXISTS (
                   SELECT 1
                     FROM pg_trigger
                    WHERE tgname = 'weekly_agent_usage_daily_compatibility'

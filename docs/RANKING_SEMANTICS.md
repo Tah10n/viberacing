@@ -12,7 +12,9 @@ For each source and UTC date, `totalTokens` is an authoritative provider total w
 otherwise it is the non-overlapping sum of input, output, cache read, cache creation/write, and
 separately reported reasoning. Adapters remove provider-specific overlap such as cached input
 already included in prompt input and reasoning already included in output. All integers remain
-canonical decimal strings in the protocol and `numeric(30,0)` in PostgreSQL.
+canonical decimal strings in the protocol. Per-source daily counters use PostgreSQL `numeric(30,0)`;
+derived `daily_agent_usage` user/agent totals use unbounded `numeric` so sums of valid source values
+cannot overflow the source-row precision.
 
 Codex is the one scoped exception for component display: its authoritative daily total is
 account-wide, while its provider-recorded component events are locally retained. While account

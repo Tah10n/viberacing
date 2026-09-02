@@ -203,7 +203,7 @@ describe("dashboard connection flow", () => {
     expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
     expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(1);
-    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(3);
+    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(4);
     expect(dashboard).toContain("AND candidate.account_max_selected");
     expect(dashboard).toContain("candidate.total_tokens = candidate.maximum_total_tokens");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
@@ -225,6 +225,8 @@ describe("dashboard connection flow", () => {
     expect(explorer).toContain("BigInt(day.tokens)");
     expect(explorer).not.toContain("Number(day.tokens)");
     expect(dashboard).toContain("s.last_rolling_range_start::text");
+    expect(dashboard).toContain("s.last_rolling_incomplete_dates::text[]");
+    expect(dashboard).toContain("provenDatesByAccount");
     expect(dashboard).toContain("sourcePeriodIncomplete");
     expect(dashboard).toContain("source.has_retained_usage");
   });

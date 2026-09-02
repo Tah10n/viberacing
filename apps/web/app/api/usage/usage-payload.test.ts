@@ -4,6 +4,7 @@ import {
   entryCompletenessAccepted,
   parseSnapshots as parseVersionedSnapshots,
   parseSourceErrors,
+  rollingIncompleteDates,
 } from "./route";
 
 function today(): string {
@@ -14,6 +15,32 @@ const sourceId = "11111111-1111-4111-8111-111111111111";
 const parseSnapshots = (value: unknown) => parseVersionedSnapshots(value, 3);
 
 describe("usage payload privacy and numeric contract", () => {
+  it("keeps explicit complete days out of bounded mixed rolling gaps", () => {
+    const [snapshot] = parseVersionedSnapshots(
+      [
+        {
+          sourceId,
+          syncSequence: "1",
+          kind: "rolling",
+          rangeStart: "2026-08-15",
+          rangeEnd: "2026-08-18",
+          completeness: "partial",
+          entries: [
+            { date: "2026-08-15", totalTokens: "0", completeness: "complete" },
+            { date: "2026-08-16", totalTokens: "10", completeness: "complete" },
+            { date: "2026-08-18", totalTokens: "2", completeness: "partial" },
+          ],
+        },
+      ],
+      5,
+      new Date("2026-09-01T12:00:00.000Z"),
+    );
+    expect(snapshot).toBeDefined();
+    if (snapshot === undefined) throw new Error("mixed rolling snapshot was not parsed");
+    expect(rollingIncompleteDates(snapshot, "partial")).toEqual(["2026-08-17", "2026-08-18"]);
+    expect(rollingIncompleteDates(snapshot, "complete")).toEqual([]);
+  });
+
   it("allows bounded v5 current-year chunks while v4 remains rolling-only", () => {
     const now = new Date("2026-09-01T12:00:00.000Z");
     const januaryChunk = {

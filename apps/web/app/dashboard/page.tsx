@@ -91,7 +91,13 @@ interface SourceRow {
   last_completeness: "complete" | "partial" | null;
   last_rolling_range_start: string | null;
   last_rolling_range_end: string | null;
+  last_rolling_incomplete_dates: string[] | null;
   has_retained_usage: boolean;
+}
+
+interface AccountProvenDateRow {
+  agent_account_id: string;
+  usage_date: string;
 }
 
 interface CodexHookNoticeRow {
@@ -282,11 +288,17 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const today = utcToday(now);
   const periodTitle = usagePeriodTitle(period);
   const periodRange = usagePeriodRangeLabel(resolvedPeriod);
-  const currentYear = Number(today.slice(0, 4));
-  const [installations, accounts, sources, codexHookNotices, dedupEvents, dailyUsage] =
-    await Promise.all([
-      query<InstallationRow>(
-        `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
+  const [
+    installations,
+    accounts,
+    sources,
+    codexHookNotices,
+    dedupEvents,
+    dailyUsage,
+    accountProvenDates,
+  ] = await Promise.all([
+    query<InstallationRow>(
+      `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
               i.browser_sync_capable,
               i.browser_sync_protocol,
               i.protocol_version,
@@ -297,10 +309,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE i.user_id = $1 AND i.status = 'active'
         GROUP BY i.id
         ORDER BY i.created_at DESC`,
-        [current.id],
-      ),
-      query<AccountRow>(
-        `SELECT a.id::text,
+      [current.id],
+    ),
+    query<AccountRow>(
+      `SELECT a.id::text,
               a.agent_id,
               a.label,
               a.aggregation_mode,
@@ -473,15 +485,16 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         GROUP BY a.id, usage.tokens, usage.partial, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
-      ),
-      query<SourceRow>(
-        `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
+    ),
+    query<SourceRow>(
+      `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
               s.collection_method, s.supported_surface, s.status,
               s.history_backfill_year, s.history_backfill_status,
               s.last_completeness,
               s.last_rolling_range_start::text,
               s.last_rolling_range_end::text,
+              s.last_rolling_incomplete_dates::text[],
               EXISTS (
                 SELECT 1 FROM daily_usage retained
                  WHERE retained.source_id = s.id
@@ -490,10 +503,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
-        [current.id],
-      ),
-      query<CodexHookNoticeRow>(
-        `SELECT profile.id::text AS source_id,
+      [current.id],
+    ),
+    query<CodexHookNoticeRow>(
+      `SELECT profile.id::text AS source_id,
               installation.name AS installation_name
          FROM installation_sources profile
          JOIN installations installation ON installation.id = profile.installation_id
@@ -513,10 +526,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                    AND member.last_successful_sync_at IS NOT NULL
               )
         ORDER BY installation.created_at, profile.created_at`,
-        [current.id],
-      ),
-      query<DedupEventRow>(
-        `SELECT event.id::text,
+      [current.id],
+    ),
+    query<DedupEventRow>(
+      `SELECT event.id::text,
               event.agent_id,
               event.dismissed_at IS NOT NULL AS dismissed,
               event.matched_days,
@@ -530,52 +543,83 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE event.user_id = $1 AND event.status = 'active'
           AND source.agent_account_id = event.target_account_id
         ORDER BY event.created_at DESC`,
-        [current.id],
-      ),
-      query<DailyUsageRow>(
-        `SELECT usage_date::text, sum(tokens)::text AS tokens
+      [current.id],
+    ),
+    query<DailyUsageRow>(
+      `SELECT usage_date::text, sum(tokens)::text AS tokens
          FROM daily_agent_usage
         WHERE user_id = $1
           AND usage_date >= $2::date AND usage_date < $3::date
         GROUP BY usage_date
         ORDER BY usage_date`,
-        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
-      ),
-    ]);
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+    ),
+    query<AccountProvenDateRow>(
+      `SELECT candidate.agent_account_id::text, candidate.usage_date::text
+           FROM (
+             SELECT eligible.*,
+                    max(eligible.total_tokens) FILTER (WHERE eligible.account_max_selected)
+                      OVER (PARTITION BY eligible.agent_account_id, eligible.usage_date)
+                      AS maximum_total_tokens
+               FROM (
+                 SELECT precedence.*,
+                        ${accountMaxObservationIsEligibleSql} AS account_max_selected
+                   FROM (
+                     SELECT a.id AS agent_account_id,
+                            d.usage_date,
+                            d.total_tokens,
+                            d.completeness,
+                            d.updated_at,
+                            max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                              OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
+                       FROM agent_accounts a
+                       JOIN installation_sources s ON s.agent_account_id = a.id
+                       JOIN daily_usage d ON d.source_id = s.id
+                      WHERE a.user_id = $1
+                        AND a.merged_into_account_id IS NULL
+                        AND a.aggregation_mode = 'account_max'
+                        AND d.usage_date >= $2::date AND d.usage_date < $3::date
+                   ) precedence
+               ) eligible
+           ) candidate
+          WHERE candidate.account_max_selected
+            AND candidate.completeness = 'complete'
+            AND candidate.updated_at = candidate.latest_complete_at
+            AND candidate.total_tokens = candidate.maximum_total_tokens
+          GROUP BY candidate.agent_account_id, candidate.usage_date`,
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+    ),
+  ]);
   const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, dailyUsage);
   const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const provenDatesByAccount = new Map<string, Set<string>>();
+  for (const row of accountProvenDates) {
+    const dates = provenDatesByAccount.get(row.agent_account_id) ?? new Set<string>();
+    dates.add(row.usage_date);
+    provenDatesByAccount.set(row.agent_account_id, dates);
+  }
   const sourceIncomplete = (source: SourceRow): boolean =>
     sourcePeriodIncomplete(resolvedPeriod, today, {
       included: source.status === "active" || source.has_retained_usage,
+      aggregationMode: accountsById.get(source.agent_account_id)?.aggregation_mode ?? "source_sum",
       historyBackfillYear: source.history_backfill_year,
       historyBackfillStatus: source.history_backfill_status,
       lastCompleteness: source.last_completeness,
       lastRollingRangeStart: source.last_rolling_range_start,
       lastRollingRangeEnd: source.last_rolling_range_end,
+      lastRollingIncompleteDates: source.last_rolling_incomplete_dates,
+      provenAccountDates: provenDatesByAccount.get(source.agent_account_id) ?? new Set<string>(),
     });
   const incompleteAccountIds = new Set(
     sources.filter(sourceIncomplete).map((source) => source.agent_account_id),
   );
   const accountPeriodPartial = (account: AccountRow): boolean =>
     account.partial || incompleteAccountIds.has(account.id);
-  const rollingCoverageIncomplete = sources.some(
-    (source) =>
-      (source.status === "active" || source.has_retained_usage) &&
-      source.last_completeness === "partial" &&
-      source.last_rolling_range_start !== null &&
-      source.last_rolling_range_end !== null &&
-      source.last_rolling_range_start < resolvedPeriod.toExclusive &&
-      source.last_rolling_range_end >= resolvedPeriod.from,
-  );
-  const historyIncomplete = sources.some(
-    (source) =>
-      (source.status === "active" || source.has_retained_usage) &&
-      (source.history_backfill_year !== currentYear ||
-        source.history_backfill_status !== "complete"),
-  );
+  const historyIncomplete = sources.some(sourceIncomplete);
   const chartStatus = usageChartStatus(resolvedPeriod, today, {
     hasUsage: dailyUsage.length > 0,
-    hasPartialAccount: accounts.some(accountPeriodPartial) || rollingCoverageIncomplete,
+    hasPartialAccount: accounts.some(accountPeriodPartial),
     historyIncomplete,
   });
   const origin = publicOrigin().origin;

@@ -5016,6 +5016,8 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   );
   assert.equal(finalConfig.sources[0].historyBackfillYear, 2026);
   assert.equal(finalConfig.sources[0].historyBackfillStatus, "partial");
+  const compactedCapture = await readFile(installation.capture, "utf8");
+  for (const date of historicalDates) assert.doesNotMatch(compactedCapture, new RegExp(date));
 });
 
 test("sync --full explicitly and idempotently retries terminal partial history", async (context) => {
@@ -5094,7 +5096,7 @@ test("sync --full explicitly and idempotently retries terminal partial history",
     secondRetryHistory
       .flatMap((snapshot) => snapshot.entries)
       .filter((entry) => entry.date === oldDate).length,
-    1,
+    0,
   );
   assert.equal(storedDays.get(`${installation.sourceId}:${oldDate}`), "8");
   assert.equal(
@@ -5103,6 +5105,131 @@ test("sync --full explicitly and idempotently retries terminal partial history",
   );
   state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
   assert.equal(state.historyRetries?.[installation.sourceId], undefined);
+  assert.doesNotMatch(await readFile(installation.capture, "utf8"), new RegExp(oldDate));
+});
+
+test("unsafe Antigravity history retains capture until a repaired full retry is acknowledged", async (context) => {
+  const receivedDates = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      receivedDates.push(
+        ...(body.snapshots ?? []).flatMap((snapshot) =>
+          snapshot.entries.map((entry) => entry.date),
+        ),
+      );
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-unsafe-history-retention-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: [
+      {
+        id: "safe-recent",
+        date: "2026-09-01",
+        usage: { date: "2026-09-01", totalTokens: "3" },
+      },
+      {
+        id: "safe-old",
+        date: "2026-01-15",
+        usage: { date: "2026-01-15", totalTokens: "5" },
+      },
+    ],
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  });
+  await writeFile(
+    installation.capture,
+    `${await readFile(installation.capture, "utf8")}{"id":"repaired-old","date":"2026-01-16","usage":`,
+  );
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.match(await readFile(installation.capture, "utf8"), /2026-01-15/);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.captureCompactionPending?.[installation.sourceId], undefined);
+
+  await writeFile(
+    installation.capture,
+    [
+      { id: "safe-recent", date: "2026-09-01", usage: { date: "2026-09-01", totalTokens: "3" } },
+      { id: "safe-old", date: "2026-01-15", usage: { date: "2026-01-15", totalTokens: "5" } },
+      { id: "repaired-old", date: "2026-01-16", usage: { date: "2026-01-16", totalTokens: "7" } },
+    ]
+      .map((event) => JSON.stringify(event))
+      .join("\n") + "\n",
+  );
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], { env: environment });
+  assert.ok(receivedDates.includes("2026-01-16"));
+  const compacted = await readFile(installation.capture, "utf8");
+  assert.doesNotMatch(compacted, /2026-01-15|2026-01-16/);
+  assert.match(compacted, /2026-09-01/);
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.captureCompactionPending?.[installation.sourceId], undefined);
+});
+
+test("terminal acknowledgement leaves crash-resumable Antigravity compaction", async (context) => {
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-history-compaction-crash-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: [
+      { id: "recent", date: "2026-09-01", usage: { date: "2026-09-01", totalTokens: "2" } },
+      { id: "old", date: "2026-01-15", usage: { date: "2026-01-15", totalTokens: "9" } },
+    ],
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+  });
+  const crashingEnvironment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    VIBERACING_TEST_FAIL_AFTER_HISTORY_ACK: installation.sourceId,
+  });
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], { env: crashingEnvironment }),
+  );
+  assert.match(await readFile(installation.capture, "utf8"), /2026-01-15/);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.captureCompactionPending?.[installation.sourceId], 2026);
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    }),
+  });
+  assert.doesNotMatch(await readFile(installation.capture, "utf8"), /2026-01-15/);
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.captureCompactionPending?.[installation.sourceId], undefined);
 });
 
 test("a rejected historical chunk is quarantined once per manual run without advancing its cursor", async (context) => {

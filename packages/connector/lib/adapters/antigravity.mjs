@@ -107,6 +107,7 @@ export const antigravityAdapter = Object.freeze({
     );
     return {
       ...result,
+      retentionSafe: result.completeness === "complete",
       completeness: context.historical ? "partial" : result.completeness,
       nextState: { ...result.nextState, parserVersion: antigravityParserVersion },
     };

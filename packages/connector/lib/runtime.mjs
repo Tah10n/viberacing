@@ -85,14 +85,32 @@ function validHistoryState(value) {
         cursor !== null &&
         typeof cursor === "object" &&
         !Array.isArray(cursor) &&
-        JSON.stringify(Object.keys(cursor).sort()) ===
-          JSON.stringify(["hadPartialChunk", "nextRangeEnd", "year"]) &&
+        [
+          "hadPartialChunk,nextRangeEnd,year",
+          "hadPartialChunk,nextRangeEnd,retentionSafe,year",
+        ].includes(Object.keys(cursor).sort().join(",")) &&
         Number.isSafeInteger(cursor.year) &&
         cursor.year >= 1970 &&
         cursor.year <= 9999 &&
         dayPattern.test(cursor.nextRangeEnd ?? "") &&
         cursor.nextRangeEnd.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
-        typeof cursor.hadPartialChunk === "boolean",
+        typeof cursor.hadPartialChunk === "boolean" &&
+        (cursor.retentionSafe === undefined || typeof cursor.retentionSafe === "boolean"),
+    )
+  );
+}
+
+function validCaptureCompactionPending(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, year]) =>
+        sourceIdPattern.test(sourceId) &&
+        Number.isSafeInteger(year) &&
+        year >= 1970 &&
+        year <= 9999,
     )
   );
 }
@@ -143,6 +161,11 @@ function normalizedRuntimeState(value) {
     throw new Error("Connector runtime history state is invalid");
   if (value.historyRetries !== undefined && !validHistoryRetries(value.historyRetries))
     throw new Error("Connector runtime history retry state is invalid");
+  if (
+    value.captureCompactionPending !== undefined &&
+    !validCaptureCompactionPending(value.captureCompactionPending)
+  )
+    throw new Error("Connector runtime capture compaction state is invalid");
   return { ...value, version: runtimeStateVersion, sequences: { ...value.sequences } };
 }
 

@@ -3249,6 +3249,7 @@ test("Antigravity historical capture stays partial even when every retained reco
   );
 
   assert.equal(result.completeness, "partial");
+  assert.equal(result.retentionSafe, true);
   assert.equal(result.entries.length, 1);
 });
 
@@ -4955,6 +4956,7 @@ test("collector limits are explicit partial results with diagnostics", async () 
   const result = await adapter.collect(source, undefined, {});
   const diagnostic = await adapter.diagnose(source);
   assert.equal(result.completeness, "partial");
+  assert.equal(result.retentionSafe, false);
   assert.deepEqual(result.warnings, ["collector_limits_or_unreadable_files"]);
   assert.equal(diagnostic.dataLocationAvailable, false);
   assert.deepEqual(diagnostic.excluded, ["Antigravity Desktop usage"]);

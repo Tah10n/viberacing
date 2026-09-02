@@ -1349,7 +1349,7 @@ function historyRangeEndingAt(rangeEnd, year) {
   return { rangeStart: firstCandidate < yearStart ? yearStart : firstCandidate, rangeEnd };
 }
 
-function historySnapshotState(sourceId, range, completeness, state, kind) {
+function historySnapshotState(sourceId, range, completeness, state, kind, retentionSafe = false) {
   const year = Number(range.rangeEnd.slice(0, 4));
   const yearStart = historyYearStart(year);
   if (kind === "rolling") {
@@ -1362,6 +1362,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind) {
         year,
         nextRangeEnd: null,
         hadPartialChunk: completeness === "partial",
+        retentionSafe,
         terminalStatus: completeness,
       },
     };
@@ -1370,6 +1371,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind) {
   if (cursor?.year !== year || cursor.nextRangeEnd !== range.rangeEnd)
     throw new Error("Current-year history cursor changed during collection");
   const hadPartialChunk = cursor.hadPartialChunk || completeness === "partial";
+  const historyRetentionSafe = cursor.retentionSafe === true && retentionSafe;
   const terminalStatus =
     range.rangeStart === yearStart ? (hadPartialChunk ? "partial" : "complete") : null;
   return {
@@ -1379,6 +1381,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind) {
       year,
       nextRangeEnd: terminalStatus === null ? addUtcDays(range.rangeStart, -1) : null,
       hadPartialChunk,
+      retentionSafe: historyRetentionSafe,
       terminalStatus,
     },
   };
@@ -1489,6 +1492,7 @@ async function forgetSourceState(sourceIds) {
   state.history ??= {};
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
+  state.captureCompactionPending ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
   state.collectionWarnings ??= {};
@@ -1498,6 +1502,7 @@ async function forgetSourceState(sourceIds) {
     delete state.history[sourceId];
     delete state.historyAdapters[sourceId];
     delete state.historyRetries[sourceId];
+    delete state.captureCompactionPending[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
     delete state.collectionWarnings[sourceId];
@@ -1620,20 +1625,24 @@ async function reconcileRemoteSources(config, remoteSources, options = {}) {
   if (retired.length > 0) await retireMappedSources(config, retired, options);
 }
 
-async function compactSuccessfulCaptures(config) {
+async function compactPendingCaptures(config) {
   const state = await readState();
+  state.captureCompactionPending ??= {};
   const pending = new Set(
     (await pendingPayloads()).map((path) => path.split(/[\\/]/).at(-1)?.split(".")[0]),
   );
   for (const source of config.sources) {
     if (
+      state.captureCompactionPending[source.sourceId] === undefined ||
       source.collectionMethod !== "antigravity_cli_capture" ||
       typeof source.dataPath !== "string" ||
       pending.has(source.sourceId) ||
       state.quarantine?.[source.sourceId]
     )
       continue;
-    await compactCapture(source.dataPath);
+    await compactCapture(source.dataPath, connectorNow());
+    delete state.captureCompactionPending[source.sourceId];
+    await writeState(state);
   }
 }
 
@@ -1721,6 +1730,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       year,
       nextRangeEnd: firstHistoricalEnd,
       hadPartialChunk: false,
+      retentionSafe: true,
     };
     delete state.historyAdapters[source.sourceId];
     changed = true;
@@ -1754,6 +1764,7 @@ function prepareFullHistoryRetries(config, state, now = connectorNow()) {
         year,
         nextRangeEnd: firstHistoricalEnd,
         hadPartialChunk: false,
+        retentionSafe: true,
       };
       delete state.historyAdapters[source.sourceId];
       changed = true;
@@ -1903,15 +1914,18 @@ function validatedHistoryAdvance(payload, sourceId) {
         advance.nextRangeEnd.startsWith(`${String(advance.year).padStart(4, "0")}-`))
     ) ||
     typeof advance.hadPartialChunk !== "boolean" ||
+    (advance.retentionSafe !== undefined && typeof advance.retentionSafe !== "boolean") ||
     !(
       advance.terminalStatus === null || ["complete", "partial"].includes(advance.terminalStatus)
     ) ||
     (advance.nextRangeEnd === null) !== (advance.terminalStatus !== null) ||
-    JSON.stringify(Object.keys(advance).sort()) !==
-      JSON.stringify(["hadPartialChunk", "nextRangeEnd", "sourceId", "terminalStatus", "year"])
+    ![
+      "hadPartialChunk,nextRangeEnd,sourceId,terminalStatus,year",
+      "hadPartialChunk,nextRangeEnd,retentionSafe,sourceId,terminalStatus,year",
+    ].includes(Object.keys(advance).sort().join(","))
   )
     throw new Error("Pending history advancement state is invalid");
-  return advance;
+  return { ...advance, retentionSafe: advance.retentionSafe === true };
 }
 
 async function applyHistoryAdvance(config, item) {
@@ -1921,11 +1935,13 @@ async function applyHistoryAdvance(config, item) {
   state.history ??= {};
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
+  state.captureCompactionPending ??= {};
   if (advance.terminalStatus === null) {
     state.history[item.sourceId] = {
       year: advance.year,
       nextRangeEnd: advance.nextRangeEnd,
       hadPartialChunk: advance.hadPartialChunk,
+      retentionSafe: advance.retentionSafe,
     };
     delete state.historyAdapters[item.sourceId];
   } else {
@@ -1936,10 +1952,18 @@ async function applyHistoryAdvance(config, item) {
     if (source) {
       source.historyBackfillYear = advance.year;
       source.historyBackfillStatus = advance.terminalStatus;
+      if (source.collectionMethod === "antigravity_cli_capture" && advance.retentionSafe)
+        state.captureCompactionPending[item.sourceId] = advance.year;
     }
   }
   await writeState(state);
   if (advance.terminalStatus !== null) await writeConfig(config);
+  if (
+    advance.terminalStatus !== null &&
+    process.env.NODE_ENV === "test" &&
+    process.env.VIBERACING_TEST_FAIL_AFTER_HISTORY_ACK === item.sourceId
+  )
+    throw new Error("synthetic failure after terminal history acknowledgement");
 }
 
 async function deliverPendingGroup(config, items, retired) {
@@ -1995,8 +2019,8 @@ async function deliverPendingGroup(config, items, retired) {
         await writeState(state);
         staleSources.push(item.sourceId);
       } else {
-        await removePending(item.path);
         if (snapshot) await applyHistoryAdvance(config, item);
+        await removePending(item.path);
         if (snapshot?.kind === "year_backfill") historyDeliveries += 1;
         if (snapshot && sequenceStatus?.accepted !== false) {
           snapshotDeliveries += 1;
@@ -2355,6 +2379,7 @@ async function syncRange(providedConfig, options = {}) {
       const requestedSourceIds = Array.isArray(options.sourceIds)
         ? new Set(options.sourceIds)
         : undefined;
+      await compactPendingCaptures(config);
       await applyDurablePendingRegistrationSupersessions();
       const previous = await drainPending(config, true, requestedSourceIds);
       let accepted = previous.accepted;
@@ -2676,6 +2701,7 @@ async function syncRange(providedConfig, options = {}) {
           outcome.value.result.completeness,
           state,
           snapshotKind,
+          outcome.value.result.retentionSafe === true,
         );
         snapshots.push({
           sourceId: activeSource.sourceId,
@@ -2712,6 +2738,7 @@ async function syncRange(providedConfig, options = {}) {
           pending.completeness,
           state,
           snapshotKind,
+          false,
         );
         snapshots.push({
           sourceId: source.sourceId,
@@ -2921,16 +2948,7 @@ async function sync(providedConfig, options = {}) {
   }
 
   const finalConfig = providedConfig ?? (await readConfig());
-  const terminalCaptureSources = finalConfig.sources.filter(
-    (source) =>
-      source.collectionMethod === "antigravity_cli_capture" &&
-      (allowed === null || allowed.has(source.sourceId)) &&
-      !failedHistorySourceIds.has(source.sourceId) &&
-      source.historyBackfillYear === currentHistoryYear() &&
-      source.historyBackfillStatus === "complete",
-  );
-  if (terminalCaptureSources.length > 0)
-    await compactSuccessfulCaptures({ ...finalConfig, sources: terminalCaptureSources });
+  await compactPendingCaptures(finalConfig);
 
   return {
     ...rolling,

@@ -7,11 +7,14 @@ const now = new Date("2026-09-01T12:00:00.000Z");
 describe("dashboard history coverage", () => {
   const completeSource = {
     included: true,
+    aggregationMode: "source_sum" as const,
     historyBackfillYear: 2026,
     historyBackfillStatus: "complete" as const,
     lastCompleteness: "complete" as const,
     lastRollingRangeStart: "2026-08-02",
     lastRollingRangeEnd: "2026-09-01",
+    lastRollingIncompleteDates: [] as string[],
+    provenAccountDates: new Set<string>(),
   };
 
   it("keeps a rolling-covered month complete while January history is pending", () => {
@@ -54,6 +57,7 @@ describe("dashboard history coverage", () => {
       sourcePeriodIncomplete(selected, "2026-09-01", {
         ...completeSource,
         lastCompleteness: "partial",
+        lastRollingIncompleteDates: ["2026-08-15"],
       }),
     ).toBe(true);
   });
@@ -76,6 +80,62 @@ describe("dashboard history coverage", () => {
       { kind: "custom", from: "2026-08-15", to: "2026-08-15" },
       now,
     );
-    expect(sourcePeriodIncomplete(selected, "2026-09-01", completeSource)).toBe(false);
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        lastCompleteness: "partial",
+        lastRollingIncompleteDates: ["2026-08-16"],
+      }),
+    ).toBe(false);
+  });
+
+  it("uses per-day mixed rolling coverage instead of the whole partial range", () => {
+    const selected = (from: string) => resolveUsagePeriod({ kind: "custom", from, to: from }, now);
+    const mixed = {
+      ...completeSource,
+      lastCompleteness: "partial" as const,
+      lastRollingIncompleteDates: ["2026-08-17", "2026-08-18"],
+    };
+    expect(sourcePeriodIncomplete(selected("2026-08-15"), "2026-09-01", mixed)).toBe(false);
+    expect(sourcePeriodIncomplete(selected("2026-08-16"), "2026-09-01", mixed)).toBe(false);
+    expect(sourcePeriodIncomplete(selected("2026-08-17"), "2026-09-01", mixed)).toBe(true);
+    expect(sourcePeriodIncomplete(selected("2026-08-18"), "2026-09-01", mixed)).toBe(true);
+  });
+
+  it("lets an account-wide authoritative observation prove a partial sibling day", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-17", to: "2026-08-17" },
+      now,
+    );
+    const partial = {
+      ...completeSource,
+      aggregationMode: "account_max" as const,
+      lastCompleteness: "partial" as const,
+      lastRollingIncompleteDates: ["2026-08-17"],
+      provenAccountDates: new Set(["2026-08-17"]),
+    };
+    expect(sourcePeriodIncomplete(selected, "2026-09-01", partial)).toBe(false);
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...partial,
+        aggregationMode: "source_sum",
+      }),
+    ).toBe(true);
+  });
+
+  it("treats legacy partial rolling metadata as conservatively incomplete", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-15", to: "2026-08-15" },
+      now,
+    );
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        lastCompleteness: "partial",
+        lastRollingRangeStart: null,
+        lastRollingRangeEnd: null,
+        lastRollingIncompleteDates: null,
+      }),
+    ).toBe(true);
   });
 });
