@@ -138,6 +138,68 @@ async function verifyExpandMigrationCompatibility() {
         legacyCoverage.rows[0]?.current_day_unresolved === (usageDate !== today),
       "migration 010 trusted legacy disconnected partial coverage as no-data",
     );
+
+    const postMigrationPartialSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old post-migration Codex',
+               'codex_app_server', 'cli', 'active')`,
+      [postMigrationPartialSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial'
+        WHERE id = $1`,
+      [postMigrationPartialSourceId],
+    );
+    await client.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      postMigrationPartialSourceId,
+    ]);
+    const postMigrationCoverage = await client.query(
+      `SELECT status,
+              last_rolling_range_start::text AS range_start,
+              last_rolling_range_end::text AS range_end,
+              cardinality(unresolved_usage_dates) AS unresolved_days,
+              (last_rolling_range_end - last_rolling_range_start + 1) AS covered_days
+         FROM installation_sources
+        WHERE id = $1`,
+      [postMigrationPartialSourceId],
+    );
+    check(
+      postMigrationCoverage.rows[0]?.status === "disconnected" &&
+        postMigrationCoverage.rows[0]?.range_end === today &&
+        postMigrationCoverage.rows[0]?.unresolved_days ===
+          postMigrationCoverage.rows[0]?.covered_days,
+      "migration 010 lost a post-migration old-release partial/disconnect write",
+    );
+
+    const priorYearPartialSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status,
+          last_successful_sync_at, last_completeness)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old prior-year Codex',
+               'codex_app_server', 'cli', 'disconnected',
+               date_trunc('year', CURRENT_DATE) - interval '1 day', 'partial')`,
+      [priorYearPartialSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    const priorYearCoverage = await client.query(
+      `SELECT last_rolling_range_start, last_rolling_range_end,
+              cardinality(unresolved_usage_dates) AS unresolved_days
+         FROM installation_sources
+        WHERE id = $1`,
+      [priorYearPartialSourceId],
+    );
+    check(
+      priorYearCoverage.rows[0]?.last_rolling_range_start === null &&
+        priorYearCoverage.rows[0]?.last_rolling_range_end === null &&
+        priorYearCoverage.rows[0]?.unresolved_days === 0,
+      "migration 010 marked a prior-year disconnected partial source as current-year partial",
+    );
     const oldRead = await client.query(
       `SELECT coalesce(sum(tokens), 0)::text AS tokens
          FROM weekly_agent_usage
@@ -1638,6 +1700,46 @@ try {
       },
     )}`,
   );
+  const legacyRaceAccountId = randomUUID();
+  const legacyRaceSourceId = randomUUID();
+  await pool.query(
+    `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+     VALUES ($1, $2, 'gemini_cli', 'Legacy rollout race', 'source_sum')`,
+    [legacyRaceAccountId, userId],
+  );
+  await pool.query(
+    `INSERT INTO installation_sources
+       (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+        suggested_label, collection_method, supported_surface, status)
+     VALUES ($1, $2, $3, $4, $5, 'gemini_cli', 'Legacy rollout race',
+             'gemini_session_json', 'cli', 'active')`,
+    [legacyRaceSourceId, coverageInstallation.id, userId, legacyRaceAccountId, randomUUID()],
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET last_successful_sync_at = now(), last_completeness = 'partial'
+      WHERE id = $1`,
+    [legacyRaceSourceId],
+  );
+  await pool.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+    legacyRaceSourceId,
+  ]);
+  const legacyRaceDashboard = await authenticatedGet(
+    `/dashboard?period=custom&from=${today}&to=${today}`,
+  );
+  const legacyRaceHtml = await legacyRaceDashboard.text();
+  const legacyRaceStart = legacyRaceHtml.indexOf("<h3>Gemini CLI · Legacy rollout race</h3>");
+  const legacyRaceEnd = legacyRaceHtml.indexOf("</article>", legacyRaceStart);
+  const legacyRaceAccountHtml = legacyRaceHtml.slice(legacyRaceStart, legacyRaceEnd);
+  check(
+    legacyRaceDashboard.status === 200 &&
+      legacyRaceStart >= 0 &&
+      legacyRaceEnd > legacyRaceStart &&
+      legacyRaceAccountHtml.includes("Partial") &&
+      !legacyRaceAccountHtml.includes("No data"),
+    "migration 010 -> old partial/disconnect -> new dashboard did not remain Partial",
+  );
+  await pool.query("DELETE FROM agent_accounts WHERE id = $1", [legacyRaceAccountId]);
   const coverageDeletion = await form("/api/accounts/delete", {
     accountId: coverageSource.agentAccountId,
     confirm: "delete",

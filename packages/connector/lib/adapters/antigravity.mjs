@@ -3,6 +3,7 @@ import {
   componentEntry,
   dayPattern,
   diagnosePath,
+  historyRetryGenerationForPath,
   mergeEntries,
   parserResult,
   utcDay,
@@ -95,6 +96,7 @@ export const antigravityAdapter = Object.freeze({
   trigger: "viberacing run antigravity",
   defaultPaths: [],
   detect: async () => [],
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: async (source, range, state = {}, context = {}) => {
     const result = await collectCaptureJsonl(
       source,

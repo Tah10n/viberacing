@@ -215,6 +215,18 @@ function validHistoryGapAttempts(value) {
   );
 }
 
+function validHistoryRetryGenerations(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, generation]) =>
+        sourceIdPattern.test(sourceId) && sha256Pattern.test(generation ?? ""),
+    )
+  );
+}
+
 function normalizedRuntimeState(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("Connector runtime state is unsupported");
@@ -248,6 +260,11 @@ function normalizedRuntimeState(value) {
     throw new Error("Connector runtime history retry state is invalid");
   if (value.historyGapAttempts !== undefined && !validHistoryGapAttempts(value.historyGapAttempts))
     throw new Error("Connector runtime history gap attempt state is invalid");
+  if (
+    value.historyRetryGenerations !== undefined &&
+    !validHistoryRetryGenerations(value.historyRetryGenerations)
+  )
+    throw new Error("Connector runtime history retry generation state is invalid");
   if (
     value.captureCompactionPending !== undefined &&
     !validCaptureCompactionPending(value.captureCompactionPending)

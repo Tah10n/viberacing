@@ -1504,6 +1504,7 @@ async function forgetSourceState(sourceIds) {
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
   state.historyGapAttempts ??= {};
+  state.historyRetryGenerations ??= {};
   state.captureCompactionPending ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
@@ -1515,6 +1516,7 @@ async function forgetSourceState(sourceIds) {
     delete state.historyAdapters[sourceId];
     delete state.historyRetries[sourceId];
     delete state.historyGapAttempts[sourceId];
+    delete state.historyRetryGenerations[sourceId];
     delete state.captureCompactionPending[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
@@ -1641,6 +1643,8 @@ async function reconcileRemoteSources(config, remoteSources, options = {}) {
 async function compactPendingCaptures(config) {
   const state = await readState();
   state.captureCompactionPending ??= {};
+  state.historyRetryGenerations ??= {};
+  state.historyGapAttempts ??= {};
   const pending = new Set(
     (await pendingPayloads()).map((path) => path.split(/[\\/]/).at(-1)?.split(".")[0]),
   );
@@ -1682,6 +1686,16 @@ async function compactPendingCaptures(config) {
       if (["compacted", "already-compacted"].includes(result.status)) {
         if (result.retainedProof === null) delete state.captureCompactionPending[source.sourceId];
         else state.captureCompactionPending[source.sourceId] = result.retainedProof;
+        const generation = await adapterFor(source.agentId).historyRetryGeneration(source);
+        state.historyRetryGenerations[source.sourceId] = generation;
+        const compaction = result.compactionResult ?? proof.compactionResult;
+        const hasUnacknowledgedSuffix =
+          compaction !== undefined && compaction.safeOffset > compaction.proofSafeOffset;
+        if (
+          !hasUnacknowledgedSuffix &&
+          state.historyGapAttempts[source.sourceId]?.result === "partial"
+        )
+          state.historyGapAttempts[source.sourceId].localGeneration = generation;
         await writeState(state);
       } else if (result.status === "invalid") {
         delete state.captureCompactionPending[source.sourceId];
@@ -1814,6 +1828,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
   state.historyGapAttempts ??= {};
+  state.historyRetryGenerations ??= {};
   const configured = new Set(config.sources.map((source) => source.sourceId));
   let changed = false;
   for (const sourceId of Object.keys(state.history))
@@ -1822,6 +1837,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       delete state.historyAdapters[sourceId];
       delete state.historyRetries[sourceId];
       delete state.historyGapAttempts[sourceId];
+      delete state.historyRetryGenerations[sourceId];
       changed = true;
     }
   for (const sourceId of Object.keys(state.historyRetries))
@@ -1832,6 +1848,11 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
   for (const sourceId of Object.keys(state.historyGapAttempts))
     if (!configured.has(sourceId) || state.historyGapAttempts[sourceId].year !== year) {
       delete state.historyGapAttempts[sourceId];
+      changed = true;
+    }
+  for (const sourceId of Object.keys(state.historyRetryGenerations))
+    if (!configured.has(sourceId)) {
+      delete state.historyRetryGenerations[sourceId];
       changed = true;
     }
   for (const source of config.sources) {
@@ -1945,7 +1966,7 @@ function historyCursorMode(state, sourceId, cursor) {
 }
 
 function historyGapGeneration(state, sourceId) {
-  return fingerprint(state.adapters?.[sourceId] ?? null);
+  return state.historyRetryGenerations?.[sourceId] ?? fingerprint({ unavailable: true });
 }
 
 function prepareFullHistoryRetries(config, state, now = connectorNow()) {
@@ -1960,15 +1981,16 @@ function prepareFullHistoryRetries(config, state, now = connectorNow()) {
   let changed = false;
   for (const source of config.sources) {
     if (typeof source.sourceId !== "string") continue;
-    if (state.historyRetries[source.sourceId] !== year) {
+    const current = state.history[source.sourceId];
+    const validActiveFullRetry =
+      state.historyRetries[source.sourceId] === year &&
+      current?.year === year &&
+      historyCursorMode(state, source.sourceId, current) === "full" &&
+      current.rangeStart === yearStart &&
+      current.nextRangeEnd >= yearStart &&
+      current.nextRangeEnd <= firstHistoricalEnd;
+    if (!validActiveFullRetry) {
       state.historyRetries[source.sourceId] = year;
-      changed = true;
-    }
-    if (
-      state.history[source.sourceId]?.year !== year ||
-      state.history[source.sourceId]?.rangeStart !== yearStart ||
-      state.history[source.sourceId]?.nextRangeEnd !== firstHistoricalEnd
-    ) {
       state.history[source.sourceId] = {
         mode: "full",
         year,
@@ -2635,6 +2657,7 @@ async function syncRange(providedConfig, options = {}) {
       const range = options.range ?? snapshotRange();
       state.adapters ??= {};
       state.historyAdapters ??= {};
+      state.historyRetryGenerations ??= {};
       state.fingerprints ??= {};
       state.collectionWarnings ??= {};
       const localSources = await readSources();
@@ -2756,6 +2779,8 @@ async function syncRange(providedConfig, options = {}) {
             suppressComponents: profileMembers.length > 1,
             historical: snapshotKind === "year_backfill",
           });
+          const historyRetryGeneration =
+            snapshotKind === "rolling" ? await adapter.historyRetryGeneration(source) : undefined;
           const binding = await bindCodexProviderAccount(
             task.physicalClientSourceId,
             result.providerAccountKey,
@@ -2809,6 +2834,7 @@ async function syncRange(providedConfig, options = {}) {
           return {
             source: activeSource,
             result,
+            historyRetryGeneration,
             inactiveSourceIds: task.requestedSources
               .filter((candidate) => candidate.clientSourceId !== activeSource.clientSourceId)
               .map((candidate) => candidate.sourceId),
@@ -2821,16 +2847,19 @@ async function syncRange(providedConfig, options = {}) {
               : null,
           };
         }
+        const result = await adapter.collect(
+          source,
+          range,
+          snapshotKind === "year_backfill"
+            ? (state.historyAdapters[source.sourceId] ?? {})
+            : (state.adapters[source.sourceId] ?? {}),
+          { historical: snapshotKind === "year_backfill" },
+        );
         return {
           source,
-          result: await adapter.collect(
-            source,
-            range,
-            snapshotKind === "year_backfill"
-              ? (state.historyAdapters[source.sourceId] ?? {})
-              : (state.adapters[source.sourceId] ?? {}),
-            { historical: snapshotKind === "year_backfill" },
-          ),
+          result,
+          historyRetryGeneration:
+            snapshotKind === "rolling" ? await adapter.historyRetryGeneration(source) : undefined,
           inactiveSourceIds: [],
           checkedClientSourceId: source.clientSourceId,
           accountSetupPending: false,
@@ -2906,6 +2935,10 @@ async function syncRange(providedConfig, options = {}) {
           state.historyAdapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
         else {
           state.adapters[activeSource.sourceId] = outcome.value.result.nextState ?? {};
+          if (!/^[0-9a-f]{64}$/.test(outcome.value.historyRetryGeneration ?? ""))
+            throw new Error("Adapter returned an invalid history retry generation");
+          state.historyRetryGenerations[activeSource.sourceId] =
+            outcome.value.historyRetryGeneration;
           reconcileDiagnosticPhase(
             state,
             activeSource.sourceId,
@@ -3147,7 +3180,15 @@ async function sync(providedConfig, options = {}) {
   let historyChunks = 0;
   let historyProgress = rolling?.historyProgress === true;
   const attemptedHistoryCycles = new Set();
-  const maximumHistoryChunks = options.automatic || options.browser ? 1 : Number.POSITIVE_INFINITY;
+  const testMaximumHistoryChunks =
+    process.env.NODE_ENV === "test" &&
+    /^(?:[1-9]|[1-9]\d)$/.test(process.env.VIBERACING_TEST_MAX_HISTORY_CHUNKS ?? "")
+      ? Number(process.env.VIBERACING_TEST_MAX_HISTORY_CHUNKS)
+      : null;
+  const maximumHistoryChunks =
+    options.automatic || options.browser
+      ? 1
+      : (testMaximumHistoryChunks ?? Number.POSITIVE_INFINITY);
   const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
 
   while (historyChunks < maximumHistoryChunks) {

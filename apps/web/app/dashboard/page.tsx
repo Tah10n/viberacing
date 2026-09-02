@@ -89,6 +89,7 @@ interface SourceRow {
   history_backfill_year: number | null;
   history_backfill_status: "pending" | "complete" | "partial";
   last_completeness: "complete" | "partial" | null;
+  last_successful_sync_date: string | null;
   last_rolling_range_start: string | null;
   last_rolling_range_end: string | null;
   unresolved_usage_dates: string[];
@@ -492,6 +493,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               s.collection_method, s.supported_surface, s.status,
               s.history_backfill_year, s.history_backfill_status,
               s.last_completeness,
+              (s.last_successful_sync_at AT TIME ZONE 'UTC')::date::text AS last_successful_sync_date,
               s.last_rolling_range_start::text,
               s.last_rolling_range_end::text,
               s.unresolved_usage_dates::text[],
@@ -605,12 +607,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         source.status === "active" ||
         source.has_retained_usage ||
         source.history_backfill_status === "partial" ||
-        source.unresolved_usage_dates.length > 0,
+        source.unresolved_usage_dates.length > 0 ||
+        (source.last_completeness === "partial" &&
+          source.last_rolling_range_start === null &&
+          source.last_rolling_range_end === null &&
+          source.last_successful_sync_date !== null &&
+          source.last_successful_sync_date >= `${today.slice(0, 4)}-01-01`),
       active: source.status === "active",
       aggregationMode: accountsById.get(source.agent_account_id)?.aggregation_mode ?? "source_sum",
       historyBackfillYear: source.history_backfill_year,
       historyBackfillStatus: source.history_backfill_status,
       lastCompleteness: source.last_completeness,
+      lastSuccessfulSyncDate: source.last_successful_sync_date,
       lastRollingRangeStart: source.last_rolling_range_start,
       lastRollingRangeEnd: source.last_rolling_range_end,
       unresolvedUsageDates: source.unresolved_usage_dates,

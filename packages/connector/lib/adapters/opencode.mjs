@@ -7,6 +7,7 @@ import {
   canonicalPathKey,
   componentEntry,
   diagnosePath,
+  historyRetryGenerationForFiles,
   mergeEntries,
   utcDay,
   validateObservedEventLedger,
@@ -412,6 +413,12 @@ export const openCodeAdapter = Object.freeze({
   trigger: "manual sync",
   defaultPaths,
   detect: detectOpenCodeSources,
+  historyRetryGeneration: (source) =>
+    historyRetryGenerationForFiles([
+      source.dataPath,
+      `${source.dataPath}-wal`,
+      `${source.dataPath}-shm`,
+    ]),
   collect,
   diagnose: async (source) => {
     const diagnostic = await diagnosePath(source);

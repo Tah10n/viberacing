@@ -365,6 +365,109 @@ export async function walk(root, suffixes, maximum = 2_000, maximumFileBytes = 2
   };
 }
 
+function historyRevisionHash(value) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function historyRevisionFile(file) {
+  return {
+    size: String(file.size),
+    modifiedAt: String(file.modifiedAt),
+    ino: String(file.ino),
+  };
+}
+
+// Retry eligibility must describe the physical source independently of the UTC range currently
+// being collected. Only bounded filesystem metadata is hashed: paths and file contents never enter
+// the persisted generation or leave the connector.
+export async function historyRetryGenerationForPath(
+  root,
+  suffixes,
+  maximum = 2_000,
+  maximumFileBytes = Number.MAX_SAFE_INTEGER,
+) {
+  try {
+    const info = await stat(root);
+    if (info.isFile())
+      return historyRevisionHash({
+        kind: "file",
+        files: [
+          historyRevisionFile({
+            size: info.size,
+            modifiedAt: info.mtimeMs,
+            ino: info.ino,
+          }),
+        ],
+      });
+  } catch (error) {
+    return historyRevisionHash({
+      kind: "unavailable",
+      reason: error?.code === "ENOENT" ? "missing" : "unreadable",
+    });
+  }
+  const discovered = await walk(root, suffixes, maximum, maximumFileBytes);
+  const files = discovered.files
+    .map(historyRevisionFile)
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  const issues = discovered.issues
+    .map((issue) => ({
+      kind: issue.kind ?? "unknown",
+      reason: issue.reason ?? "unknown",
+      ...(issue.size === undefined ? {} : { size: String(issue.size) }),
+      ...(issue.modifiedAt === undefined ? {} : { modifiedAt: String(issue.modifiedAt) }),
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return historyRevisionHash({
+    kind: "directory",
+    incomplete: discovered.incomplete,
+    files,
+    issues,
+  });
+}
+
+export async function historyRetryGenerationForFiles(paths) {
+  const files = [];
+  for (let slot = 0; slot < paths.length; slot += 1) {
+    try {
+      const info = await stat(paths[slot]);
+      files.push({
+        slot,
+        kind: info.isFile() ? "file" : info.isDirectory() ? "directory" : "other",
+        size: String(info.size),
+        modifiedAt: String(info.mtimeMs),
+        ino: String(info.ino),
+      });
+    } catch (error) {
+      files.push({
+        slot,
+        kind: "unavailable",
+        reason: error?.code === "ENOENT" ? "missing" : "unreadable",
+      });
+    }
+  }
+  return historyRevisionHash({ kind: "files", files });
+}
+
+export async function historyRetryGenerationForPaths(
+  paths,
+  suffixes,
+  maximum = 2_000,
+  maximumFileBytes = Number.MAX_SAFE_INTEGER,
+) {
+  const revisions = [];
+  for (let slot = 0; slot < paths.length; slot += 1)
+    revisions.push({
+      slot,
+      revision: await historyRetryGenerationForPath(
+        paths[slot],
+        suffixes,
+        maximum,
+        maximumFileBytes,
+      ),
+    });
+  return historyRevisionHash({ kind: "paths", revisions });
+}
+
 export async function jsonLinesChunk(path, start = 0, size) {
   if (size !== undefined && start >= size)
     return { lines: [], safeOffset: start, oversizedLines: 0, tail: "", tailBytes: 0 };

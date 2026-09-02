@@ -5,6 +5,7 @@ import {
   componentEntry,
   diagnosePath,
   findFile,
+  historyRetryGenerationForPath,
   jsonLinesChunk,
   mergeEntries,
   tailFingerprint,
@@ -285,6 +286,7 @@ export const claudeAdapter = Object.freeze({
   trigger: "Stop hook",
   defaultPaths: [defaultPath],
   detect: detectClaudeSources,
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: collectClaude,
   diagnose: (source) => diagnosePath(source),
 });

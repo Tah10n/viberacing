@@ -43,7 +43,9 @@ describe("readiness migration ledger", () => {
       expectedSchemaVersion,
     ]);
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("weekly_agent_usage_daily_compatibility"),
+      expect.stringMatching(
+        /weekly_agent_usage_daily_compatibility[\s\S]*installation_sources_legacy_partial_coverage/,
+      ),
       [expectedSchemaVersion],
     );
   });

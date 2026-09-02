@@ -9,6 +9,7 @@ interface SourceCoverage {
   readonly historyBackfillYear: number | null;
   readonly historyBackfillStatus: "pending" | "complete" | "partial";
   readonly lastCompleteness: "complete" | "partial" | null;
+  readonly lastSuccessfulSyncDate?: string | null;
   readonly lastRollingRangeStart: string | null;
   readonly lastRollingRangeEnd: string | null;
   readonly unresolvedUsageDates: readonly string[];
@@ -35,9 +36,18 @@ export function sourcePeriodIncomplete(
     source.unresolvedUsageDates.length === 0;
   let selectedIntersectsLegacyPartial = false;
   if (legacyPartialWithoutCoverage) {
+    const yearStart = `${rollingToday.slice(0, 4)}-01-01`;
+    const legacyEnd =
+      source.lastSuccessfulSyncDate === undefined || source.lastSuccessfulSyncDate === null
+        ? rollingToday
+        : source.lastSuccessfulSyncDate < rollingToday
+          ? source.lastSuccessfulSyncDate
+          : rollingToday;
+    const legacyStart =
+      addUtcDays(legacyEnd, -30) < yearStart ? yearStart : addUtcDays(legacyEnd, -30);
     for (
-      let date = resolved.from < rollingStart ? rollingStart : resolved.from;
-      date < resolved.toExclusive && date <= rollingToday;
+      let date = resolved.from < legacyStart ? legacyStart : resolved.from;
+      date < resolved.toExclusive && date <= legacyEnd && legacyEnd >= yearStart;
       date = addUtcDays(date, 1)
     )
       if (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date)) {

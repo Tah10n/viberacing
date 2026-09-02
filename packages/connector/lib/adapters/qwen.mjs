@@ -6,6 +6,7 @@ import {
   collectJsonl,
   componentEntry,
   diagnosePath,
+  historyRetryGenerationForPath,
   integer,
   mergeEntries,
   parserResult,
@@ -353,6 +354,7 @@ export const qwenAdapter = Object.freeze({
     return { hookConfigRoot };
   },
   detect: detectQwenSources,
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: async (source, range, state = {}) => {
     const result = await collectJsonl(
       source,

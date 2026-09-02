@@ -60,9 +60,14 @@ WITH legacy_partial AS (
                     (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date),
            (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
          ) AS range_end
-    FROM installation_sources source
+   FROM installation_sources source
    WHERE source.status IN ('active', 'disconnected')
      AND source.last_completeness = 'partial'
+     AND least(
+           coalesce((source.last_successful_sync_at AT TIME ZONE 'UTC')::date,
+                    (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date),
+           (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
+         ) >= date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
 ), legacy_coverage AS (
   SELECT partial.id,
          partial.range_start,
@@ -90,6 +95,59 @@ UPDATE installation_sources source
        unresolved_usage_dates = coverage.unresolved_dates
   FROM legacy_coverage coverage
  WHERE source.id = coverage.id;
+
+-- The old application may remain live briefly after migration 010 commits. Materialize the same
+-- conservative coverage when that release writes a partial result without the new columns, so a
+-- subsequent disconnect cannot turn the source into trusted no-data for the new dashboard.
+CREATE FUNCTION materialize_legacy_partial_source_coverage()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  utc_today date := (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date;
+  utc_year_start date := date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date;
+  coverage_end date;
+  coverage_start date;
+BEGIN
+  IF NEW.last_completeness IS DISTINCT FROM 'partial' THEN
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE'
+    AND (NEW.last_rolling_range_start IS DISTINCT FROM OLD.last_rolling_range_start
+      OR NEW.last_rolling_range_end IS DISTINCT FROM OLD.last_rolling_range_end
+      OR NEW.unresolved_usage_dates IS DISTINCT FROM OLD.unresolved_usage_dates) THEN
+    RETURN NEW;
+  END IF;
+
+  coverage_end := least(
+    coalesce((NEW.last_successful_sync_at AT TIME ZONE 'UTC')::date, utc_today),
+    utc_today
+  );
+  IF coverage_end < utc_year_start THEN
+    NEW.last_rolling_range_start := NULL;
+    NEW.last_rolling_range_end := NULL;
+    NEW.unresolved_usage_dates := '{}'::date[];
+    RETURN NEW;
+  END IF;
+  coverage_start := greatest(utc_year_start, coverage_end - 30);
+  NEW.last_rolling_range_start := coverage_start;
+  NEW.last_rolling_range_end := coverage_end;
+  SELECT coalesce(array_agg(day.value::date ORDER BY day.value) FILTER (
+           WHERE NOT EXISTS (
+             SELECT 1
+               FROM daily_usage usage
+              WHERE usage.source_id = NEW.id
+                AND usage.usage_date = day.value::date
+                AND usage.completeness = 'complete'
+           )
+         ), '{}'::date[])
+    INTO NEW.unresolved_usage_dates
+    FROM generate_series(coverage_start, coverage_end, interval '1 day') AS day(value);
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER installation_sources_legacy_partial_coverage
+BEFORE INSERT OR UPDATE ON installation_sources
+FOR EACH ROW EXECUTE FUNCTION materialize_legacy_partial_source_coverage();
 
 -- Migration 010 is the expand half of an expand-contract rollout. The previous application release
 -- still reads and writes weekly_agent_usage while Railway runs this migration before switching

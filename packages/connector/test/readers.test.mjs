@@ -3390,10 +3390,57 @@ test("all seven adapters expose the complete collection contract", () => {
   for (const adapter of adapters) {
     assert.equal(typeof adapter.detect, "function");
     assert.equal(typeof adapter.collect, "function");
+    assert.equal(typeof adapter.historyRetryGeneration, "function");
     assert.equal(typeof adapter.diagnose, "function");
     assert.ok(adapter.supportedSurfaces.length > 0);
     assert.ok(adapter.collectionMethods.length > 0);
   }
+});
+
+test("history retry generation ignores collection ranges and changes with historical files", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-history-generation-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "capture.jsonl");
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      id: "old-event",
+      date: "2026-01-10",
+      usage: { date: "2026-01-10", totalTokens: "2" },
+    })}\n`,
+  );
+  const adapter = adapterFor("antigravity");
+  const source = { dataPath: path, collectionMethod: "antigravity_cli_capture" };
+  const before = await adapter.historyRetryGeneration(source);
+  await adapter.collect(source, { rangeStart: "2026-08-02", rangeEnd: "2026-09-01" }, {});
+  const afterRangeCollection = await adapter.historyRetryGeneration(source);
+  assert.equal(afterRangeCollection, before);
+
+  await appendFile(
+    path,
+    `${JSON.stringify({
+      id: "repaired-old-event",
+      date: "2026-01-11",
+      usage: { date: "2026-01-11", totalTokens: "3" },
+    })}\n`,
+  );
+  assert.notEqual(await adapter.historyRetryGeneration(source), before);
+});
+
+test("OpenCode history retry generation covers the database, WAL, and SHM", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-generation-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  await writeFile(path, "database");
+  const adapter = adapterFor("opencode");
+  const source = { dataPath: path, collectionMethod: "opencode_sqlite" };
+  const databaseOnly = await adapter.historyRetryGeneration(source);
+  await writeFile(`${path}-wal`, "wal");
+  const withWal = await adapter.historyRetryGeneration(source);
+  await writeFile(`${path}-shm`, "shm");
+  const withShm = await adapter.historyRetryGeneration(source);
+  assert.notEqual(withWal, databaseOnly);
+  assert.notEqual(withShm, withWal);
 });
 
 test("malformed records never become usage", () => {

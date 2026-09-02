@@ -14,6 +14,7 @@ import {
 import { diagnosticError } from "../diagnostics.mjs";
 import {
   componentEntry,
+  historyRetryGenerationForPaths,
   integer,
   jsonLinesChunk,
   mergeEntries,
@@ -1641,6 +1642,12 @@ export const codexAdapter = Object.freeze({
       },
     ];
   },
+  historyRetryGeneration: (source) =>
+    historyRetryGenerationForPaths(
+      [join(source.dataPath, "sessions"), join(source.dataPath, "archived_sessions")],
+      [".jsonl", ".jsonl.zst"],
+      10_000,
+    ),
   collect,
   diagnose: async (source) => {
     try {

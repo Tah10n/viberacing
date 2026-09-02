@@ -65,6 +65,12 @@ async function get(): Promise<Response> {
                     FROM pg_trigger
                    WHERE tgname = 'weekly_agent_usage_daily_compatibility'
                      AND NOT tgisinternal
+                )
+                AND EXISTS (
+                  SELECT 1
+                    FROM pg_trigger
+                   WHERE tgname = 'installation_sources_legacy_partial_coverage'
+                     AND NOT tgisinternal
                 ) AS required_tables`,
       [expectedSchemaVersion],
     );

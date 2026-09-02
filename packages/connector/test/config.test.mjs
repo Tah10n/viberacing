@@ -5320,27 +5320,172 @@ test("sync --full keeps its January cursor when a server gap closes mid-run", as
   assert.equal(state.history?.[installation.sourceId], undefined);
 });
 
-test("manual Sync terminates persistent 46, 70, and 120 day gap cycles", async (context) => {
+test("sync --full resumes its saved cursor across processes and ordinary Sync leaves it alone", async (context) => {
   const bodies = [];
-  let gapStart;
-  let gapEnd;
-  const previousDay = (date) => {
-    const value = new Date(`${date}T00:00:00.000Z`);
-    value.setUTCDate(value.getUTCDate() - 1);
-    return value.toISOString().slice(0, 10);
-  };
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
     request.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       bodies.push(body);
-      for (const snapshot of body.snapshots ?? []) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-full-process-resume-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  });
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+  });
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], {
+    env: { ...environment, VIBERACING_TEST_MAX_HISTORY_CHUNKS: "1" },
+  });
+  const firstHistory = bodies
+    .flatMap((body) => body.snapshots ?? [])
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.equal(firstHistory.length, 1);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  const savedCursor = state.history[installation.sourceId];
+  assert.equal(savedCursor.mode, "full");
+  assert.equal(state.historyRetries[installation.sourceId], 2026);
+  assert.ok(savedCursor.nextRangeEnd < firstHistory[0].rangeStart);
+
+  const ordinaryStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(
+    bodies
+      .slice(ordinaryStart)
+      .flatMap((body) => body.snapshots ?? [])
+      .filter((snapshot) => snapshot.kind === "year_backfill").length,
+    0,
+  );
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history[installation.sourceId].nextRangeEnd, savedCursor.nextRangeEnd);
+
+  const resumedStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], { env: environment });
+  const resumedHistory = bodies
+    .slice(resumedStart)
+    .flatMap((body) => body.snapshots ?? [])
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.equal(resumedHistory[0].rangeEnd, savedCursor.nextRangeEnd);
+  assert.equal(resumedHistory.at(-1).rangeStart, "2026-01-01");
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history?.[installation.sourceId], undefined);
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
+});
+
+test("sync --full reconciles a lost response after two accepted chunks without restarting them", async (context) => {
+  const bodies = [];
+  const acceptedHistoryRanges = [];
+  let lastAcceptedSequence = 0n;
+  let loseThirdHistoryResponse = true;
+  let historyAcceptances = 0;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      const snapshot = body.snapshots?.[0];
+      if (!snapshot) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      const sequence = BigInt(snapshot.syncSequence);
+      const stale = sequence <= lastAcceptedSequence;
+      if (!stale) {
+        lastAcceptedSequence = sequence;
         if (snapshot.kind === "year_backfill") {
-          gapEnd = snapshot.rangeStart <= gapStart ? null : previousDay(snapshot.rangeStart);
-          if (gapEnd === null) gapStart = null;
+          historyAcceptances += 1;
+          acceptedHistoryRanges.push(`${snapshot.rangeStart}:${snapshot.rangeEnd}`);
         }
       }
+      if (
+        snapshot.kind === "year_backfill" &&
+        historyAcceptances >= 3 &&
+        loseThirdHistoryResponse
+      ) {
+        request.socket.destroy();
+        return;
+      }
+      const result = usageResponse(body);
+      result.sourceSequences = result.sourceSequences.map((source) => ({
+        ...source,
+        lastAcceptedSyncSequence: lastAcceptedSequence.toString(),
+        accepted: !stale,
+      }));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(result));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-full-lost-response-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  });
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+  });
+  const interrupted = await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], {
+    env: environment,
+  }).catch((error) => error);
+  assert.equal(interrupted.code, 1);
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  const cursorAfterTwoAcknowledgements = state.history[installation.sourceId];
+  assert.equal(cursorAfterTwoAcknowledgements.mode, "full");
+  assert.equal(acceptedHistoryRanges.length, 3);
+  assert.ok(Object.keys(state.historyAdapters[installation.sourceId].files).length > 0);
+
+  loseThirdHistoryResponse = false;
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], { env: environment });
+  const firstTwoRanges = acceptedHistoryRanges.slice(0, 2);
+  for (const range of firstTwoRanges)
+    assert.equal(acceptedHistoryRanges.filter((candidate) => candidate === range).length, 1);
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history?.[installation.sourceId], undefined);
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
+  assert.ok(
+    bodies
+      .flatMap((body) => body.snapshots ?? [])
+      .some(
+        (snapshot) => snapshot.kind === "year_backfill" && snapshot.rangeStart === "2026-01-01",
+      ),
+  );
+});
+
+test("manual Sync terminates persistent 46, 70, and 120 day gap cycles", async (context) => {
+  const bodies = [];
+  let gapStart;
+  let gapEnd;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
       const base = usageResponse(body);
       base.sourceSequences = base.sourceSequences.map((source) => ({
         ...source,
@@ -5398,6 +5543,22 @@ test("manual Sync terminates persistent 46, 70, and 120 day gap cycles", async (
     );
     const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
     assert.equal(state.history?.[installation.sourceId], undefined);
+    assert.match(state.historyRetryGenerations[installation.sourceId], /^[0-9a-f]{64}$/);
+
+    const nextDayStart = bodies.length;
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        VIBERACING_TEST_NOW: "2026-09-02T12:00:00.000Z",
+      }),
+    });
+    assert.equal(
+      bodies
+        .slice(nextDayStart)
+        .flatMap((body) => body.snapshots ?? [])
+        .filter((snapshot) => snapshot.kind === "year_backfill").length,
+      0,
+    );
   }
 });
 
@@ -5465,6 +5626,22 @@ test("a terminal partial gap waits for new local data or an explicit full retry"
     0,
   );
 
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  const generationBeforeUtcRollover = state.historyRetryGenerations[installation.sourceId];
+  const nextDayStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: { ...environment, VIBERACING_TEST_NOW: "2026-09-02T12:00:00.000Z" },
+  });
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(
+    bodies
+      .slice(nextDayStart)
+      .flatMap((body) => body.snapshots)
+      .filter((snapshot) => snapshot.kind === "year_backfill").length,
+    0,
+  );
+  assert.equal(state.historyRetryGenerations[installation.sourceId], generationBeforeUtcRollover);
+
   await appendFile(
     installation.capture,
     `${JSON.stringify({
@@ -5474,7 +5651,9 @@ test("a terminal partial gap waits for new local data or an explicit full retry"
     })}\n`,
   );
   const changedStart = bodies.length;
-  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: { ...environment, VIBERACING_TEST_NOW: "2026-09-02T12:00:00.000Z" },
+  });
   assert.equal(
     bodies
       .slice(changedStart)

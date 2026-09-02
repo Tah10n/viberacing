@@ -236,4 +236,26 @@ describe("dashboard history coverage", () => {
       }),
     ).toBe(true);
   });
+
+  it("bounds legacy disconnected partial coverage by its last successful sync", () => {
+    const selected = (date: string) =>
+      resolveUsagePeriod({ kind: "custom", from: date, to: date }, now);
+    const legacy = {
+      ...completeSource,
+      active: false,
+      lastCompleteness: "partial" as const,
+      lastSuccessfulSyncDate: "2026-08-10",
+      lastRollingRangeStart: null,
+      lastRollingRangeEnd: null,
+      unresolvedUsageDates: [],
+    };
+    expect(sourcePeriodIncomplete(selected("2026-08-01"), "2026-09-01", legacy)).toBe(true);
+    expect(sourcePeriodIncomplete(selected("2026-08-25"), "2026-09-01", legacy)).toBe(false);
+    expect(
+      sourcePeriodIncomplete(selected("2026-01-01"), "2026-09-01", {
+        ...legacy,
+        lastSuccessfulSyncDate: "2025-12-31",
+      }),
+    ).toBe(false);
+  });
 });

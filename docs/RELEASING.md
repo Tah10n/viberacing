@@ -61,10 +61,11 @@ legacy `weekly_agent_usage` table, and adds a temporary bridge plus application 
 previous release stays compatible throughout Railway pre-deploy and healthcheck switching. The new
 release reads only the daily summary. Cleanup then needs two distinct, reviewed deployments.
 Deployment A changes application code only: it stops weekly writes and removes the weekly table and
-trigger from readiness, but deliberately leaves both in PostgreSQL. After that build is healthy,
-Deployment B may add migration 011 to remove the trigger, function, and weekly table. CI rejects a
-destructive weekly migration while production application references remain. Never combine these
-phases or place cleanup 011 in the same deployment as expand migration 010.
+both migration-010 compatibility triggers from readiness, but deliberately leaves the objects in
+PostgreSQL. After that build is healthy, Deployment B may add migration 011 to remove both triggers,
+their functions, and the weekly table. CI rejects a destructive weekly migration while production
+application references remain. Never combine these phases or place cleanup 011 in the same
+deployment as expand migration 010.
 
 The feature pull request stages the migration, server, package bytes, tests, and documentation only.
 Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, or Railway variable
