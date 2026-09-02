@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
 import { adapterFor } from "../packages/connector/lib/readers.mjs";
@@ -43,6 +44,122 @@ const githubId = 800_000_000_000_000_000n + BigInt(`0x${randomBytes(7).toString(
 const trustedProxyScenario = process.env.VIBERACING_TEST_TRUSTED_PROXY === "true";
 let userId;
 let pairingClientSequence = 0;
+
+async function verifyExpandMigrationCompatibility() {
+  const client = await pool.connect();
+  const schema = `migration_010_${randomBytes(6).toString("hex")}`;
+  try {
+    await client.query("BEGIN");
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    for (let index = 1; index <= 9; index += 1) {
+      const prefix = String(index).padStart(3, "0");
+      const migrations = [
+        "001_initial.sql",
+        "002_account_deduplication.sql",
+        "003_browser_sync.sql",
+        "004_browser_sync_rate_guard.sql",
+        "005_browser_sync_protocol.sql",
+        "006_account_switch_sources.sql",
+        "007_account_switch_safety.sql",
+        "008_account_dedup_notice_dismissal.sql",
+        "009_codex_hook_notice.sql",
+      ];
+      const migration = migrations[index - 1];
+      check(migration?.startsWith(prefix), "migration compatibility fixture is out of order");
+      await client.query(
+        await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
+      );
+    }
+    const compatibilityUser = await client.query(
+      "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+      [
+        `9${randomBytes(8).readBigUInt64BE().toString().slice(0, 17)}`,
+        `compat-${randomBytes(4).toString("hex")}`,
+      ],
+    );
+    const compatibilityUserId = compatibilityUser.rows[0].id;
+    const installationId = randomUUID();
+    const accountId = randomUUID();
+    const sourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Old release', 'active', $3, $4, '0.5.0', 4)`,
+      [installationId, compatibilityUserId, digest(token()), digest(token())],
+    );
+    await client.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+       VALUES ($1, $2, 'codex', 'Old Codex', 'account_max')`,
+      [accountId, compatibilityUserId],
+    );
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old Codex', 'codex_app_server', 'cli', 'active')`,
+      [sourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    const usageDate = "2026-08-31";
+    const weekStart = "2026-08-31";
+    await client.query(
+      `INSERT INTO daily_usage (source_id, usage_date, total_tokens, completeness)
+       VALUES ($1, $2, 40, 'complete')`,
+      [sourceId, usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       VALUES ($1, $2, 'codex', 40)`,
+      [weekStart, compatibilityUserId],
+    );
+
+    await client.query(
+      await readFile(
+        new URL("../apps/web/database/010_current_year_history.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const oldRead = await client.query(
+      `SELECT coalesce(sum(tokens), 0)::text AS tokens
+         FROM weekly_agent_usage
+        WHERE user_id = $1 AND week_start = $2`,
+      [compatibilityUserId, weekStart],
+    );
+    check(oldRead.rows[0]?.tokens === "40", "migration 010 broke the main-era weekly read");
+
+    await client.query(
+      "UPDATE daily_usage SET total_tokens = 25, updated_at = now() WHERE source_id = $1 AND usage_date = $2",
+      [sourceId, usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       SELECT $1::date, $2, 'codex', sum(total_tokens)
+         FROM daily_usage
+        WHERE source_id = $3 AND usage_date >= $1::date AND usage_date < $1::date + 7
+       ON CONFLICT (week_start, user_id, agent_id) DO UPDATE
+         SET tokens = EXCLUDED.tokens, updated_at = now()`,
+      [weekStart, compatibilityUserId, sourceId],
+    );
+    const compatibleTotals = await client.query(
+      `SELECT
+         (SELECT tokens::text FROM weekly_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex' AND week_start = $2) AS weekly_tokens,
+         (SELECT coalesce(sum(tokens), 0)::text FROM daily_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex'
+             AND usage_date >= $2::date AND usage_date < $2::date + 7) AS daily_tokens`,
+      [compatibilityUserId, weekStart],
+    );
+    check(
+      compatibleTotals.rows[0]?.weekly_tokens === "25" &&
+        compatibleTotals.rows[0]?.daily_tokens === "25",
+      "migration 010 did not mirror a main-era weekly write into the daily summary",
+    );
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
+  }
+}
 
 function syntheticEdgeHeader(address) {
   return trustedProxyScenario ? { "x-real-ip": address } : {};
@@ -358,6 +475,9 @@ function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
 }
 
 try {
+  await verifyExpandMigrationCompatibility();
+  console.log("ok - migration 010 preserves main-era weekly reads and writes during rollout");
+
   const inserted = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
     [githubId.toString(), handle],
@@ -377,17 +497,11 @@ try {
   const legacyWeeklyTable = await pool.query(
     "SELECT to_regclass('public.weekly_agent_usage')::text AS relation",
   );
-  let legacyWeeklyQueryError;
-  try {
-    await pool.query("SELECT tokens FROM weekly_agent_usage LIMIT 1");
-  } catch (error) {
-    legacyWeeklyQueryError = error;
-  }
   check(
-    legacyWeeklyTable.rows[0]?.relation === null && legacyWeeklyQueryError?.code === "42P01",
-    "migration 010 did not enforce its forward-only legacy weekly query boundary",
+    legacyWeeklyTable.rows[0]?.relation === "weekly_agent_usage",
+    "migration 010 did not retain the legacy weekly table for rollout compatibility",
   );
-  console.log("ok - migration 010 drops the stale weekly summary and old query path");
+  console.log("ok - migration 010 retains the temporary weekly compatibility summary");
 
   const wideAggregateUser = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -1934,7 +2048,10 @@ try {
   check(response.status === 200, "unchanged confirmation snapshot failed");
   const afterConfirmation = await pool.query(
     `SELECT source.last_successful_sync_at AS source_sync_at,
-            installation.last_sync_at AS installation_sync_at
+            installation.last_sync_at AS installation_sync_at,
+            source.last_rolling_range_start::text AS rolling_start,
+            source.last_rolling_range_end::text AS rolling_end,
+            source.last_completeness
        FROM installation_sources source
        JOIN installations installation ON installation.id = source.installation_id
       WHERE source.id = $1`,
@@ -1943,8 +2060,26 @@ try {
   check(
     afterConfirmation.rows[0].source_sync_at > beforeConfirmation.rows[0].source_sync_at &&
       afterConfirmation.rows[0].installation_sync_at >
-        beforeConfirmation.rows[0].installation_sync_at,
-    "an unchanged confirmation did not advance account and computer Last sync timestamps",
+        beforeConfirmation.rows[0].installation_sync_at &&
+      afterConfirmation.rows[0].rolling_start === yesterday &&
+      afterConfirmation.rows[0].rolling_end === today &&
+      afterConfirmation.rows[0].last_completeness === "complete",
+    "an unchanged confirmation did not advance Last sync timestamps and rolling coverage",
+  );
+  const compatibilitySummary = await pool.query(
+    `SELECT
+       (SELECT tokens::text FROM weekly_agent_usage
+         WHERE user_id = $1 AND agent_id = 'codex'
+           AND week_start = date_trunc('week', current_date)::date) AS weekly_tokens,
+       (SELECT coalesce(sum(tokens), 0)::text FROM daily_agent_usage
+         WHERE user_id = $1 AND agent_id = 'codex'
+           AND usage_date >= date_trunc('week', current_date)::date
+           AND usage_date < date_trunc('week', current_date)::date + 7) AS daily_tokens`,
+    [userId],
+  );
+  check(
+    compatibilitySummary.rows[0]?.weekly_tokens === compatibilitySummary.rows[0]?.daily_tokens,
+    "new ingestion did not keep weekly and daily compatibility summaries equal",
   );
   console.log("ok - unchanged confirmation advances account and computer Last sync timestamps");
   const authoritativeDayBeforePartial = await pool.query(
@@ -1952,7 +2087,10 @@ try {
     [target, today],
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
-  response = await usage(first.deviceToken, [snapshot(target, 9, [[today, 25]], "partial")]);
+  const omittedPartialDay = dateOffset(-5);
+  response = await usage(first.deviceToken, [
+    snapshot(target, 9, [[today, 25]], "partial", omittedPartialDay, today),
+  ]);
   check(response.status === 200, "partial correction failed");
   let rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text, completeness, updated_at FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
@@ -1966,6 +2104,40 @@ try {
         authoritativeDayBeforePartial.rows[0].updated_at.getTime(),
     "a lower partial snapshot replaced or refreshed previously authoritative evidence",
   );
+  const omittedPartialDashboard = await authenticatedGet(
+    `/dashboard?period=custom&from=${omittedPartialDay}&to=${omittedPartialDay}`,
+  );
+  check(
+    omittedPartialDashboard.status === 200 &&
+      (await omittedPartialDashboard.text()).includes("Partial current-year history"),
+    "a missing day inside the last partial rolling range became trusted no-data",
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET status = 'disconnected',
+            history_backfill_year = $2,
+            history_backfill_status = 'partial',
+            history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [target, currentUtcYear],
+  );
+  const disconnectedMissingHistory = await authenticatedGet(
+    `/dashboard?period=custom&from=${januaryFirst}&to=${januaryFirst}`,
+  );
+  check(
+    disconnectedMissingHistory.status === 200 &&
+      (await disconnectedMissingHistory.text()).includes("Partial current-year history"),
+    "disconnected retained terminal-partial history became trusted no-data without a row",
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET status = 'active',
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [target],
+  );
+  console.log("ok - missing rolling and retained historical coverage stays explicitly partial");
   const beforeProvisionalSummary = await pool.query(
     "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
@@ -3292,7 +3464,7 @@ try {
          JOIN installation_sources source ON source.id = usage.source_id
         WHERE source.user_id = $1) AS source_days,
        (SELECT count(*)::int FROM daily_agent_usage WHERE user_id = $1) AS agent_days,
-       to_regclass('public.weekly_agent_usage')::text AS weekly_relation`,
+       (SELECT count(*)::int FROM weekly_agent_usage WHERE user_id = $1) AS weekly_rows`,
     [userId],
   );
   check(
@@ -3301,7 +3473,7 @@ try {
       profileAfterLeave.status === 404 &&
       retainedUsageAfterLeave.rows[0]?.source_days === 0 &&
       retainedUsageAfterLeave.rows[0].agent_days === 0 &&
-      retainedUsageAfterLeave.rows[0].weekly_relation === null,
+      retainedUsageAfterLeave.rows[0].weekly_rows === 0,
     "Leave leaderboard retained public participation or a usage aggregate",
   );
   console.log("ok - Leave removes all usage and the retained bare identity has no public profile");

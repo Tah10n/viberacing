@@ -224,6 +224,9 @@ describe("dashboard connection flow", () => {
     expect(explorer).toContain("requestAnimationFrame");
     expect(explorer).toContain("BigInt(day.tokens)");
     expect(explorer).not.toContain("Number(day.tokens)");
+    expect(dashboard).toContain("s.last_rolling_range_start::text");
+    expect(dashboard).toContain("sourcePeriodIncomplete");
+    expect(dashboard).toContain("source.has_retained_usage");
   });
 
   it("uses the connector protocol for the current-year history upgrade notice", () => {

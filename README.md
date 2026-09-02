@@ -26,13 +26,14 @@ loop: one dirty generation gets one automatic attempt, and a later hook or manua
 failures. There is no daemon, watcher, or polling loop. Manual `viberacing sync` and the first
 successful `connect` still collect every active source immediately. Every sync first refreshes the
 rolling range of at most 31 UTC dates. Connector 0.6.0 then backfills the rest of the current UTC
-year in resumable, newest-first chunks of at most 31 dates: an automatic event advances at most one
-historical chunk. `connect` and manual `viberacing sync` continue through every eligible chunk;
-browser Sync remains bounded to at most one. Acknowledged cursors make retries idempotent and
-survive interruption. Later JSONL reads resume from safe byte offsets. Automatic hooks suppress an
-unchanged normalized rolling snapshot. Manual and browser-triggered Sync still submit a
-content-equivalent rolling confirmation so the dashboard's **Last sync** time advances after a
-successful check.
+year in resumable, newest-first chunks of at most 31 dates: automatic and browser Sync drain bounded
+pending payloads and collect at most one new historical range. `connect` and manual
+`viberacing sync` continue through every eligible chunk. Explicit `viberacing sync --full` starts or
+resumes a retry of terminal partial current-year history; ordinary, automatic, and browser Sync do
+not restart it. Acknowledged cursors make retries idempotent and survive interruption. Later JSONL
+reads resume from safe byte offsets. Automatic hooks suppress an unchanged normalized rolling
+snapshot. Manual and browser-triggered Sync still submit a content-equivalent rolling confirmation
+so the dashboard's **Last sync** time advances after a successful check.
 
 Codex marks its physical profile dirty after each completed turn. One `CODEX_HOME` can safely track
 up to eight ChatGPT logins: each collection reads local `tokens.account_id` before starting App

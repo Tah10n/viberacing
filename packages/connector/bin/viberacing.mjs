@@ -1488,6 +1488,7 @@ async function forgetSourceState(sourceIds) {
   state.adapters ??= {};
   state.history ??= {};
   state.historyAdapters ??= {};
+  state.historyRetries ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
   state.collectionWarnings ??= {};
@@ -1496,6 +1497,7 @@ async function forgetSourceState(sourceIds) {
     delete state.adapters[sourceId];
     delete state.history[sourceId];
     delete state.historyAdapters[sourceId];
+    delete state.historyRetries[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
     delete state.collectionWarnings[sourceId];
@@ -1683,19 +1685,28 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
   const firstHistoricalEnd = addUtcDays(rollingStart < yearStart ? yearStart : rollingStart, -1);
   state.history ??= {};
   state.historyAdapters ??= {};
+  state.historyRetries ??= {};
   const configured = new Set(config.sources.map((source) => source.sourceId));
   let changed = false;
   for (const sourceId of Object.keys(state.history))
     if (!configured.has(sourceId)) {
       delete state.history[sourceId];
       delete state.historyAdapters[sourceId];
+      delete state.historyRetries[sourceId];
+      changed = true;
+    }
+  for (const sourceId of Object.keys(state.historyRetries))
+    if (!configured.has(sourceId) || state.historyRetries[sourceId] !== year) {
+      delete state.historyRetries[sourceId];
       changed = true;
     }
   for (const source of config.sources) {
     if (typeof source.sourceId !== "string") continue;
+    const retryingPartial = state.historyRetries[source.sourceId] === year;
     const terminal =
       source.historyBackfillYear === year &&
-      ["complete", "partial"].includes(source.historyBackfillStatus);
+      (source.historyBackfillStatus === "complete" ||
+        (source.historyBackfillStatus === "partial" && !retryingPartial));
     if (terminal || firstHistoricalEnd < yearStart) {
       if (state.history[source.sourceId] !== undefined) {
         delete state.history[source.sourceId];
@@ -1713,6 +1724,40 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
     };
     delete state.historyAdapters[source.sourceId];
     changed = true;
+  }
+  return changed;
+}
+
+function prepareFullHistoryRetries(config, state, now = connectorNow()) {
+  const year = currentHistoryYear(now);
+  const yearStart = historyYearStart(year);
+  const rollingStart = snapshotRange(now).rangeStart;
+  const firstHistoricalEnd = addUtcDays(rollingStart < yearStart ? yearStart : rollingStart, -1);
+  if (firstHistoricalEnd < yearStart) return false;
+  state.history ??= {};
+  state.historyAdapters ??= {};
+  state.historyRetries ??= {};
+  let changed = false;
+  for (const source of config.sources) {
+    if (
+      typeof source.sourceId !== "string" ||
+      source.historyBackfillYear !== year ||
+      source.historyBackfillStatus !== "partial"
+    )
+      continue;
+    if (state.historyRetries[source.sourceId] !== year) {
+      state.historyRetries[source.sourceId] = year;
+      changed = true;
+    }
+    if (state.history[source.sourceId]?.year !== year) {
+      state.history[source.sourceId] = {
+        year,
+        nextRangeEnd: firstHistoricalEnd,
+        hadPartialChunk: false,
+      };
+      delete state.historyAdapters[source.sourceId];
+      changed = true;
+    }
   }
   return changed;
 }
@@ -1875,6 +1920,7 @@ async function applyHistoryAdvance(config, item) {
   const state = await readState();
   state.history ??= {};
   state.historyAdapters ??= {};
+  state.historyRetries ??= {};
   if (advance.terminalStatus === null) {
     state.history[item.sourceId] = {
       year: advance.year,
@@ -1885,6 +1931,7 @@ async function applyHistoryAdvance(config, item) {
   } else {
     delete state.history[item.sourceId];
     delete state.historyAdapters[item.sourceId];
+    delete state.historyRetries[item.sourceId];
     const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
     if (source) {
       source.historyBackfillYear = advance.year;
@@ -1908,6 +1955,7 @@ async function deliverPendingGroup(config, items, retired) {
       staleSources: [],
       quarantinedSources: [],
       historyDeliveries: 0,
+      snapshotDeliveries: 0,
     };
   try {
     if (await lifecycleMutationActive())
@@ -1925,6 +1973,7 @@ async function deliverPendingGroup(config, items, retired) {
     );
     const staleSources = [];
     let historyDeliveries = 0;
+    let snapshotDeliveries = 0;
     for (const item of eligible) {
       const snapshot = item.payload.snapshots?.[0];
       const sequenceStatus = sequenceById.get(item.sourceId);
@@ -1950,6 +1999,7 @@ async function deliverPendingGroup(config, items, retired) {
         if (snapshot) await applyHistoryAdvance(config, item);
         if (snapshot?.kind === "year_backfill") historyDeliveries += 1;
         if (snapshot && sequenceStatus?.accepted !== false) {
+          snapshotDeliveries += 1;
           await clearQuarantine(item.sourceId);
           const state = await readState();
           if (state.quarantine?.[item.sourceId]) {
@@ -1966,6 +2016,7 @@ async function deliverPendingGroup(config, items, retired) {
       staleSources,
       quarantinedSources: [],
       historyDeliveries,
+      snapshotDeliveries,
     };
   } catch (error) {
     if (error?.status === 400 && eligible.length > 1) {
@@ -1978,6 +2029,7 @@ async function deliverPendingGroup(config, items, retired) {
         staleSources: [...left.staleSources, ...right.staleSources],
         quarantinedSources: [...left.quarantinedSources, ...right.quarantinedSources],
         historyDeliveries: left.historyDeliveries + right.historyDeliveries,
+        snapshotDeliveries: left.snapshotDeliveries + right.snapshotDeliveries,
       };
     }
     if (error?.status === 400 && error?.code === "unsupported_source") {
@@ -1989,6 +2041,7 @@ async function deliverPendingGroup(config, items, retired) {
         staleSources: [],
         quarantinedSources: [],
         historyDeliveries: 0,
+        snapshotDeliveries: 0,
       };
     }
     if (error?.status === 400) {
@@ -2008,6 +2061,7 @@ async function deliverPendingGroup(config, items, retired) {
         staleSources: [],
         quarantinedSources: [item.sourceId],
         historyDeliveries: 0,
+        snapshotDeliveries: 0,
       };
     }
     await lifecycleFailure(error);
@@ -2091,6 +2145,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   let accepted = 0;
   let successfulDeliveries = 0;
   let historyDeliveries = 0;
+  let snapshotDeliveries = 0;
   const staleSources = new Set();
   const quarantinedSources = new Set();
   const groups = [
@@ -2105,6 +2160,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
       accepted += delivered.accepted;
       successfulDeliveries += delivered.successfulDeliveries;
       historyDeliveries += delivered.historyDeliveries;
+      snapshotDeliveries += delivered.snapshotDeliveries;
       for (const sourceId of delivered.staleSources) staleSources.add(sourceId);
       for (const sourceId of delivered.quarantinedSources) quarantinedSources.add(sourceId);
     }
@@ -2117,6 +2173,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
     accepted += retried.accepted;
     successfulDeliveries += retried.successfulDeliveries;
     historyDeliveries += retried.historyDeliveries;
+    snapshotDeliveries += retried.snapshotDeliveries;
     for (const sourceId of retried.retiredSources) retired.add(sourceId);
     for (const sourceId of retried.quarantinedSources) quarantinedSources.add(sourceId);
     for (const sourceId of retried.reobserveSourceIds) reobserveSourceIds.add(sourceId);
@@ -2125,6 +2182,7 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
     accepted,
     successfulDeliveries,
     historyDeliveries,
+    snapshotDeliveries,
     reobserveSourceIds: [...reobserveSourceIds],
     retiredSources: [...retired],
     staleSources: [...staleSources],
@@ -2302,6 +2360,7 @@ async function syncRange(providedConfig, options = {}) {
       let accepted = previous.accepted;
       let state = await readState();
       state = await reconcileServerState(config, state);
+      if (options.fullHistory && prepareFullHistoryRetries(config, state)) await writeState(state);
       await migrateSourcesSchema();
       const snapshotKind = options.kind ?? "rolling";
       if (!["rolling", "year_backfill"].includes(snapshotKind))
@@ -2603,7 +2662,7 @@ async function syncRange(providedConfig, options = {}) {
         });
         if (
           snapshotKind === "rolling" &&
-          (options.automatic || options.browser) &&
+          options.automatic &&
           state.fingerprints[activeSource.sourceId] === nextFingerprint
         )
           continue;
@@ -2707,7 +2766,7 @@ async function syncRange(providedConfig, options = {}) {
         return {
           accepted,
           failures,
-          unchanged: true,
+          unchanged: previous.snapshotDeliveries === 0,
           inactiveSourceIds,
           accountSetupPending,
           failedHistorySourceIds,
@@ -2813,7 +2872,8 @@ async function sync(providedConfig, options = {}) {
           !inactiveSourceIds.has(source.sourceId) &&
           !failedHistorySourceIds.has(source.sourceId) &&
           !blockedHistorySourceIds.has(source.sourceId) &&
-          state.history?.[source.sourceId]?.year === year,
+          state.history?.[source.sourceId]?.year === year &&
+          (options.fullHistory === true || state.historyRetries?.[source.sourceId] !== year),
       )
       .map((source) => ({ source, cursor: state.history[source.sourceId] }))
       .sort(
@@ -2867,7 +2927,7 @@ async function sync(providedConfig, options = {}) {
       (allowed === null || allowed.has(source.sourceId)) &&
       !failedHistorySourceIds.has(source.sourceId) &&
       source.historyBackfillYear === currentHistoryYear() &&
-      ["complete", "partial"].includes(source.historyBackfillStatus),
+      source.historyBackfillStatus === "complete",
   );
   if (terminalCaptureSources.length > 0)
     await compactSuccessfulCaptures({ ...finalConfig, sources: terminalCaptureSources });
@@ -3901,8 +3961,14 @@ try {
     output("OpenCode upgrade preflight passed.");
   } else if (command === "connect") await connect();
   else if (command === "sync") {
+    const syncArguments = arguments_.slice(1).filter((value) => value !== "--quiet");
+    if (syncArguments.some((value) => value !== "--full") || syncArguments.length > 1)
+      throw new Error("Usage: viberacing sync [--full]");
     await assertOpenCodeUpgradeReady(stateDirectory);
-    const result = await sync(await readConnectedConfig(), { waitMs: manualSyncLockWaitMs });
+    const result = await sync(await readConnectedConfig(), {
+      waitMs: manualSyncLockWaitMs,
+      fullHistory: syncArguments.includes("--full"),
+    });
     if (result?.skipped) throw new Error("Another sync is already running.");
   } else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
@@ -4096,7 +4162,7 @@ try {
     }
   } else
     output(
-      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
+      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync [--full] | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
     );
 } catch (error) {
   if (error?.diagnosticCode === "opencode_cutover_required")

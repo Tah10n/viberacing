@@ -4299,6 +4299,7 @@ for await (const line of lines) {
       [secondarySourceId],
       [primarySourceId],
       [secondarySourceId],
+      [primarySourceId],
     ],
   );
   assert.deepEqual(
@@ -5015,6 +5016,93 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   );
   assert.equal(finalConfig.sources[0].historyBackfillYear, 2026);
   assert.equal(finalConfig.sources[0].historyBackfillStatus, "partial");
+});
+
+test("sync --full explicitly and idempotently retries terminal partial history", async (context) => {
+  const bodies = [];
+  const storedDays = new Map();
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      for (const snapshot of body.snapshots ?? [])
+        for (const entry of snapshot.entries ?? [])
+          storedDays.set(`${snapshot.sourceId}:${entry.date}`, entry.totalTokens);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(usageResponse(body)));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-full-history-retry-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const oldDate = "2026-01-15";
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: ["2026-09-01", oldDate].map((date, index) => ({
+      id: `full-retry-${index}`,
+      date,
+      usage: { date, totalTokens: String(index + 7) },
+    })),
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "partial",
+  });
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+  });
+
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(
+    bodies.flatMap((body) => body.snapshots).some((snapshot) => snapshot.kind === "year_backfill"),
+    false,
+  );
+
+  const firstRetryStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], {
+    env: environment,
+  });
+  const firstRetryHistory = bodies
+    .slice(firstRetryStart)
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.equal(
+    firstRetryHistory
+      .flatMap((snapshot) => snapshot.entries)
+      .filter((entry) => entry.date === oldDate).length,
+    1,
+  );
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history?.[installation.sourceId], undefined);
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
+
+  const secondRetryStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], {
+    env: environment,
+  });
+  const secondRetryHistory = bodies
+    .slice(secondRetryStart)
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.equal(
+    secondRetryHistory
+      .flatMap((snapshot) => snapshot.entries)
+      .filter((entry) => entry.date === oldDate).length,
+    1,
+  );
+  assert.equal(storedDays.get(`${installation.sourceId}:${oldDate}`), "8");
+  assert.equal(
+    [...storedDays.keys()].filter((key) => key === `${installation.sourceId}:${oldDate}`).length,
+    1,
+  );
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
 });
 
 test("a rejected historical chunk is quarantined once per manual run without advancing its cursor", async (context) => {
@@ -10357,22 +10445,110 @@ test("browser Sync confirms unchanged usage and scopes diagnostics to claimed so
   );
   assert.deepEqual(
     usageBodies.map((body) => body.snapshots[0]?.syncSequence),
-    ["1", "1"],
+    ["1", "2", "3"],
   );
   assert.deepEqual(
-    new Set(usageBodies[1].snapshots.map((snapshot) => snapshot.sourceId)),
-    new Set([otherSourceId]),
+    usageBodies.map((body) => new Set(body.snapshots.map((snapshot) => snapshot.sourceId))),
+    [
+      new Set([selectedSourceId]),
+      new Set([selectedSourceId]),
+      new Set([selectedSourceId, otherSourceId]),
+    ],
   );
   assert.deepEqual(
     resultBodies.map(({ status, resultCode }) => ({ status, resultCode })),
     [
       { status: "succeeded", resultCode: "complete" },
-      { status: "succeeded", resultCode: "unchanged" },
+      { status: "succeeded", resultCode: "complete" },
       { status: "succeeded", resultCode: "complete" },
     ],
   );
   const finalState = JSON.parse(await readFile(statePath, "utf8"));
   assert.deepEqual(finalState.diagnostics.outboxBySource, {});
+});
+
+test("browser Sync does not report unchanged after accepting a pending rolling snapshot", async (context) => {
+  const requestId = "62626262-6262-4626-8626-626262626262";
+  const usageBodies = [];
+  const resultBodies = [];
+  let installation;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current/sync/claim") {
+        response.end(JSON.stringify({ requestId, sourceIds: [installation.sourceId] }));
+        return;
+      }
+      if (request.url === "/api/usage") {
+        usageBodies.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+        return;
+      }
+      if (request.url === "/api/installations/current/sync/result") {
+        resultBodies.push(body);
+        response.statusCode = 204;
+        response.end();
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ error: "not_found" }));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-browser-pending-rolling-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    events: [],
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  });
+  const statePath = join(installation.directory, "state.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.sequences[installation.sourceId] = "1";
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const pendingDirectory = join(installation.directory, "pending");
+  await mkdir(pendingDirectory, { recursive: true });
+  await writeFile(
+    join(pendingDirectory, `${installation.sourceId}.json`),
+    `${JSON.stringify({
+      protocolVersion: 5,
+      snapshots: [
+        {
+          sourceId: installation.sourceId,
+          syncSequence: "1",
+          kind: "rolling",
+          rangeStart: "2026-08-02",
+          rangeEnd: "2026-09-01",
+          completeness: "complete",
+          entries: [],
+        },
+      ],
+      sourceErrors: [],
+    })}\n`,
+  );
+
+  const url = `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`;
+  await execFileAsync(process.execPath, [connectorPath, "handle-url", url], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    }),
+  });
+
+  assert.deepEqual(
+    usageBodies.map((body) => body.snapshots[0]?.syncSequence),
+    ["1", "2"],
+  );
+  assert.deepEqual(resultBodies, [{ requestId, status: "succeeded", resultCode: "complete" }]);
 });
 
 test("browser Sync reports useful work when an unchanged rolling snapshot imports history", async (context) => {
@@ -10434,7 +10610,7 @@ test("browser Sync reports useful work when an unchanged rolling snapshot import
   const secondCallSnapshots = usageBodies.slice(2).flatMap((body) => body.snapshots);
   assert.equal(
     secondCallSnapshots.some((snapshot) => snapshot.kind === "rolling"),
-    false,
+    true,
   );
   assert.equal(
     secondCallSnapshots.some((snapshot) => snapshot.kind === "year_backfill"),

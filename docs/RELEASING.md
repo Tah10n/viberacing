@@ -56,10 +56,12 @@ Connector 0.6.0 adds bounded protocol v5 history snapshots while the server cont
 protocols v2, v3, and v4 for rolling usage. Migration `010_current_year_history.sql` and the v5
 server must be deployed and verified before the connector package is published: older connectors
 keep their recent rolling sync, while only v5 connectors can resume the current UTC year's history
-in at-most-31-day chunks. Migration 010 replaces the legacy `weekly_agent_usage` summary with
-`daily_agent_usage` and drops the weekly table. This schema rollout is forward-only: after migration
-010, do not roll the application back to a version whose query path requires `weekly_agent_usage`.
-Restore service by rolling forward with a compatible build instead.
+in at-most-31-day chunks. Migration 010 expands the schema with `daily_agent_usage`, retains the
+legacy `weekly_agent_usage` table, and adds a temporary bridge plus application dual-write so the
+previous release stays compatible throughout Railway pre-deploy and healthcheck switching. The new
+release reads only the daily summary. After production is healthy, use a separate reviewed PR and
+deployment for cleanup migration 011, which can remove the weekly table and temporary compatibility
+logic. Never place destructive cleanup 011 in the same deployment as expand migration 010.
 
 The feature pull request stages the migration, server, package bytes, tests, and documentation only.
 Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, or Railway variable

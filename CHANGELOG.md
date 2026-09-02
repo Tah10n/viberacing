@@ -14,15 +14,18 @@ experience or protocol.
   snapshot. History moves newest-first in acknowledged chunks of at most 31 dates, uses isolated
   adapter state, finishes as `complete` or `partial`, resumes after interruption or a lost response,
   and starts a fresh cursor at the next UTC year without deleting older server rows. Automatic and
-  browser-triggered runs process at most one history chunk; connect and manual Sync finish every
-  eligible chunk.
+  browser-triggered runs drain bounded pending payloads and collect at most one new historical
+  range; connect and manual Sync finish every eligible chunk.
 - Week, Month, current-year All time, and current-year Custom selectors now drive one shared UTC
   period across leaderboard, public profiles, and dashboard totals. The dashboard adds a
   dependency-free accessible SVG daily chart with pointer and keyboard zoom/pan/reset, exact UTC
   tooltips, a text summary, and an equivalent daily table.
 - Migration 010 adds exact per-day `daily_agent_usage` summaries and source-level current-year
   backfill status. It backfills existing data with the same `account_max` and `source_sum`
-  precedence used by live ingestion.
+  precedence used by live ingestion, while temporarily retaining and maintaining the legacy weekly
+  summary for a safe expand-contract deployment.
+- `viberacing sync --full` explicitly retries terminal partial current-year history with a durable
+  cursor, while ordinary, automatic, and browser Sync leave that recovery opt-in.
 - `connect` and `doctor --repair` now reconcile one strict installation-owned OpenCode plugin under
   the global XDG `opencode/plugins` directory. After one OpenCode restart it handles
   `session.status: idle`, deduplicates the `session.idle` fallback for two seconds, synchronously

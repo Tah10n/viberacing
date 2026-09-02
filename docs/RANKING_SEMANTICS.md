@@ -78,16 +78,19 @@ Automatic scheduling changes delivery timing, not ranking semantics. Source-owne
 events into at most about one batch every two minutes; only dirty sources are collected, while
 pending aggregates can upload without a rescan. Manual sync and first connect collect all active
 sources immediately and then finish their remaining current-year history chunks. Automatic and
-browser-triggered runs process at most one history chunk. Automatic hooks make no usage request for
-an unchanged normalized rolling snapshot. Manual and browser-triggered Sync submit a
-content-equivalent rolling snapshot with the next sequence, so a successful check advances **Last
-sync** and the refreshed dashboard immediately confirms it. Historical partial status is tracked
-separately and never overwrites rolling operational completeness.
+browser-triggered runs drain bounded pending payloads and collect at most one new historical range.
+Automatic hooks make no usage request for an unchanged normalized rolling snapshot. Manual and
+browser-triggered Sync submit a content-equivalent rolling snapshot with the next sequence, so a
+successful check advances **Last sync** and the refreshed dashboard immediately confirms it.
+Historical partial status is tracked separately and never overwrites rolling operational
+completeness.
 
 Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
 Code, Qwen Code, Antigravity, and Gemini CLI.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
-and run `viberacing sync`. To delete retained history, disconnect and explicitly delete the agent
-account in the dashboard. Use **Leave leaderboard** for all ranking rows or **Delete Vibe Racing
-account** for the complete user record.
+and run `viberacing sync`. If a completed current-year pass is `partial`, run
+`viberacing sync --full` to start or resume an explicit full retry; ordinary and scheduled syncs do
+not restart it. To delete retained history, disconnect and explicitly delete the agent account in
+the dashboard. Use **Leave leaderboard** for all ranking rows or **Delete Vibe Racing account** for
+the complete user record.

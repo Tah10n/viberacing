@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { usageChartStatus } from "./history-coverage";
+import { sourcePeriodIncomplete, usageChartStatus } from "./history-coverage";
 import { resolveUsagePeriod } from "./usage-period";
 
 const now = new Date("2026-09-01T12:00:00.000Z");
 
 describe("dashboard history coverage", () => {
+  const completeSource = {
+    included: true,
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete" as const,
+    lastCompleteness: "complete" as const,
+    lastRollingRangeStart: "2026-08-02",
+    lastRollingRangeEnd: "2026-09-01",
+  };
+
   it("keeps a rolling-covered month complete while January history is pending", () => {
     expect(
       usageChartStatus(resolveUsagePeriod({ kind: "month" }, now), "2026-09-01", {
@@ -34,5 +43,39 @@ describe("dashboard history coverage", () => {
     const options = { hasUsage: true, hasPartialAccount: false, historyIncomplete: true };
     expect(usageChartStatus(recent, "2026-09-01", options)).toBe("complete");
     expect(usageChartStatus(old, "2026-09-01", options)).toBe("partial");
+  });
+
+  it("treats an omitted day inside a partial rolling range as partial", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-15", to: "2026-08-15" },
+      now,
+    );
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        lastCompleteness: "partial",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps retained disconnected terminal-partial history conservative without a selected row", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-01-15", to: "2026-01-15" },
+      now,
+    );
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        historyBackfillStatus: "partial",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps an explicit complete zero range complete", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-15", to: "2026-08-15" },
+      now,
+    );
+    expect(sourcePeriodIncomplete(selected, "2026-09-01", completeSource)).toBe(false);
   });
 });

@@ -100,13 +100,13 @@
   Confirm manual and browser-triggered Sync collect their selected sources immediately, submit an
   unchanged confirmation snapshot, and advance account/computer **Last sync** timestamps. Verify
   connect and manual Sync complete every remaining current-year chunk, while automatic and browser
-  Sync process at most one history chunk after rolling usage. Interrupt between chunks, retry a lost
-  acknowledgement, remove local cursor state after a server-complete import, and confirm the cursor
-  resumes without duplicate totals or restarting completed work. Move the clock across January 1 and
-  confirm a new-year cursor starts without deleting prior-year server rows. Verify permanent
-  collector/network failure ends after one generation, retains safe pending/error state, and retries
-  only after a new hook/manual sync. No daemon, watcher, polling loop, system service, or required
-  cron should be installed.
+  Sync drain bounded pending payloads and collect at most one new historical range after rolling
+  usage. Interrupt between chunks, retry a lost acknowledgement, remove local cursor state after a
+  server-complete import, and confirm the cursor resumes without duplicate totals or restarting
+  completed work. Move the clock across January 1 and confirm a new-year cursor starts without
+  deleting prior-year server rows. Verify permanent collector/network failure ends after one
+  generation, retains safe pending/error state, and retries only after a new hook/manual sync. No
+  daemon, watcher, polling loop, system service, or required cron should be installed.
 - On Linux, macOS, and Windows, connect an OpenCode source with home/config/state paths containing
   spaces and Unicode. Confirm the installation-owned plugin is under
   `<XDG_CONFIG_HOME>/opencode/plugins` (Windows defaults to `%USERPROFILE%\.config`, never APPDATA),
@@ -229,11 +229,15 @@
   latest release.
 - For 0.6.0, merge and deploy the server-side protocol-v5 compatibility plus migration 010 before
   publishing the connector. Verify migration 010 backfills `daily_agent_usage` from existing source
-  rows with exact `account_max`/`source_sum` precedence, `/ready` names migration 010, and v2-v4
-  connectors still sync recent usage. Only then create an exact-main `v0.6.0` release, wait for the
-  immutable package and `latest`, and run a real interrupted/resumed current-year import. Raising
-  the compatibility floor, deploying, publishing, tagging, or changing Railway remains a separate
-  authorization decision.
+  rows with exact `account_max`/`source_sum` precedence, retains writable `weekly_agent_usage`,
+  mirrors a previous-release weekly write into the daily summary, `/ready` names migration 010, and
+  v2-v4 connectors still sync recent usage. Only then create an exact-main `v0.6.0` release, wait
+  for the immutable package and `latest`, and run a real interrupted/resumed current-year import.
+  Raising the compatibility floor, deploying, publishing, tagging, or changing Railway remains a
+  separate authorization decision.
+- Keep cleanup migration 011 out of the migration-010 deployment. After the new build is healthy and
+  separately approved, remove the weekly table and temporary dual-write bridge in a later PR and
+  deployment.
 
 ## PostgreSQL operations
 

@@ -101,30 +101,30 @@ local component sum that differs from the separate provider account total.
 
 Collectors run independently with concurrency four. Every run refreshes at most 31 rolling UTC
 dates. A current-year cursor then moves newest-first through separate chunks of at most 31 dates;
-automatic and browser runs advance at most one chunk, while connect and manual sync finish all
-eligible chunks. Cursor and isolated historical adapter state are persisted only after an exact
-server acknowledgement, so interruption or a lost response remains resumable and idempotent. Later
-rolling JSONL runs reuse size, mtime, inode, and the last complete byte offset; unchanged files are
-not reopened for content, appends resume, and truncation or replacement rereads only that file.
-Historical scans do not replace those rolling checkpoints. OpenCode SQL and Qwen monthly files are
-range-bounded before records enter the ledger. Other event adapters also filter parsed events before
-ledger limits and completeness are evaluated. Non-Codex observations feed a shared content-free
-ledger keyed by hashed event identity. One Codex App Server is started per physical profile per
-batch. It reads the ChatGPT account before and after usage without refreshing credentials and routes
-the snapshot only to the matching local logical source. Its official daily total remains
-authoritative; the connector incrementally extracts only cumulative token events from that profile's
-local session records, uses the exact last-call counters, removes cache/reasoning overlap, and
-deduplicates repeated or copied events with content-free hashes. The provider's account-wide daily
-total and the locally observed component sum remain separate exact counters. While account buckets
-lag, each exact local daily sum after the newest authoritative bucket is submitted as partial so
-Sync can update the ranking immediately across UTC rollovers. The source remains non-destructive
-until an authoritative bucket covers the current day. Inside a continuous, successfully read App
-Server range, a missing daily bucket is sent as an explicit complete zero so prior usage can be
-corrected; no zero is created for an incomplete result or beyond that proven range. Later complete
-account data corrects each provisional value. Missing, bounded, or changed transcript shapes
-otherwise degrade to total-only rather than an estimate. Component counters are suppressed once a
-physical profile contains multiple identities because those local records do not prove account
-ownership.
+automatic and browser runs drain bounded pending payloads and collect at most one new historical
+range, while connect and manual sync finish all eligible chunks. Cursor and isolated historical
+adapter state are persisted only after an exact server acknowledgement, so interruption or a lost
+response remains resumable and idempotent. Later rolling JSONL runs reuse size, mtime, inode, and
+the last complete byte offset; unchanged files are not reopened for content, appends resume, and
+truncation or replacement rereads only that file. Historical scans do not replace those rolling
+checkpoints. OpenCode SQL and Qwen monthly files are range-bounded before records enter the ledger.
+Other event adapters also filter parsed events before ledger limits and completeness are evaluated.
+Non-Codex observations feed a shared content-free ledger keyed by hashed event identity. One Codex
+App Server is started per physical profile per batch. It reads the ChatGPT account before and after
+usage without refreshing credentials and routes the snapshot only to the matching local logical
+source. Its official daily total remains authoritative; the connector incrementally extracts only
+cumulative token events from that profile's local session records, uses the exact last-call
+counters, removes cache/reasoning overlap, and deduplicates repeated or copied events with
+content-free hashes. The provider's account-wide daily total and the locally observed component sum
+remain separate exact counters. While account buckets lag, each exact local daily sum after the
+newest authoritative bucket is submitted as partial so Sync can update the ranking immediately
+across UTC rollovers. The source remains non-destructive until an authoritative bucket covers the
+current day. Inside a continuous, successfully read App Server range, a missing daily bucket is sent
+as an explicit complete zero so prior usage can be corrected; no zero is created for an incomplete
+result or beyond that proven range. Later complete account data corrects each provisional value.
+Missing, bounded, or changed transcript shapes otherwise degrade to total-only rather than an
+estimate. Component counters are suppressed once a physical profile contains multiple identities
+because those local records do not prove account ownership.
 
 Owned hook handlers carry `viberacing-hook-v3:<clientSourceId>` and pass the same stable physical
 local source ID to `viberacing hook`. Removal filters only that marker, preserving foreign hooks and

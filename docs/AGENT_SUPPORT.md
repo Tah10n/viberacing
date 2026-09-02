@@ -29,10 +29,11 @@ replace rolling incremental checkpoints, fingerprints, or operational diagnostic
 
 A terminal `complete` status means every requested chunk for that source was authoritative. A
 terminal `partial` status means the import reached January 1 but at least one chunk was incomplete;
-the exact dates that were available still count. An inactive Codex logical account keeps its cursor
-for a later run after the user switches accounts. A new UTC year starts a new cursor without
-deleting server rows from prior years; only explicit account/source deletion removes retained
-history.
+the exact dates that were available still count. `viberacing sync --full` explicitly starts or
+resumes a current-year retry for that terminal partial state; ordinary, automatic, and browser Sync
+do not restart it. An inactive Codex logical account keeps its cursor for a later run after the user
+switches accounts. A new UTC year starts a new cursor without deleting server rows from prior years;
+only explicit account/source deletion removes retained history.
 
 If an authoritative total differs from the visible component formula, only the authoritative total
 is uploaded for every agent except Codex. Codex's separately exact local component tuple may differ

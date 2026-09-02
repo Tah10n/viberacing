@@ -36,6 +36,13 @@ describe("readiness migration ledger", () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining("history_backfill_status"), [
       expectedSchemaVersion,
     ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("last_rolling_range_start"), [
+      expectedSchemaVersion,
+    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("weekly_agent_usage_daily_compatibility"),
+      [expectedSchemaVersion],
+    );
   });
 
   it("returns 503 when the expected latest migration is absent", async () => {

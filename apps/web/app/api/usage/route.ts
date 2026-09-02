@@ -581,6 +581,8 @@ async function post(request: Request): Promise<Response> {
                 SET last_accepted_sync_sequence = $2::numeric,
                     last_successful_sync_at = now(),
                     last_completeness = $3,
+                    last_rolling_range_start = $7::date,
+                    last_rolling_range_end = $8::date,
                     last_error_summary = NULL,
                     last_warning_summary = $4,
                     history_backfill_year = CASE
@@ -599,6 +601,8 @@ async function post(request: Request): Promise<Response> {
               sourceCompleteness,
               sourceCompleteness === "partial" ? "Collector reported a partial snapshot" : null,
               snapshot.historyYearComplete,
+              snapshot.rangeEnd,
+              snapshot.rangeStart,
               snapshot.rangeEnd,
             ],
           );

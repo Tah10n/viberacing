@@ -97,6 +97,21 @@ function validHistoryState(value) {
   );
 }
 
+function validHistoryRetries(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, year]) =>
+        sourceIdPattern.test(sourceId) &&
+        Number.isSafeInteger(year) &&
+        year >= 1970 &&
+        year <= 9999,
+    )
+  );
+}
+
 function normalizedRuntimeState(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("Connector runtime state is unsupported");
@@ -126,6 +141,8 @@ function normalizedRuntimeState(value) {
       throw new Error("Connector runtime state is invalid");
   if (value.history !== undefined && !validHistoryState(value.history))
     throw new Error("Connector runtime history state is invalid");
+  if (value.historyRetries !== undefined && !validHistoryRetries(value.historyRetries))
+    throw new Error("Connector runtime history retry state is invalid");
   return { ...value, version: runtimeStateVersion, sequences: { ...value.sequences } };
 }
 

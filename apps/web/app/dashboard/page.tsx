@@ -31,7 +31,7 @@ import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
 import { formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
-import { usageChartStatus } from "@/lib/history-coverage";
+import { sourcePeriodIncomplete, usageChartStatus } from "@/lib/history-coverage";
 import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
 import {
   addUtcDays,
@@ -88,7 +88,10 @@ interface SourceRow {
   status: string;
   history_backfill_year: number | null;
   history_backfill_status: "pending" | "complete" | "partial";
-  has_period_usage: boolean;
+  last_completeness: "complete" | "partial" | null;
+  last_rolling_range_start: string | null;
+  last_rolling_range_end: string | null;
+  has_retained_usage: boolean;
 }
 
 interface CodexHookNoticeRow {
@@ -476,17 +479,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
               s.collection_method, s.supported_surface, s.status,
               s.history_backfill_year, s.history_backfill_status,
+              s.last_completeness,
+              s.last_rolling_range_start::text,
+              s.last_rolling_range_end::text,
               EXISTS (
                 SELECT 1 FROM daily_usage retained
                  WHERE retained.source_id = s.id
-                   AND retained.usage_date >= $2::date
-                   AND retained.usage_date < $3::date
-              ) AS has_period_usage
+              ) AS has_retained_usage
          FROM installation_sources s
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
-        [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+        [current.id],
       ),
       query<CodexHookNoticeRow>(
         `SELECT profile.id::text AS source_id,
@@ -540,15 +544,38 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     ]);
   const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, dailyUsage);
   const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
+  const sourceIncomplete = (source: SourceRow): boolean =>
+    sourcePeriodIncomplete(resolvedPeriod, today, {
+      included: source.status === "active" || source.has_retained_usage,
+      historyBackfillYear: source.history_backfill_year,
+      historyBackfillStatus: source.history_backfill_status,
+      lastCompleteness: source.last_completeness,
+      lastRollingRangeStart: source.last_rolling_range_start,
+      lastRollingRangeEnd: source.last_rolling_range_end,
+    });
+  const incompleteAccountIds = new Set(
+    sources.filter(sourceIncomplete).map((source) => source.agent_account_id),
+  );
+  const accountPeriodPartial = (account: AccountRow): boolean =>
+    account.partial || incompleteAccountIds.has(account.id);
+  const rollingCoverageIncomplete = sources.some(
+    (source) =>
+      (source.status === "active" || source.has_retained_usage) &&
+      source.last_completeness === "partial" &&
+      source.last_rolling_range_start !== null &&
+      source.last_rolling_range_end !== null &&
+      source.last_rolling_range_start < resolvedPeriod.toExclusive &&
+      source.last_rolling_range_end >= resolvedPeriod.from,
+  );
   const historyIncomplete = sources.some(
     (source) =>
-      (source.status === "active" || source.has_period_usage) &&
+      (source.status === "active" || source.has_retained_usage) &&
       (source.history_backfill_year !== currentYear ||
         source.history_backfill_status !== "complete"),
   );
   const chartStatus = usageChartStatus(resolvedPeriod, today, {
     hasUsage: dailyUsage.length > 0,
-    hasPartialAccount: accounts.some((account) => account.partial),
+    hasPartialAccount: accounts.some(accountPeriodPartial) || rollingCoverageIncomplete,
     historyIncomplete,
   });
   const origin = publicOrigin().origin;
@@ -834,10 +861,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       <h3>{accountTitle(account.agent_id, account.label)}</h3>
                       <Badge
                         tone={
-                          account.has_error ? "warning" : account.partial ? "neutral" : "success"
+                          account.has_error
+                            ? "warning"
+                            : accountPeriodPartial(account)
+                              ? "neutral"
+                              : "success"
                         }
                       >
-                        {account.has_error ? "Error" : account.partial ? "Partial" : "Complete"}
+                        {account.has_error
+                          ? "Error"
+                          : accountPeriodPartial(account)
+                            ? "Partial"
+                            : "Complete"}
                       </Badge>
                     </div>
                     <div className="agent-list">

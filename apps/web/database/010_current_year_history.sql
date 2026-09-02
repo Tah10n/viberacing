@@ -57,13 +57,103 @@ ALTER TABLE installation_sources
   ADD COLUMN history_backfill_status varchar(16) NOT NULL DEFAULT 'pending'
     CHECK (history_backfill_status IN ('pending', 'complete', 'partial')),
   ADD COLUMN history_backfill_completed_at timestamptz,
+  ADD COLUMN last_rolling_range_start date,
+  ADD COLUMN last_rolling_range_end date,
   ADD CONSTRAINT installation_sources_history_backfill_completion_check CHECK (
     (history_backfill_status = 'pending' AND history_backfill_completed_at IS NULL)
     OR (history_backfill_status IN ('complete', 'partial')
       AND history_backfill_completed_at IS NOT NULL)
+  ),
+  ADD CONSTRAINT installation_sources_last_rolling_range_check CHECK (
+    (last_rolling_range_start IS NULL AND last_rolling_range_end IS NULL)
+    OR (last_rolling_range_start IS NOT NULL
+      AND last_rolling_range_end IS NOT NULL
+      AND last_rolling_range_start <= last_rolling_range_end)
   );
 
--- From this migration onward the application reads and writes daily summaries only. Keeping an
--- unmaintained weekly summary would retain deleted usage and make an application rollback return
--- stale totals, so the schema transition is intentionally forward-only.
-DROP TABLE weekly_agent_usage;
+-- Migration 010 is the expand half of an expand-contract rollout. The previous application release
+-- still reads and writes weekly_agent_usage while Railway runs this migration before switching
+-- traffic. Reflect every old weekly mutation into the new daily summary from the authoritative raw
+-- rows, and keep the new application dual-writing both summaries until a separately deployed
+-- cleanup migration removes this bridge and weekly_agent_usage.
+CREATE FUNCTION refresh_daily_agent_usage_compatibility(
+  affected_week_start date,
+  affected_user_id bigint,
+  affected_agent_id varchar(32)
+) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  DELETE FROM daily_agent_usage
+   WHERE user_id = affected_user_id
+     AND agent_id = affected_agent_id
+     AND usage_date >= affected_week_start
+     AND usage_date < affected_week_start + 7;
+
+  WITH source_days AS (
+    SELECT account.id AS account_id,
+           account.aggregation_mode,
+           usage.usage_date,
+           usage.total_tokens,
+           usage.completeness,
+           usage.updated_at,
+           max(usage.updated_at) FILTER (WHERE usage.completeness = 'complete')
+             OVER (PARTITION BY account.id, usage.usage_date) AS latest_complete_at
+      FROM agent_accounts account
+      JOIN installation_sources source ON source.agent_account_id = account.id
+      JOIN daily_usage usage ON usage.source_id = source.id
+     WHERE account.user_id = affected_user_id
+       AND account.agent_id = affected_agent_id
+       AND usage.usage_date >= affected_week_start
+       AND usage.usage_date < affected_week_start + 7
+  ), account_daily AS (
+    SELECT account_id,
+           usage_date,
+           CASE aggregation_mode
+             WHEN 'account_max' THEN max(total_tokens) FILTER (
+               WHERE latest_complete_at IS NULL
+                  OR (completeness = 'complete' AND updated_at = latest_complete_at)
+                  OR (completeness = 'partial' AND updated_at > latest_complete_at)
+             )
+             ELSE sum(total_tokens)
+           END AS tokens
+      FROM source_days
+     GROUP BY account_id, aggregation_mode, usage_date
+  )
+  INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+  SELECT usage_date, affected_user_id, affected_agent_id, sum(tokens)
+    FROM account_daily
+   GROUP BY usage_date;
+END;
+$$;
+
+CREATE FUNCTION mirror_weekly_agent_usage_to_daily()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP IN ('UPDATE', 'DELETE') THEN
+    PERFORM refresh_daily_agent_usage_compatibility(
+      OLD.week_start,
+      OLD.user_id,
+      OLD.agent_id
+    );
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    PERFORM refresh_daily_agent_usage_compatibility(
+      NEW.week_start,
+      NEW.user_id,
+      NEW.agent_id
+    );
+  ELSIF TG_OP = 'UPDATE'
+    AND ROW(NEW.week_start, NEW.user_id, NEW.agent_id)
+      IS DISTINCT FROM ROW(OLD.week_start, OLD.user_id, OLD.agent_id) THEN
+    PERFORM refresh_daily_agent_usage_compatibility(
+      NEW.week_start,
+      NEW.user_id,
+      NEW.agent_id
+    );
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER weekly_agent_usage_daily_compatibility
+AFTER INSERT OR UPDATE OR DELETE ON weekly_agent_usage
+FOR EACH ROW EXECUTE FUNCTION mirror_weekly_agent_usage_to_daily();

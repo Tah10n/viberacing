@@ -112,10 +112,14 @@ support for an older protocol is intentionally removed or a reviewed installed c
 deliberately made the supported baseline. Merging the feature pull request itself does not authorize
 deployment, npm publication, a tag, a GitHub Release, or a Railway variable change.
 
-Migration 010 is an application forward-only boundary: it drops the legacy `weekly_agent_usage`
-table after rebuilding the maintained daily summary. Once applied, recover application failures by
-rolling forward to a compatible build; an older build whose query path reads the weekly table is not
-a valid rollback target. Connector distribution rollback remains independent of this schema rule.
+Migration 010 is the additive half of an expand-contract rollout. It creates and backfills
+`daily_agent_usage`, retains `weekly_agent_usage`, and installs a temporary database bridge so the
+previous application can keep reading and writing weekly summaries while Railway runs pre-deploy
+before the new healthcheck succeeds. The new application reads daily summaries and temporarily
+dual-writes both representations. After this deployment is healthy and separately approved, a new PR
+may add cleanup migration 011 to remove the weekly table and compatibility logic; do not include
+that destructive migration in the same deployment as 010. Connector distribution rollback remains
+independent of this application-schema sequence.
 
 Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains
 accepted aggregate snapshots. First publish and run connector 0.4.4, which keeps the old wire
