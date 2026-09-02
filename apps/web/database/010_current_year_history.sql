@@ -24,7 +24,7 @@ ALTER TABLE installation_sources
   ADD COLUMN history_backfill_completed_at timestamptz,
   ADD COLUMN last_rolling_range_start date,
   ADD COLUMN last_rolling_range_end date,
-  ADD COLUMN last_rolling_incomplete_dates date[],
+  ADD COLUMN unresolved_usage_dates date[] NOT NULL DEFAULT '{}'::date[],
   ADD CONSTRAINT installation_sources_history_backfill_completion_check CHECK (
     (history_backfill_status = 'pending' AND history_backfill_completed_at IS NULL)
     OR (history_backfill_status IN ('complete', 'partial')
@@ -36,10 +36,9 @@ ALTER TABLE installation_sources
       AND last_rolling_range_end IS NOT NULL
       AND last_rolling_range_start <= last_rolling_range_end)
   ),
-  ADD CONSTRAINT installation_sources_last_rolling_incomplete_dates_check CHECK (
-    last_rolling_incomplete_dates IS NULL
-    OR (cardinality(last_rolling_incomplete_dates) <= 31
-      AND array_position(last_rolling_incomplete_dates, NULL) IS NULL)
+  ADD CONSTRAINT installation_sources_unresolved_usage_dates_check CHECK (
+    cardinality(unresolved_usage_dates) <= 366
+    AND array_position(unresolved_usage_dates, NULL) IS NULL
   );
 
 -- Migration 010 is the expand half of an expand-contract rollout. The previous application release

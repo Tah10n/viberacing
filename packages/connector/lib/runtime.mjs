@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   appendFile,
@@ -73,6 +73,7 @@ const captureTokenKeys = [
   "reasoningTokens",
 ];
 const runtimeStateVersion = 3;
+const sha256Pattern = /^[0-9a-f]{64}$/;
 
 function validHistoryState(value) {
   return (
@@ -88,12 +89,17 @@ function validHistoryState(value) {
         [
           "hadPartialChunk,nextRangeEnd,year",
           "hadPartialChunk,nextRangeEnd,retentionSafe,year",
+          "hadPartialChunk,nextRangeEnd,rangeStart,retentionSafe,year",
         ].includes(Object.keys(cursor).sort().join(",")) &&
         Number.isSafeInteger(cursor.year) &&
         cursor.year >= 1970 &&
         cursor.year <= 9999 &&
         dayPattern.test(cursor.nextRangeEnd ?? "") &&
         cursor.nextRangeEnd.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
+        (cursor.rangeStart === undefined ||
+          (dayPattern.test(cursor.rangeStart) &&
+            cursor.rangeStart.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
+            cursor.rangeStart <= cursor.nextRangeEnd)) &&
         typeof cursor.hadPartialChunk === "boolean" &&
         (cursor.retentionSafe === undefined || typeof cursor.retentionSafe === "boolean"),
     )
@@ -106,12 +112,65 @@ function validCaptureCompactionPending(value) {
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.entries(value).every(
-      ([sourceId, year]) =>
+      ([sourceId, proof]) =>
         sourceIdPattern.test(sourceId) &&
-        Number.isSafeInteger(year) &&
-        year >= 1970 &&
-        year <= 9999,
+        (Number.isSafeInteger(proof) || validCaptureCleanupProof(proof)),
     )
+  );
+}
+
+function validCaptureCleanupProof(proof) {
+  const result = proof?.compactionResult;
+  const validSegments = (segments, maximumOffset, allowEmpty = false) =>
+    Array.isArray(segments) &&
+    (allowEmpty ? segments.length <= 4_096 : segments.length >= 1 && segments.length <= 4_096) &&
+    segments.every(
+      (segment) =>
+        segment !== null &&
+        typeof segment === "object" &&
+        !Array.isArray(segment) &&
+        JSON.stringify(Object.keys(segment).sort()) ===
+          JSON.stringify(["rangeEnd", "rangeStart", "safeOffset"]) &&
+        Number.isSafeInteger(segment.safeOffset) &&
+        segment.safeOffset >= 0 &&
+        segment.safeOffset <= maximumOffset &&
+        dayPattern.test(segment.rangeStart ?? "") &&
+        dayPattern.test(segment.rangeEnd ?? "") &&
+        segment.rangeStart <= segment.rangeEnd,
+    );
+  return (
+    proof !== null &&
+    typeof proof === "object" &&
+    !Array.isArray(proof) &&
+    proof.version === 1 &&
+    typeof proof.ino === "string" &&
+    /^\d+$/.test(proof.ino) &&
+    Number.isSafeInteger(proof.safeOffset) &&
+    proof.safeOffset >= 0 &&
+    proof.safeOffset <= 100_000_000 &&
+    sha256Pattern.test(proof.prefixHash ?? "") &&
+    validSegments(proof.acknowledgedSegments, proof.safeOffset) &&
+    (result === undefined ||
+      (result !== null &&
+        typeof result === "object" &&
+        !Array.isArray(result) &&
+        JSON.stringify(Object.keys(result).sort()) ===
+          JSON.stringify([
+            "acknowledgedSegments",
+            "prefixHash",
+            "proofPrefixHash",
+            "proofSafeOffset",
+            "safeOffset",
+          ]) &&
+        Number.isSafeInteger(result.safeOffset) &&
+        result.safeOffset >= 0 &&
+        result.safeOffset <= 100_000_000 &&
+        sha256Pattern.test(result.prefixHash ?? "") &&
+        Number.isSafeInteger(result.proofSafeOffset) &&
+        result.proofSafeOffset >= 0 &&
+        result.proofSafeOffset <= result.safeOffset &&
+        sha256Pattern.test(result.proofPrefixHash ?? "") &&
+        validSegments(result.acknowledgedSegments, result.proofSafeOffset, true)))
   );
 }
 
@@ -608,6 +667,195 @@ export async function compactCapture(path, now = new Date(), maximumBytes = 1_00
   });
 }
 
+function bufferHash(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export async function createCaptureCleanupProof(path, observedFile, acknowledgedRange) {
+  if (
+    observedFile === null ||
+    typeof observedFile !== "object" ||
+    !Number.isSafeInteger(observedFile.safeOffset) ||
+    observedFile.safeOffset < 0 ||
+    observedFile.safeOffset !== observedFile.size ||
+    observedFile.safeOffset > 100_000_000 ||
+    !dayPattern.test(acknowledgedRange?.rangeStart ?? "") ||
+    !dayPattern.test(acknowledgedRange?.rangeEnd ?? "") ||
+    acknowledgedRange.rangeStart > acknowledgedRange.rangeEnd
+  )
+    return null;
+  return withCaptureLock(path, async () => {
+    let info;
+    try {
+      info = await stat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+    if (
+      info.size < observedFile.safeOffset ||
+      (observedFile.ino !== undefined && String(info.ino) !== String(observedFile.ino))
+    )
+      return null;
+    const contents = await readFile(path);
+    const prefix = contents.subarray(0, observedFile.safeOffset);
+    return {
+      version: 1,
+      ino: String(info.ino),
+      safeOffset: observedFile.safeOffset,
+      prefixHash: bufferHash(prefix),
+      acknowledgedSegments: [{ safeOffset: observedFile.safeOffset, ...acknowledgedRange }],
+    };
+  });
+}
+
+export async function mergeCaptureCleanupProof(path, previous, next) {
+  if (!validCaptureCleanupProof(next) || !validCaptureCleanupProof(previous)) return next;
+  return withCaptureLock(path, async () => {
+    let contents;
+    let info;
+    try {
+      [contents, info] = await Promise.all([readFile(path), stat(path)]);
+    } catch {
+      return next;
+    }
+    if (
+      previous.compactionResult !== undefined ||
+      previous.ino !== next.ino ||
+      String(info.ino) !== next.ino ||
+      previous.safeOffset > next.safeOffset ||
+      contents.length < next.safeOffset ||
+      bufferHash(contents.subarray(0, previous.safeOffset)) !== previous.prefixHash ||
+      bufferHash(contents.subarray(0, next.safeOffset)) !== next.prefixHash
+    )
+      return next;
+    return {
+      ...next,
+      acknowledgedSegments: [...previous.acknowledgedSegments, ...next.acknowledgedSegments]
+        .filter(
+          (segment, index, values) =>
+            values.findIndex(
+              (candidate) =>
+                candidate.safeOffset === segment.safeOffset &&
+                candidate.rangeStart === segment.rangeStart &&
+                candidate.rangeEnd === segment.rangeEnd,
+            ) === index,
+        )
+        .slice(-4_096),
+    };
+  });
+}
+
+export async function compactCaptureWithProof(path, proof, now = new Date(), options = {}) {
+  if (!validCaptureCleanupProof(proof)) return { status: "invalid" };
+  return withCaptureLock(path, async () => {
+    let info;
+    let contents;
+    try {
+      [info, contents] = await Promise.all([stat(path), readFile(path)]);
+    } catch (error) {
+      if (error?.code === "ENOENT") return { status: "invalid" };
+      throw error;
+    }
+    const completed = proof.compactionResult;
+    if (
+      completed &&
+      contents.length >= completed.safeOffset &&
+      bufferHash(contents.subarray(0, completed.safeOffset)) === completed.prefixHash
+    ) {
+      const retainedProof =
+        completed.acknowledgedSegments.length === 0
+          ? null
+          : {
+              version: 1,
+              ino: String(info.ino),
+              safeOffset: completed.proofSafeOffset,
+              prefixHash: completed.proofPrefixHash,
+              acknowledgedSegments: completed.acknowledgedSegments,
+            };
+      return { status: "already-compacted", retainedProof };
+    }
+    if (
+      String(info.ino) !== proof.ino ||
+      contents.length < proof.safeOffset ||
+      bufferHash(contents.subarray(0, proof.safeOffset)) !== proof.prefixHash
+    )
+      return { status: "invalid" };
+    const prefix = contents.subarray(0, proof.safeOffset);
+    const text = prefix.toString("utf8");
+    if (!prefix.equals(Buffer.from(text)) || (text.length > 0 && !text.endsWith("\n")))
+      return { status: "invalid" };
+    const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    oldest.setUTCDate(oldest.getUTCDate() - 35);
+    const oldestDate = oldest.toISOString().slice(0, 10);
+    const retained = [];
+    const retainedOffsets = [];
+    const acknowledged = (date, lineEnd) =>
+      proof.acknowledgedSegments.some(
+        (segment) =>
+          lineEnd <= segment.safeOffset && date >= segment.rangeStart && date <= segment.rangeEnd,
+      );
+    let lineEnd = 0;
+    for (const line of text.split(/\n/).slice(0, -1)) {
+      lineEnd += Buffer.byteLength(line) + 1;
+      const normalized = line.endsWith("\r") ? line.slice(0, -1) : line;
+      if (safeCaptureLine(normalized, "0000-00-00") === null) return { status: "invalid" };
+      const record = JSON.parse(normalized);
+      if (record.date >= oldestDate || !acknowledged(record.date, lineEnd)) {
+        retained.push(line);
+        retainedOffsets.push({ original: lineEnd, compacted: 0 });
+      }
+    }
+    const compactedPrefix = Buffer.from(`${retained.join("\n")}${retained.length ? "\n" : ""}`);
+    let compactedOffset = 0;
+    for (let index = 0; index < retained.length; index += 1) {
+      compactedOffset += Buffer.byteLength(retained[index]) + 1;
+      retainedOffsets[index].compacted = compactedOffset;
+    }
+    const transformedSegments = proof.acknowledgedSegments
+      .map((segment) => {
+        let safeOffset = 0;
+        for (const offset of retainedOffsets) {
+          if (offset.original > segment.safeOffset) break;
+          safeOffset = offset.compacted;
+        }
+        return { ...segment, safeOffset };
+      })
+      .filter((segment) => segment.safeOffset > 0);
+    const compacted = Buffer.concat([compactedPrefix, contents.subarray(proof.safeOffset)]);
+    if (compacted.equals(contents)) return { status: "unchanged" };
+    const compactionResult = {
+      safeOffset: compacted.length,
+      prefixHash: bufferHash(compacted),
+      proofSafeOffset: compactedPrefix.length,
+      proofPrefixHash: bufferHash(compactedPrefix),
+      acknowledgedSegments: transformedSegments,
+    };
+    await options.beforeRename?.(compactionResult);
+    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, compacted, { mode: 0o600 });
+      await rename(temporary, path);
+      await options.afterRename?.();
+      const compactedInfo = await stat(path);
+      const retainedProof =
+        transformedSegments.length === 0
+          ? null
+          : {
+              version: 1,
+              ino: String(compactedInfo.ino),
+              safeOffset: compactedPrefix.length,
+              prefixHash: compactionResult.proofPrefixHash,
+              acknowledgedSegments: transformedSegments,
+            };
+      return { status: "compacted", compactionResult, retainedProof };
+    } catch (error) {
+      await unlink(temporary).catch(() => {});
+      throw error;
+    }
+  });
+}
+
 export async function quarantinePending(sourceId, payload, errorCode) {
   if (!sourceIdPattern.test(sourceId)) throw new Error("Invalid quarantined source id");
   await mkdir(quarantineDirectory, { recursive: true, mode: 0o700 });
@@ -715,6 +963,9 @@ export async function savePending(payload) {
     const historyAdvances = (payload.historyAdvances ?? []).filter(
       (advance) => advance.sourceId === snapshot.sourceId,
     );
+    const captureCleanupProofs = (payload.captureCleanupProofs ?? []).filter(
+      (proof) => proof.sourceId === snapshot.sourceId,
+    );
     await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
@@ -723,6 +974,9 @@ export async function savePending(payload) {
         ? { pendingRegistrationSupersessions: undefined }
         : { pendingRegistrationSupersessions }),
       ...(historyAdvances.length === 0 ? { historyAdvances: undefined } : { historyAdvances }),
+      ...(captureCleanupProofs.length === 0
+        ? { captureCleanupProofs: undefined }
+        : { captureCleanupProofs }),
     });
     await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
       if (error?.code !== "ENOENT") throw error;

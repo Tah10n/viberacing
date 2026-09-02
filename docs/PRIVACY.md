@@ -22,12 +22,14 @@ reports. During sync it sends a server source ID, sequence, UTC range, snapshot 
 aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
 may also mark an individual UTC date complete or partial. Protocol v5 adds only a fixed rolling or
 current-year-history kind and, on the final January chunk, a fixed `complete` or `partial` year
-status. The resumable year, next range end, partial bit, and isolated adapter checkpoint stay in
-owner-only local state; no filename, provider identity, or content is added. The server still
-accepts v2-v4 payloads. If collection fails, v4+ may instead send only the fixed `collector_failed`
-code, source ID, and the last server-accepted sequence known before collection. That ordering value
-is an opaque canonical counter, not local content. Delayed errors are ignored; legacy v2/v3 errors
-are accepted but cannot overwrite persistent status. Exception messages are never sent.
+status. Responses may add only nullable UTC start/end bounds for a durable missing-date gap. The
+resumable year, next range end, partial bit, and isolated adapter checkpoint stay in owner-only
+local state; the server stores only aggregate unresolved UTC dates, and no filename, provider
+identity, or content is added. The server still accepts v2-v4 payloads. If collection fails, v4+ may
+instead send only the fixed `collector_failed` code, source ID, and the last server-accepted
+sequence known before collection. That ordering value is an opaque canonical counter, not local
+content. Delayed errors are ignored; legacy v2/v3 errors are accepted but cannot overwrite
+persistent status. Exception messages are never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
@@ -72,14 +74,15 @@ authoritative correction marker rather than an inferred usage value. No zero is 
 incomplete result or beyond the proven range. These remain date-level aggregate counters; it never
 retains or transmits any other transcript field. The Antigravity wrapper passes native output
 through to the terminal and persists only the stable event ID, UTC date, and exact token counters
-needed for deduplication. Capture records older than 35 days are removed only after every available
-record has been safely read and the terminal historical payload has been acknowledged; public
-Antigravity history can still remain partial. Failed or limited reads retain the capture for repair,
-and acknowledged cleanup is retried after a crash. Large files are rewritten atomically with the
-same allowlist. `source add` requires an explicit label and never derives network metadata from the
-local data-root path. Each capture profile is keyed by its random client source ID, not an account
-label, provider identity, or agent name. Multiple Antigravity accounts therefore remain in separate
-local files.
+needed for deduplication. Capture records older than 35 days are removed only when their exact
+capture prefix, byte boundary, and date range are bound to an acknowledged payload and revalidated
+under the capture lock; public Antigravity history can still remain partial. Appended or malformed
+suffixes, changed prefixes, replaced/truncated files, and unsafe collections retain the capture for
+repair. Acknowledged cleanup repeats after later successful Sync, is retried after a crash, and is
+best-effort per source. Large files are rewritten atomically with the same allowlist. `source add`
+requires an explicit label and never derives network metadata from the local data-root path. Each
+capture profile is keyed by its random client source ID, not an account label, provider identity, or
+agent name. Multiple Antigravity accounts therefore remain in separate local files.
 
 For Codex ChatGPT logins, the connector reads the size-bounded, non-symlinked `CODEX_HOME/auth.json`
 before starting App Server, retains only `tokens.account_id`, brackets usage with two

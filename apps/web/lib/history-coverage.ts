@@ -4,13 +4,14 @@ export type UsageChartStatus = "complete" | "partial" | "no-data";
 
 interface SourceCoverage {
   readonly included: boolean;
+  readonly active: boolean;
   readonly aggregationMode: "account_max" | "source_sum";
   readonly historyBackfillYear: number | null;
   readonly historyBackfillStatus: "pending" | "complete" | "partial";
   readonly lastCompleteness: "complete" | "partial" | null;
   readonly lastRollingRangeStart: string | null;
   readonly lastRollingRangeEnd: string | null;
-  readonly lastRollingIncompleteDates: readonly string[] | null;
+  readonly unresolvedUsageDates: readonly string[];
   readonly provenAccountDates: ReadonlySet<string>;
 }
 
@@ -21,22 +22,29 @@ export function sourcePeriodIncomplete(
 ): boolean {
   if (!source.included) return false;
   const rollingStart = addUtcDays(rollingToday, -30);
-  let selectedIntersectsPartialRolling = false;
-  if (source.lastCompleteness === "partial") {
-    if (
-      source.lastRollingRangeStart === null ||
-      source.lastRollingRangeEnd === null ||
-      source.lastRollingIncompleteDates === null
-    ) {
-      selectedIntersectsPartialRolling = resolved.toExclusive > rollingStart;
-    } else {
-      selectedIntersectsPartialRolling = source.lastRollingIncompleteDates.some(
-        (date) =>
-          date >= resolved.from &&
-          date < resolved.toExclusive &&
-          (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date)),
-      );
-    }
+  const unresolvedDateMatters = (date: string): boolean =>
+    date >= resolved.from &&
+    date < resolved.toExclusive &&
+    date <= rollingToday &&
+    (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date));
+  const selectedIntersectsUnresolved = source.unresolvedUsageDates.some(unresolvedDateMatters);
+  let selectedIntersectsStaleTail = false;
+  if (source.active) {
+    const staleStart =
+      source.lastRollingRangeEnd === null
+        ? resolved.from < rollingStart
+          ? rollingStart
+          : resolved.from
+        : addUtcDays(source.lastRollingRangeEnd, 1);
+    for (
+      let date = staleStart < resolved.from ? resolved.from : staleStart;
+      date < resolved.toExclusive && date <= rollingToday;
+      date = addUtcDays(date, 1)
+    )
+      if (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date)) {
+        selectedIntersectsStaleTail = true;
+        break;
+      }
   }
   const historyEnd = resolved.toExclusive < rollingStart ? resolved.toExclusive : rollingStart;
   let selectedIntersectsUnfinishedHistory =
@@ -52,7 +60,11 @@ export function sourcePeriodIncomplete(
       }
     }
   }
-  return selectedIntersectsPartialRolling || selectedIntersectsUnfinishedHistory;
+  return (
+    selectedIntersectsUnresolved ||
+    selectedIntersectsStaleTail ||
+    selectedIntersectsUnfinishedHistory
+  );
 }
 
 export function usageChartStatus(

@@ -7,13 +7,14 @@ const now = new Date("2026-09-01T12:00:00.000Z");
 describe("dashboard history coverage", () => {
   const completeSource = {
     included: true,
+    active: true,
     aggregationMode: "source_sum" as const,
     historyBackfillYear: 2026,
     historyBackfillStatus: "complete" as const,
     lastCompleteness: "complete" as const,
     lastRollingRangeStart: "2026-08-02",
     lastRollingRangeEnd: "2026-09-01",
-    lastRollingIncompleteDates: [] as string[],
+    unresolvedUsageDates: [] as string[],
     provenAccountDates: new Set<string>(),
   };
 
@@ -57,7 +58,7 @@ describe("dashboard history coverage", () => {
       sourcePeriodIncomplete(selected, "2026-09-01", {
         ...completeSource,
         lastCompleteness: "partial",
-        lastRollingIncompleteDates: ["2026-08-15"],
+        unresolvedUsageDates: ["2026-08-15"],
       }),
     ).toBe(true);
   });
@@ -84,7 +85,7 @@ describe("dashboard history coverage", () => {
       sourcePeriodIncomplete(selected, "2026-09-01", {
         ...completeSource,
         lastCompleteness: "partial",
-        lastRollingIncompleteDates: ["2026-08-16"],
+        unresolvedUsageDates: ["2026-08-16"],
       }),
     ).toBe(false);
   });
@@ -94,7 +95,7 @@ describe("dashboard history coverage", () => {
     const mixed = {
       ...completeSource,
       lastCompleteness: "partial" as const,
-      lastRollingIncompleteDates: ["2026-08-17", "2026-08-18"],
+      unresolvedUsageDates: ["2026-08-17", "2026-08-18"],
     };
     expect(sourcePeriodIncomplete(selected("2026-08-15"), "2026-09-01", mixed)).toBe(false);
     expect(sourcePeriodIncomplete(selected("2026-08-16"), "2026-09-01", mixed)).toBe(false);
@@ -111,7 +112,7 @@ describe("dashboard history coverage", () => {
       ...completeSource,
       aggregationMode: "account_max" as const,
       lastCompleteness: "partial" as const,
-      lastRollingIncompleteDates: ["2026-08-17"],
+      unresolvedUsageDates: ["2026-08-17"],
       provenAccountDates: new Set(["2026-08-17"]),
     };
     expect(sourcePeriodIncomplete(selected, "2026-09-01", partial)).toBe(false);
@@ -134,8 +135,88 @@ describe("dashboard history coverage", () => {
         lastCompleteness: "partial",
         lastRollingRangeStart: null,
         lastRollingRangeEnd: null,
-        lastRollingIncompleteDates: null,
+        unresolvedUsageDates: [],
       }),
     ).toBe(true);
+  });
+
+  it("keeps an unresolved omitted date partial after it leaves the next rolling window", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-07-16", to: "2026-07-16" },
+      now,
+    );
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        lastRollingRangeStart: "2026-08-02",
+        unresolvedUsageDates: ["2026-07-16"],
+      }),
+    ).toBe(true);
+  });
+
+  it("treats an active source ending yesterday and a never-synced source as partial today", () => {
+    const today = resolveUsagePeriod({ kind: "custom", from: "2026-09-01", to: "2026-09-01" }, now);
+    expect(
+      sourcePeriodIncomplete(today, "2026-09-01", {
+        ...completeSource,
+        lastRollingRangeEnd: "2026-08-31",
+      }),
+    ).toBe(true);
+    expect(
+      sourcePeriodIncomplete(today, "2026-09-01", {
+        ...completeSource,
+        lastRollingRangeStart: null,
+        lastRollingRangeEnd: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not turn future week or month dates into false partial coverage", () => {
+    const week = resolveUsagePeriod({ kind: "week" }, now);
+    const month = resolveUsagePeriod({ kind: "month" }, now);
+    for (const selected of [week, month])
+      expect(
+        sourcePeriodIncomplete(selected, "2026-09-01", {
+          ...completeSource,
+          lastRollingRangeEnd: "2026-09-01",
+        }),
+      ).toBe(false);
+  });
+
+  it("keeps source-sum gaps but lets an authoritative account-max sibling close the day", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-07-16", to: "2026-07-16" },
+      now,
+    );
+    const unresolved = {
+      ...completeSource,
+      unresolvedUsageDates: ["2026-07-16"],
+      provenAccountDates: new Set(["2026-07-16"]),
+    };
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...unresolved,
+        aggregationMode: "account_max",
+      }),
+    ).toBe(false);
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...unresolved,
+        aggregationMode: "source_sum",
+      }),
+    ).toBe(true);
+  });
+
+  it("retains a known disconnected gap without inferring a new disconnected tail", () => {
+    const selected = (date: string) =>
+      resolveUsagePeriod({ kind: "custom", from: date, to: date }, now);
+    const disconnected = {
+      ...completeSource,
+      active: false,
+      lastRollingRangeEnd: "2026-08-20",
+      unresolvedUsageDates: ["2026-08-10"],
+    };
+    expect(sourcePeriodIncomplete(selected("2026-08-10"), "2026-09-01", disconnected)).toBe(true);
+    expect(sourcePeriodIncomplete(selected("2026-08-25"), "2026-09-01", disconnected)).toBe(false);
   });
 });

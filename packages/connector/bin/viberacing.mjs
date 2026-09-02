@@ -99,6 +99,9 @@ import {
   claimConnectedScheduler,
   claimSchedulerLaunch,
   compactCapture,
+  compactCaptureWithProof,
+  createCaptureCleanupProof,
+  mergeCaptureCleanupProof,
   clearAutomaticState,
   clearDirty,
   clearDirtyForSources,
@@ -1343,10 +1346,9 @@ function historyYearStart(year) {
   return `${String(year).padStart(4, "0")}-01-01`;
 }
 
-function historyRangeEndingAt(rangeEnd, year) {
+function historyRangeEndingAt(rangeEnd, year, rangeStart = historyYearStart(year)) {
   const firstCandidate = addUtcDays(rangeEnd, -30);
-  const yearStart = historyYearStart(year);
-  return { rangeStart: firstCandidate < yearStart ? yearStart : firstCandidate, rangeEnd };
+  return { rangeStart: firstCandidate < rangeStart ? rangeStart : firstCandidate, rangeEnd };
 }
 
 function historySnapshotState(sourceId, range, completeness, state, kind, retentionSafe = false) {
@@ -1360,6 +1362,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind, retent
       advance: {
         sourceId,
         year,
+        rangeStart: yearStart,
         nextRangeEnd: null,
         hadPartialChunk: completeness === "partial",
         retentionSafe,
@@ -1372,13 +1375,18 @@ function historySnapshotState(sourceId, range, completeness, state, kind, retent
     throw new Error("Current-year history cursor changed during collection");
   const hadPartialChunk = cursor.hadPartialChunk || completeness === "partial";
   const historyRetentionSafe = cursor.retentionSafe === true && retentionSafe;
+  const cursorRangeStart = cursor.rangeStart ?? yearStart;
   const terminalStatus =
-    range.rangeStart === yearStart ? (hadPartialChunk ? "partial" : "complete") : null;
+    range.rangeStart === cursorRangeStart ? (hadPartialChunk ? "partial" : "complete") : null;
   return {
-    snapshot: terminalStatus === null ? {} : { historyYearComplete: terminalStatus },
+    snapshot:
+      terminalStatus === null || cursorRangeStart !== yearStart
+        ? {}
+        : { historyYearComplete: terminalStatus },
     advance: {
       sourceId,
       year,
+      rangeStart: cursorRangeStart,
       nextRangeEnd: terminalStatus === null ? addUtcDays(range.rangeStart, -1) : null,
       hadPartialChunk,
       retentionSafe: historyRetentionSafe,
@@ -1632,18 +1640,111 @@ async function compactPendingCaptures(config) {
     (await pendingPayloads()).map((path) => path.split(/[\\/]/).at(-1)?.split(".")[0]),
   );
   for (const source of config.sources) {
+    const proof = state.captureCompactionPending[source.sourceId];
     if (
-      state.captureCompactionPending[source.sourceId] === undefined ||
+      proof === undefined ||
       source.collectionMethod !== "antigravity_cli_capture" ||
       typeof source.dataPath !== "string" ||
       pending.has(source.sourceId) ||
       state.quarantine?.[source.sourceId]
     )
       continue;
-    await compactCapture(source.dataPath, connectorNow());
-    delete state.captureCompactionPending[source.sourceId];
-    await writeState(state);
+    if (Number.isSafeInteger(proof)) {
+      delete state.captureCompactionPending[source.sourceId];
+      await writeState(state);
+      warning("Vibe Racing warning: stale Antigravity cleanup proof was discarded.");
+      continue;
+    }
+    try {
+      if (
+        process.env.NODE_ENV === "test" &&
+        process.env.VIBERACING_TEST_FAIL_CAPTURE_COMPACTION === source.sourceId
+      )
+        throw new Error("synthetic capture compaction failure");
+      const result = await compactCaptureWithProof(source.dataPath, proof, connectorNow(), {
+        beforeRename: async (compactionResult) => {
+          state.captureCompactionPending[source.sourceId] = { ...proof, compactionResult };
+          await writeState(state);
+        },
+        afterRename: async () => {
+          if (
+            process.env.NODE_ENV === "test" &&
+            process.env.VIBERACING_TEST_FAIL_AFTER_CAPTURE_COMPACTION_RENAME === source.sourceId
+          )
+            throw new Error("synthetic failure after capture compaction rename");
+        },
+      });
+      if (["compacted", "already-compacted"].includes(result.status)) {
+        if (result.retainedProof === null) delete state.captureCompactionPending[source.sourceId];
+        else state.captureCompactionPending[source.sourceId] = result.retainedProof;
+        await writeState(state);
+      } else if (result.status === "invalid") {
+        delete state.captureCompactionPending[source.sourceId];
+        await writeState(state);
+      }
+      if (result.status === "invalid")
+        warning("Vibe Racing warning: stale Antigravity cleanup proof was discarded.");
+    } catch {
+      warning("Vibe Racing warning: Antigravity capture cleanup was deferred.");
+    }
   }
+}
+
+function validatedCaptureCleanupProof(payload, sourceId) {
+  const proofs = payload.captureCleanupProofs ?? [];
+  if (!Array.isArray(proofs) || proofs.length > 1) {
+    throw new Error("Pending capture cleanup proof is invalid");
+  }
+  const item = proofs[0];
+  if (item === undefined) return null;
+  const proof = item.proof;
+  if (
+    item?.sourceId !== sourceId ||
+    !uuidPattern.test(item.sourceId ?? "") ||
+    proof?.version !== 1 ||
+    typeof proof.ino !== "string" ||
+    !/^\d+$/.test(proof.ino) ||
+    !Number.isSafeInteger(proof.safeOffset) ||
+    proof.safeOffset < 0 ||
+    proof.safeOffset > 100_000_000 ||
+    !/^[0-9a-f]{64}$/.test(proof.prefixHash ?? "") ||
+    !Array.isArray(proof.acknowledgedSegments) ||
+    proof.acknowledgedSegments.length < 1 ||
+    proof.acknowledgedSegments.length > 4_096 ||
+    proof.acknowledgedSegments.some(
+      (segment) =>
+        !Number.isSafeInteger(segment?.safeOffset) ||
+        segment.safeOffset < 0 ||
+        segment.safeOffset > proof.safeOffset ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(segment?.rangeStart ?? "") ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(segment?.rangeEnd ?? "") ||
+        segment.rangeStart > segment.rangeEnd ||
+        JSON.stringify(Object.keys(segment).sort()) !==
+          JSON.stringify(["rangeEnd", "rangeStart", "safeOffset"]),
+    ) ||
+    JSON.stringify(Object.keys(item).sort()) !== JSON.stringify(["proof", "sourceId"]) ||
+    JSON.stringify(Object.keys(proof).sort()) !==
+      JSON.stringify(["acknowledgedSegments", "ino", "prefixHash", "safeOffset", "version"])
+  )
+    throw new Error("Pending capture cleanup proof is invalid");
+  return proof;
+}
+
+async function applyCaptureCleanupAcknowledgement(config, item) {
+  const proof = validatedCaptureCleanupProof(item.payload, item.sourceId);
+  if (proof === null) return;
+  const state = await readState();
+  state.captureCompactionPending ??= {};
+  const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
+  const previous = state.captureCompactionPending[item.sourceId];
+  state.captureCompactionPending[item.sourceId] =
+    source?.collectionMethod === "antigravity_cli_capture" &&
+    typeof source.dataPath === "string" &&
+    previous !== undefined &&
+    !Number.isSafeInteger(previous)
+      ? await mergeCaptureCleanupProof(source.dataPath, previous, proof)
+      : proof;
+  await writeState(state);
 }
 
 async function rememberServerSequences(config, sequences) {
@@ -1679,7 +1780,20 @@ async function rememberServerSequences(config, sequences) {
       source.historyBackfillStatus = status.historyBackfillStatus;
       changed = true;
     }
+    if (
+      (status?.historyGapRangeStart === null ||
+        /^\d{4}-\d{2}-\d{2}$/.test(status?.historyGapRangeStart ?? "")) &&
+      (status?.historyGapRangeEnd === null ||
+        /^\d{4}-\d{2}-\d{2}$/.test(status?.historyGapRangeEnd ?? "")) &&
+      (source.historyGapRangeStart !== status.historyGapRangeStart ||
+        source.historyGapRangeEnd !== status.historyGapRangeEnd)
+    ) {
+      source.historyGapRangeStart = status.historyGapRangeStart;
+      source.historyGapRangeEnd = status.historyGapRangeEnd;
+      changed = true;
+    }
   }
+  changed = reconcileHistoryCursors(config, state) || changed;
   if (changed) {
     await writeState(state);
     await writeConfig(config);
@@ -1711,11 +1825,38 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
     }
   for (const source of config.sources) {
     if (typeof source.sourceId !== "string") continue;
+    const gapStart = source.historyGapRangeStart;
+    const gapEnd = source.historyGapRangeEnd;
+    if (
+      typeof gapStart === "string" &&
+      typeof gapEnd === "string" &&
+      gapStart.startsWith(`${year}-`) &&
+      gapStart <= gapEnd
+    ) {
+      const current = state.history[source.sourceId];
+      if (
+        current?.year !== year ||
+        current.rangeStart !== gapStart ||
+        current.nextRangeEnd > gapEnd ||
+        current.nextRangeEnd < gapStart
+      ) {
+        state.history[source.sourceId] = {
+          year,
+          rangeStart: gapStart,
+          nextRangeEnd: gapEnd,
+          hadPartialChunk: false,
+          retentionSafe: true,
+        };
+        delete state.historyAdapters[source.sourceId];
+        changed = true;
+      }
+      continue;
+    }
     const retryingPartial = state.historyRetries[source.sourceId] === year;
     const terminal =
       source.historyBackfillYear === year &&
-      (source.historyBackfillStatus === "complete" ||
-        (source.historyBackfillStatus === "partial" && !retryingPartial));
+      ["complete", "partial"].includes(source.historyBackfillStatus) &&
+      !retryingPartial;
     if (terminal || firstHistoricalEnd < yearStart) {
       if (state.history[source.sourceId] !== undefined) {
         delete state.history[source.sourceId];
@@ -1728,6 +1869,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
     if (current?.year === year) continue;
     state.history[source.sourceId] = {
       year,
+      rangeStart: yearStart,
       nextRangeEnd: firstHistoricalEnd,
       hadPartialChunk: false,
       retentionSafe: true,
@@ -1749,19 +1891,19 @@ function prepareFullHistoryRetries(config, state, now = connectorNow()) {
   state.historyRetries ??= {};
   let changed = false;
   for (const source of config.sources) {
-    if (
-      typeof source.sourceId !== "string" ||
-      source.historyBackfillYear !== year ||
-      source.historyBackfillStatus !== "partial"
-    )
-      continue;
+    if (typeof source.sourceId !== "string") continue;
     if (state.historyRetries[source.sourceId] !== year) {
       state.historyRetries[source.sourceId] = year;
       changed = true;
     }
-    if (state.history[source.sourceId]?.year !== year) {
+    if (
+      state.history[source.sourceId]?.year !== year ||
+      state.history[source.sourceId]?.rangeStart !== yearStart ||
+      state.history[source.sourceId]?.nextRangeEnd !== firstHistoricalEnd
+    ) {
       state.history[source.sourceId] = {
         year,
+        rangeStart: yearStart,
         nextRangeEnd: firstHistoricalEnd,
         hadPartialChunk: false,
         retentionSafe: true,
@@ -1902,12 +2044,15 @@ function validatedHistoryAdvance(payload, sourceId) {
   }
   const advance = advances[0];
   if (advance === undefined) return null;
+  const rangeStart = advance.rangeStart ?? historyYearStart(advance.year);
   if (
     advance?.sourceId !== sourceId ||
     !uuidPattern.test(advance.sourceId ?? "") ||
     !Number.isSafeInteger(advance.year) ||
     advance.year < 1970 ||
     advance.year > 9999 ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(rangeStart ?? "") ||
+    !rangeStart.startsWith(`${String(advance.year).padStart(4, "0")}-`) ||
     !(
       advance.nextRangeEnd === null ||
       (/^\d{4}-\d{2}-\d{2}$/.test(advance.nextRangeEnd ?? "") &&
@@ -1922,10 +2067,11 @@ function validatedHistoryAdvance(payload, sourceId) {
     ![
       "hadPartialChunk,nextRangeEnd,sourceId,terminalStatus,year",
       "hadPartialChunk,nextRangeEnd,retentionSafe,sourceId,terminalStatus,year",
+      "hadPartialChunk,nextRangeEnd,rangeStart,retentionSafe,sourceId,terminalStatus,year",
     ].includes(Object.keys(advance).sort().join(","))
   )
     throw new Error("Pending history advancement state is invalid");
-  return { ...advance, retentionSafe: advance.retentionSafe === true };
+  return { ...advance, rangeStart, retentionSafe: advance.retentionSafe === true };
 }
 
 async function applyHistoryAdvance(config, item) {
@@ -1939,6 +2085,7 @@ async function applyHistoryAdvance(config, item) {
   if (advance.terminalStatus === null) {
     state.history[item.sourceId] = {
       year: advance.year,
+      rangeStart: advance.rangeStart,
       nextRangeEnd: advance.nextRangeEnd,
       hadPartialChunk: advance.hadPartialChunk,
       retentionSafe: advance.retentionSafe,
@@ -1952,9 +2099,8 @@ async function applyHistoryAdvance(config, item) {
     if (source) {
       source.historyBackfillYear = advance.year;
       source.historyBackfillStatus = advance.terminalStatus;
-      if (source.collectionMethod === "antigravity_cli_capture" && advance.retentionSafe)
-        state.captureCompactionPending[item.sourceId] = advance.year;
     }
+    reconcileHistoryCursors(config, state);
   }
   await writeState(state);
   if (advance.terminalStatus !== null) await writeConfig(config);
@@ -2019,7 +2165,10 @@ async function deliverPendingGroup(config, items, retired) {
         await writeState(state);
         staleSources.push(item.sourceId);
       } else {
-        if (snapshot) await applyHistoryAdvance(config, item);
+        if (snapshot) {
+          await applyCaptureCleanupAcknowledgement(config, item);
+          await applyHistoryAdvance(config, item);
+        }
         await removePending(item.path);
         if (snapshot?.kind === "year_backfill") historyDeliveries += 1;
         if (snapshot && sequenceStatus?.accepted !== false) {
@@ -2385,7 +2534,12 @@ async function syncRange(providedConfig, options = {}) {
       let accepted = previous.accepted;
       let state = await readState();
       state = await reconcileServerState(config, state);
-      if (options.fullHistory && prepareFullHistoryRetries(config, state)) await writeState(state);
+      if (
+        options.fullHistory &&
+        (options.kind ?? "rolling") === "rolling" &&
+        prepareFullHistoryRetries(config, state)
+      )
+        await writeState(state);
       await migrateSourcesSchema();
       const snapshotKind = options.kind ?? "rolling";
       if (!["rolling", "year_backfill"].includes(snapshotKind))
@@ -2611,6 +2765,7 @@ async function syncRange(providedConfig, options = {}) {
       let accountSetupPending = backfillAccountSetupPending;
       const pendingRegistrationSupersessions = new Map();
       const historyAdvances = [];
+      const captureCleanupProofs = [];
       let terminalCollectorDiagnostic;
       for (const sourceId of previous.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
@@ -2713,6 +2868,24 @@ async function syncRange(providedConfig, options = {}) {
           ...history.snapshot,
         });
         if (history.advance !== null) historyAdvances.push(history.advance);
+        if (activeSource.collectionMethod === "antigravity_cli_capture") {
+          state.captureCompactionPending ??= {};
+          if (outcome.value.result.retentionSafe !== true) {
+            delete state.captureCompactionPending[activeSource.sourceId];
+          } else {
+            try {
+              const observed =
+                outcome.value.result.nextState?.files?.[resolve(activeSource.dataPath)];
+              const proof = await createCaptureCleanupProof(activeSource.dataPath, observed, range);
+              if (proof !== null)
+                captureCleanupProofs.push({ sourceId: activeSource.sourceId, proof });
+              else delete state.captureCompactionPending[activeSource.sourceId];
+            } catch {
+              delete state.captureCompactionPending[activeSource.sourceId];
+              warning("Vibe Racing warning: Antigravity cleanup proof could not be prepared.");
+            }
+          }
+        }
         if (outcome.value.supersededPendingClientSourceId)
           pendingRegistrationSupersessions.set(activeSource.sourceId, {
             sourceId: activeSource.sourceId,
@@ -2807,6 +2980,7 @@ async function syncRange(providedConfig, options = {}) {
         sourceErrors,
         pendingRegistrationSupersessions: [...pendingRegistrationSupersessions.values()],
         historyAdvances,
+        captureCleanupProofs,
       };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
@@ -2906,14 +3080,20 @@ async function sync(providedConfig, options = {}) {
       .sort(
         (left, right) =>
           right.cursor.nextRangeEnd.localeCompare(left.cursor.nextRangeEnd) ||
+          (left.cursor.rangeStart ?? historyYearStart(year)).localeCompare(
+            right.cursor.rangeStart ?? historyYearStart(year),
+          ) ||
           left.source.sourceId.localeCompare(right.source.sourceId),
       );
     const nextRangeEnd = candidates[0]?.cursor.nextRangeEnd;
     if (nextRangeEnd === undefined) break;
+    const rangeStart = candidates[0].cursor.rangeStart ?? historyYearStart(year);
     const selected = candidates.filter(
-      (candidate) => candidate.cursor.nextRangeEnd === nextRangeEnd,
+      (candidate) =>
+        candidate.cursor.nextRangeEnd === nextRangeEnd &&
+        (candidate.cursor.rangeStart ?? historyYearStart(year)) === rangeStart,
     );
-    const range = historyRangeEndingAt(nextRangeEnd, year);
+    const range = historyRangeEndingAt(nextRangeEnd, year, rangeStart);
     const blockedBefore = blockedHistorySourceIds.size;
     const historical = await syncRange(config, {
       ...options,
@@ -2943,8 +3123,11 @@ async function sync(providedConfig, options = {}) {
       ({ source }) =>
         !afterConfig.sources.some((candidate) => candidate.sourceId === source.sourceId),
     );
-    if (!cursorChanged && !sourceRetired && blockedHistorySourceIds.size === blockedBefore)
-      throw new Error("Historical sync made no progress; retry in a separate run.");
+    if (!cursorChanged && !sourceRetired && blockedHistorySourceIds.size === blockedBefore) {
+      if (range.rangeStart !== rangeStart)
+        throw new Error("Historical sync made no progress; retry in a separate run.");
+      for (const { source } of selected) blockedHistorySourceIds.add(source.sourceId);
+    }
   }
 
   const finalConfig = providedConfig ?? (await readConfig());

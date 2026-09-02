@@ -58,7 +58,7 @@ async function get(): Promise<Response> {
                   SELECT 1 FROM information_schema.columns
                    WHERE table_schema = 'public'
                      AND table_name = 'installation_sources'
-                     AND column_name = 'last_rolling_incomplete_dates'
+                     AND column_name = 'unresolved_usage_dates'
                 )
                 AND EXISTS (
                   SELECT 1

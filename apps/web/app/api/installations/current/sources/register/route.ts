@@ -80,6 +80,8 @@ type SourceMapping = {
   profile_source_id: string;
   history_backfill_year: number;
   history_backfill_status: "pending" | "complete" | "partial";
+  history_gap_range_start: string | null;
+  history_gap_range_end: string | null;
 };
 
 function response(mapping: SourceMapping, protocolVersion: number): Response {
@@ -98,6 +100,8 @@ function response(mapping: SourceMapping, protocolVersion: number): Response {
           ? {
               historyBackfillYear: mapping.history_backfill_year,
               historyBackfillStatus: mapping.history_backfill_status,
+              historyGapRangeStart: mapping.history_gap_range_start,
+              historyGapRangeEnd: mapping.history_gap_range_end,
             }
           : {}),
       },
@@ -166,6 +170,9 @@ async function post(request: Request): Promise<Response> {
                 source.profile_source_id::text,
                 source.history_backfill_year,
                 source.history_backfill_status,
+                source.unresolved_usage_dates[1]::text AS history_gap_range_start,
+                source.unresolved_usage_dates[cardinality(source.unresolved_usage_dates)]::text
+                  AS history_gap_range_end,
                 source.status
            FROM installation_sources source
            JOIN agent_accounts account ON account.id = source.agent_account_id
@@ -292,7 +299,10 @@ async function post(request: Request): Promise<Response> {
          RETURNING id::text AS source_id, client_source_id, agent_account_id::text, agent_id,
                    $9::text AS account_label, collection_method,
                    last_accepted_sync_sequence::text, profile_source_id::text,
-                   history_backfill_year, history_backfill_status`,
+                   history_backfill_year, history_backfill_status,
+                   unresolved_usage_dates[1]::text AS history_gap_range_start,
+                   unresolved_usage_dates[cardinality(unresolved_usage_dates)]::text
+                     AS history_gap_range_end`,
         [
           sourceId,
           owner.id,

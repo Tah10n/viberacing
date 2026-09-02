@@ -2284,6 +2284,17 @@ try {
     "new ingestion did not keep weekly and daily compatibility summaries equal",
   );
   console.log("ok - unchanged confirmation advances account and computer Last sync timestamps");
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_year = $3,
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = coalesce(history_backfill_completed_at, now()),
+            last_rolling_range_start = $4::date,
+            last_rolling_range_end = $5::date,
+            last_completeness = 'complete'
+      WHERE user_id = $1 AND id <> $2 AND status = 'active'`,
+    [userId, target, currentUtcYear, dateOffset(-30), today],
+  );
   const omittedPartialDay = dateOffset(-8);
   const explicitCompleteZeroDay = dateOffset(-7);
   const authoritativeMixedDay = dateOffset(-6);
@@ -2304,7 +2315,7 @@ try {
   ]);
   check(response.status === 200, "mixed rolling completeness snapshot failed");
   const rollingCoverage = await pool.query(
-    `SELECT last_rolling_incomplete_dates::text[] AS incomplete_dates
+    `SELECT unresolved_usage_dates::text[] AS incomplete_dates
        FROM installation_sources WHERE id = $1`,
     [target],
   );
@@ -2384,6 +2395,121 @@ try {
   console.log(
     "ok - mixed rolling dates and retained historical coverage keep exact complete/partial status",
   );
+
+  const outageAccountId = randomUUID();
+  const outageInstallationId = randomUUID();
+  const outageDeviceToken = token();
+  const outageSourceId = randomUUID();
+  const outageGapStart = dateOffset(-44);
+  const outageGapEnd = dateOffset(-31);
+  const outageRecoveredDate = dateOffset(-40);
+  await pool.query(
+    `INSERT INTO installations
+       (id, user_id, name, status, installation_secret_hash, device_token_hash,
+        connector_version, protocol_version)
+     VALUES ($1, $2, 'Temporal outage', 'active', $3, $4, '0.6.0', 5)`,
+    [outageInstallationId, userId, digest(token()), digest(outageDeviceToken)],
+  );
+  await pool.query(
+    `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+     VALUES ($1, $2, 'antigravity', 'Temporal outage', 'source_sum')`,
+    [outageAccountId, userId],
+  );
+  await pool.query(
+    `INSERT INTO installation_sources
+       (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+        suggested_label, collection_method, supported_surface, status,
+        history_backfill_year, history_backfill_status, history_backfill_completed_at,
+        last_rolling_range_start, last_rolling_range_end, last_completeness,
+        unresolved_usage_dates)
+     VALUES
+       ($1, $2, $3, $4, $5, 'antigravity', 'Temporal outage',
+        'antigravity_cli_capture', 'cli', 'active', $6, 'complete', now(),
+        $7::date, $7::date, 'complete', '{}'::date[])`,
+    [
+      outageSourceId,
+      outageInstallationId,
+      userId,
+      outageAccountId,
+      randomUUID(),
+      currentUtcYear,
+      dateOffset(-45),
+    ],
+  );
+  const outageRolling = await usage(outageDeviceToken, [
+    snapshot(outageSourceId, 1, [[today, 9]], "complete", dateOffset(-30), today),
+  ]);
+  const outageRollingBody = await outageRolling.json();
+  check(
+    outageRolling.status === 200 &&
+      outageRollingBody.sourceSequences?.[0]?.historyGapRangeStart === outageGapStart &&
+      outageRollingBody.sourceSequences?.[0]?.historyGapRangeEnd === outageGapEnd,
+    `a 45-day outage did not expose the exact resumable gap: ${JSON.stringify(outageRollingBody)}`,
+  );
+  const outagePartialPage = await authenticatedGet(
+    `/dashboard?period=custom&from=${outageRecoveredDate}&to=${outageRecoveredDate}`,
+  );
+  check(
+    outagePartialPage.status === 200 &&
+      (await outagePartialPage.text()).includes("Partial current-year history"),
+    "a newly discovered rolling gap was presented as trusted no-data",
+  );
+  const gapRepairSnapshot = {
+    ...snapshot(
+      outageSourceId,
+      2,
+      [[outageRecoveredDate, 77]],
+      "complete",
+      outageGapStart,
+      outageGapEnd,
+    ),
+    kind: "year_backfill",
+  };
+  const outageRepair = await usage(outageDeviceToken, [gapRepairSnapshot]);
+  const outageRepairBody = await outageRepair.json();
+  check(
+    outageRepair.status === 200 &&
+      outageRepairBody.sourceSequences?.[0]?.historyGapRangeStart === null &&
+      outageRepairBody.sourceSequences?.[0]?.historyGapRangeEnd === null,
+    `the acknowledged gap backfill did not close durable coverage: ${JSON.stringify(
+      outageRepairBody,
+    )}`,
+  );
+  const outageReplay = await usage(outageDeviceToken, [gapRepairSnapshot]);
+  const outageReplayBody = await outageReplay.json();
+  const outageCoverage = await pool.query(
+    `SELECT history_backfill_status, unresolved_usage_dates::text[] AS unresolved_dates,
+            (SELECT count(*)::int FROM daily_usage
+              WHERE source_id = $1 AND usage_date = $2::date) AS recovered_rows,
+            (SELECT total_tokens::text FROM daily_usage
+              WHERE source_id = $1 AND usage_date = $2::date) AS recovered_tokens
+       FROM installation_sources
+      WHERE id = $1`,
+    [outageSourceId, outageRecoveredDate],
+  );
+  const outageCompletePage = await authenticatedGet(
+    `/dashboard?period=custom&from=${outageRecoveredDate}&to=${outageRecoveredDate}`,
+  );
+  check(
+    outageReplay.status === 200 &&
+      outageReplayBody.staleSnapshots === 1 &&
+      outageCoverage.rows[0]?.history_backfill_status === "complete" &&
+      outageCoverage.rows[0].unresolved_dates.length === 0 &&
+      outageCoverage.rows[0].recovered_rows === 1 &&
+      outageCoverage.rows[0].recovered_tokens === "77" &&
+      outageCompletePage.status === 200 &&
+      !(await outageCompletePage.text()).includes("Partial current-year history"),
+    `gap recovery was not exactly-once and complete: ${JSON.stringify({
+      replay: outageReplayBody,
+      coverage: outageCoverage.rows[0],
+    })}`,
+  );
+  await pool.query("DELETE FROM installations WHERE id = $1", [outageInstallationId]);
+  await pool.query("DELETE FROM agent_accounts WHERE id = $1", [outageAccountId]);
+  console.log(
+    "ok - a 45-day outage creates, backfills, and exactly-once closes a durable history gap",
+  );
+
   const beforeProvisionalSummary = await pool.query(
     "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],

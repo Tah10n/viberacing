@@ -134,21 +134,50 @@ const legacyMappingKeys = new Set([
   "collectionMethod",
   "lastAcceptedSyncSequence",
 ]);
-const mappingKeys = new Set([...legacyMappingKeys, "historyBackfillYear", "historyBackfillStatus"]);
+const mappingKeys = new Set([
+  ...legacyMappingKeys,
+  "historyBackfillYear",
+  "historyBackfillStatus",
+  "historyGapRangeStart",
+  "historyGapRangeEnd",
+]);
+const requiredHistoryMappingKeys = new Set([
+  ...legacyMappingKeys,
+  "historyBackfillYear",
+  "historyBackfillStatus",
+]);
+
+function validHistoryGap(value) {
+  const start = value?.historyGapRangeStart;
+  const end = value?.historyGapRangeEnd;
+  return (
+    (start === undefined && end === undefined) ||
+    (start === null && end === null) ||
+    (typeof start === "string" &&
+      typeof end === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(start) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(end) &&
+      start <= end)
+  );
+}
 
 function validHistoryStatus(value) {
   return (
     Number.isSafeInteger(value?.historyBackfillYear) &&
     value.historyBackfillYear >= 1970 &&
     value.historyBackfillYear <= 9999 &&
-    ["pending", "complete", "partial"].includes(value.historyBackfillStatus)
+    ["pending", "complete", "partial"].includes(value.historyBackfillStatus) &&
+    validHistoryGap(value)
   );
 }
 
 function parseMapping(value, local, historyRequired = false) {
   const keys = historyRequired ? mappingKeys : legacyMappingKeys;
   if (
-    !requiredExactKeys(value, keys) ||
+    !exactKeys(value, keys) ||
+    ![...(historyRequired ? requiredHistoryMappingKeys : legacyMappingKeys)].every((key) =>
+      Object.hasOwn(value, key),
+    ) ||
     value.clientSourceId !== local.clientSourceId ||
     !identifierPattern.test(value.clientSourceId) ||
     !uuidPattern.test(value.sourceId) ||
@@ -171,6 +200,8 @@ function parseMapping(value, local, historyRequired = false) {
       ? {
           historyBackfillYear: value.historyBackfillYear,
           historyBackfillStatus: value.historyBackfillStatus,
+          historyGapRangeStart: value.historyGapRangeStart,
+          historyGapRangeEnd: value.historyGapRangeEnd,
         }
       : {}),
   };
@@ -241,19 +272,31 @@ function parseReconciliation(value, context) {
   if (expected.size > 100 || value.sources.length !== expected.size) throw invalid();
   const seen = new Set();
   for (const source of value.sources) {
+    const reconciliationKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "status",
+            "lastAcceptedSyncSequence",
+            "historyBackfillYear",
+            "historyBackfillStatus",
+            "historyGapRangeStart",
+            "historyGapRangeEnd",
+          ])
+        : new Set(["sourceId", "status", "lastAcceptedSyncSequence"]);
+    const requiredReconciliationKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "status",
+            "lastAcceptedSyncSequence",
+            "historyBackfillYear",
+            "historyBackfillStatus",
+          ])
+        : reconciliationKeys;
     if (
-      !requiredExactKeys(
-        source,
-        context.protocolVersion >= 5
-          ? new Set([
-              "sourceId",
-              "status",
-              "lastAcceptedSyncSequence",
-              "historyBackfillYear",
-              "historyBackfillStatus",
-            ])
-          : new Set(["sourceId", "status", "lastAcceptedSyncSequence"]),
-      ) ||
+      !exactKeys(source, reconciliationKeys) ||
+      ![...requiredReconciliationKeys].every((key) => Object.hasOwn(source, key)) ||
       !expected.has(source.sourceId) ||
       seen.has(source.sourceId) ||
       !["active", "disconnected"].includes(source.status) ||
@@ -293,8 +336,11 @@ function parseReconciliation(value, context) {
 
 function parseSourceRegistration(value, context) {
   if (!requiredExactKeys(value, new Set(["source"]))) throw invalid();
+  const registrationKeys = new Set([...mappingKeys, "profileSourceId"]);
+  const requiredRegistrationKeys = new Set([...requiredHistoryMappingKeys, "profileSourceId"]);
   if (
-    !requiredExactKeys(value.source, new Set([...mappingKeys, "profileSourceId"])) ||
+    !exactKeys(value.source, registrationKeys) ||
+    ![...requiredRegistrationKeys].every((key) => Object.hasOwn(value.source, key)) ||
     value.source.profileSourceId !== context.profileSourceId ||
     !uuidPattern.test(value.source.profileSourceId)
   )
@@ -331,12 +377,26 @@ function parseUsage(value, context) {
   if (value.sourceSequences.length !== expected.size) throw invalid();
   const seen = new Set();
   for (const sequence of value.sourceSequences) {
+    const sequenceKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "lastAcceptedSyncSequence",
+            "accepted",
+            "historyGapRangeStart",
+            "historyGapRangeEnd",
+          ])
+        : new Set(["sourceId", "lastAcceptedSyncSequence", "accepted"]);
     if (
-      !requiredExactKeys(sequence, new Set(["sourceId", "lastAcceptedSyncSequence", "accepted"])) ||
+      !exactKeys(sequence, sequenceKeys) ||
+      !["sourceId", "lastAcceptedSyncSequence", "accepted"].every((key) =>
+        Object.hasOwn(sequence, key),
+      ) ||
       !expected.has(sequence.sourceId) ||
       seen.has(sequence.sourceId) ||
       !decimalPattern.test(sequence.lastAcceptedSyncSequence) ||
-      typeof sequence.accepted !== "boolean"
+      typeof sequence.accepted !== "boolean" ||
+      (context.protocolVersion >= 5 && !validHistoryGap(sequence))
     )
       throw invalid();
     seen.add(sequence.sourceId);
@@ -382,7 +442,10 @@ export function mergeStoredSourceMapping(local, mapping) {
   if (mapping.agentAccountId !== undefined && !uuidPattern.test(mapping.agentAccountId))
     throw invalid("Connector configuration contains an invalid account mapping");
   if (
-    (mapping.historyBackfillYear !== undefined || mapping.historyBackfillStatus !== undefined) &&
+    (mapping.historyBackfillYear !== undefined ||
+      mapping.historyBackfillStatus !== undefined ||
+      mapping.historyGapRangeStart !== undefined ||
+      mapping.historyGapRangeEnd !== undefined) &&
     !validHistoryStatus(mapping)
   )
     throw invalid("Connector configuration contains invalid history state");
@@ -404,6 +467,8 @@ export function mergeStoredSourceMapping(local, mapping) {
       : {
           historyBackfillYear: mapping.historyBackfillYear,
           historyBackfillStatus: mapping.historyBackfillStatus,
+          historyGapRangeStart: mapping.historyGapRangeStart,
+          historyGapRangeEnd: mapping.historyGapRangeEnd,
         }),
     ...(mapping.profileSourceId === undefined ? {} : { profileSourceId: mapping.profileSourceId }),
   };

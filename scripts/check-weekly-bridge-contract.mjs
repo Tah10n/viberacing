@@ -16,13 +16,22 @@ async function filesUnder(directory) {
   return files;
 }
 
-function productionSource(path) {
+function portablePath(path) {
+  return path.replaceAll("\\", "/");
+}
+
+export function productionSource(path) {
+  const normalized = portablePath(path);
   return (
-    sourceExtensions.has(extname(path)) &&
-    !/\.(?:test|spec)\.[^.]+$/.test(path) &&
-    !path.includes("/database/") &&
-    !path.includes("/e2e/")
+    sourceExtensions.has(extname(normalized)) &&
+    !/\.(?:test|spec)\.[^.]+$/.test(normalized) &&
+    !normalized.includes("/database/") &&
+    !normalized.includes("/e2e/")
   );
+}
+
+export function migrationPath(path) {
+  return /^\d{3}_[a-z0-9_]+\.sql$/.test(portablePath(path).split("/").at(-1) ?? "");
 }
 
 function withoutSqlComments(sql) {
@@ -30,9 +39,7 @@ function withoutSqlComments(sql) {
 }
 
 export async function checkWeeklyBridgeContract({ cwd = root } = {}) {
-  const migrations = (await filesUnder(resolve(cwd, "apps/web/database"))).filter((path) =>
-    /\/\d{3}_[a-z0-9_]+\.sql$/.test(path),
-  );
+  const migrations = (await filesUnder(resolve(cwd, "apps/web/database"))).filter(migrationPath);
   const destructive = [];
   for (const path of migrations) {
     const sql = withoutSqlComments(await readFile(path, "utf8"));
@@ -44,7 +51,15 @@ export async function checkWeeklyBridgeContract({ cwd = root } = {}) {
     const removesFunction =
       /\bDROP\s+FUNCTION(?:\s+IF\s+EXISTS)?\s+mirror_weekly_agent_usage_to_daily\b/i.test(sql) &&
       !/\bCREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\s+mirror_weekly_agent_usage_to_daily\b/i.test(sql);
-    if (dropsTable || removesTrigger || removesFunction) destructive.push(path);
+    const removesRefreshFunction =
+      /\bDROP\s+FUNCTION(?:\s+IF\s+EXISTS)?\s+refresh_daily_agent_usage_compatibility\b/i.test(
+        sql,
+      ) &&
+      !/\bCREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\s+refresh_daily_agent_usage_compatibility\b/i.test(
+        sql,
+      );
+    if (dropsTable || removesTrigger || removesFunction || removesRefreshFunction)
+      destructive.push(path);
   }
   if (destructive.length === 0) return;
 

@@ -91,7 +91,7 @@ interface SourceRow {
   last_completeness: "complete" | "partial" | null;
   last_rolling_range_start: string | null;
   last_rolling_range_end: string | null;
-  last_rolling_incomplete_dates: string[] | null;
+  unresolved_usage_dates: string[];
   has_retained_usage: boolean;
 }
 
@@ -494,7 +494,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               s.last_completeness,
               s.last_rolling_range_start::text,
               s.last_rolling_range_end::text,
-              s.last_rolling_incomplete_dates::text[],
+              s.unresolved_usage_dates::text[],
               EXISTS (
                 SELECT 1 FROM daily_usage retained
                  WHERE retained.source_id = s.id
@@ -601,14 +601,19 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   }
   const sourceIncomplete = (source: SourceRow): boolean =>
     sourcePeriodIncomplete(resolvedPeriod, today, {
-      included: source.status === "active" || source.has_retained_usage,
+      included:
+        source.status === "active" ||
+        source.has_retained_usage ||
+        source.history_backfill_status === "partial" ||
+        source.unresolved_usage_dates.length > 0,
+      active: source.status === "active",
       aggregationMode: accountsById.get(source.agent_account_id)?.aggregation_mode ?? "source_sum",
       historyBackfillYear: source.history_backfill_year,
       historyBackfillStatus: source.history_backfill_status,
       lastCompleteness: source.last_completeness,
       lastRollingRangeStart: source.last_rolling_range_start,
       lastRollingRangeEnd: source.last_rolling_range_end,
-      lastRollingIncompleteDates: source.last_rolling_incomplete_dates,
+      unresolvedUsageDates: source.unresolved_usage_dates,
       provenAccountDates: provenDatesByAccount.get(source.agent_account_id) ?? new Set<string>(),
     });
   const incompleteAccountIds = new Set(

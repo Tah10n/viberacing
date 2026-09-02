@@ -28,12 +28,14 @@ successful `connect` still collect every active source immediately. Every sync f
 rolling range of at most 31 UTC dates. Connector 0.6.0 then backfills the rest of the current UTC
 year in resumable, newest-first chunks of at most 31 dates: automatic and browser Sync drain bounded
 pending payloads and collect at most one new historical range. `connect` and manual
-`viberacing sync` continue through every eligible chunk. Explicit `viberacing sync --full` starts or
-resumes a retry of terminal partial current-year history; ordinary, automatic, and browser Sync do
-not restart it. Acknowledged cursors make retries idempotent and survive interruption. Later JSONL
-reads resume from safe byte offsets. Automatic hooks suppress an unchanged normalized rolling
-snapshot. Manual and browser-triggered Sync still submit a content-equivalent rolling confirmation
-so the dashboard's **Last sync** time advances after a successful check.
+`viberacing sync` continue through every eligible chunk. If rolling ranges are separated by an
+offline interval, the server retains the missing UTC dates and protocol v5 returns a resumable gap
+cursor; later Sync drains it with the same limits. Explicit `viberacing sync --full` starts a full
+current-year rescan even after a terminal `complete` or `partial` pass. Acknowledged cursors make
+retries idempotent and survive interruption. Later JSONL reads resume from safe byte offsets.
+Automatic hooks suppress an unchanged normalized rolling snapshot. Manual and browser-triggered Sync
+still submit a content-equivalent rolling confirmation so the dashboard's **Last sync** time
+advances after a successful check.
 
 Codex marks its physical profile dirty after each completed turn. One `CODEX_HOME` can safely track
 up to eight ChatGPT logins: each collection reads local `tokens.account_id` before starting App
@@ -63,6 +65,8 @@ payload. Manual `viberacing sync` remains available, including when OpenCode is 
 
 Connector 0.6.0 uses protocol v5 to distinguish rolling snapshots from bounded current-year history
 chunks and to reconcile each source's `pending`, `complete`, or `partial` backfill status. It keeps
+durable unresolved UTC dates when a partial snapshot omits a day or rolling windows leave a gap, and
+returns the bounded gap to the connector until an acknowledged complete backfill closes it. It keeps
 the v4 sequence rule for allowlisted collector errors. The server remains wire-compatible with
 protocol v2, v3, and v4 during the rollout, so older connectors continue syncing recent usage but do
 not import the current year's earlier dates. A saved unsequenced v2/v3 collector error is replaced

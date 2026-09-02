@@ -39,7 +39,7 @@ describe("readiness migration ledger", () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining("last_rolling_range_start"), [
       expectedSchemaVersion,
     ]);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("last_rolling_incomplete_dates"), [
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("unresolved_usage_dates"), [
       expectedSchemaVersion,
     ]);
     expect(query).toHaveBeenCalledWith(

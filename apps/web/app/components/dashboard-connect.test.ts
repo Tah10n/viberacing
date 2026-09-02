@@ -225,7 +225,7 @@ describe("dashboard connection flow", () => {
     expect(explorer).toContain("BigInt(day.tokens)");
     expect(explorer).not.toContain("Number(day.tokens)");
     expect(dashboard).toContain("s.last_rolling_range_start::text");
-    expect(dashboard).toContain("s.last_rolling_incomplete_dates::text[]");
+    expect(dashboard).toContain("s.unresolved_usage_dates::text[]");
     expect(dashboard).toContain("provenDatesByAccount");
     expect(dashboard).toContain("sourcePeriodIncomplete");
     expect(dashboard).toContain("source.has_retained_usage");

@@ -85,14 +85,19 @@ Automatic hooks make no usage request for an unchanged normalized rolling snapsh
 browser-triggered Sync submit a content-equivalent rolling snapshot with the next sequence, so a
 successful check advances **Last sync** and the refreshed dashboard immediately confirms it.
 Historical partial status is tracked separately and never overwrites rolling operational
-completeness.
+completeness. Unresolved current-year dates are durable across later rolling windows: complete
+evidence clears only the dates it covers, while a gap between rolling ranges is backfilled through
+the normal resumable cursor. Active sources are partial after their last acknowledged rolling day
+through the request's current UTC date; future dates are never inferred missing. Disconnect stops
+new inferred gaps but retains already known incompleteness. An authoritative complete sibling can
+prove an `account_max` account-day, whereas every unresolved contributor keeps `source_sum` partial.
 
 Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
 Code, Qwen Code, Antigravity, and Gemini CLI.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
-and run `viberacing sync`. If a completed current-year pass is `partial`, run
-`viberacing sync --full` to start or resume an explicit full retry; ordinary and scheduled syncs do
-not restart it. To delete retained history, disconnect and explicitly delete the agent account in
-the dashboard. Use **Leave leaderboard** for all ranking rows or **Delete Vibe Racing account** for
-the complete user record.
+and run `viberacing sync`. Run `viberacing sync --full` to explicitly rescan the current year after
+either a `complete` or `partial` terminal pass. Ordinary Sync automatically repairs server-reported
+rolling gaps without otherwise restarting a terminal full-year pass. To delete retained history,
+disconnect and explicitly delete the agent account in the dashboard. Use **Leave leaderboard** for
+all ranking rows or **Delete Vibe Racing account** for the complete user record.

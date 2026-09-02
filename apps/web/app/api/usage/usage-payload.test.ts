@@ -4,7 +4,7 @@ import {
   entryCompletenessAccepted,
   parseSnapshots as parseVersionedSnapshots,
   parseSourceErrors,
-  rollingIncompleteDates,
+  updatedUnresolvedUsageDates,
 } from "./route";
 
 function today(): string {
@@ -37,8 +37,48 @@ describe("usage payload privacy and numeric contract", () => {
     );
     expect(snapshot).toBeDefined();
     if (snapshot === undefined) throw new Error("mixed rolling snapshot was not parsed");
-    expect(rollingIncompleteDates(snapshot, "partial")).toEqual(["2026-08-17", "2026-08-18"]);
-    expect(rollingIncompleteDates(snapshot, "complete")).toEqual([]);
+    expect(updatedUnresolvedUsageDates(snapshot, "partial", "2026-08-14", [])).toEqual([
+      "2026-08-17",
+      "2026-08-18",
+    ]);
+    expect(updatedUnresolvedUsageDates(snapshot, "complete", "2026-08-14", [])).toEqual([]);
+  });
+
+  it("retains gaps outside a snapshot and clears only dates proven complete", () => {
+    const [snapshot] = parseVersionedSnapshots(
+      [
+        {
+          sourceId,
+          syncSequence: "1",
+          kind: "rolling",
+          rangeStart: "2026-08-15",
+          rangeEnd: "2026-08-18",
+          completeness: "partial",
+          entries: [{ date: "2026-08-16", totalTokens: "10", completeness: "complete" }],
+        },
+      ],
+      5,
+      new Date("2026-09-01T12:00:00.000Z"),
+    );
+    if (snapshot === undefined) throw new Error("rolling snapshot was not parsed");
+    expect(updatedUnresolvedUsageDates(snapshot, "partial", "2026-08-10", ["2026-07-01"])).toEqual([
+      "2026-07-01",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-17",
+      "2026-08-18",
+    ]);
+    expect(
+      updatedUnresolvedUsageDates(
+        { ...snapshot, completeness: "complete", entries: [] },
+        "complete",
+        "2026-08-18",
+        ["2026-07-01", "2026-08-16"],
+      ),
+    ).toEqual(["2026-07-01"]);
   });
 
   it("allows bounded v5 current-year chunks while v4 remains rolling-only", () => {

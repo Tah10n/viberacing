@@ -232,6 +232,8 @@ async function post(request: Request): Promise<Response> {
         last_accepted_sync_sequence: string;
         history_backfill_year: number;
         history_backfill_status: "pending" | "complete" | "partial";
+        history_gap_range_start: string | null;
+        history_gap_range_end: string | null;
       }>(
         `SELECT requested.source_id::text,
                 CASE WHEN source.status = 'active' THEN 'active' ELSE 'disconnected' END AS status,
@@ -250,6 +252,13 @@ async function post(request: Request): Promise<Response> {
                   THEN coalesce(source.history_backfill_status, 'pending')
                   ELSE 'pending'
                 END AS history_backfill_status
+                ,CASE WHEN source.history_backfill_year =
+                    extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                  THEN source.unresolved_usage_dates[1]::text END AS history_gap_range_start
+                ,CASE WHEN source.history_backfill_year =
+                    extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                  THEN source.unresolved_usage_dates[cardinality(source.unresolved_usage_dates)]::text
+                  END AS history_gap_range_end
            FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(source_id, position)
            LEFT JOIN installation_sources source
              ON source.id = requested.source_id
@@ -301,6 +310,8 @@ async function post(request: Request): Promise<Response> {
             ? {
                 historyBackfillYear: source.history_backfill_year,
                 historyBackfillStatus: source.history_backfill_status,
+                historyGapRangeStart: source.history_gap_range_start,
+                historyGapRangeEnd: source.history_gap_range_end,
               }
             : {}),
         })),

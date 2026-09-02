@@ -293,17 +293,22 @@ Every sync refreshes a rolling range of at most 31 UTC dates. Connector 0.6.0 th
 from the day before that range to January 1 of the current UTC year in newest-first chunks of at
 most 31 dates. Automatic activity and browser Sync drain bounded pending payloads and collect at
 most one new historical range; `connect` and manual `sync` continue through every eligible chunk. If
-a completed pass is partial, explicit `sync --full` starts or resumes a full current-year retry;
-ordinary, automatic, and browser Sync do not restart that terminal partial pass. An inactive Codex
-account remains resumable and does not block the active account or create an unbounded loop.
-Subsequent rolling JSONL collection skips unchanged files and resumes at the last complete byte
-offset, detecting append, truncation, replacement, and file removal. Historical scans use separate
-bounded state. Partial passes retain prior contributions, and valid usage metadata in a JSONL record
-over 1 MB is parsed while the pass is explicitly reported partial. OpenCode and Qwen read only files
-or rows intersecting the requested UTC range. Codex and Antigravity conservatively mark historical
-coverage partial where their local surfaces cannot prove a complete year. Successful Antigravity
-capture syncs compact only after the year reaches a terminal status and still retain at most 35
-days, so older wrapper history is normally partial. Only Antigravity CLI sessions launched through
-the Vibe Racing wrapper are counted; earlier/direct sessions and Antigravity Desktop are not
-included. Detailed versions, formulas, and limitations are in
+a rolling range starts after the previous acknowledged range, the server returns the durable gap;
+`connect` and manual Sync drain all its chunks while automatic and browser Sync still collect at
+most one chunk. Explicit `sync --full` starts a full current-year rescan after either terminal
+`complete` or `partial`; ordinary runs do not restart a terminal full-year pass without a gap. An
+inactive Codex account remains resumable and does not block the active account or create an
+unbounded loop. Subsequent rolling JSONL collection skips unchanged files and resumes at the last
+complete byte offset, detecting append, truncation, replacement, and file removal. Historical scans
+use separate bounded state. Partial passes retain prior contributions, and valid usage metadata in a
+JSONL record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode and Qwen
+read only files or rows intersecting the requested UTC range. Codex and Antigravity conservatively
+mark historical coverage partial where their local surfaces cannot prove a complete year. Each safe
+Antigravity collection records an inode/offset/prefix-hash proof with its pending payload. After
+acknowledgement, cleanup revalidates that exact prefix under the capture lock and removes only
+proved records older than 35 days; appended, replaced, truncated, malformed, and unacknowledged
+bytes are retained. Cleanup is retried after later successful Sync and its failure never blocks
+other sources. Only Antigravity CLI sessions launched through the Vibe Racing wrapper are counted;
+earlier/direct sessions and Antigravity Desktop are not included. Detailed versions, formulas, and
+limitations are in
 [AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).

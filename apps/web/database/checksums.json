@@ -8,5 +8,5 @@
   "007_account_switch_safety.sql": "42246fef7d370ac4b124a861861b063717b4036ebd0c8603e164507b3f86de43",
   "008_account_dedup_notice_dismissal.sql": "480cb70d1eb62c6e1dd16a7cfa2425b315253d2d8a6081c7d7b6e954465173ee",
   "009_codex_hook_notice.sql": "75cdbe6b24ed9bc82f5bb7e9bdb2cee3938fcc1e3a9970fc975c4526d2abc0ff",
-  "010_current_year_history.sql": "65b32a3625457d63c127519f12dba230d6c8c25e2c0bc017f378b6f6b4b6d88d"
+  "010_current_year_history.sql": "e9095e5a82569f99fdf9af06b700a075d21e85cbeeaded85d4bc3e962ab85df9"
 }

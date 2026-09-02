@@ -29,11 +29,14 @@ replace rolling incremental checkpoints, fingerprints, or operational diagnostic
 
 A terminal `complete` status means every requested chunk for that source was authoritative. A
 terminal `partial` status means the import reached January 1 but at least one chunk was incomplete;
-the exact dates that were available still count. `viberacing sync --full` explicitly starts or
-resumes a current-year retry for that terminal partial state; ordinary, automatic, and browser Sync
-do not restart it. An inactive Codex logical account keeps its cursor for a later run after the user
-switches accounts. A new UTC year starts a new cursor without deleting server rows from prior years;
-only explicit account/source deletion removes retained history.
+the exact dates that were available still count. The server separately retains unresolved dates from
+partial/omitted days and gaps between acknowledged rolling ranges. A complete snapshot clears only
+its own range; a complete entry inside a mixed snapshot clears only its date. `connect` and manual
+Sync drain returned gap cursors, while automatic and browser Sync collect at most one gap chunk.
+`viberacing sync --full` explicitly rescans the current year after either terminal status. An
+inactive Codex logical account keeps its cursor for a later run after the user switches accounts. A
+new UTC year starts a new cursor without deleting server rows from prior years; only explicit
+account/source deletion removes retained history.
 
 If an authoritative total differs from the visible component formula, only the authoritative total
 is uploaded for every agent except Codex. Codex's separately exact local component tuple may differ
@@ -86,11 +89,15 @@ forwards stdout, stderr, SIGINT, and SIGTERM, and preserves the exit code. For A
 only event ID, UTC date, and authoritative usage counters. The resolved executable path is retained
 only in local `sources.json` so portable installs continue working from later processes. It never
 stores the native stream, prompt, response, tool calls, path, model, or credential fields.
-Antigravity captures are incremental, records older than 35 days are removed after successful sync,
-and oversized files are atomically compacted. Antigravity Desktop has no supported exact local usage
-export. Every capture source defaults to `~/.viberacing/captures/<clientSourceId>.jsonl`; labels and
-agent IDs are not used as filenames. One matching source is selected automatically, while multiple
-profiles require `--source`. That option is never forwarded to `agy`.
+Antigravity captures are incremental. A successful safe collection binds its pending payload to the
+capture inode, acknowledged byte offset, and prefix hash. Under the same capture lock, cleanup
+revalidates that proof and removes only acknowledged records older than 35 days; appended or
+malformed suffixes and replaced/truncated files are preserved. Cleanup repeats after later
+successful Sync, is crash-idempotent, and remains best-effort per source. Antigravity Desktop has no
+supported exact local usage export. Every capture source defaults to
+`~/.viberacing/captures/<clientSourceId>.jsonl`; labels and agent IDs are not used as filenames. One
+matching source is selected automatically, while multiple profiles require `--source`. That option
+is never forwarded to `agy`.
 
 ## Sync behavior
 

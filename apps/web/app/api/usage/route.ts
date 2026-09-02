@@ -63,6 +63,10 @@ interface SourceRow {
   user_id: string;
   agent_id: string;
   last_accepted_sync_sequence: string;
+  history_backfill_year: number;
+  history_backfill_status: "pending" | "complete" | "partial";
+  last_rolling_range_end: string | null;
+  unresolved_usage_dates: string[];
 }
 
 interface ParsedEntry {
@@ -347,21 +351,36 @@ function affectedRanges(
   return result;
 }
 
-export function rollingIncompleteDates(
+export function updatedUnresolvedUsageDates(
   snapshot: Readonly<ParsedSnapshot>,
   completeness: "complete" | "partial",
+  previousRollingRangeEnd: string | null,
+  existing: readonly string[],
 ): string[] {
-  if (snapshot.kind !== "rolling" || completeness === "complete") return [];
+  const yearPrefix = `${snapshot.rangeEnd.slice(0, 4)}-`;
+  const unresolved = new Set(existing.filter((date) => date.startsWith(yearPrefix)));
+  if (
+    snapshot.kind === "rolling" &&
+    previousRollingRangeEnd !== null &&
+    previousRollingRangeEnd.startsWith(yearPrefix)
+  ) {
+    for (
+      let date = addUtcDays(previousRollingRangeEnd, 1);
+      date < snapshot.rangeStart;
+      date = addUtcDays(date, 1)
+    )
+      unresolved.add(date);
+  }
   const completeDates = new Set(
     snapshot.entries
       .filter((entry) => entry.completeness === "complete")
       .map((entry) => entry.date),
   );
-  const incompleteDates: string[] = [];
   for (let date = snapshot.rangeStart; date <= snapshot.rangeEnd; date = addUtcDays(date, 1)) {
-    if (!completeDates.has(date)) incompleteDates.push(date);
+    if (completeness === "complete" || completeDates.has(date)) unresolved.delete(date);
+    else unresolved.add(date);
   }
-  return incompleteDates;
+  return [...unresolved].sort();
 }
 
 async function post(request: Request): Promise<Response> {
@@ -453,7 +472,9 @@ async function post(request: Request): Promise<Response> {
         throw new UsageError(401, "unauthorized");
       }
       const sources = await client.query<SourceRow>(
-        `SELECT id::text, user_id::text, agent_id, last_accepted_sync_sequence::text
+        `SELECT id::text, user_id::text, agent_id, last_accepted_sync_sequence::text,
+                history_backfill_year, history_backfill_status,
+                last_rolling_range_end::text, unresolved_usage_dates::text[]
            FROM installation_sources
           WHERE installation_id = $1 AND id = ANY($2::uuid[]) AND status = 'active'
           FOR UPDATE`,
@@ -495,6 +516,18 @@ async function post(request: Request): Promise<Response> {
         )
           ? "partial"
           : snapshot.completeness;
+        const unresolvedUsageDates = updatedUnresolvedUsageDates(
+          snapshot,
+          sourceCompleteness,
+          source.last_rolling_range_end,
+          source.unresolved_usage_dates,
+        );
+        const snapshotYear = Number(snapshot.rangeEnd.slice(0, 4));
+        const historyStatus =
+          snapshot.historyYearComplete ??
+          (source.history_backfill_year === snapshotYear
+            ? source.history_backfill_status
+            : "pending");
         if (
           !isSupportedAgent(source.agent_id) ||
           !agentRegistry[source.agent_id].countsExactTokens
@@ -600,7 +633,7 @@ async function post(request: Request): Promise<Response> {
                     last_completeness = $3,
                     last_rolling_range_start = $7::date,
                     last_rolling_range_end = $8::date,
-                    last_rolling_incomplete_dates = $9::date[],
+                    unresolved_usage_dates = $9::date[],
                     last_error_summary = NULL,
                     last_warning_summary = $4,
                     history_backfill_year = CASE
@@ -609,7 +642,11 @@ async function post(request: Request): Promise<Response> {
                     END,
                     history_backfill_status = coalesce($5, history_backfill_status),
                     history_backfill_completed_at = CASE
-                      WHEN $5::text IS NULL THEN history_backfill_completed_at ELSE now()
+                      WHEN $5::text = 'pending' THEN NULL
+                      WHEN history_backfill_status::text IS DISTINCT FROM $5::text
+                        OR history_backfill_year IS DISTINCT FROM extract(year FROM ($6::date))::integer
+                      THEN now()
+                      ELSE history_backfill_completed_at
                     END,
                     updated_at = now()
               WHERE id = $1`,
@@ -618,11 +655,11 @@ async function post(request: Request): Promise<Response> {
               snapshot.syncSequence,
               sourceCompleteness,
               sourceCompleteness === "partial" ? "Collector reported a partial snapshot" : null,
-              snapshot.historyYearComplete,
+              historyStatus,
               snapshot.rangeEnd,
               snapshot.rangeStart,
               snapshot.rangeEnd,
-              rollingIncompleteDates(snapshot, sourceCompleteness),
+              unresolvedUsageDates,
             ],
           );
         } else {
@@ -633,18 +670,28 @@ async function post(request: Request): Promise<Response> {
                     history_backfill_year = extract(year FROM ($3::date))::integer,
                     history_backfill_status = coalesce($4, 'pending'),
                     history_backfill_completed_at = CASE
-                      WHEN $4::text IS NULL THEN NULL ELSE now()
+                      WHEN $4::text = 'pending' THEN NULL
+                      WHEN history_backfill_status::text IS DISTINCT FROM $4::text
+                        OR history_backfill_year IS DISTINCT FROM extract(year FROM ($3::date))::integer
+                      THEN now()
+                      ELSE history_backfill_completed_at
                     END,
+                    unresolved_usage_dates = $5::date[],
                     updated_at = now()
               WHERE id = $1`,
             [
               snapshot.sourceId,
               snapshot.syncSequence,
               snapshot.rangeStart,
-              snapshot.historyYearComplete,
+              historyStatus,
+              unresolvedUsageDates,
             ],
           );
         }
+        source.history_backfill_year = snapshotYear;
+        source.history_backfill_status = historyStatus;
+        source.unresolved_usage_dates = unresolvedUsageDates;
+        if (snapshot.kind === "rolling") source.last_rolling_range_end = snapshot.rangeEnd;
         acceptedEntries += snapshot.entries.length;
         acceptedSnapshots += 1;
         acceptedSequences.set(snapshot.sourceId, snapshot.syncSequence);
@@ -732,6 +779,13 @@ async function post(request: Request): Promise<Response> {
             sourceId,
             lastAcceptedSyncSequence: acceptedSequences.get(sourceId) ?? "0",
             accepted: acceptedSourceIds.has(sourceId),
+            ...(requestProtocolVersion >= 5
+              ? {
+                  historyGapRangeStart: sourceById.get(sourceId)?.unresolved_usage_dates[0] ?? null,
+                  historyGapRangeEnd:
+                    sourceById.get(sourceId)?.unresolved_usage_dates.at(-1) ?? null,
+                }
+              : {}),
           })),
         },
         autoMerges,

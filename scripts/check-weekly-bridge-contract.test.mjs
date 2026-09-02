@@ -3,7 +3,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { checkWeeklyBridgeContract } from "./check-weekly-bridge-contract.mjs";
+import {
+  checkWeeklyBridgeContract,
+  migrationPath,
+  productionSource,
+} from "./check-weekly-bridge-contract.mjs";
 
 async function fixture(t, { source, migration }) {
   const cwd = await mkdtemp(join(tmpdir(), "viberacing-weekly-contract-"));
@@ -41,4 +45,20 @@ test("ignores prose and test-only references", async (t) => {
     "export const oldTable = 'weekly_agent_usage';\n",
   );
   await assert.doesNotReject(checkWeeklyBridgeContract({ cwd }));
+});
+
+test("classifies Windows migration and production paths portably", () => {
+  assert.equal(migrationPath("C:\\repo\\apps\\web\\database\\011_cleanup.sql"), true);
+  assert.equal(productionSource("C:\\repo\\apps\\web\\lib\\summary.ts"), true);
+  assert.equal(productionSource("C:\\repo\\apps\\web\\database\\helper.ts"), false);
+  assert.equal(productionSource("C:\\repo\\apps\\web\\e2e\\dashboard.ts"), false);
+  assert.equal(productionSource("C:\\repo\\apps\\web\\lib\\summary.test.ts"), false);
+});
+
+test("rejects removing the inner refresh helper while production references remain", async (t) => {
+  const cwd = await fixture(t, {
+    source: "export const table = 'weekly_agent_usage';\n",
+    migration: "DROP FUNCTION refresh_daily_agent_usage_compatibility(date, bigint, varchar);\n",
+  });
+  await assert.rejects(checkWeeklyBridgeContract({ cwd }), /code-only cleanup first/);
 });

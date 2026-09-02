@@ -639,6 +639,8 @@ function serializedConfig(config) {
         : {
             historyBackfillYear: source.historyBackfillYear,
             historyBackfillStatus: source.historyBackfillStatus,
+            historyGapRangeStart: source.historyGapRangeStart ?? null,
+            historyGapRangeEnd: source.historyGapRangeEnd ?? null,
           }),
       ...(source.profileSourceId === undefined ? {} : { profileSourceId: source.profileSourceId }),
     })),

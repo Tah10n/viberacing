@@ -32,6 +32,8 @@ interface SourceRow {
   last_accepted_sync_sequence: string;
   history_backfill_year: number;
   history_backfill_status: "pending" | "complete" | "partial";
+  history_gap_range_start: string | null;
+  history_gap_range_end: string | null;
 }
 
 async function post(request: Request): Promise<Response> {
@@ -121,7 +123,10 @@ async function post(request: Request): Promise<Response> {
               s.collection_method,
               s.last_accepted_sync_sequence::text,
               s.history_backfill_year,
-              s.history_backfill_status
+              s.history_backfill_status,
+              s.unresolved_usage_dates[1]::text AS history_gap_range_start,
+              s.unresolved_usage_dates[cardinality(s.unresolved_usage_dates)]::text
+                AS history_gap_range_end
          FROM installation_sources s
          JOIN agent_accounts a ON a.id = s.agent_account_id
          JOIN installations i ON i.id = s.installation_id
@@ -158,6 +163,14 @@ async function post(request: Request): Promise<Response> {
                     source.history_backfill_year === currentHistoryYear
                       ? source.history_backfill_status
                       : "pending",
+                  historyGapRangeStart:
+                    source.history_backfill_year === currentHistoryYear
+                      ? source.history_gap_range_start
+                      : null,
+                  historyGapRangeEnd:
+                    source.history_backfill_year === currentHistoryYear
+                      ? source.history_gap_range_end
+                      : null,
                 }
               : {}),
           })),
