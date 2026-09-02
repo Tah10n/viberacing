@@ -7,8 +7,22 @@ const browserSyncProtocolMigration = readFileSync(
   new URL("../database/005_browser_sync_protocol.sql", import.meta.url),
   "utf8",
 );
+const currentYearHistoryMigration = readFileSync(
+  new URL("../database/010_current_year_history.sql", import.meta.url),
+  "utf8",
+);
 
 describe("migration expansion compatibility", () => {
+  it("materializes unresolved rolling coverage for legacy disconnected partial sources", () => {
+    expect(currentYearHistoryMigration).toContain("source.status IN ('active', 'disconnected')");
+    expect(currentYearHistoryMigration).toContain("source.last_completeness = 'partial'");
+    expect(currentYearHistoryMigration).toContain("generate_series(");
+    expect(currentYearHistoryMigration).toContain("usage.completeness = 'complete'");
+    expect(currentYearHistoryMigration).toContain(
+      "unresolved_usage_dates = coverage.unresolved_dates",
+    );
+  });
+
   it("allows the previous web release to keep writing its legacy capability column", () => {
     expect(browserSyncProtocolMigration).toContain("CHECK (browser_sync_protocol BETWEEN 0 AND 2)");
     expect(browserSyncProtocolMigration).not.toMatch(

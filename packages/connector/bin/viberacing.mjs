@@ -1361,6 +1361,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind, retent
       snapshot: { historyYearComplete: completeness },
       advance: {
         sourceId,
+        mode: "initial",
         year,
         rangeStart: yearStart,
         nextRangeEnd: null,
@@ -1376,6 +1377,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind, retent
   const hadPartialChunk = cursor.hadPartialChunk || completeness === "partial";
   const historyRetentionSafe = cursor.retentionSafe === true && retentionSafe;
   const cursorRangeStart = cursor.rangeStart ?? yearStart;
+  const mode = historyCursorMode(state, sourceId, cursor);
   const terminalStatus =
     range.rangeStart === cursorRangeStart ? (hadPartialChunk ? "partial" : "complete") : null;
   return {
@@ -1385,6 +1387,7 @@ function historySnapshotState(sourceId, range, completeness, state, kind, retent
         : { historyYearComplete: terminalStatus },
     advance: {
       sourceId,
+      mode,
       year,
       rangeStart: cursorRangeStart,
       nextRangeEnd: terminalStatus === null ? addUtcDays(range.rangeStart, -1) : null,
@@ -1500,6 +1503,7 @@ async function forgetSourceState(sourceIds) {
   state.history ??= {};
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
+  state.historyGapAttempts ??= {};
   state.captureCompactionPending ??= {};
   state.fingerprints ??= {};
   state.quarantine ??= {};
@@ -1510,6 +1514,7 @@ async function forgetSourceState(sourceIds) {
     delete state.history[sourceId];
     delete state.historyAdapters[sourceId];
     delete state.historyRetries[sourceId];
+    delete state.historyGapAttempts[sourceId];
     delete state.captureCompactionPending[sourceId];
     delete state.fingerprints[sourceId];
     delete state.quarantine[sourceId];
@@ -1706,7 +1711,6 @@ function validatedCaptureCleanupProof(payload, sourceId) {
     !/^\d+$/.test(proof.ino) ||
     !Number.isSafeInteger(proof.safeOffset) ||
     proof.safeOffset < 0 ||
-    proof.safeOffset > 100_000_000 ||
     !/^[0-9a-f]{64}$/.test(proof.prefixHash ?? "") ||
     !Array.isArray(proof.acknowledgedSegments) ||
     proof.acknowledgedSegments.length < 1 ||
@@ -1809,6 +1813,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
   state.history ??= {};
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
+  state.historyGapAttempts ??= {};
   const configured = new Set(config.sources.map((source) => source.sourceId));
   let changed = false;
   for (const sourceId of Object.keys(state.history))
@@ -1816,6 +1821,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       delete state.history[sourceId];
       delete state.historyAdapters[sourceId];
       delete state.historyRetries[sourceId];
+      delete state.historyGapAttempts[sourceId];
       changed = true;
     }
   for (const sourceId of Object.keys(state.historyRetries))
@@ -1823,8 +1829,36 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       delete state.historyRetries[sourceId];
       changed = true;
     }
+  for (const sourceId of Object.keys(state.historyGapAttempts))
+    if (!configured.has(sourceId) || state.historyGapAttempts[sourceId].year !== year) {
+      delete state.historyGapAttempts[sourceId];
+      changed = true;
+    }
   for (const source of config.sources) {
     if (typeof source.sourceId !== "string") continue;
+    const retryingPartial = state.historyRetries[source.sourceId] === year;
+    if (retryingPartial) {
+      const current = state.history[source.sourceId];
+      if (
+        current?.year !== year ||
+        historyCursorMode(state, source.sourceId, current) !== "full" ||
+        current.rangeStart !== yearStart ||
+        current.nextRangeEnd < yearStart ||
+        current.nextRangeEnd > firstHistoricalEnd
+      ) {
+        state.history[source.sourceId] = {
+          mode: "full",
+          year,
+          rangeStart: yearStart,
+          nextRangeEnd: firstHistoricalEnd,
+          hadPartialChunk: false,
+          retentionSafe: true,
+        };
+        delete state.historyAdapters[source.sourceId];
+        changed = true;
+      }
+      continue;
+    }
     const gapStart = source.historyGapRangeStart;
     const gapEnd = source.historyGapRangeEnd;
     if (
@@ -1833,14 +1867,32 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       gapStart.startsWith(`${year}-`) &&
       gapStart <= gapEnd
     ) {
+      const attempt = state.historyGapAttempts[source.sourceId];
+      const localGeneration = historyGapGeneration(state, source.sourceId);
+      if (
+        attempt?.year === year &&
+        attempt.rangeStart === gapStart &&
+        attempt.rangeEnd === gapEnd &&
+        attempt.result === "partial" &&
+        attempt.localGeneration === localGeneration
+      ) {
+        if (historyCursorMode(state, source.sourceId, state.history[source.sourceId]) === "gap") {
+          delete state.history[source.sourceId];
+          delete state.historyAdapters[source.sourceId];
+          changed = true;
+        }
+        continue;
+      }
       const current = state.history[source.sourceId];
       if (
         current?.year !== year ||
+        historyCursorMode(state, source.sourceId, current) !== "gap" ||
         current.rangeStart !== gapStart ||
         current.nextRangeEnd > gapEnd ||
         current.nextRangeEnd < gapStart
       ) {
         state.history[source.sourceId] = {
+          mode: "gap",
           year,
           rangeStart: gapStart,
           nextRangeEnd: gapEnd,
@@ -1852,7 +1904,10 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       }
       continue;
     }
-    const retryingPartial = state.historyRetries[source.sourceId] === year;
+    if (state.historyGapAttempts[source.sourceId] !== undefined) {
+      delete state.historyGapAttempts[source.sourceId];
+      changed = true;
+    }
     const terminal =
       source.historyBackfillYear === year &&
       ["complete", "partial"].includes(source.historyBackfillStatus) &&
@@ -1868,6 +1923,7 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
     const current = state.history[source.sourceId];
     if (current?.year === year) continue;
     state.history[source.sourceId] = {
+      mode: "initial",
       year,
       rangeStart: yearStart,
       nextRangeEnd: firstHistoricalEnd,
@@ -1878,6 +1934,18 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
     changed = true;
   }
   return changed;
+}
+
+function historyCursorMode(state, sourceId, cursor) {
+  if (["initial", "gap", "full"].includes(cursor?.mode)) return cursor.mode;
+  if (state.historyRetries?.[sourceId] === cursor?.year) return "full";
+  return cursor?.rangeStart && cursor.rangeStart !== historyYearStart(cursor.year)
+    ? "gap"
+    : "initial";
+}
+
+function historyGapGeneration(state, sourceId) {
+  return fingerprint(state.adapters?.[sourceId] ?? null);
 }
 
 function prepareFullHistoryRetries(config, state, now = connectorNow()) {
@@ -1902,6 +1970,7 @@ function prepareFullHistoryRetries(config, state, now = connectorNow()) {
       state.history[source.sourceId]?.nextRangeEnd !== firstHistoricalEnd
     ) {
       state.history[source.sourceId] = {
+        mode: "full",
         year,
         rangeStart: yearStart,
         nextRangeEnd: firstHistoricalEnd,
@@ -2045,12 +2114,14 @@ function validatedHistoryAdvance(payload, sourceId) {
   const advance = advances[0];
   if (advance === undefined) return null;
   const rangeStart = advance.rangeStart ?? historyYearStart(advance.year);
+  const mode = advance.mode ?? (rangeStart === historyYearStart(advance.year) ? "initial" : "gap");
   if (
     advance?.sourceId !== sourceId ||
     !uuidPattern.test(advance.sourceId ?? "") ||
     !Number.isSafeInteger(advance.year) ||
     advance.year < 1970 ||
     advance.year > 9999 ||
+    !["initial", "gap", "full"].includes(mode) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(rangeStart ?? "") ||
     !rangeStart.startsWith(`${String(advance.year).padStart(4, "0")}-`) ||
     !(
@@ -2068,10 +2139,11 @@ function validatedHistoryAdvance(payload, sourceId) {
       "hadPartialChunk,nextRangeEnd,sourceId,terminalStatus,year",
       "hadPartialChunk,nextRangeEnd,retentionSafe,sourceId,terminalStatus,year",
       "hadPartialChunk,nextRangeEnd,rangeStart,retentionSafe,sourceId,terminalStatus,year",
+      "hadPartialChunk,mode,nextRangeEnd,rangeStart,retentionSafe,sourceId,terminalStatus,year",
     ].includes(Object.keys(advance).sort().join(","))
   )
     throw new Error("Pending history advancement state is invalid");
-  return { ...advance, rangeStart, retentionSafe: advance.retentionSafe === true };
+  return { ...advance, mode, rangeStart, retentionSafe: advance.retentionSafe === true };
 }
 
 async function applyHistoryAdvance(config, item) {
@@ -2081,9 +2153,11 @@ async function applyHistoryAdvance(config, item) {
   state.history ??= {};
   state.historyAdapters ??= {};
   state.historyRetries ??= {};
+  state.historyGapAttempts ??= {};
   state.captureCompactionPending ??= {};
   if (advance.terminalStatus === null) {
     state.history[item.sourceId] = {
+      mode: advance.mode,
       year: advance.year,
       rangeStart: advance.rangeStart,
       nextRangeEnd: advance.nextRangeEnd,
@@ -2094,12 +2168,26 @@ async function applyHistoryAdvance(config, item) {
   } else {
     delete state.history[item.sourceId];
     delete state.historyAdapters[item.sourceId];
-    delete state.historyRetries[item.sourceId];
     const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
-    if (source) {
+    if (advance.mode !== "gap" && source) {
       source.historyBackfillYear = advance.year;
       source.historyBackfillStatus = advance.terminalStatus;
     }
+    if (advance.mode === "full" && advance.rangeStart === historyYearStart(advance.year))
+      delete state.historyRetries[item.sourceId];
+    if (
+      source &&
+      advance.terminalStatus === "partial" &&
+      typeof source.historyGapRangeStart === "string" &&
+      typeof source.historyGapRangeEnd === "string"
+    )
+      state.historyGapAttempts[item.sourceId] = {
+        year: advance.year,
+        rangeStart: source.historyGapRangeStart,
+        rangeEnd: source.historyGapRangeEnd,
+        result: "partial",
+        localGeneration: historyGapGeneration(state, item.sourceId),
+      };
     reconcileHistoryCursors(config, state);
   }
   await writeState(state);
@@ -3058,6 +3146,7 @@ async function sync(providedConfig, options = {}) {
   let accountSetupPending = rolling?.accountSetupPending ?? false;
   let historyChunks = 0;
   let historyProgress = rolling?.historyProgress === true;
+  const attemptedHistoryCycles = new Set();
   const maximumHistoryChunks = options.automatic || options.browser ? 1 : Number.POSITIVE_INFINITY;
   const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
 
@@ -3074,9 +3163,24 @@ async function sync(providedConfig, options = {}) {
           !failedHistorySourceIds.has(source.sourceId) &&
           !blockedHistorySourceIds.has(source.sourceId) &&
           state.history?.[source.sourceId]?.year === year &&
-          (options.fullHistory === true || state.historyRetries?.[source.sourceId] !== year),
+          (options.fullHistory === true ||
+            historyCursorMode(state, source.sourceId, state.history[source.sourceId]) !== "full"),
       )
-      .map((source) => ({ source, cursor: state.history[source.sourceId] }))
+      .map((source) => {
+        const cursor = state.history[source.sourceId];
+        const mode = historyCursorMode(state, source.sourceId, cursor);
+        const cycleKey = [
+          source.sourceId,
+          mode,
+          cursor.rangeStart ?? historyYearStart(year),
+          cursor.nextRangeEnd,
+          source.historyGapRangeStart ?? "",
+          source.historyGapRangeEnd ?? "",
+          historyGapGeneration(state, source.sourceId),
+        ].join("|");
+        return { source, cursor, mode, cycleKey };
+      })
+      .filter((candidate) => !attemptedHistoryCycles.has(candidate.cycleKey))
       .sort(
         (left, right) =>
           right.cursor.nextRangeEnd.localeCompare(left.cursor.nextRangeEnd) ||
@@ -3093,6 +3197,7 @@ async function sync(providedConfig, options = {}) {
         candidate.cursor.nextRangeEnd === nextRangeEnd &&
         (candidate.cursor.rangeStart ?? historyYearStart(year)) === rangeStart,
     );
+    for (const candidate of selected) attemptedHistoryCycles.add(candidate.cycleKey);
     const range = historyRangeEndingAt(nextRangeEnd, year, rangeStart);
     const blockedBefore = blockedHistorySourceIds.size;
     const historical = await syncRange(config, {

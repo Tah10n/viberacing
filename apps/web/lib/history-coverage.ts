@@ -28,6 +28,23 @@ export function sourcePeriodIncomplete(
     date <= rollingToday &&
     (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date));
   const selectedIntersectsUnresolved = source.unresolvedUsageDates.some(unresolvedDateMatters);
+  const legacyPartialWithoutCoverage =
+    source.lastCompleteness === "partial" &&
+    source.lastRollingRangeStart === null &&
+    source.lastRollingRangeEnd === null &&
+    source.unresolvedUsageDates.length === 0;
+  let selectedIntersectsLegacyPartial = false;
+  if (legacyPartialWithoutCoverage) {
+    for (
+      let date = resolved.from < rollingStart ? rollingStart : resolved.from;
+      date < resolved.toExclusive && date <= rollingToday;
+      date = addUtcDays(date, 1)
+    )
+      if (source.aggregationMode === "source_sum" || !source.provenAccountDates.has(date)) {
+        selectedIntersectsLegacyPartial = true;
+        break;
+      }
+  }
   let selectedIntersectsStaleTail = false;
   if (source.active) {
     const staleStart =
@@ -62,6 +79,7 @@ export function sourcePeriodIncomplete(
   }
   return (
     selectedIntersectsUnresolved ||
+    selectedIntersectsLegacyPartial ||
     selectedIntersectsStaleTail ||
     selectedIntersectsUnfinishedHistory
   );

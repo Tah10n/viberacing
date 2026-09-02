@@ -219,4 +219,21 @@ describe("dashboard history coverage", () => {
     expect(sourcePeriodIncomplete(selected("2026-08-10"), "2026-09-01", disconnected)).toBe(true);
     expect(sourcePeriodIncomplete(selected("2026-08-25"), "2026-09-01", disconnected)).toBe(false);
   });
+
+  it("does not trust legacy disconnected partial coverage as no-data", () => {
+    const selected = resolveUsagePeriod(
+      { kind: "custom", from: "2026-08-25", to: "2026-08-25" },
+      now,
+    );
+    expect(
+      sourcePeriodIncomplete(selected, "2026-09-01", {
+        ...completeSource,
+        active: false,
+        lastCompleteness: "partial",
+        lastRollingRangeStart: null,
+        lastRollingRangeEnd: null,
+        unresolvedUsageDates: [],
+      }),
+    ).toBe(true);
+  });
 });

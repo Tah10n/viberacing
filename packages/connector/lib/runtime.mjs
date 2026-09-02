@@ -90,6 +90,7 @@ function validHistoryState(value) {
           "hadPartialChunk,nextRangeEnd,year",
           "hadPartialChunk,nextRangeEnd,retentionSafe,year",
           "hadPartialChunk,nextRangeEnd,rangeStart,retentionSafe,year",
+          "hadPartialChunk,mode,nextRangeEnd,rangeStart,retentionSafe,year",
         ].includes(Object.keys(cursor).sort().join(",")) &&
         Number.isSafeInteger(cursor.year) &&
         cursor.year >= 1970 &&
@@ -101,6 +102,7 @@ function validHistoryState(value) {
             cursor.rangeStart.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
             cursor.rangeStart <= cursor.nextRangeEnd)) &&
         typeof cursor.hadPartialChunk === "boolean" &&
+        (cursor.mode === undefined || ["initial", "gap", "full"].includes(cursor.mode)) &&
         (cursor.retentionSafe === undefined || typeof cursor.retentionSafe === "boolean"),
     )
   );
@@ -147,7 +149,6 @@ function validCaptureCleanupProof(proof) {
     /^\d+$/.test(proof.ino) &&
     Number.isSafeInteger(proof.safeOffset) &&
     proof.safeOffset >= 0 &&
-    proof.safeOffset <= 100_000_000 &&
     sha256Pattern.test(proof.prefixHash ?? "") &&
     validSegments(proof.acknowledgedSegments, proof.safeOffset) &&
     (result === undefined ||
@@ -164,7 +165,6 @@ function validCaptureCleanupProof(proof) {
           ]) &&
         Number.isSafeInteger(result.safeOffset) &&
         result.safeOffset >= 0 &&
-        result.safeOffset <= 100_000_000 &&
         sha256Pattern.test(result.prefixHash ?? "") &&
         Number.isSafeInteger(result.proofSafeOffset) &&
         result.proofSafeOffset >= 0 &&
@@ -185,6 +185,32 @@ function validHistoryRetries(value) {
         Number.isSafeInteger(year) &&
         year >= 1970 &&
         year <= 9999,
+    )
+  );
+}
+
+function validHistoryGapAttempts(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, attempt]) =>
+        sourceIdPattern.test(sourceId) &&
+        attempt !== null &&
+        typeof attempt === "object" &&
+        !Array.isArray(attempt) &&
+        Object.keys(attempt).sort().join(",") ===
+          "localGeneration,rangeEnd,rangeStart,result,year" &&
+        Number.isSafeInteger(attempt.year) &&
+        attempt.year >= 1970 &&
+        attempt.year <= 9999 &&
+        dayPattern.test(attempt.rangeStart ?? "") &&
+        dayPattern.test(attempt.rangeEnd ?? "") &&
+        attempt.rangeStart.startsWith(`${String(attempt.year).padStart(4, "0")}-`) &&
+        attempt.rangeStart <= attempt.rangeEnd &&
+        attempt.result === "partial" &&
+        sha256Pattern.test(attempt.localGeneration ?? ""),
     )
   );
 }
@@ -220,6 +246,8 @@ function normalizedRuntimeState(value) {
     throw new Error("Connector runtime history state is invalid");
   if (value.historyRetries !== undefined && !validHistoryRetries(value.historyRetries))
     throw new Error("Connector runtime history retry state is invalid");
+  if (value.historyGapAttempts !== undefined && !validHistoryGapAttempts(value.historyGapAttempts))
+    throw new Error("Connector runtime history gap attempt state is invalid");
   if (
     value.captureCompactionPending !== undefined &&
     !validCaptureCompactionPending(value.captureCompactionPending)
@@ -667,8 +695,16 @@ export async function compactCapture(path, now = new Date(), maximumBytes = 1_00
   });
 }
 
-function bufferHash(value) {
-  return createHash("sha256").update(value).digest("hex");
+async function filePrefixHash(path, length) {
+  if (!Number.isSafeInteger(length) || length < 0) return null;
+  const hash = createHash("sha256");
+  let bytes = 0;
+  if (length > 0)
+    for await (const chunk of createReadStream(path, { start: 0, end: length - 1 })) {
+      bytes += chunk.length;
+      hash.update(chunk);
+    }
+  return bytes === length ? hash.digest("hex") : null;
 }
 
 export async function createCaptureCleanupProof(path, observedFile, acknowledgedRange) {
@@ -678,7 +714,6 @@ export async function createCaptureCleanupProof(path, observedFile, acknowledged
     !Number.isSafeInteger(observedFile.safeOffset) ||
     observedFile.safeOffset < 0 ||
     observedFile.safeOffset !== observedFile.size ||
-    observedFile.safeOffset > 100_000_000 ||
     !dayPattern.test(acknowledgedRange?.rangeStart ?? "") ||
     !dayPattern.test(acknowledgedRange?.rangeEnd ?? "") ||
     acknowledgedRange.rangeStart > acknowledgedRange.rangeEnd
@@ -697,13 +732,13 @@ export async function createCaptureCleanupProof(path, observedFile, acknowledged
       (observedFile.ino !== undefined && String(info.ino) !== String(observedFile.ino))
     )
       return null;
-    const contents = await readFile(path);
-    const prefix = contents.subarray(0, observedFile.safeOffset);
+    const prefixHash = await filePrefixHash(path, observedFile.safeOffset);
+    if (prefixHash === null) return null;
     return {
       version: 1,
       ino: String(info.ino),
       safeOffset: observedFile.safeOffset,
-      prefixHash: bufferHash(prefix),
+      prefixHash,
       acknowledgedSegments: [{ safeOffset: observedFile.safeOffset, ...acknowledgedRange }],
     };
   });
@@ -712,21 +747,24 @@ export async function createCaptureCleanupProof(path, observedFile, acknowledged
 export async function mergeCaptureCleanupProof(path, previous, next) {
   if (!validCaptureCleanupProof(next) || !validCaptureCleanupProof(previous)) return next;
   return withCaptureLock(path, async () => {
-    let contents;
     let info;
     try {
-      [contents, info] = await Promise.all([readFile(path), stat(path)]);
+      info = await stat(path);
     } catch {
       return next;
     }
+    const [previousHash, nextHash] = await Promise.all([
+      filePrefixHash(path, previous.safeOffset),
+      filePrefixHash(path, next.safeOffset),
+    ]);
     if (
       previous.compactionResult !== undefined ||
       previous.ino !== next.ino ||
       String(info.ino) !== next.ino ||
       previous.safeOffset > next.safeOffset ||
-      contents.length < next.safeOffset ||
-      bufferHash(contents.subarray(0, previous.safeOffset)) !== previous.prefixHash ||
-      bufferHash(contents.subarray(0, next.safeOffset)) !== next.prefixHash
+      info.size < next.safeOffset ||
+      previousHash !== previous.prefixHash ||
+      nextHash !== next.prefixHash
     )
       return next;
     return {
@@ -750,9 +788,8 @@ export async function compactCaptureWithProof(path, proof, now = new Date(), opt
   if (!validCaptureCleanupProof(proof)) return { status: "invalid" };
   return withCaptureLock(path, async () => {
     let info;
-    let contents;
     try {
-      [info, contents] = await Promise.all([stat(path), readFile(path)]);
+      info = await stat(path);
     } catch (error) {
       if (error?.code === "ENOENT") return { status: "invalid" };
       throw error;
@@ -760,8 +797,8 @@ export async function compactCaptureWithProof(path, proof, now = new Date(), opt
     const completed = proof.compactionResult;
     if (
       completed &&
-      contents.length >= completed.safeOffset &&
-      bufferHash(contents.subarray(0, completed.safeOffset)) === completed.prefixHash
+      info.size >= completed.safeOffset &&
+      (await filePrefixHash(path, completed.safeOffset)) === completed.prefixHash
     ) {
       const retainedProof =
         completed.acknowledgedSegments.length === 0
@@ -777,80 +814,137 @@ export async function compactCaptureWithProof(path, proof, now = new Date(), opt
     }
     if (
       String(info.ino) !== proof.ino ||
-      contents.length < proof.safeOffset ||
-      bufferHash(contents.subarray(0, proof.safeOffset)) !== proof.prefixHash
+      info.size < proof.safeOffset ||
+      (await filePrefixHash(path, proof.safeOffset)) !== proof.prefixHash
     )
-      return { status: "invalid" };
-    const prefix = contents.subarray(0, proof.safeOffset);
-    const text = prefix.toString("utf8");
-    if (!prefix.equals(Buffer.from(text)) || (text.length > 0 && !text.endsWith("\n")))
       return { status: "invalid" };
     const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     oldest.setUTCDate(oldest.getUTCDate() - 35);
     const oldestDate = oldest.toISOString().slice(0, 10);
-    const retained = [];
-    const retainedOffsets = [];
     const acknowledged = (date, lineEnd) =>
       proof.acknowledgedSegments.some(
         (segment) =>
           lineEnd <= segment.safeOffset && date >= segment.rangeStart && date <= segment.rangeEnd,
       );
-    let lineEnd = 0;
-    for (const line of text.split(/\n/).slice(0, -1)) {
-      lineEnd += Buffer.byteLength(line) + 1;
-      const normalized = line.endsWith("\r") ? line.slice(0, -1) : line;
-      if (safeCaptureLine(normalized, "0000-00-00") === null) return { status: "invalid" };
-      const record = JSON.parse(normalized);
-      if (record.date >= oldestDate || !acknowledged(record.date, lineEnd)) {
-        retained.push(line);
-        retainedOffsets.push({ original: lineEnd, compacted: 0 });
-      }
-    }
-    const compactedPrefix = Buffer.from(`${retained.join("\n")}${retained.length ? "\n" : ""}`);
-    let compactedOffset = 0;
-    for (let index = 0; index < retained.length; index += 1) {
-      compactedOffset += Buffer.byteLength(retained[index]) + 1;
-      retainedOffsets[index].compacted = compactedOffset;
-    }
-    const transformedSegments = proof.acknowledgedSegments
-      .map((segment) => {
-        let safeOffset = 0;
-        for (const offset of retainedOffsets) {
-          if (offset.original > segment.safeOffset) break;
-          safeOffset = offset.compacted;
-        }
-        return { ...segment, safeOffset };
-      })
-      .filter((segment) => segment.safeOffset > 0);
-    const compacted = Buffer.concat([compactedPrefix, contents.subarray(proof.safeOffset)]);
-    if (compacted.equals(contents)) return { status: "unchanged" };
-    const compactionResult = {
-      safeOffset: compacted.length,
-      prefixHash: bufferHash(compacted),
-      proofSafeOffset: compactedPrefix.length,
-      proofPrefixHash: bufferHash(compactedPrefix),
-      acknowledgedSegments: transformedSegments,
-    };
-    await options.beforeRename?.(compactionResult);
     const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    const output = await open(temporary, "w", 0o600);
+    const proofHash = createHash("sha256");
+    const fullHash = createHash("sha256");
+    const transformedSegments = proof.acknowledgedSegments
+      .map((segment, index) => ({ ...segment, index, transformedOffset: 0 }))
+      .sort((left, right) => left.safeOffset - right.safeOffset || left.index - right.index);
+    let segmentIndex = 0;
+    let compactedOffset = 0;
+    let position = 0;
+    let pending = Buffer.alloc(0);
+    let changed = false;
+    const finalizeSegmentsBefore = (lineEnd) => {
+      while (
+        segmentIndex < transformedSegments.length &&
+        transformedSegments[segmentIndex].safeOffset < lineEnd
+      ) {
+        transformedSegments[segmentIndex].transformedOffset = compactedOffset;
+        segmentIndex += 1;
+      }
+    };
     try {
-      await writeFile(temporary, compacted, { mode: 0o600 });
+      const prefixStream =
+        proof.safeOffset > 0 ? createReadStream(path, { start: 0, end: proof.safeOffset - 1 }) : [];
+      for await (const chunk of prefixStream) {
+        let start = 0;
+        while (start < chunk.length) {
+          const newline = chunk.indexOf(10, start);
+          const end = newline < 0 ? chunk.length : newline;
+          const part = chunk.subarray(start, end);
+          position += part.length;
+          if (pending.length + part.length > maximumCaptureLineBytes)
+            throw new Error("invalid_capture_prefix");
+          if (part.length > 0)
+            pending = pending.length === 0 ? Buffer.from(part) : Buffer.concat([pending, part]);
+          if (newline < 0) break;
+          position += 1;
+          finalizeSegmentsBefore(position);
+          const raw = pending.toString("utf8");
+          if (!pending.equals(Buffer.from(raw))) throw new Error("invalid_capture_prefix");
+          const normalized = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+          if (safeCaptureLine(normalized, "0000-00-00") === null)
+            throw new Error("invalid_capture_prefix");
+          const record = JSON.parse(normalized);
+          if (record.date >= oldestDate || !acknowledged(record.date, position)) {
+            const retained = Buffer.concat([pending, Buffer.from("\n")]);
+            await output.write(retained);
+            proofHash.update(retained);
+            fullHash.update(retained);
+            compactedOffset += retained.length;
+          } else changed = true;
+          pending = Buffer.alloc(0);
+          start = newline + 1;
+        }
+      }
+      if (pending.length > 0 || position !== proof.safeOffset)
+        throw new Error("invalid_capture_prefix");
+      while (segmentIndex < transformedSegments.length) {
+        transformedSegments[segmentIndex].transformedOffset = compactedOffset;
+        segmentIndex += 1;
+      }
+      const proofSafeOffset = compactedOffset;
+      if (proof.safeOffset < info.size)
+        for await (const chunk of createReadStream(path, {
+          start: proof.safeOffset,
+          end: info.size - 1,
+        })) {
+          await output.write(chunk);
+          fullHash.update(chunk);
+          compactedOffset += chunk.length;
+        }
+      await output.close();
+      if (!changed) {
+        await unlink(temporary);
+        return { status: "unchanged" };
+      }
+      const acknowledgedSegments = transformedSegments
+        .sort((left, right) => left.index - right.index)
+        .map(({ transformedOffset, rangeStart, rangeEnd }) => ({
+          safeOffset: transformedOffset,
+          rangeStart,
+          rangeEnd,
+        }))
+        .filter((segment) => segment.safeOffset > 0);
+      const compactionResult = {
+        safeOffset: compactedOffset,
+        prefixHash: fullHash.digest("hex"),
+        proofSafeOffset,
+        proofPrefixHash: proofHash.digest("hex"),
+        acknowledgedSegments,
+      };
+      await options.beforeRename?.(compactionResult);
+      const current = await stat(path);
+      if (
+        String(current.ino) !== String(info.ino) ||
+        current.size !== info.size ||
+        current.mtimeMs !== info.mtimeMs
+      ) {
+        await unlink(temporary);
+        return { status: "invalid" };
+      }
       await rename(temporary, path);
       await options.afterRename?.();
       const compactedInfo = await stat(path);
       const retainedProof =
-        transformedSegments.length === 0
+        acknowledgedSegments.length === 0
           ? null
           : {
               version: 1,
               ino: String(compactedInfo.ino),
-              safeOffset: compactedPrefix.length,
+              safeOffset: proofSafeOffset,
               prefixHash: compactionResult.proofPrefixHash,
-              acknowledgedSegments: transformedSegments,
+              acknowledgedSegments,
             };
       return { status: "compacted", compactionResult, retainedProof };
     } catch (error) {
+      await output.close().catch(() => {});
       await unlink(temporary).catch(() => {});
+      if (error?.message === "invalid_capture_prefix") return { status: "invalid" };
       throw error;
     }
   });

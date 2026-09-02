@@ -41,6 +41,56 @@ ALTER TABLE installation_sources
     AND array_position(unresolved_usage_dates, NULL) IS NULL
   );
 
+-- Legacy releases only persisted a coarse partial bit. Materialize a conservative rolling
+-- coverage window before the new application can interpret a disconnected source. Days with an
+-- explicitly complete source row are proven; every other day remains unresolved instead of being
+-- presented as trusted no-data.
+WITH legacy_partial AS (
+  SELECT source.id,
+         greatest(
+           date_trunc('year', CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date,
+           least(
+             coalesce((source.last_successful_sync_at AT TIME ZONE 'UTC')::date,
+                      (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date),
+             (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
+           ) - 30
+         ) AS range_start,
+         least(
+           coalesce((source.last_successful_sync_at AT TIME ZONE 'UTC')::date,
+                    (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date),
+           (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date
+         ) AS range_end
+    FROM installation_sources source
+   WHERE source.status IN ('active', 'disconnected')
+     AND source.last_completeness = 'partial'
+), legacy_coverage AS (
+  SELECT partial.id,
+         partial.range_start,
+         partial.range_end,
+         coalesce(array_agg(day.value::date ORDER BY day.value) FILTER (
+           WHERE NOT EXISTS (
+             SELECT 1
+               FROM daily_usage usage
+              WHERE usage.source_id = partial.id
+                AND usage.usage_date = day.value::date
+                AND usage.completeness = 'complete'
+           )
+         ), '{}'::date[]) AS unresolved_dates
+    FROM legacy_partial partial
+    CROSS JOIN LATERAL generate_series(
+      partial.range_start,
+      partial.range_end,
+      interval '1 day'
+    ) AS day(value)
+   GROUP BY partial.id, partial.range_start, partial.range_end
+)
+UPDATE installation_sources source
+   SET last_rolling_range_start = coverage.range_start,
+       last_rolling_range_end = coverage.range_end,
+       unresolved_usage_dates = coverage.unresolved_dates
+  FROM legacy_coverage coverage
+ WHERE source.id = coverage.id;
+
 -- Migration 010 is the expand half of an expand-contract rollout. The previous application release
 -- still reads and writes weekly_agent_usage while Railway runs this migration before switching
 -- traffic. Reflect every old weekly mutation into the new daily summary from the authoritative raw

@@ -2252,8 +2252,11 @@ test("acknowledged capture proof removes only its unchanged prefix and preserves
   try {
     const runtime = await import(`../lib/runtime.mjs?capture-proof=${encodeURIComponent(home)}`);
     const path = join(home, "capture.jsonl");
-    const record = (id, date) => JSON.stringify({ id, date, usage: { date, totalTokens: "12" } });
-    const acknowledged = `${record("ack-old", "2026-06-01")}\n${record("ack-new", "2026-09-10")}\n`;
+    const record = (id, date, padding = "") =>
+      JSON.stringify({ id, date, usage: { date, totalTokens: "12" }, padding });
+    const largeOldPrefix = `${record("ack-old", "2026-06-01", "x".repeat(100_000))}\n`.repeat(210);
+    const acknowledged = `${largeOldPrefix}${record("ack-new", "2026-09-10")}\n`;
+    assert.ok(Buffer.byteLength(acknowledged) > 20_000_000);
     await writeFile(path, acknowledged);
     const observed = await stat(path);
     const proof = await runtime.createCaptureCleanupProof(
@@ -2266,7 +2269,12 @@ test("acknowledged capture proof removes only its unchanged prefix and preserves
       { rangeStart: "2026-01-01", rangeEnd: "2026-09-20" },
     );
     assert.ok(proof);
-    const appended = `${record("not-acknowledged-old", "2026-06-02")}\n{"unterminated":`;
+    const appended = `${`${record(
+      "not-acknowledged-old",
+      "2026-06-02",
+      "y".repeat(100_000),
+    )}\n`.repeat(210)}{"unterminated":`;
+    assert.ok(Buffer.byteLength(appended) > 20_000_000);
     await appendFile(path, appended);
     const result = await runtime.compactCaptureWithProof(
       path,
@@ -5262,10 +5270,60 @@ test("sync --full explicitly and idempotently rescans terminal complete history"
   assert.doesNotMatch(await readFile(installation.capture, "utf8"), new RegExp(oldDate));
 });
 
-test("manual Sync recovers a multi-chunk gap after more than 31 offline days", async (context) => {
+test("sync --full keeps its January cursor when a server gap closes mid-run", async (context) => {
   const bodies = [];
-  let gapStart = "2026-07-01";
-  let gapEnd = "2026-08-01";
+  let gapOpen = true;
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      bodies.push(body);
+      if (body.snapshots?.some((snapshot) => snapshot.kind === "year_backfill")) gapOpen = false;
+      const result = usageResponse(body);
+      result.sourceSequences = result.sourceSequences.map((source) => ({
+        ...source,
+        historyGapRangeStart: gapOpen ? "2026-07-01" : null,
+        historyGapRangeEnd: gapOpen ? "2026-07-05" : null,
+      }));
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify(result));
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const address = server.address();
+  assert.equal(typeof address, "object");
+
+  const home = await mkdtemp(join(tmpdir(), "viberacing-full-gap-closes-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+    date: "2026-09-01",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  });
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], {
+    env: connectorEnvironment(home, {
+      NODE_ENV: "test",
+      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+    }),
+  });
+
+  const history = bodies
+    .flatMap((body) => body.snapshots ?? [])
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.ok(history.length > 1);
+  assert.equal(history.at(-1).rangeStart, "2026-01-01");
+  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
+  assert.equal(state.history?.[installation.sourceId], undefined);
+});
+
+test("manual Sync terminates persistent 46, 70, and 120 day gap cycles", async (context) => {
+  const bodies = [];
+  let gapStart;
+  let gapEnd;
   const previousDay = (date) => {
     const value = new Date(`${date}T00:00:00.000Z`);
     value.setUTCDate(value.getUTCDate() - 1);
@@ -5299,39 +5357,51 @@ test("manual Sync recovers a multi-chunk gap after more than 31 offline days", a
   const address = server.address();
   assert.equal(typeof address, "object");
 
-  const home = await mkdtemp(join(tmpdir(), "viberacing-offline-gap-"));
-  context.after(() => rm(home, { recursive: true, force: true }));
-  const oldDate = "2026-07-05";
-  const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
-    date: "2026-09-01",
-    events: ["2026-09-01", oldDate].map((date, index) => ({
-      id: `offline-gap-${index}`,
-      date,
-      usage: { date, totalTokens: String(index + 3) },
-    })),
-    historyBackfillYear: 2026,
-    historyBackfillStatus: "complete",
-  });
-  await execFileAsync(process.execPath, [connectorPath, "sync"], {
-    env: connectorEnvironment(home, {
-      NODE_ENV: "test",
-      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
-    }),
-  });
+  for (const scenario of [
+    { days: 46, start: "2026-06-17", chunks: 2 },
+    { days: 70, start: "2026-05-24", chunks: 3 },
+    { days: 120, start: "2026-04-04", chunks: 4 },
+  ]) {
+    gapStart = scenario.start;
+    gapEnd = "2026-08-01";
+    const bodyStart = bodies.length;
+    const home = await mkdtemp(join(tmpdir(), `viberacing-offline-gap-${scenario.days}-`));
+    context.after(() => rm(home, { recursive: true, force: true }));
+    const installation = await writeCaptureInstallation(home, `http://127.0.0.1:${address.port}`, {
+      date: "2026-09-01",
+      events: ["2026-09-01", scenario.start].map((date, index) => ({
+        id: `offline-gap-${scenario.days}-${index}`,
+        date,
+        usage: { date, totalTokens: String(index + 3) },
+      })),
+      historyBackfillYear: 2026,
+      historyBackfillStatus: "complete",
+    });
+    await execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: connectorEnvironment(home, {
+        NODE_ENV: "test",
+        VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
+      }),
+    });
 
-  const snapshots = bodies.flatMap((body) => body.snapshots ?? []);
-  assert.equal(snapshots.filter((snapshot) => snapshot.kind === "rolling").length, 1);
-  assert.equal(snapshots.filter((snapshot) => snapshot.kind === "year_backfill").length, 2);
-  assert.equal(
-    snapshots.flatMap((snapshot) => snapshot.entries).filter((entry) => entry.date === oldDate)
-      .length,
-    1,
-  );
-  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
-  assert.equal(state.history?.[installation.sourceId], undefined);
+    const snapshots = bodies.slice(bodyStart).flatMap((body) => body.snapshots ?? []);
+    assert.equal(snapshots.filter((snapshot) => snapshot.kind === "rolling").length, 1);
+    assert.equal(
+      snapshots.filter((snapshot) => snapshot.kind === "year_backfill").length,
+      scenario.chunks,
+    );
+    assert.equal(
+      snapshots
+        .flatMap((snapshot) => snapshot.entries)
+        .filter((entry) => entry.date === scenario.start).length,
+      1,
+    );
+    const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+    assert.equal(state.history?.[installation.sourceId], undefined);
+  }
 });
 
-test("an unresolved terminal gap is attempted once per manual run", async (context) => {
+test("a terminal partial gap waits for new local data or an explicit full retry", async (context) => {
   const bodies = [];
   const gapStart = "2026-07-01";
   const gapEnd = "2026-07-05";
@@ -5364,25 +5434,65 @@ test("an unresolved terminal gap is attempted once per manual run", async (conte
     historyBackfillYear: 2026,
     historyBackfillStatus: "complete",
   });
-  await execFileAsync(process.execPath, [connectorPath, "sync"], {
-    env: connectorEnvironment(home, {
-      NODE_ENV: "test",
-      VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
-    }),
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_NOW: "2026-09-01T12:00:00.000Z",
   });
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
 
   assert.deepEqual(
     bodies.flatMap((body) => body.snapshots).map((snapshot) => snapshot.kind),
     ["rolling", "year_backfill"],
   );
-  const state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
-  assert.deepEqual(state.history[installation.sourceId], {
+  let state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.history?.[installation.sourceId], undefined);
+  assert.deepEqual(state.historyGapAttempts[installation.sourceId], {
     year: 2026,
     rangeStart: gapStart,
-    nextRangeEnd: gapEnd,
-    hadPartialChunk: false,
-    retentionSafe: true,
+    rangeEnd: gapEnd,
+    result: "partial",
+    localGeneration: state.historyGapAttempts[installation.sourceId].localGeneration,
   });
+  assert.match(state.historyGapAttempts[installation.sourceId].localGeneration, /^[0-9a-f]{64}$/);
+
+  const unchangedStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(
+    bodies
+      .slice(unchangedStart)
+      .flatMap((body) => body.snapshots)
+      .filter((snapshot) => snapshot.kind === "year_backfill").length,
+    0,
+  );
+
+  await appendFile(
+    installation.capture,
+    `${JSON.stringify({
+      id: "new-gap-generation",
+      date: "2026-07-02",
+      usage: { date: "2026-07-02", totalTokens: "4" },
+    })}\n`,
+  );
+  const changedStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
+  assert.equal(
+    bodies
+      .slice(changedStart)
+      .flatMap((body) => body.snapshots)
+      .filter((snapshot) => snapshot.kind === "year_backfill").length,
+    1,
+  );
+
+  const fullStart = bodies.length;
+  await execFileAsync(process.execPath, [connectorPath, "sync", "--full"], { env: environment });
+  const fullHistory = bodies
+    .slice(fullStart)
+    .flatMap((body) => body.snapshots)
+    .filter((snapshot) => snapshot.kind === "year_backfill");
+  assert.ok(fullHistory.length > 1);
+  assert.equal(fullHistory.at(-1).rangeStart, "2026-01-01");
+  state = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(state.historyRetries?.[installation.sourceId], undefined);
 });
 
 test("unsafe Antigravity history retains capture until a repaired full retry is acknowledged", async (context) => {

@@ -638,6 +638,261 @@ export async function collectJsonl(
   };
 }
 
+// Capture files are owned by the connector and can legitimately grow beyond the discovery walk's
+// per-file limit. Read the exact file as a bounded stream while retaining the same durable event
+// ledger and append checkpoint contract as the general JSONL collector.
+export async function collectCaptureJsonl(
+  source,
+  parser,
+  state = {},
+  range,
+  eventKey,
+  ledgerParserVersion = 1,
+) {
+  const path = resolve(source.dataPath);
+  try {
+    if ((await stat(path)).isDirectory())
+      return collectJsonl(source, parser, () => true, state, range, eventKey, ledgerParserVersion);
+  } catch {}
+  const normalized = normalizedJsonlState(state, ledgerParserVersion, range);
+  let ledgerCount = validateObservedEventLedger(normalized.ledger, ledgerParserVersion);
+  const ledger = normalized.ledger;
+  const legacyEventDays = normalized.legacyEventDays;
+  const legacyBaseline = normalized.legacyBaseline;
+  const provisionalLedger = {};
+  const nextState = { files: {}, ledger, legacyBaseline, legacyEventDays };
+  let ledgerBytes = Buffer.byteLength(JSON.stringify(ledger));
+  let incomplete = false;
+  let oversized = false;
+  let schemaUnsupported = false;
+  let identityConflict = false;
+  let unreadable = false;
+  let limited = false;
+  let file;
+  try {
+    const info = await stat(path);
+    if (!info.isFile()) throw new Error("Capture path is not a file");
+    file = { path, size: info.size, modifiedAt: info.mtimeMs, ino: info.ino };
+  } catch {
+    incomplete = true;
+    unreadable = true;
+  }
+
+  const previous = normalized.files[path];
+  if (file) {
+    if (
+      previous &&
+      previous.size === file.size &&
+      previous.modifiedAt === file.modifiedAt &&
+      previous.safeOffset === file.size &&
+      (previous.ino === undefined || previous.ino === file.ino)
+    ) {
+      nextState.files[path] = previous;
+    } else {
+      let appended =
+        previous &&
+        previous.size <= file.size &&
+        previous.safeOffset <= file.size &&
+        (previous.ino === undefined || previous.ino === file.ino);
+      if (appended && previous.tailFingerprint !== undefined) {
+        try {
+          appended =
+            previous.tailFingerprint === (await tailFingerprint(path, previous.safeOffset));
+        } catch {
+          appended = false;
+        }
+      }
+      const offset = appended ? previous.safeOffset : 0;
+      let pending = Buffer.alloc(0);
+      let discardingLongLine = false;
+      let lineCount = appended ? (previous.lineCount ?? 0) : 0;
+      let safeOffset = offset;
+      let position = offset;
+      let overflowed = false;
+      let checkpointSafe = true;
+      const consume = (line, lineEnd) => {
+        lineCount += 1;
+        const raw = line.toString("utf8");
+        if (!line.equals(Buffer.from(raw))) {
+          incomplete = true;
+          schemaUnsupported = true;
+          checkpointSafe = false;
+          return;
+        }
+        const normalizedLine = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+        if (normalizedLine.length === 0) {
+          safeOffset = lineEnd;
+          return;
+        }
+        const event = eventKey?.(normalizedLine, { path, lineIndex: lineCount - 1 });
+        const keys = observedEventKeys(event);
+        const usage = event ? storedUsage(event.entry) : null;
+        if (keys === null || !dayPattern.test(event?.date ?? "") || usage === null) {
+          const parsed = parser([normalizedLine]);
+          const unsupported = Array.isArray(parsed) ? 0 : parsed.stats.unsupportedCandidates;
+          if (unsupported > 0) {
+            incomplete = true;
+            schemaUnsupported = true;
+            checkpointSafe = false;
+          }
+          safeOffset = lineEnd;
+          return;
+        }
+        if (range && (event.date < range.rangeStart || event.date > range.rangeEnd)) {
+          safeOffset = lineEnd;
+          return;
+        }
+        const [key, ...aliasKeys] = keys;
+        const candidate = { date: event.date, usage, parserVersion: ledgerParserVersion };
+        const legacyDates = [key, ...aliasKeys]
+          .map((candidateKey) => legacyEventDays[candidateKey])
+          .filter((date) => date !== undefined);
+        if (legacyDates.length > 0) {
+          if (legacyDates.some((date) => date !== event.date)) {
+            incomplete = true;
+            identityConflict = true;
+            checkpointSafe = false;
+          }
+          safeOffset = lineEnd;
+          return;
+        }
+        if (ledger[key] !== undefined) {
+          if (JSON.stringify(ledger[key]) !== JSON.stringify(candidate)) {
+            incomplete = true;
+            identityConflict = true;
+            checkpointSafe = false;
+          }
+          safeOffset = lineEnd;
+          return;
+        }
+        const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
+        if (
+          ledgerCount >= maximumLedgerEvents ||
+          ledgerBytes + candidateBytes > maximumLedgerBytes
+        ) {
+          incomplete = true;
+          limited = true;
+          overflowed = true;
+          checkpointSafe = false;
+          return;
+        }
+        ledger[key] = candidate;
+        ledgerCount += 1;
+        ledgerBytes += candidateBytes;
+        safeOffset = lineEnd;
+      };
+      try {
+        const stream =
+          offset < file.size ? createReadStream(path, { start: offset, end: file.size - 1 }) : [];
+        for await (const chunk of stream) {
+          let start = 0;
+          while (start < chunk.length && !overflowed) {
+            const newline = chunk.indexOf(10, start);
+            const end = newline < 0 ? chunk.length : newline;
+            const part = chunk.subarray(start, end);
+            position += part.length;
+            if (!discardingLongLine) {
+              if (pending.length + part.length > 2_000_000) {
+                pending = Buffer.alloc(0);
+                discardingLongLine = true;
+                incomplete = true;
+                oversized = true;
+                limited = true;
+                checkpointSafe = false;
+              } else if (part.length > 0) {
+                pending = pending.length === 0 ? Buffer.from(part) : Buffer.concat([pending, part]);
+                if (pending.length > 1_000_000) {
+                  incomplete = true;
+                  oversized = true;
+                  limited = true;
+                }
+              }
+            }
+            if (newline < 0) break;
+            position += 1;
+            const lineEnd = position;
+            if (!discardingLongLine) consume(pending, lineEnd);
+            else safeOffset = lineEnd;
+            pending = Buffer.alloc(0);
+            discardingLongLine = false;
+            start = newline + 1;
+          }
+          if (overflowed) break;
+        }
+        if (pending.length > 0 || discardingLongLine) {
+          incomplete = true;
+          checkpointSafe = false;
+        }
+        if (pending.length > 0 && !discardingLongLine) {
+          const raw = pending.toString("utf8");
+          const normalizedLine = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+          const event = pending.equals(Buffer.from(raw))
+            ? eventKey?.(normalizedLine, { path, lineIndex: lineCount })
+            : null;
+          const keys = observedEventKeys(event);
+          const usage = event ? storedUsage(event.entry) : null;
+          if (
+            keys !== null &&
+            dayPattern.test(event.date ?? "") &&
+            usage !== null &&
+            (!range || (event.date >= range.rangeStart && event.date <= range.rangeEnd))
+          ) {
+            const [key, ...aliasKeys] = keys;
+            const candidate = { date: event.date, usage, parserVersion: ledgerParserVersion };
+            const legacyDates = [key, ...aliasKeys]
+              .map((candidateKey) => legacyEventDays[candidateKey])
+              .filter((date) => date !== undefined);
+            const existing = ledger[key] ?? provisionalLedger[key];
+            if (legacyDates.length > 0) {
+              if (legacyDates.some((date) => date !== event.date)) identityConflict = true;
+            } else if (existing === undefined) provisionalLedger[key] = candidate;
+            else if (JSON.stringify(existing) !== JSON.stringify(candidate))
+              identityConflict = true;
+          }
+        }
+        if (checkpointSafe && !overflowed && safeOffset === file.size)
+          nextState.files[path] = {
+            size: file.size,
+            modifiedAt: file.modifiedAt,
+            ino: file.ino,
+            safeOffset: file.size,
+            tailFingerprint: await tailFingerprint(path, file.size),
+            lineCount,
+          };
+        else if (previous) nextState.files[path] = previous;
+      } catch {
+        incomplete = true;
+        unreadable = true;
+        if (previous) nextState.files[path] = previous;
+      }
+    }
+  } else if (previous) nextState.files[path] = previous;
+
+  const warnings = [];
+  if (incomplete) warnings.push("collector_limits_or_unreadable_files");
+  if (oversized) warnings.push("oversized_jsonl_records");
+  if (schemaUnsupported) warnings.push("unsupported_usage_records");
+  if (identityConflict) warnings.push("local_event_identity_conflict");
+  return {
+    entries: mergeEntries([
+      ...legacyBaseline,
+      ...[...Object.values(ledger), ...Object.values(provisionalLedger)].map((event) => ({
+        date: event.date,
+        ...event.usage,
+      })),
+    ]),
+    completeness: incomplete ? "partial" : "complete",
+    nextState,
+    warnings,
+    diagnostics: [
+      ...(unreadable ? [{ code: "local_store_unreadable", phase: "collect" }] : []),
+      ...(limited ? [{ code: "local_store_scan_limit", phase: "collect" }] : []),
+      ...(schemaUnsupported ? [{ code: "local_store_schema_unsupported", phase: "collect" }] : []),
+      ...(identityConflict ? [{ code: "local_event_identity_conflict", phase: "collect" }] : []),
+    ],
+  };
+}
+
 export function parserResult(entries, candidateRecords, parsedRecords, unsupportedCandidates) {
   return {
     entries,

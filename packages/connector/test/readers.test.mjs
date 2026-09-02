@@ -54,6 +54,26 @@ async function fixture(name) {
   return readFile(fileURLToPath(new URL(`fixtures/${name}`, import.meta.url)), "utf8");
 }
 
+function exactCaptureContents(size) {
+  const prefix =
+    '{"id":"boundary-event","date":"2026-08-10","usage":{"date":"2026-08-10","totalTokens":"1"},"padding":"';
+  const suffix = '"}\n';
+  const minimum = Buffer.byteLength(prefix) + Buffer.byteLength(suffix);
+  const maximumPadding = 100_000;
+  const parts = [];
+  let remaining = size;
+  while (remaining > 0) {
+    if (remaining < minimum) throw new Error("Capture test size cannot contain a complete line");
+    let padding = Math.min(maximumPadding, remaining - minimum);
+    const leftover = remaining - minimum - padding;
+    if (leftover > 0 && leftover < minimum) padding -= minimum - leftover;
+    const line = `${prefix}${"x".repeat(padding)}${suffix}`;
+    parts.push(line);
+    remaining -= Buffer.byteLength(line);
+  }
+  return parts.join("");
+}
+
 function codexTokenCount(timestamp, usage, lastUsage = usage, ordinal = 1) {
   return JSON.stringify({
     ordinal,
@@ -3232,8 +3252,9 @@ test("reads Antigravity CLI snake-case usage", async () => {
 test("Antigravity historical capture stays partial even when every retained record is readable", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-antigravity-history-"));
   context.after(() => rm(root, { force: true, recursive: true }));
+  const capture = join(root, "capture.jsonl");
   await writeFile(
-    join(root, "capture.jsonl"),
+    capture,
     `${JSON.stringify({
       date: "2026-08-10",
       id: "capture-1",
@@ -3242,7 +3263,7 @@ test("Antigravity historical capture stays partial even when every retained reco
   );
 
   const result = await adapterFor("antigravity").collect(
-    { dataPath: root },
+    { dataPath: capture },
     { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
     {},
     { historical: true },
@@ -3251,6 +3272,43 @@ test("Antigravity historical capture stays partial even when every retained reco
   assert.equal(result.completeness, "partial");
   assert.equal(result.retentionSafe, true);
   assert.equal(result.entries.length, 1);
+});
+
+test("Antigravity streams capture files across the former 20 MB discovery boundary", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-antigravity-large-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const path = join(root, "capture.jsonl");
+  for (const size of [20_000_000 - 1, 20_000_000, 20_000_000 + 1]) {
+    await writeFile(path, exactCaptureContents(size));
+    assert.equal((await stat(path)).size, size);
+    const result = await adapterFor("antigravity").collect(
+      { dataPath: path },
+      { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+      {},
+    );
+    assert.equal(result.completeness, "complete");
+    assert.equal(result.retentionSafe, true);
+    assert.equal(result.entries[0]?.totalTokens, "1");
+    assert.equal(result.nextState.files[path]?.safeOffset, size);
+  }
+});
+
+test("large capture collection and proof cleanup implementations do not read the file whole", async () => {
+  const shared = await readFile(new URL("../lib/adapters/shared.mjs", import.meta.url), "utf8");
+  const captureCollector = shared.slice(
+    shared.indexOf("export async function collectCaptureJsonl"),
+    shared.indexOf("export function parserResult"),
+  );
+  assert.match(captureCollector, /createReadStream/);
+  assert.doesNotMatch(captureCollector, /readFile\(/);
+
+  const runtime = await readFile(new URL("../lib/runtime.mjs", import.meta.url), "utf8");
+  const proofCleanup = runtime.slice(
+    runtime.indexOf("async function filePrefixHash"),
+    runtime.indexOf("export async function quarantinePending"),
+  );
+  assert.match(proofCleanup, /createReadStream/);
+  assert.doesNotMatch(proofCleanup, /readFile\(/);
 });
 
 test("reads Gemini session usage metadata", async () => {

@@ -1,5 +1,5 @@
 import {
-  collectJsonl,
+  collectCaptureJsonl,
   componentEntry,
   dayPattern,
   diagnosePath,
@@ -96,10 +96,9 @@ export const antigravityAdapter = Object.freeze({
   defaultPaths: [],
   detect: async () => [],
   collect: async (source, range, state = {}, context = {}) => {
-    const result = await collectJsonl(
+    const result = await collectCaptureJsonl(
       source,
       analyzeAntigravityLines,
-      () => true,
       state,
       range,
       captureEventKey,

@@ -97,8 +97,10 @@ async function verifyExpandMigrationCompatibility() {
     await client.query(
       `INSERT INTO installation_sources
          (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
-          suggested_label, collection_method, supported_surface, status)
-       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old Codex', 'codex_app_server', 'cli', 'active')`,
+          suggested_label, collection_method, supported_surface, status,
+          last_successful_sync_at, last_completeness)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old Codex', 'codex_app_server', 'cli',
+               'disconnected', CURRENT_DATE, 'partial')`,
       [sourceId, installationId, compatibilityUserId, accountId, randomUUID()],
     );
     const usageDate = "2026-08-31";
@@ -119,6 +121,22 @@ async function verifyExpandMigrationCompatibility() {
         new URL("../apps/web/database/010_current_year_history.sql", import.meta.url),
         "utf8",
       ),
+    );
+    const legacyCoverage = await client.query(
+      `SELECT last_rolling_range_start::text AS range_start,
+              last_rolling_range_end::text AS range_end,
+              $2::date = ANY(unresolved_usage_dates) AS complete_day_unresolved,
+              CURRENT_DATE = ANY(unresolved_usage_dates) AS current_day_unresolved
+         FROM installation_sources
+        WHERE id = $1`,
+      [sourceId, usageDate],
+    );
+    check(
+      legacyCoverage.rows[0]?.range_start !== null &&
+        legacyCoverage.rows[0]?.range_end === today &&
+        legacyCoverage.rows[0]?.complete_day_unresolved === false &&
+        legacyCoverage.rows[0]?.current_day_unresolved === (usageDate !== today),
+      "migration 010 trusted legacy disconnected partial coverage as no-data",
     );
     const oldRead = await client.query(
       `SELECT coalesce(sum(tokens), 0)::text AS tokens
