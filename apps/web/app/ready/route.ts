@@ -20,7 +20,6 @@ async function get(): Promise<Response> {
               to_regclass('public.installation_sources') IS NOT NULL
                 AND to_regclass('public.daily_usage') IS NOT NULL
                 AND to_regclass('public.daily_agent_usage') IS NOT NULL
-                AND to_regclass('public.weekly_agent_usage') IS NOT NULL
                 AND to_regclass('public.account_dedup_events') IS NOT NULL
                 AND to_regclass('public.browser_sync_runs') IS NOT NULL
                 AND to_regclass('public.browser_sync_grants') IS NOT NULL
@@ -60,18 +59,7 @@ async function get(): Promise<Response> {
                      AND table_name = 'installation_sources'
                      AND column_name = 'unresolved_usage_dates'
                 )
-                AND EXISTS (
-                  SELECT 1
-                    FROM pg_trigger
-                   WHERE tgname = 'weekly_agent_usage_daily_compatibility'
-                     AND NOT tgisinternal
-                )
-                AND EXISTS (
-                  SELECT 1
-                    FROM pg_trigger
-                   WHERE tgname = 'installation_sources_legacy_partial_coverage'
-                     AND NOT tgisinternal
-                ) AS required_tables`,
+                AS required_tables`,
       [expectedSchemaVersion],
     );
     const schema = rows[0];

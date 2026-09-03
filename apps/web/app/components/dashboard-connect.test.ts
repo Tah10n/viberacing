@@ -202,12 +202,14 @@ describe("dashboard connection flow", () => {
     expect(usageSummary).toContain("export const accountMaxDailyTokensSql");
     expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
+    expect(usageSummary).not.toContain("weekly_agent_usage");
     expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(1);
     expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(4);
     expect(dashboard).toContain("AND candidate.account_max_selected");
     expect(dashboard).toContain("candidate.total_tokens = candidate.maximum_total_tokens");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
     expect(dashboard).toContain("FROM daily_agent_usage");
+    expect(source("../api/leaderboard/leave/route.ts")).not.toContain("weekly_agent_usage");
   });
 
   it("renders one period-consistent exact daily explorer without number coercion", () => {
