@@ -10,6 +10,22 @@ experience or protocol.
 
 ### Added
 
+- Connector 0.6.0 and protocol v5 add a resumable current-UTC-year import after the normal rolling
+  snapshot. History moves newest-first in acknowledged chunks of at most 31 dates, uses isolated
+  adapter state, finishes as `complete` or `partial`, resumes after interruption or a lost response,
+  and starts a fresh cursor at the next UTC year without deleting older server rows. Automatic and
+  browser-triggered runs drain bounded pending payloads and collect at most one new historical
+  range; connect and manual Sync finish every eligible chunk.
+- Week, Month, current-year All time, and current-year Custom selectors now drive one shared UTC
+  period across leaderboard, public profiles, and dashboard totals. The dashboard adds a
+  dependency-free accessible SVG daily chart with pointer and keyboard zoom/pan/reset, exact UTC
+  tooltips, a text summary, and an equivalent daily table.
+- Migration 010 adds exact per-day `daily_agent_usage` summaries and source-level current-year
+  backfill status. It backfills existing data with the same `account_max` and `source_sum`
+  precedence used by live ingestion, while temporarily retaining and maintaining the legacy weekly
+  summary for a safe expand-contract deployment.
+- `viberacing sync --full` explicitly retries terminal partial current-year history with a durable
+  cursor, while ordinary, automatic, and browser Sync leave that recovery opt-in.
 - `connect` and `doctor --repair` now reconcile one strict installation-owned OpenCode plugin under
   the global XDG `opencode/plugins` directory. After one OpenCode restart it handles
   `session.status: idle`, deduplicates the `session.idle` fallback for two seconds, synchronously
@@ -31,6 +47,11 @@ experience or protocol.
 
 ### Changed
 
+- Every adapter now applies the requested date range before events consume ledger limits or affect
+  chunk completeness. OpenCode uses a range-bounded SQLite query, Qwen opens only intersecting month
+  files, and historical collection cannot replace rolling checkpoints, fingerprints, or diagnostics.
+- Protocol v2-v4 remains accepted during the server-first rollout. Older connectors continue recent
+  usage sync, while the dashboard asks users to update before importing earlier current-year dates.
 - The stable launcher sets `VIBERACING_STATE_DIR` from its own absolute location before importing
   the versioned runtime, preventing custom installations from falling back to `~/.viberacing`.
 - `doctor` inspection is read-only and reports `OpenCode automatic sync plugin: <status>`; repair
@@ -39,6 +60,9 @@ experience or protocol.
 
 ### Fixed
 
+- Inactive Codex logical accounts no longer cause an unbounded manual history loop; their cursor is
+  retained until that account is active. Runtime-state schema v3 is also accepted by the existing
+  fail-closed OpenCode cutover preflight.
 - `connect` now revalidates the prior connection generation, installation identity, source registry,
   and pending OpenCode cleanup under the pre-pairing lifecycle boundary. A stale process therefore
   cannot recreate local authorization after a concurrent `disconnect` has removed it.

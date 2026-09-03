@@ -1,6 +1,6 @@
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 
-export const connectorProtocolVersion = 4;
+export const connectorProtocolVersion = 5;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
@@ -125,7 +125,7 @@ function parsePairingStart(value, context) {
   return value;
 }
 
-const mappingKeys = new Set([
+const legacyMappingKeys = new Set([
   "clientSourceId",
   "sourceId",
   "agentAccountId",
@@ -134,10 +134,50 @@ const mappingKeys = new Set([
   "collectionMethod",
   "lastAcceptedSyncSequence",
 ]);
+const mappingKeys = new Set([
+  ...legacyMappingKeys,
+  "historyBackfillYear",
+  "historyBackfillStatus",
+  "historyGapRangeStart",
+  "historyGapRangeEnd",
+]);
+const requiredHistoryMappingKeys = new Set([
+  ...legacyMappingKeys,
+  "historyBackfillYear",
+  "historyBackfillStatus",
+]);
 
-function parseMapping(value, local) {
+function validHistoryGap(value) {
+  const start = value?.historyGapRangeStart;
+  const end = value?.historyGapRangeEnd;
+  return (
+    (start === undefined && end === undefined) ||
+    (start === null && end === null) ||
+    (typeof start === "string" &&
+      typeof end === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(start) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(end) &&
+      start <= end)
+  );
+}
+
+function validHistoryStatus(value) {
+  return (
+    Number.isSafeInteger(value?.historyBackfillYear) &&
+    value.historyBackfillYear >= 1970 &&
+    value.historyBackfillYear <= 9999 &&
+    ["pending", "complete", "partial"].includes(value.historyBackfillStatus) &&
+    validHistoryGap(value)
+  );
+}
+
+function parseMapping(value, local, historyRequired = false) {
+  const keys = historyRequired ? mappingKeys : legacyMappingKeys;
   if (
-    !requiredExactKeys(value, mappingKeys) ||
+    !exactKeys(value, keys) ||
+    ![...(historyRequired ? requiredHistoryMappingKeys : legacyMappingKeys)].every((key) =>
+      Object.hasOwn(value, key),
+    ) ||
     value.clientSourceId !== local.clientSourceId ||
     !identifierPattern.test(value.clientSourceId) ||
     !uuidPattern.test(value.sourceId) ||
@@ -146,7 +186,8 @@ function parseMapping(value, local) {
     value.collectionMethod !== local.collectionMethod ||
     (typeof local.sourceId === "string" && value.sourceId !== local.sourceId) ||
     !safeText(value.accountLabel, 40, 1) ||
-    !decimalPattern.test(value.lastAcceptedSyncSequence)
+    !decimalPattern.test(value.lastAcceptedSyncSequence) ||
+    (historyRequired && !validHistoryStatus(value))
   )
     throw invalid();
   return {
@@ -155,6 +196,14 @@ function parseMapping(value, local) {
     agentAccountId: value.agentAccountId,
     accountLabel: value.accountLabel,
     lastAcceptedSyncSequence: value.lastAcceptedSyncSequence,
+    ...(historyRequired
+      ? {
+          historyBackfillYear: value.historyBackfillYear,
+          historyBackfillStatus: value.historyBackfillStatus,
+          historyGapRangeStart: value.historyGapRangeStart,
+          historyGapRangeEnd: value.historyGapRangeEnd,
+        }
+      : {}),
   };
 }
 
@@ -195,7 +244,7 @@ function parsePairingPoll(value, context) {
     const local = typeof clientSourceId === "string" ? localById.get(clientSourceId) : undefined;
     if (local === undefined || seen.has(clientSourceId)) throw invalid();
     seen.add(clientSourceId);
-    return parseMapping(mapping, local);
+    return parseMapping(mapping, local, true);
   });
   if ([...requiredClientSourceIds].some((clientSourceId) => !seen.has(clientSourceId))) {
     throw invalid();
@@ -223,12 +272,36 @@ function parseReconciliation(value, context) {
   if (expected.size > 100 || value.sources.length !== expected.size) throw invalid();
   const seen = new Set();
   for (const source of value.sources) {
+    const reconciliationKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "status",
+            "lastAcceptedSyncSequence",
+            "historyBackfillYear",
+            "historyBackfillStatus",
+            "historyGapRangeStart",
+            "historyGapRangeEnd",
+          ])
+        : new Set(["sourceId", "status", "lastAcceptedSyncSequence"]);
+    const requiredReconciliationKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "status",
+            "lastAcceptedSyncSequence",
+            "historyBackfillYear",
+            "historyBackfillStatus",
+          ])
+        : reconciliationKeys;
     if (
-      !requiredExactKeys(source, new Set(["sourceId", "status", "lastAcceptedSyncSequence"])) ||
+      !exactKeys(source, reconciliationKeys) ||
+      ![...requiredReconciliationKeys].every((key) => Object.hasOwn(source, key)) ||
       !expected.has(source.sourceId) ||
       seen.has(source.sourceId) ||
       !["active", "disconnected"].includes(source.status) ||
-      !decimalPattern.test(source.lastAcceptedSyncSequence)
+      !decimalPattern.test(source.lastAcceptedSyncSequence) ||
+      (context.protocolVersion >= 5 && !validHistoryStatus(source))
     )
       throw invalid();
     seen.add(source.sourceId);
@@ -263,14 +336,17 @@ function parseReconciliation(value, context) {
 
 function parseSourceRegistration(value, context) {
   if (!requiredExactKeys(value, new Set(["source"]))) throw invalid();
+  const registrationKeys = new Set([...mappingKeys, "profileSourceId"]);
+  const requiredRegistrationKeys = new Set([...requiredHistoryMappingKeys, "profileSourceId"]);
   if (
-    !requiredExactKeys(value.source, new Set([...mappingKeys, "profileSourceId"])) ||
+    !exactKeys(value.source, registrationKeys) ||
+    ![...requiredRegistrationKeys].every((key) => Object.hasOwn(value.source, key)) ||
     value.source.profileSourceId !== context.profileSourceId ||
     !uuidPattern.test(value.source.profileSourceId)
   )
     throw invalid();
   const { profileSourceId, ...mapping } = value.source;
-  const source = { ...parseMapping(mapping, context.localSource), profileSourceId };
+  const source = { ...parseMapping(mapping, context.localSource, true), profileSourceId };
   if (source.agentId !== "codex" || source.profileClientSourceId !== context.profileClientSourceId)
     throw invalid();
   return { source };
@@ -301,12 +377,26 @@ function parseUsage(value, context) {
   if (value.sourceSequences.length !== expected.size) throw invalid();
   const seen = new Set();
   for (const sequence of value.sourceSequences) {
+    const sequenceKeys =
+      context.protocolVersion >= 5
+        ? new Set([
+            "sourceId",
+            "lastAcceptedSyncSequence",
+            "accepted",
+            "historyGapRangeStart",
+            "historyGapRangeEnd",
+          ])
+        : new Set(["sourceId", "lastAcceptedSyncSequence", "accepted"]);
     if (
-      !requiredExactKeys(sequence, new Set(["sourceId", "lastAcceptedSyncSequence", "accepted"])) ||
+      !exactKeys(sequence, sequenceKeys) ||
+      !["sourceId", "lastAcceptedSyncSequence", "accepted"].every((key) =>
+        Object.hasOwn(sequence, key),
+      ) ||
       !expected.has(sequence.sourceId) ||
       seen.has(sequence.sourceId) ||
       !decimalPattern.test(sequence.lastAcceptedSyncSequence) ||
-      typeof sequence.accepted !== "boolean"
+      typeof sequence.accepted !== "boolean" ||
+      (context.protocolVersion >= 5 && !validHistoryGap(sequence))
     )
       throw invalid();
     seen.add(sequence.sourceId);
@@ -352,6 +442,14 @@ export function mergeStoredSourceMapping(local, mapping) {
   if (mapping.agentAccountId !== undefined && !uuidPattern.test(mapping.agentAccountId))
     throw invalid("Connector configuration contains an invalid account mapping");
   if (
+    (mapping.historyBackfillYear !== undefined ||
+      mapping.historyBackfillStatus !== undefined ||
+      mapping.historyGapRangeStart !== undefined ||
+      mapping.historyGapRangeEnd !== undefined) &&
+    !validHistoryStatus(mapping)
+  )
+    throw invalid("Connector configuration contains invalid history state");
+  if (
     mapping.profileSourceId !== undefined &&
     (local.agentId !== "codex" ||
       local.profileClientSourceId === undefined ||
@@ -364,6 +462,14 @@ export function mergeStoredSourceMapping(local, mapping) {
     ...(mapping.agentAccountId === undefined ? {} : { agentAccountId: mapping.agentAccountId }),
     accountLabel: mapping.accountLabel,
     lastAcceptedSyncSequence: mapping.lastAcceptedSyncSequence ?? "0",
+    ...(mapping.historyBackfillYear === undefined
+      ? {}
+      : {
+          historyBackfillYear: mapping.historyBackfillYear,
+          historyBackfillStatus: mapping.historyBackfillStatus,
+          historyGapRangeStart: mapping.historyGapRangeStart,
+          historyGapRangeEnd: mapping.historyGapRangeEnd,
+        }),
     ...(mapping.profileSourceId === undefined ? {} : { profileSourceId: mapping.profileSourceId }),
   };
 }

@@ -23,9 +23,10 @@
 - Never set `VIBERACING_ALLOW_INSECURE_LOCAL` in Railway. It is a loopback-only local-preview flag.
 - Confirm configured public and local-test origins contain no URL username or password; startup
   rejects credential-bearing origins without printing the credential.
-- Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports the latest
-  required migration. Insert a synthetic later ledger row and confirm readiness remains healthy;
-  remove the required row and confirm readiness returns 503.
+- Confirm pre-deploy migration succeeds, `/health` answers liveness, and `/ready` reports
+  `010_current_year_history.sql` as the latest required migration. Insert a synthetic later ledger
+  row and confirm readiness remains healthy; remove the required row and confirm readiness
+  returns 503.
 - Confirm Railway parses one-line JSON logs, an intentional rejected request has a searchable
   `requestId`, `route`, `status`, and `outcome`, and a failed readiness check is logged at `error`.
   Routine unauthenticated rejections are visible only while `debug` is enabled. Temporarily use
@@ -98,9 +99,14 @@
   delivery does not rescan collectors, and unchanged automatic data produces no usage request.
   Confirm manual and browser-triggered Sync collect their selected sources immediately, submit an
   unchanged confirmation snapshot, and advance account/computer **Last sync** timestamps. Verify
-  permanent collector/network failure ends after one generation, retains safe pending/error state,
-  and retries only after a new hook/manual sync. No daemon, watcher, polling loop, system service,
-  or required cron should be installed.
+  connect and manual Sync complete every remaining current-year chunk, while automatic and browser
+  Sync drain bounded pending payloads and collect at most one new historical range after rolling
+  usage. Interrupt between chunks, retry a lost acknowledgement, remove local cursor state after a
+  server-complete import, and confirm the cursor resumes without duplicate totals or restarting
+  completed work. Move the clock across January 1 and confirm a new-year cursor starts without
+  deleting prior-year server rows. Verify permanent collector/network failure ends after one
+  generation, retains safe pending/error state, and retries only after a new hook/manual sync. No
+  daemon, watcher, polling loop, system service, or required cron should be installed.
 - On Linux, macOS, and Windows, connect an OpenCode source with home/config/state paths containing
   spaces and Unicode. Confirm the installation-owned plugin is under
   `<XDG_CONFIG_HOME>/opencode/plugins` (Windows defaults to `%USERPROFILE%\.config`, never APPDATA),
@@ -131,16 +137,23 @@
   turn and verify one dirty generation reaches the server within two minutes. Run `doctor --repair`
   again and confirm the hook remains trusted and its command identity is unchanged; do not use a
   hook-trust bypass or write `trusted_hash` from the connector.
-- Verify two linked Codex computers follow `complete 100` then newer `complete 90`; dashboard,
-  weekly summary, chart, leaderboard, and component selection must all show the same corrected
-  value. A later partial may provisionally advance it, and the next complete must correct it down.
-  Verify an explicit complete zero inside an outer partial snapshot corrects a covered day without
-  changing an uncovered day. Verify automatic matching requires at least seven exact matched days,
-  three distinct positive totals, a span of at least six days, zero conflicts, and preserves Undo.
-- Verify protocol v4 applies a collector error only at its exact observed sequence, ignores a
-  delayed error after a newer success, and clears an applied error on the next success. Re-run v2/v3
-  pairing and usage compatibility scenarios, including replacement of an unsequenced pending v2/v3
-  error by the current v4 observation.
+- Verify two linked Codex computers follow `complete 100` then newer `complete 90`; dashboard, daily
+  summary, chart, leaderboard, and component selection must all show the same corrected value for
+  Week, Month, All time, and Custom. Verify invalid/custom-out-of-year query parameters fall back
+  safely, **All time** ends today and means the current UTC calendar year, and the accessible SVG
+  chart supports keyboard/pointer zoom, pan, reset, exact UTC tooltips, a text summary, and an
+  equivalent daily table. A later partial may provisionally advance the value, and the next complete
+  must correct it down. Verify an explicit complete zero inside an outer partial snapshot corrects a
+  covered day without changing an uncovered day. Verify automatic matching requires at least seven
+  exact matched days, three distinct positive totals, a span of at least six days, zero conflicts,
+  and preserves Undo.
+- Verify protocol v5 accepts a January chunk later in the same UTC year, rejects prior-year and
+  future dates, bounds every chunk to 31 inclusive dates, requires its explicit kind, and accepts a
+  terminal history status only on the January 1 chunk. Verify historical partial state does not
+  overwrite rolling completeness, an explicit complete historical entry can correct down, and a
+  partial entry cannot. Verify v4 still rejects the older range and applies a collector error only
+  at its exact observed sequence. Re-run v2-v4 pairing and usage compatibility scenarios, including
+  replacement of an unsequenced pending v2/v3 error by the current ordered observation.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
@@ -214,6 +227,20 @@
   Linux/Windows/macOS smoke plus a real Codex A -> B -> A run, and only then decide whether the
   compatibility floor needs to become `0.5.0`. Do not change the floor merely because 0.5.0 is the
   latest release.
+- For 0.6.0, merge and deploy the server-side protocol-v5 compatibility plus migration 010 before
+  publishing the connector. Verify migration 010 backfills `daily_agent_usage` from existing source
+  rows with exact `account_max`/`source_sum` precedence, retains writable `weekly_agent_usage`,
+  mirrors a previous-release weekly write into the daily summary, `/ready` names migration 010, and
+  v2-v4 connectors still sync recent usage. Only then create an exact-main `v0.6.0` release, wait
+  for the immutable package and `latest`, and run a real interrupted/resumed current-year import.
+  Raising the compatibility floor, deploying, publishing, tagging, or changing Railway remains a
+  separate authorization decision.
+- Keep both cleanup phases out of the migration-010 deployment. In a separately approved future
+  Deployment A, ship code that stops all weekly writes and removes the weekly table and both
+  migration-010 compatibility triggers from readiness while the database objects remain. After A is
+  healthy, a distinct Deployment B may run migration 011 to remove both triggers, their functions,
+  and the table. Confirm the CI weekly-bridge contract rejects Deployment B while any production
+  application reference remains.
 
 ## PostgreSQL operations
 

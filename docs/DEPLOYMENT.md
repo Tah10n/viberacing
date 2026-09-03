@@ -104,11 +104,26 @@ already immutable npm version. Staging 0.4.3 in the server-first pull request do
 the official service remains on npm `latest`, and publication still requires the later reviewed tag
 and GitHub Release after the compatible server deployment is healthy.
 
-The protocol v4 rollout completed with connector 0.4.0; the server remains compatible with v2, v3,
-and v4. For every future protocol change, preserve server-first ordering: deploy and verify a server
-that accepts both the old and new protocols, publish the compatible connector, and only then raise
-`VIBERACING_MIN_CONNECTOR_VERSION` if support for an older protocol is intentionally removed or a
-reviewed installed capability is deliberately made the supported baseline.
+Protocol v5 is staged with connector 0.6.0 for bounded current-UTC-year history. The server remains
+compatible with v2, v3, and v4 rolling snapshots. Preserve server-first ordering: deploy migration
+`010_current_year_history.sql` and verify a server that accepts both the old rolling protocols and
+v5 before publishing the compatible connector. Only then raise `VIBERACING_MIN_CONNECTOR_VERSION` if
+support for an older protocol is intentionally removed or a reviewed installed capability is
+deliberately made the supported baseline. Merging the feature pull request itself does not authorize
+deployment, npm publication, a tag, a GitHub Release, or a Railway variable change.
+
+Migration 010 is the additive half of an expand-contract rollout. It creates and backfills
+`daily_agent_usage`, retains `weekly_agent_usage`, and installs a temporary database bridge so the
+previous application can keep reading and writing weekly summaries while Railway runs pre-deploy
+before the new healthcheck succeeds. The new application reads daily summaries and temporarily
+dual-writes both representations. Cleanup requires two separately approved future deployments
+because Railway runs migrations before switching traffic. Deployment A is code-only: stop every
+`weekly_agent_usage` write and remove the weekly table and both migration-010 compatibility triggers
+from `/ready`, while leaving the bridges and table intact. Only after Deployment A is healthy may
+Deployment B add migration 011 to remove both triggers, their functions, and the weekly table. The
+CI weekly-bridge contract rejects that destructive migration while production application references
+remain. Do not include either cleanup phase in the migration-010 deployment. Connector distribution
+rollback remains independent of this application-schema sequence.
 
 Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains
 accepted aggregate snapshots. First publish and run connector 0.4.4, which keeps the old wire

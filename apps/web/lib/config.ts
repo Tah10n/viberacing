@@ -98,20 +98,21 @@ export function databaseSslEnabled(): boolean {
 
 export { databaseClientConfig };
 
-export const connectorProtocolVersion = 4;
-export type SupportedConnectorProtocolVersion = 2 | 3 | typeof connectorProtocolVersion;
+export const connectorProtocolVersion = 5;
+export const currentYearHistoryProtocolVersion = 5;
+export type SupportedConnectorProtocolVersion = 2 | 3 | 4 | typeof connectorProtocolVersion;
 
 export function isSupportedConnectorProtocolVersion(
   value: unknown,
 ): value is SupportedConnectorProtocolVersion {
-  return value === 2 || value === 3 || value === connectorProtocolVersion;
+  return value === 2 || value === 3 || value === 4 || value === connectorProtocolVersion;
 }
 export const browserSyncInstallationScopeProtocol = 2;
 export const maximumSourcesPerInstallation = 32;
 export const maximumActiveSourcesPerUser = 100;
 export const maximumAgentAccountsPerUser = 100;
 export const installedStateAttestationMinimumVersion = "0.4.3";
-export const expectedSchemaVersion = "009_codex_hook_notice.sql";
+export const expectedSchemaVersion = "010_current_year_history.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
 

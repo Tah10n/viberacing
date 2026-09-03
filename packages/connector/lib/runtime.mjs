@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
   appendFile,
@@ -72,12 +72,165 @@ const captureTokenKeys = [
   "cacheWriteTokens",
   "reasoningTokens",
 ];
-const runtimeStateVersion = 2;
+const runtimeStateVersion = 3;
+const sha256Pattern = /^[0-9a-f]{64}$/;
+
+function validHistoryState(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, cursor]) =>
+        sourceIdPattern.test(sourceId) &&
+        cursor !== null &&
+        typeof cursor === "object" &&
+        !Array.isArray(cursor) &&
+        [
+          "hadPartialChunk,nextRangeEnd,year",
+          "hadPartialChunk,nextRangeEnd,retentionSafe,year",
+          "hadPartialChunk,nextRangeEnd,rangeStart,retentionSafe,year",
+          "hadPartialChunk,mode,nextRangeEnd,rangeStart,retentionSafe,year",
+        ].includes(Object.keys(cursor).sort().join(",")) &&
+        Number.isSafeInteger(cursor.year) &&
+        cursor.year >= 1970 &&
+        cursor.year <= 9999 &&
+        dayPattern.test(cursor.nextRangeEnd ?? "") &&
+        cursor.nextRangeEnd.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
+        (cursor.rangeStart === undefined ||
+          (dayPattern.test(cursor.rangeStart) &&
+            cursor.rangeStart.startsWith(`${String(cursor.year).padStart(4, "0")}-`) &&
+            cursor.rangeStart <= cursor.nextRangeEnd)) &&
+        typeof cursor.hadPartialChunk === "boolean" &&
+        (cursor.mode === undefined || ["initial", "gap", "full"].includes(cursor.mode)) &&
+        (cursor.retentionSafe === undefined || typeof cursor.retentionSafe === "boolean"),
+    )
+  );
+}
+
+function validCaptureCompactionPending(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, proof]) =>
+        sourceIdPattern.test(sourceId) &&
+        (Number.isSafeInteger(proof) || validCaptureCleanupProof(proof)),
+    )
+  );
+}
+
+function validCaptureCleanupProof(proof) {
+  const result = proof?.compactionResult;
+  const validSegments = (segments, maximumOffset, allowEmpty = false) =>
+    Array.isArray(segments) &&
+    (allowEmpty ? segments.length <= 4_096 : segments.length >= 1 && segments.length <= 4_096) &&
+    segments.every(
+      (segment) =>
+        segment !== null &&
+        typeof segment === "object" &&
+        !Array.isArray(segment) &&
+        JSON.stringify(Object.keys(segment).sort()) ===
+          JSON.stringify(["rangeEnd", "rangeStart", "safeOffset"]) &&
+        Number.isSafeInteger(segment.safeOffset) &&
+        segment.safeOffset >= 0 &&
+        segment.safeOffset <= maximumOffset &&
+        dayPattern.test(segment.rangeStart ?? "") &&
+        dayPattern.test(segment.rangeEnd ?? "") &&
+        segment.rangeStart <= segment.rangeEnd,
+    );
+  return (
+    proof !== null &&
+    typeof proof === "object" &&
+    !Array.isArray(proof) &&
+    proof.version === 1 &&
+    typeof proof.ino === "string" &&
+    /^\d+$/.test(proof.ino) &&
+    Number.isSafeInteger(proof.safeOffset) &&
+    proof.safeOffset >= 0 &&
+    sha256Pattern.test(proof.prefixHash ?? "") &&
+    validSegments(proof.acknowledgedSegments, proof.safeOffset) &&
+    (result === undefined ||
+      (result !== null &&
+        typeof result === "object" &&
+        !Array.isArray(result) &&
+        JSON.stringify(Object.keys(result).sort()) ===
+          JSON.stringify([
+            "acknowledgedSegments",
+            "prefixHash",
+            "proofPrefixHash",
+            "proofSafeOffset",
+            "safeOffset",
+          ]) &&
+        Number.isSafeInteger(result.safeOffset) &&
+        result.safeOffset >= 0 &&
+        sha256Pattern.test(result.prefixHash ?? "") &&
+        Number.isSafeInteger(result.proofSafeOffset) &&
+        result.proofSafeOffset >= 0 &&
+        result.proofSafeOffset <= result.safeOffset &&
+        sha256Pattern.test(result.proofPrefixHash ?? "") &&
+        validSegments(result.acknowledgedSegments, result.proofSafeOffset, true)))
+  );
+}
+
+function validHistoryRetries(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, year]) =>
+        sourceIdPattern.test(sourceId) &&
+        Number.isSafeInteger(year) &&
+        year >= 1970 &&
+        year <= 9999,
+    )
+  );
+}
+
+function validHistoryGapAttempts(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, attempt]) =>
+        sourceIdPattern.test(sourceId) &&
+        attempt !== null &&
+        typeof attempt === "object" &&
+        !Array.isArray(attempt) &&
+        Object.keys(attempt).sort().join(",") ===
+          "localGeneration,rangeEnd,rangeStart,result,year" &&
+        Number.isSafeInteger(attempt.year) &&
+        attempt.year >= 1970 &&
+        attempt.year <= 9999 &&
+        dayPattern.test(attempt.rangeStart ?? "") &&
+        dayPattern.test(attempt.rangeEnd ?? "") &&
+        attempt.rangeStart.startsWith(`${String(attempt.year).padStart(4, "0")}-`) &&
+        attempt.rangeStart <= attempt.rangeEnd &&
+        attempt.result === "partial" &&
+        sha256Pattern.test(attempt.localGeneration ?? ""),
+    )
+  );
+}
+
+function validHistoryRetryGenerations(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([sourceId, generation]) =>
+        sourceIdPattern.test(sourceId) && sha256Pattern.test(generation ?? ""),
+    )
+  );
+}
 
 function normalizedRuntimeState(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("Connector runtime state is unsupported");
-  if (value.version !== 1 && value.version !== runtimeStateVersion)
+  if (![1, 2, runtimeStateVersion].includes(value.version))
     throw new Error("Connector runtime state was written by an unsupported connector version");
   if (
     value.sequences === null ||
@@ -88,12 +241,35 @@ function normalizedRuntimeState(value) {
     )
   )
     throw new Error("Connector runtime sequences are invalid");
-  for (const key of ["adapters", "fingerprints", "quarantine", "collectionWarnings", "diagnostics"])
+  for (const key of [
+    "adapters",
+    "historyAdapters",
+    "fingerprints",
+    "quarantine",
+    "collectionWarnings",
+    "diagnostics",
+  ])
     if (
       value[key] !== undefined &&
       (value[key] === null || typeof value[key] !== "object" || Array.isArray(value[key]))
     )
       throw new Error("Connector runtime state is invalid");
+  if (value.history !== undefined && !validHistoryState(value.history))
+    throw new Error("Connector runtime history state is invalid");
+  if (value.historyRetries !== undefined && !validHistoryRetries(value.historyRetries))
+    throw new Error("Connector runtime history retry state is invalid");
+  if (value.historyGapAttempts !== undefined && !validHistoryGapAttempts(value.historyGapAttempts))
+    throw new Error("Connector runtime history gap attempt state is invalid");
+  if (
+    value.historyRetryGenerations !== undefined &&
+    !validHistoryRetryGenerations(value.historyRetryGenerations)
+  )
+    throw new Error("Connector runtime history retry generation state is invalid");
+  if (
+    value.captureCompactionPending !== undefined &&
+    !validCaptureCompactionPending(value.captureCompactionPending)
+  )
+    throw new Error("Connector runtime capture compaction state is invalid");
   return { ...value, version: runtimeStateVersion, sequences: { ...value.sequences } };
 }
 
@@ -536,6 +712,261 @@ export async function compactCapture(path, now = new Date(), maximumBytes = 1_00
   });
 }
 
+async function filePrefixHash(path, length) {
+  if (!Number.isSafeInteger(length) || length < 0) return null;
+  const hash = createHash("sha256");
+  let bytes = 0;
+  if (length > 0)
+    for await (const chunk of createReadStream(path, { start: 0, end: length - 1 })) {
+      bytes += chunk.length;
+      hash.update(chunk);
+    }
+  return bytes === length ? hash.digest("hex") : null;
+}
+
+export async function createCaptureCleanupProof(path, observedFile, acknowledgedRange) {
+  if (
+    observedFile === null ||
+    typeof observedFile !== "object" ||
+    !Number.isSafeInteger(observedFile.safeOffset) ||
+    observedFile.safeOffset < 0 ||
+    observedFile.safeOffset !== observedFile.size ||
+    !dayPattern.test(acknowledgedRange?.rangeStart ?? "") ||
+    !dayPattern.test(acknowledgedRange?.rangeEnd ?? "") ||
+    acknowledgedRange.rangeStart > acknowledgedRange.rangeEnd
+  )
+    return null;
+  return withCaptureLock(path, async () => {
+    let info;
+    try {
+      info = await stat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+    if (
+      info.size < observedFile.safeOffset ||
+      (observedFile.ino !== undefined && String(info.ino) !== String(observedFile.ino))
+    )
+      return null;
+    const prefixHash = await filePrefixHash(path, observedFile.safeOffset);
+    if (prefixHash === null) return null;
+    return {
+      version: 1,
+      ino: String(info.ino),
+      safeOffset: observedFile.safeOffset,
+      prefixHash,
+      acknowledgedSegments: [{ safeOffset: observedFile.safeOffset, ...acknowledgedRange }],
+    };
+  });
+}
+
+export async function mergeCaptureCleanupProof(path, previous, next) {
+  if (!validCaptureCleanupProof(next) || !validCaptureCleanupProof(previous)) return next;
+  return withCaptureLock(path, async () => {
+    let info;
+    try {
+      info = await stat(path);
+    } catch {
+      return next;
+    }
+    const [previousHash, nextHash] = await Promise.all([
+      filePrefixHash(path, previous.safeOffset),
+      filePrefixHash(path, next.safeOffset),
+    ]);
+    if (
+      previous.compactionResult !== undefined ||
+      previous.ino !== next.ino ||
+      String(info.ino) !== next.ino ||
+      previous.safeOffset > next.safeOffset ||
+      info.size < next.safeOffset ||
+      previousHash !== previous.prefixHash ||
+      nextHash !== next.prefixHash
+    )
+      return next;
+    return {
+      ...next,
+      acknowledgedSegments: [...previous.acknowledgedSegments, ...next.acknowledgedSegments]
+        .filter(
+          (segment, index, values) =>
+            values.findIndex(
+              (candidate) =>
+                candidate.safeOffset === segment.safeOffset &&
+                candidate.rangeStart === segment.rangeStart &&
+                candidate.rangeEnd === segment.rangeEnd,
+            ) === index,
+        )
+        .slice(-4_096),
+    };
+  });
+}
+
+export async function compactCaptureWithProof(path, proof, now = new Date(), options = {}) {
+  if (!validCaptureCleanupProof(proof)) return { status: "invalid" };
+  return withCaptureLock(path, async () => {
+    let info;
+    try {
+      info = await stat(path);
+    } catch (error) {
+      if (error?.code === "ENOENT") return { status: "invalid" };
+      throw error;
+    }
+    const completed = proof.compactionResult;
+    if (
+      completed &&
+      info.size >= completed.safeOffset &&
+      (await filePrefixHash(path, completed.safeOffset)) === completed.prefixHash
+    ) {
+      const retainedProof =
+        completed.acknowledgedSegments.length === 0
+          ? null
+          : {
+              version: 1,
+              ino: String(info.ino),
+              safeOffset: completed.proofSafeOffset,
+              prefixHash: completed.proofPrefixHash,
+              acknowledgedSegments: completed.acknowledgedSegments,
+            };
+      return { status: "already-compacted", retainedProof };
+    }
+    if (
+      String(info.ino) !== proof.ino ||
+      info.size < proof.safeOffset ||
+      (await filePrefixHash(path, proof.safeOffset)) !== proof.prefixHash
+    )
+      return { status: "invalid" };
+    const oldest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    oldest.setUTCDate(oldest.getUTCDate() - 35);
+    const oldestDate = oldest.toISOString().slice(0, 10);
+    const acknowledged = (date, lineEnd) =>
+      proof.acknowledgedSegments.some(
+        (segment) =>
+          lineEnd <= segment.safeOffset && date >= segment.rangeStart && date <= segment.rangeEnd,
+      );
+    const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+    const output = await open(temporary, "w", 0o600);
+    const proofHash = createHash("sha256");
+    const fullHash = createHash("sha256");
+    const transformedSegments = proof.acknowledgedSegments
+      .map((segment, index) => ({ ...segment, index, transformedOffset: 0 }))
+      .sort((left, right) => left.safeOffset - right.safeOffset || left.index - right.index);
+    let segmentIndex = 0;
+    let compactedOffset = 0;
+    let position = 0;
+    let pending = Buffer.alloc(0);
+    let changed = false;
+    const finalizeSegmentsBefore = (lineEnd) => {
+      while (
+        segmentIndex < transformedSegments.length &&
+        transformedSegments[segmentIndex].safeOffset < lineEnd
+      ) {
+        transformedSegments[segmentIndex].transformedOffset = compactedOffset;
+        segmentIndex += 1;
+      }
+    };
+    try {
+      const prefixStream =
+        proof.safeOffset > 0 ? createReadStream(path, { start: 0, end: proof.safeOffset - 1 }) : [];
+      for await (const chunk of prefixStream) {
+        let start = 0;
+        while (start < chunk.length) {
+          const newline = chunk.indexOf(10, start);
+          const end = newline < 0 ? chunk.length : newline;
+          const part = chunk.subarray(start, end);
+          position += part.length;
+          if (pending.length + part.length > maximumCaptureLineBytes)
+            throw new Error("invalid_capture_prefix");
+          if (part.length > 0)
+            pending = pending.length === 0 ? Buffer.from(part) : Buffer.concat([pending, part]);
+          if (newline < 0) break;
+          position += 1;
+          finalizeSegmentsBefore(position);
+          const raw = pending.toString("utf8");
+          if (!pending.equals(Buffer.from(raw))) throw new Error("invalid_capture_prefix");
+          const normalized = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+          if (safeCaptureLine(normalized, "0000-00-00") === null)
+            throw new Error("invalid_capture_prefix");
+          const record = JSON.parse(normalized);
+          if (record.date >= oldestDate || !acknowledged(record.date, position)) {
+            const retained = Buffer.concat([pending, Buffer.from("\n")]);
+            await output.write(retained);
+            proofHash.update(retained);
+            fullHash.update(retained);
+            compactedOffset += retained.length;
+          } else changed = true;
+          pending = Buffer.alloc(0);
+          start = newline + 1;
+        }
+      }
+      if (pending.length > 0 || position !== proof.safeOffset)
+        throw new Error("invalid_capture_prefix");
+      while (segmentIndex < transformedSegments.length) {
+        transformedSegments[segmentIndex].transformedOffset = compactedOffset;
+        segmentIndex += 1;
+      }
+      const proofSafeOffset = compactedOffset;
+      if (proof.safeOffset < info.size)
+        for await (const chunk of createReadStream(path, {
+          start: proof.safeOffset,
+          end: info.size - 1,
+        })) {
+          await output.write(chunk);
+          fullHash.update(chunk);
+          compactedOffset += chunk.length;
+        }
+      await output.close();
+      if (!changed) {
+        await unlink(temporary);
+        return { status: "unchanged" };
+      }
+      const acknowledgedSegments = transformedSegments
+        .sort((left, right) => left.index - right.index)
+        .map(({ transformedOffset, rangeStart, rangeEnd }) => ({
+          safeOffset: transformedOffset,
+          rangeStart,
+          rangeEnd,
+        }))
+        .filter((segment) => segment.safeOffset > 0);
+      const compactionResult = {
+        safeOffset: compactedOffset,
+        prefixHash: fullHash.digest("hex"),
+        proofSafeOffset,
+        proofPrefixHash: proofHash.digest("hex"),
+        acknowledgedSegments,
+      };
+      await options.beforeRename?.(compactionResult);
+      const current = await stat(path);
+      if (
+        String(current.ino) !== String(info.ino) ||
+        current.size !== info.size ||
+        current.mtimeMs !== info.mtimeMs
+      ) {
+        await unlink(temporary);
+        return { status: "invalid" };
+      }
+      await rename(temporary, path);
+      await options.afterRename?.();
+      const compactedInfo = await stat(path);
+      const retainedProof =
+        acknowledgedSegments.length === 0
+          ? null
+          : {
+              version: 1,
+              ino: String(compactedInfo.ino),
+              safeOffset: proofSafeOffset,
+              prefixHash: compactionResult.proofPrefixHash,
+              acknowledgedSegments,
+            };
+      return { status: "compacted", compactionResult, retainedProof };
+    } catch (error) {
+      await output.close().catch(() => {});
+      await unlink(temporary).catch(() => {});
+      if (error?.message === "invalid_capture_prefix") return { status: "invalid" };
+      throw error;
+    }
+  });
+}
+
 export async function quarantinePending(sourceId, payload, errorCode) {
   if (!sourceIdPattern.test(sourceId)) throw new Error("Invalid quarantined source id");
   await mkdir(quarantineDirectory, { recursive: true, mode: 0o700 });
@@ -640,6 +1071,12 @@ export async function savePending(payload) {
     const pendingRegistrationSupersessions = (
       payload.pendingRegistrationSupersessions ?? []
     ).filter((supersession) => supersession.sourceId === snapshot.sourceId);
+    const historyAdvances = (payload.historyAdvances ?? []).filter(
+      (advance) => advance.sourceId === snapshot.sourceId,
+    );
+    const captureCleanupProofs = (payload.captureCleanupProofs ?? []).filter(
+      (proof) => proof.sourceId === snapshot.sourceId,
+    );
     await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
@@ -647,6 +1084,10 @@ export async function savePending(payload) {
       ...(pendingRegistrationSupersessions.length === 0
         ? { pendingRegistrationSupersessions: undefined }
         : { pendingRegistrationSupersessions }),
+      ...(historyAdvances.length === 0 ? { historyAdvances: undefined } : { historyAdvances }),
+      ...(captureCleanupProofs.length === 0
+        ? { captureCleanupProofs: undefined }
+        : { captureCleanupProofs }),
     });
     await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
       if (error?.code !== "ENOENT") throw error;

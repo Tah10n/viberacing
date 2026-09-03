@@ -1,5 +1,10 @@
 import { digest } from "@/lib/crypto";
-import { browserSyncInstallationScopeProtocol, isSemanticVersion } from "@/lib/config";
+import {
+  browserSyncInstallationScopeProtocol,
+  isSemanticVersion,
+  isSupportedConnectorProtocolVersion,
+  type SupportedConnectorProtocolVersion,
+} from "@/lib/config";
 import { isRecord, isUuid, problem, readBoundedJson } from "@/lib/http";
 import { query, transaction } from "@/lib/db";
 import {
@@ -30,6 +35,7 @@ interface ReconciliationBody {
   handlerAttestation?: HandlerAttestation;
   sourceIds: string[];
   bootstrapSourceIds?: string[];
+  protocolVersion?: SupportedConnectorProtocolVersion;
 }
 
 interface HandlerAttestation {
@@ -81,6 +87,7 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
           "connectorVersion",
           "cliVersion",
           "handlerAttestation",
+          "protocolVersion",
         ].includes(key),
     ) ||
     (keys.has("connectorVersion") && keys.has("cliVersion")) ||
@@ -106,10 +113,12 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   )
     return null;
   if (
-    value.cliVersion !== undefined &&
-    (typeof value.cliVersion !== "string" ||
-      value.cliVersion.length > 40 ||
-      !isSemanticVersion(value.cliVersion))
+    (value.protocolVersion !== undefined &&
+      !isSupportedConnectorProtocolVersion(value.protocolVersion)) ||
+    (value.cliVersion !== undefined &&
+      (typeof value.cliVersion !== "string" ||
+        value.cliVersion.length > 40 ||
+        !isSemanticVersion(value.cliVersion)))
   ) {
     return null;
   }
@@ -134,6 +143,7 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
     ...(value.cliVersion === undefined ? {} : { cliVersion: value.cliVersion }),
     ...(value.connectorVersion === undefined ? {} : { connectorVersion: value.connectorVersion }),
     ...(handlerAttestation === undefined ? {} : { handlerAttestation }),
+    ...(value.protocolVersion === undefined ? {} : { protocolVersion: value.protocolVersion }),
   };
 }
 
@@ -207,14 +217,48 @@ async function post(request: Request): Promise<Response> {
           [installation.id, cliVersion, digest(token)],
         );
       }
+      if (body.protocolVersion !== undefined) {
+        await client.query(
+          `UPDATE installations
+              SET protocol_version = $2, updated_at = now()
+            WHERE id = $1 AND status = 'active' AND device_token_hash = $3
+              AND protocol_version IS DISTINCT FROM $2`,
+          [installation.id, body.protocolVersion, digest(token)],
+        );
+      }
       const result = await client.query<{
         source_id: string;
         status: "active" | "disconnected";
         last_accepted_sync_sequence: string;
+        history_backfill_year: number;
+        history_backfill_status: "pending" | "complete" | "partial";
+        history_gap_range_start: string | null;
+        history_gap_range_end: string | null;
       }>(
         `SELECT requested.source_id::text,
                 CASE WHEN source.status = 'active' THEN 'active' ELSE 'disconnected' END AS status,
-                coalesce(source.last_accepted_sync_sequence, 0)::text AS last_accepted_sync_sequence
+                coalesce(source.last_accepted_sync_sequence, 0)::text AS last_accepted_sync_sequence,
+                coalesce(
+                  CASE
+                    WHEN source.history_backfill_year =
+                      extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                    THEN source.history_backfill_year
+                  END,
+                  extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                ) AS history_backfill_year,
+                CASE
+                  WHEN source.history_backfill_year =
+                    extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                  THEN coalesce(source.history_backfill_status, 'pending')
+                  ELSE 'pending'
+                END AS history_backfill_status
+                ,CASE WHEN source.history_backfill_year =
+                    extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                  THEN source.unresolved_usage_dates[1]::text END AS history_gap_range_start
+                ,CASE WHEN source.history_backfill_year =
+                    extract(year FROM (CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))::integer
+                  THEN source.unresolved_usage_dates[cardinality(source.unresolved_usage_dates)]::text
+                  END AS history_gap_range_end
            FROM unnest($2::uuid[]) WITH ORDINALITY AS requested(source_id, position)
            LEFT JOIN installation_sources source
              ON source.id = requested.source_id
@@ -262,6 +306,14 @@ async function post(request: Request): Promise<Response> {
           sourceId: source.source_id,
           status: source.status,
           lastAcceptedSyncSequence: source.last_accepted_sync_sequence,
+          ...(body.protocolVersion !== undefined && body.protocolVersion >= 5
+            ? {
+                historyBackfillYear: source.history_backfill_year,
+                historyBackfillStatus: source.history_backfill_status,
+                historyGapRangeStart: source.history_gap_range_start,
+                historyGapRangeEnd: source.history_gap_range_end,
+              }
+            : {}),
         })),
         ...(body.bootstrapSourceIds === undefined
           ? {}

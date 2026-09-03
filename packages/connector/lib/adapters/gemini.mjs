@@ -6,6 +6,7 @@ import {
   componentEntry,
   diagnosePath,
   findFile,
+  historyRetryGenerationForPath,
   integer,
   mergeEntries,
   parserResult,
@@ -177,6 +178,7 @@ export const geminiAdapter = Object.freeze({
   trigger: "SessionEnd hook",
   defaultPaths: [defaultPath],
   detect: detectGeminiSources,
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: async (source, range, state = {}) => {
     const result = await collectJsonl(
       source,

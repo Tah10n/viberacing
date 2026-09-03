@@ -13,6 +13,31 @@ token counters; Vibe Racing never estimates tokens from text.
 | Antigravity | native terminal `result.usage`; exact input/output/cache counters                                                                                                                                    | wrapped CLI sessions  | source-specific Personal/Work captures          | `source_sum`  | only sessions launched with `viberacing run antigravity [--source ID] -- …` are counted. Earlier or directly launched `agy` sessions and Antigravity Desktop are not included. Official local transcripts contain private conversation data and there is no documented usage-only daily export; the official status-line surface exposes current conversation totals, not account-wide daily history.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Gemini CLI  | `$GEMINI_CLI_HOME/.gemini/tmp/**/chats/session-*.jsonl` message `tokens`; authoritative total                                                                                                        | CLI                   | multiple project/profile roots                  | `source_sum`  | additive `SessionEnd` hook. Prompt count includes cached input, so cached is subtracted for component display; authoritative total wins. Verified against Gemini CLI 0.55.1 recording schema.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
+## Current-year history coverage
+
+Connector 0.6.0 refreshes the recent rolling range first and then requests the rest of the current
+UTC year in resumable chunks of at most 31 dates. Codex uses account-wide App Server buckets plus
+exact local tail evidence; historical snapshots are conservatively partial when that surface cannot
+prove every requested date, while an individually authoritative returned date can still correct a
+stored value down. OpenCode applies the requested range in its read-only `time_created` SQL query.
+Qwen opens only `token-usage-YYYY-MM.jsonl` files whose month intersects the chunk. Claude, Kimi,
+and Gemini scan only their documented roots and discard parsed events outside the chunk before
+ledger limits or completeness are evaluated. Antigravity can import only retained wrapper captures
+and therefore marks historical coverage partial; direct CLI runs, older compacted captures, and
+Desktop usage remain unavailable. Every adapter uses isolated historical state, so backfill cannot
+replace rolling incremental checkpoints, fingerprints, or operational diagnostics.
+
+A terminal `complete` status means every requested chunk for that source was authoritative. A
+terminal `partial` status means the import reached January 1 but at least one chunk was incomplete;
+the exact dates that were available still count. The server separately retains unresolved dates from
+partial/omitted days and gaps between acknowledged rolling ranges. A complete snapshot clears only
+its own range; a complete entry inside a mixed snapshot clears only its date. `connect` and manual
+Sync drain returned gap cursors, while automatic and browser Sync collect at most one gap chunk.
+`viberacing sync --full` explicitly rescans the current year after either terminal status. An
+inactive Codex logical account keeps its cursor for a later run after the user switches accounts. A
+new UTC year starts a new cursor without deleting server rows from prior years; only explicit
+account/source deletion removes retained history.
+
 If an authoritative total differs from the visible component formula, only the authoritative total
 is uploaded for every agent except Codex. Codex's separately exact local component tuple may differ
 from its account-wide total, and the dashboard labels that difference. Other contradictory
@@ -23,10 +48,11 @@ schema make the collection `partial`, preserve the previous file state and daily
 replace previously committed file state. Unreadable or bounded collections become `partial`, and an
 unavailable source is reported by `doctor` rather than submitted as zero.
 
-Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity retain a bounded 31-day ledger of
-hashed event identity, UTC date, exact token tuple, and parser version. It survives record deletion,
-movement, or copying and deduplicates copies. A repeated identity with a different tuple preserves
-the first observation, makes the collection partial, and reports `local_event_identity_conflict`.
+Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity retain a bounded range-aware ledger
+of hashed event identity, UTC date, exact token tuple, and parser version. It survives record
+deletion, movement, or copying within the retained range and deduplicates copies. A repeated
+identity with a different tuple preserves the first observation, makes the collection partial, and
+reports `local_event_identity_conflict`.
 
 Codex reports overlapping counters: cached/cache-write input is removed from regular input and
 reasoning output is removed from regular output. Qwen cached input is removed from regular input,
@@ -63,11 +89,15 @@ forwards stdout, stderr, SIGINT, and SIGTERM, and preserves the exit code. For A
 only event ID, UTC date, and authoritative usage counters. The resolved executable path is retained
 only in local `sources.json` so portable installs continue working from later processes. It never
 stores the native stream, prompt, response, tool calls, path, model, or credential fields.
-Antigravity captures are incremental, records older than 35 days are removed after successful sync,
-and oversized files are atomically compacted. Antigravity Desktop has no supported exact local usage
-export. Every capture source defaults to `~/.viberacing/captures/<clientSourceId>.jsonl`; labels and
-agent IDs are not used as filenames. One matching source is selected automatically, while multiple
-profiles require `--source`. That option is never forwarded to `agy`.
+Antigravity captures are incremental. A successful safe collection binds its pending payload to the
+capture inode, acknowledged byte offset, and prefix hash. Under the same capture lock, cleanup
+revalidates that proof and removes only acknowledged records older than 35 days; appended or
+malformed suffixes and replaced/truncated files are preserved. Cleanup repeats after later
+successful Sync, is crash-idempotent, and remains best-effort per source. Antigravity Desktop has no
+supported exact local usage export. Every capture source defaults to
+`~/.viberacing/captures/<clientSourceId>.jsonl`; labels and agent IDs are not used as filenames. One
+matching source is selected automatically, while multiple profiles require `--source`. That option
+is never forwarded to `agy`.
 
 ## Sync behavior
 
@@ -90,10 +120,12 @@ Automatic attempts are debounced for 15 seconds, limited to one about every 120 
 be postponed past 120 seconds from the first dirty event. It drains pending uploads without
 rescanning, then collects only active dirty sources; events for different sources can share one
 batch. The scheduler exits after its batch and there is no daemon, watcher, or polling loop. Manual
-sync and initial connect are immediate and collect all active sources. A first sync reads a bounded
-31-day UTC window; later file-backed syncs are incremental. An unchanged automatic snapshot sends no
-HTTP request, while manual and browser-triggered Sync submit a confirmation snapshot so **Last
-sync** advances. Seven agents currently contribute exact counters.
+sync and initial connect are immediate and collect all active sources. Every run reads a bounded
+rolling window of at most 31 UTC dates. Initial connect and manual sync then finish all eligible
+current-year chunks; automatic and browser-triggered runs advance at most one. Later rolling
+file-backed syncs are incremental. An unchanged automatic rolling snapshot sends no HTTP request,
+while manual and browser-triggered Sync submit a confirmation snapshot so **Last sync** advances.
+Seven agents currently contribute exact counters.
 
 ## Upstream references
 

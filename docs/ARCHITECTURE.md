@@ -1,7 +1,7 @@
 # Architecture
 
 ```text
-local adapter registry -> connector protocol v4 -> Next.js -> PostgreSQL
+local adapter registry -> connector protocol v5 -> Next.js -> PostgreSQL
 browser ---------------------- GitHub OAuth -----------^
 ```
 
@@ -65,43 +65,56 @@ provider identifiers, derived HMACs, and credentials are never transmitted.
 
 ## Snapshot ingestion and ranking
 
-Every changed source sends a 31-day UTC snapshot with a monotonically increasing decimal sequence.
-Complete snapshots replace values and delete missing dates; partial snapshots update only present
-dates and retain the greater prior total when a partial subtotal is lower. Complete corrections may
-decrease values, including complete per-day entries carried by an otherwise partial snapshot.
-Protocol v3 added per-day completeness; the server continues to accept legacy v2 snapshots. Protocol
-v4 orders a failed collector's allowlisted `collector_failed` code with the last server-accepted
-source sequence known before collection. The server persists that error only when the sequence still
-matches; delayed errors are counted as stale and ignored, while v2/v3 errors without ordering
-metadata are accepted on the wire but never overwrite persistent status. Raw errors, content, and
-paths are never part of the protocol. The server validates canonical decimal strings, source
-ownership, body/range limits, and token components, then uses bulk JSON-to-recordset SQL in one
-transaction.
+Every source snapshot has a monotonically increasing decimal sequence. Protocol v5 explicitly
+separates a rolling range of at most 31 inclusive UTC dates from a current-year history chunk of the
+same maximum size. A history chunk may reach back only to January 1 of the server's current UTC
+year, and only the final January chunk can mark that source `complete` or `partial`. Complete
+rolling snapshots replace values and delete missing dates; history snapshots never delete dates
+merely because they are absent from a chunk. Partial snapshots update only present dates and retain
+the greater prior total when a partial subtotal is lower. Complete corrections may decrease values,
+including complete per-day entries carried by an otherwise partial snapshot. Protocol v3 added
+per-day completeness, and v4 orders a failed collector's allowlisted `collector_failed` code with
+the last server-accepted source sequence. Protocol v5 retains both rules while the server continues
+to accept v2-v4. The server also accumulates unresolved current-year dates across rolling snapshots:
+gaps and partial/omitted dates remain until complete evidence covers those exact dates, and v5
+responses expose only the nullable min/max bounds needed for resumable repair. Raw errors, content,
+and paths are never part of the protocol. The server validates canonical decimal strings, source
+ownership, body/range limits, current-year boundaries, and token components, then uses bulk
+JSON-to-recordset SQL in one transaction.
 
 The server reports `lastAcceptedSyncSequence` during pairing, installation inspection, and usage
 responses. Connect, doctor, and sync reconcile the local value with the server maximum. A stale
 pending snapshot is rewritten to `server + 1` and retried once; there is no unbounded sequence loop.
 
-Accepted updates rebuild only affected `(user, agent, UTC week)` rows in `weekly_agent_usage`.
-Leaderboard and public profile reads use this compact table. Within an account, account-wide sources
-use only complete observations tied at the newest complete `updated_at`, plus provisional
-observations accepted later than that boundary; a later complete observation excludes every older
-complete and provisional row and may correct the value down. If no complete observation exists,
-every provisional row is eligible. Machine-local sources use daily `sum`; different accounts and
-agents sum. Dashboard components for an account-wide day are selected conservatively from the
-largest complete local component total. They are hidden for that day if equally large rows contain
-more than one distinct tuple. The dashboard identifies a local component sum that differs from the
-separate provider account total.
+Accepted updates rebuild only affected `(UTC date, user, agent)` rows in `daily_agent_usage`.
+Leaderboard, public profile, and dashboard reads resolve one shared half-open UTC period and sum the
+same daily rows. Week means the current Monday-Sunday UTC week, Month means the current UTC calendar
+month, All time means January 1 through today in the current UTC year, and Custom is restricted to
+that same year through today. SQL `numeric(30,0)` values remain decimal strings at application
+boundaries. Within an account, account-wide sources use only complete observations tied at the
+newest complete `updated_at`, plus provisional observations accepted later than that boundary; a
+later complete observation excludes every older complete and provisional row and may correct the
+value down. If no complete observation exists, every provisional row is eligible. Machine-local
+sources use daily `sum`; different accounts and agents sum. Dashboard components for an account-wide
+day are selected conservatively from the largest complete local component total. They are hidden for
+that day if equally large rows contain more than one distinct tuple. The dashboard identifies a
+local component sum that differs from the separate provider account total.
 
 ## Reliability and lifecycle
 
-Collectors run independently with concurrency four. The first run reads at most the required 31 UTC
-days within explicit file/count/byte bounds. Later JSONL runs reuse size, mtime, inode, and the last
-complete byte offset; unchanged files are not reopened for content, appends resume, truncation or
-replacement rereads only that file, and disappeared files leave the index. OpenCode's read-only SQL
-is range-bounded. Non-Codex observations feed a shared content-free ledger keyed by hashed event
-identity; date, exact token tuple, and parser version survive local record deletion or copying for
-the 31-day window. One Codex App Server is started per physical profile per batch. It reads the
+Collectors run independently with concurrency four. Every run refreshes at most 31 rolling UTC
+dates. A current-year cursor then moves newest-first through separate chunks of at most 31 dates;
+automatic and browser runs drain bounded pending payloads and collect at most one new historical
+range, while connect and manual sync finish all eligible chunks. Cursor and isolated historical
+adapter state are persisted only after an exact server acknowledgement, so interruption or a lost
+response remains resumable and idempotent. Rolling gaps create the same resumable cursor, and
+`sync --full` can replace terminal state with a complete current-year rescan. Later rolling JSONL
+runs reuse size, mtime, inode, and the last complete byte offset; unchanged files are not reopened
+for content, appends resume, and truncation or replacement rereads only that file. Historical scans
+do not replace those rolling checkpoints. OpenCode SQL and Qwen monthly files are range-bounded
+before records enter the ledger. Other event adapters also filter parsed events before ledger limits
+and completeness are evaluated. Non-Codex observations feed a shared content-free ledger keyed by
+hashed event identity. One Codex App Server is started per physical profile per batch. It reads the
 ChatGPT account before and after usage without refreshing credentials and routes the snapshot only
 to the matching local logical source. Its official daily total remains authoritative; the connector
 incrementally extracts only cumulative token events from that profile's local session records, uses
@@ -210,8 +223,11 @@ succeeds. Reconnect performs its final config/token/hook replacement under that 
 `doctor` performs local read-only inspection; `doctor --repair` performs mutable remote
 reconciliation under the sync lock. Authorization revocation removes hooks/token/automatic state,
 and HTTP 426 disables automatic attempts until a compatible reconnect or authenticated server
-response confirms the updated connector. Successful capture syncs retain only 35 days and atomically
-compact oversized source-specific files.
+response confirms the updated connector. Safe Antigravity payloads carry a local inode, byte-offset,
+and prefix-hash cleanup proof. After acknowledgement, compaction revalidates that proof under the
+capture lock, removes only proved records older than 35 days, preserves every unproved suffix byte,
+and records the atomic result for crash-idempotent retry. Cleanup failures remain source-local and
+never block usage delivery.
 
 Approval is serialized on the user row and caps each user at 20 active installations, 100 active
 sources, and 100 agent accounts. Ingestion has both installation and user fixed-window limits, so

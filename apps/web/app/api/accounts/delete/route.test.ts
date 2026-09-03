@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   clientQuery: vi.fn(),
-  rebuildAgentSummaries: vi.fn(),
+  rebuildAgentDailySummaries: vi.fn(),
   transaction: vi.fn(),
   viewer: vi.fn(),
 }));
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ transaction: mocks.transaction }));
 vi.mock("@/lib/session", () => ({ viewer: mocks.viewer }));
 vi.mock("@/lib/usage-summary", () => ({
-  rebuildAgentSummaries: mocks.rebuildAgentSummaries,
+  rebuildAgentDailySummaries: mocks.rebuildAgentDailySummaries,
 }));
 vi.mock("@/lib/request-log", () => ({
   withRequestLogging: (_route: string, handler: unknown) => handler,
@@ -55,7 +55,7 @@ describe("account deletion", () => {
       error: "primary_account_has_linked_accounts",
     });
     expect(mocks.clientQuery).toHaveBeenCalledTimes(3);
-    expect(mocks.rebuildAgentSummaries).not.toHaveBeenCalled();
+    expect(mocks.rebuildAgentDailySummaries).not.toHaveBeenCalled();
   });
 
   it("deletes an unreferenced account after explicit confirmation", async () => {
@@ -72,7 +72,7 @@ describe("account deletion", () => {
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/dashboard?accountDeleted=1",
     );
-    expect(mocks.rebuildAgentSummaries).toHaveBeenCalledWith(expect.anything(), "42", "codex");
+    expect(mocks.rebuildAgentDailySummaries).toHaveBeenCalledWith(expect.anything(), "42", "codex");
   });
 
   it("still requires confirmation for an account with sources", async () => {

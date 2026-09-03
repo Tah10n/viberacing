@@ -16,13 +16,14 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zstdCompressSync } from "node:zlib";
 import {
   collectClaude,
   collectCodexSessionUsage,
   codexUsageSnapshot,
+  codexTotalOnlyEntries,
   deriveCodexProviderAccountKey,
   materializeCodexAuthoritativeDays,
   parseClaudeLines,
@@ -42,7 +43,7 @@ import {
   parseQwenLines,
   adapters,
   adapterFor,
-  recentEntries,
+  entriesWithinRange,
   safeCaptureRecord,
   readCodexAuthIdentity,
   wrapperInvocation,
@@ -51,6 +52,26 @@ import { jsonLinesChunk } from "../lib/adapters/shared.mjs";
 
 async function fixture(name) {
   return readFile(fileURLToPath(new URL(`fixtures/${name}`, import.meta.url)), "utf8");
+}
+
+function exactCaptureContents(size) {
+  const prefix =
+    '{"id":"boundary-event","date":"2026-08-10","usage":{"date":"2026-08-10","totalTokens":"1"},"padding":"';
+  const suffix = '"}\n';
+  const minimum = Buffer.byteLength(prefix) + Buffer.byteLength(suffix);
+  const maximumPadding = 100_000;
+  const parts = [];
+  let remaining = size;
+  while (remaining > 0) {
+    if (remaining < minimum) throw new Error("Capture test size cannot contain a complete line");
+    let padding = Math.min(maximumPadding, remaining - minimum);
+    const leftover = remaining - minimum - padding;
+    if (leftover > 0 && leftover < minimum) padding -= minimum - leftover;
+    const line = `${prefix}${"x".repeat(padding)}${suffix}`;
+    parts.push(line);
+    remaining -= Buffer.byteLength(line);
+  }
+  return parts.join("");
 }
 
 function codexTokenCount(timestamp, usage, lastUsage = usage, ordinal = 1) {
@@ -474,6 +495,67 @@ test("prefers the Codex account total once the current UTC bucket is available",
       completeness: "complete",
       entries: [{ ...current, totalTokens: "30" }],
     },
+  );
+});
+
+test("historical Codex collection keeps authoritative range-end entries explicitly complete", async () => {
+  const responses = [
+    {
+      id: 1,
+      result: {
+        account: { type: "chatgpt", email: "history@example.com", planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+    {
+      id: 2,
+      result: { dailyUsageBuckets: [{ startDate: "2026-08-10", tokens: "80" }] },
+    },
+    {
+      id: 3,
+      result: {
+        account: { type: "chatgpt", email: "history@example.com", planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+  ][Symbol.iterator]();
+  const result = await adapterFor("codex").collect(
+    { dataPath: join(tmpdir(), "missing-codex-history") },
+    { rangeStart: "2026-07-11", rangeEnd: "2026-08-10" },
+    {},
+    {
+      historical: true,
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      readCodexAuthIdentity: async () => [["account", "stable-history-account"]],
+      withCodexAppServer: async (_source, callback) =>
+        callback({
+          next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+          write: () => {},
+        }),
+    },
+  );
+  assert.equal(result.completeness, "partial");
+  assert.deepEqual(result.entries, [
+    { date: "2026-08-10", totalTokens: "80", completeness: "complete" },
+  ]);
+});
+
+test("Codex total-only projection preserves per-entry completeness", () => {
+  assert.deepEqual(
+    codexTotalOnlyEntries([
+      {
+        date: "2026-08-10",
+        totalTokens: "80",
+        inputTokens: "40",
+        outputTokens: "40",
+        completeness: "complete",
+      },
+      { date: "2026-08-11", totalTokens: "5" },
+    ]),
+    [
+      { date: "2026-08-10", totalTokens: "80", completeness: "complete" },
+      { date: "2026-08-11", totalTokens: "5" },
+    ],
   );
 });
 
@@ -3076,6 +3158,29 @@ test("reads Qwen content-free stats using UTC timestamp instead of localDate", a
   ]);
 });
 
+test("Qwen scans only monthly usage files intersecting the requested range", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-qwen-range-months-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  await writeFile(join(root, "token-usage-2026-07.jsonl"), "not-json\n");
+  await writeFile(join(root, "token-usage-2026-08.jsonl"), await fixture("qwen.jsonl"));
+
+  const result = await adapterFor("qwen_code").collect(
+    { dataPath: root },
+    { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+    {},
+  );
+
+  assert.equal(result.completeness, "complete");
+  assert.deepEqual(
+    result.entries.map((entry) => entry.date),
+    ["2026-08-10"],
+  );
+  assert.deepEqual(
+    Object.keys(result.nextState.files).map((path) => basename(path)),
+    ["token-usage-2026-08.jsonl"],
+  );
+});
+
 test("invalidates Qwen incremental state created with overlapping component semantics", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "viberacing-qwen-parser-version-"));
   context.after(() => rm(root, { force: true, recursive: true }));
@@ -3144,6 +3249,68 @@ test("reads Antigravity CLI snake-case usage", async () => {
   ]);
 });
 
+test("Antigravity historical capture stays partial even when every retained record is readable", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-antigravity-history-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const capture = join(root, "capture.jsonl");
+  await writeFile(
+    capture,
+    `${JSON.stringify({
+      date: "2026-08-10",
+      id: "capture-1",
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`,
+  );
+
+  const result = await adapterFor("antigravity").collect(
+    { dataPath: capture },
+    { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+    {},
+    { historical: true },
+  );
+
+  assert.equal(result.completeness, "partial");
+  assert.equal(result.retentionSafe, true);
+  assert.equal(result.entries.length, 1);
+});
+
+test("Antigravity streams capture files across the former 20 MB discovery boundary", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "viberacing-antigravity-large-"));
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const path = join(root, "capture.jsonl");
+  for (const size of [20_000_000 - 1, 20_000_000, 20_000_000 + 1]) {
+    await writeFile(path, exactCaptureContents(size));
+    assert.equal((await stat(path)).size, size);
+    const result = await adapterFor("antigravity").collect(
+      { dataPath: path },
+      { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+      {},
+    );
+    assert.equal(result.completeness, "complete");
+    assert.equal(result.retentionSafe, true);
+    assert.equal(result.entries[0]?.totalTokens, "1");
+    assert.equal(result.nextState.files[path]?.safeOffset, size);
+  }
+});
+
+test("large capture collection and proof cleanup implementations do not read the file whole", async () => {
+  const shared = await readFile(new URL("../lib/adapters/shared.mjs", import.meta.url), "utf8");
+  const captureCollector = shared.slice(
+    shared.indexOf("export async function collectCaptureJsonl"),
+    shared.indexOf("export function parserResult"),
+  );
+  assert.match(captureCollector, /createReadStream/);
+  assert.doesNotMatch(captureCollector, /readFile\(/);
+
+  const runtime = await readFile(new URL("../lib/runtime.mjs", import.meta.url), "utf8");
+  const proofCleanup = runtime.slice(
+    runtime.indexOf("async function filePrefixHash"),
+    runtime.indexOf("export async function quarantinePending"),
+  );
+  assert.match(proofCleanup, /createReadStream/);
+  assert.doesNotMatch(proofCleanup, /readFile\(/);
+});
+
 test("reads Gemini session usage metadata", async () => {
   assert.deepEqual(parseGeminiRecords(JSON.parse(await fixture("gemini.json"))), [
     {
@@ -3209,7 +3376,10 @@ test("keeps exactly the 31 UTC dates accepted by ingestion", () => {
     { date: "2026-08-13", totalTokens: "3" },
     { date: "2026-08-14", totalTokens: "4" },
   ];
-  assert.deepEqual(recentEntries(entries, new Date("2026-08-13T23:00:00Z")), entries.slice(1, 3));
+  assert.deepEqual(
+    entriesWithinRange(entries, { rangeStart: "2026-07-14", rangeEnd: "2026-08-13" }),
+    entries.slice(1, 3),
+  );
 });
 
 test("all seven adapters expose the complete collection contract", () => {
@@ -3220,10 +3390,57 @@ test("all seven adapters expose the complete collection contract", () => {
   for (const adapter of adapters) {
     assert.equal(typeof adapter.detect, "function");
     assert.equal(typeof adapter.collect, "function");
+    assert.equal(typeof adapter.historyRetryGeneration, "function");
     assert.equal(typeof adapter.diagnose, "function");
     assert.ok(adapter.supportedSurfaces.length > 0);
     assert.ok(adapter.collectionMethods.length > 0);
   }
+});
+
+test("history retry generation ignores collection ranges and changes with historical files", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-history-generation-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "capture.jsonl");
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      id: "old-event",
+      date: "2026-01-10",
+      usage: { date: "2026-01-10", totalTokens: "2" },
+    })}\n`,
+  );
+  const adapter = adapterFor("antigravity");
+  const source = { dataPath: path, collectionMethod: "antigravity_cli_capture" };
+  const before = await adapter.historyRetryGeneration(source);
+  await adapter.collect(source, { rangeStart: "2026-08-02", rangeEnd: "2026-09-01" }, {});
+  const afterRangeCollection = await adapter.historyRetryGeneration(source);
+  assert.equal(afterRangeCollection, before);
+
+  await appendFile(
+    path,
+    `${JSON.stringify({
+      id: "repaired-old-event",
+      date: "2026-01-11",
+      usage: { date: "2026-01-11", totalTokens: "3" },
+    })}\n`,
+  );
+  assert.notEqual(await adapter.historyRetryGeneration(source), before);
+});
+
+test("OpenCode history retry generation covers the database, WAL, and SHM", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-generation-"));
+  context.after(() => rm(directory, { force: true, recursive: true }));
+  const path = join(directory, "opencode.db");
+  await writeFile(path, "database");
+  const adapter = adapterFor("opencode");
+  const source = { dataPath: path, collectionMethod: "opencode_sqlite" };
+  const databaseOnly = await adapter.historyRetryGeneration(source);
+  await writeFile(`${path}-wal`, "wal");
+  const withWal = await adapter.historyRetryGeneration(source);
+  await writeFile(`${path}-shm`, "shm");
+  const withShm = await adapter.historyRetryGeneration(source);
+  assert.notEqual(withWal, databaseOnly);
+  assert.notEqual(withShm, withWal);
 });
 
 test("malformed records never become usage", () => {
@@ -4844,6 +5061,7 @@ test("collector limits are explicit partial results with diagnostics", async () 
   const result = await adapter.collect(source, undefined, {});
   const diagnostic = await adapter.diagnose(source);
   assert.equal(result.completeness, "partial");
+  assert.equal(result.retentionSafe, false);
   assert.deepEqual(result.warnings, ["collector_limits_or_unreadable_files"]);
   assert.equal(diagnostic.dataLocationAvailable, false);
   assert.deepEqual(diagnostic.excluded, ["Antigravity Desktop usage"]);

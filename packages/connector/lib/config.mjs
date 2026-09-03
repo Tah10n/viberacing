@@ -634,6 +634,14 @@ function serializedConfig(config) {
       accountLabel: source.accountLabel,
       collectionMethod: source.collectionMethod,
       lastAcceptedSyncSequence: source.lastAcceptedSyncSequence ?? "0",
+      ...(source.historyBackfillYear === undefined
+        ? {}
+        : {
+            historyBackfillYear: source.historyBackfillYear,
+            historyBackfillStatus: source.historyBackfillStatus,
+            historyGapRangeStart: source.historyGapRangeStart ?? null,
+            historyGapRangeEnd: source.historyGapRangeEnd ?? null,
+          }),
       ...(source.profileSourceId === undefined ? {} : { profileSourceId: source.profileSourceId }),
     })),
   };

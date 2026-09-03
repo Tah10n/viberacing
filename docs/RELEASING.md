@@ -50,6 +50,30 @@ old and new protocols, publish the compatible connector, and only then raise
 That variable is a compatibility floor, not a latest-version tracker; normal patch and minor
 releases do not change it.
 
+## Connector 0.6.0 current-year history staging
+
+Connector 0.6.0 adds bounded protocol v5 history snapshots while the server continues accepting
+protocols v2, v3, and v4 for rolling usage. Migration `010_current_year_history.sql` and the v5
+server must be deployed and verified before the connector package is published: older connectors
+keep their recent rolling sync, while only v5 connectors can resume the current UTC year's history
+in at-most-31-day chunks. Migration 010 expands the schema with `daily_agent_usage`, retains the
+legacy `weekly_agent_usage` table, and adds a temporary bridge plus application dual-write so the
+previous release stays compatible throughout Railway pre-deploy and healthcheck switching. The new
+release reads only the daily summary. Cleanup then needs two distinct, reviewed deployments.
+Deployment A changes application code only: it stops weekly writes and removes the weekly table and
+both migration-010 compatibility triggers from readiness, but deliberately leaves the objects in
+PostgreSQL. After that build is healthy, Deployment B may add migration 011 to remove both triggers,
+their functions, and the weekly table. CI rejects a destructive weekly migration while production
+application references remain. Never combine these phases or place cleanup 011 in the same
+deployment as expand migration 010.
+
+The feature pull request stages the migration, server, package bytes, tests, and documentation only.
+Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, or Railway variable
+change. After a separately approved server deployment is healthy, follow the stable release process
+above for 0.6.0. Keep the compatibility floor unchanged unless a later, separate rollout decision
+intentionally makes v5 history support mandatory; the web UI already lets older connectors continue
+recent sync and explains that an update is needed only for current-year history.
+
 ## Connector 0.5.1 OpenCode plugin staging
 
 Connector 0.5.1 adds only the local installation-owned OpenCode automatic-Sync plugin and retains

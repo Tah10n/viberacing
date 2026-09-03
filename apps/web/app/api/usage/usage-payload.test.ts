@@ -4,6 +4,7 @@ import {
   entryCompletenessAccepted,
   parseSnapshots as parseVersionedSnapshots,
   parseSourceErrors,
+  updatedUnresolvedUsageDates,
 } from "./route";
 
 function today(): string {
@@ -14,6 +15,205 @@ const sourceId = "11111111-1111-4111-8111-111111111111";
 const parseSnapshots = (value: unknown) => parseVersionedSnapshots(value, 3);
 
 describe("usage payload privacy and numeric contract", () => {
+  it("keeps explicit complete days out of bounded mixed rolling gaps", () => {
+    const [snapshot] = parseVersionedSnapshots(
+      [
+        {
+          sourceId,
+          syncSequence: "1",
+          kind: "rolling",
+          rangeStart: "2026-08-15",
+          rangeEnd: "2026-08-18",
+          completeness: "partial",
+          entries: [
+            { date: "2026-08-15", totalTokens: "0", completeness: "complete" },
+            { date: "2026-08-16", totalTokens: "10", completeness: "complete" },
+            { date: "2026-08-18", totalTokens: "2", completeness: "partial" },
+          ],
+        },
+      ],
+      5,
+      new Date("2026-09-01T12:00:00.000Z"),
+    );
+    expect(snapshot).toBeDefined();
+    if (snapshot === undefined) throw new Error("mixed rolling snapshot was not parsed");
+    expect(updatedUnresolvedUsageDates(snapshot, "partial", "2026-08-14", [])).toEqual([
+      "2026-08-17",
+      "2026-08-18",
+    ]);
+    expect(updatedUnresolvedUsageDates(snapshot, "complete", "2026-08-14", [])).toEqual([]);
+  });
+
+  it("retains gaps outside a snapshot and clears only dates proven complete", () => {
+    const [snapshot] = parseVersionedSnapshots(
+      [
+        {
+          sourceId,
+          syncSequence: "1",
+          kind: "rolling",
+          rangeStart: "2026-08-15",
+          rangeEnd: "2026-08-18",
+          completeness: "partial",
+          entries: [{ date: "2026-08-16", totalTokens: "10", completeness: "complete" }],
+        },
+      ],
+      5,
+      new Date("2026-09-01T12:00:00.000Z"),
+    );
+    if (snapshot === undefined) throw new Error("rolling snapshot was not parsed");
+    expect(updatedUnresolvedUsageDates(snapshot, "partial", "2026-08-10", ["2026-07-01"])).toEqual([
+      "2026-07-01",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+      "2026-08-15",
+      "2026-08-17",
+      "2026-08-18",
+    ]);
+    expect(
+      updatedUnresolvedUsageDates(
+        { ...snapshot, completeness: "complete", entries: [] },
+        "complete",
+        "2026-08-18",
+        ["2026-07-01", "2026-08-16"],
+      ),
+    ).toEqual(["2026-07-01"]);
+  });
+
+  it("allows bounded v5 current-year chunks while v4 remains rolling-only", () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const januaryChunk = {
+      sourceId,
+      syncSequence: "1",
+      kind: "year_backfill",
+      rangeStart: "2026-01-01",
+      rangeEnd: "2026-01-31",
+      completeness: "complete",
+      historyYearComplete: "complete",
+      entries: [{ date: "2026-01-01", totalTokens: "1" }],
+    };
+    expect(parseVersionedSnapshots([januaryChunk], 5, now)[0]).toMatchObject({
+      kind: "year_backfill",
+      historyYearComplete: "complete",
+    });
+    expect(() => parseVersionedSnapshots([januaryChunk], 4, now)).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [{ ...januaryChunk, rangeStart: "2025-12-31", historyYearComplete: undefined }],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...januaryChunk,
+            rangeStart: "2026-08-02",
+            rangeEnd: "2026-09-01",
+            historyYearComplete: undefined,
+            entries: [],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...januaryChunk,
+            rangeStart: "2026-08-01",
+            rangeEnd: "2026-09-01",
+            historyYearComplete: undefined,
+            entries: [],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+  });
+
+  it("accepts a v5 rolling window and completion metadata across New Year", () => {
+    const now = new Date("2027-01-01T12:00:00.000Z");
+    const rolling = {
+      sourceId,
+      syncSequence: "1",
+      kind: "rolling",
+      rangeStart: "2026-12-02",
+      rangeEnd: "2027-01-01",
+      completeness: "complete",
+      historyYearComplete: "complete",
+      entries: [
+        { date: "2026-12-31", totalTokens: "10" },
+        { date: "2027-01-01", totalTokens: "11" },
+      ],
+    };
+    expect(parseVersionedSnapshots([rolling], 5, now)[0]).toMatchObject({
+      kind: "rolling",
+      historyYearComplete: "complete",
+      rangeStart: "2026-12-02",
+    });
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...rolling,
+            historyYearComplete: undefined,
+            entries: [{ date: "2026-12-31", totalTokens: "12" }],
+          },
+        ],
+        5,
+        now,
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects future history, incomplete completion metadata, and unknown history fields", () => {
+    const now = new Date("2026-09-01T12:00:00.000Z");
+    const snapshot = {
+      sourceId,
+      syncSequence: "1",
+      kind: "year_backfill",
+      rangeStart: "2026-09-01",
+      rangeEnd: "2026-09-02",
+      completeness: "partial",
+      entries: [],
+    };
+    expect(() => parseVersionedSnapshots([snapshot], 5, now)).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...snapshot,
+            rangeStart: "2026-08-01",
+            rangeEnd: "2026-08-31",
+            historyYearComplete: "partial",
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+    expect(() =>
+      parseVersionedSnapshots(
+        [
+          {
+            ...snapshot,
+            rangeStart: "2026-01-01",
+            rangeEnd: "2026-01-31",
+            historyCursor: "private",
+          },
+        ],
+        5,
+        now,
+      ),
+    ).toThrow("invalid_snapshot");
+  });
+
   it("accepts canonical decimal strings beyond JavaScript integer precision", () => {
     const date = today();
     expect(

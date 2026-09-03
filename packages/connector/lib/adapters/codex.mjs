@@ -14,6 +14,7 @@ import {
 import { diagnosticError } from "../diagnostics.mjs";
 import {
   componentEntry,
+  historyRetryGenerationForPaths,
   integer,
   jsonLinesChunk,
   mergeEntries,
@@ -1595,8 +1596,16 @@ async function collect(source, range, state = {}, context = {}) {
     components.entries,
     range.rangeEnd,
   );
+  const entries = context.historical
+    ? snapshot.entries.map((entry) => ({
+        ...entry,
+        completeness: entry.completeness ?? "complete",
+      }))
+    : snapshot.entries;
   return {
     ...snapshot,
+    entries,
+    completeness: context.historical ? "partial" : snapshot.completeness,
     providerAccountKey: accountUsage.providerAccountKey,
     nextState: { componentUsage: components.nextState },
     warnings: components.warnings,
@@ -1633,6 +1642,12 @@ export const codexAdapter = Object.freeze({
       },
     ];
   },
+  historyRetryGeneration: (source) =>
+    historyRetryGenerationForPaths(
+      [join(source.dataPath, "sessions"), join(source.dataPath, "archived_sessions")],
+      [".jsonl", ".jsonl.zst"],
+      10_000,
+    ),
   collect,
   diagnose: async (source) => {
     try {

@@ -9,6 +9,7 @@ import {
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { ConnectorUpdateNotice } from "../components/connector-update-notice";
+import { PeriodSelector } from "../components/period-selector";
 import { DangerActionForm } from "../components/danger-action-form";
 import { SameOriginActionForm } from "../components/same-origin-action-form";
 import { UserLocalTime } from "../components/user-local-time";
@@ -20,6 +21,7 @@ import {
 import { agentNames, agentRegistry, isSupportedAgent } from "@/lib/agents";
 import {
   browserSyncInstallationScopeProtocol,
+  currentYearHistoryProtocolVersion,
   installedConnectorUpdateRequired,
   maximumSourcesPerInstallation,
   minimumConnectorVersion,
@@ -27,9 +29,19 @@ import {
 } from "@/lib/config";
 import { connectorCommandShell } from "@/lib/command-platform";
 import { query } from "@/lib/db";
-import { currentWeekStart, formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
+import { formatCompactTokens, formatExactTokens } from "@/lib/leaderboard";
 import { localInstallationId, viewer } from "@/lib/session";
+import { sourcePeriodIncomplete, usageChartStatus } from "@/lib/history-coverage";
 import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
+import {
+  addUtcDays,
+  parseUsagePeriod,
+  resolveUsagePeriod,
+  utcToday,
+  usagePeriodRangeLabel,
+  usagePeriodTitle,
+} from "@/lib/usage-period";
+import { UsageExplorer, type UsageExplorerDay } from "./usage-explorer";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -38,6 +50,7 @@ interface DashboardProps {
 interface InstallationRow {
   browser_sync_capable: boolean;
   browser_sync_protocol: number;
+  protocol_version: number;
   installed_connector_version: string | null;
   id: string;
   name: string;
@@ -73,6 +86,19 @@ interface SourceRow {
   collection_method: string;
   supported_surface: string;
   status: string;
+  history_backfill_year: number | null;
+  history_backfill_status: "pending" | "complete" | "partial";
+  last_completeness: "complete" | "partial" | null;
+  last_successful_sync_date: string | null;
+  last_rolling_range_start: string | null;
+  last_rolling_range_end: string | null;
+  unresolved_usage_dates: string[];
+  has_retained_usage: boolean;
+}
+
+interface AccountProvenDateRow {
+  agent_account_id: string;
+  usage_date: string;
 }
 
 interface CodexHookNoticeRow {
@@ -95,32 +121,11 @@ interface DailyUsageRow {
   tokens: string;
 }
 
-interface UsageChartDay {
-  date: string;
-  day: string;
-  fullLabel: string;
-  level: number;
-  tokens: string;
-  weekday: string;
-}
-
-interface UsageChart {
-  days: UsageChartDay[];
-  maximum: string;
-  midpoint: string;
-  total: string;
-}
-
-const usageChartLevels = 20n;
-const weekdayFormatter = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  timeZone: "UTC",
-});
 const fullDayFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   timeZone: "UTC",
-  weekday: "long",
+  year: "numeric",
 });
 
 function agentLabel(agent: string): string {
@@ -167,7 +172,7 @@ function hasReassignmentTarget(accounts: readonly AccountRow[], account: Account
   );
 }
 
-function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
+function PeriodTokenBreakdown({ account }: { readonly account: AccountRow }) {
   if (account.shared_profile)
     return (
       <p className="token-breakdown-note">
@@ -190,7 +195,7 @@ function WeeklyTokenBreakdown({ account }: { readonly account: AccountRow }) {
   const componentTotal = account.component_tokens;
   return (
     <>
-      <dl aria-label="Weekly token breakdown" className="token-breakdown">
+      <dl aria-label="Token breakdown for selected period" className="token-breakdown">
         {counters.map(([label, tokens]) => (
           <div key={label}>
             <dt>{label}</dt>
@@ -248,42 +253,26 @@ function AccountMatchHistory({
   );
 }
 
-function usageChart(weekStart: string, usage: readonly DailyUsageRow[]): UsageChart {
+function usageSeries(
+  from: string,
+  toExclusive: string,
+  usage: readonly DailyUsageRow[],
+): readonly UsageExplorerDay[] {
   const totals = new Map(usage.map((entry) => [entry.usage_date, entry.tokens]));
-  const start = new Date(`${weekStart}T00:00:00.000Z`);
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(start);
-    date.setUTCDate(start.getUTCDate() + index);
-    const dateKey = date.toISOString().slice(0, 10);
-    return {
-      date: dateKey,
-      day: date.getUTCDate().toString(),
-      fullLabel: fullDayFormatter.format(date),
-      tokens: totals.get(dateKey) ?? "0",
-      weekday: weekdayFormatter.format(date),
-    };
-  });
-  const maximum = days.reduce((value, day) => {
-    const tokens = BigInt(day.tokens);
-    return tokens > value ? tokens : value;
-  }, 0n);
-  const chartDays = days.map((day) => {
-    const tokens = BigInt(day.tokens);
-    const rounded = maximum === 0n ? 0n : (tokens * usageChartLevels + maximum / 2n) / maximum;
-    const level = tokens === 0n ? 0n : rounded > 0n ? rounded : 1n;
-    return { ...day, level: Number(level) };
-  });
-  const total = days.reduce((value, day) => value + BigInt(day.tokens), 0n);
-  return {
-    days: chartDays,
-    maximum: maximum.toString(),
-    midpoint: (maximum / 2n).toString(),
-    total: total.toString(),
-  };
+  const days: UsageExplorerDay[] = [];
+  for (let date = from; date < toExclusive; date = addUtcDays(date, 1)) {
+    days.push({
+      date,
+      label: fullDayFormatter.format(new Date(`${date}T00:00:00.000Z`)),
+      tokens: totals.get(date) ?? "0",
+    });
+  }
+  return days;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
   await connection();
+  const now = new Date();
   const requestHeaders = await headers();
   const commandShell = connectorCommandShell(
     requestHeaders.get("sec-ch-ua-platform"),
@@ -295,13 +284,25 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     localInstallationId(),
   ]);
   if (current === null) redirect("/api/auth/github/start?next=/dashboard");
-  const weekStart = currentWeekStart();
-  const [installations, accounts, sources, codexHookNotices, dedupEvents, dailyUsage] =
-    await Promise.all([
-      query<InstallationRow>(
-        `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
+  const period = parseUsagePeriod(params, now);
+  const resolvedPeriod = resolveUsagePeriod(period, now);
+  const today = utcToday(now);
+  const periodTitle = usagePeriodTitle(period);
+  const periodRange = usagePeriodRangeLabel(resolvedPeriod);
+  const [
+    installations,
+    accounts,
+    sources,
+    codexHookNotices,
+    dedupEvents,
+    dailyUsage,
+    accountProvenDates,
+  ] = await Promise.all([
+    query<InstallationRow>(
+      `SELECT i.id::text, i.name, i.installed_connector_version, i.last_sync_at,
               i.browser_sync_capable,
               i.browser_sync_protocol,
+              i.protocol_version,
               count(s.id)::int AS source_count
          FROM installations i
          LEFT JOIN installation_sources s
@@ -309,10 +310,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE i.user_id = $1 AND i.status = 'active'
         GROUP BY i.id
         ORDER BY i.created_at DESC`,
-        [current.id],
-      ),
-      query<AccountRow>(
-        `SELECT a.id::text,
+      [current.id],
+    ),
+    query<AccountRow>(
+      `SELECT a.id::text,
               a.agent_id,
               a.label,
               a.aggregation_mode,
@@ -326,9 +327,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
               count(s.id)::int AS source_count,
               count(DISTINCT s.installation_id)::int AS installation_count,
               max(s.last_successful_sync_at) AS last_sync_at,
-              coalesce(bool_or(s.last_completeness = 'partial'), false) AS partial,
+              coalesce(usage.partial, false) AS partial,
               coalesce(bool_or(s.last_error_summary IS NOT NULL), false) AS has_error
-              ,coalesce(bool_or(s.installation_id = $3::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
+              ,coalesce(bool_or(s.installation_id = $4::uuid AND installation.browser_sync_capable), false) AS can_browser_sync,
               coalesce(bool_or(
                 s.agent_id = 'codex' AND (
                   SELECT count(*)
@@ -345,6 +346,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
          LEFT JOIN installations installation ON installation.id = s.installation_id
          LEFT JOIN LATERAL (
            SELECT sum(day.tokens) AS tokens,
+                  bool_or(day.partial) AS partial,
                   CASE WHEN (a.aggregation_mode = 'account_max'
                               AND bool_or(day.components_complete))
                               OR (a.aggregation_mode = 'source_sum'
@@ -381,6 +383,15 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
                         ELSE sum(candidate.total_tokens)
                       END AS tokens,
+                      CASE a.aggregation_mode
+                        WHEN 'account_max' THEN NOT coalesce(bool_or(
+                          candidate.completeness = 'complete'
+                        ) FILTER (
+                          WHERE candidate.account_max_selected
+                            AND candidate.total_tokens = candidate.maximum_total_tokens
+                        ), false)
+                        ELSE coalesce(bool_or(candidate.completeness = 'partial'), false)
+                      END AS partial,
                       CASE a.aggregation_mode
                         WHEN 'account_max' THEN max(candidate.input_tokens) FILTER (
                           WHERE candidate.component_tokens = candidate.maximum_component_tokens
@@ -440,7 +451,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                           max(precedence.component_tokens) FILTER (
                             WHERE ${accountMaxObservationIsEligibleSql})
                             OVER (PARTITION BY precedence.usage_date)
-                            AS maximum_component_tokens
+                            AS maximum_component_tokens,
+                          max(precedence.total_tokens) FILTER (
+                            WHERE ${accountMaxObservationIsEligibleSql})
+                            OVER (PARTITION BY precedence.usage_date)
+                            AS maximum_total_tokens
                      FROM (
                        SELECT d.*,
                               CASE WHEN d.input_tokens IS NOT NULL
@@ -461,29 +476,39 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                          JOIN daily_usage d ON d.source_id = source_usage.id
                         WHERE source_usage.agent_account_id = a.id
                           AND source_usage.user_id = a.user_id
-                          AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
+                          AND d.usage_date >= $2::date AND d.usage_date < $3::date
                      ) precedence
                  ) candidate
                 GROUP BY candidate.usage_date
              ) day
          ) usage ON true
         WHERE a.user_id = $1 AND a.merged_into_account_id IS NULL
-        GROUP BY a.id, usage.tokens, usage.component_tokens, usage.input_tokens, usage.output_tokens,
+        GROUP BY a.id, usage.tokens, usage.partial, usage.component_tokens, usage.input_tokens, usage.output_tokens,
                  usage.cache_tokens, usage.reasoning_tokens
         ORDER BY a.agent_id, lower(a.label), a.created_at`,
-        [current.id, weekStart, browserInstallationId],
-      ),
-      query<SourceRow>(
-        `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
-              s.collection_method, s.supported_surface, s.status
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
+    ),
+    query<SourceRow>(
+      `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
+              s.collection_method, s.supported_surface, s.status,
+              s.history_backfill_year, s.history_backfill_status,
+              s.last_completeness,
+              (s.last_successful_sync_at AT TIME ZONE 'UTC')::date::text AS last_successful_sync_date,
+              s.last_rolling_range_start::text,
+              s.last_rolling_range_end::text,
+              s.unresolved_usage_dates::text[],
+              EXISTS (
+                SELECT 1 FROM daily_usage retained
+                 WHERE retained.source_id = s.id
+              ) AS has_retained_usage
          FROM installation_sources s
          JOIN installations i ON i.id = s.installation_id
         WHERE s.user_id = $1
         ORDER BY i.created_at, s.created_at`,
-        [current.id],
-      ),
-      query<CodexHookNoticeRow>(
-        `SELECT profile.id::text AS source_id,
+      [current.id],
+    ),
+    query<CodexHookNoticeRow>(
+      `SELECT profile.id::text AS source_id,
               installation.name AS installation_name
          FROM installation_sources profile
          JOIN installations installation ON installation.id = profile.installation_id
@@ -503,10 +528,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                    AND member.last_successful_sync_at IS NOT NULL
               )
         ORDER BY installation.created_at, profile.created_at`,
-        [current.id],
-      ),
-      query<DedupEventRow>(
-        `SELECT event.id::text,
+      [current.id],
+    ),
+    query<DedupEventRow>(
+      `SELECT event.id::text,
               event.agent_id,
               event.dismissed_at IS NOT NULL AS dismissed,
               event.matched_days,
@@ -520,42 +545,96 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         WHERE event.user_id = $1 AND event.status = 'active'
           AND source.agent_account_id = event.target_account_id
         ORDER BY event.created_at DESC`,
-        [current.id],
-      ),
-      query<DailyUsageRow>(
-        `WITH source_days AS (
-         SELECT a.id,
-                a.aggregation_mode,
-                d.usage_date,
-                d.total_tokens,
-                d.completeness,
-                d.updated_at,
-                max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
-                  OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
-           FROM agent_accounts a
-           JOIN installation_sources s
-             ON s.agent_account_id = a.id AND s.user_id = a.user_id
-           JOIN daily_usage d ON d.source_id = s.id
-          WHERE a.user_id = $1
-            AND d.usage_date >= $2::date AND d.usage_date < $2::date + 7
-       ), account_daily AS (
-         SELECT id,
-                usage_date,
-                CASE aggregation_mode
-                  WHEN 'account_max' THEN ${accountMaxDailyTokensSql}
-                  ELSE sum(total_tokens)
-                END AS tokens
-           FROM source_days
-          GROUP BY id, aggregation_mode, usage_date
-       )
-       SELECT usage_date::text, sum(tokens)::text AS tokens
-         FROM account_daily
+      [current.id],
+    ),
+    query<DailyUsageRow>(
+      `SELECT usage_date::text, sum(tokens)::text AS tokens
+         FROM daily_agent_usage
+        WHERE user_id = $1
+          AND usage_date >= $2::date AND usage_date < $3::date
         GROUP BY usage_date
         ORDER BY usage_date`,
-        [current.id, weekStart],
-      ),
-    ]);
-  const chart = usageChart(weekStart, dailyUsage);
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+    ),
+    query<AccountProvenDateRow>(
+      `SELECT candidate.agent_account_id::text, candidate.usage_date::text
+           FROM (
+             SELECT eligible.*,
+                    max(eligible.total_tokens) FILTER (WHERE eligible.account_max_selected)
+                      OVER (PARTITION BY eligible.agent_account_id, eligible.usage_date)
+                      AS maximum_total_tokens
+               FROM (
+                 SELECT precedence.*,
+                        ${accountMaxObservationIsEligibleSql} AS account_max_selected
+                   FROM (
+                     SELECT a.id AS agent_account_id,
+                            d.usage_date,
+                            d.total_tokens,
+                            d.completeness,
+                            d.updated_at,
+                            max(d.updated_at) FILTER (WHERE d.completeness = 'complete')
+                              OVER (PARTITION BY a.id, d.usage_date) AS latest_complete_at
+                       FROM agent_accounts a
+                       JOIN installation_sources s ON s.agent_account_id = a.id
+                       JOIN daily_usage d ON d.source_id = s.id
+                      WHERE a.user_id = $1
+                        AND a.merged_into_account_id IS NULL
+                        AND a.aggregation_mode = 'account_max'
+                        AND d.usage_date >= $2::date AND d.usage_date < $3::date
+                   ) precedence
+               ) eligible
+           ) candidate
+          WHERE candidate.account_max_selected
+            AND candidate.completeness = 'complete'
+            AND candidate.updated_at = candidate.latest_complete_at
+            AND candidate.total_tokens = candidate.maximum_total_tokens
+          GROUP BY candidate.agent_account_id, candidate.usage_date`,
+      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+    ),
+  ]);
+  const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, dailyUsage);
+  const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const provenDatesByAccount = new Map<string, Set<string>>();
+  for (const row of accountProvenDates) {
+    const dates = provenDatesByAccount.get(row.agent_account_id) ?? new Set<string>();
+    dates.add(row.usage_date);
+    provenDatesByAccount.set(row.agent_account_id, dates);
+  }
+  const sourceIncomplete = (source: SourceRow): boolean =>
+    sourcePeriodIncomplete(resolvedPeriod, today, {
+      included:
+        source.status === "active" ||
+        source.has_retained_usage ||
+        source.history_backfill_status === "partial" ||
+        source.unresolved_usage_dates.length > 0 ||
+        (source.last_completeness === "partial" &&
+          source.last_rolling_range_start === null &&
+          source.last_rolling_range_end === null &&
+          source.last_successful_sync_date !== null &&
+          source.last_successful_sync_date >= `${today.slice(0, 4)}-01-01`),
+      active: source.status === "active",
+      aggregationMode: accountsById.get(source.agent_account_id)?.aggregation_mode ?? "source_sum",
+      historyBackfillYear: source.history_backfill_year,
+      historyBackfillStatus: source.history_backfill_status,
+      lastCompleteness: source.last_completeness,
+      lastSuccessfulSyncDate: source.last_successful_sync_date,
+      lastRollingRangeStart: source.last_rolling_range_start,
+      lastRollingRangeEnd: source.last_rolling_range_end,
+      unresolvedUsageDates: source.unresolved_usage_dates,
+      provenAccountDates: provenDatesByAccount.get(source.agent_account_id) ?? new Set<string>(),
+    });
+  const incompleteAccountIds = new Set(
+    sources.filter(sourceIncomplete).map((source) => source.agent_account_id),
+  );
+  const accountPeriodPartial = (account: AccountRow): boolean =>
+    account.partial || incompleteAccountIds.has(account.id);
+  const historyIncomplete = sources.some(sourceIncomplete);
+  const chartStatus = usageChartStatus(resolvedPeriod, today, {
+    hasUsage: dailyUsage.length > 0,
+    hasPartialAccount: accounts.some(accountPeriodPartial),
+    historyIncomplete,
+  });
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
   const updateCommand = connectorRepairCommand(origin);
@@ -570,6 +649,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
   const browserSyncEnabled =
     accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
+  const historyUpgradeRequired = installations.some(
+    (installation) => installation.protocol_version < currentYearHistoryProtocolVersion,
+  );
   const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
   const notice =
     params.connected === "1"
@@ -614,6 +696,27 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       {notice === null ? null : (
         <p className={params.left === "1" ? "notice warning-notice" : "notice"}>{notice}</p>
       )}
+
+      {historyUpgradeRequired ? (
+        <Panel className="dashboard-notice connector-history-notice">
+          <div>
+            <p className="eyebrow">CURRENT-YEAR HISTORY</p>
+            <h2>Update the connector to import current-year history</h2>
+            <p>
+              Existing connectors continue recent sync. Protocol v5 is required only for the
+              resumable import from 1 January of the current UTC year.
+            </p>
+            <pre>
+              <code>{updateCommand}</code>
+            </pre>
+          </div>
+          <CopyCommandButton
+            command={updateCommand}
+            copiedLabel="Update command copied"
+            label="Copy update command"
+          />
+        </Panel>
+      ) : null}
 
       {hasNewCodexAccountNotice ? (
         <Panel className="dashboard-notice new-account-notice">
@@ -727,6 +830,23 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </div>
       </details>
 
+      <section className="dashboard-period" aria-labelledby="dashboard-period-title">
+        <div>
+          <p className="eyebrow">USAGE PERIOD</p>
+          <h2 id="dashboard-period-title">{periodTitle}</h2>
+          <p>
+            {period.kind === "year" ? "Current calendar year · " : ""}
+            {periodRange}
+          </p>
+        </div>
+        <PeriodSelector
+          basePath="/dashboard"
+          period={period}
+          resolved={resolvedPeriod}
+          today={today}
+        />
+      </section>
+
       <section className="summary-grid" aria-label="Connection summary">
         <div>
           <span>Computers</span>
@@ -741,9 +861,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           <strong>{installations.length > 0 ? "Active" : "Not connected"}</strong>
         </div>
         <div>
-          <span>This week</span>
-          <strong title={`${formatExactTokens(chart.total)} tokens`}>
-            {formatCompactTokens(chart.total)}
+          <span>{periodTitle}</span>
+          <strong title={`${formatExactTokens(periodTotal)} tokens`}>
+            {formatCompactTokens(periodTotal)}
           </strong>
         </div>
       </section>
@@ -751,50 +871,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       <section className="dashboard-section" aria-labelledby="usage-chart-title">
         <div className="section-heading plain-heading">
           <div>
-            <p className="eyebrow">WEEKLY USAGE</p>
+            <p className="eyebrow">{periodTitle.toUpperCase()} USAGE</p>
             <h2 id="usage-chart-title">Tokens by day</h2>
           </div>
-          <span>UTC · MON–SUN</span>
+          <span>{periodRange}</span>
         </div>
-        <figure aria-labelledby="usage-chart-title" className="usage-chart">
-          <figcaption className="sr-only">
-            {chart.days
-              .map((day) => `${day.fullLabel}: ${formatExactTokens(day.tokens)} tokens`)
-              .join("; ")}
-          </figcaption>
-          <div aria-hidden="true" className="usage-chart-layout">
-            <div className="usage-chart-scale">
-              <span title={`${formatExactTokens(chart.maximum)} tokens`}>
-                {formatCompactTokens(chart.maximum)}
-              </span>
-              <span title={`${formatExactTokens(chart.midpoint)} tokens`}>
-                {formatCompactTokens(chart.midpoint)}
-              </span>
-              <span>0</span>
-            </div>
-            <div className="usage-chart-plot">
-              {chart.days.map((day) => (
-                <div className="usage-chart-day" key={day.date}>
-                  <span
-                    className="usage-chart-value"
-                    title={`${formatExactTokens(day.tokens)} tokens`}
-                  >
-                    {formatCompactTokens(day.tokens)}
-                  </span>
-                  <div className="usage-chart-bar-area">
-                    <span
-                      className={`usage-chart-bar usage-chart-bar-level-${day.level.toString()}`}
-                    />
-                  </div>
-                  <time dateTime={day.date}>
-                    <strong>{day.weekday}</strong>
-                    <span>{day.day}</span>
-                  </time>
-                </div>
-              ))}
-            </div>
-          </div>
-        </figure>
+        <UsageExplorer
+          days={chartDays}
+          key={`${resolvedPeriod.from}:${resolvedPeriod.toExclusive}`}
+          periodLabel={periodTitle}
+          rangeLabel={periodRange}
+          status={chartStatus}
+        />
       </section>
 
       <BrowserSyncProvider enabled={browserSyncEnabled}>
@@ -830,10 +918,18 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       <h3>{accountTitle(account.agent_id, account.label)}</h3>
                       <Badge
                         tone={
-                          account.has_error ? "warning" : account.partial ? "neutral" : "success"
+                          account.has_error
+                            ? "warning"
+                            : accountPeriodPartial(account)
+                              ? "neutral"
+                              : "success"
                         }
                       >
-                        {account.has_error ? "Error" : account.partial ? "Partial" : "Complete"}
+                        {account.has_error
+                          ? "Error"
+                          : accountPeriodPartial(account)
+                            ? "Partial"
+                            : "Complete"}
                       </Badge>
                     </div>
                     <div className="agent-list">
@@ -860,7 +956,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                         <span className="agent-chip">Shared Codex profile</span>
                       ) : null}
                     </div>
-                    <WeeklyTokenBreakdown account={account} />
+                    <PeriodTokenBreakdown account={account} />
                   </div>
                   <div className="device-meta">
                     <span>Last sync</span>

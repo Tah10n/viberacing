@@ -202,19 +202,41 @@ describe("dashboard connection flow", () => {
     expect(usageSummary).toContain("export const accountMaxDailyTokensSql");
     expect(usageSummary).toContain("updated_at = latest_complete_at");
     expect(usageSummary).toContain("updated_at > latest_complete_at");
-    expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(2);
-    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(2);
+    expect(dashboard.match(/\$\{accountMaxDailyTokensSql\}/g)).toHaveLength(1);
+    expect(dashboard.match(/\$\{accountMaxObservationIsEligibleSql\}/g)).toHaveLength(4);
     expect(dashboard).toContain("AND candidate.account_max_selected");
+    expect(dashboard).toContain("candidate.total_tokens = candidate.maximum_total_tokens");
     expect(dashboard).not.toContain("WHEN 'account_max' THEN max(candidate.total_tokens)");
+    expect(dashboard).toContain("FROM daily_agent_usage");
   });
 
-  it("renders a shared-scale weekly chart and exact weekly summary without number coercion", () => {
-    expect(dashboard).toContain("maximum: maximum.toString()");
-    expect(dashboard).toContain("midpoint: (maximum / 2n).toString()");
-    expect(dashboard).toContain("value + BigInt(day.tokens)");
-    expect(dashboard).toContain('className="usage-chart-scale"');
-    expect(dashboard).toContain('className="usage-chart-bar-area"');
-    expect(dashboard).toContain("formatExactTokens(chart.total)");
-    expect(dashboard).not.toContain("Number(day.tokens)");
+  it("renders one period-consistent exact daily explorer without number coercion", () => {
+    const explorer = source("../dashboard/usage-explorer.tsx");
+    expect(dashboard).toContain("parseUsagePeriod(params, now)");
+    expect(dashboard).toContain("resolvedPeriod.from");
+    expect(dashboard).toContain("resolvedPeriod.toExclusive");
+    expect(dashboard).toContain("total + BigInt(day.tokens)");
+    expect(dashboard).toContain("formatExactTokens(periodTotal)");
+    expect(dashboard).toContain("<UsageExplorer");
+    expect(explorer).toContain("Zoom in");
+    expect(explorer).toContain("Zoom out");
+    expect(explorer).toContain("Reset view");
+    expect(explorer).toContain("requestAnimationFrame");
+    expect(explorer).toContain("BigInt(day.tokens)");
+    expect(explorer).not.toContain("Number(day.tokens)");
+    expect(dashboard).toContain("s.last_rolling_range_start::text");
+    expect(dashboard).toContain("s.unresolved_usage_dates::text[]");
+    expect(dashboard).toContain("last_successful_sync_date");
+    expect(dashboard).toContain("provenDatesByAccount");
+    expect(dashboard).toContain("sourcePeriodIncomplete");
+    expect(dashboard).toContain("source.has_retained_usage");
+  });
+
+  it("uses the connector protocol for the current-year history upgrade notice", () => {
+    expect(dashboard).toContain("i.protocol_version");
+    expect(dashboard).toContain(
+      "installation.protocol_version < currentYearHistoryProtocolVersion",
+    );
+    expect(dashboard).not.toContain("installation.browser_sync_protocol < 5");
   });
 });

@@ -23,7 +23,7 @@ describe("readiness migration ledger", () => {
       status: "ready",
       schemaVersion: expectedSchemaVersion,
     });
-    expect(expectedSchemaVersion).toBe("009_codex_hook_notice.sql");
+    expect(expectedSchemaVersion).toBe("010_current_year_history.sql");
     expect(query).toHaveBeenCalledWith(expect.stringContaining("browser_sync_protocol"), [
       expectedSchemaVersion,
     ]);
@@ -33,6 +33,21 @@ describe("readiness migration ledger", () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining("codex_hook_notice_dismissed_at"), [
       expectedSchemaVersion,
     ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("history_backfill_status"), [
+      expectedSchemaVersion,
+    ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("last_rolling_range_start"), [
+      expectedSchemaVersion,
+    ]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("unresolved_usage_dates"), [
+      expectedSchemaVersion,
+    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /weekly_agent_usage_daily_compatibility[\s\S]*installation_sources_legacy_partial_coverage/,
+      ),
+      [expectedSchemaVersion],
+    );
   });
 
   it("returns 503 when the expected latest migration is absent", async () => {

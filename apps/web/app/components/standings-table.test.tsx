@@ -7,6 +7,8 @@ describe("standings table profile contract", () => {
     const markup = renderToStaticMarkup(
       <StandingsTable
         currentHandle="Tah10n"
+        periodLabel="All time"
+        periodSearch="period=year"
         rows={[
           {
             handle: "Tah10n",
@@ -23,5 +25,7 @@ describe("standings table profile contract", () => {
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noreferrer"');
     expect(markup).toContain('class="racer-profile-dialog"');
+    expect(markup).toContain('href="/u/Tah10n?period=year"');
+    expect(markup).toContain("Tokens · All time");
   });
 });

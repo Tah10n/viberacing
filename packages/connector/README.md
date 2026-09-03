@@ -69,7 +69,7 @@ serialized behind any active sync, so an older request cannot restore superseded
 
 ```text
 viberacing connect [--origin URL]
-viberacing sync
+viberacing sync [--full]
 viberacing doctor [--repair]
 viberacing accounts
 viberacing source list
@@ -135,11 +135,13 @@ file-backed `auth.json`; they do not repair a keyring-only login. The connector 
 keyring directly. Adding that capability requires a separate security design covering platform APIs,
 access control, lifetime, redaction, and account-switch races.
 
-Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity usage use a common 31-day observed-
-event ledger. It stores only a SHA-256 event key, UTC date, exact token tuple, and parser version,
-with explicit count and byte bounds. Observations survive local file deletion, movement, copying,
-and database-row cleanup; copies deduplicate. Reusing one event identity with different counters
-keeps the first tuple, marks the snapshot partial, and emits `local_event_identity_conflict`.
+Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity usage use a common range-aware
+observed-event ledger. It stores only a SHA-256 event key, UTC date, exact token tuple, and parser
+version, with explicit count and byte bounds. Rolling and historical adapter state are isolated, so
+a current-year backfill cannot change rolling fingerprints, diagnostics, or incremental offsets.
+Observations survive local file deletion, movement, copying, and database-row cleanup within the
+retained range; copies deduplicate. Reusing one event identity with different counters keeps the
+first tuple, marks the snapshot partial, and emits `local_event_identity_conflict`.
 
 Current Kimi discovery prefers `$KIMI_CODE_HOME` (default `~/.kimi-code`) and does not automatically
 add the default legacy `~/.kimi` when both exist. A deliberately retained or archived Python-format
@@ -242,13 +244,15 @@ lock, and it does not collect usage unless the user separately runs `viberacing 
 compatible reconnect, authenticated sync, or doctor server check clears a prior version-upgrade
 automatic-sync disable.
 
-Connector 0.5.0 uses protocol v4. Collector errors contain only the mapped source ID, the fixed
-allowlisted code, and `observedAfterSequence`, copied from the last server-accepted sequence known
-before collection. Saved pending errors retain that original ordering value, so retrying a delayed
-error cannot turn it into a newer observation. Servers accept legacy v2/v3 payloads during rollout;
-those protocols lack error ordering metadata and therefore cannot change persistent source-error
-status. A saved unsequenced v2/v3 error is removed only when its source is in scope, its local
-failure fingerprint is reset, and the current collection can emit a fresh ordered v4 observation.
+Connector 0.6.0 uses protocol v5. Every snapshot explicitly identifies a rolling or current-year
+history kind, while history chunks remain bounded to 31 inclusive UTC dates and a source reports a
+terminal `complete` or `partial` status only with the January 1 chunk. A cursor advances only after
+the server acknowledges that exact pending payload; a lost response safely resends the same sequence
+and chunk. Protocol v5 retains v4 collector-error ordering: errors contain only the mapped source
+ID, fixed allowlisted code, and `observedAfterSequence` copied before collection. Servers continue
+accepting v2-v4. Those older connectors keep recent usage current but cannot import earlier
+current-year dates. A saved unsequenced v2/v3 error is removed only when its source is in scope, its
+local failure fingerprint is reset, and the current collector can emit a fresh ordered observation.
 
 Codex, Claude Code, Kimi Code, Qwen Code, and Gemini CLI install supported lifecycle triggers. Codex
 uses `Stop` after every completed turn; upgrades remove only Vibe Racing's older `SessionEnd`
@@ -285,12 +289,26 @@ usage content are never included. The server serializes claims per installation,
 new browser sync per 60 seconds, and rejects a second claim while a recent run is still active.
 `uninstall` removes only an owned handler registration before deleting its runtime.
 
-The first sync may read one bounded 31-day window. Subsequent JSONL collection skips unchanged files
-and resumes at the last complete byte offset, detecting append, truncation, replacement, and file
-removal. Partial passes retain prior per-file contributions, and valid usage metadata in a JSONL
-record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode queries only the
-UTC range. Successful Antigravity capture syncs remove records older than 35 days and atomically
-compact large files. Only Antigravity CLI sessions launched through the Vibe Racing wrapper are
-counted; earlier/direct sessions and Antigravity Desktop are not included. Detailed versions,
-formulas, and limitations are in
+Every sync refreshes a rolling range of at most 31 UTC dates. Connector 0.6.0 then works backward
+from the day before that range to January 1 of the current UTC year in newest-first chunks of at
+most 31 dates. Automatic activity and browser Sync drain bounded pending payloads and collect at
+most one new historical range; `connect` and manual `sync` continue through every eligible chunk. If
+a rolling range starts after the previous acknowledged range, the server returns the durable gap;
+`connect` and manual Sync drain all its chunks while automatic and browser Sync still collect at
+most one chunk. Explicit `sync --full` starts a full current-year rescan after either terminal
+`complete` or `partial`; ordinary runs do not restart a terminal full-year pass without a gap. An
+inactive Codex account remains resumable and does not block the active account or create an
+unbounded loop. Subsequent rolling JSONL collection skips unchanged files and resumes at the last
+complete byte offset, detecting append, truncation, replacement, and file removal. Historical scans
+use separate bounded state. Partial passes retain prior contributions, and valid usage metadata in a
+JSONL record over 1 MB is parsed while the pass is explicitly reported partial. OpenCode and Qwen
+read only files or rows intersecting the requested UTC range. Codex and Antigravity conservatively
+mark historical coverage partial where their local surfaces cannot prove a complete year. Each safe
+Antigravity collection records an inode/offset/prefix-hash proof with its pending payload. After
+acknowledgement, cleanup revalidates that exact prefix under the capture lock and removes only
+proved records older than 35 days; appended, replaced, truncated, malformed, and unacknowledged
+bytes are retained. Cleanup is retried after later successful Sync and its failure never blocks
+other sources. Only Antigravity CLI sessions launched through the Vibe Racing wrapper are counted;
+earlier/direct sessions and Antigravity Desktop are not included. Detailed versions, formulas, and
+limitations are in
 [AGENT_SUPPORT.md](https://github.com/Tah10n/viberacing/blob/main/docs/AGENT_SUPPORT.md).

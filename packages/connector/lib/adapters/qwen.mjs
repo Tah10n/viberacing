@@ -6,6 +6,7 @@ import {
   collectJsonl,
   componentEntry,
   diagnosePath,
+  historyRetryGenerationForPath,
   integer,
   mergeEntries,
   parserResult,
@@ -14,6 +15,15 @@ import {
 } from "./shared.mjs";
 
 const qwenParserVersion = 5;
+
+function qwenUsageFileWithinRange(path, range) {
+  const match = /^token-usage-(\d{4}-\d{2})\.jsonl$/.exec(basename(path));
+  return (
+    match !== null &&
+    match[1] >= range.rangeStart.slice(0, 7) &&
+    match[1] <= range.rangeEnd.slice(0, 7)
+  );
+}
 
 function analyzeQwenLines(lines) {
   const seen = new Set();
@@ -344,11 +354,12 @@ export const qwenAdapter = Object.freeze({
     return { hookConfigRoot };
   },
   detect: detectQwenSources,
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: async (source, range, state = {}) => {
     const result = await collectJsonl(
       source,
       analyzeQwenLines,
-      (path) => basename(path).startsWith("token-usage-"),
+      (path) => qwenUsageFileWithinRange(path, range),
       state,
       range,
       qwenEventKey,

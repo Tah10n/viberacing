@@ -42,6 +42,10 @@ function mapping(overrides = {}) {
     accountLabel: "Antigravity",
     collectionMethod: local.collectionMethod,
     lastAcceptedSyncSequence: "0",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "pending",
+    historyGapRangeStart: null,
+    historyGapRangeEnd: null,
     ...overrides,
   };
 }
@@ -301,6 +305,81 @@ test("compact reconciliation requires every requested source and supports 100 ma
       kind: "reconciliation",
       sourceIds,
     }),
+    /invalid protocol response/,
+  );
+});
+
+test("protocol v5 reconciliation requires bounded per-source history status", async () => {
+  const context = { kind: "reconciliation", sourceIds: [sourceId], protocolVersion: 5 };
+  const source = {
+    sourceId,
+    status: "active",
+    lastAcceptedSyncSequence: "7",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+    historyGapRangeStart: null,
+    historyGapRangeEnd: null,
+  };
+  assert.deepEqual(await parseProtocolResponse(json({ sources: [source] }), context), {
+    sources: [source],
+  });
+  const withoutGap = {
+    sourceId,
+    status: "active",
+    lastAcceptedSyncSequence: "7",
+    historyBackfillYear: 2026,
+    historyBackfillStatus: "complete",
+  };
+  assert.deepEqual(await parseProtocolResponse(json({ sources: [withoutGap] }), context), {
+    sources: [withoutGap],
+  });
+  for (const invalid of [
+    { ...source, historyBackfillYear: 2026.5 },
+    { ...source, historyBackfillYear: 10_000 },
+    { ...source, historyBackfillStatus: "lifetime" },
+    Object.fromEntries(Object.entries(source).filter(([key]) => key !== "historyBackfillStatus")),
+    { ...source, historyGapRangeStart: "2026-06-01", historyGapRangeEnd: null },
+    { ...source, historyGapRangeStart: "2026-06-02", historyGapRangeEnd: "2026-06-01" },
+    { ...source, historyPath: "/private/provider" },
+  ]) {
+    await assert.rejects(
+      parseProtocolResponse(json({ sources: [invalid] }), context),
+      /invalid protocol response/,
+    );
+  }
+});
+
+test("protocol v5 usage accepts optional exact gap bounds and rejects half-gaps", async () => {
+  const base = {
+    acceptedEntries: 0,
+    acceptedSnapshots: 1,
+    acceptedSourceErrors: 0,
+    staleSourceErrors: 0,
+    legacySourceErrorsIgnored: 0,
+    staleSnapshots: 0,
+    sourceSequences: [{ sourceId, lastAcceptedSyncSequence: "8", accepted: true }],
+  };
+  const context = { kind: "usage", sourceIds: [sourceId], protocolVersion: 5 };
+  assert.deepEqual(await parseProtocolResponse(json(base), context), base);
+  const withGap = {
+    ...base,
+    sourceSequences: [
+      {
+        ...base.sourceSequences[0],
+        historyGapRangeStart: "2026-06-01",
+        historyGapRangeEnd: "2026-06-14",
+      },
+    ],
+  };
+  assert.deepEqual(await parseProtocolResponse(json(withGap), context), withGap);
+  await assert.rejects(
+    parseProtocolResponse(
+      json({
+        ...base,
+        sourceSequences: [{ ...base.sourceSequences[0], historyGapRangeStart: "2026-06-01" }],
+      }),
+      context,
+    ),
     /invalid protocol response/,
   );
 });

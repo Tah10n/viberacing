@@ -1,8 +1,9 @@
 import {
-  collectJsonl,
+  collectCaptureJsonl,
   componentEntry,
   dayPattern,
   diagnosePath,
+  historyRetryGenerationForPath,
   mergeEntries,
   parserResult,
   utcDay,
@@ -95,11 +96,11 @@ export const antigravityAdapter = Object.freeze({
   trigger: "viberacing run antigravity",
   defaultPaths: [],
   detect: async () => [],
-  collect: async (source, range, state = {}) => {
-    const result = await collectJsonl(
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
+  collect: async (source, range, state = {}, context = {}) => {
+    const result = await collectCaptureJsonl(
       source,
       analyzeAntigravityLines,
-      () => true,
       state,
       range,
       captureEventKey,
@@ -107,6 +108,8 @@ export const antigravityAdapter = Object.freeze({
     );
     return {
       ...result,
+      retentionSafe: result.completeness === "complete",
+      completeness: context.historical ? "partial" : result.completeness,
       nextState: { ...result.nextState, parserVersion: antigravityParserVersion },
     };
   },

@@ -3,8 +3,10 @@
 [![CI](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml/badge.svg)](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/Tah10n/viberacing)](LICENSE)
 
-Vibe Racing is a fast weekly leaderboard for exact, self-reported coding-agent token usage. One
-GitHub user can connect several computers, several agents, and several accounts of the same agent.
+Vibe Racing is a fast period-aware leaderboard for exact, self-reported coding-agent token usage.
+Week, Month, All time, and Custom views all use UTC boundaries; **All time** means January 1 through
+today in the current UTC calendar year, not lifetime usage. One GitHub user can connect several
+computers, several agents, and several accounts of the same agent.
 
 The production shape stays deliberately small: one Next.js service, one PostgreSQL database, and one
 local connector. Usage sync contains only UTC dates and aggregate token counters. A separate,
@@ -22,10 +24,18 @@ scheduler coalesces source events and sends at most about one automatic batch ev
 drains saved payloads first and runs collectors only for currently dirty sources. There is no retry
 loop: one dirty generation gets one automatic attempt, and a later hook or manual sync retries saved
 failures. There is no daemon, watcher, or polling loop. Manual `viberacing sync` and the first
-successful `connect` still collect every active source immediately. The first collection is bounded
-to 31 UTC days, and later JSONL reads resume from safe byte offsets. Automatic hooks suppress an
-unchanged normalized snapshot. Manual and browser-triggered Sync still submit a content-equivalent
-confirmation snapshot so the dashboard's **Last sync** time advances after a successful check.
+successful `connect` still collect every active source immediately. Every sync first refreshes the
+rolling range of at most 31 UTC dates. Connector 0.6.0 then backfills the rest of the current UTC
+year in resumable, newest-first chunks of at most 31 dates: automatic and browser Sync drain bounded
+pending payloads and collect at most one new historical range. `connect` and manual
+`viberacing sync` continue through every eligible chunk. If rolling ranges are separated by an
+offline interval, the server retains the missing UTC dates and protocol v5 returns a resumable gap
+cursor; later Sync drains it with the same limits. Explicit `viberacing sync --full` starts a full
+current-year rescan even after a terminal `complete` or `partial` pass. Acknowledged cursors make
+retries idempotent and survive interruption. Later JSONL reads resume from safe byte offsets.
+Automatic hooks suppress an unchanged normalized rolling snapshot. Manual and browser-triggered Sync
+still submit a content-equivalent rolling confirmation so the dashboard's **Last sync** time
+advances after a successful check.
 
 Codex marks its physical profile dirty after each completed turn. One `CODEX_HOME` can safely track
 up to eight ChatGPT logins: each collection reads local `tokens.account_id` before starting App
@@ -53,12 +63,17 @@ deduplicated fallback, then starts the stable local Vibe Racing launcher without
 It does not read or forward the session ID, prompt, response, code, model, project path, or event
 payload. Manual `viberacing sync` remains available, including when OpenCode is killed before idle.
 
-Connector 0.5.x uses protocol v4 to sequence its allowlisted collector-error state against the last
-server-accepted source snapshot. The server remains wire-compatible with protocol v2 and v3 during
-the rollout. A saved unsequenced v2/v3 collector error is replaced by a fresh v4 observation on its
-next in-scope collection instead of being relabeled as ordered. Account-wide sources are
-automatically matched only after seven complete positive days spanning at least a week, with three
-distinct totals and no complete contradiction; manual reassignment and Undo stay available.
+Connector 0.6.0 uses protocol v5 to distinguish rolling snapshots from bounded current-year history
+chunks and to reconcile each source's `pending`, `complete`, or `partial` backfill status. It keeps
+durable unresolved UTC dates when a partial snapshot omits a day or rolling windows leave a gap, and
+returns the bounded gap to the connector until an acknowledged complete backfill closes it. It keeps
+the v4 sequence rule for allowlisted collector errors. The server remains wire-compatible with
+protocol v2, v3, and v4 during the rollout, so older connectors continue syncing recent usage but do
+not import the current year's earlier dates. A saved unsequenced v2/v3 collector error is replaced
+by a fresh ordered observation on its next in-scope collection instead of being relabeled.
+Account-wide sources are automatically matched only after seven complete positive days spanning at
+least a week, with three distinct totals and no complete contradiction; manual reassignment and Undo
+stay available.
 
 Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
 Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still

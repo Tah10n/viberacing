@@ -41,6 +41,7 @@ async function post(request: Request): Promise<Response> {
         WHERE source_id IN (SELECT id FROM installation_sources WHERE user_id = $1)`,
       [current.id],
     );
+    await client.query("DELETE FROM daily_agent_usage WHERE user_id = $1", [current.id]);
     await client.query("DELETE FROM weekly_agent_usage WHERE user_id = $1", [current.id]);
   });
   return NextResponse.redirect(new URL("/dashboard?left=1", publicOrigin()), 303);

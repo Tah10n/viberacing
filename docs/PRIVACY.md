@@ -20,12 +20,16 @@ a safe protocol downgrade or handler removal discovered from the OS registration
 an installed update from the version of a newer `npx` process. Legacy connectors may omit these
 reports. During sync it sends a server source ID, sequence, UTC range, snapshot status, UTC dates,
 aggregate total tokens, and optional aggregate input/output/cache/reasoning counters. Protocol v3+
-may also mark an individual UTC date complete or partial; the server still accepts v2 payloads that
-carry only snapshot-level status. If collection fails, protocol v4 may instead send only the fixed
-`collector_failed` code, source ID, and the last server-accepted sequence known before collection.
-That ordering value is an opaque canonical counter, not local content. Delayed errors are ignored;
-legacy v2/v3 errors are accepted but cannot overwrite persistent status. Exception messages are
-never sent.
+may also mark an individual UTC date complete or partial. Protocol v5 adds only a fixed rolling or
+current-year-history kind and, on the final January chunk, a fixed `complete` or `partial` year
+status. Responses may add only nullable UTC start/end bounds for a durable missing-date gap. The
+resumable year, next range end, partial bit, and isolated adapter checkpoint stay in owner-only
+local state; the server stores only aggregate unresolved UTC dates, and no filename, provider
+identity, or content is added. The server still accepts v2-v4 payloads. If collection fails, v4+ may
+instead send only the fixed `collector_failed` code, source ID, and the last server-accepted
+sequence known before collection. That ordering value is an opaque canonical counter, not local
+content. Delayed errors are ignored; legacy v2/v3 errors are accepted but cannot overwrite
+persistent status. Exception messages are never sent.
 
 Operational diagnostics use a separate authenticated endpoint and never change whether a usage
 snapshot is accepted. A diagnostic request contains only schema and connector versions plus up to 32
@@ -45,15 +49,15 @@ lost, the connector may retry the same allowlisted transition. This can duplicat
 structured event and does not add raw diagnostic data. The original `collector_failed` source error
 remains in usage sync for dashboard compatibility.
 
-For account-wide agents, the server may compare already stored complete daily totals from the last
-30 finished UTC days. Seven exact nonzero days spanning at least a week and containing three
-distinct positive totals, with no conflicting complete overlap, can automatically map two computer
-sources to one logical account. Partial and zero days are not evidence. The decision stores opaque
-source/account IDs and the number of matching days, not the daily values themselves, and can be
-undone from the dashboard. No email, username, account ID from the provider, or derived email
-fingerprint is used. The source also retains the timestamp of an automatic match or later explicit
-reassignment, preventing a background match from overriding that decision after temporary Undo
-metadata is cleaned up.
+For account-wide agents, the server may compare already stored complete daily totals from the
+current UTC year plus the prior-year part of the rolling 30-day boundary. Seven exact nonzero days
+spanning at least a week and containing three distinct positive totals, with no conflicting complete
+overlap, can automatically map two computer sources to one logical account. Partial and zero days
+are not evidence. The decision stores opaque source/account IDs and the number of matching days, not
+the daily values themselves, and can be undone from the dashboard. No email, username, account ID
+from the provider, or derived email fingerprint is used. The source also retains the timestamp of an
+automatic match or later explicit reassignment, preventing a background match from overriding that
+decision after temporary Undo metadata is cleaned up.
 
 It never sends prompts, responses, transcript content, code, tool arguments, repository names, local
 paths, hostnames, provider emails/usernames, provider credentials, API keys, model names, costs, or
@@ -70,11 +74,15 @@ authoritative correction marker rather than an inferred usage value. No zero is 
 incomplete result or beyond the proven range. These remain date-level aggregate counters; it never
 retains or transmits any other transcript field. The Antigravity wrapper passes native output
 through to the terminal and persists only the stable event ID, UTC date, and exact token counters
-needed for deduplication. Capture records older than 35 days are removed after a successful sync and
-large files are rewritten atomically with the same allowlist. `source add` requires an explicit
-label and never derives network metadata from the local data-root path. Each capture profile is
-keyed by its random client source ID, not an account label, provider identity, or agent name.
-Multiple Antigravity accounts therefore remain in separate local files.
+needed for deduplication. Capture records older than 35 days are removed only when their exact
+capture prefix, byte boundary, and date range are bound to an acknowledged payload and revalidated
+under the capture lock; public Antigravity history can still remain partial. Appended or malformed
+suffixes, changed prefixes, replaced/truncated files, and unsafe collections retain the capture for
+repair. Acknowledged cleanup repeats after later successful Sync, is retried after a crash, and is
+best-effort per source. Large files are rewritten atomically with the same allowlist. `source add`
+requires an explicit label and never derives network metadata from the local data-root path. Each
+capture profile is keyed by its random client source ID, not an account label, provider identity, or
+agent name. Multiple Antigravity accounts therefore remain in separate local files.
 
 For Codex ChatGPT logins, the connector reads the size-bounded, non-symlinked `CODEX_HOME/auth.json`
 before starting App Server, retains only `tokens.account_id`, brackets usage with two
@@ -103,11 +111,12 @@ before implementation.
 Claude, OpenCode, Kimi, Qwen, Gemini, and captured Antigravity contribute to a local observed-event
 ledger containing only a SHA-256 event key, UTC date, exact aggregate token tuple, and parser
 version. Raw provider IDs, filenames, models, and record bodies are not retained. Ledger entries are
-limited to the 31-day ingestion range and bounded by count and serialized bytes. They intentionally
-survive file deletion, movement, copying, and current-database cleanup so already observed usage is
-not silently subtracted; duplicate copies collapse to the same hash. If one identity appears with a
-different tuple, the original tuple wins and only the allowlisted `local_event_identity_conflict`
-diagnostic is emitted.
+limited to the requested rolling or historical range and bounded by count and serialized bytes;
+historical state is isolated from rolling incremental state. Entries intentionally survive file
+deletion, movement, copying, and current-database cleanup within the retained range so already
+observed usage is not silently subtracted; duplicate copies collapse to the same hash. If one
+identity appears with a different tuple, the original tuple wins and only the allowlisted
+`local_event_identity_conflict` diagnostic is emitted.
 
 Qwen `.env` files are parsed locally for its two routing variables and names explicitly referenced
 by `advanced.runtimeOutputDir`. Unreferenced values are discarded immediately; no environment value
@@ -135,10 +144,11 @@ current handle and is not stored. Browser, installation, poll, and device secret
 in PostgreSQL. Local Vibe Racing directories are owner-only; secrets/config files are `0600` and the
 installed executable is `0700`.
 
-Public pages expose GitHub handle, current UTC-week rank, total, and agent breakdown. They do not
-expose daily data, account labels, source/installation details, or credentials. Local data is under
-the user's control, so the leaderboard is explicitly self-reported and grants no authorization,
-reward, or access.
+Public pages expose GitHub handle, selected UTC-period rank, total, and agent breakdown. Week,
+Month, current-year All time, and current-year Custom views all read aggregate daily summaries; they
+do not expose daily source data, account labels, source/installation details, or credentials. Local
+data is under the user's control, so the leaderboard is explicitly self-reported and grants no
+authorization, reward, or access.
 
 Browser sync stores only an installation capability, independently hashed five-minute grants, an
 opaque request ID, a closed account/installation scope, an optional opaque account ID for

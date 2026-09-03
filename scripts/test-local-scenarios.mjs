@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
+import { adapterFor } from "../packages/connector/lib/readers.mjs";
 
 const requireFromWeb = createRequire(new URL("../apps/web/package.json", import.meta.url));
 const pg = requireFromWeb("pg");
@@ -11,7 +13,7 @@ const appUrl = process.env.VIBERACING_TEST_ORIGIN ?? "http://127.0.0.1:3000";
 const browserOrigin = new URL(process.env.VIBERACING_PUBLIC_ORIGIN ?? "http://localhost:3000")
   .origin;
 const pool = new Pool({ connectionString: databaseUrl, max: 4 });
-const connectorProtocolVersion = 4;
+const connectorProtocolVersion = 5;
 const legacyConnectorProtocolVersion = 2;
 const legacyConnectorProtocolVersion3 = 3;
 const digest = (value) => createHash("sha256").update(value, "utf8").digest();
@@ -20,6 +22,8 @@ const check = (condition, message) => {
   if (!condition) throw new Error(message);
 };
 const today = new Date().toISOString().slice(0, 10);
+const currentUtcYear = new Date(`${today}T00:00:00Z`).getUTCFullYear();
+const januaryFirst = `${currentUtcYear}-01-01`;
 const dateOffset = (days) => {
   const date = new Date(`${today}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -40,6 +44,495 @@ const githubId = 800_000_000_000_000_000n + BigInt(`0x${randomBytes(7).toString(
 const trustedProxyScenario = process.env.VIBERACING_TEST_TRUSTED_PROXY === "true";
 let userId;
 let pairingClientSequence = 0;
+
+async function verifyExpandMigrationCompatibility() {
+  const client = await pool.connect();
+  const schema = `migration_010_${randomBytes(6).toString("hex")}`;
+  try {
+    await client.query("BEGIN");
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    for (let index = 1; index <= 9; index += 1) {
+      const prefix = String(index).padStart(3, "0");
+      const migrations = [
+        "001_initial.sql",
+        "002_account_deduplication.sql",
+        "003_browser_sync.sql",
+        "004_browser_sync_rate_guard.sql",
+        "005_browser_sync_protocol.sql",
+        "006_account_switch_sources.sql",
+        "007_account_switch_safety.sql",
+        "008_account_dedup_notice_dismissal.sql",
+        "009_codex_hook_notice.sql",
+      ];
+      const migration = migrations[index - 1];
+      check(migration?.startsWith(prefix), "migration compatibility fixture is out of order");
+      await client.query(
+        await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
+      );
+    }
+    const compatibilityUser = await client.query(
+      "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+      [
+        `9${randomBytes(8).readBigUInt64BE().toString().slice(0, 17)}`,
+        `compat-${randomBytes(4).toString("hex")}`,
+      ],
+    );
+    const compatibilityUserId = compatibilityUser.rows[0].id;
+    const installationId = randomUUID();
+    const accountId = randomUUID();
+    const sourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Old release', 'active', $3, $4, '0.5.0', 4)`,
+      [installationId, compatibilityUserId, digest(token()), digest(token())],
+    );
+    await client.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+       VALUES ($1, $2, 'codex', 'Old Codex', 'account_max')`,
+      [accountId, compatibilityUserId],
+    );
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status,
+          last_successful_sync_at, last_completeness)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old Codex', 'codex_app_server', 'cli',
+               'disconnected', CURRENT_DATE, 'partial')`,
+      [sourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    const usageDate = "2026-08-31";
+    const weekStart = "2026-08-31";
+    await client.query(
+      `INSERT INTO daily_usage (source_id, usage_date, total_tokens, completeness)
+       VALUES ($1, $2, 40, 'complete')`,
+      [sourceId, usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       VALUES ($1, $2, 'codex', 40)`,
+      [weekStart, compatibilityUserId],
+    );
+
+    await client.query(
+      await readFile(
+        new URL("../apps/web/database/010_current_year_history.sql", import.meta.url),
+        "utf8",
+      ),
+    );
+    const legacyCoverage = await client.query(
+      `SELECT last_rolling_range_start::text AS range_start,
+              last_rolling_range_end::text AS range_end,
+              $2::date = ANY(unresolved_usage_dates) AS complete_day_unresolved,
+              CURRENT_DATE = ANY(unresolved_usage_dates) AS current_day_unresolved
+         FROM installation_sources
+        WHERE id = $1`,
+      [sourceId, usageDate],
+    );
+    check(
+      legacyCoverage.rows[0]?.range_start !== null &&
+        legacyCoverage.rows[0]?.range_end === today &&
+        legacyCoverage.rows[0]?.complete_day_unresolved === false &&
+        legacyCoverage.rows[0]?.current_day_unresolved === (usageDate !== today),
+      "migration 010 trusted legacy disconnected partial coverage as no-data",
+    );
+
+    const durableGapDate = dateOffset(-45);
+    check(
+      durableGapDate >= januaryFirst && durableGapDate < dateOffset(-30),
+      "migration compatibility fixture needs a current-year date before the rolling window",
+    );
+    const nativeSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Native Codex',
+               'codex_app_server', 'cli', 'active')`,
+      [nativeSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'on', true)");
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial',
+              last_rolling_range_start = CURRENT_DATE - 30,
+              last_rolling_range_end = CURRENT_DATE,
+              unresolved_usage_dates = ARRAY[$2::date],
+              history_backfill_status = 'complete',
+              history_backfill_completed_at = now()
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'off', true)");
+
+    await client.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      nativeSourceId,
+    ]);
+    let nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during disconnect",
+    );
+
+    await client.query(
+      `UPDATE installation_sources
+          SET status = 'active',
+              last_warning_summary = 'diagnostic unchanged coverage',
+              agent_account_id = $2
+        WHERE id = $1`,
+      [nativeSourceId, accountId],
+    );
+    nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during diagnostics/account mapping",
+    );
+
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'on', true)");
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial',
+              last_rolling_range_start = CURRENT_DATE - 30,
+              last_rolling_range_end = CURRENT_DATE,
+              unresolved_usage_dates = unresolved_usage_dates
+        WHERE id = $1`,
+      [nativeSourceId],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'off', true)");
+    nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during an identical partial snapshot",
+    );
+
+    const postMigrationPartialSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old post-migration Codex',
+               'codex_app_server', 'cli', 'active')`,
+      [postMigrationPartialSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    await client.query(
+      `UPDATE installation_sources
+          SET unresolved_usage_dates = ARRAY[$2::date]
+        WHERE id = $1`,
+      [postMigrationPartialSourceId, durableGapDate],
+    );
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial'
+        WHERE id = $1`,
+      [postMigrationPartialSourceId],
+    );
+    await client.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      postMigrationPartialSourceId,
+    ]);
+    const postMigrationCoverage = await client.query(
+      `SELECT status,
+              last_rolling_range_start::text AS range_start,
+              last_rolling_range_end::text AS range_end,
+              $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved,
+              cardinality(unresolved_usage_dates) AS unresolved_days,
+              (last_rolling_range_end - last_rolling_range_start + 1) AS covered_days
+         FROM installation_sources
+        WHERE id = $1`,
+      [postMigrationPartialSourceId, durableGapDate],
+    );
+    check(
+      postMigrationCoverage.rows[0]?.status === "disconnected" &&
+        postMigrationCoverage.rows[0]?.range_end === today &&
+        postMigrationCoverage.rows[0]?.durable_gap_preserved === true &&
+        postMigrationCoverage.rows[0]?.unresolved_days ===
+          postMigrationCoverage.rows[0]?.covered_days + 1,
+      "migration 010 lost a post-migration old-release partial/disconnect write",
+    );
+
+    const priorYearPartialSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status,
+          last_successful_sync_at, last_completeness)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Old prior-year Codex',
+               'codex_app_server', 'cli', 'disconnected',
+               date_trunc('year', CURRENT_DATE) - interval '1 day', 'partial')`,
+      [priorYearPartialSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    const priorYearCoverage = await client.query(
+      `SELECT last_rolling_range_start, last_rolling_range_end,
+              cardinality(unresolved_usage_dates) AS unresolved_days
+         FROM installation_sources
+        WHERE id = $1`,
+      [priorYearPartialSourceId],
+    );
+    check(
+      priorYearCoverage.rows[0]?.last_rolling_range_start === null &&
+        priorYearCoverage.rows[0]?.last_rolling_range_end === null &&
+        priorYearCoverage.rows[0]?.unresolved_days === 0,
+      "migration 010 marked a prior-year disconnected partial source as current-year partial",
+    );
+    const oldRead = await client.query(
+      `SELECT coalesce(sum(tokens), 0)::text AS tokens
+         FROM weekly_agent_usage
+        WHERE user_id = $1 AND week_start = $2`,
+      [compatibilityUserId, weekStart],
+    );
+    check(oldRead.rows[0]?.tokens === "40", "migration 010 broke the main-era weekly read");
+
+    await client.query(
+      "UPDATE daily_usage SET total_tokens = 25, updated_at = now() WHERE source_id = $1 AND usage_date = $2",
+      [sourceId, usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       SELECT $1::date, $2, 'codex', sum(total_tokens)
+         FROM daily_usage
+        WHERE source_id = $3 AND usage_date >= $1::date AND usage_date < $1::date + 7
+       ON CONFLICT (week_start, user_id, agent_id) DO UPDATE
+         SET tokens = EXCLUDED.tokens, updated_at = now()`,
+      [weekStart, compatibilityUserId, sourceId],
+    );
+    const compatibleTotals = await client.query(
+      `SELECT
+         (SELECT tokens::text FROM weekly_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex' AND week_start = $2) AS weekly_tokens,
+         (SELECT coalesce(sum(tokens), 0)::text FROM daily_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex'
+             AND usage_date >= $2::date AND usage_date < $2::date + 7) AS daily_tokens`,
+      [compatibilityUserId, weekStart],
+    );
+    check(
+      compatibleTotals.rows[0]?.weekly_tokens === "25" &&
+        compatibleTotals.rows[0]?.daily_tokens === "25",
+      "migration 010 did not mirror a main-era weekly write into the daily summary",
+    );
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
+  }
+
+  await verifyMigrationWriteInterleaving("before_lock");
+  await verifyMigrationWriteInterleaving("after_lock");
+}
+
+const compatibilityMigrations = [
+  "001_initial.sql",
+  "002_account_deduplication.sql",
+  "003_browser_sync.sql",
+  "004_browser_sync_rate_guard.sql",
+  "005_browser_sync_protocol.sql",
+  "006_account_switch_sources.sql",
+  "007_account_switch_safety.sql",
+  "008_account_dedup_notice_dismissal.sql",
+  "009_codex_hook_notice.sql",
+];
+
+async function migrationCompatibilityFixture(schema) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`CREATE SCHEMA ${schema}`);
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    for (const migration of compatibilityMigrations)
+      await client.query(
+        await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
+      );
+    const user = await client.query(
+      "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+      [
+        `9${randomBytes(8).readBigUInt64BE().toString().slice(0, 17)}`,
+        `race-${randomBytes(4).toString("hex")}`,
+      ],
+    );
+    const fixture = {
+      userId: user.rows[0].id,
+      installationId: randomUUID(),
+      accountId: randomUUID(),
+      sourceId: randomUUID(),
+      usageDate: "2026-08-31",
+      weekStart: "2026-08-31",
+    };
+    await client.query(
+      `INSERT INTO installations
+         (id, user_id, name, status, installation_secret_hash, device_token_hash,
+          connector_version, protocol_version)
+       VALUES ($1, $2, 'Racing old release', 'active', $3, $4, '0.5.0', 4)`,
+      [fixture.installationId, fixture.userId, digest(token()), digest(token())],
+    );
+    await client.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+       VALUES ($1, $2, 'codex', 'Racing Codex', 'account_max')`,
+      [fixture.accountId, fixture.userId],
+    );
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Racing Codex', 'codex_app_server', 'cli', 'active')`,
+      [fixture.sourceId, fixture.installationId, fixture.userId, fixture.accountId, randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO daily_usage (source_id, usage_date, total_tokens, completeness)
+       VALUES ($1, $2, 40, 'complete')`,
+      [fixture.sourceId, fixture.usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       VALUES ($1, $2, 'codex', 40)`,
+      [fixture.weekStart, fixture.userId],
+    );
+    await client.query("COMMIT");
+    return fixture;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function waitForDatabaseWait(observer, applicationName, predicate, label) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const activity = await observer.query(
+      `SELECT wait_event_type, wait_event
+         FROM pg_stat_activity
+        WHERE application_name = $1 AND state = 'active'`,
+      [applicationName],
+    );
+    if (activity.rows.some(predicate)) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`timed out waiting for controlled migration point: ${label}`);
+}
+
+async function oldReleaseWrite(client, schema, fixture, applicationName) {
+  await client.query("SELECT set_config('application_name', $1, false)", [applicationName]);
+  await client.query("BEGIN");
+  try {
+    await client.query(`SET LOCAL search_path TO ${schema}`);
+    await client.query(
+      `UPDATE daily_usage SET total_tokens = 73, updated_at = now()
+        WHERE source_id = $1 AND usage_date = $2`,
+      [fixture.sourceId, fixture.usageDate],
+    );
+    await client.query(
+      `INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens)
+       SELECT $1::date, $2, 'codex', sum(total_tokens)
+         FROM daily_usage
+        WHERE source_id = $3 AND usage_date >= $1::date AND usage_date < $1::date + 7
+       ON CONFLICT (week_start, user_id, agent_id) DO UPDATE
+         SET tokens = EXCLUDED.tokens, updated_at = now()`,
+      [fixture.weekStart, fixture.userId, fixture.sourceId],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  }
+}
+
+async function verifyMigrationWriteInterleaving(position) {
+  const schema = `migration_010_race_${randomBytes(6).toString("hex")}`;
+  const fixture = await migrationCompatibilityFixture(schema);
+  const [migrationClient, writer, control, observer] = await Promise.all([
+    pool.connect(),
+    pool.connect(),
+    pool.connect(),
+    pool.connect(),
+  ]);
+  const lockKey = randomBytes(4).readUInt32BE() & 0x7fffffff;
+  const migrationName = `migration-${position}-${randomBytes(3).toString("hex")}`;
+  const writerName = `writer-${position}-${randomBytes(3).toString("hex")}`;
+  try {
+    await control.query("SELECT pg_advisory_lock($1)", [lockKey]);
+    const rawMigration = await readFile(
+      new URL("../apps/web/database/010_current_year_history.sql", import.meta.url),
+      "utf8",
+    );
+    const marker =
+      position === "before_lock"
+        ? "-- Compatibility lock boundary:"
+        : "-- Final authoritative backfill begins";
+    check(rawMigration.includes(marker), `migration interleaving marker missing: ${position}`);
+    const controlledMigration = rawMigration.replace(
+      marker,
+      `SELECT pg_advisory_xact_lock(${lockKey});\n${marker}`,
+    );
+    await migrationClient.query("SELECT set_config('application_name', $1, false)", [
+      migrationName,
+    ]);
+    await migrationClient.query("BEGIN");
+    await migrationClient.query(`SET LOCAL search_path TO ${schema}`);
+    const migrationPromise = migrationClient
+      .query(controlledMigration)
+      .then(() => migrationClient.query("COMMIT"));
+    await waitForDatabaseWait(
+      observer,
+      migrationName,
+      (row) => row.wait_event_type === "Lock" && row.wait_event === "advisory",
+      `${position} migration advisory lock`,
+    );
+
+    const writePromise = oldReleaseWrite(writer, schema, fixture, writerName);
+    if (position === "before_lock") await writePromise;
+    else
+      await waitForDatabaseWait(
+        observer,
+        writerName,
+        (row) => row.wait_event_type === "Lock",
+        "old writer blocked behind compatibility lock",
+      );
+    await control.query("SELECT pg_advisory_unlock($1)", [lockKey]);
+    await migrationPromise;
+    await writePromise;
+
+    const totals = await observer.query(
+      `SELECT
+         (SELECT tokens::text FROM ${schema}.weekly_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex' AND week_start = $2) AS weekly_tokens,
+         (SELECT coalesce(sum(tokens), 0)::text FROM ${schema}.daily_agent_usage
+           WHERE user_id = $1 AND agent_id = 'codex'
+             AND usage_date >= $2::date AND usage_date < $2::date + 7) AS daily_tokens`,
+      [fixture.userId, fixture.weekStart],
+    );
+    check(
+      totals.rows[0]?.weekly_tokens === "73" && totals.rows[0]?.daily_tokens === "73",
+      `${position} migration interleaving lost an old-release write: ${JSON.stringify(totals.rows[0])}`,
+    );
+  } finally {
+    await control.query("SELECT pg_advisory_unlock($1)", [lockKey]).catch(() => {});
+    await migrationClient.query("ROLLBACK").catch(() => {});
+    await writer.query("ROLLBACK").catch(() => {});
+    await observer.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`).catch(() => {});
+    migrationClient.release();
+    writer.release();
+    control.release();
+    observer.release();
+  }
+}
 
 function syntheticEdgeHeader(address) {
   return trustedProxyScenario ? { "x-real-ip": address } : {};
@@ -209,9 +702,12 @@ async function usage(
   sourceErrors = [],
   protocolVersion = connectorProtocolVersion,
 ) {
+  const wireSnapshots = snapshots.map((item) =>
+    protocolVersion >= 5 && item.kind === undefined ? { ...item, kind: "rolling" } : item,
+  );
   return json(
     "/api/usage",
-    { protocolVersion, snapshots, sourceErrors },
+    { protocolVersion, snapshots: wireSnapshots, sourceErrors },
     { authorization: `Bearer ${deviceToken}` },
   );
 }
@@ -222,7 +718,12 @@ function rawUsage(
   sourceErrors = [],
   protocolVersion = connectorProtocolVersion,
 ) {
-  const payload = Buffer.from(JSON.stringify({ protocolVersion, snapshots, sourceErrors }));
+  const wireSnapshots = snapshots.map((item) =>
+    protocolVersion >= 5 && item.kind === undefined ? { ...item, kind: "rolling" } : item,
+  );
+  const payload = Buffer.from(
+    JSON.stringify({ protocolVersion, snapshots: wireSnapshots, sourceErrors }),
+  );
   const target = new URL("/api/usage", appUrl);
   return new Promise((resolve, reject) => {
     const request = httpRequest(
@@ -273,7 +774,85 @@ function snapshot(
   };
 }
 
+function currentYearHistorySnapshot(sourceId, sequence, entries, completeness = "complete") {
+  return {
+    ...snapshot(
+      sourceId,
+      sequence,
+      entries,
+      completeness,
+      januaryFirst,
+      entries.at(-1)?.[0] ?? januaryFirst,
+    ),
+    kind: "year_backfill",
+    historyYearComplete: completeness,
+  };
+}
+
+async function syntheticCodexHistoricalCollection(entries, account = "synthetic-history") {
+  const rangeEnd = entries.at(-1)?.[0] ?? januaryFirst;
+  const responses = [
+    {
+      id: 1,
+      result: {
+        account: { type: "chatgpt", email: `${account}@example.com`, planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+    {
+      id: 2,
+      result: {
+        dailyUsageBuckets: entries.map(([date, totalTokens]) => ({
+          startDate: date,
+          tokens: String(totalTokens),
+        })),
+      },
+    },
+    {
+      id: 3,
+      result: {
+        account: { type: "chatgpt", email: `${account}@example.com`, planType: "pro" },
+        requiresOpenaiAuth: false,
+      },
+    },
+  ][Symbol.iterator]();
+  return adapterFor("codex").collect(
+    {},
+    { rangeStart: januaryFirst, rangeEnd },
+    {},
+    {
+      historical: true,
+      suppressComponents: true,
+      providerIdentitySalt: "local-provider-identity-salt-that-is-long-enough",
+      readCodexAuthIdentity: async () => [["account", account]],
+      withCodexAppServer: async (_source, callback) =>
+        callback({
+          next: async () => ({ value: undefined, done: false, ...responses.next().value }),
+          write: () => {},
+        }),
+    },
+  );
+}
+
+function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
+  return {
+    sourceId,
+    syncSequence: String(sequence),
+    rangeStart: januaryFirst,
+    rangeEnd: collected.entries.at(-1)?.date ?? januaryFirst,
+    completeness: collected.completeness,
+    entries: collected.entries,
+    kind: "year_backfill",
+    historyYearComplete: "partial",
+  };
+}
+
 try {
+  await verifyExpandMigrationCompatibility();
+  console.log(
+    "ok - migration 010 preserves sequential and two-session before/after-lock old-version writes",
+  );
+
   const inserted = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
     [githubId.toString(), handle],
@@ -289,6 +868,33 @@ try {
   );
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
+
+  const legacyWeeklyTable = await pool.query(
+    "SELECT to_regclass('public.weekly_agent_usage')::text AS relation",
+  );
+  check(
+    legacyWeeklyTable.rows[0]?.relation === "weekly_agent_usage",
+    "migration 010 did not retain the legacy weekly table for rollout compatibility",
+  );
+  console.log("ok - migration 010 retains the temporary weekly compatibility summary");
+
+  const wideAggregateUser = await pool.query(
+    "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
+    [(githubId + 1n).toString(), `${handle}-wide`],
+  );
+  const wideAggregate = await pool.query(
+    `INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+     SELECT $1::date, $2, 'codex', sum(value)
+       FROM (VALUES ($3::numeric), ($3::numeric)) totals(value)
+     RETURNING tokens::text`,
+    [today, wideAggregateUser.rows[0].id, "999999999999999999999999999999"],
+  );
+  check(
+    wideAggregate.rows[0]?.tokens === "1999999999999999999999999999998",
+    "daily agent aggregate lost precision above 30 digits",
+  );
+  await pool.query("DELETE FROM users WHERE id = $1", [wideAggregateUser.rows[0].id]);
+  console.log("ok - daily agent aggregates support more than 30 digits");
 
   const legacyInstallation = { id: randomUUID(), secret: token() };
   const legacy = await pair(
@@ -314,16 +920,7 @@ try {
   );
   check(
     upgradedLegacy.deviceToken !== legacy.deviceToken,
-    "v2 installation did not renegotiate protocol v4 during reconnect",
-  );
-  const legacyCleanup = await form("/api/accounts/delete", {
-    accountId: legacySource.agentAccountId,
-    confirm: "delete",
-  });
-  check(legacyCleanup.status === 303, "legacy v2 account cleanup failed");
-  await pool.query("DELETE FROM installations WHERE id = $1", [legacyInstallation.id]);
-  await pool.query(
-    "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'pairing_approve_user', 'pairing_approve_global')",
+    "v2 installation did not renegotiate protocol v5 during reconnect",
   );
   const legacyV3Installation = { id: randomUUID(), secret: token() };
   const legacyV3 = await pair(
@@ -353,6 +950,112 @@ try {
   check(legacyV3Cleanup.status === 303, "legacy v3 account cleanup failed");
   await pool.query("DELETE FROM installations WHERE id = $1", [legacyV3Installation.id]);
   console.log("ok - legacy protocol v2/v3 pairing and usage remain compatible");
+
+  const historyPairing = upgradedLegacy;
+  const historySource = historyPairing.sources[0];
+  check(
+    historySource?.historyBackfillYear === currentUtcYear &&
+      historySource.historyBackfillStatus === "pending",
+    "protocol v5 pairing omitted current-year history state",
+  );
+  check(
+    (
+      await usage(historyPairing.deviceToken, [
+        snapshot(historySource.sourceId, 2, [[today, 100]], "complete", today, today),
+      ])
+    ).status === 200,
+    "protocol v5 rolling baseline was rejected",
+  );
+  const partialHistorySnapshot = {
+    ...snapshot(
+      historySource.sourceId,
+      3,
+      [[januaryFirst, 20]],
+      "partial",
+      januaryFirst,
+      januaryFirst,
+    ),
+    kind: "year_backfill",
+    historyYearComplete: "partial",
+  };
+  check(
+    (await usage(historyPairing.deviceToken, [partialHistorySnapshot])).status === 200,
+    "protocol v5 January history chunk was rejected",
+  );
+  let historyState = await pool.query(
+    `SELECT history_backfill_year,
+            history_backfill_status,
+            last_completeness,
+            (SELECT tokens::text FROM daily_agent_usage
+              WHERE user_id = source.user_id
+                AND agent_id = source.agent_id
+                AND usage_date = $2::date) AS january_tokens
+       FROM installation_sources source
+      WHERE id = $1`,
+    [historySource.sourceId, januaryFirst],
+  );
+  check(
+    historyState.rows[0]?.history_backfill_year === currentUtcYear &&
+      historyState.rows[0]?.history_backfill_status === "partial" &&
+      historyState.rows[0]?.last_completeness === "complete" &&
+      historyState.rows[0]?.january_tokens === "20",
+    `historical partial state corrupted rolling completeness: ${JSON.stringify(historyState.rows[0])}`,
+  );
+  check(
+    (
+      await usage(historyPairing.deviceToken, [
+        {
+          ...snapshot(
+            historySource.sourceId,
+            4,
+            [[januaryFirst, 15]],
+            "complete",
+            januaryFirst,
+            januaryFirst,
+          ),
+          kind: "year_backfill",
+          historyYearComplete: "complete",
+        },
+      ])
+    ).status === 200,
+    "complete historical correction was rejected",
+  );
+  historyState = await pool.query(
+    `SELECT history_backfill_status,
+            last_completeness,
+            (SELECT tokens::text FROM daily_agent_usage
+              WHERE user_id = source.user_id
+                AND agent_id = source.agent_id
+                AND usage_date = $2::date) AS january_tokens
+       FROM installation_sources source
+      WHERE id = $1`,
+    [historySource.sourceId, januaryFirst],
+  );
+  check(
+    historyState.rows[0]?.history_backfill_status === "complete" &&
+      historyState.rows[0]?.last_completeness === "complete" &&
+      historyState.rows[0]?.january_tokens === "15",
+    `complete history did not correct the daily summary down: ${JSON.stringify(historyState.rows[0])}`,
+  );
+  const v4TooOld = await usage(
+    historyPairing.deviceToken,
+    [snapshot(historySource.sourceId, 5, [[tooOld, 1]], "complete", tooOld, tooOld)],
+    [],
+    4,
+  );
+  check(v4TooOld.status === 400, "protocol v4 accepted a date outside its rolling window");
+  const legacyCleanup = await form("/api/accounts/delete", {
+    accountId: historySource.agentAccountId,
+    confirm: "delete",
+  });
+  check(legacyCleanup.status === 303, "legacy v2/current-year history account cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [legacyInstallation.id]);
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_approve_pre_auth', 'pairing_approve_user', 'pairing_approve_global')",
+  );
+  console.log(
+    "ok - protocol v5 imports January, stores terminal status, preserves rolling completeness, and corrects daily summaries",
+  );
 
   if (!trustedProxyScenario) {
     const directInstallation = { id: randomUUID(), secret: token() };
@@ -690,7 +1393,7 @@ try {
     "equal-timestamp account_max observations in one request were not deterministic",
   );
   const totals = await pool.query(
-    "SELECT agent_id, tokens::text FROM weekly_agent_usage WHERE user_id = $1 ORDER BY agent_id",
+    "SELECT agent_id, sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 GROUP BY agent_id ORDER BY agent_id",
     [userId],
   );
   check(
@@ -709,7 +1412,7 @@ try {
   let componentDashboard = await authenticatedGet("/dashboard");
   let componentDashboardHtml = await componentDashboard.text();
   let componentBreakdownCount = (
-    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+    componentDashboardHtml.match(/aria-label="Token breakdown for selected period"/g) ?? []
   ).length;
   let independentComponentNoteCount = (
     componentDashboardHtml.match(/Local component counters total/g) ?? []
@@ -758,7 +1461,7 @@ try {
   componentDashboard = await authenticatedGet("/dashboard");
   componentDashboardHtml = await componentDashboard.text();
   componentBreakdownCount = (
-    componentDashboardHtml.match(/aria-label="Weekly token breakdown"/g) ?? []
+    componentDashboardHtml.match(/aria-label="Token breakdown for selected period"/g) ?? []
   ).length;
   check(
     componentDashboard.status === 200 && componentBreakdownCount === 2,
@@ -778,7 +1481,7 @@ try {
   );
   const currentCodexTotal = async () => {
     const result = await pool.query(
-      "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+      "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
       [userId],
     );
     return BigInt(result.rows[0].tokens);
@@ -846,25 +1549,31 @@ try {
   );
   const currentWeekTotal = await pool.query(
     `SELECT coalesce(sum(tokens), 0)::text AS tokens
-       FROM weekly_agent_usage
+       FROM daily_agent_usage
       WHERE user_id = $1
-        AND week_start = date_trunc('week', $2::date)::date`,
+        AND usage_date >= date_trunc('week', $2::date)::date
+        AND usage_date < date_trunc('week', $2::date)::date + 7`,
     [userId, today],
   );
   const todayLabel = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    month: "long",
     day: "numeric",
+    month: "long",
     timeZone: "UTC",
+    year: "numeric",
   }).format(new Date(`${today}T00:00:00.000Z`));
+  const todayRowStart = precedenceDashboardHtml.indexOf(`<td>${todayLabel}</td>`);
+  const todayRowEnd = precedenceDashboardHtml.indexOf("</tr>", todayRowStart);
+  const todayRowHtml = precedenceDashboardHtml.slice(todayRowStart, todayRowEnd);
   check(
     precedenceDashboard.status === 200 &&
       precedenceAccountStart >= 0 &&
       precedenceAccountEnd > precedenceAccountStart &&
       /90(?:<!-- -->)? tokens/.test(precedenceAccountHtml) &&
-      !precedenceAccountHtml.includes('aria-label="Weekly token breakdown"') &&
-      precedenceDashboardHtml.includes(`${todayLabel}: ${currentWeekTotal.rows[0].tokens} tokens`),
-    "dashboard account total, components, chart, and weekly summary diverged on precedence",
+      !precedenceAccountHtml.includes('aria-label="Token breakdown for selected period"') &&
+      todayRowStart >= 0 &&
+      todayRowEnd > todayRowStart &&
+      todayRowHtml.includes(`<td>${currentWeekTotal.rows[0].tokens}</td>`),
+    "dashboard account total, components, chart, and daily summary diverged on precedence",
   );
   let precedenceRestore = await usage(second.deviceToken, [
     snapshot(precedenceSecondSource.sourceId, 7, [[today, 80]], "complete", today, today),
@@ -966,7 +1675,7 @@ try {
   );
   check(
     authoritativeZeroCodexTotal === precedenceBaselineTokens + 65n,
-    `authoritative-zero weekly summary mismatch: expected ${precedenceBaselineTokens + 65n}, received ${authoritativeZeroCodexTotal}`,
+    `authoritative-zero daily summary mismatch: expected ${precedenceBaselineTokens + 65n}, received ${authoritativeZeroCodexTotal}`,
   );
   check(
     authoritativeZeroDashboard.status === 200 &&
@@ -976,7 +1685,15 @@ try {
     "authoritative-zero dashboard weekly account total diverged from the fixture",
   );
   check(
-    authoritativeZeroHtml.includes(`${todayLabel}: 157 tokens`),
+    (() => {
+      const rowStart = authoritativeZeroHtml.indexOf(`<td>${todayLabel}</td>`);
+      const rowEnd = authoritativeZeroHtml.indexOf("</tr>", rowStart);
+      return (
+        rowStart >= 0 &&
+        rowEnd > rowStart &&
+        authoritativeZeroHtml.slice(rowStart, rowEnd).includes("<td>157</td>")
+      );
+    })(),
     "authoritative-zero chart total diverged from the fixture",
   );
   const authoritativeZeroRestore = await usage(first.deviceToken, [
@@ -991,8 +1708,204 @@ try {
     "ok - an explicit authoritative zero corrects a mixed partial snapshot without touching uncovered days",
   );
 
+  const coverageInstallation = { id: randomUUID(), secret: token() };
+  const coverageConnection = await pair(coverageInstallation, [
+    source("period-coverage-claude", "claude_code"),
+  ]);
+  const coverageSource = coverageConnection.sources[0];
+  let coverageUsage = await usage(coverageConnection.deviceToken, [
+    currentYearHistorySnapshot(
+      coverageSource.sourceId,
+      1,
+      [[januaryFirst, 10, undefined, "complete"]],
+      "complete",
+    ),
+  ]);
+  coverageUsage = await usage(coverageConnection.deviceToken, [
+    snapshot(
+      coverageSource.sourceId,
+      2,
+      [[today, 5, undefined, "partial"]],
+      "partial",
+      today,
+      today,
+    ),
+  ]);
+  const otherCoverageStatuses = await pool.query(
+    `SELECT id::text, history_backfill_year, history_backfill_status,
+            history_backfill_completed_at
+       FROM installation_sources
+      WHERE user_id = $1 AND id <> $2 AND status = 'active'`,
+    [userId, coverageSource.sourceId],
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_year = $2,
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = coalesce(history_backfill_completed_at, now())
+      WHERE user_id = $1 AND id <> $3 AND status = 'active'`,
+    [userId, currentUtcYear, coverageSource.sourceId],
+  );
+  const oldCustomCoverage = await authenticatedGet(
+    `/dashboard?period=custom&from=${januaryFirst}&to=${januaryFirst}`,
+  );
+  const oldCustomCoverageHtml = await oldCustomCoverage.text();
+  check(
+    coverageUsage.status === 200 &&
+      oldCustomCoverage.status === 200 &&
+      !oldCustomCoverageHtml.includes("Partial current-year history"),
+    "a current rolling partial incorrectly marked an imported historical Custom range partial",
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_status = 'partial', history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [coverageSource.sourceId],
+  );
+  const disconnectedCoverage = await form("/api/sources/disconnect", {
+    sourceId: coverageSource.sourceId,
+  });
+  const disconnectedYear = await authenticatedGet("/dashboard?period=year");
+  const disconnectedYearHtml = await disconnectedYear.text();
+  const disconnectedCoverageState = await pool.query(
+    `SELECT source.status, source.history_backfill_status,
+            jsonb_agg(jsonb_build_object(
+              'date', usage.usage_date::text,
+              'completeness', usage.completeness,
+              'tokens', usage.total_tokens::text
+            ) ORDER BY usage.usage_date) AS days
+       FROM installation_sources source
+       JOIN daily_usage usage ON usage.source_id = source.id
+      WHERE source.id = $1
+      GROUP BY source.status, source.history_backfill_status`,
+    [coverageSource.sourceId],
+  );
+  check(
+    coverageUsage.status === 200 &&
+      disconnectedCoverage.status === 303 &&
+      disconnectedYear.status === 200 &&
+      disconnectedYearHtml.includes("Partial current-year history"),
+    `a disconnected source with retained partial totals was presented as complete: ${JSON.stringify(
+      {
+        state: disconnectedCoverageState.rows[0],
+        status: disconnectedYear.status,
+        hasPartialText: disconnectedYearHtml.includes("Partial current-year history"),
+      },
+    )}`,
+  );
+  const legacyRaceAccountId = randomUUID();
+  const legacyRaceSourceId = randomUUID();
+  await pool.query(
+    `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+     VALUES ($1, $2, 'gemini_cli', 'Legacy rollout race', 'source_sum')`,
+    [legacyRaceAccountId, userId],
+  );
+  await pool.query(
+    `INSERT INTO installation_sources
+       (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+        suggested_label, collection_method, supported_surface, status)
+     VALUES ($1, $2, $3, $4, $5, 'gemini_cli', 'Legacy rollout race',
+             'gemini_session_json', 'cli', 'active')`,
+    [legacyRaceSourceId, coverageInstallation.id, userId, legacyRaceAccountId, randomUUID()],
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET last_successful_sync_at = now(), last_completeness = 'partial'
+      WHERE id = $1`,
+    [legacyRaceSourceId],
+  );
+  await pool.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+    legacyRaceSourceId,
+  ]);
+  const legacyRaceDashboard = await authenticatedGet(
+    `/dashboard?period=custom&from=${today}&to=${today}`,
+  );
+  const legacyRaceHtml = await legacyRaceDashboard.text();
+  const legacyRaceStart = legacyRaceHtml.indexOf("<h3>Gemini CLI · Legacy rollout race</h3>");
+  const legacyRaceEnd = legacyRaceHtml.indexOf("</article>", legacyRaceStart);
+  const legacyRaceAccountHtml = legacyRaceHtml.slice(legacyRaceStart, legacyRaceEnd);
+  check(
+    legacyRaceDashboard.status === 200 &&
+      legacyRaceStart >= 0 &&
+      legacyRaceEnd > legacyRaceStart &&
+      legacyRaceAccountHtml.includes("Partial") &&
+      !legacyRaceAccountHtml.includes("No data"),
+    "migration 010 -> old partial/disconnect -> new dashboard did not remain Partial",
+  );
+  await pool.query("DELETE FROM agent_accounts WHERE id = $1", [legacyRaceAccountId]);
+  const coverageDeletion = await form("/api/accounts/delete", {
+    accountId: coverageSource.agentAccountId,
+    confirm: "delete",
+  });
+  check(coverageDeletion.status === 303, "period coverage fixture cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [coverageInstallation.id]);
+  for (const sourceStatus of otherCoverageStatuses.rows)
+    await pool.query(
+      `UPDATE installation_sources
+          SET history_backfill_year = $2,
+              history_backfill_status = $3,
+              history_backfill_completed_at = $4
+        WHERE id = $1`,
+      [
+        sourceStatus.id,
+        sourceStatus.history_backfill_year,
+        sourceStatus.history_backfill_status,
+        sourceStatus.history_backfill_completed_at,
+      ],
+    );
+  console.log(
+    "ok - chart completeness follows the selected range and retained disconnected source data",
+  );
+
+  const adapterCorrectionInstallation = { id: randomUUID(), secret: token() };
+  const adapterCorrection = await pair(adapterCorrectionInstallation, [
+    source("adapter-correction-codex", "codex"),
+  ]);
+  const adapterCorrectionSource = adapterCorrection.sources[0];
+  const adapterBaseline = await syntheticCodexHistoricalCollection(
+    [[januaryFirst, 100]],
+    "adapter-correction",
+  );
+  check(
+    adapterBaseline.completeness === "partial" &&
+      adapterBaseline.entries[0]?.completeness === "complete",
+    "historical Codex adapter did not preserve authoritative entry completeness",
+  );
+  let adapterCorrectionUsage = await usage(adapterCorrection.deviceToken, [
+    collectedCodexHistorySnapshot(adapterCorrectionSource.sourceId, 1, adapterBaseline),
+  ]);
+  const adapterCorrected = await syntheticCodexHistoricalCollection(
+    [[januaryFirst, 80]],
+    "adapter-correction",
+  );
+  adapterCorrectionUsage = await usage(adapterCorrection.deviceToken, [
+    collectedCodexHistorySnapshot(adapterCorrectionSource.sourceId, 2, adapterCorrected),
+  ]);
+  const adapterCorrectionRow = await pool.query(
+    `SELECT total_tokens::text, completeness
+       FROM daily_usage
+      WHERE source_id = $1 AND usage_date = $2`,
+    [adapterCorrectionSource.sourceId, januaryFirst],
+  );
+  check(
+    adapterCorrectionUsage.status === 200 &&
+      adapterCorrectionRow.rows[0]?.total_tokens === "80" &&
+      adapterCorrectionRow.rows[0].completeness === "complete",
+    "full Codex adapter wire ingestion did not apply an authoritative downward correction",
+  );
+  const adapterCorrectionDeletion = await form("/api/accounts/delete", {
+    accountId: adapterCorrectionSource.agentAccountId,
+    confirm: "delete",
+  });
+  check(adapterCorrectionDeletion.status === 303, "adapter correction fixture cleanup failed");
+  await pool.query("DELETE FROM installations WHERE id = $1", [adapterCorrectionInstallation.id]);
+  await pool.query("DELETE FROM rate_limit_buckets WHERE scope = 'pairing_approve_user'");
+  console.log(
+    "ok - synthetic Codex App Server history stays complete per day and corrects PostgreSQL totals downward",
+  );
+
   const dedupBaseline = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   const dedupBaselineTokens = BigInt(dedupBaseline.rows[0].tokens);
@@ -1002,32 +1915,22 @@ try {
   const guardSecond = await pair(guardSecondInstallation, [source("guard-codex-b", "codex")]);
   const guardFirstSource = guardFirst.sources[0];
   const guardSecondSource = guardSecond.sources[0];
-  const guardDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
+  const guardDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(`${januaryFirst}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
   const guardSameEntries = guardDates.map((date) => [date, 11111]);
   check(
     guardFirstSource !== undefined && guardSecondSource !== undefined,
     "deduplication guard pairing omitted a source",
   );
   let guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      1,
-      guardSameEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 1, guardSameEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "deduplication guard history was rejected");
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      1,
-      guardSameEntries,
-      "partial",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 1, guardSameEntries, "partial"),
   ]);
   let guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1038,13 +1941,11 @@ try {
     "partial history triggered automatic account matching",
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       guardSecondSource.sourceId,
       2,
       guardSameEntries.slice(0, 2),
       "complete",
-      guardDates[0],
-      guardDates[1],
     ),
   ]);
   guardEvents = await pool.query(
@@ -1056,14 +1957,7 @@ try {
     "two coincident complete days with one repeated total triggered automatic account matching",
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      3,
-      guardSameEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 3, guardSameEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1075,25 +1969,11 @@ try {
   );
   const guardZeroEntries = guardDates.map((date, index) => [date, index === 6 ? 0 : 11111]);
   guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      2,
-      guardZeroEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 2, guardZeroEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "zero-evidence baseline was rejected");
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      4,
-      guardZeroEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 4, guardZeroEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1108,28 +1988,14 @@ try {
     [11111, 22222, 33333][index % 3],
   ]);
   guardUsage = await usage(guardFirst.deviceToken, [
-    snapshot(
-      guardFirstSource.sourceId,
-      3,
-      guardVariedEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardFirstSource.sourceId, 3, guardVariedEntries, "complete"),
   ]);
   check(guardUsage.status === 200, "mismatch guard baseline was rejected");
   const guardMismatchEntries = guardVariedEntries.map((entry, index) =>
     index === 3 ? [entry[0], Number(entry[1]) + 1] : entry,
   );
   guardUsage = await usage(guardSecond.deviceToken, [
-    snapshot(
-      guardSecondSource.sourceId,
-      5,
-      guardMismatchEntries,
-      "complete",
-      guardDates[0],
-      guardDates.at(-1),
-    ),
+    currentYearHistorySnapshot(guardSecondSource.sourceId, 5, guardMismatchEntries, "complete"),
   ]);
   guardEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1147,7 +2013,7 @@ try {
     [guardFirstInstallation.id, guardSecondInstallation.id],
   ]);
   const guardCleanupTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1173,28 +2039,21 @@ try {
   const dedupSecond = await pair(dedupSecondInstallation, [source("dedup-codex-b", "codex")]);
   const dedupFirstSource = dedupFirst.sources[0];
   const dedupSecondSource = dedupSecond.sources[0];
-  const dedupDates = Array.from({ length: 7 }, (_, index) => dateOffset(-8 + index));
-  const dedupStart = dedupDates[0];
-  const dedupEnd = dedupDates.at(-1);
-  const dedupEntries = dedupDates.map((date, index) => [
-    date,
-    dedupValues[index],
-    undefined,
-    "complete",
-  ]);
+  const dedupDates = guardDates;
   check(
     dedupFirstSource !== undefined && dedupSecondSource !== undefined,
     "deduplication pairing omitted a source",
   );
+  const collectedDedupHistory = await syntheticCodexHistoricalCollection(
+    dedupDates.map((date, index) => [date, dedupValues[index]]),
+    "adapter-dedup",
+  );
+  check(
+    collectedDedupHistory.entries.every((entry) => entry.completeness === "complete"),
+    "Codex adapter did not provide complete evidence for January account matching",
+  );
   let dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
-      dedupSecondSource.sourceId,
-      1,
-      [...dedupEntries, [today, 0, undefined, "partial"]],
-      "partial",
-      dedupStart,
-      today,
-    ),
+    collectedCodexHistorySnapshot(dedupSecondSource.sourceId, 1, collectedDedupHistory),
   ]);
   const dedupEvents = await pool.query(
     "SELECT count(*)::int AS count FROM account_dedup_events WHERE source_id = $1",
@@ -1205,14 +2064,7 @@ try {
     "a source was matched before another account had comparable history",
   );
   dedupUsage = await usage(dedupFirst.deviceToken, [
-    snapshot(
-      dedupFirstSource.sourceId,
-      1,
-      [...dedupEntries, [today, 0, undefined, "partial"]],
-      "partial",
-      dedupStart,
-      today,
-    ),
+    collectedCodexHistorySnapshot(dedupFirstSource.sourceId, 1, collectedDedupHistory),
   ]);
   const dedupEvent = await pool.query(
     `SELECT event.id::text,
@@ -1230,7 +2082,7 @@ try {
   );
   const activeDedup = dedupEvent.rows[0];
   const mergedCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1242,7 +2094,7 @@ try {
       activeDedup.current_account_id === activeDedup.target_account_id &&
       activeDedup.has_durable_decision === true &&
       BigInt(mergedCodexTotals.rows[0].tokens) === dedupBaselineTokens + dedupFixtureTokens,
-    "matching finished Codex histories were not combined when today's row was partial",
+    "matching January Codex histories were not combined without recent usage",
   );
   const dedupDashboard = await authenticatedGet("/dashboard");
   const dedupDashboardHtml = await dedupDashboard.text();
@@ -1266,7 +2118,7 @@ try {
     [activeDedup.id],
   );
   const undoneCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1279,13 +2131,11 @@ try {
     "Undo did not restore the original account mapping",
   );
   dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       dedupSecondSource.sourceId,
       2,
       dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
-      dedupStart,
-      dedupEnd,
     ),
   ]);
   const remerged = await pool.query("SELECT status FROM account_dedup_events WHERE id = $1", [
@@ -1297,13 +2147,11 @@ try {
   );
   await pool.query("DELETE FROM account_dedup_events WHERE id = $1", [activeDedup.id]);
   dedupUsage = await usage(dedupSecond.deviceToken, [
-    snapshot(
+    currentYearHistorySnapshot(
       dedupSecondSource.sourceId,
       3,
       dedupDates.map((date, index) => [date, dedupValues[index]]),
       "complete",
-      dedupStart,
-      dedupEnd,
     ),
   ]);
   const durableDecision = await pool.query(
@@ -1330,7 +2178,7 @@ try {
     [dedupFirstInstallation.id, dedupSecondInstallation.id],
   ]);
   const cleanedCodexTotals = await pool.query(
-    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex'",
     [userId],
   );
   check(
@@ -1365,18 +2213,18 @@ try {
     ]),
   ]);
   const concurrentClaudeSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND week_start = date_trunc('week', $2::date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'claude_code' AND usage_date >= date_trunc('week', $2::date)::date AND usage_date < date_trunc('week', $2::date)::date + 7",
     [userId, previousWeek],
   );
   check(
     concurrentWeeklyUpdates.every((item) => item.status === 200) &&
       concurrentClaudeSummary.rows[0]?.tokens === "54",
-    `concurrent weekly summary update was lost: ${JSON.stringify({
+    `concurrent daily summary update was lost: ${JSON.stringify({
       statuses: concurrentWeeklyUpdates.map((item) => item.status),
       summary: concurrentClaudeSummary.rows[0]?.tokens,
     })}`,
   );
-  console.log("ok - concurrent usage from two installations preserves the weekly summary");
+  console.log("ok - concurrent usage from two installations preserves the daily summary");
 
   const orderClient = await pool.connect();
   let orderedUsage;
@@ -1480,7 +2328,7 @@ try {
     diagnostic.status === 200 &&
       diagnosticBody.acceptedSourceErrors === 1 &&
       diagnosticBody.staleSourceErrors === 0,
-    "current protocol v4 source error was not accepted",
+    "current ordered source error was not accepted",
   );
   let diagnosticRow = await pool.query(
     "SELECT last_error_summary FROM installation_sources WHERE id = $1",
@@ -1517,7 +2365,7 @@ try {
       diagnosticBody.acceptedSourceErrors === 0 &&
       diagnosticBody.staleSourceErrors === 1 &&
       diagnosticRow.rows[0]?.last_error_summary === null,
-    "delayed protocol v4 source error overwrote a newer success",
+    "delayed ordered source error overwrote a newer success",
   );
   diagnostic = await usage(
     first.deviceToken,
@@ -1570,7 +2418,7 @@ try {
     diagnosticRow.rows[0]?.last_error_summary === null,
     "legacy unordered source error overwrote a newer success",
   );
-  console.log("ok - protocol v4 source errors are sequence-ordered while v2/v3 remain safe");
+  console.log("ok - protocol v5 retains ordered source errors while v2/v3 remain safe");
   response = await usage(first.deviceToken, [snapshot(target, 7, [[today, 999]])]);
   const staleBody = await response.json();
   check(
@@ -1615,7 +2463,10 @@ try {
   check(response.status === 200, "unchanged confirmation snapshot failed");
   const afterConfirmation = await pool.query(
     `SELECT source.last_successful_sync_at AS source_sync_at,
-            installation.last_sync_at AS installation_sync_at
+            installation.last_sync_at AS installation_sync_at,
+            source.last_rolling_range_start::text AS rolling_start,
+            source.last_rolling_range_end::text AS rolling_end,
+            source.last_completeness
        FROM installation_sources source
        JOIN installations installation ON installation.id = source.installation_id
       WHERE source.id = $1`,
@@ -1624,35 +2475,260 @@ try {
   check(
     afterConfirmation.rows[0].source_sync_at > beforeConfirmation.rows[0].source_sync_at &&
       afterConfirmation.rows[0].installation_sync_at >
-        beforeConfirmation.rows[0].installation_sync_at,
-    "an unchanged confirmation did not advance account and computer Last sync timestamps",
+        beforeConfirmation.rows[0].installation_sync_at &&
+      afterConfirmation.rows[0].rolling_start === yesterday &&
+      afterConfirmation.rows[0].rolling_end === today &&
+      afterConfirmation.rows[0].last_completeness === "complete",
+    "an unchanged confirmation did not advance Last sync timestamps and rolling coverage",
+  );
+  const compatibilitySummary = await pool.query(
+    `SELECT
+       (SELECT tokens::text FROM weekly_agent_usage
+         WHERE user_id = $1 AND agent_id = 'codex'
+           AND week_start = date_trunc('week', current_date)::date) AS weekly_tokens,
+       (SELECT coalesce(sum(tokens), 0)::text FROM daily_agent_usage
+         WHERE user_id = $1 AND agent_id = 'codex'
+           AND usage_date >= date_trunc('week', current_date)::date
+           AND usage_date < date_trunc('week', current_date)::date + 7) AS daily_tokens`,
+    [userId],
+  );
+  check(
+    compatibilitySummary.rows[0]?.weekly_tokens === compatibilitySummary.rows[0]?.daily_tokens,
+    "new ingestion did not keep weekly and daily compatibility summaries equal",
   );
   console.log("ok - unchanged confirmation advances account and computer Last sync timestamps");
+  await pool.query(
+    `UPDATE installation_sources
+        SET history_backfill_year = $3,
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = coalesce(history_backfill_completed_at, now()),
+            last_rolling_range_start = $4::date,
+            last_rolling_range_end = $5::date,
+            last_completeness = 'complete'
+      WHERE user_id = $1 AND id <> $2 AND status = 'active'`,
+    [userId, target, currentUtcYear, dateOffset(-30), today],
+  );
+  const omittedPartialDay = dateOffset(-8);
+  const explicitCompleteZeroDay = dateOffset(-7);
+  const authoritativeMixedDay = dateOffset(-6);
+  const explicitPartialDay = dateOffset(-5);
+  response = await usage(first.deviceToken, [
+    snapshot(
+      target,
+      9,
+      [
+        [explicitCompleteZeroDay, 0, undefined, "complete"],
+        [authoritativeMixedDay, 12, undefined, "complete"],
+        [explicitPartialDay, 4, undefined, "partial"],
+      ],
+      "partial",
+      omittedPartialDay,
+      explicitPartialDay,
+    ),
+  ]);
+  check(response.status === 200, "mixed rolling completeness snapshot failed");
+  const rollingCoverage = await pool.query(
+    `SELECT unresolved_usage_dates::text[] AS incomplete_dates
+       FROM installation_sources WHERE id = $1`,
+    [target],
+  );
+  check(
+    JSON.stringify(rollingCoverage.rows[0]?.incomplete_dates) ===
+      JSON.stringify([omittedPartialDay, explicitPartialDay]),
+    `mixed rolling coverage was not persisted per day: ${JSON.stringify(rollingCoverage.rows[0])}`,
+  );
+  const coveragePages = await Promise.all(
+    [explicitCompleteZeroDay, authoritativeMixedDay, explicitPartialDay, omittedPartialDay].map(
+      async (date) => {
+        const page = await authenticatedGet(`/dashboard?period=custom&from=${date}&to=${date}`);
+        return { date, status: page.status, html: await page.text() };
+      },
+    ),
+  );
+  const coverageByDate = new Map(coveragePages.map((page) => [page.date, page]));
+  check(
+    coveragePages.every((page) => page.status === 200) &&
+      !coverageByDate.get(explicitCompleteZeroDay)?.html.includes("Partial current-year history") &&
+      !coverageByDate.get(authoritativeMixedDay)?.html.includes("Partial current-year history") &&
+      coverageByDate.get(explicitPartialDay)?.html.includes("Partial current-year history") &&
+      coverageByDate.get(omittedPartialDay)?.html.includes("Partial current-year history"),
+    "mixed rolling complete, zero, partial, and omitted dates rendered incorrect coverage",
+  );
+  response = await usage(first.deviceToken, [
+    snapshot(target, 10, [], "complete", omittedPartialDay, explicitPartialDay),
+  ]);
+  check(response.status === 200, "mixed rolling coverage cleanup failed");
+
   const authoritativeDayBeforePartial = await pool.query(
     "SELECT completeness, updated_at FROM daily_usage WHERE source_id = $1 AND usage_date = $2::date",
     [target, today],
   );
   await new Promise((resolve) => setTimeout(resolve, 10));
-  response = await usage(first.deviceToken, [snapshot(target, 9, [[today, 25]], "partial")]);
+  response = await usage(first.deviceToken, [
+    snapshot(target, 11, [[today, 25]], "partial", dateOffset(-4), today),
+  ]);
   check(response.status === 200, "partial correction failed");
   let rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text, completeness, updated_at FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
     [target],
   );
+  const currentDayAfterPartial = rows.rows.find((row) => row.usage_date === today);
   check(
-    rows.rows.length === 2 &&
-      rows.rows[1].total_tokens === "35" &&
-      rows.rows[1].completeness === "complete" &&
-      rows.rows[1].updated_at.getTime() ===
+    currentDayAfterPartial?.total_tokens === "35" &&
+      currentDayAfterPartial.completeness === "complete" &&
+      currentDayAfterPartial.updated_at.getTime() ===
         authoritativeDayBeforePartial.rows[0].updated_at.getTime(),
     "a lower partial snapshot replaced or refreshed previously authoritative evidence",
   );
+  await pool.query(
+    `UPDATE installation_sources
+        SET status = 'disconnected',
+            history_backfill_year = $2,
+            history_backfill_status = 'partial',
+            history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [target, currentUtcYear],
+  );
+  const disconnectedMissingHistory = await authenticatedGet(
+    `/dashboard?period=custom&from=${januaryFirst}&to=${januaryFirst}`,
+  );
+  check(
+    disconnectedMissingHistory.status === 200 &&
+      (await disconnectedMissingHistory.text()).includes("Partial current-year history"),
+    "disconnected retained terminal-partial history became trusted no-data without a row",
+  );
+  await pool.query(
+    `UPDATE installation_sources
+        SET status = 'active',
+            history_backfill_status = 'complete',
+            history_backfill_completed_at = now()
+      WHERE id = $1`,
+    [target],
+  );
+  console.log(
+    "ok - mixed rolling dates and retained historical coverage keep exact complete/partial status",
+  );
+
+  const outageAccountId = randomUUID();
+  const outageInstallationId = randomUUID();
+  const outageDeviceToken = token();
+  const outageSourceId = randomUUID();
+  const outageGapStart = dateOffset(-44);
+  const outageGapEnd = dateOffset(-31);
+  const outageRecoveredDate = dateOffset(-40);
+  await pool.query(
+    `INSERT INTO installations
+       (id, user_id, name, status, installation_secret_hash, device_token_hash,
+        connector_version, protocol_version)
+     VALUES ($1, $2, 'Temporal outage', 'active', $3, $4, '0.6.0', 5)`,
+    [outageInstallationId, userId, digest(token()), digest(outageDeviceToken)],
+  );
+  await pool.query(
+    `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode)
+     VALUES ($1, $2, 'antigravity', 'Temporal outage', 'source_sum')`,
+    [outageAccountId, userId],
+  );
+  await pool.query(
+    `INSERT INTO installation_sources
+       (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+        suggested_label, collection_method, supported_surface, status,
+        history_backfill_year, history_backfill_status, history_backfill_completed_at,
+        last_rolling_range_start, last_rolling_range_end, last_completeness,
+        unresolved_usage_dates)
+     VALUES
+       ($1, $2, $3, $4, $5, 'antigravity', 'Temporal outage',
+        'antigravity_cli_capture', 'cli', 'active', $6, 'complete', now(),
+        $7::date, $7::date, 'complete', '{}'::date[])`,
+    [
+      outageSourceId,
+      outageInstallationId,
+      userId,
+      outageAccountId,
+      randomUUID(),
+      currentUtcYear,
+      dateOffset(-45),
+    ],
+  );
+  const outageRolling = await usage(outageDeviceToken, [
+    snapshot(outageSourceId, 1, [[today, 9]], "complete", dateOffset(-30), today),
+  ]);
+  const outageRollingBody = await outageRolling.json();
+  check(
+    outageRolling.status === 200 &&
+      outageRollingBody.sourceSequences?.[0]?.historyGapRangeStart === outageGapStart &&
+      outageRollingBody.sourceSequences?.[0]?.historyGapRangeEnd === outageGapEnd,
+    `a 45-day outage did not expose the exact resumable gap: ${JSON.stringify(outageRollingBody)}`,
+  );
+  const outagePartialPage = await authenticatedGet(
+    `/dashboard?period=custom&from=${outageRecoveredDate}&to=${outageRecoveredDate}`,
+  );
+  check(
+    outagePartialPage.status === 200 &&
+      (await outagePartialPage.text()).includes("Partial current-year history"),
+    "a newly discovered rolling gap was presented as trusted no-data",
+  );
+  const gapRepairSnapshot = {
+    ...snapshot(
+      outageSourceId,
+      2,
+      [[outageRecoveredDate, 77]],
+      "complete",
+      outageGapStart,
+      outageGapEnd,
+    ),
+    kind: "year_backfill",
+  };
+  const outageRepair = await usage(outageDeviceToken, [gapRepairSnapshot]);
+  const outageRepairBody = await outageRepair.json();
+  check(
+    outageRepair.status === 200 &&
+      outageRepairBody.sourceSequences?.[0]?.historyGapRangeStart === null &&
+      outageRepairBody.sourceSequences?.[0]?.historyGapRangeEnd === null,
+    `the acknowledged gap backfill did not close durable coverage: ${JSON.stringify(
+      outageRepairBody,
+    )}`,
+  );
+  const outageReplay = await usage(outageDeviceToken, [gapRepairSnapshot]);
+  const outageReplayBody = await outageReplay.json();
+  const outageCoverage = await pool.query(
+    `SELECT history_backfill_status, unresolved_usage_dates::text[] AS unresolved_dates,
+            (SELECT count(*)::int FROM daily_usage
+              WHERE source_id = $1 AND usage_date = $2::date) AS recovered_rows,
+            (SELECT total_tokens::text FROM daily_usage
+              WHERE source_id = $1 AND usage_date = $2::date) AS recovered_tokens
+       FROM installation_sources
+      WHERE id = $1`,
+    [outageSourceId, outageRecoveredDate],
+  );
+  const outageCompletePage = await authenticatedGet(
+    `/dashboard?period=custom&from=${outageRecoveredDate}&to=${outageRecoveredDate}`,
+  );
+  check(
+    outageReplay.status === 200 &&
+      outageReplayBody.staleSnapshots === 1 &&
+      outageCoverage.rows[0]?.history_backfill_status === "complete" &&
+      outageCoverage.rows[0].unresolved_dates.length === 0 &&
+      outageCoverage.rows[0].recovered_rows === 1 &&
+      outageCoverage.rows[0].recovered_tokens === "77" &&
+      outageCompletePage.status === 200 &&
+      !(await outageCompletePage.text()).includes("Partial current-year history"),
+    `gap recovery was not exactly-once and complete: ${JSON.stringify({
+      replay: outageReplayBody,
+      coverage: outageCoverage.rows[0],
+    })}`,
+  );
+  await pool.query("DELETE FROM installations WHERE id = $1", [outageInstallationId]);
+  await pool.query("DELETE FROM agent_accounts WHERE id = $1", [outageAccountId]);
+  console.log(
+    "ok - a 45-day outage creates, backfills, and exactly-once closes a durable history gap",
+  );
+
   const beforeProvisionalSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 10, [[today, 40, undefined, "partial"]], "complete"),
+    snapshot(target, 12, [[today, 40, undefined, "partial"]], "complete"),
   ]);
   check(response.status === 200, "current-day partial snapshot failed");
   rows = await pool.query(
@@ -1666,7 +2742,7 @@ try {
     "a mixed snapshot deleted an absent date despite its partial effective completeness",
   );
   const provisionalSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1675,11 +2751,11 @@ try {
     "current-day partial total did not immediately update the weekly ranking summary",
   );
   response = await usage(first.deviceToken, [
-    snapshot(target, 11, [[today, 20, undefined, "complete"]], "partial"),
+    snapshot(target, 13, [[today, 20, undefined, "complete"]], "partial"),
   ]);
   check(response.status === 200, "authoritative entry correction in a partial snapshot failed");
   const authoritativeSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1687,7 +2763,7 @@ try {
       BigInt(provisionalSummary.rows[0]?.tokens ?? "0") - 20n,
     "authoritative entry did not correct the provisional weekly ranking total",
   );
-  response = await usage(first.deviceToken, [snapshot(target, 12, [[today, 20]])]);
+  response = await usage(first.deviceToken, [snapshot(target, 14, [[today, 20]])]);
   check(response.status === 200, "final complete correction failed");
   rows = await pool.query(
     "SELECT usage_date::text, total_tokens::text FROM daily_usage WHERE source_id = $1 ORDER BY usage_date",
@@ -1698,34 +2774,42 @@ try {
     "complete snapshot did not delete absent dates",
   );
   const correctedSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
     correctedSummary.rows[0]?.tokens === "120",
-    "weekly summary did not decrease after correction",
+    "daily summary did not decrease after correction",
   );
   console.log(
     "ok - snapshots decrease values and weekly summaries, reject stale writes, and distinguish complete from partial",
   );
 
+  await pool.query(
+    "DELETE FROM rate_limit_buckets WHERE scope IN ('usage_sync', 'usage_sync_user')",
+  );
   const randomSource = randomUUID();
   const future = await usage(first.deviceToken, [
-    snapshot(target, 13, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
+    snapshot(target, 15, [[tomorrow, 1]], "complete", tomorrow, tomorrow),
   ]);
   const old = await usage(first.deviceToken, [
-    snapshot(target, 13, [[tooOld, 1]], "complete", tooOld, tooOld),
+    snapshot(target, 15, [[tooOld, 1]], "complete", tooOld, tooOld),
   ]);
   const unsupported = await usage(first.deviceToken, [snapshot(randomSource, 1, [[today, 1]])]);
   const excessive = await usage(first.deviceToken, [
-    snapshot(target, 13, [[today, "10000000000000000"]]),
+    snapshot(target, 15, [[today, "10000000000000000"]]),
   ]);
   check(
     future.status === 400 &&
       old.status === 400 &&
       unsupported.status === 400 &&
       excessive.status === 400,
-    "usage bounds were not enforced",
+    `usage bounds were not enforced: ${JSON.stringify({
+      future: future.status,
+      old: old.status,
+      unsupported: unsupported.status,
+      excessive: excessive.status,
+    })}`,
   );
   console.log("ok - date, source, and technical token bounds are enforced");
 
@@ -1778,7 +2862,7 @@ try {
   ]);
   check(response.status === 200, "UTC week-boundary snapshot failed");
   const boundary = await pool.query(
-    "SELECT week_start::text, tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'opencode' AND week_start IN ($2::date - 7, $2::date) ORDER BY week_start",
+    "SELECT date_trunc('week', usage_date)::date::text AS week_start, sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'opencode' AND date_trunc('week', usage_date)::date IN ($2::date - 7, $2::date) GROUP BY date_trunc('week', usage_date)::date ORDER BY date_trunc('week', usage_date)::date",
     [userId, monday],
   );
   check(
@@ -1837,7 +2921,7 @@ try {
     "reconnect duplicated installation or lost history",
   );
   let pairingSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -1896,7 +2980,7 @@ try {
     [migratedKimi.sourceId],
   );
   const kimiSummary = await pool.query(
-    "SELECT count(*)::int AS count FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'kimi_code'",
+    "SELECT count(*)::int AS count FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'kimi_code'",
     [userId],
   );
   check(
@@ -1929,7 +3013,7 @@ try {
   );
   check(countAfterConcurrent.rows[0].count === 1, "concurrent reconnect created a duplicate");
   pairingSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -2198,7 +3282,7 @@ try {
     [userId],
   );
   const weeklyAfterInitial = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
 
@@ -2301,7 +3385,7 @@ try {
     [userId],
   );
   const weeklyAfterReset = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(
@@ -2310,7 +3394,7 @@ try {
       accountStateAfterReset.rows[0]?.new_sources === 2 &&
       accountsAfterReset.rows[0]?.count === accountsAfterInitial.rows[0]?.count &&
       weeklyAfterReset.rows[0]?.tokens === weeklyAfterInitial.rows[0]?.tokens,
-    `logical Codex reset duplicated accounts, sources, or weekly usage: ${JSON.stringify({
+    `logical Codex reset duplicated accounts, sources, or daily usage: ${JSON.stringify({
       accountState: accountStateAfterReset.rows[0],
       accountsAfterInitial: accountsAfterInitial.rows[0],
       accountsAfterReset: accountsAfterReset.rows[0],
@@ -2337,7 +3421,7 @@ try {
     "logical Codex reconnect fixture cleanup failed",
   );
   console.log(
-    'ok - renamed Codex A+B reconnect/reset preserves label "Work", reuses two accounts, claims both sources, and does not double weekly usage',
+    'ok - renamed Codex A+B reconnect/reset preserves label "Work", reuses two accounts, claims both sources, and does not double daily usage',
   );
 
   const pendingBeforeQuotaRace = await pool.query(
@@ -2465,7 +3549,7 @@ try {
     "source reassignment was not persisted",
   );
   let codexSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(codexSummary.rows[0]?.tokens === "20", "account_max was not rebuilt after reassign");
@@ -2480,7 +3564,7 @@ try {
     "source move back was not persisted",
   );
   codexSummary = await pool.query(
-    "SELECT tokens::text FROM weekly_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND week_start = date_trunc('week', current_date)::date",
+    "SELECT coalesce(sum(tokens), 0)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'codex' AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   check(codexSummary.rows[0]?.tokens === "120", "summary was not restored after reassign");
@@ -2500,17 +3584,19 @@ try {
   console.log("ok - owned account rename and source reassignment rebuild summaries");
 
   const currentTotal = await pool.query(
-    "SELECT sum(tokens)::text AS tokens FROM weekly_agent_usage WHERE user_id = $1 AND week_start = date_trunc('week', current_date)::date",
+    "SELECT sum(tokens)::text AS tokens FROM daily_agent_usage WHERE user_id = $1 AND usage_date >= date_trunc('week', current_date)::date AND usage_date < date_trunc('week', current_date)::date + 7",
     [userId],
   );
   await pool.query(
-    "INSERT INTO weekly_agent_usage (week_start, user_id, agent_id, tokens) VALUES (date_trunc('week', current_date)::date, $1, 'codex', $2)",
+    "INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens) VALUES (current_date, $1, 'codex', $2)",
     [other.rows[0].id, currentTotal.rows[0].tokens],
   );
   const ranking = await pool.query(
     `WITH totals AS (
-       SELECT user_id, sum(tokens) AS total FROM weekly_agent_usage
-        WHERE week_start = date_trunc('week', current_date)::date GROUP BY user_id
+       SELECT user_id, sum(tokens) AS total FROM daily_agent_usage
+        WHERE usage_date >= date_trunc('week', current_date)::date
+          AND usage_date < date_trunc('week', current_date)::date + 7
+        GROUP BY user_id
      ), ranked AS (
        SELECT user_id, dense_rank() OVER (ORDER BY total DESC)::int AS rank FROM totals
      )
@@ -2961,6 +4047,29 @@ try {
   ]);
   check(afterDisconnect.status === 401, "disconnected installation could still sync");
   console.log("ok - readiness and authorization lifecycle behave as expected");
+
+  const profileBeforeLeave = await authenticatedGet(`/u/${handle}?period=year`);
+  const leaveLeaderboard = await form("/api/leaderboard/leave", { confirm: "leave" });
+  const profileAfterLeave = await authenticatedGet(`/u/${handle}?period=year`);
+  const retainedUsageAfterLeave = await pool.query(
+    `SELECT
+       (SELECT count(*)::int FROM daily_usage usage
+         JOIN installation_sources source ON source.id = usage.source_id
+        WHERE source.user_id = $1) AS source_days,
+       (SELECT count(*)::int FROM daily_agent_usage WHERE user_id = $1) AS agent_days,
+       (SELECT count(*)::int FROM weekly_agent_usage WHERE user_id = $1) AS weekly_rows`,
+    [userId],
+  );
+  check(
+    profileBeforeLeave.status === 200 &&
+      leaveLeaderboard.status === 303 &&
+      profileAfterLeave.status === 404 &&
+      retainedUsageAfterLeave.rows[0]?.source_days === 0 &&
+      retainedUsageAfterLeave.rows[0].agent_days === 0 &&
+      retainedUsageAfterLeave.rows[0].weekly_rows === 0,
+    "Leave leaderboard retained public participation or a usage aggregate",
+  );
+  console.log("ok - Leave removes all usage and the retained bare identity has no public profile");
 
   const fullAccountDeletion = await form("/api/account/delete", { confirm: "delete-account" });
   const deletedUser = await pool.query("SELECT count(*)::int AS count FROM users WHERE id = $1", [

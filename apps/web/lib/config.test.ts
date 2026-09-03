@@ -3,6 +3,7 @@ import { Client } from "pg";
 import {
   connectorDistribution,
   connectorProtocolVersion,
+  currentYearHistoryProtocolVersion,
   databaseClientConfig,
   databaseSslEnabled,
   githubWebOrigin,
@@ -59,13 +60,15 @@ afterEach(() => {
 });
 
 describe("connector protocol compatibility", () => {
-  it("keeps legacy v2 and v3 available during the v4 rollout", () => {
-    expect(connectorProtocolVersion).toBe(4);
+  it("keeps legacy v2-v4 available during the v5 rollout", () => {
+    expect(connectorProtocolVersion).toBe(5);
+    expect(currentYearHistoryProtocolVersion).toBe(5);
     expect(isSupportedConnectorProtocolVersion(2)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(3)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(4)).toBe(true);
+    expect(isSupportedConnectorProtocolVersion(5)).toBe(true);
     expect(isSupportedConnectorProtocolVersion(1)).toBe(false);
-    expect(isSupportedConnectorProtocolVersion(5)).toBe(false);
+    expect(isSupportedConnectorProtocolVersion(6)).toBe(false);
     expect(isSupportedConnectorProtocolVersion("3")).toBe(false);
   });
 });

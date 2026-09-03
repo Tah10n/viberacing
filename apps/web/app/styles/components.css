@@ -449,3 +449,85 @@
 .state-panel-error {
   border-color: var(--color-danger-border);
 }
+.period-selector {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.period-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.period-option {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  border: 0.0625rem solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-3);
+  background: var(--color-track-raised);
+  color: var(--color-muted-strong);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  font-weight: 700;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.period-option:hover,
+.period-option:focus-visible,
+.period-option-active {
+  border-color: var(--color-action);
+  color: var(--color-action);
+}
+
+.custom-period {
+  position: relative;
+}
+
+.custom-period > summary {
+  list-style: none;
+}
+
+.custom-period > summary::-webkit-details-marker {
+  display: none;
+}
+
+.custom-period-form {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: grid;
+  width: min(26rem, calc(100vw - 2 * var(--space-4)));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  border: 0.0625rem solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  background: var(--color-track-raised);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 45%);
+}
+
+.custom-period-form label {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-info);
+  font-family: var(--font-mono);
+  font-size: var(--meta-font-size);
+  text-transform: uppercase;
+}
+
+.custom-period-form input {
+  min-width: 0;
+}
+
+.custom-period-form .button {
+  grid-column: 1 / -1;
+}

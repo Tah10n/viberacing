@@ -218,6 +218,12 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   const mapped = active.sources[0];
   if (mapped === undefined) throw new Error("active pairing omitted its source mapping");
   const today = new Date().toISOString().slice(0, 10);
+  const todayLabel = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+    year: "numeric",
+  }).format(new Date(`${today}T00:00:00.000Z`));
   const usage = await request.post("/api/usage", {
     headers: { authorization: `Bearer ${active.deviceToken}` },
     data: {
@@ -291,7 +297,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   ).toBeVisible();
   await page.goto("/dashboard");
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
-  await expect(usageChart.locator(".usage-chart-day")).toHaveCount(7);
+  await expect(usageChart.locator(".usage-values tbody tr")).toHaveCount(7);
   await expect(page.locator(".summary-grid > div")).toHaveCount(4);
   const desktopSummaryColumns = await page
     .locator(".summary-grid")
@@ -299,11 +305,36 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
       getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean),
     );
   expect(desktopSummaryColumns).toHaveLength(4);
-  await expect(usageChart.locator(".usage-chart-scale > span")).toHaveCount(3);
-  const todayBar = usageChart.locator(`.usage-chart-day:has(time[datetime="${today}"])`);
-  await expect(todayBar).toContainText(/12[.,]3K/);
-  await expect(todayBar.locator(".usage-chart-bar-level-20")).toHaveCount(1);
+  await expect(usageChart.locator(".usage-grid-line")).toHaveCount(3);
+  await usageChart.getByText("Daily UTC values", { exact: true }).click();
+  const todayRow = usageChart.getByRole("row", { name: new RegExp(todayLabel) });
+  await expect(todayRow).toContainText(/12\s345/);
   await expect(page.locator(".summary-grid").getByText(/12[.,]3K/, { exact: true })).toBeVisible();
+  await expect(page.locator(".connector-history-notice")).toContainText(
+    "Update the connector to import current-year history",
+  );
+
+  await page.getByRole("link", { name: "Month", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\?period=month$/);
+  await expect(page.getByRole("link", { name: "Month", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const monthChart = page.getByRole("figure", { name: "Tokens by day" });
+  const [year, month] = today.split("-").map(Number);
+  const daysInCurrentMonth = new Date(Date.UTC(year ?? 0, month ?? 0, 0)).getUTCDate();
+  await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(daysInCurrentMonth);
+  const viewport = monthChart.locator(".usage-explorer-controls output");
+  const fullMonthViewport = await viewport.textContent();
+  await monthChart.getByRole("button", { name: "Zoom in on usage chart" }).click();
+  await expect(viewport).not.toHaveText(fullMonthViewport ?? "");
+  const chartCanvas = monthChart.locator(".usage-explorer-canvas");
+  await chartCanvas.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Home");
+  await expect(viewport).toHaveText(fullMonthViewport ?? "");
+  await page.getByRole("link", { name: "Week", exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard\?period=week$/);
 
   const dedupDatabase = new Client({ connectionString: databaseUrl });
   await dedupDatabase.connect();
@@ -494,7 +525,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     await dedupDatabase.end();
   }
 
-  const tokenBreakdown = page.locator('dl[aria-label="Weekly token breakdown"]');
+  const tokenBreakdown = page.locator('dl[aria-label="Token breakdown for selected period"]');
   await expect(tokenBreakdown.locator("div")).toHaveText([
     "Input7K",
     "Output3K",
@@ -560,7 +591,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.goto("/");
   await expectLeftAlignedHero(page);
-  await expect(page.locator(".hero-race time")).toHaveAttribute("title", "America/New_York");
+  await expect(page.locator(".hero-race")).toContainText("This week");
+  await expect(page.locator(".hero-race")).toContainText("UTC");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -578,7 +610,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toBeVisible();
-  await expect(page.locator(".usage-chart-day")).toHaveCount(7);
+  await expect(page.locator(".usage-values tbody tr")).toHaveCount(7);
   const mobileSummaryBoxes = await page.locator(".summary-grid > div").evaluateAll((elements) =>
     elements.map((element) => {
       const box = element.getBoundingClientRect();
@@ -588,15 +620,16 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   expect(mobileSummaryBoxes).toHaveLength(4);
   expect(new Set(mobileSummaryBoxes.map((box) => box.left)).size).toBe(2);
   expect(new Set(mobileSummaryBoxes.map((box) => box.top)).size).toBe(2);
-  const [usagePlotBox, usageDayBox] = await Promise.all([
-    page.locator(".usage-chart-plot").boundingBox(),
-    page.locator(".usage-chart-day").first().boundingBox(),
+  const [usagePlotBox, usageSvgBox] = await Promise.all([
+    page.locator(".usage-explorer-canvas").boundingBox(),
+    page.locator(".usage-explorer-canvas svg").boundingBox(),
   ]);
   expect(usagePlotBox).not.toBeNull();
-  expect(usageDayBox).not.toBeNull();
-  if (usagePlotBox !== null && usageDayBox !== null) {
-    expect(usageDayBox.y + usageDayBox.height).toBeLessThanOrEqual(
-      usagePlotBox.y + usagePlotBox.height,
+  expect(usageSvgBox).not.toBeNull();
+  if (usagePlotBox !== null && usageSvgBox !== null) {
+    expect(usageSvgBox.x).toBeGreaterThanOrEqual(usagePlotBox.x);
+    expect(usageSvgBox.x + usageSvgBox.width).toBeLessThanOrEqual(
+      usagePlotBox.x + usagePlotBox.width,
     );
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -621,6 +654,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     data: {
       sourceIds: [mapped.sourceId],
       cliVersion: bundledConnectorVersion,
+      protocolVersion: 5,
       handlerAttestation: {
         attestationId: handlerAttestationId,
         installedRuntimeVersion: bundledConnectorVersion,
@@ -634,6 +668,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   });
   await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toHaveCount(0);
+  await expect(page.locator(".connector-history-notice")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
   await page.goto("/");
   await expect(page.locator(".connector-update-prominent")).toHaveCount(0);

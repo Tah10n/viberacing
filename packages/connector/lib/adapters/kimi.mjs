@@ -6,6 +6,7 @@ import {
   componentEntry,
   diagnosePath,
   findFile,
+  historyRetryGenerationForPath,
   mergeEntries,
   parserResult,
   utcDay,
@@ -222,6 +223,7 @@ export const kimiAdapter = Object.freeze({
   trigger: "Stop hook",
   defaultPaths: kimiDefaultPaths,
   detect: detectKimiSources,
+  historyRetryGeneration: (source) => historyRetryGenerationForPath(source.dataPath, [".jsonl"]),
   collect: (source, range, state) => {
     const legacy =
       source.collectionMethod === "kimi_legacy_wire_jsonl" ||

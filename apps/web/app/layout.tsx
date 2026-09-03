@@ -5,7 +5,7 @@ import { viewer } from "@/lib/session";
 import "./styles.css";
 
 export const metadata: Metadata = {
-  title: "Vibe Racing — weekly AI coding token leaderboard",
+  title: "Vibe Racing — AI coding token leaderboard",
   description: "A privacy-first community leaderboard for tokens used in Codex and Claude Code.",
   icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }] },
 };
@@ -23,7 +23,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         <footer>
           <div>
             <strong>Vibe Racing</strong>
-            <span>Weekly coding-agent token standings.</span>
+            <span>Coding-agent token standings by UTC period.</span>
           </div>
           <p>Totals are self-reported. Rankings are for fun, not proof of cost or productivity.</p>
         </footer>
