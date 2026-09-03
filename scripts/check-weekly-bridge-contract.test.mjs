@@ -62,3 +62,12 @@ test("rejects removing the inner refresh helper while production references rema
   });
   await assert.rejects(checkWeeklyBridgeContract({ cwd }), /code-only cleanup first/);
 });
+
+test("rejects removing the source coverage bridge while production references remain", async (t) => {
+  const cwd = await fixture(t, {
+    source: "export const trigger = 'installation_sources_legacy_partial_coverage';\n",
+    migration:
+      "DROP FUNCTION materialize_legacy_partial_source_coverage();\nDROP TRIGGER installation_sources_legacy_partial_coverage ON installation_sources;\n",
+  });
+  await assert.rejects(checkWeeklyBridgeContract({ cwd }), /code-only cleanup first/);
+});

@@ -869,14 +869,28 @@ try {
   check(duplicate.rows[0].id === userId, "one GitHub ID created multiple users");
   console.log("ok - GitHub identity is unique");
 
-  const legacyWeeklyTable = await pool.query(
-    "SELECT to_regclass('public.weekly_agent_usage')::text AS relation",
+  const weeklyCleanup = await pool.query(
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM schema_migrations
+          WHERE version = '011_remove_weekly_compatibility.sql'
+       ) AS migration_applied,
+       to_regclass('public.weekly_agent_usage') IS NULL AS table_removed,
+       NOT EXISTS (
+         SELECT 1 FROM pg_trigger
+          WHERE tgname IN (
+            'weekly_agent_usage_daily_compatibility',
+            'installation_sources_legacy_partial_coverage'
+          ) AND NOT tgisinternal
+       ) AS triggers_removed`,
   );
   check(
-    legacyWeeklyTable.rows[0]?.relation === "weekly_agent_usage",
-    "migration 010 did not retain the legacy weekly table for rollout compatibility",
+    weeklyCleanup.rows[0]?.migration_applied === true &&
+      weeklyCleanup.rows[0].table_removed === true &&
+      weeklyCleanup.rows[0].triggers_removed === true,
+    "migration 011 did not remove the weekly compatibility contract",
   );
-  console.log("ok - migration 010 retains the temporary weekly compatibility summary");
+  console.log("ok - migration 011 removes the temporary weekly compatibility contract");
 
   const wideAggregateUser = await pool.query(
     "INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text",
@@ -2481,24 +2495,20 @@ try {
       afterConfirmation.rows[0].last_completeness === "complete",
     "an unchanged confirmation did not advance Last sync timestamps and rolling coverage",
   );
-  const compatibilitySummary = await pool.query(
-    `SELECT
-       (SELECT tokens::text FROM weekly_agent_usage
-         WHERE user_id = $1 AND agent_id = 'codex'
-           AND week_start = date_trunc('week', current_date)::date) AS weekly_tokens,
-       (SELECT coalesce(sum(tokens), 0)::text FROM daily_agent_usage
-         WHERE user_id = $1 AND agent_id = 'codex'
-           AND usage_date >= date_trunc('week', current_date)::date
-           AND usage_date < date_trunc('week', current_date)::date + 7) AS daily_tokens`,
+  const dailySummary = await pool.query(
+    `SELECT coalesce(sum(tokens), 0)::text AS daily_tokens
+       FROM daily_agent_usage
+      WHERE user_id = $1 AND agent_id = 'codex'
+        AND usage_date >= date_trunc('week', current_date)::date
+        AND usage_date < date_trunc('week', current_date)::date + 7`,
     [userId],
   );
   check(
-    compatibilitySummary.rows[0]?.weekly_tokens === null &&
-      BigInt(compatibilitySummary.rows[0]?.daily_tokens ?? "0") > 0n,
-    "Deployment A still wrote the legacy weekly summary or failed to update the daily summary",
+    BigInt(dailySummary.rows[0]?.daily_tokens ?? "0") > 0n,
+    "Deployment B failed to update the daily summary after weekly cleanup",
   );
   console.log(
-    "ok - Deployment A updates only daily summaries and unchanged confirmation advances Last sync",
+    "ok - Deployment B updates daily summaries and unchanged confirmation advances Last sync",
   );
   await pool.query(
     `UPDATE installation_sources
