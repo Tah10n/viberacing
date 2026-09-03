@@ -10,6 +10,12 @@ experience or protocol.
 
 ### Added
 
+- Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
+  records only minimized schemas, exact integer counter candidates, local HMAC identities, safe
+  status/version fields, and timestamps outside the repository. Cursor remains unsupported and is
+  not registered because current Desktop and CLI evidence does not prove one authoritative exact
+  source.
+
 - Connector 0.6.0 and protocol v5 add a resumable current-UTC-year import after the normal rolling
   snapshot. History moves newest-first in acknowledged chunks of at most 31 dates, uses isolated
   adapter state, finishes as `complete` or `partial`, resumes after interruption or a lost response,
