@@ -247,7 +247,7 @@ test("hook install uses a fixed relative launcher, preserves foreign fields, and
   assert.equal(
     first.command,
     process.platform === "win32"
-      ? "./hooks/viberacing-cursor-evidence-probe.cmd"
+      ? ".\\hooks\\viberacing-cursor-evidence-probe.cmd"
       : "./hooks/viberacing-cursor-evidence-probe-hook.mjs",
   );
   assert.doesNotMatch(first.command, /[&|<>^%!()'" ]/);
