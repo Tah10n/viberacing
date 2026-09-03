@@ -11,6 +11,10 @@ const currentYearHistoryMigration = readFileSync(
   new URL("../database/010_current_year_history.sql", import.meta.url),
   "utf8",
 );
+const weeklyCleanupMigration = readFileSync(
+  new URL("../database/011_remove_weekly_compatibility.sql", import.meta.url),
+  "utf8",
+);
 const usageRoute = readFileSync(new URL("../app/api/usage/route.ts", import.meta.url), "utf8");
 
 describe("migration expansion compatibility", () => {
@@ -60,6 +64,26 @@ describe("migration expansion compatibility", () => {
     expect(browserSyncProtocolMigration).toContain(
       "scope = 'installation' AND agent_account_id IS NULL AND agent_id IS NULL",
     );
+  });
+});
+
+describe("weekly compatibility contract cleanup", () => {
+  it("removes both bridges and the legacy summary only after the application contract phase", () => {
+    expect(weeklyCleanupMigration).toContain(
+      "DROP TRIGGER weekly_agent_usage_daily_compatibility ON weekly_agent_usage;",
+    );
+    expect(weeklyCleanupMigration).toContain(
+      "DROP TRIGGER installation_sources_legacy_partial_coverage ON installation_sources;",
+    );
+    expect(weeklyCleanupMigration).toContain("DROP FUNCTION mirror_weekly_agent_usage_to_daily();");
+    expect(weeklyCleanupMigration).toContain(
+      "DROP FUNCTION refresh_daily_agent_usage_compatibility(date, bigint, varchar);",
+    );
+    expect(weeklyCleanupMigration).toContain(
+      "DROP FUNCTION materialize_legacy_partial_source_coverage();",
+    );
+    expect(weeklyCleanupMigration).toContain("DROP TABLE weekly_agent_usage;");
+    expect(weeklyCleanupMigration).not.toContain("CASCADE");
   });
 });
 

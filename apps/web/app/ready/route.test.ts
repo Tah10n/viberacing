@@ -23,7 +23,7 @@ describe("readiness migration ledger", () => {
       status: "ready",
       schemaVersion: expectedSchemaVersion,
     });
-    expect(expectedSchemaVersion).toBe("010_current_year_history.sql");
+    expect(expectedSchemaVersion).toBe("011_remove_weekly_compatibility.sql");
     expect(query).toHaveBeenCalledWith(expect.stringContaining("browser_sync_protocol"), [
       expectedSchemaVersion,
     ]);

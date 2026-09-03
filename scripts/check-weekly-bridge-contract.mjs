@@ -10,8 +10,12 @@ async function filesUnder(directory) {
   const files = [];
   for (const entry of entries) {
     const path = resolve(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await filesUnder(path)));
-    else files.push(path);
+    if (entry.isDirectory()) {
+      if (entry.name === ".next" || entry.name === "node_modules") continue;
+      files.push(...(await filesUnder(path)));
+    } else if (entry.isFile()) {
+      files.push(path);
+    }
   }
   return files;
 }
@@ -58,7 +62,25 @@ export async function checkWeeklyBridgeContract({ cwd = root } = {}) {
       !/\bCREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\s+refresh_daily_agent_usage_compatibility\b/i.test(
         sql,
       );
-    if (dropsTable || removesTrigger || removesFunction || removesRefreshFunction)
+    const removesCoverageTrigger =
+      /\bDROP\s+TRIGGER(?:\s+IF\s+EXISTS)?\s+installation_sources_legacy_partial_coverage\b/i.test(
+        sql,
+      ) && !/\bCREATE\s+TRIGGER\s+installation_sources_legacy_partial_coverage\b/i.test(sql);
+    const removesCoverageFunction =
+      /\bDROP\s+FUNCTION(?:\s+IF\s+EXISTS)?\s+materialize_legacy_partial_source_coverage\b/i.test(
+        sql,
+      ) &&
+      !/\bCREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\s+materialize_legacy_partial_source_coverage\b/i.test(
+        sql,
+      );
+    if (
+      dropsTable ||
+      removesTrigger ||
+      removesFunction ||
+      removesRefreshFunction ||
+      removesCoverageTrigger ||
+      removesCoverageFunction
+    )
       destructive.push(path);
   }
   if (destructive.length === 0) return;
@@ -67,7 +89,11 @@ export async function checkWeeklyBridgeContract({ cwd = root } = {}) {
   const references = [];
   for (const path of applicationFiles) {
     const source = await readFile(path, "utf8");
-    if (/weekly_agent_usage|weekly_agent_usage_daily_compatibility/.test(source))
+    if (
+      /weekly_agent_usage|weekly_agent_usage_daily_compatibility|installation_sources_legacy_partial_coverage|materialize_legacy_partial_source_coverage/.test(
+        source,
+      )
+    )
       references.push(path);
   }
   if (references.length > 0)

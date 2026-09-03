@@ -235,12 +235,13 @@
   for the immutable package and `latest`, and run a real interrupted/resumed current-year import.
   Raising the compatibility floor, deploying, publishing, tagging, or changing Railway remains a
   separate authorization decision.
-- Keep both cleanup phases out of the migration-010 deployment. Deployment A is code-only: ship code
-  that stops all weekly writes and removes the weekly table and both migration-010 compatibility
-  triggers from readiness while the database objects remain. Verify that build in production before
-  a distinct Deployment B runs migration 011 to remove both triggers, their functions, and the
-  table. Confirm the CI weekly-bridge contract rejects Deployment B while any production application
-  reference remains.
+- Keep both cleanup phases out of the migration-010 deployment. Deployment A shipped code that
+  stopped all weekly writes and removed the weekly objects from readiness; it was verified healthy
+  while those database objects remained. Deployment B then ran migration 011 to remove both
+  triggers, their functions, and the table. Confirm migration 011 is recorded, `/ready` returns 200,
+  the weekly table and compatibility triggers are absent, and daily aggregates still match the
+  authoritative source rows. The CI weekly-bridge contract must continue rejecting destructive
+  compatibility migrations while any production application reference remains.
 
 ## PostgreSQL operations
 
