@@ -487,6 +487,7 @@ async function post(request: Request): Promise<Response> {
       );
       const acceptedAt = acceptanceClock.rows[0]?.accepted_at;
       if (!(acceptedAt instanceof Date)) throw new Error("Usage acceptance clock is unavailable");
+      await client.query("SELECT set_config('viberacing.native_usage_coverage', 'on', true)");
 
       let acceptedEntries = 0;
       let acceptedSnapshots = 0;

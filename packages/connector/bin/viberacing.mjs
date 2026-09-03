@@ -1880,6 +1880,30 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       }
       continue;
     }
+    const current = state.history[source.sourceId];
+    const validActiveInitial =
+      current?.year === year &&
+      historyCursorMode(state, source.sourceId, current) === "initial" &&
+      current.rangeStart === yearStart &&
+      current.nextRangeEnd >= yearStart &&
+      current.nextRangeEnd <= firstHistoricalEnd;
+    const initialPending =
+      source.historyBackfillYear === year && source.historyBackfillStatus === "pending";
+    if (firstHistoricalEnd >= yearStart && (validActiveInitial || initialPending)) {
+      if (!validActiveInitial) {
+        state.history[source.sourceId] = {
+          mode: "initial",
+          year,
+          rangeStart: yearStart,
+          nextRangeEnd: firstHistoricalEnd,
+          hadPartialChunk: false,
+          retentionSafe: true,
+        };
+        delete state.historyAdapters[source.sourceId];
+        changed = true;
+      }
+      continue;
+    }
     const gapStart = source.historyGapRangeStart;
     const gapEnd = source.historyGapRangeEnd;
     if (
@@ -1904,7 +1928,6 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
         }
         continue;
       }
-      const current = state.history[source.sourceId];
       if (
         current?.year !== year ||
         historyCursorMode(state, source.sourceId, current) !== "gap" ||
@@ -1941,7 +1964,6 @@ function reconcileHistoryCursors(config, state, now = connectorNow()) {
       }
       continue;
     }
-    const current = state.history[source.sourceId];
     if (current?.year === year) continue;
     state.history[source.sourceId] = {
       mode: "initial",
@@ -2199,6 +2221,7 @@ async function applyHistoryAdvance(config, item) {
       delete state.historyRetries[item.sourceId];
     if (
       source &&
+      advance.mode !== "initial" &&
       advance.terminalStatus === "partial" &&
       typeof source.historyGapRangeStart === "string" &&
       typeof source.historyGapRangeEnd === "string"

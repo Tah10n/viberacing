@@ -11,6 +11,7 @@ const currentYearHistoryMigration = readFileSync(
   new URL("../database/010_current_year_history.sql", import.meta.url),
   "utf8",
 );
+const usageRoute = readFileSync(new URL("../app/api/usage/route.ts", import.meta.url), "utf8");
 
 describe("migration expansion compatibility", () => {
   it("materializes unresolved rolling coverage for legacy disconnected partial sources", () => {
@@ -21,6 +22,16 @@ describe("migration expansion compatibility", () => {
     expect(currentYearHistoryMigration).toContain(
       "unresolved_usage_dates = coverage.unresolved_dates",
     );
+  });
+
+  it("limits legacy partial materialization to old coverage writers", () => {
+    expect(currentYearHistoryMigration).toContain(
+      "BEFORE INSERT OR UPDATE OF last_successful_sync_at, last_completeness",
+    );
+    expect(currentYearHistoryMigration).toContain(
+      "current_setting('viberacing.native_usage_coverage', true) = 'on'",
+    );
+    expect(usageRoute).toContain("set_config('viberacing.native_usage_coverage', 'on', true)");
   });
 
   it("allows the previous web release to keep writing its legacy capability column", () => {

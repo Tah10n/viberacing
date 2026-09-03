@@ -139,6 +139,91 @@ async function verifyExpandMigrationCompatibility() {
       "migration 010 trusted legacy disconnected partial coverage as no-data",
     );
 
+    const durableGapDate = dateOffset(-45);
+    check(
+      durableGapDate >= januaryFirst && durableGapDate < dateOffset(-30),
+      "migration compatibility fixture needs a current-year date before the rolling window",
+    );
+    const nativeSourceId = randomUUID();
+    await client.query(
+      `INSERT INTO installation_sources
+         (id, installation_id, user_id, agent_account_id, client_source_id, agent_id,
+          suggested_label, collection_method, supported_surface, status)
+       VALUES ($1, $2, $3, $4, $5, 'codex', 'Native Codex',
+               'codex_app_server', 'cli', 'active')`,
+      [nativeSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'on', true)");
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial',
+              last_rolling_range_start = CURRENT_DATE - 30,
+              last_rolling_range_end = CURRENT_DATE,
+              unresolved_usage_dates = ARRAY[$2::date],
+              history_backfill_status = 'complete',
+              history_backfill_completed_at = now()
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'off', true)");
+
+    await client.query("UPDATE installation_sources SET status = 'disconnected' WHERE id = $1", [
+      nativeSourceId,
+    ]);
+    let nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during disconnect",
+    );
+
+    await client.query(
+      `UPDATE installation_sources
+          SET status = 'active',
+              last_warning_summary = 'diagnostic unchanged coverage',
+              agent_account_id = $2
+        WHERE id = $1`,
+      [nativeSourceId, accountId],
+    );
+    nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during diagnostics/account mapping",
+    );
+
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'on', true)");
+    await client.query(
+      `UPDATE installation_sources
+          SET last_successful_sync_at = CURRENT_DATE,
+              last_completeness = 'partial',
+              last_rolling_range_start = CURRENT_DATE - 30,
+              last_rolling_range_end = CURRENT_DATE,
+              unresolved_usage_dates = unresolved_usage_dates
+        WHERE id = $1`,
+      [nativeSourceId],
+    );
+    await client.query("SELECT set_config('viberacing.native_usage_coverage', 'off', true)");
+    nativeCoverage = await client.query(
+      `SELECT $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved
+         FROM installation_sources
+        WHERE id = $1`,
+      [nativeSourceId, durableGapDate],
+    );
+    check(
+      nativeCoverage.rows[0]?.durable_gap_preserved === true,
+      "migration 010 erased a native unresolved date during an identical partial snapshot",
+    );
+
     const postMigrationPartialSourceId = randomUUID();
     await client.query(
       `INSERT INTO installation_sources
@@ -147,6 +232,12 @@ async function verifyExpandMigrationCompatibility() {
        VALUES ($1, $2, $3, $4, $5, 'codex', 'Old post-migration Codex',
                'codex_app_server', 'cli', 'active')`,
       [postMigrationPartialSourceId, installationId, compatibilityUserId, accountId, randomUUID()],
+    );
+    await client.query(
+      `UPDATE installation_sources
+          SET unresolved_usage_dates = ARRAY[$2::date]
+        WHERE id = $1`,
+      [postMigrationPartialSourceId, durableGapDate],
     );
     await client.query(
       `UPDATE installation_sources
@@ -162,17 +253,19 @@ async function verifyExpandMigrationCompatibility() {
       `SELECT status,
               last_rolling_range_start::text AS range_start,
               last_rolling_range_end::text AS range_end,
+              $2::date = ANY(unresolved_usage_dates) AS durable_gap_preserved,
               cardinality(unresolved_usage_dates) AS unresolved_days,
               (last_rolling_range_end - last_rolling_range_start + 1) AS covered_days
          FROM installation_sources
         WHERE id = $1`,
-      [postMigrationPartialSourceId],
+      [postMigrationPartialSourceId, durableGapDate],
     );
     check(
       postMigrationCoverage.rows[0]?.status === "disconnected" &&
         postMigrationCoverage.rows[0]?.range_end === today &&
+        postMigrationCoverage.rows[0]?.durable_gap_preserved === true &&
         postMigrationCoverage.rows[0]?.unresolved_days ===
-          postMigrationCoverage.rows[0]?.covered_days,
+          postMigrationCoverage.rows[0]?.covered_days + 1,
       "migration 010 lost a post-migration old-release partial/disconnect write",
     );
 

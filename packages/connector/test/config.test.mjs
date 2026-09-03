@@ -392,6 +392,12 @@ async function writeCaptureInstallation(home, origin, options = {}) {
           lastAcceptedSyncSequence: "0",
           historyBackfillYear: options.historyBackfillYear ?? new Date().getUTCFullYear(),
           historyBackfillStatus: options.historyBackfillStatus ?? "complete",
+          ...(options.historyGapRangeStart === undefined
+            ? {}
+            : {
+                historyGapRangeStart: options.historyGapRangeStart,
+                historyGapRangeEnd: options.historyGapRangeEnd,
+              }),
         },
       ],
     })}\n`,
@@ -5071,9 +5077,9 @@ test("manual sync collects every active source and clears only its prior dirty g
   assert.equal((await readFile(trace, "utf8")).trim().split("\n").length, 4);
 });
 
-test("automatic sync advances one current-year chunk and manual sync resumes through January", async (context) => {
+test("automatic sync preserves initial priority over a partial-day gap and manual sync resumes through January", async (context) => {
   const fixedNow = "2026-09-01T12:00:00.000Z";
-  const historicalDates = ["2026-07-15", "2026-06-15", "2026-05-15"];
+  const historicalDates = ["2026-05-15", "2026-01-15"];
   const bodies = [];
   const server = createServer((request, response) => {
     const chunks = [];
@@ -5081,8 +5087,14 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
     request.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       bodies.push(body);
+      const result = usageResponse(body);
+      result.sourceSequences = result.sourceSequences.map((source) => ({
+        ...source,
+        historyGapRangeStart: "2026-09-01",
+        historyGapRangeEnd: "2026-09-01",
+      }));
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify(usageResponse(body)));
+      response.end(JSON.stringify(result));
     });
   });
   server.listen(0, "127.0.0.1");
@@ -5102,6 +5114,8 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
     })),
     historyBackfillYear: 2026,
     historyBackfillStatus: "pending",
+    historyGapRangeStart: "2026-09-01",
+    historyGapRangeEnd: "2026-09-01",
   });
   await writeFile(
     join(installation.directory, "dirty.json"),
@@ -5131,6 +5145,7 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   );
   const cursorAfterAutomatic = afterAutomatic.history[installation.sourceId];
   assert.equal(cursorAfterAutomatic.year, 2026);
+  assert.equal(cursorAfterAutomatic.mode, "initial");
   assert.equal(cursorAfterAutomatic.hadPartialChunk, true);
   assert.equal(afterAutomatic.historyAdapters?.[installation.sourceId], undefined);
   const rollingAdapterState = afterAutomatic.adapters[installation.sourceId];
@@ -5139,7 +5154,16 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
   const resumedBodies = bodies.slice(bodyCountAfterAutomatic);
   assert.equal(resumedBodies[0].snapshots[0].kind, "rolling");
-  const historical = resumedBodies.slice(1).map((body) => body.snapshots[0]);
+  const historicalBodies = resumedBodies
+    .slice(1)
+    .filter((body) => body.snapshots[0]?.kind === "year_backfill");
+  const initialBodies = historicalBodies.filter(
+    (body) => body.snapshots[0].rangeStart !== "2026-09-01",
+  );
+  const gapBodies = historicalBodies.filter(
+    (body) => body.snapshots[0].rangeStart === "2026-09-01",
+  );
+  const historical = initialBodies.map((body) => body.snapshots[0]);
   assert.ok(historical.length > 0);
   for (const [index, snapshot] of historical.entries()) {
     assert.equal(snapshot.kind, "year_backfill");
@@ -5154,6 +5178,11 @@ test("automatic sync advances one current-year chunk and manual sync resumes thr
   const terminal = historical.at(-1);
   assert.equal(terminal.rangeStart, "2026-01-01");
   assert.equal(terminal.historyYearComplete, "partial");
+  assert.ok(gapBodies.length > 0);
+  assert.equal(gapBodies[0].snapshots[0].rangeStart, "2026-09-01");
+  assert.ok(
+    historicalBodies.indexOf(gapBodies[0]) > historicalBodies.indexOf(initialBodies.at(-1)),
+  );
   const deliveredHistoryDates = bodies
     .flatMap((body) => body.snapshots)
     .filter((snapshot) => snapshot.kind === "year_backfill")

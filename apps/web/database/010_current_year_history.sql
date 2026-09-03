@@ -99,6 +99,9 @@ UPDATE installation_sources source
 -- The old application may remain live briefly after migration 010 commits. Materialize the same
 -- conservative coverage when that release writes a partial result without the new columns, so a
 -- subsequent disconnect cannot turn the source into trusted no-data for the new dashboard.
+-- The current application sets a transaction-local marker before its native coverage writes.
+-- Column-scoped updates keep unrelated lifecycle/diagnostic changes out of this compatibility path,
+-- while known unresolved dates outside the legacy rolling window remain durable.
 CREATE FUNCTION materialize_legacy_partial_source_coverage()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
@@ -110,10 +113,7 @@ BEGIN
   IF NEW.last_completeness IS DISTINCT FROM 'partial' THEN
     RETURN NEW;
   END IF;
-  IF TG_OP = 'UPDATE'
-    AND (NEW.last_rolling_range_start IS DISTINCT FROM OLD.last_rolling_range_start
-      OR NEW.last_rolling_range_end IS DISTINCT FROM OLD.last_rolling_range_end
-      OR NEW.unresolved_usage_dates IS DISTINCT FROM OLD.unresolved_usage_dates) THEN
+  IF current_setting('viberacing.native_usage_coverage', true) = 'on' THEN
     RETURN NEW;
   END IF;
 
@@ -122,31 +122,34 @@ BEGIN
     utc_today
   );
   IF coverage_end < utc_year_start THEN
-    NEW.last_rolling_range_start := NULL;
-    NEW.last_rolling_range_end := NULL;
-    NEW.unresolved_usage_dates := '{}'::date[];
     RETURN NEW;
   END IF;
   coverage_start := greatest(utc_year_start, coverage_end - 30);
   NEW.last_rolling_range_start := coverage_start;
   NEW.last_rolling_range_end := coverage_end;
-  SELECT coalesce(array_agg(day.value::date ORDER BY day.value) FILTER (
-           WHERE NOT EXISTS (
-             SELECT 1
-               FROM daily_usage usage
-              WHERE usage.source_id = NEW.id
-                AND usage.usage_date = day.value::date
-                AND usage.completeness = 'complete'
-           )
-         ), '{}'::date[])
+  SELECT coalesce(array_agg(candidate.usage_date ORDER BY candidate.usage_date), '{}'::date[])
     INTO NEW.unresolved_usage_dates
-    FROM generate_series(coverage_start, coverage_end, interval '1 day') AS day(value);
+    FROM (
+      SELECT known.usage_date
+        FROM unnest(NEW.unresolved_usage_dates) AS known(usage_date)
+       WHERE known.usage_date < coverage_start OR known.usage_date > coverage_end
+      UNION
+      SELECT day.value::date AS usage_date
+        FROM generate_series(coverage_start, coverage_end, interval '1 day') AS day(value)
+       WHERE NOT EXISTS (
+         SELECT 1
+           FROM daily_usage usage
+          WHERE usage.source_id = NEW.id
+            AND usage.usage_date = day.value::date
+            AND usage.completeness = 'complete'
+       )
+    ) AS candidate;
   RETURN NEW;
 END;
 $$;
 
 CREATE TRIGGER installation_sources_legacy_partial_coverage
-BEFORE INSERT OR UPDATE ON installation_sources
+BEFORE INSERT OR UPDATE OF last_successful_sync_at, last_completeness ON installation_sources
 FOR EACH ROW EXECUTE FUNCTION materialize_legacy_partial_source_coverage();
 
 -- Migration 010 is the expand half of an expand-contract rollout. The previous application release
