@@ -16,7 +16,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { inspectOwnerOnlyWindowsFile } from "../packages/connector/lib/windows-security.mjs";
+import {
+  ensureOwnerOnlyWindowsFile,
+  inspectOwnerOnlyWindowsFile,
+} from "../packages/connector/lib/windows-security.mjs";
 import {
   buildEvidenceReport,
   installProbeHooks,
@@ -45,8 +48,20 @@ function context(overrides = {}) {
 async function privateTemporaryDirectory(testContext, prefix) {
   const directory = await mkdtemp(join(tmpdir(), prefix));
   if (process.platform !== "win32") await chmod(directory, 0o700);
-  testContext.after(() => rm(directory, { recursive: true, force: true }));
+  testContext.after(() =>
+    rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: process.platform === "win32" ? 50 : 0,
+      retryDelay: 100,
+    }),
+  );
   return directory;
+}
+
+async function writePrivateFile(path, contents, options = {}) {
+  await writeFile(path, contents, { mode: 0o600, ...options });
+  await ensureOwnerOnlyWindowsFile(path);
 }
 
 async function writeExecutable(path, source) {
@@ -220,7 +235,7 @@ test("hook install uses a fixed relative launcher, preserves foreign fields, and
     vendorExtension: { enabled: true },
     hooks: { stop: [{ command: "foreign-stop --keep" }], afterFileEdit: [{ command: "keep" }] },
   };
-  await writeFile(hooksFile, `${JSON.stringify(foreign, null, 2)}\n`, { mode: 0o600 });
+  await writePrivateFile(hooksFile, `${JSON.stringify(foreign, null, 2)}\n`);
   const first = await installProbeHooks({
     outputDirectory,
     surface: "desktop",
@@ -327,7 +342,7 @@ test("hooks.json compare-and-swap retries once and preserves a concurrent foreig
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
   const hooksFile = join(cursorRoot, "hooks.json");
-  await writeFile(hooksFile, '{"version":1,"hooks":{}}\n', { mode: 0o600 });
+  await writePrivateFile(hooksFile, '{"version":1,"hooks":{}}\n');
   const result = await installProbeHooks({
     outputDirectory,
     surface: "desktop",
@@ -337,10 +352,9 @@ test("hooks.json compare-and-swap retries once and preserves a concurrent foreig
     hooksFile,
     beforeCompareAndSwap: async ({ attempt }) => {
       if (attempt === 0)
-        await writeFile(
+        await writePrivateFile(
           hooksFile,
           '{"version":1,"hooks":{"afterFileEdit":[{"command":"foreign"}]}}\n',
-          { mode: 0o600 },
         );
     },
   });
@@ -354,7 +368,7 @@ test("hooks.json compare-and-swap fails closed after the single retry", async (t
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
   const hooksFile = join(cursorRoot, "hooks.json");
-  await writeFile(hooksFile, '{"version":1,"hooks":{}}\n', { mode: 0o600 });
+  await writePrivateFile(hooksFile, '{"version":1,"hooks":{}}\n');
   await assert.rejects(
     installProbeHooks({
       outputDirectory,
@@ -364,10 +378,9 @@ test("hooks.json compare-and-swap fails closed after the single retry", async (t
       step: "single",
       hooksFile,
       beforeCompareAndSwap: ({ attempt }) =>
-        writeFile(
+        writePrivateFile(
           hooksFile,
           `{"version":1,"hooks":{"stop":[{"command":"foreign-${attempt}"}]}}\n`,
-          { mode: 0o600 },
         ),
     }),
     /changed concurrently/,
@@ -381,7 +394,7 @@ test("hooks.json no-replace publish preserves a foreign update after displacemen
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
   const hooksFile = join(cursorRoot, "hooks.json");
-  await writeFile(hooksFile, '{"version":1,"hooks":{}}\n', { mode: 0o600 });
+  await writePrivateFile(hooksFile, '{"version":1,"hooks":{}}\n');
   const result = await installProbeHooks({
     outputDirectory,
     surface: "desktop",
@@ -391,10 +404,10 @@ test("hooks.json no-replace publish preserves a foreign update after displacemen
     hooksFile,
     afterDisplace: async ({ attempt }) => {
       if (attempt === 0)
-        await writeFile(
+        await writePrivateFile(
           hooksFile,
           '{"version":1,"hooks":{"afterFileEdit":[{"command":"late-foreign"}]}}\n',
-          { mode: 0o600, flag: "wx" },
+          { flag: "wx" },
         );
     },
   });
@@ -409,9 +422,10 @@ test("hook mutation recovers a displaced hooks.json left by an interrupted publi
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
   const hooksFile = join(cursorRoot, "hooks.json");
   const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
-  await writeFile(recovery, '{"version":1,"hooks":{"afterFileEdit":[{"command":"preserved"}]}}\n', {
-    mode: 0o600,
-  });
+  await writePrivateFile(
+    recovery,
+    '{"version":1,"hooks":{"afterFileEdit":[{"command":"preserved"}]}}\n',
+  );
   const result = await installProbeHooks({
     outputDirectory,
     surface: "desktop",
@@ -785,10 +799,9 @@ test("report requires semantic scenarios but always keeps the production gate cl
     }),
   );
   for (const row of rows)
-    await writeFile(
+    await writePrivateFile(
       join(observationsDirectory, `${row.observationId}.json`),
       `${JSON.stringify(row)}\n`,
-      { mode: 0o600 },
     );
   const report = await buildEvidenceReport(outputDirectory);
   assert.equal(report.productionGate, "closed");
@@ -804,10 +817,9 @@ test("report requires semantic scenarios but always keeps the production gate cl
 
   add("desktop-one-turn", "desktop", runA, "single", "conflicting-account");
   const conflict = rows.at(-1);
-  await writeFile(
+  await writePrivateFile(
     join(observationsDirectory, `${conflict.observationId}.json`),
     `${JSON.stringify(conflict)}\n`,
-    { mode: 0o600 },
   );
   const conflictingReport = await buildEvidenceReport(outputDirectory);
   assert.equal(conflictingReport.scenarioCoverage["desktop-one-turn"], false);
@@ -833,10 +845,9 @@ test("the observation ceiling is itself treated as truncation", async (testConte
   await mkdir(observationsDirectory, { mode: 0o700 });
   for (const account of ["a", "b"]) {
     const observation = sanitizeCursorObservation(usagePayload(account), context());
-    await writeFile(
+    await writePrivateFile(
       join(observationsDirectory, `${observation.observationId}.json`),
       `${JSON.stringify(observation)}\n`,
-      { mode: 0o600 },
     );
   }
   const report = await buildEvidenceReport(outputDirectory, { maximumObservationCount: 2 });

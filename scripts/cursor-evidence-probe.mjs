@@ -631,7 +631,7 @@ export async function readBoundedJson(stream, maximumBytes = maximumInputBytes) 
 
 function hookCommandFor(platform = process.platform) {
   return platform === "win32"
-    ? "./hooks/viberacing-cursor-evidence-probe.cmd"
+    ? ".\\hooks\\viberacing-cursor-evidence-probe.cmd"
     : `./hooks/${hookLauncherScriptName}`;
 }
 
