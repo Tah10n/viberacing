@@ -25,7 +25,7 @@
     "local:test": "node --env-file=apps/web/.env.local scripts/test-local-scenarios.mjs",
     "local:up": "sh scripts/local-up.sh",
     "privacy:check": "node scripts/check-privacy.mjs",
-    "test": "node --test scripts/check-connector-release.test.mjs scripts/check-connector-version-bump.test.mjs scripts/publish-connector-workflow.test.mjs && corepack pnpm --filter @viberacing/web test && corepack pnpm --filter @viberacing/connector test",
+    "test": "node --test scripts/check-connector-release.test.mjs scripts/check-connector-version-bump.test.mjs scripts/cursor-evidence-probe.test.mjs scripts/publish-connector-workflow.test.mjs && corepack pnpm --filter @viberacing/web test && corepack pnpm --filter @viberacing/connector test",
     "test:e2e": "corepack pnpm db:migrate && corepack pnpm --filter @viberacing/web test:e2e",
     "typecheck": "corepack pnpm --filter @viberacing/web typecheck",
     "verify": "corepack pnpm run privacy:check && corepack pnpm run migrations:check && corepack pnpm run connector:package:check && corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run typecheck && corepack pnpm run test && corepack pnpm run build"
