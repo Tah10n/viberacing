@@ -25,7 +25,8 @@ describe("standings table profile contract", () => {
     expect(markup).toContain('target="_blank"');
     expect(markup).toContain('rel="noreferrer"');
     expect(markup).toContain('class="racer-profile-dialog"');
-    expect(markup).toContain('href="/u/Tah10n?period=year"');
+    expect(markup).not.toContain('class="leaderboard-profile-link"');
+    expect(markup).not.toContain(">View profile<");
     expect(markup).toContain("Tokens · All time");
   });
 });

@@ -1,7 +1,8 @@
 # Agent support
 
-Last researched against current upstream sources on 2026-09-03. “Exact” means provider-recorded
-token counters; Vibe Racing never estimates tokens from text.
+The supported-agent matrix was last researched against current upstream sources on 2026-08-22; the
+separate Cursor exclusion was researched on 2026-09-03. “Exact” means provider-recorded token
+counters; Vibe Racing never estimates tokens from text.
 
 Cursor is not a supported eighth agent. Its current documented Desktop hooks and CLI output schema
 do not establish exact input/output/cache/reasoning counters across both surfaces. The

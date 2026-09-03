@@ -536,7 +536,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     page.getByRole("heading", { name: "Only exact aggregate token counters cross the boundary" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
   const accountDisclosure = page.locator(".account-disclosure");
   await expect(accountDisclosure).toHaveAttribute("open", "");
   await accountDisclosure.locator("summary").click();
@@ -555,7 +556,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
       ["0.4.3", 1, installationId],
     );
     await page.reload();
-    await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
     await expect(page.locator(".connector-update")).toBeVisible();
     await featureDatabase.query(
       "UPDATE installations SET browser_sync_protocol = $1 WHERE id = $2",
@@ -709,7 +711,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     await missingHandlerDatabase.end();
   }
   await page.goto("/dashboard");
-  await expect(page.getByRole("button", { name: "Sync all agents" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
   await expect(page.locator(".connector-update")).toBeVisible();
   await expect(page.locator(".connector-update code")).toHaveText(
     "npx --yes @viberacing/connector@latest doctor --repair",

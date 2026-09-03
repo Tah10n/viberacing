@@ -7,8 +7,12 @@ This document records the investigation boundary for adding Cursor Desktop and C
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source
 proves provider-recorded integer token counters, stable local deduplication identities, UTC
 attribution, and privacy-safe account separation for every supported surface. Request counts,
-context-window occupancy, text-derived estimates, costs, subscription dashboards, and
-organization/admin APIs are not token usage.
+context-window occupancy, text-derived estimates, costs, and subscription dashboards are not token
+usage. Cursor's Team [Admin API](https://prod.cursor.com/docs/account/teams/admin-api) and
+[Organization API](https://prod.cursor.com/docs/account/organizations/organization-admin-api) do
+publish exact `tokenUsage` for some team usage events, but they are credentialed,
+organization-level, non-universal feeds and are outside this local Desktop/CLI evidence gate. They
+do not establish the required local source or account-switch contract.
 
 ## Evidence reviewed
 
@@ -49,14 +53,16 @@ Consequently this change deliberately does **not**:
 
 ## Opt-in local probe
 
-The root-only probe helps an authenticated Cursor user gather future schema evidence without putting
-raw payloads in this repository. It is research tooling, not part of the published connector archive
-and not a production collector.
+The repository-only probe helps an authenticated Cursor user gather future schema evidence without
+putting raw payloads in this repository. It is research tooling, not part of the published connector
+archive and not a production collector.
 
 Choose a new absolute output directory outside the repository. The probe creates a missing directory
-as owner-only and rejects an existing directory that is accessible to another user. It stores only:
+as owner-only and rejects an existing directory that is accessible to another user. On POSIX it
+enforces owner-only modes. On Windows it applies and verifies current-user-only ACLs for probe
+state, observations, and installed launcher files. It stores only:
 
-- structural field paths and primitive types;
+- structural field paths and primitive types, with unrecognized field names replaced by local HMACs;
 - allowlisted non-negative integer token fields as canonical decimal strings;
 - locally HMACed account and event identities;
 - a parse status, safe Cursor version/status, and parseable provider timestamp.
@@ -74,7 +80,9 @@ Install additive probe-owned hooks for one surface and scenario:
 node scripts/cursor-evidence-probe.mjs install-hooks \
   --output-dir /absolute/private/cursor-evidence \
   --surface desktop \
-  --scenario desktop-one-turn
+  --scenario desktop-one-turn \
+  --run-id 11111111-1111-4111-8111-111111111111 \
+  --step single
 ```
 
 Run only the named scenario, then remove the probe entries. Foreign hook entries and unknown
@@ -85,9 +93,13 @@ node scripts/cursor-evidence-probe.mjs remove-hooks \
   --output-dir /absolute/private/cursor-evidence
 ```
 
-Repeat installation with `--surface cli-interactive` for interactive CLI scenarios. Installation
-fails closed for linked, oversized, non-regular, or other-user hook files. It never changes Cursor
-hook trust or bypasses an approval UI.
+Repeat installation with `--surface cli-interactive` for interactive CLI scenarios. `surface`,
+`scenario`, `run-id`, and `step` are operator-declared labels, not claims inferred from Cursor.
+Installation writes a fixed relative launcher under `~/.cursor/hooks/`; dynamic paths never enter a
+shell command. An owned lock, file fingerprint comparison, exclusive no-replace publication, and a
+recoverable displaced-file journal preserve concurrent foreign edits, with one retry before failing
+closed. Installation also fails closed for linked, oversized, non-regular, or other-user hook files.
+It never changes Cursor hook trust or bypasses an approval UI.
 
 ### Headless CLI
 
@@ -100,12 +112,20 @@ node scripts/cursor-evidence-probe.mjs run-cli \
   --output-dir /absolute/private/cursor-evidence \
   --agent /absolute/path/to/agent \
   --scenario cli-headless-one-turn \
+  --run-id 22222222-2222-4222-8222-222222222222 \
+  --step single \
   -- --print "your private prompt"
 ```
 
+The wrapper uses a streaming UTF-8 decoder, honors stdout backpressure, processes and saves records
+sequentially, waits for stdio `close`, terminates and awaits the child after a processing failure,
+removes temporary signal listeners, and preserves the child's exit code or terminating signal.
+Malformed middle records, unterminated tails, byte limits, and observation limits leave an explicit
+non-qualifying observation without suppressing later complete records.
+
 For an already captured local JSONL file, `inspect-jsonl` performs the same bounded streaming
-sanitization. The input must be an absolute, current-user, single-link regular file and is never
-copied into the output directory.
+sanitization and also requires `--run-id` and `--step`. The input must be an absolute, current-user,
+single-link regular file and is never copied into the output directory.
 
 ### Required scenarios
 
@@ -129,11 +149,19 @@ node scripts/cursor-evidence-probe.mjs report \
   --output-dir /absolute/private/cursor-evidence
 ```
 
-`gatePassed: true` is only a mechanical signal that the required labels, three surfaces, two local
-account keys, event identities, provider timestamps, valid counters, and the four-component total
-formula were observed. It is not authorization to enable Cursor. Before production code, a reviewer
-must inspect the minimized schemas and reproduce every scenario against the current stable Desktop
-and CLI versions. A fixture may be committed only after proving that it contains no private content.
+`mechanicalCoverageComplete: true` means only that the probe mechanically verified the explicit
+steps for all ten scenarios: same/different account relationships, CLI and Desktop A/B/A reuse,
+three usage-bearing surfaces, parent/subagent observations, aborted/error status, UTC rollover, and
+one hook/history identity reconciliation. Ambiguous timestamps/accounts, invalid counters,
+truncation, and incomplete scenarios cannot qualify. Email aliases and case-sensitive opaque account
+IDs are HMACed separately and are linked into one local account only when they co-occur in an
+unambiguous observation.
+
+`productionGate` is always `closed`, and `limitations` is never empty. The report lists only
+observed candidate counter equalities; it does not select an authoritative token formula. Before
+production code, a reviewer must authenticate the source, interpret the minimized schemas, and
+reproduce every scenario against current stable Desktop and CLI versions. A fixture may be committed
+only after proving that it contains no private content.
 
 ## Acceptance boundary for a future integration
 

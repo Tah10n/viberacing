@@ -11,8 +11,11 @@ experience or protocol.
 ### Added
 
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
-  records only minimized schemas, exact integer counter candidates, local HMAC identities, safe
-  status/version fields, and timestamps outside the repository. Cursor remains unsupported and is
+  records only minimized schemas (HMACing unknown field names), exact integer counter candidates,
+  local HMAC identities, safe status/version fields, and unambiguous timestamps outside the
+  repository. Its fixed hook launcher, owner-only Windows ACLs, compare-and-swap hook updates,
+  close-aware UTF-8 CLI stream handling, explicit scenario steps, and always-closed production gate
+  harden research collection without asserting a token formula. Cursor remains unsupported and is
   not registered because current Desktop and CLI evidence does not prove one authoritative exact
   source.
 
@@ -53,6 +56,10 @@ experience or protocol.
 
 ### Changed
 
+- Dashboard account and installation Sync controls remain visible when browser Sync is unavailable;
+  they are disabled with an explanation until this browser is linked to a current connector.
+- Leaderboard rows no longer repeat a large inline profile link when the entire accessible row
+  already opens the profile dialog; the full leaderboard-profile link remains inside that dialog.
 - Every adapter now applies the requested date range before events consume ledger limits or affect
   chunk completeness. OpenCode uses a range-bounded SQLite query, Qwen opens only intersecting month
   files, and historical collection cannot replace rolling checkpoints, fingerprints, or diagnostics.

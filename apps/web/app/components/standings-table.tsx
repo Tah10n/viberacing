@@ -194,12 +194,6 @@ export function StandingsTable({
                   <td className="racer-cell">
                     <div className="racer-line">
                       <RacerLink handle={row.handle} />
-                      <Link
-                        className="leaderboard-profile-link"
-                        href={`/u/${encodeURIComponent(row.handle)}?${periodSearch}`}
-                      >
-                        View profile
-                      </Link>
                       {isCurrent ? <Badge>You</Badge> : null}
                     </div>
                     <div className="mobile-agent-mix">

@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -334,6 +335,7 @@ export function AccountControls({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const unavailableDescriptionId = useId();
   const sync = useContext(BrowserSyncContext);
   const current = sync?.state?.target === accountId ? sync.state : null;
   const actionsId = `account-actions-${accountId}`;
@@ -351,16 +353,25 @@ export function AccountControls({
         >
           Manage account
         </button>
-        {canSync ? (
-          <button
-            className="button"
-            disabled={!sync?.ready || current?.tone === "status"}
-            onClick={() => sync?.launchAccount(accountId)}
-            type="button"
-          >
-            Sync
-          </button>
-        ) : null}
+        <button
+          aria-describedby={canSync ? undefined : unavailableDescriptionId}
+          className={canSync ? "button" : "button sync-unavailable"}
+          disabled={!canSync || !sync?.ready || current?.tone === "status"}
+          onClick={() => sync?.launchAccount(accountId)}
+          title={
+            canSync
+              ? undefined
+              : "Sync is available after this browser is linked to a current local connector."
+          }
+          type="button"
+        >
+          Sync
+        </button>
+        {canSync ? null : (
+          <span className="sr-only" id={unavailableDescriptionId}>
+            Sync is unavailable until this browser is linked to a current local connector.
+          </span>
+        )}
       </div>
       {current === null ? null : (
         <p
@@ -378,19 +389,30 @@ export function AccountControls({
 }
 
 export function InstallationSyncControl({ canSync }: { canSync: boolean }) {
+  const unavailableDescriptionId = useId();
   const sync = useContext(BrowserSyncContext);
-  if (!canSync) return null;
   const current = sync?.state?.target === installationSyncTarget ? sync.state : null;
   return (
     <div className="installation-sync-control">
       <button
-        className="button"
-        disabled={!sync?.ready || current?.tone === "status"}
+        aria-describedby={canSync ? undefined : unavailableDescriptionId}
+        className={canSync ? "button" : "button sync-unavailable"}
+        disabled={!canSync || !sync?.ready || current?.tone === "status"}
         onClick={() => sync?.launchInstallation()}
+        title={
+          canSync
+            ? undefined
+            : "Sync is available after this browser is linked to a current local connector."
+        }
         type="button"
       >
         Sync all agents
       </button>
+      {canSync ? null : (
+        <p className="browser-sync-message status" id={unavailableDescriptionId}>
+          Link this browser to a current connector to enable Sync.
+        </p>
+      )}
       {current === null ? null : (
         <p
           className={`browser-sync-message ${current.tone}`}
