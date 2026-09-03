@@ -114,15 +114,13 @@ deployment, npm publication, a tag, a GitHub Release, or a Railway variable chan
 
 Migration 010 is the additive half of an expand-contract rollout. It creates and backfills
 `daily_agent_usage`, retains `weekly_agent_usage`, and installs a temporary database bridge so the
-previous application can keep reading and writing weekly summaries while Railway runs pre-deploy
-before the new healthcheck succeeds. The new application reads daily summaries and temporarily
-dual-writes both representations. Cleanup requires two separately approved future deployments
-because Railway runs migrations before switching traffic. Deployment A is code-only: stop every
-`weekly_agent_usage` write and remove the weekly table and both migration-010 compatibility triggers
-from `/ready`, while leaving the bridges and table intact. Only after Deployment A is healthy may
-Deployment B add migration 011 to remove both triggers, their functions, and the weekly table. The
-CI weekly-bridge contract rejects that destructive migration while production application references
-remain. Do not include either cleanup phase in the migration-010 deployment. Connector distribution
+previous application could keep reading and writing weekly summaries while Railway ran pre-deploy
+before the new healthcheck succeeded. Deployment A is the code-only contract phase: the application
+now reads and writes only `daily_agent_usage`, and `/ready` no longer requires the weekly table or
+either migration-010 compatibility trigger. The database bridges and weekly table deliberately
+remain intact until this build is healthy. Only then may Deployment B add migration 011 to remove
+both triggers, their functions, and the weekly table. The CI weekly-bridge contract rejects that
+destructive migration while production application references remain. Connector distribution
 rollback remains independent of this application-schema sequence.
 
 Connector 0.5.0 has an additional OpenCode ordering constraint because production already contains

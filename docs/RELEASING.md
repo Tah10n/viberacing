@@ -58,14 +58,13 @@ server must be deployed and verified before the connector package is published: 
 keep their recent rolling sync, while only v5 connectors can resume the current UTC year's history
 in at-most-31-day chunks. Migration 010 expands the schema with `daily_agent_usage`, retains the
 legacy `weekly_agent_usage` table, and adds a temporary bridge plus application dual-write so the
-previous release stays compatible throughout Railway pre-deploy and healthcheck switching. The new
-release reads only the daily summary. Cleanup then needs two distinct, reviewed deployments.
-Deployment A changes application code only: it stops weekly writes and removes the weekly table and
-both migration-010 compatibility triggers from readiness, but deliberately leaves the objects in
-PostgreSQL. After that build is healthy, Deployment B may add migration 011 to remove both triggers,
-their functions, and the weekly table. CI rejects a destructive weekly migration while production
-application references remain. Never combine these phases or place cleanup 011 in the same
-deployment as expand migration 010.
+previous release stayed compatible throughout Railway pre-deploy and healthcheck switching.
+Deployment A is code-only: the application now writes only daily summaries and readiness no longer
+depends on the weekly table or either migration-010 compatibility trigger, while those PostgreSQL
+objects remain for the contract window. After that build is healthy, Deployment B may add migration
+011 to remove both triggers, their functions, and the weekly table. CI rejects a destructive weekly
+migration while production application references remain. Never combine these phases or place
+cleanup 011 in the same deployment as expand migration 010.
 
 The feature pull request stages the migration, server, package bytes, tests, and documentation only.
 Merging it does not authorize `npm publish`, a tag, GitHub Release, deploy, or Railway variable

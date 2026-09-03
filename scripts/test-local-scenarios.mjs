@@ -2493,10 +2493,13 @@ try {
     [userId],
   );
   check(
-    compatibilitySummary.rows[0]?.weekly_tokens === compatibilitySummary.rows[0]?.daily_tokens,
-    "new ingestion did not keep weekly and daily compatibility summaries equal",
+    compatibilitySummary.rows[0]?.weekly_tokens === null &&
+      BigInt(compatibilitySummary.rows[0]?.daily_tokens ?? "0") > 0n,
+    "Deployment A still wrote the legacy weekly summary or failed to update the daily summary",
   );
-  console.log("ok - unchanged confirmation advances account and computer Last sync timestamps");
+  console.log(
+    "ok - Deployment A updates only daily summaries and unchanged confirmation advances Last sync",
+  );
   await pool.query(
     `UPDATE installation_sources
         SET history_backfill_year = $3,
@@ -4056,8 +4059,7 @@ try {
        (SELECT count(*)::int FROM daily_usage usage
          JOIN installation_sources source ON source.id = usage.source_id
         WHERE source.user_id = $1) AS source_days,
-       (SELECT count(*)::int FROM daily_agent_usage WHERE user_id = $1) AS agent_days,
-       (SELECT count(*)::int FROM weekly_agent_usage WHERE user_id = $1) AS weekly_rows`,
+       (SELECT count(*)::int FROM daily_agent_usage WHERE user_id = $1) AS agent_days`,
     [userId],
   );
   check(
@@ -4065,8 +4067,7 @@ try {
       leaveLeaderboard.status === 303 &&
       profileAfterLeave.status === 404 &&
       retainedUsageAfterLeave.rows[0]?.source_days === 0 &&
-      retainedUsageAfterLeave.rows[0].agent_days === 0 &&
-      retainedUsageAfterLeave.rows[0].weekly_rows === 0,
+      retainedUsageAfterLeave.rows[0].agent_days === 0,
     "Leave leaderboard retained public participation or a usage aggregate",
   );
   console.log("ok - Leave removes all usage and the retained bare identity has no public profile");

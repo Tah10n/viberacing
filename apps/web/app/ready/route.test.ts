@@ -42,12 +42,9 @@ describe("readiness migration ledger", () => {
     expect(query).toHaveBeenCalledWith(expect.stringContaining("unresolved_usage_dates"), [
       expectedSchemaVersion,
     ]);
-    expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /weekly_agent_usage_daily_compatibility[\s\S]*installation_sources_legacy_partial_coverage/,
-      ),
-      [expectedSchemaVersion],
-    );
+    const readinessQuery = query.mock.calls[0]?.[0] as string;
+    expect(readinessQuery).not.toContain("weekly_agent_usage");
+    expect(readinessQuery).not.toContain("installation_sources_legacy_partial_coverage");
   });
 
   it("returns 503 when the expected latest migration is absent", async () => {
