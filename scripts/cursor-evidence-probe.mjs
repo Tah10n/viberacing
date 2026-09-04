@@ -1164,13 +1164,13 @@ function hookBundleName(probeId, installationId) {
 function hookCommandFor(probeId, installationId, platform = process.platform) {
   const bundle = hookBundleName(probeId, installationId);
   return platform === "win32"
-    ? `.\\hooks\\${bundle}\\scripts\\${hookLauncherCommandName}`
-    : `./hooks/${bundle}/scripts/${hookLauncherScriptName}`;
+    ? `.\\${bundle}\\scripts\\${hookLauncherCommandName}`
+    : `./${bundle}/scripts/${hookLauncherScriptName}`;
 }
 
 function parseOwnedHookCommand(command, platform = process.platform) {
   if (typeof command !== "string") return null;
-  const prefix = platform === "win32" ? ".\\hooks\\" : "./hooks/";
+  const prefix = platform === "win32" ? ".\\" : "./";
   const suffix =
     platform === "win32"
       ? `\\scripts\\${hookLauncherCommandName}`
@@ -1724,7 +1724,7 @@ async function writeOwnedArtifact(path, contents, { executable = false } = {}) {
 }
 
 function hookBundlePaths(parent, probeId, installationId) {
-  const directory = join(parent, "hooks");
+  const directory = parent;
   const root = join(directory, hookBundleName(probeId, installationId));
   const scripts = join(root, "scripts");
   const library = join(root, "packages", "connector", "lib");
@@ -1961,7 +1961,7 @@ async function validateOwnedHookEntries(document, parent, probeId, expectedOutpu
 }
 
 async function discoverProbeBundles(parent, probeId, expectedOutputDirectory) {
-  const directory = join(parent, "hooks");
+  const directory = parent;
   await ensurePrivateBundleDirectory(directory, { shared: true });
   const bundles = new Map();
   const prefix = `${hookBundlePrefix}${probeId}-`;
@@ -1984,7 +1984,7 @@ async function discoverProbeBundles(parent, probeId, expectedOutputDirectory) {
 }
 
 async function installHookLauncher(parent, configuration) {
-  const directory = join(parent, "hooks");
+  const directory = parent;
   await ensurePrivateBundleDirectory(directory, { create: true, shared: true });
   return installHookBundle(parent, configuration);
 }

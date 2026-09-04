@@ -443,8 +443,8 @@ test("hook install uses a fixed relative launcher, preserves foreign fields, and
   assert.match(
     first.command,
     process.platform === "win32"
-      ? /^\.\\hooks\\viberacing-cursor-evidence-[0-9a-f-]+-[0-9a-f-]+\\scripts\\viberacing-cursor-evidence-probe\.cmd$/
-      : /^\.\/hooks\/viberacing-cursor-evidence-[0-9a-f-]+-[0-9a-f-]+\/scripts\/viberacing-cursor-evidence-probe-hook\.mjs$/,
+      ? /^\.\\viberacing-cursor-evidence-[0-9a-f-]+-[0-9a-f-]+\\scripts\\viberacing-cursor-evidence-probe\.cmd$/
+      : /^\.\/viberacing-cursor-evidence-[0-9a-f-]+-[0-9a-f-]+\/scripts\/viberacing-cursor-evidence-probe-hook\.mjs$/,
   );
   assert.doesNotMatch(first.command, /[&|<>^%!()'" ]/);
   const installed = JSON.parse(await readFile(hooksFile, "utf8"));
@@ -538,7 +538,6 @@ test("install CLI reads an owner-only expected identity file and stores only its
   );
   const bundle = join(
     cursorRoot,
-    "hooks",
     `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
   );
   const configuration = await readFile(
@@ -583,7 +582,6 @@ test("remove-hooks validates the probe identity before changing hooks or runtime
   });
   const bundle = join(
     currentRoot,
-    "hooks",
     `viberacing-cursor-evidence-${current.probeId}-${current.installationId}`,
   );
   const watched = [
@@ -648,7 +646,6 @@ test(
     });
     const bundle = join(
       cursorRoot,
-      "hooks",
       `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
     );
     const state = JSON.parse(
@@ -701,7 +698,6 @@ test(
     assert.notEqual(first.command, second.command);
     const firstBundle = join(
       cursorRoot,
-      "hooks",
       `viberacing-cursor-evidence-${first.probeId}-${first.installationId}`,
     );
     const firstStatePath = join(
@@ -800,7 +796,6 @@ test(
     const observationName = (await readdir(join(outputDirectory, "observations")))[0];
     const bundle = join(
       cursorRoot,
-      "hooks",
       `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
     );
     for (const path of [
@@ -1322,7 +1317,6 @@ test("a hook manifest is identity-bound and becomes failed after any second invo
     await readFile(
       join(
         cursorRoot,
-        "hooks",
         `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
         "scripts",
         "viberacing-cursor-evidence-probe-state.json",
