@@ -25,7 +25,7 @@ import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.m
 import { quoteWindowsCommandArgument } from "./executables.mjs";
 import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { normalizeOrigin } from "./origin.mjs";
-import { mergeStoredSourceMapping } from "./protocol.mjs";
+import { mergeStoredSourceMapping, providerAccountPolicy } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
@@ -100,7 +100,6 @@ const providerAccountKeyPattern = /^acct1_[A-Za-z0-9_-]{43}$/;
 const sourcesSchemaVersion = 2;
 const maximumLocalSources = 32;
 const maximumOpenCodePluginCleanupTargets = 32;
-const maximumCodexAccountsPerProfile = 8;
 const legacyCollectionMethods = new Set([
   "antigravity\0antigravity_cli_capture",
   "claude_code\0claude_jsonl",
@@ -709,8 +708,8 @@ async function normalizedSources(sources) {
     }
     const primary = byId.get(source.profileClientSourceId);
     if (
-      source.agentId !== "codex" ||
-      primary?.agentId !== "codex" ||
+      !providerAccountPolicy(source) ||
+      primary?.agentId !== source.agentId ||
       primary.profileClientSourceId !== undefined ||
       primary.clientSourceId === source.clientSourceId ||
       (await canonicalPathKey(primary.dataPath)) !== root ||
@@ -720,7 +719,7 @@ async function normalizedSources(sources) {
       primary.hookConfigRoot !== source.hookConfigRoot ||
       source.providerAccountKey === undefined
     ) {
-      throw new Error("Codex logical source configuration is unsupported");
+      throw new Error("Provider logical source configuration is unsupported");
     }
   }
   for (const source of normalized) {
@@ -730,13 +729,13 @@ async function normalizedSources(sources) {
     profileMembers.set(primaryId, members);
   }
   for (const members of profileMembers.values()) {
-    if (members.length > maximumCodexAccountsPerProfile)
-      throw new Error("Codex profile exceeds the logical account limit");
+    if (members.length > (providerAccountPolicy(members[0])?.maximumAccounts ?? 1))
+      throw new Error("Provider profile exceeds the logical account limit");
     const accountKeys = members
       .map((source) => source.providerAccountKey)
       .filter((value) => value !== undefined);
     if (new Set(accountKeys).size !== accountKeys.length)
-      throw new Error("Codex profile contains a duplicate provider account key");
+      throw new Error("Provider profile contains a duplicate provider account key");
   }
   return normalized;
 }
@@ -1259,9 +1258,9 @@ function validLocalSource(source) {
     (source.executablePath === undefined || typeof source.executablePath === "string") &&
     (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string") &&
     (source.profileClientSourceId === undefined ||
-      (source.agentId === "codex" && sourceIdPattern.test(source.profileClientSourceId))) &&
+      (providerAccountPolicy(source) && sourceIdPattern.test(source.profileClientSourceId))) &&
     (source.providerAccountKey === undefined ||
-      (source.agentId === "codex" && providerAccountKeyPattern.test(source.providerAccountKey)))
+      (providerAccountPolicy(source) && providerAccountKeyPattern.test(source.providerAccountKey)))
   );
 }
 
@@ -1473,21 +1472,27 @@ export function codexPrimaryClientSourceId(source) {
     : source?.clientSourceId;
 }
 
-export async function bindCodexProviderAccount(clientSourceId, providerAccountKey) {
+export function bindCodexProviderAccount(clientSourceId, providerAccountKey) {
+  return bindProviderAccount("codex", clientSourceId, providerAccountKey);
+}
+
+export async function bindProviderAccount(agentId, clientSourceId, providerAccountKey) {
   if (!sourceIdPattern.test(clientSourceId) || !providerAccountKeyPattern.test(providerAccountKey))
-    throw new Error("Invalid Codex provider account binding");
+    throw new Error("Invalid provider account binding");
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
     const sources = await readSourcesUnlocked();
     const selected = sources.find((source) => source.clientSourceId === clientSourceId);
-    if (selected?.agentId !== "codex") throw new Error("Codex profile source is unavailable");
+    const policy = providerAccountPolicy(selected);
+    if (!policy || selected.agentId !== agentId)
+      throw new Error("Provider profile source is unavailable");
     const primaryId = selected.profileClientSourceId ?? selected.clientSourceId;
     const primary = sources.find((source) => source.clientSourceId === primaryId);
-    if (primary?.agentId !== "codex" || primary.profileClientSourceId !== undefined)
-      throw new Error("Codex profile source is invalid");
+    if (primary?.agentId !== agentId || primary.profileClientSourceId !== undefined)
+      throw new Error("Provider profile source is invalid");
     const members = sources.filter(
       (source) =>
-        source.agentId === "codex" &&
+        source.agentId === agentId &&
         (source.profileClientSourceId ?? source.clientSourceId) === primary.clientSourceId,
     );
     const existing = members.find((source) => source.providerAccountKey === providerAccountKey);
@@ -1502,8 +1507,8 @@ export async function bindCodexProviderAccount(clientSourceId, providerAccountKe
         boundPrimary: true,
       };
     }
-    if (members.length >= maximumCodexAccountsPerProfile) {
-      const error = new Error("Codex profile has reached the logical account limit");
+    if (members.length >= policy.maximumAccounts) {
+      const error = new Error("Provider profile has reached the logical account limit");
       error.diagnosticCode = "provider_account_limit_reached";
       throw error;
     }
@@ -1511,7 +1516,10 @@ export async function bindCodexProviderAccount(clientSourceId, providerAccountKe
       {
         ...primary,
         clientSourceId: undefined,
-        suggestedLabel: "Codex account",
+        suggestedLabel:
+          agentId === "cursor"
+            ? `${policy.label} account ${members.length + 1}`
+            : `${policy.label} account`,
         profileClientSourceId: primary.clientSourceId,
         providerAccountKey,
       },
@@ -1606,11 +1614,11 @@ export async function removeSource(clientSourceId) {
     const removed = sources.find((source) => source.clientSourceId === clientSourceId);
     if (!removed) return null;
     if (
-      removed.agentId === "codex" &&
+      providerAccountPolicy(removed) &&
       removed.profileClientSourceId === undefined &&
       sources.some((source) => source.profileClientSourceId === removed.clientSourceId)
     )
-      throw new Error("Remove the logical Codex accounts before removing their physical profile");
+      throw new Error("Remove the logical accounts before removing their physical profile");
     await writeSourcesUnlocked(
       sources.filter((source) => source.clientSourceId !== clientSourceId),
     );
@@ -1995,6 +2003,8 @@ const installedRuntimeFiles = [
   "browser.mjs",
   "connection-lifecycle.mjs",
   "config.mjs",
+  "cursor-identity.mjs",
+  "cursor-events.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
@@ -2169,7 +2179,7 @@ export function quoteHookArgument(value, platform = process.platform) {
 }
 
 export async function installHookForSource(source, installedScript) {
-  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
+  if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(
     source.agentId === "codex" ? installedHookLauncherScript() : installedScript,
@@ -2220,7 +2230,7 @@ export async function installHooks(sourceUrl, sources) {
 }
 
 function physicalHookSource(source) {
-  if (source.agentId !== "codex" || source.profileClientSourceId === undefined) return source;
+  if (!providerAccountPolicy(source) || source.profileClientSourceId === undefined) return source;
   const { profileClientSourceId, providerAccountKey: _providerAccountKey, ...rest } = source;
   return { ...rest, clientSourceId: profileClientSourceId };
 }
@@ -2231,7 +2241,7 @@ function physicalHookSources(sources, knownLocalSources = sources) {
   const seen = new Set();
   for (const source of sources) {
     const hookSource =
-      source.agentId === "codex" && source.profileClientSourceId !== undefined
+      providerAccountPolicy(source) && source.profileClientSourceId !== undefined
         ? (knownById.get(source.profileClientSourceId) ?? physicalHookSource(source))
         : source;
     const key = `${hookSource.agentId}\0${hookSource.clientSourceId}`;
@@ -2336,7 +2346,7 @@ function mergeHookStatus(previous, next) {
 }
 
 export async function removeHookForSource(source, options = {}) {
-  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
+  if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   const marker = hookMarkerForSource(source.clientSourceId);
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };

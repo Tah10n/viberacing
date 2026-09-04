@@ -16,7 +16,12 @@ import {
   pendingDiagnosticEvents,
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
-import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
+import {
+  connectorProtocolVersion,
+  parseProtocolResponse,
+  providerAccountPolicy,
+  sourceRegistrationBody,
+} from "../lib/protocol.mjs";
 import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
 import { assertOpenCodeUpgradeReady } from "../lib/opencode-cutover-preflight.mjs";
 import {
@@ -945,7 +950,7 @@ function publicSource(source) {
 async function exactPairingSources(sources) {
   const result = [];
   for (const source of sources) {
-    if (source.agentId === "codex" && source.profileClientSourceId !== undefined) continue;
+    if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) continue;
     const adapter = adapterFor(source.agentId);
     if (!adapter || adapter.exactAccounting === false) continue;
     if (source.agentId === "antigravity") {
@@ -1071,7 +1076,7 @@ async function connect() {
     .filter(
       (source) =>
         !localSourceIds.has(source.clientSourceId) &&
-        !(source.agentId === "codex" && source.profileClientSourceId !== undefined),
+        !(providerAccountPolicy(source) && source.profileClientSourceId !== undefined),
     )
     .map((source) => source.clientSourceId);
   const exactSources = await exactPairingSources(localSources);
@@ -1107,7 +1112,7 @@ async function connect() {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
     for (const previous of previousConfig.sources) {
       const local = localById.get(previous.clientSourceId);
-      if (local?.agentId === "codex" && local.profileClientSourceId !== undefined) continue;
+      if (providerAccountPolicy(local) && local.profileClientSourceId !== undefined) continue;
       if (
         local &&
         local.agentId === previous.agentId &&
@@ -1211,19 +1216,22 @@ async function connect() {
             protocol: result.protocol,
           };
           for (const local of localSources) {
-            if (local.agentId !== "codex" || local.profileClientSourceId === undefined) continue;
+            if (!providerAccountPolicy(local) || local.profileClientSourceId === undefined)
+              continue;
             const profile = nextConfig.sources.find(
               (source) => source.clientSourceId === local.profileClientSourceId,
             );
             if (!profile)
-              throw new Error("Codex logical source profile was not paired on this installation");
-            const registered = await requestCodexLogicalSourceRegistration(
+              throw new Error(
+                "Provider logical source profile was not paired on this installation",
+              );
+            const registered = await requestProviderLogicalSourceRegistration(
               nextConfig,
               local,
               profile,
             );
             if (registered.profileSourceId !== profile.sourceId)
-              throw new Error("Codex logical source profile mapping changed during pairing");
+              throw new Error("Provider logical source profile mapping changed during pairing");
             nextConfig.sources.push(registered);
           }
           const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
@@ -2515,7 +2523,7 @@ async function settleLimited(items, worker, limit = 4) {
   return results;
 }
 
-async function requestCodexLogicalSourceRegistration(config, localSource, profileSource) {
+async function requestProviderLogicalSourceRegistration(config, localSource, profileSource) {
   const existing = config.sources.find(
     (source) => source.clientSourceId === localSource.clientSourceId,
   );
@@ -2529,13 +2537,7 @@ async function requestCodexLogicalSourceRegistration(config, localSource, profil
           Authorization: `Bearer ${config.deviceToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          agentId: "codex",
-          clientSourceId: localSource.clientSourceId,
-          collectionMethod: "codex_app_server",
-          profileClientSourceId: profileSource.clientSourceId,
-          supportedSurface: "desktop",
-        }),
+        body: JSON.stringify(sourceRegistrationBody(localSource, profileSource)),
       },
       1,
       {
@@ -2554,11 +2556,11 @@ async function requestCodexLogicalSourceRegistration(config, localSource, profil
   }
 }
 
-async function registerCodexLogicalSource(config, localSource, profileSource) {
+async function registerProviderLogicalSource(config, localSource, profileSource) {
   const existing = config.sources.find(
     (source) => source.clientSourceId === localSource.clientSourceId,
   );
-  const registered = await requestCodexLogicalSourceRegistration(
+  const registered = await requestProviderLogicalSourceRegistration(
     config,
     existing ?? localSource,
     profileSource,
@@ -2705,7 +2707,7 @@ async function syncRange(providedConfig, options = {}) {
           continue;
         }
         try {
-          const mapped = await registerCodexLogicalSource(config, localSource, profileSource);
+          const mapped = await registerProviderLogicalSource(config, localSource, profileSource);
           if (!requestedSourceIds || requestedSourceIds.has(mapped.sourceId)) {
             registrationBackfills.push({ clientSourceId, source: mapped, pending });
           } else if (!options.installationScoped) backfillAccountSetupPending = true;
@@ -2822,7 +2824,7 @@ async function syncRange(providedConfig, options = {}) {
           }
           if (!activeSource)
             try {
-              activeSource = await registerCodexLogicalSource(
+              activeSource = await registerProviderLogicalSource(
                 config,
                 binding.source,
                 profileMapping,

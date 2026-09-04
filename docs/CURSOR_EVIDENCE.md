@@ -42,12 +42,16 @@ affected by keyboard input translation and received a clarification response; th
 correctly and requested a minimal response. Both completed successfully. Temporary probe hooks and
 their runtime artifacts were removed after capture; foreign hooks were preserved.
 
-**Unresolved contract boundary:** none of the reviewed stop, final stream result, or sessionEnd
-observations contains a provider timestamp. The new two-turn observations also have no provider
-timestamp. Local `observedAt` is capture time, not provider time. The requested strict missing-
-timestamp rejection would therefore reject these real events. Do not manufacture provider timestamps
-or add them to fixtures claiming to represent the observed schema. A decision on UTC attribution is
-required before implementing that part of the parser.
+**Approved capture-time policy (2026-09-04):** the user explicitly approved using immutable
+`capturedAt` and the UTC day of capture in place of the originally requested provider timestamp. A
+stop hook fixes this time at invocation; the wrapper fixes it on receipt of the successful final
+result. The first durable event keeps that time across retries, replay and delayed synchronization.
+Headless attribution uses the result's capture time regardless of when sessionEnd arrives. Missing
+or invalid capture time fails closed. This is exact captured usage, not provider-dated history.
+
+None of the reviewed stop, final stream result, or sessionEnd observations contains a provider
+timestamp. Production fixtures must not invent one. The approved policy changes UTC attribution; it
+does not weaken counter, identity, schema, deduplication or lifecycle validation.
 
 A narrow follow-up inspected the installed Desktop 3.19.7 and CLI `2026.09.02-c22c1a3` application
 code. The CLI emits `timestamp_ms` on intermediate stream events using its own `Date.now()`; the

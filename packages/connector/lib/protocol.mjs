@@ -2,6 +2,18 @@ import { hasTerminalControlCharacters } from "./terminal.mjs";
 
 export const connectorProtocolVersion = 5;
 
+const providerAccountPolicies = Object.freeze({
+  codex: { collectionMethod: "codex_app_server", label: "Codex", maximumAccounts: 8 },
+  cursor: { collectionMethod: "cursor_local_events", label: "Cursor", maximumAccounts: 8 },
+});
+
+export function providerAccountPolicy(source) {
+  const policy = Object.hasOwn(providerAccountPolicies, source?.agentId ?? "")
+    ? providerAccountPolicies[source.agentId]
+    : undefined;
+  return policy && source.collectionMethod === policy.collectionMethod ? policy : undefined;
+}
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const decimalPattern = /^(?:0|[1-9]\d{0,29})$/;
 const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/;
@@ -334,6 +346,30 @@ function parseReconciliation(value, context) {
   return value;
 }
 
+export function sourceRegistrationBody(localSource, profileSource) {
+  if (
+    !providerAccountPolicy(localSource) ||
+    localSource.agentId !== profileSource?.agentId ||
+    localSource.collectionMethod !== profileSource.collectionMethod ||
+    localSource.supportedSurface !== "desktop" ||
+    profileSource.supportedSurface !== "desktop" ||
+    profileSource.profileClientSourceId !== undefined ||
+    localSource.profileClientSourceId !== profileSource.clientSourceId ||
+    localSource.clientSourceId === profileSource.clientSourceId ||
+    !uuidPattern.test(localSource.clientSourceId) ||
+    !uuidPattern.test(profileSource.clientSourceId)
+  )
+    throw invalid("Local provider profile registration is invalid");
+  // Deliberate projection: provider identities and paths must stay on this machine.
+  return {
+    agentId: localSource.agentId,
+    clientSourceId: localSource.clientSourceId,
+    collectionMethod: localSource.collectionMethod,
+    profileClientSourceId: profileSource.clientSourceId,
+    supportedSurface: "desktop",
+  };
+}
+
 function parseSourceRegistration(value, context) {
   if (!requiredExactKeys(value, new Set(["source"]))) throw invalid();
   const registrationKeys = new Set([...mappingKeys, "profileSourceId"]);
@@ -347,7 +383,10 @@ function parseSourceRegistration(value, context) {
     throw invalid();
   const { profileSourceId, ...mapping } = value.source;
   const source = { ...parseMapping(mapping, context.localSource, true), profileSourceId };
-  if (source.agentId !== "codex" || source.profileClientSourceId !== context.profileClientSourceId)
+  if (
+    !providerAccountPolicy(source) ||
+    source.profileClientSourceId !== context.profileClientSourceId
+  )
     throw invalid();
   return { source };
 }
@@ -451,7 +490,7 @@ export function mergeStoredSourceMapping(local, mapping) {
     throw invalid("Connector configuration contains invalid history state");
   if (
     mapping.profileSourceId !== undefined &&
-    (local.agentId !== "codex" ||
+    (!providerAccountPolicy(local) ||
       local.profileClientSourceId === undefined ||
       !uuidPattern.test(mapping.profileSourceId))
   )

@@ -10,15 +10,19 @@ experience or protocol.
 
 ### Added
 
+- Connector 0.7.0 preparation: Cursor account identity, logical-source registration and exact-event
+  parsers use the approved immutable capture-time policy. UTC attribution is the day of capture,
+  retained across replay; reasoning is included in output. Capture hooks, durable ledger and the
+  headless wrapper are still under implementation; this is not a production-support announcement.
+
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
   records only minimized schemas (HMACing unknown field names), exact integer counter candidates,
   local HMAC identities, safe status/version fields, and unambiguous timestamps outside the
   repository. Its per-run/event immutable runtime bundle, execution-time POSIX/Windows integrity
   checks, lossless compare-and-swap recovery, pre-mutation ownership validation, close-aware UTF-8
   CLI stream handling, explicit scenario steps, strict alias/event reconciliation, and always-closed
-  production gate harden research collection without asserting a token formula. Cursor remains
-  unsupported and is not registered because current Desktop and CLI evidence does not prove one
-  authoritative exact source.
+  production gate harden research collection. Authenticated follow-up evidence now establishes exact
+  per-turn counters; see `docs/CURSOR_EVIDENCE.md` for accepted paths and versions.
 
 - Connector 0.6.0 and protocol v5 add a resumable current-UTC-year import after the normal rolling
   snapshot. History moves newest-first in acknowledged chunks of at most 31 dates, uses isolated

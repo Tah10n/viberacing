@@ -132,6 +132,8 @@ const requiredFiles = [
   "README.md",
   "package.json",
   "bin/viberacing.mjs",
+  "lib/cursor-identity.mjs",
+  "lib/cursor-events.mjs",
   "lib/diagnostics.mjs",
   "lib/opencode-cleanup.mjs",
   "lib/opencode-plugin.mjs",

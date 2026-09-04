@@ -1068,125 +1068,161 @@ test("connection, source, and installation mutations invalidate a pending connec
   }
 });
 
-test("Codex source schema v2 binds at most eight local identities to one physical profile", async () => {
-  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-identities-"));
-  const restoreEnvironment = useModuleEnvironment(home);
-  try {
-    const module = await import(`../lib/config.mjs?codex-identities=${encodeURIComponent(home)}`);
-    const primary = {
-      clientSourceId: "91919191-9191-4191-8191-919191919191",
-      agentId: "codex",
-      collectionMethod: "codex_app_server",
-      dataPath: join(home, ".codex"),
-      suggestedLabel: "Codex",
-      supportedSurface: "desktop",
-    };
-    await module.writeSources([primary]);
-    await writeFile(
-      join(home, ".viberacing", "sources.json"),
-      `${JSON.stringify({ version: 1, sources: [primary] })}\n`,
-    );
-    await writeFile(
-      join(home, ".viberacing", `sources.json.${process.pid}.tmp`),
-      "interrupted migration must not replace the committed registry\n",
-    );
-    assert.equal(await module.migrateSourcesSchema(), true);
-    assert.equal(await module.migrateSourcesSchema(), false);
-    const firstKey = `acct1_${"a".repeat(43)}`;
-    const first = await module.bindCodexProviderAccount(primary.clientSourceId, firstKey);
-    assert.equal(first.boundPrimary, true);
-    assert.equal(first.source.clientSourceId, primary.clientSourceId);
-    for (let index = 1; index < 8; index += 1) {
-      const key = `acct1_${String.fromCharCode(97 + index).repeat(43)}`;
-      const binding = await module.bindCodexProviderAccount(primary.clientSourceId, key);
-      assert.equal(binding.added, true);
-      assert.equal(binding.source.profileClientSourceId, primary.clientSourceId);
-      assert.equal(binding.source.suggestedLabel, "Codex account");
+for (const [agentId, collectionMethod] of [
+  ["codex", "codex_app_server"],
+  ["cursor", "cursor_local_events"],
+]) {
+  test(`${agentId} source schema v2 binds at most eight local identities to one physical profile`, async () => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-codex-identities-"));
+    const restoreEnvironment = useModuleEnvironment(home);
+    try {
+      const module = await import(`../lib/config.mjs?codex-identities=${encodeURIComponent(home)}`);
+      const bind = (sourceId, key) =>
+        agentId === "codex"
+          ? module.bindCodexProviderAccount(sourceId, key)
+          : module.bindProviderAccount(agentId, sourceId, key);
+      const primary = {
+        clientSourceId: "91919191-9191-4191-8191-919191919191",
+        agentId,
+        collectionMethod,
+        dataPath: join(home, `.${agentId}`),
+        suggestedLabel: agentId,
+        supportedSurface: "desktop",
+      };
+      await module.writeSources([primary]);
+      await writeFile(
+        join(home, ".viberacing", "sources.json"),
+        `${JSON.stringify({ version: 1, sources: [primary] })}\n`,
+      );
+      await writeFile(
+        join(home, ".viberacing", `sources.json.${process.pid}.tmp`),
+        "interrupted migration must not replace the committed registry\n",
+      );
+      assert.equal(await module.migrateSourcesSchema(), true);
+      assert.equal(await module.migrateSourcesSchema(), false);
+      const firstKey = `acct1_${"a".repeat(43)}`;
+      const first = await bind(primary.clientSourceId, firstKey);
+      assert.equal(first.boundPrimary, true);
+      assert.equal(first.source.clientSourceId, primary.clientSourceId);
+      for (let index = 1; index < 8; index += 1) {
+        const key = `acct1_${String.fromCharCode(97 + index).repeat(43)}`;
+        const binding = await bind(primary.clientSourceId, key);
+        assert.equal(binding.added, true);
+        assert.equal(binding.source.profileClientSourceId, primary.clientSourceId);
+        assert.equal(
+          binding.source.suggestedLabel,
+          agentId === "codex" ? "Codex account" : `Cursor account ${index + 1}`,
+        );
+      }
+      const sources = await module.readSources();
+      // A -> B -> A and calls through a logical member preserve the original source.
+      assert.equal(
+        (await bind(sources[1].clientSourceId, firstKey)).source.clientSourceId,
+        primary.clientSourceId,
+      );
+      await assert.rejects(module.removeSource(primary.clientSourceId), /logical accounts/);
+      await assert.rejects(
+        module.bindProviderAccount(
+          agentId === "cursor" ? "codex" : "cursor",
+          primary.clientSourceId,
+          firstKey,
+        ),
+        /unavailable/,
+      );
+      assert.equal(sources.length, 8);
+      assert.equal(
+        JSON.parse(await readFile(join(home, ".viberacing", "sources.json"))).version,
+        2,
+      );
+      await assert.rejects(
+        bind(primary.clientSourceId, `acct1_${"z".repeat(43)}`),
+        (error) => error?.diagnosticCode === "provider_account_limit_reached",
+      );
+      assert.equal(
+        await module.installHookForSource(sources[1], join(home, "installed-runtime.mjs")),
+        false,
+      );
+
+      const sourcesPath = join(home, ".viberacing", "sources.json");
+      const validRegistry = await readFile(sourcesPath, "utf8");
+      const corruptRegistry = `${JSON.stringify({
+        version: 2,
+        sources: [
+          primary,
+          {
+            ...primary,
+            clientSourceId: "92929292-9292-4292-8292-929292929292",
+            profileClientSourceId: primary.clientSourceId,
+            providerAccountKey: `acct1_${"q".repeat(43)}`,
+            supportedSurface: "cli",
+          },
+        ],
+      })}\n`;
+      await writeFile(sourcesPath, corruptRegistry);
+      await assert.rejects(module.readSources(), /unsupported/);
+      assert.equal(await readFile(sourcesPath, "utf8"), corruptRegistry);
+
+      for (const changed of [
+        { agentId: agentId === "cursor" ? "codex" : "cursor" },
+        { collectionMethod: "unknown_method" },
+        { providerAccountKey: firstKey },
+      ]) {
+        const malformed = [sources[0], { ...sources[1], ...changed }];
+        await assert.rejects(module.writeSources(malformed));
+      }
+
+      const futureRegistry = `${JSON.stringify({ version: 3, sources: [primary] })}\n`;
+      await writeFile(sourcesPath, futureRegistry);
+      await assert.rejects(module.readSources(), /unsupported/);
+      assert.equal(await readFile(sourcesPath, "utf8"), futureRegistry);
+      await writeFile(sourcesPath, validRegistry);
+    } finally {
+      restoreEnvironment();
+      await rm(home, { recursive: true, force: true });
     }
-    const sources = await module.readSources();
-    assert.equal(sources.length, 8);
-    assert.equal(JSON.parse(await readFile(join(home, ".viberacing", "sources.json"))).version, 2);
-    await assert.rejects(
-      module.bindCodexProviderAccount(primary.clientSourceId, `acct1_${"z".repeat(43)}`),
-      (error) => error?.diagnosticCode === "provider_account_limit_reached",
-    );
-    assert.equal(
-      await module.installHookForSource(sources[1], join(home, "installed-runtime.mjs")),
-      false,
-    );
+  });
 
-    const sourcesPath = join(home, ".viberacing", "sources.json");
-    const validRegistry = await readFile(sourcesPath, "utf8");
-    const corruptRegistry = `${JSON.stringify({
-      version: 2,
-      sources: [
-        primary,
-        {
-          ...primary,
-          clientSourceId: "92929292-9292-4292-8292-929292929292",
-          profileClientSourceId: primary.clientSourceId,
-          providerAccountKey: `acct1_${"q".repeat(43)}`,
-          supportedSurface: "cli",
-        },
-      ],
-    })}\n`;
-    await writeFile(sourcesPath, corruptRegistry);
-    await assert.rejects(module.readSources(), /unsupported/);
-    assert.equal(await readFile(sourcesPath, "utf8"), corruptRegistry);
+  test(`provider identity salt and exactly two ${agentId} logical accounts survive reset-installation`, async () => {
+    const home = await mkdtemp(join(tmpdir(), "viberacing-codex-reset-identities-"));
+    const restoreEnvironment = useModuleEnvironment(home);
+    try {
+      const module = await import(`../lib/config.mjs?codex-reset=${encodeURIComponent(home)}`);
+      const bind = (sourceId, key) =>
+        agentId === "codex"
+          ? module.bindCodexProviderAccount(sourceId, key)
+          : module.bindProviderAccount(agentId, sourceId, key);
+      const primary = {
+        clientSourceId: "93939393-9393-4393-8393-939393939393",
+        agentId,
+        collectionMethod,
+        dataPath: join(home, `.${agentId}`),
+        suggestedLabel: agentId,
+        supportedSurface: "desktop",
+      };
+      await module.writeSources([primary]);
+      const saltBefore = await module.readOrCreateProviderIdentitySalt();
+      const firstKey = `acct1_${"a".repeat(43)}`;
+      const secondKey = `acct1_${"b".repeat(43)}`;
+      await bind(primary.clientSourceId, firstKey);
+      await bind(primary.clientSourceId, secondKey);
+      assert.equal((await module.readSources()).length, 2);
 
-    const futureRegistry = `${JSON.stringify({ version: 3, sources: [primary] })}\n`;
-    await writeFile(sourcesPath, futureRegistry);
-    await assert.rejects(module.readSources(), /unsupported/);
-    assert.equal(await readFile(sourcesPath, "utf8"), futureRegistry);
-    await writeFile(sourcesPath, validRegistry);
-  } finally {
-    restoreEnvironment();
-    await rm(home, { recursive: true, force: true });
-  }
-});
-
-test("provider identity salt and exactly two Codex logical accounts survive reset-installation", async () => {
-  const home = await mkdtemp(join(tmpdir(), "viberacing-codex-reset-identities-"));
-  const restoreEnvironment = useModuleEnvironment(home);
-  try {
-    const module = await import(`../lib/config.mjs?codex-reset=${encodeURIComponent(home)}`);
-    const primary = {
-      clientSourceId: "93939393-9393-4393-8393-939393939393",
-      agentId: "codex",
-      collectionMethod: "codex_app_server",
-      dataPath: join(home, ".codex"),
-      suggestedLabel: "Codex",
-      supportedSurface: "desktop",
-    };
-    await module.writeSources([primary]);
-    const saltBefore = await module.readOrCreateProviderIdentitySalt();
-    const firstKey = `acct1_${"a".repeat(43)}`;
-    const secondKey = `acct1_${"b".repeat(43)}`;
-    await module.bindCodexProviderAccount(primary.clientSourceId, firstKey);
-    await module.bindCodexProviderAccount(primary.clientSourceId, secondKey);
-    assert.equal((await module.readSources()).length, 2);
-
-    await module.readOrCreateInstallation();
-    await module.resetInstallation();
-    assert.equal(await module.readOrCreateProviderIdentitySalt(), saltBefore);
-    assert.equal(
-      (await module.bindCodexProviderAccount(primary.clientSourceId, firstKey)).added,
-      false,
-    );
-    assert.equal(
-      (await module.bindCodexProviderAccount(primary.clientSourceId, secondKey)).added,
-      false,
-    );
-    assert.equal((await module.readSources()).length, 2);
-    assert.equal(
-      JSON.parse(await readFile(join(home, ".viberacing", "provider-identity.json"))).salt,
-      saltBefore,
-    );
-  } finally {
-    restoreEnvironment();
-    await rm(home, { recursive: true, force: true });
-  }
-});
+      await module.readOrCreateInstallation();
+      await module.resetInstallation();
+      assert.equal(await module.readOrCreateProviderIdentitySalt(), saltBefore);
+      assert.equal((await bind(primary.clientSourceId, firstKey)).added, false);
+      assert.equal((await bind(primary.clientSourceId, secondKey)).added, false);
+      assert.equal((await module.readSources()).length, 2);
+      assert.equal(
+        JSON.parse(await readFile(join(home, ".viberacing", "provider-identity.json"))).salt,
+        saltBefore,
+      );
+    } finally {
+      restoreEnvironment();
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+}
 
 test("disconnect wins both connection-state lock orders and provider hooks cannot resurrect state", async () => {
   for (const order of ["recovery-first", "disconnect-first"]) {
