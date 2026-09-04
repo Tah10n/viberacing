@@ -1,7 +1,57 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-03: **closed**. Cursor is not a registered Vibe Racing agent and contributes no
-ranking usage.
+Status on 2026-09-04: **exact-source evidence accepted; implementation pending**. Cursor is not yet
+a registered Vibe Racing agent and contributes no ranking usage. Rollout remains blocked until a
+reviewed server-first deployment. The historical investigation below describes the earlier gate, not
+the current availability of authenticated token counters.
+
+## Authenticated contract and narrow follow-up
+
+Implementation base: `265ce5e82ad19d3867d8f6289fad055527b302d3` (main after PR #64). The accepted
+local evidence establishes Desktop 3.18.25, interactive CLI `2026.09.02-c22c1a3`, successful
+headless aggregate usage, matching Desktop/CLI account identity, matching headless result/sessionEnd
+session identity, aggregate subagent accounting, and failed aborted invocations. Raw observations
+and local identity hashes are not included here.
+
+Selected exact paths in the minimized schemas:
+
+| Contract                     | Counters                                                                                             | Account identity    | Event/correlation identity        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------- |
+| Desktop / interactive `stop` | `$.input_tokens`, `$.output_tokens`, `$.cache_read_tokens`, `$.cache_write_tokens`                   | `$.user_email`      | `$.generation_id`, `$.session_id` |
+| Headless final result        | `$.usage.inputTokens`, `$.usage.outputTokens`, `$.usage.cacheReadTokens`, `$.usage.cacheWriteTokens` | Bound by sessionEnd | `$.request_id`, `$.session_id`    |
+| `sessionEnd`                 | None                                                                                                 | `$.user_email`      | `$.session_id`                    |
+
+Hook version evidence uses `$.cursor_version`; headless CLI version evidence comes from the CLI
+version invocation. The normalized probe counter names must not be mistaken for raw hook paths. The
+accepted formula is input + output + cache read + cache write; reasoning is already in output. There
+is no separately observed total counter in these contracts.
+
+On 2026-09-04, two consecutive live Desktop turns were captured in one fresh session on Desktop
+**3.19.7**. Session and account HMAC equality passed; generation HMAC inequality passed. Only the
+following minimized counters are retained in this report:
+
+| Turn   | Input | Output | Cache read | Cache write | Computed sum |
+| ------ | ----: | -----: | ---------: | ----------: | -----------: |
+| First  | 17193 |    230 |       2176 |           0 |        19599 |
+| Second | 17467 |     29 |       2176 |           0 |        19672 |
+
+The second output counter is smaller than the first in the same session, consistent with per-turn
+usage and inconsistent with a monotonic cumulative session snapshot. The first test prompt was
+affected by keyboard input translation and received a clarification response; the second was pasted
+correctly and requested a minimal response. Both completed successfully. Temporary probe hooks and
+their runtime artifacts were removed after capture; foreign hooks were preserved.
+
+**Unresolved contract boundary:** none of the reviewed stop, final stream result, or sessionEnd
+observations contains a provider timestamp. The new two-turn observations also have no provider
+timestamp. Local `observedAt` is capture time, not provider time. The requested strict missing-
+timestamp rejection would therefore reject these real events. Do not manufacture provider timestamps
+or add them to fixtures claiming to represent the observed schema. A decision on UTC attribution is
+required before implementing that part of the parser.
+
+The existing evidence contains one local account identity across Desktop and CLI. Live A/B/A with a
+second account remains unverified and is a Draft blocker. Production implementation, wrapper
+deduplication, migration 012, packaging, privacy canary tests, and rollout checks are still pending;
+this report does not claim they passed.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source
@@ -14,7 +64,7 @@ publish exact `tokenUsage` for some team usage events, but they are credentialed
 organization-level, non-universal feeds and are outside this local Desktop/CLI evidence gate. They
 do not establish the required local source or account-switch contract.
 
-## Evidence reviewed
+## Historical evidence reviewed on 2026-09-03
 
 The repository base was `de23c761ff08686a69e96c8c4ea67625fca4d6e4` from `main`.
 
