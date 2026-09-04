@@ -535,7 +535,9 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(
     page.getByRole("heading", { name: "Only exact aggregate token counters cross the boundary" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sync", exact: true })).toBeVisible();
+  const accountSyncButton = page.getByRole("button", { name: "Sync", exact: true });
+  await expect(accountSyncButton).toBeVisible();
+  await expect(accountSyncButton).toBeEnabled();
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
   const accountDisclosure = page.locator(".account-disclosure");
@@ -556,10 +558,11 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
       ["0.4.3", 1, installationId],
     );
     await page.reload();
+    await expect(accountSyncButton).toBeEnabled();
     await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
     const updateReason = "Update or repair the connector and Browser Sync handler to enable Sync.";
-    await expect(page.getByLabel("Accounts in your total").getByText(updateReason)).toBeVisible();
+    await expect(page.getByLabel("Accounts in your total").getByText(updateReason)).toHaveCount(0);
     await expect(page.getByLabel("Connected computers").getByText(updateReason)).toBeVisible();
     await expect(page.locator(".connector-update")).toBeVisible();
     await featureDatabase.query(
@@ -714,6 +717,12 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     await missingHandlerDatabase.end();
   }
   await page.goto("/dashboard");
+  await expect(accountSyncButton).toBeDisabled();
+  await expect(
+    page
+      .getByLabel("Accounts in your total")
+      .getByText("Repair this account's Browser Sync source before using Sync."),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
   await expect(

@@ -673,12 +673,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     );
     if (!browserInstallation || !linkedSource)
       return "Link this browser to the current connector that owns this account to enable Sync.";
-    return (
-      installationSyncUnavailableReason(browserInstallation) ??
-      (account.can_browser_sync
-        ? null
-        : "Repair this account's Browser Sync source before using Sync.")
-    );
+    return account.can_browser_sync
+      ? null
+      : "Repair this account's Browser Sync source before using Sync.";
   };
   const browserSyncEnabled =
     accounts.some((account) => accountSyncUnavailableReason(account) === null) ||
