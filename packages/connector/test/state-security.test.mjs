@@ -348,6 +348,7 @@ test("legacy migration locks the root before accepting a final unchanged tree", 
     ],
     { env: environment, stdio: ["ignore", "ignore", "pipe"] },
   );
+  const childClosed = once(child, "close");
   let stderr = "";
   child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
   for (let attempts = 0; attempts < 250; attempts += 1) {
@@ -364,7 +365,7 @@ test("legacy migration locks the root before accepting a final unchanged tree", 
   await mkdir(join(state, "runtime", "0.2.1", "bin"), { recursive: true });
   await writeFile(injectedRuntime, "throw new Error('must never run');\n");
   await writeFile(`${barrier}.continue`, "continue\n");
-  const [code] = await once(child, "close");
+  const [code] = await childClosed;
   assert.notEqual(code, 0);
   assert.match(stderr, /state changed during migration/);
   await assert.rejects(access(join(state, ".viberacing-state")), { code: "ENOENT" });

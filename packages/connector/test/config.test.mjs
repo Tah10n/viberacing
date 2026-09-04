@@ -3577,6 +3577,7 @@ test("uninstall waits for a scheduler child paused before lock acquisition", asy
     [connectorPath, "hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
     { env: environment, stdio: ["pipe", "pipe", "pipe"] },
   );
+  const hookClosed = once(hook, "close");
   hook.stdin.end("{}\n");
   await waitFor(() =>
     access(`${barrier}.ready`)
@@ -3593,7 +3594,7 @@ test("uninstall waits for a scheduler child paused before lock acquisition", asy
       .catch(() => false),
   );
   await writeFile(`${barrier}.continue`, "continue\n");
-  const [hookCode] = await once(hook, "close");
+  const [hookCode] = await hookClosed;
   assert.equal(hookCode, 0);
   const uninstallResult = await uninstall;
   assert.match(uninstallResult.stdout, /local state removed/);
@@ -13806,6 +13807,7 @@ process.stdout.write(JSON.stringify({type:"result",session_id:"gate-wait-record"
       env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const holderClosed = once(holder, "close");
     context.after(() => holder.kill("SIGKILL"));
     await waitFor(() =>
       access(`${holderBarrier}.ready`)
@@ -13817,6 +13819,7 @@ process.stdout.write(JSON.stringify({type:"result",session_id:"gate-wait-record"
       env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const wrapperClosed = once(wrapper, "close");
     context.after(() => wrapper.kill("SIGKILL"));
     let wrapperStdout = "";
     let wrapperStderr = "";
@@ -13830,9 +13833,9 @@ process.stdout.write(JSON.stringify({type:"result",session_id:"gate-wait-record"
     assert.doesNotMatch(await readFile(installation.capture, "utf8"), /gate-wait-record/);
 
     await writeFile(`${holderBarrier}.continue`, "continue\n");
-    const [holderCode] = await once(holder, "close");
+    const [holderCode] = await holderClosed;
     assert.equal(holderCode, 0);
-    const [wrapperCode] = await once(wrapper, "close");
+    const [wrapperCode] = await wrapperClosed;
     assert.equal(wrapperCode, 0);
     assert.equal(wrapperStderr, "");
     assert.match(wrapperStdout, /gate-wait-record/);
@@ -13873,11 +13876,12 @@ test(
       env: connectorEnvironment(home, { PATH: `${bin}${delimiter}${process.env.PATH}` }),
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const childClosed = once(child, "close");
     context.after(() => child.kill("SIGKILL"));
     child.stdout.setEncoding("utf8");
     await new Promise((resolve) => child.stdout.once("data", resolve));
     child.kill("SIGINT");
-    const [code, signal] = await once(child, "close");
+    const [code, signal] = await childClosed;
     assert.equal(code, null);
     assert.equal(signal, "SIGINT");
   },
@@ -13916,6 +13920,7 @@ process.stdout.write(JSON.stringify({type:"result",session_id:"stale-wrapper",ti
       env: environment,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    const wrapperClosed = once(wrapper, "close");
     await waitFor(() =>
       access(`${barrier}.ready`)
         .then(() => true)
@@ -13924,7 +13929,7 @@ process.stdout.write(JSON.stringify({type:"result",session_id:"stale-wrapper",ti
     await execFileAsync(process.execPath, [connectorPath, "uninstall"], { env: environment });
     await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
     await writeFile(`${barrier}.continue`, "continue\n");
-    const [code] = await once(wrapper, "close");
+    const [code] = await wrapperClosed;
     assert.equal(code, 0);
     await delay(100);
     await assert.rejects(access(join(home, ".viberacing")), { code: "ENOENT" });
