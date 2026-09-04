@@ -70,6 +70,10 @@ experience or protocol.
 
 ### Fixed
 
+- Dashboard Sync actions remain visible when unavailable and now explain whether the browser must be
+  linked to the account's connector or that connector/Browser Sync handler must be updated or
+  repaired. The leaderboard removes the redundant inline “View profile” link while preserving the
+  row-click profile dialog and its explicit full-profile navigation.
 - Inactive Codex logical accounts no longer cause an unbounded manual history loop; their cursor is
   retained until that account is active. Runtime-state schema v3 is also accepted by the existing
   fail-closed OpenCode cutover preflight.

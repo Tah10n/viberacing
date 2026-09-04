@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -326,17 +327,19 @@ export function BrowserSyncProvider({
 
 export function AccountControls({
   accountId,
-  canSync,
+  syncUnavailableReason,
   children,
 }: {
   accountId: string;
-  canSync: boolean;
+  syncUnavailableReason: string | null;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const unavailableDescriptionId = useId();
   const sync = useContext(BrowserSyncContext);
   const current = sync?.state?.target === accountId ? sync.state : null;
   const actionsId = `account-actions-${accountId}`;
+  const canSync = syncUnavailableReason === null;
   return (
     <div className="account-controls">
       <div className="account-control-buttons">
@@ -351,17 +354,21 @@ export function AccountControls({
         >
           Manage account
         </button>
-        {canSync ? (
-          <button
-            className="button"
-            disabled={!sync?.ready || current?.tone === "status"}
-            onClick={() => sync?.launchAccount(accountId)}
-            type="button"
-          >
-            Sync
-          </button>
-        ) : null}
+        <button
+          aria-describedby={canSync ? undefined : unavailableDescriptionId}
+          className={canSync ? "button" : "button sync-unavailable"}
+          disabled={!canSync || !sync?.ready || current?.tone === "status"}
+          onClick={() => sync?.launchAccount(accountId)}
+          type="button"
+        >
+          Sync
+        </button>
       </div>
+      {canSync ? null : (
+        <p className="browser-sync-message status" id={unavailableDescriptionId}>
+          {syncUnavailableReason}
+        </p>
+      )}
       {current === null ? null : (
         <p
           className={`browser-sync-message ${current.tone}`}
@@ -377,20 +384,31 @@ export function AccountControls({
   );
 }
 
-export function InstallationSyncControl({ canSync }: { canSync: boolean }) {
+export function InstallationSyncControl({
+  syncUnavailableReason,
+}: {
+  syncUnavailableReason: string | null;
+}) {
+  const unavailableDescriptionId = useId();
   const sync = useContext(BrowserSyncContext);
-  if (!canSync) return null;
   const current = sync?.state?.target === installationSyncTarget ? sync.state : null;
+  const canSync = syncUnavailableReason === null;
   return (
     <div className="installation-sync-control">
       <button
-        className="button"
-        disabled={!sync?.ready || current?.tone === "status"}
+        aria-describedby={canSync ? undefined : unavailableDescriptionId}
+        className={canSync ? "button" : "button sync-unavailable"}
+        disabled={!canSync || !sync?.ready || current?.tone === "status"}
         onClick={() => sync?.launchInstallation()}
         type="button"
       >
         Sync all agents
       </button>
+      {canSync ? null : (
+        <p className="browser-sync-message status" id={unavailableDescriptionId}>
+          {syncUnavailableReason}
+        </p>
+      )}
       {current === null ? null : (
         <p
           className={`browser-sync-message ${current.tone}`}
