@@ -1,11 +1,13 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-04: **exact-source evidence accepted; production implementation in progress**.
-This branch registers Cursor as the eighth server agent with `source_sum` and migration 012. The
-connector implements strict stop capture, account routing and the explicit headless wrapper. Global
-checkpoint/acknowledgement integration, reset safety and release checks remain in progress. Rollout
-remains blocked until a reviewed server-first deployment. The historical investigation below
-describes the earlier gate, not the current availability of authenticated token counters.
+Status on 2026-09-05: **exact-source evidence passed; production implementation implemented in this
+PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
+eighth server agent with `source_sum` and migration 012. The connector implements strict stop
+capture, account routing, the explicit headless wrapper, durable integrity proofs, source
+reservations across reset and ACK-driven lossless compaction. Release checks and final
+implementation smoke remain in progress. Rollout remains blocked until a reviewed server-first
+deployment. The historical investigation below describes the earlier gate, not the current
+availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -103,10 +105,15 @@ The doctor reports both hook states, last captured Desktop/CLI versions, local a
 capture start, pending pairs, coverage and allowlisted schema/version failures without exposing
 Cursor paths or provider identities.
 
-Global checkpoint/acknowledgement compaction integration, installation-reset replay safety for
-`source_sum`, the full privacy matrix, remaining live smoke and final cross-platform checks remain
-pending. These local tests do not establish production readiness; live A/B/A remains a separate
-Draft blocker.
+Durable source reservations now precede possible upload, preventing installation reset from
+replaying the same local events into another server source. Integrity high-water proofs survive
+sync-cache reset and recover controlled atomic replacements. Validated ACKs bind source/range/prefix
+to local events; compaction retains all event identities/counters and the unacknowledged suffix.
+Synthetic HTTP/CLI tests cover reset/re-pair, unknown old outcomes, full replay and exact
+old-plus-new totals. CLI-only discovery verifies the executable and leaves filesystem creation to
+hook installation. The full privacy matrix, remaining live smoke and final cross-platform checks
+remain in progress. These local tests do not establish production readiness; live A/B/A remains a
+separate Draft blocker.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source

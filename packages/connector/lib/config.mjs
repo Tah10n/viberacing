@@ -29,7 +29,11 @@ import { normalizeOrigin } from "./origin.mjs";
 import { mergeStoredSourceMapping, providerAccountPolicy } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
 import { inspectCursorHooks, observeCursorHooks, reconcileCursorHooks } from "./cursor-hooks.mjs";
-import { initializeCursorLedger, recordCursorHookObservation } from "./cursor-ledger.mjs";
+import {
+  initializeCursorLedger,
+  recordCursorHookObservation,
+  reserveCursorEvents,
+} from "./cursor-ledger.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
@@ -164,7 +168,8 @@ function ownedStatePath(path, info) {
     const captureName = parts[1];
     const base = captureName
       .replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "")
-      .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "");
+      .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "")
+      .replace(/^((?:cursor-)[0-9a-f-]{36}\.jsonl)\.proof\.json$/i, "$1");
     return (
       sourceIdPattern.test(base.replace(/^cursor-/, "").replace(/\.jsonl$/i, "")) &&
       /\.jsonl$/i.test(base) &&
@@ -2266,7 +2271,7 @@ export async function withCursorCaptureContext(request, callback) {
 
 // Collection observes the currently connected mapping under the existing lifecycle lock.
 // An old collector cannot publish continuity into a replacement installation or removed source.
-export async function observeCursorProfileHooks(source, capturedAt) {
+export async function prepareCursorCollection(source, capturedAt, range) {
   const { lifecycleMutationActive } = await import("./runtime.mjs");
   if (await lifecycleMutationActive()) return null;
   return withExistingConnectionStateLock(async () => {
@@ -2300,6 +2305,18 @@ export async function observeCursorProfileHooks(source, capturedAt) {
       observation,
       capturedAt,
     );
+    if (range)
+      await reserveCursorEvents(
+        stateDirectory,
+        profile.clientSourceId,
+        {
+          sourceId: mapping.sourceId,
+          accountKey: mapping.providerAccountKey,
+          rangeStart: range.rangeStart,
+          rangeEnd: range.rangeEnd,
+        },
+        capturedAt,
+      );
     return observation;
   });
 }
@@ -2308,10 +2325,29 @@ export async function installHookForSource(source, installedScript) {
   if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   if (source.agentId === "cursor") {
     const profile = await prepareCursorHookOwner(source);
-    const changed = await reconcileCursorHooks(
-      hookRoot(profile, "cursor"),
-      await cursorHookOptions(profile),
-    );
+    const root = hookRoot(profile, "cursor");
+    try {
+      await lstat(root);
+    } catch (error) {
+      if (error.code !== "ENOENT" || resolve(root) !== resolve(join(homedir(), ".cursor")))
+        throw error;
+      // CLI-only discovery does not create directories. Pairing installs the one default root.
+      const parent = await lstat(homedir());
+      if (
+        !parent.isDirectory() ||
+        parent.isSymbolicLink() ||
+        (typeof process.getuid === "function" &&
+          (parent.uid !== process.getuid() || (parent.mode & 0o022) !== 0))
+      )
+        throw new Error("Cursor hook root is unavailable");
+      try {
+        await mkdir(root, { mode: 0o700 });
+        await secureWindowsStateDirectory(root);
+      } catch (createError) {
+        if (createError.code !== "EEXIST") throw createError;
+      }
+    }
+    const changed = await reconcileCursorHooks(root, await cursorHookOptions(profile));
     const capturedAt = new Date().toISOString();
     await initializeCursorLedger(stateDirectory, profile.clientSourceId, capturedAt);
     await recordCursorHookObservation(

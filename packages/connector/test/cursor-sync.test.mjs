@@ -55,6 +55,7 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
   const mappings = new Map();
   const sequences = new Map();
   let failRegistration = true;
+  let rejectUsage = false;
   let claimedIds = [primarySourceId];
   const year = new Date().getUTCFullYear();
   const server = createServer((request, response) => {
@@ -107,6 +108,11 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
         );
       } else if (request.url === "/api/usage") {
         usages.push(body);
+        if (rejectUsage && body.snapshots?.length) {
+          response.statusCode = 400;
+          response.end(JSON.stringify({ error: "invalid_payload" }));
+          return;
+        }
         for (const snapshot of body.snapshots ?? [])
           sequences.set(snapshot.sourceId, snapshot.syncSequence);
         response.end(JSON.stringify(usageReply(body)));
@@ -192,8 +198,12 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
         prompt: "canary-prompt",
         response: "canary-response",
         tool_arguments: "canary-tool",
+        code: "canary-source-code",
+        repository: "canary-repository",
+        cwd: "/canary-absolute-path",
         account_id: "canary-account-id",
         access_token: "canary-token",
+        api_key: "canary-api-key",
         model: "canary-model",
         cost: "canary-cost",
       },
@@ -336,6 +346,57 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
   );
   assert.equal(rollingSince(before).length, 3);
   assert.equal(reports.at(-1).resultCode, "partial_accounts_inactive");
+  // Reset creates new server sources, while historical source_sum rows remain on the server.
+  // Re-pairing must send only events not already reserved to an earlier server source.
+  const oldConfig = await config.readConfig();
+  await config.resetInstallation();
+  const replacementInstallation = await config.readOrCreateInstallation();
+  const replacementPrimary = randomUUID();
+  const replacementSources = oldConfig.sources
+    .filter((item) => item.sourceId !== missingSourceId)
+    .map((item) => ({
+      ...item,
+      sourceId: item.sourceId === primarySourceId ? replacementPrimary : randomUUID(),
+      ...(item.profileSourceId ? { profileSourceId: replacementPrimary } : {}),
+      lastAcceptedSyncSequence: "0",
+    }));
+  await config.writeConfig({
+    ...oldConfig,
+    installationId: replacementInstallation.id,
+    sources: replacementSources,
+  });
+  before = usages.length;
+  await run("sync", "--full");
+  assert.equal(rollingSince(before).length, 3);
+  assert.ok(rollingSince(before).every((snapshot) => total(snapshot) === "0"));
+  await record("A", "canary-generation-a3", 30);
+  before = usages.length;
+  await run("sync", "--full");
+  assert.equal(
+    total(rollingSince(before).find((snapshot) => snapshot.sourceId === replacementPrimary)),
+    "39",
+  );
+  assert.equal((await config.readSources())[0].providerAccountKey, boundA.providerAccountKey);
+  // Summing the last snapshot from each physical server source gives each event exactly once.
+  const lastBySource = new Map(
+    rollingSince(0).map((snapshot) => [snapshot.sourceId, total(snapshot)]),
+  );
+  assert.equal(
+    BigInt(lastBySource.get(primarySourceId)) + BigInt(lastBySource.get(replacementPrimary)),
+    87n,
+  );
+  rejectUsage = true;
+  await record("A", "canary-generation-rejected", 40);
+  assert.match((await run("sync")).stderr, /payload quarantined/);
+  const quarantine = join(stateRoot, "pending", "quarantine");
+  const quarantined = await readdir(quarantine);
+  assert.ok(quarantined.some((file) => file.endsWith(".json")));
+  for (const file of quarantined)
+    if (file.endsWith(".json"))
+      assert.doesNotMatch(
+        await readFile(join(quarantine, file), "utf8"),
+        /canary-|acct1_|alias1_|evt1_/,
+      );
   for (const body of registrations)
     assert.deepEqual(Object.keys(body).sort(), [
       "agentId",
@@ -345,6 +406,18 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
       "supportedSurface",
     ]);
   assert.doesNotMatch(JSON.stringify({ allRequests, outputs }), /canary-|acct1_|alias1_|evt1_/);
+  assert.doesNotMatch(
+    JSON.stringify(allRequests),
+    /cursorAcknowledgements|eventOwners|checkpoint|proof\.json/,
+  );
+  for (const file of [
+    "sources.json",
+    "installation.json",
+    ...(await readdir(join(stateRoot, "captures")))
+      .filter((name) => name.endsWith(".jsonl") || name.endsWith(".proof.json"))
+      .map((name) => join("captures", name)),
+  ])
+    assert.doesNotMatch(await readFile(join(stateRoot, file), "utf8"), /canary-/);
   assert.doesNotMatch(
     await readFile(join(stateRoot, "config.json"), "utf8"),
     /canary-|acct1_|alias1_|evt1_/,

@@ -10,6 +10,8 @@ import {
   symlink,
   stat,
   truncate,
+  rename,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +25,9 @@ import {
   maximumCursorLedgerBytes,
   compactCursorLedger,
   repairCursorLedger,
+  reserveCursorEvents,
+  acknowledgeCursorCapture,
+  compactAcknowledgedCursorCapture,
 } from "../lib/cursor-ledger.mjs";
 import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
 import { collectCursor } from "../lib/adapters/cursor.mjs";
@@ -125,6 +130,83 @@ test("Cursor concurrent invocations count every generation once", async (context
     1330n,
   );
   assert.equal(read.accounts.length, 1);
+});
+
+test("Cursor source reservations survive an unknown upload outcome, reset and compaction", async (context) => {
+  const root = await fixture(context);
+  await recordStop(root);
+  const accountKey = (await readCursorLedger(root, profile, later)).accounts[0].accountKey;
+  const range = { rangeStart: "2026-09-04", rangeEnd: "2026-09-05" };
+  const oldSource = randomUUID();
+  const newSource = randomUUID();
+  assert.equal(
+    await reserveCursorEvents(root, profile, { sourceId: oldSource, accountKey, ...range }, later),
+    1,
+  );
+  // The request might have succeeded remotely; neither a missing ACK nor reset can transfer it.
+  const source = {
+    agentId: "cursor",
+    collectionMethod: "cursor_local_events",
+    clientSourceId: profile,
+    providerAccountKey: accountKey,
+  };
+  const collect = (sourceId) =>
+    collectCursor({ ...source, sourceId }, range, {}, { stateRoot: root, now: later });
+  assert.deepEqual((await collect(newSource)).entries, []);
+  assert.equal((await collect(oldSource)).entries[0].totalTokens, "133");
+  await recordStop(root, { ...stop, generation_id: "new-after-reset", input_tokens: 200 }, later);
+  assert.equal((await collect(newSource)).entries[0].totalTokens, "233");
+  assert.equal((await collect(oldSource)).entries[0].totalTokens, "133");
+  const before = await readCursorLedger(root, profile, later);
+  assert.equal(await compactCursorLedger(root, profile, before.checkpoint), true);
+  const after = await readCursorLedger(root, profile, later);
+  assert.deepEqual(after.eventOwners, before.eventOwners);
+  assert.equal((await collect(newSource)).entries[0].totalTokens, "233");
+  assert.equal((await collect(oldSource)).entries[0].totalTokens, "133");
+});
+
+test("Cursor ACK compaction proves each account and range and retains the unacknowledged suffix", async (context) => {
+  const root = await fixture(context);
+  await recordStop(root);
+  await recordStop(root, { ...stop, generation_id: "same-day-second" });
+  const accountKey = (await readCursorLedger(root, profile, later)).accounts[0].accountKey;
+  const sourceId = randomUUID();
+  const range = { rangeStart: "2026-09-04", rangeEnd: "2026-09-04" };
+  await reserveCursorEvents(root, profile, { sourceId, accountKey, ...range }, later);
+  const checkpoint = (await readCursorLedger(root, profile, later)).checkpoint;
+  const before = await readFile(file(root));
+  assert.equal(await compactAcknowledgedCursorCapture(root, profile), false);
+  assert.deepEqual(await readFile(file(root)), before);
+  await recordStop(root, { ...stop, generation_id: "next-day", input_tokens: 200 }, later);
+  const unacknowledgedSuffix = (await readFile(file(root))).subarray(before.length);
+  const proof = { sourceId, ...range, checkpoint };
+  assert.equal(
+    await acknowledgeCursorCapture(root, profile, { ...proof, sourceId: randomUUID() }, later),
+    true,
+  );
+  assert.equal(await compactAcknowledgedCursorCapture(root, profile), false);
+  assert.equal(
+    await acknowledgeCursorCapture(
+      root,
+      profile,
+      { ...proof, checkpoint: { ...checkpoint, sha256: "0".repeat(64) } },
+      later,
+    ),
+    false,
+  );
+  assert.equal(await acknowledgeCursorCapture(root, profile, proof, later), true);
+  const once = await readFile(file(root));
+  assert.equal(await acknowledgeCursorCapture(root, profile, proof, later), true);
+  assert.deepEqual(await readFile(file(root)), once);
+  assert.equal(await compactAcknowledgedCursorCapture(root, profile), true);
+  const compacted = await readFile(file(root));
+  assert.ok(compacted.includes(unacknowledgedSuffix));
+  const ledger = await readCursorLedger(root, profile, later);
+  assert.deepEqual(
+    ledger.events.map((event) => event.tokens.totalTokens),
+    ["133", "133", "233"],
+  );
+  assert.equal(await compactAcknowledgedCursorCapture(root, profile), false);
 });
 
 test("Cursor conflicting tuples retain the first event and persist a partial gap", async (context) => {
@@ -293,11 +375,49 @@ test("Cursor capture does not initialize a missing ledger or disclose malformed 
   await rm(file(root));
   await assert.rejects(recordStop(root));
   await assert.rejects(stat(file(root)), { code: "ENOENT" });
-  await initializeCursorLedger(root, profile, start);
-  await appendFile(file(root), '{"prompt":"private-malformed-content"}\n');
-  await assert.rejects(readCursorLedger(root, profile, later), {
+  await assert.rejects(initializeCursorLedger(root, profile, start));
+  const fresh = await fixture(context);
+  await appendFile(file(fresh), '{"prompt":"private-malformed-content"}\n');
+  await assert.rejects(readCursorLedger(fresh, profile, later), {
     message: "cursor_schema_unsupported",
   });
+});
+
+test("Cursor durable proof rejects truncation and same-content replacement without a sync cache", async (context) => {
+  const root = await fixture(context);
+  const prefix = (await stat(file(root))).size;
+  await recordStop(root);
+  await truncate(file(root), prefix);
+  await assert.rejects(readCursorLedger(root, profile, later), {
+    diagnosticCode: "cursor_usage_incomplete",
+  });
+  const other = await fixture(context);
+  const bytes = await readFile(file(other));
+  const replacement = `${file(other)}.replacement`;
+  await writeFile(replacement, bytes, { mode: 0o600 });
+  await rename(replacement, file(other));
+  await assert.rejects(readCursorLedger(other, profile, later), {
+    diagnosticCode: "cursor_usage_incomplete",
+  });
+});
+
+test("Cursor observed append after a writer crash advances durable proof before returning", async (context) => {
+  const root = await fixture(context);
+  const prefix = (await stat(file(root))).size;
+  // Simulate a complete fsynced line whose writer died before updating the sidecar.
+  await appendFile(file(root), `${JSON.stringify({ v: 1, kind: "current", at: later })}\n`);
+  await readCursorLedger(root, profile, later);
+  await truncate(file(root), prefix);
+  await assert.rejects(readCursorLedger(root, profile, later));
+});
+
+test("Cursor observed torn suffix cannot be manually removed to erase its coverage gap", async (context) => {
+  const root = await fixture(context);
+  const prefix = (await stat(file(root))).size;
+  await appendFile(file(root), '{"v":1,"kind":');
+  assert.equal((await readCursorLedger(root, profile, later)).torn, true);
+  await truncate(file(root), prefix);
+  await assert.rejects(readCursorLedger(root, profile, later));
 });
 
 test("Cursor contradictory account after headless completion blocks that session", async (context) => {

@@ -10,10 +10,17 @@ experience or protocol.
 
 ### Added
 
-- Connector 0.7.0 preparation: Cursor account identity, logical-source registration and exact-event
-  parsers use the approved immutable capture-time policy. UTC attribution is the day of capture,
-  retained across replay; reasoning is included in output. Capture hooks, durable ledger and the
-  headless wrapper are still under implementation; this is not a production-support announcement.
+- Connector 0.7.0 implements Cursor as the eighth agent: automatic Desktop/interactive stop hooks,
+  `viberacing run cursor` for headless runs, exact aggregate counters, local account separation and
+  stable A → B → A routing. Desktop and CLI share one physical profile and one logical source per
+  account. Existing `source_sum` adds machine-local sources; migration 012 and server-derived
+  Codex/Cursor registration policy preserve protocol v5 and older connector compatibility.
+- Cursor uses the approved immutable capture-time UTC policy. Reasoning and subagents are already
+  included in aggregate usage. Durable result/sessionEnd pairing, duplicate/conflict checks, owned
+  hook repair, source reservations across reset, integrity proofs and acknowledged compaction retain
+  exact captured history without raw provider content. Earlier history, current-day coverage and
+  known capture failures remain partial. This unreleased Draft implementation still requires live
+  A/B/A validation and a separately approved server-first rollout.
 
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
   records only minimized schemas (HMACing unknown field names), exact integer counter candidates,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile, stat, symlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
@@ -12,6 +12,8 @@ import {
   resolveCursorExecutable,
   runCursorProcess,
 } from "../lib/cursor-cli.mjs";
+import { detectCursorProfile } from "../lib/adapters/cursor.mjs";
+import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
 
 const salt = "s".repeat(43);
 const version = "2026.09.02-c22c1a3";
@@ -68,6 +70,47 @@ async function fakeAgent(body, extension = process.platform === "win32" ? ".cmd"
   const executable = await resolveCursorExecutable({ environment });
   return { executable, environment, path, script };
 }
+
+test("Cursor CLI-only discovery verifies the executable and creates no hook root", async () => {
+  const agent = await fakeAgent("process.exit(0)");
+  const home = join(root, `home-${randomUUID()}`);
+  await mkdir(home, { mode: 0o700 });
+  const detected = await detectCursorProfile({ home, environment: agent.environment });
+  assert.equal(detected.length, 1);
+  assert.equal(detected[0].executablePath, agent.executable.path);
+  assert.equal(detected[0].dataPath, join(home, ".cursor"));
+  assert.equal(detected[0].supportedSurface, "desktop");
+  await assert.rejects(stat(join(home, ".cursor")), { code: "ENOENT" });
+  assert.deepEqual(
+    await detectCursorProfile({
+      home,
+      environment: { ...agent.environment, VIBERACING_CURSOR_BIN: "relative-agent" },
+    }),
+    [],
+  );
+  const elsewhere = join(root, `foreign-${randomUUID()}`);
+  await mkdir(elsewhere, { mode: 0o700 });
+  await symlink(
+    elsewhere,
+    join(home, ".cursor"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  assert.deepEqual(await detectCursorProfile({ home, environment: agent.environment }), []);
+  await rm(join(home, ".cursor"));
+  await mkdir(join(home, ".cursor"), { mode: 0o700 });
+  await ensurePrivateStateDirectory(join(home, ".cursor"));
+  assert.equal(
+    (
+      await detectCursorProfile({
+        home,
+        resolveExecutable() {
+          throw new Error("must not probe");
+        },
+      })
+    ).length,
+    1,
+  );
+});
 
 test("Cursor run enforces headless stream JSON while preserving literal provider arguments", () => {
   const args = ["--model", "selected", "--", "literal --print & %PATH% ' \" 雪"];

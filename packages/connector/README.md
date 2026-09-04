@@ -94,6 +94,30 @@ determines the UTC date. Direct headless runs outside this wrapper are not guara
 Cursor 0.7.0 support remains under validation in the Draft implementation; see
 [the evidence and remaining gates](../../docs/CURSOR_EVIDENCE.md).
 
+Cursor Desktop and interactive CLI use the same owned `~/.cursor/hooks.json` profile (Windows:
+`%USERPROFILE%\.cursor`). Discovery accepts a safe existing root or a verified official `agent`
+executable; it creates no files. Connection installs additive stop/sessionEnd hooks, preserving
+foreign commands. Account identities are converted immediately to local HMACs. The first account
+uses the physical source, later accounts use stable logical sources, and returning to A reuses A.
+Desktop A and CLI A share a source; Desktop A and CLI B remain separate. Assign sources on another
+computer to the same account explicitly; the server adds their machine-local events.
+
+Capture starts after hook installation. Each event keeps its first capture timestamp and UTC day,
+including a final headless result whose sessionEnd arrives later. This is capture time, not provider
+time. Reasoning is already in output, and subagents are already in the aggregate result. Missing
+counters/identity, unsupported schemas/versions, aborts and incomplete pairs fail closed. Direct
+`agent --print` outside the wrapper, Tab, Bugbot, Cloud Agents and SDK usage are not guaranteed.
+Current-day and pre-capture history remain partial; completed past days require intact observed hook
+intervals. `sync --full` reads only available captures and cannot recover pre-install history.
+
+`doctor` shows both hook states, last captured versions, account count, pending pairs and coverage;
+`doctor --repair` restores only owned hooks while retaining events and gaps. Reset keeps identity
+salt and durable event reservations. A newly paired server source cannot replay events already
+reserved to an earlier source, including an unknown earlier upload outcome; this can leave coverage
+partial. Do not copy Cursor ledgers between computers. Their integrity proof rejects replacement and
+truncation even after sync cache reset. ACK-driven compaction preserves exact events and the
+unacknowledged suffix. The 8 MiB bound fails closed rather than discarding unknown history.
+
 `connect` also registers a per-user `viberacing://` handler on macOS, Windows, and Linux when the
 default state directory is used. The dashboard uses it only after that browser approved the same
 installation. A click starts the installed connector copy, claims a short-lived device-authenticated

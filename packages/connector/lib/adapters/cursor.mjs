@@ -1,10 +1,15 @@
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readCursorLedger, recordCursorHookObservation } from "../cursor-ledger.mjs";
+import {
+  readCursorLedger,
+  recordCursorHookObservation,
+  reserveCursorEvents,
+} from "../cursor-ledger.mjs";
 import { diagnosticError } from "../diagnostics.mjs";
 import { inspectOwnerOnlyWindowsDirectory } from "../windows-security.mjs";
 import { mergeEntries } from "./shared.mjs";
+import { resolveCursorExecutable } from "../cursor-cli.mjs";
 
 async function defaultStateRoot() {
   return (await import("../config.mjs")).stateDirectory;
@@ -19,8 +24,19 @@ function validDay(value) {
   return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value;
 }
 
-export async function detectCursorProfile({ home = homedir() } = {}) {
+export async function detectCursorProfile({
+  home = homedir(),
+  environment = process.env,
+  resolveExecutable = resolveCursorExecutable,
+} = {}) {
   const root = join(home, ".cursor");
+  const source = {
+    dataPath: root,
+    hookConfigRoot: root,
+    suggestedLabel: "Cursor",
+    collectionMethod: "cursor_local_events",
+    supportedSurface: "desktop",
+  };
   try {
     const info = await lstat(root);
     if (
@@ -31,17 +47,16 @@ export async function detectCursorProfile({ home = homedir() } = {}) {
       !(await inspectOwnerOnlyWindowsDirectory(root))
     )
       return [];
-    return [
-      {
-        dataPath: root,
-        hookConfigRoot: root,
-        suggestedLabel: "Cursor",
-        collectionMethod: "cursor_local_events",
-        supportedSurface: "desktop",
-      },
-    ];
+    return [source];
   } catch (error) {
-    if (error.code === "ENOENT") return [];
+    if (error.code === "ENOENT") {
+      try {
+        const executable = await resolveExecutable({ environment, home });
+        return [{ ...source, executablePath: executable.path }];
+      } catch {
+        return [];
+      }
+    }
     throw diagnosticError("Cursor profile is unavailable", "cursor_hook_missing");
   }
 }
@@ -68,15 +83,25 @@ export async function collectCursor(source, range, state = {}, context = {}) {
     await recordCursorHookObservation(stateRoot, profileId(source), context.hookObservation, now);
   } else if (!context.stateRoot) {
     try {
-      const { observeCursorProfileHooks } = await import("../config.mjs");
-      if (!(await observeCursorProfileHooks(source, now))) throw new Error("inactive");
+      const { prepareCursorCollection } = await import("../config.mjs");
+      if (!(await prepareCursorCollection(source, now, range))) throw new Error("inactive");
     } catch {
       throw diagnosticError("Cursor hook continuity is unavailable", "cursor_hook_stale");
     }
   }
-  const ledger = await readCursorLedger(stateRoot, profileId(source), now, {
-    checkpoint: state.checkpoint,
-  });
+  if (context.stateRoot && source.sourceId)
+    await reserveCursorEvents(
+      stateRoot,
+      profileId(source),
+      {
+        sourceId: source.sourceId,
+        accountKey: source.providerAccountKey,
+        rangeStart: range.rangeStart,
+        rangeEnd: range.rangeEnd,
+      },
+      now,
+    );
+  const ledger = await readCursorLedger(stateRoot, profileId(source), now);
   if (!ledger.previousCheckpointMatches)
     throw diagnosticError("Cursor capture history changed unexpectedly", "cursor_usage_incomplete");
   if (!ledger.accounts.some((account) => account.accountKey === source.providerAccountKey)) {
@@ -87,16 +112,18 @@ export async function collectCursor(source, range, state = {}, context = {}) {
     error.inactiveProviderAccount = ledger.accounts.length > 0;
     throw error;
   }
-  const entries = mergeEntries(
-    ledger.events
-      .filter(
-        (event) =>
-          event.accountKey === source.providerAccountKey &&
-          event.date >= range.rangeStart &&
-          event.date <= range.rangeEnd,
-      )
-      .map((event) => ({ date: event.date, ...event.tokens })),
+  const inRange = ledger.events.filter(
+    (event) =>
+      event.accountKey === source.providerAccountKey &&
+      event.date >= range.rangeStart &&
+      event.date <= range.rangeEnd,
   );
+  const sourceId = source.sourceId?.toLowerCase();
+  const owned = sourceId
+    ? inRange.filter((event) => ledger.eventOwners[event.eventKey] === sourceId)
+    : inRange;
+  const ownershipPartial = owned.length !== inRange.length;
+  const entries = mergeEntries(owned.map((event) => ({ date: event.date, ...event.tokens })));
   const gaps = ledger.gaps.filter(
     (gap) => gap.from.slice(0, 10) <= range.rangeEnd && gap.to.slice(0, 10) >= range.rangeStart,
   );
@@ -108,6 +135,7 @@ export async function collectCursor(source, range, state = {}, context = {}) {
       interval.from <= `${range.rangeStart}T00:00:00.000Z` && interval.to >= rangeEndExclusive,
   );
   const partial =
+    ownershipPartial ||
     !covered ||
     !ledger.captureStartedAt ||
     `${range.rangeStart}T00:00:00.000Z` < ledger.captureStartedAt ||
@@ -119,13 +147,17 @@ export async function collectCursor(source, range, state = {}, context = {}) {
     completeness: partial ? "partial" : "complete",
     retentionSafe: !ledger.torn,
     warnings: partial ? ["cursor_capture_partial"] : [],
-    diagnostics: [...new Set(gaps.map((gap) => gap.code))].map((code) => ({
+    diagnostics: [
+      ...new Set([
+        ...gaps.map((gap) => gap.code),
+        ...(ownershipPartial ? ["cursor_usage_incomplete"] : []),
+      ]),
+    ].map((code) => ({
       code,
       phase: "collect",
     })),
     nextState: {
       parserVersion: 1,
-      ...(ledger.checkpoint ? { checkpoint: ledger.checkpoint } : {}),
     },
     cursorCheckpoint: ledger.checkpoint,
   };

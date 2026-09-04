@@ -159,6 +159,28 @@ function hookFingerprint(value) {
 }
 function validRecord(record) {
   if (!record || record.v !== 1) return false;
+  if (record.kind === "ack")
+    return (
+      keys(record, ["v", "kind", "sourceId", "eventKeys"]) &&
+      uuid.test(record.sourceId) &&
+      Array.isArray(record.eventKeys) &&
+      record.eventKeys.length > 0 &&
+      record.eventKeys.length <= 128 &&
+      record.eventKeys.every((value) => hash.test(value)) &&
+      new Set(record.eventKeys).size === record.eventKeys.length
+    );
+  if (record.kind === "owner")
+    return (
+      keys(record, ["v", "kind", "at", "sourceId", "accountKey", "eventKeys"]) &&
+      time(record.at) &&
+      uuid.test(record.sourceId) &&
+      accountHash.test(record.accountKey) &&
+      Array.isArray(record.eventKeys) &&
+      record.eventKeys.length > 0 &&
+      record.eventKeys.length <= 128 &&
+      record.eventKeys.every((value) => hash.test(value)) &&
+      new Set(record.eventKeys).size === record.eventKeys.length
+    );
   if (record.kind === "hooks")
     return (
       keys(record, ["v", "kind", "at", "hooks", "fingerprint"]) &&
@@ -273,6 +295,8 @@ function fold(records) {
   const state = {
     accounts: [],
     events: new Map(),
+    owners: new Map(),
+    acknowledged: new Set(),
     pending: new Map(),
     completed: new Map(),
     gaps: [],
@@ -335,6 +359,21 @@ function fold(records) {
     if (record.kind === "start") {
       if (state.captureStartedAt) fail("cursor_schema_unsupported");
       state.captureStartedAt = record.at;
+    } else if (record.kind === "ack") {
+      for (const eventKey of record.eventKeys) {
+        if (state.owners.get(eventKey) !== record.sourceId) fail();
+        state.acknowledged.add(eventKey);
+      }
+    } else if (record.kind === "owner") {
+      for (const eventKey of record.eventKeys) {
+        const event = state.events.get(eventKey);
+        if (!event || event.accountKey !== record.accountKey)
+          fail("cursor_event_identity_conflict");
+        const owner = state.owners.get(eventKey);
+        if (owner && owner !== record.sourceId)
+          gap(event.capturedAt, record.at, "cursor_event_identity_conflict");
+        else state.owners.set(eventKey, record.sourceId);
+      }
     } else if (record.kind === "version") state.versions[record.surface] = record.value;
     else if (record.kind === "hooks") {
       const previous = state.hookObservation;
@@ -480,6 +519,102 @@ async function safeFile(path, allowMissing = false, checkAcl = true) {
     fail();
   return info;
 }
+
+function validCheckpoint(value) {
+  return (
+    keys(value, ["version", "bytes", "sha256", "ino", "dev"]) &&
+    value.version === 1 &&
+    Number.isSafeInteger(value.bytes) &&
+    value.bytes >= 0 &&
+    value.bytes <= maximumCursorLedgerBytes &&
+    /^[a-f0-9]{64}$/.test(value.sha256) &&
+    /^\d+$/.test(value.ino) &&
+    /^\d+$/.test(value.dev)
+  );
+}
+function matchesCheckpoint(proof, bytes, info) {
+  return (
+    validCheckpoint(proof) &&
+    proof.bytes <= bytes.length &&
+    proof.ino === String(info.ino) &&
+    proof.dev === String(info.dev) &&
+    checkpoint(bytes.subarray(0, proof.bytes), info).sha256 === proof.sha256
+  );
+}
+async function syncDirectory(directory) {
+  if (process.platform === "win32") return;
+  const parent = await open(directory, constants.O_RDONLY);
+  try {
+    await parent.sync();
+  } finally {
+    await parent.close();
+  }
+}
+async function readLedgerProof(path) {
+  const info = await safeFile(path, true);
+  if (!info) return null;
+  if (info.size > 1024) fail();
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (
+      opened.ino !== info.ino ||
+      opened.dev !== info.dev ||
+      opened.size !== info.size ||
+      opened.nlink !== 1
+    )
+      fail();
+    const bytes = Buffer.alloc(info.size);
+    if ((await handle.read(bytes, 0, bytes.length, 0)).bytesRead !== bytes.length) fail();
+    const proof = JSON.parse(bytes.toString("utf8"));
+    if (
+      !keys(proof, proof.next ? ["version", "current", "next"] : ["version", "current"]) ||
+      proof.version !== 1 ||
+      !validCheckpoint(proof.current) ||
+      (proof.next !== undefined && !validCheckpoint(proof.next))
+    )
+      fail();
+    return proof;
+  } finally {
+    await handle.close();
+  }
+}
+async function writeLedgerProof(path, directory, proof) {
+  const before = await safeFile(path, true);
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  let staged;
+  try {
+    staged = await open(
+      temporary,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+      0o600,
+    );
+    await ensureOwnerOnlyWindowsFile(temporary);
+    await staged.writeFile(`${JSON.stringify(proof)}\n`);
+    await staged.sync();
+    await staged.close();
+    staged = null;
+    const current = await safeFile(path, true);
+    if (
+      before
+        ? !current ||
+          current.ino !== before.ino ||
+          current.dev !== before.dev ||
+          current.size !== before.size ||
+          current.mtimeMs !== before.mtimeMs
+        : current
+    )
+      fail();
+    await safeFile(temporary);
+    await rename(temporary, path);
+    await syncDirectory(directory);
+  } finally {
+    await staged?.close();
+    await unlink(temporary).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+}
 async function withLedger(...args) {
   try {
     return await withLedgerFile(...args);
@@ -511,8 +646,11 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
   if (!lock) fail();
   let handle;
   try {
+    const proofPath = `${path}.proof.json`;
+    const durableProof = await readLedgerProof(proofPath);
     let before = await safeFile(path, initialize);
     if (!before) {
+      if (durableProof) fail();
       handle = await open(path, constants.O_CREAT | constants.O_EXCL | constants.O_RDWR, 0o600);
       await ensureOwnerOnlyWindowsFile(path);
       before = await safeFile(path);
@@ -535,6 +673,22 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
       fail("cursor_schema_unsupported");
     }
     const state = fold(records);
+    // This high-water mark lives beside the ledger, outside resettable sync state.
+    // An interrupted replacement is accepted only with its precommitted inode and digest.
+    if (durableProof) {
+      if (
+        !matchesCheckpoint(durableProof.current, bytes, opened) &&
+        !matchesCheckpoint(durableProof.next, bytes, opened)
+      )
+        fail();
+    } else if (!initialize || bytes.length !== 0) fail();
+    const observedProof = {
+      version: 1,
+      current: checkpoint(bytes, opened),
+    };
+    if (JSON.stringify(observedProof) !== JSON.stringify(durableProof))
+      await writeLedgerProof(proofPath, directory, observedProof);
+    let durableBytes = bytes;
     let expectedSize = opened.size;
     const append = async (record) => {
       if (!validRecord(record)) fail("cursor_schema_unsupported");
@@ -562,6 +716,11 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
       }
       expectedSize += line.length;
       await handle.sync();
+      durableBytes = Buffer.concat([durableBytes, line]);
+      await writeLedgerProof(proofPath, directory, {
+        version: 1,
+        current: checkpoint(durableBytes, opened),
+      });
       if (process.platform !== "win32" && current.size === 0) {
         const parent = await open(directory, constants.O_RDONLY);
         try {
@@ -600,7 +759,13 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
           !currentBytes.equals(bytes)
         )
           fail();
-        await safeFile(temporary);
+        const replacementInfo = await safeFile(temporary);
+        const replacementProof = checkpoint(replacement, replacementInfo);
+        await writeLedgerProof(proofPath, directory, {
+          version: 1,
+          current: checkpoint(bytes, opened),
+          next: replacementProof,
+        });
         if (process.platform === "win32") {
           // Release the old destination before Windows replaces it, retaining the ledger lock.
           await handle.close();
@@ -624,6 +789,7 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
           }
         }
         await options.afterPublish?.();
+        await writeLedgerProof(proofPath, directory, { version: 1, current: replacementProof });
       } finally {
         await staged?.close();
         await unlink(temporary).catch((error) => {
@@ -650,6 +816,42 @@ export async function initializeCursorLedger(root, profileId, capturedAt) {
     },
     true,
   );
+}
+
+// Reserve before a request can leave this installation. A lost response or reset must not
+// move the same source_sum event to a new server source. Reservations survive cache resets.
+export async function reserveCursorEvents(root, profileId, scope, now) {
+  if (
+    !uuid.test(scope?.sourceId ?? "") ||
+    !accountHash.test(scope?.accountKey ?? "") ||
+    !time(now) ||
+    !time(`${scope?.rangeStart}T00:00:00.000Z`) ||
+    !time(`${scope?.rangeEnd}T00:00:00.000Z`) ||
+    scope.rangeStart > scope.rangeEnd
+  )
+    fail();
+  return withLedger(root, profileId, async ({ state, append, torn }) => {
+    if (torn || !state.captureStartedAt) fail();
+    const eventKeys = capturedEvents(state, now)
+      .filter(
+        (event) =>
+          event.accountKey === scope.accountKey &&
+          event.date >= scope.rangeStart &&
+          event.date <= scope.rangeEnd &&
+          !state.owners.has(event.eventKey),
+      )
+      .map((event) => event.eventKey);
+    for (let offset = 0; offset < eventKeys.length; offset += 128)
+      await append({
+        v: 1,
+        kind: "owner",
+        at: now,
+        sourceId: scope.sourceId.toLowerCase(),
+        accountKey: scope.accountKey,
+        eventKeys: eventKeys.slice(offset, offset + 128),
+      });
+    return eventKeys.length;
+  });
 }
 
 export async function recordCursorCaptureGap(root, profileId, capturedAt, code) {
@@ -724,6 +926,7 @@ export async function readCursorLedger(
       versions: state.versions,
       accounts: state.accounts,
       events: capturedEvents(state, now),
+      eventOwners: Object.fromEntries(state.owners),
       pendingPairs: pending.length,
       headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
@@ -939,6 +1142,89 @@ function checkpoint(bytes, info) {
     ino: String(info.ino),
     dev: String(info.dev),
   };
+}
+
+export function validCursorAcknowledgement(value) {
+  return (
+    keys(value, ["sourceId", "rangeStart", "rangeEnd", "checkpoint"]) &&
+    uuid.test(value.sourceId) &&
+    time(`${value.rangeStart}T00:00:00.000Z`) &&
+    time(`${value.rangeEnd}T00:00:00.000Z`) &&
+    value.rangeStart <= value.rangeEnd &&
+    validCheckpoint(value.checkpoint) &&
+    value.checkpoint.bytes > 0
+  );
+}
+
+// The pending envelope carries only source/range/file proof, never event/account HMACs.
+// Call only after the aggregate request has a validated successful acknowledgement.
+export async function acknowledgeCursorCapture(
+  root,
+  profileId,
+  acknowledgement,
+  now = new Date().toISOString(),
+) {
+  if (!validCursorAcknowledgement(acknowledgement) || !time(now)) fail();
+  return withLedger(root, profileId, async ({ state, bytes, opened, append, torn }) => {
+    const { checkpoint: proof, sourceId, rangeStart, rangeEnd } = acknowledgement;
+    if (torn || !matchesCheckpoint(proof, bytes, opened) || bytes[proof.bytes - 1] !== 10)
+      return false;
+    const prefix = fold(
+      bytes
+        .subarray(0, proof.bytes)
+        .toString("utf8")
+        .trimEnd()
+        .split("\n")
+        .map((line) => JSON.parse(line)),
+    );
+    const eventKeys = capturedEvents(prefix, now)
+      .filter(
+        (event) =>
+          prefix.owners.get(event.eventKey) === sourceId &&
+          event.date >= rangeStart &&
+          event.date <= rangeEnd &&
+          !state.acknowledged.has(event.eventKey),
+      )
+      .map((event) => event.eventKey);
+    for (let offset = 0; offset < eventKeys.length; offset += 128)
+      await append({
+        v: 1,
+        kind: "ack",
+        sourceId,
+        eventKeys: eventKeys.slice(offset, offset + 128),
+      });
+    return true;
+  });
+}
+
+export async function compactAcknowledgedCursorCapture(root, profileId, options = {}) {
+  // Stop at the first unacknowledged event or unresolved pair. Later bytes stay byte-exact.
+  const proof = await withLedger(
+    root,
+    profileId,
+    async ({ state, records, bytes, opened, torn }) => {
+      if (torn) return null;
+      let offset = 0;
+      for (const record of records) {
+        if (
+          record.event &&
+          !state.acknowledged.has(record.event.eventKey) &&
+          !state.suppressedEvents.has(record.event.eventKey)
+        )
+          break;
+        if (
+          record.captureId &&
+          (!state.completed.has(record.captureId) ||
+            (state.completed.get(record.captureId) &&
+              !state.acknowledged.has(state.completed.get(record.captureId))))
+        )
+          break;
+        offset = bytes.indexOf(10, offset) + 1;
+      }
+      return offset > 0 ? checkpoint(bytes.subarray(0, offset), opened) : null;
+    },
+  );
+  return proof ? compactCursorLedger(root, profileId, proof, options) : false;
 }
 
 // The sync caller supplies only a checkpoint whose aggregate snapshot was acknowledged.

@@ -17,11 +17,19 @@ import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "viberacing-cursor-capture-"));
 const oldState = process.env.VIBERACING_STATE_DIR;
+const oldHome = process.env.HOME;
+const oldUserProfile = process.env.USERPROFILE;
+process.env.HOME = root;
+process.env.USERPROFILE = root;
 process.env.VIBERACING_STATE_DIR = join(root, "state");
 const config = await import("../lib/config.mjs");
 const capture = await import("../lib/cursor-capture.mjs");
 const runtime = await import("../lib/runtime.mjs");
 after(async () => {
+  if (oldHome === undefined) delete process.env.HOME;
+  else process.env.HOME = oldHome;
+  if (oldUserProfile === undefined) delete process.env.USERPROFILE;
+  else process.env.USERPROFILE = oldUserProfile;
   if (oldState === undefined) delete process.env.VIBERACING_STATE_DIR;
   else process.env.VIBERACING_STATE_DIR = oldState;
   await rm(root, { recursive: true, force: true });
@@ -85,9 +93,7 @@ test("Cursor stdin decoder bounds bytes and time without retaining malformed con
 });
 
 test("Cursor capture lifecycle owns hooks, records exact private events, rejects stale invocations and preserves cleanup identity", async () => {
-  const providerRoot = join(root, "cursor");
-  await mkdir(providerRoot, { mode: 0o700 });
-  await ensurePrivateStateDirectory(providerRoot);
+  const providerRoot = join(root, ".cursor");
   const installation = await config.readOrCreateInstallation();
   const { source } = await config.addSource({
     agentId: "cursor",
@@ -240,13 +246,14 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
     "dirty.json",
     "state.json",
     join("captures", `cursor-${source.clientSourceId}.jsonl`),
+    join("captures", `cursor-${source.clientSourceId}.jsonl.proof.json`),
   ])
     assert.doesNotMatch(
       await readFile(join(config.stateDirectory, filename), "utf8"),
       /canary-|do-not-count-wrapper-stop|blocked-generation/,
     );
   await config.removeHookForSource(profile);
-  const observation = await config.observeCursorProfileHooks(
+  const observation = await config.prepareCursorCollection(
     (await config.readConfig()).sources[0],
     new Date().toISOString(),
   );

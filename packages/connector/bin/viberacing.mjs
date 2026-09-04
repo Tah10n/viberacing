@@ -16,6 +16,9 @@ import {
   readCursorLedger,
   beginCursorHeadlessCapture,
   recordCursorCapture,
+  acknowledgeCursorCapture,
+  compactAcknowledgedCursorCapture,
+  validCursorAcknowledgement,
 } from "../lib/cursor-ledger.mjs";
 import {
   cursorRunArguments,
@@ -1676,6 +1679,27 @@ async function compactPendingCaptures(config) {
   const pending = new Set(
     (await pendingPayloads()).map((path) => path.split(/[\\/]/).at(-1)?.split(".")[0]),
   );
+  const cursorProfiles = new Set();
+  for (const source of config.sources) {
+    if (source.collectionMethod !== "cursor_local_events") continue;
+    const profile = source.profileClientSourceId ?? source.clientSourceId;
+    if (cursorProfiles.has(profile)) continue;
+    cursorProfiles.add(profile);
+    if (
+      config.sources.some(
+        (candidate) =>
+          candidate.collectionMethod === "cursor_local_events" &&
+          (candidate.profileClientSourceId ?? candidate.clientSourceId) === profile &&
+          (pending.has(candidate.sourceId) || state.quarantine?.[candidate.sourceId]),
+      )
+    )
+      continue;
+    try {
+      await compactAcknowledgedCursorCapture(stateDirectory, profile);
+    } catch {
+      warning("Vibe Racing warning: Cursor capture cleanup was deferred.");
+    }
+  }
   for (const source of config.sources) {
     const proof = state.captureCompactionPending[source.sourceId];
     if (
@@ -1777,6 +1801,35 @@ function validatedCaptureCleanupProof(payload, sourceId) {
 }
 
 async function applyCaptureCleanupAcknowledgement(config, item) {
+  const cursorProofs = item.payload.cursorAcknowledgements ?? [];
+  if (
+    !Array.isArray(cursorProofs) ||
+    cursorProofs.length > 1 ||
+    cursorProofs.some(
+      (proof) => !validCursorAcknowledgement(proof) || proof.sourceId !== item.sourceId,
+    )
+  )
+    throw new Error("Pending Cursor acknowledgement is invalid");
+  if (cursorProofs.length) {
+    const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
+    const snapshot = item.payload.snapshots?.[0];
+    const cursorProof = cursorProofs[0];
+    if (
+      source?.collectionMethod !== "cursor_local_events" ||
+      cursorProof.rangeStart !== snapshot?.rangeStart ||
+      cursorProof.rangeEnd !== snapshot?.rangeEnd
+    )
+      throw new Error("Pending Cursor acknowledgement is invalid");
+    try {
+      await acknowledgeCursorCapture(
+        stateDirectory,
+        source.profileClientSourceId ?? source.clientSourceId,
+        cursorProof,
+      );
+    } catch {
+      warning("Vibe Racing warning: Cursor capture acknowledgement was deferred.");
+    }
+  }
   const proof = validatedCaptureCleanupProof(item.payload, item.sourceId);
   if (proof === null) return;
   const state = await readState();
@@ -3010,6 +3063,7 @@ async function syncRange(providedConfig, options = {}) {
       const pendingRegistrationSupersessions = new Map();
       const historyAdvances = [];
       const captureCleanupProofs = [];
+      const cursorAcknowledgements = [];
       let terminalCollectorDiagnostic;
       for (const sourceId of previous.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
@@ -3125,6 +3179,15 @@ async function syncRange(providedConfig, options = {}) {
           ...history.snapshot,
         });
         if (history.advance !== null) historyAdvances.push(history.advance);
+        if (
+          activeSource.collectionMethod === "cursor_local_events" &&
+          outcome.value.result.cursorCheckpoint
+        )
+          cursorAcknowledgements.push({
+            sourceId: activeSource.sourceId,
+            ...range,
+            checkpoint: outcome.value.result.cursorCheckpoint,
+          });
         if (activeSource.collectionMethod === "antigravity_cli_capture") {
           state.captureCompactionPending ??= {};
           if (outcome.value.result.retentionSafe !== true) {
@@ -3257,6 +3320,7 @@ async function syncRange(providedConfig, options = {}) {
         pendingRegistrationSupersessions: [...pendingRegistrationSupersessions.values()],
         historyAdvances,
         captureCleanupProofs,
+        cursorAcknowledgements,
       };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
@@ -4036,7 +4100,10 @@ async function doctor() {
               (gap) => gap.from.slice(0, 10) <= yesterday && gap.to.slice(0, 10) >= yesterday,
             );
           output(
-            `  Previous UTC day: ${complete ? "complete" : "partial"}; current UTC day: partial`,
+            `  Captured profile history: previous UTC day ${complete ? "complete" : "partial"}; current UTC day partial`,
+          );
+          output(
+            "  Source coverage can remain partial for events reserved before installation reset.",
           );
           for (const code of new Set(
             ledger.gaps

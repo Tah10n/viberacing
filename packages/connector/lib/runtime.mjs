@@ -1077,6 +1077,9 @@ export async function savePending(payload) {
     const captureCleanupProofs = (payload.captureCleanupProofs ?? []).filter(
       (proof) => proof.sourceId === snapshot.sourceId,
     );
+    const cursorAcknowledgements = (payload.cursorAcknowledgements ?? []).filter(
+      (proof) => proof.sourceId === snapshot.sourceId,
+    );
     await atomicJson(pendingPath(snapshot.sourceId), {
       ...payload,
       snapshots: [snapshot],
@@ -1088,6 +1091,9 @@ export async function savePending(payload) {
       ...(captureCleanupProofs.length === 0
         ? { captureCleanupProofs: undefined }
         : { captureCleanupProofs }),
+      ...(cursorAcknowledgements.length === 0
+        ? { cursorAcknowledgements: undefined }
+        : { cursorAcknowledgements }),
     });
     await unlink(pendingPath(snapshot.sourceId, "error")).catch((error) => {
       if (error?.code !== "ENOENT") throw error;

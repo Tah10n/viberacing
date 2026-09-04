@@ -11,6 +11,30 @@ identity, local-only source paths, exact collectors, additive hooks, CLI capture
 single-flight/retry/pending state, and diagnostics. PostgreSQL is the only shared state. There is no
 queue, cache, worker, proxy, ORM, or second service.
 
+Cursor 0.7.0 adds one adapter, `cursor_local_events`, covering Desktop and CLI. Its
+`provider_account_events` metadata selects physical-profile/logical-account routing; server math
+remains `source_sum` and protocol v5 is unchanged. The existing authenticated dynamic-source route
+derives collection method, surface, label and limits from Codex/Cursor policy. Clients cannot select
+aggregation or send provider identity.
+
+Installation-owned stop/sessionEnd hooks and the explicit `viberacing run cursor` wrapper feed a
+private bounded JSONL ledger. Only strict exact counters, immutable capture UTC time, local HMAC
+identities and safe lifecycle metadata survive parsing. A headless marker is durably registered
+before provider entry; successful result and sessionEnd pair in either order. Ordinary stops are
+suppressed for owned runs, with bounded account/session/time/tuple correlation as a second defense.
+Pending halves and failures remain partial. The existing short-lived scheduler handles network sync.
+
+Before a snapshot can be sent, ledger events are reserved to its server source under the existing
+connection and ledger locks. Reservations survive reset, preventing `source_sum` replay into a new
+installation even when the old response was lost. A separate owner-only proof records the ledger
+inode, byte high-water mark and digest, independently of sync state. Atomic replacement precommits
+both old and staged identities so repair/compaction recover either crash outcome. Validated server
+ACKs bind source/range/prefix to local events. Compaction removes repeated identity metadata only
+from the acknowledged prefix, retains replay identities and counters, and preserves an
+unacknowledged suffix byte-for-byte. The ledger is bounded at 8 MiB; reaching the bound fails closed
+rather than silently discarding history. No capture file, checkpoint, HMAC or provider payload is
+sent to the server.
+
 ## Identity and pairing
 
 `installation.json` contains a random UUID and secret that survive reconnect, plus the exact local
@@ -39,9 +63,9 @@ source. An abandoned pairing therefore leaves both local configuration and serve
 Server storage separates `installations`, human-defined `agent_accounts`, and machine-local
 `installation_sources`. Composite foreign keys prevent cross-user or cross-agent mappings.
 Reassigning a source during pairing rebuilds only the affected user's agent summaries in that same
-transaction. A nullable self-reference links a logical Codex source to its physical profile source.
-The authenticated `/api/installations/current/sources/register` transaction locks the user,
-installation, and physical profile; enforces eight accounts per profile, 32 sources per
+transaction. A nullable self-reference links a logical Codex or Cursor source to its physical
+profile source. The authenticated `/api/installations/current/sources/register` transaction locks
+the user, installation, and physical profile; enforces eight accounts per profile, 32 sources per
 installation, and the shared per-user source/account limits; creates a generic account/source
 idempotently; and accepts no provider identity. A restrictive profile foreign key prevents deleting
 a physical source while logical sibling accounts still depend on it. Separate Codex profiles are

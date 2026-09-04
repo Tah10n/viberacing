@@ -141,6 +141,7 @@ function connectorEnvironment(home, extra = {}) {
     HOME: join(home, "user-home"),
     USERPROFILE: join(home, "user-home"),
     VIBERACING_STATE_DIR: join(home, ".viberacing"),
+    VIBERACING_CURSOR_BIN: join(home, "missing-cursor-agent"),
     CODEX_HOME: join(home, ".codex"),
     CLAUDE_CONFIG_DIR: join(home, ".claude"),
     KIMI_CODE_HOME: join(home, ".kimi-code"),
