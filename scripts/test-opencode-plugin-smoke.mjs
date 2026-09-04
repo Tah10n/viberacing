@@ -135,5 +135,10 @@ try {
     `OpenCode ${compatibilityTarget} plugin smoke passed with Bun on ${process.platform}.\n`,
   );
 } finally {
-  await rm(root, { recursive: true, force: true });
+  await rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: process.platform === "win32" ? 50 : 0,
+    retryDelay: 100,
+  });
 }

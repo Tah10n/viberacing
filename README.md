@@ -18,6 +18,11 @@ Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen C
 CLI, and Gemini CLI. Antigravity Desktop is not supported. See
 [agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
+Cursor is not counted yet. The current official Desktop hook and CLI output schemas do not expose a
+confirmed exact token source shared by both surfaces. The dated
+[Cursor evidence gate](docs/CURSOR_EVIDENCE.md) documents the closed production boundary and an
+opt-in, privacy-minimized local probe for future schema verification.
+
 Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
 all active mapped OpenCode databases for that installation together. One short-lived detached
 scheduler coalesces source events and sends at most about one automatic batch every two minutes; it
