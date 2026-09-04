@@ -187,7 +187,7 @@ test("Cursor process preserves output, argument bytes, exit code and marker with
       stdin: "ignore",
       now: () => before,
     });
-    assert.equal(outcome.code, 0);
+    assert.equal(outcome.code, 0, `${extension || "native"}: ${stderr.bytes().toString("utf8")}`);
     assert.equal(outcome.signal, null);
     assert.equal(outcome.result.capturedAt, before);
     assert.deepEqual(stdout.bytes(), stream);

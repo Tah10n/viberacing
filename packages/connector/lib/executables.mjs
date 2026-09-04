@@ -159,7 +159,7 @@ export function resolvedExecutableInvocation(
   const commandLine = [
     escapeCommand(executablePath),
     ...args.map((argument) =>
-      quoteWindowsCommandArgument(argument, /\.cmd$/i.test(executablePath)),
+      quoteWindowsCommandArgument(argument, /\.(?:cmd|bat)$/i.test(executablePath)),
     ),
   ].join(" ");
   return {
