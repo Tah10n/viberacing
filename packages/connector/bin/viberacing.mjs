@@ -12,6 +12,7 @@ import {
   parseCursorHookRequest,
   readCursorHookInput,
 } from "../lib/cursor-capture.mjs";
+import { readCursorLedger } from "../lib/cursor-ledger.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 import {
   acknowledgeDiagnosticEvents,
@@ -67,6 +68,7 @@ import {
   addSource,
   beginConnectAttempt,
   bindCodexProviderAccount,
+  bindProviderAccount,
   clearConnectAttempt,
   clearOpenCodePluginCleanupTarget,
   commitConnectionState,
@@ -2576,6 +2578,60 @@ async function registerProviderLogicalSource(config, localSource, profileSource)
   return existing ?? registered;
 }
 
+function dirtyProfileId(source, localById) {
+  return providerAccountPolicy(source)
+    ? (localById.get(source.clientSourceId)?.profileClientSourceId ??
+        source.profileClientSourceId ??
+        source.clientSourceId)
+    : source.clientSourceId;
+}
+
+async function prepareCursorAccounts(config, requestedSourceIds, installationScoped) {
+  const failures = new Map();
+  const addedSourceIds = [];
+  const profiles = config.sources.filter(
+    (source) =>
+      source.agentId === "cursor" &&
+      source.profileClientSourceId === undefined &&
+      (!requestedSourceIds ||
+        config.sources.some(
+          (member) =>
+            member.agentId === "cursor" &&
+            (member.profileClientSourceId ?? member.clientSourceId) === source.clientSourceId &&
+            requestedSourceIds.has(member.sourceId),
+        )),
+  );
+  for (const profile of profiles) {
+    try {
+      const ledger = await readCursorLedger(stateDirectory, profile.clientSourceId);
+      for (const account of ledger.accounts) {
+        const binding = await bindProviderAccount(
+          "cursor",
+          profile.clientSourceId,
+          account.accountKey,
+        );
+        const mapped = config.sources.find(
+          (source) => source.clientSourceId === binding.source.clientSourceId,
+        );
+        if (mapped) Object.assign(mapped, binding.source);
+        else {
+          try {
+            const registered = await registerProviderLogicalSource(config, binding.source, profile);
+            addedSourceIds.push(registered.sourceId);
+            if (installationScoped && requestedSourceIds)
+              requestedSourceIds.add(registered.sourceId);
+          } catch (error) {
+            failures.set(profile.clientSourceId, error);
+          }
+        }
+      }
+    } catch (error) {
+      failures.set(profile.clientSourceId, error);
+    }
+  }
+  return { failures, addedSourceIds };
+}
+
 function syncTasksForSources(sources, localById, allMappedSources) {
   const tasks = new Map();
   for (const source of sources) {
@@ -2593,7 +2649,8 @@ function syncTasksForSources(sources, localById, allMappedSources) {
     const physicalMapped =
       allMappedSources.find((candidate) => candidate.clientSourceId === taskId) ?? physicalLocal;
     tasks.set(taskId, {
-      physicalClientSourceId: taskId,
+      physicalClientSourceId:
+        source.agentId === "cursor" ? dirtyProfileId(source, localById) : taskId,
       source: physicalMapped,
       requestedSources: [source],
     });
@@ -2690,6 +2747,28 @@ async function syncRange(providedConfig, options = {}) {
       state.historyRetryGenerations ??= {};
       state.fingerprints ??= {};
       state.collectionWarnings ??= {};
+      const dirty = await readDirty();
+      const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
+      const cursorPreparationScope =
+        options.automatic && !requestedSourceIds
+          ? new Set(
+              config.sources
+                .filter(
+                  (source) =>
+                    dirtyIds.has(source.profileClientSourceId ?? source.clientSourceId) ||
+                    previous.reobserveSourceIds.includes(source.sourceId),
+                )
+                .map((source) => source.sourceId),
+            )
+          : requestedSourceIds;
+      const cursorAccounts =
+        snapshotKind === "rolling"
+          ? await prepareCursorAccounts(
+              config,
+              cursorPreparationScope,
+              options.installationScoped === true,
+            )
+          : { failures: new Map(), addedSourceIds: [] };
       const localSources = await readSources();
       const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
       state.pendingAccountRegistrations ??= {};
@@ -2707,7 +2786,7 @@ async function syncRange(providedConfig, options = {}) {
         const profileSource = config.sources.find(
           (source) => source.clientSourceId === pending.profileClientSourceId,
         );
-        if (!localSource || typeof profileSource.sourceId !== "string") {
+        if (!localSource || typeof profileSource?.sourceId !== "string") {
           backfillAccountSetupPending = true;
           continue;
         }
@@ -2721,41 +2800,25 @@ async function syncRange(providedConfig, options = {}) {
         }
       }
       const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
-      const dirty = await readDirty();
-      const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
       const syncSources = requestedSourceIds
         ? mappedSources.filter((source) => requestedSourceIds.has(source.sourceId))
         : options.automatic
           ? mappedSources.filter(
               (source) =>
-                dirtyIds.has(
-                  source.agentId === "codex"
-                    ? (localById.get(source.clientSourceId)?.profileClientSourceId ??
-                        source.clientSourceId)
-                    : source.clientSourceId,
-                ) || previous.reobserveSourceIds.includes(source.sourceId),
+                dirtyIds.has(dirtyProfileId(source, localById)) ||
+                previous.reobserveSourceIds.includes(source.sourceId),
             )
           : mappedSources;
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
-      const activeIds = new Set(
-        mappedSources.map((source) =>
-          source.agentId === "codex"
-            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
-            : source.clientSourceId,
-        ),
-      );
+      const activeIds = new Set(mappedSources.map((source) => dirtyProfileId(source, localById)));
       const unmappedDirtyIds = [...dirtyIds].filter(
         (clientSourceId) => !activeIds.has(clientSourceId),
       );
       if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
       const claims = dirtyClaims(
         dirty,
-        syncSources.map((source) =>
-          source.agentId === "codex"
-            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
-            : source.clientSourceId,
-        ),
+        syncSources.map((source) => dirtyProfileId(source, localById)),
       );
       if (options.automatic && syncSources.length > 0) {
         state.lastAutomaticSyncAt = Date.now();
@@ -2877,29 +2940,44 @@ async function syncRange(providedConfig, options = {}) {
               : null,
           };
         }
-        const result = await adapter.collect(
-          source,
-          range,
-          snapshotKind === "year_backfill"
-            ? (state.historyAdapters[source.sourceId] ?? {})
-            : (state.adapters[source.sourceId] ?? {}),
-          { historical: snapshotKind === "year_backfill" },
-        );
+        let result;
+        try {
+          result = await adapter.collect(
+            source,
+            range,
+            snapshotKind === "year_backfill"
+              ? (state.historyAdapters[source.sourceId] ?? {})
+              : (state.adapters[source.sourceId] ?? {}),
+            { historical: snapshotKind === "year_backfill" },
+          );
+        } catch (error) {
+          if (source.agentId !== "cursor" || error.inactiveProviderAccount !== true) throw error;
+          return {
+            source,
+            result: null,
+            inactiveSourceIds: [source.sourceId],
+            checkedClientSourceId: task.physicalClientSourceId,
+            accountSetupPending: false,
+            supersededPendingClientSourceId: null,
+          };
+        }
         return {
           source,
           result,
           historyRetryGeneration:
             snapshotKind === "rolling" ? await adapter.historyRetryGeneration(source) : undefined,
           inactiveSourceIds: [],
-          checkedClientSourceId: source.clientSourceId,
+          checkedClientSourceId: task.physicalClientSourceId,
           accountSetupPending: false,
           supersededPendingClientSourceId: null,
         };
       });
       const snapshots = [];
       const sourceErrors = [];
-      const failures = [];
-      const failedClientSourceIds = [];
+      const failures = [...cursorAccounts.failures.values()].map(
+        (error) => `cursor: ${collectorDiagnostic(error).code}`,
+      );
+      const failedClientSourceIds = [...cursorAccounts.failures.keys()];
       const failedHistorySourceIds = [];
       const blockedHistorySourceIds = new Set([
         ...previous.retiredSources,
@@ -2909,7 +2987,13 @@ async function syncRange(providedConfig, options = {}) {
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
       const inactiveSourceIds = [];
-      let accountSetupPending = backfillAccountSetupPending;
+      let accountSetupPending =
+        backfillAccountSetupPending ||
+        [...cursorAccounts.failures.values()].some(
+          (error) =>
+            error.diagnosticCode === "provider_account_registration_pending" ||
+            error.diagnosticCode === "provider_account_limit_reached",
+        );
       const pendingRegistrationSupersessions = new Map();
       const historyAdvances = [];
       const captureCleanupProofs = [];
@@ -2973,7 +3057,16 @@ async function syncRange(providedConfig, options = {}) {
             state,
             activeSource.sourceId,
             "collect",
-            normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
+            normalizeAdapterDiagnostics([
+              ...(outcome.value.result.diagnostics ?? []),
+              ...(cursorAccounts.failures.has(outcome.value.checkedClientSourceId)
+                ? [
+                    collectorDiagnostic(
+                      cursorAccounts.failures.get(outcome.value.checkedClientSourceId),
+                    ),
+                  ]
+                : []),
+            ]),
           );
         }
         const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
@@ -3088,7 +3181,25 @@ async function syncRange(providedConfig, options = {}) {
         clearDirty(
           Object.fromEntries(
             successfullyChecked
-              .filter((clientSourceId) => claims[clientSourceId])
+              .filter(
+                (clientSourceId) =>
+                  claims[clientSourceId] &&
+                  (!mappedSources.some(
+                    (source) =>
+                      source.agentId === "cursor" &&
+                      dirtyProfileId(source, localById) === clientSourceId,
+                  ) ||
+                    (!failedClientSourceIds.includes(clientSourceId) &&
+                      mappedSources
+                        .filter(
+                          (source) =>
+                            source.agentId === "cursor" &&
+                            dirtyProfileId(source, localById) === clientSourceId,
+                        )
+                        .every((source) =>
+                          syncSources.some((selected) => selected.sourceId === source.sourceId),
+                        ))),
+              )
               .map((clientSourceId) => [clientSourceId, claims[clientSourceId]]),
           ),
         );
@@ -3112,7 +3223,7 @@ async function syncRange(providedConfig, options = {}) {
         if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
         if (inactiveSourceIds.length > 0)
           warning(
-            "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+            "Vibe Racing partial sync: some provider accounts are inactive or have no captured usage; switch accounts and sync again.",
           );
         return {
           accepted,
@@ -3120,6 +3231,7 @@ async function syncRange(providedConfig, options = {}) {
           unchanged: previous.snapshotDeliveries === 0,
           inactiveSourceIds,
           accountSetupPending,
+          registeredSourceIds: cursorAccounts.addedSourceIds,
           failedHistorySourceIds,
           blockedHistorySourceIds: [...blockedHistorySourceIds],
           historyProgress: previous.historyDeliveries > 0,
@@ -3177,13 +3289,14 @@ async function syncRange(providedConfig, options = {}) {
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       if (inactiveSourceIds.length > 0)
         warning(
-          "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+          "Vibe Racing partial sync: some provider accounts are inactive or have no captured usage; switch accounts and sync again.",
         );
       return {
         accepted,
         failures,
         inactiveSourceIds,
         accountSetupPending,
+        registeredSourceIds: cursorAccounts.addedSourceIds,
         failedHistorySourceIds,
         blockedHistorySourceIds: [...blockedHistorySourceIds],
         historyProgress: previous.historyDeliveries + delivered.historyDeliveries > 0,
@@ -3219,7 +3332,12 @@ async function sync(providedConfig, options = {}) {
     options.automatic || options.browser
       ? 1
       : (testMaximumHistoryChunks ?? Number.POSITIVE_INFINITY);
-  const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
+  const allowed = Array.isArray(options.sourceIds)
+    ? new Set([
+        ...options.sourceIds,
+        ...(options.installationScoped ? (rolling?.registeredSourceIds ?? []) : []),
+      ])
+    : null;
 
   while (historyChunks < maximumHistoryChunks) {
     const config = providedConfig ?? (await readConfig());

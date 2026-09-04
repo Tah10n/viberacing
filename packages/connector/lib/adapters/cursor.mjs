@@ -71,11 +71,14 @@ export async function collectCursor(source, range, state = {}, context = {}) {
   );
   if (!ledger.previousCheckpointMatches)
     throw diagnosticError("Cursor capture history changed unexpectedly", "cursor_usage_incomplete");
-  if (!ledger.accounts.some((account) => account.accountKey === source.providerAccountKey))
-    throw diagnosticError(
+  if (!ledger.accounts.some((account) => account.accountKey === source.providerAccountKey)) {
+    const error = diagnosticError(
       "Cursor account has no captured identity",
       "cursor_account_identity_unavailable",
     );
+    error.inactiveProviderAccount = ledger.accounts.length > 0;
+    throw error;
+  }
   const entries = mergeEntries(
     ledger.events
       .filter(
