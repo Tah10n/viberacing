@@ -81,8 +81,18 @@ viberacing source remove <client-source-id>
 viberacing disconnect
 viberacing uninstall
 viberacing reset-installation
+viberacing run cursor [--source <client-source-id>] -- <native Cursor agent arguments>
 viberacing run antigravity [--source <client-source-id>] -- <native agy arguments>
 ```
+
+The Cursor wrapper requires a connected profile with current stop/sessionEnd hooks. It adds
+`--print --output-format stream-json` when absent and rejects a conflicting output format. Set
+`VIBERACING_CURSOR_BIN` to a safe absolute executable path when automatic lookup is insufficient.
+Arguments and provider stdout/stderr remain unchanged; exact usage is committed only for a
+successful final result paired with its authenticated sessionEnd. The result's first capture time
+determines the UTC date. Direct headless runs outside this wrapper are not guaranteed to be counted.
+Cursor 0.7.0 support remains under validation in the Draft implementation; see
+[the evidence and remaining gates](../../docs/CURSOR_EVIDENCE.md).
 
 `connect` also registers a per-user `viberacing://` handler on macOS, Windows, and Linux when the
 default state directory is used. The dashboard uses it only after that browser approved the same

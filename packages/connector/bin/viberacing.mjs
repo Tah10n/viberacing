@@ -12,7 +12,16 @@ import {
   parseCursorHookRequest,
   readCursorHookInput,
 } from "../lib/cursor-capture.mjs";
-import { readCursorLedger } from "../lib/cursor-ledger.mjs";
+import {
+  readCursorLedger,
+  beginCursorHeadlessCapture,
+  recordCursorCapture,
+} from "../lib/cursor-ledger.mjs";
+import {
+  cursorRunArguments,
+  resolveCursorExecutable,
+  runCursorProcess,
+} from "../lib/cursor-cli.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 import {
   acknowledgeDiagnosticEvents,
@@ -76,6 +85,7 @@ import {
   connectedStateExists,
   connectedSourceMappingExists,
   diagnoseHooks,
+  diagnoseHookForSource,
   invalidateConnectAttempt,
   inspectConfig,
   inspectSources,
@@ -103,6 +113,7 @@ import {
   stateDirectory,
   writeConfig,
   withConnectionConfig,
+  withCursorCaptureContext,
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
@@ -675,7 +686,7 @@ function commandRequiresOpenCodeGuard() {
   if (command === "connect" || command === "sync") return true;
   if (command === "auto-sync" || command === "handle-url" || command === "doctor") return true;
   if (command === "reset-installation") return true;
-  if (command === "run" && arguments_[1] === "antigravity") return true;
+  if (command === "run" && ["antigravity", "cursor"].includes(arguments_[1])) return true;
   return command === "source" && ["add", "remove"].includes(arguments_[1]);
 }
 
@@ -4384,6 +4395,89 @@ async function wrapperSource(agentId) {
   return { source: sources[0], separator, sourceOption };
 }
 
+async function wrapCursor() {
+  const separator = arguments_.indexOf("--");
+  const controls = arguments_.slice(2, separator < 0 ? undefined : separator);
+  if (
+    separator < 0 ||
+    !(
+      controls.length === 0 ||
+      (controls.length === 2 && controls[0] === "--source" && uuidPattern.test(controls[1]))
+    )
+  )
+    throw new Error("Usage: viberacing run cursor [--source ID] -- <Cursor agent arguments>");
+  const passed = arguments_.slice(separator + 1);
+  cursorRunArguments(passed);
+  const config = await readConnectedConfig();
+  const selected = controls.length
+    ? config.sources.find(
+        (source) => source.clientSourceId === controls[1] && source.agentId === "cursor",
+      )
+    : config.sources.find(
+        (source) => source.agentId === "cursor" && source.profileClientSourceId === undefined,
+      );
+  const profile =
+    selected &&
+    config.sources.find(
+      (source) =>
+        source.agentId === "cursor" &&
+        source.clientSourceId === (selected.profileClientSourceId ?? selected.clientSourceId),
+    );
+  if (!profile)
+    throw new Error("Connect the Cursor profile before running captured headless usage.");
+  if ((await diagnoseHookForSource(profile)) !== "current")
+    throw new Error("Cursor capture hooks are not current; run `viberacing doctor --repair`.");
+  let executable;
+  if (!process.env.VIBERACING_CURSOR_BIN && profile.executablePath) {
+    try {
+      executable = await resolveCursorExecutable({
+        environment: { ...process.env, VIBERACING_CURSOR_BIN: profile.executablePath },
+      });
+    } catch {}
+  }
+  executable ??= await resolveCursorExecutable();
+  const request = { installationId: config.installationId, profileId: profile.clientSourceId };
+  const captureId = randomUUID();
+  const context = await withCursorCaptureContext(request, async (current) => {
+    if (await lifecycleMutationActive()) return null;
+    await beginCursorHeadlessCapture(
+      stateDirectory,
+      profile.clientSourceId,
+      captureId,
+      new Date().toISOString(),
+    );
+    return current;
+  });
+  if (!context) throw new Error("Cursor capture installation changed; reconnect before retrying.");
+  let outcome;
+  try {
+    outcome = await runCursorProcess({ executable, args: passed, salt: context.salt, captureId });
+  } catch (error) {
+    outcome = { code: 1, signal: null, diagnostic: collectorDiagnostic(error).code };
+  }
+  try {
+    const marked = await withCursorCaptureContext(request, async (current) => {
+      if (await lifecycleMutationActive()) return false;
+      const result = outcome.result;
+      await recordCursorCapture(stateDirectory, profile.clientSourceId, {
+        kind: result ? "result" : "abort",
+        captureId,
+        salt: current.salt,
+        version: executable.version,
+        capturedAt: result?.capturedAt ?? new Date().toISOString(),
+        payload: result?.payload,
+        diagnosticCode: outcome.diagnostic,
+      });
+      return markDirtyIfConnected(profile.clientSourceId, "cursor");
+    });
+    if (marked) await launchAutomaticScheduler();
+  } catch {
+    // Capture failure does not replace the provider's process outcome or expose its payload.
+  }
+  if (outcome.signal) process.kill(process.pid, outcome.signal);
+  else process.exitCode = outcome.code ?? 1;
+}
+
 async function wrap(agentId) {
   const { source, separator, sourceOption, executable } = await withOpenCodeLifecycleMutation(
     async () => {
@@ -4491,6 +4585,7 @@ try {
   } else if (command === "source" && (arguments_[1] === "add" || arguments_[1] === "remove"))
     await withOpenCodeLifecycleMutation(() => sourceCommand());
   else if (command === "source") await sourceCommand();
+  else if (command === "run" && arguments_[1] === "cursor") await wrapCursor();
   else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
   else if (command === "disconnect") {
     let remoteError;
@@ -4673,7 +4768,7 @@ try {
     }
   } else
     output(
-      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync [--full] | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
+      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync [--full] | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor [--source ID] -- … | run antigravity [--source ID] -- …",
     );
 } catch (error) {
   if (error?.diagnosticCode === "opencode_cutover_required")

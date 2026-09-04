@@ -1,10 +1,11 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-04: **exact-source evidence accepted; server implementation in progress**. This
-branch registers Cursor as the eighth server agent with `source_sum` and migration 012. The
-production connector capture path is not implemented yet. Rollout remains blocked until a reviewed
-server-first deployment. The historical investigation below describes the earlier gate, not the
-current availability of authenticated token counters.
+Status on 2026-09-04: **exact-source evidence accepted; production implementation in progress**.
+This branch registers Cursor as the eighth server agent with `source_sum` and migration 012. The
+connector implements strict stop capture, account routing and the explicit headless wrapper; final
+continuity, secondary deduplication and release checks remain in progress. Rollout remains blocked
+until a reviewed server-first deployment. The historical investigation below describes the earlier
+gate, not the current availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -76,9 +77,18 @@ implemented in this branch. Local tests cover fresh/upgrade migration, idempoten
 cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for one server
 account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.
 
-Production capture, local account routing, wrapper deduplication, connector 0.7.0 packaging,
-complete privacy canary tests, remaining live smoke and rollout checks are still pending. Server
-tests do not establish connector capture readiness.
+The connector now implements a sanitized durable capture ledger, installation-owned stop/sessionEnd
+hooks, physical-profile/logical-account routing, account-scoped and automatic synchronization, and
+`viberacing run cursor -- <agent arguments>`. The wrapper selects a version-checked executable,
+requires stream-json, preserves stdout/stderr and the child outcome, and commits only after a
+successful process exit. A durable random marker suppresses its stop hook. Result/sessionEnd halves
+pair in either order; the first result receipt determines UTC attribution. Aborted or malformed
+streams add no usage. Synthetic installed-runtime tests cover these paths and raw-data exclusion.
+
+Secondary stop/headless correlation without the marker, durable hook continuity, global checkpoint
+and acknowledgement compaction integration, final standalone packaging, the full privacy matrix,
+remaining live smoke and final cross-platform checks are still pending. These local tests do not
+establish production readiness; live A/B/A remains a separate Draft blocker.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source

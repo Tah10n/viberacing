@@ -137,6 +137,7 @@ const requiredFiles = [
   "lib/cursor-ledger.mjs",
   "lib/cursor-hooks.mjs",
   "lib/cursor-capture.mjs",
+  "lib/cursor-cli.mjs",
   "lib/adapters/cursor.mjs",
   "lib/diagnostics.mjs",
   "lib/opencode-cleanup.mjs",

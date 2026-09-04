@@ -455,6 +455,19 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
         )
           fail();
         await safeFile(temporary);
+        if (process.platform === "win32") {
+          // Release the old destination before Windows replaces it, retaining the ledger lock.
+          await handle.close();
+          handle = null;
+          const afterClose = await safeFile(path);
+          if (
+            afterClose.ino !== current.ino ||
+            afterClose.dev !== current.dev ||
+            afterClose.size !== current.size ||
+            afterClose.mtimeMs !== current.mtimeMs
+          )
+            fail();
+        }
         await rename(temporary, path);
         if (process.platform !== "win32") {
           const parent = await open(directory, constants.O_RDONLY);
@@ -692,6 +705,20 @@ export async function recordCursorCapture(root, profileId, input) {
         return { status: "duplicate" };
     }
     await append(record);
+    if (record.kind === "abort" && failureCodes.has(input.diagnosticCode))
+      await append({
+        v: 1,
+        kind: "gap",
+        from: [
+          state.pending.get(record.captureId)?.firstAt ?? input.capturedAt,
+          input.capturedAt,
+        ].sort()[0],
+        to: [
+          state.pending.get(record.captureId)?.firstAt ?? input.capturedAt,
+          input.capturedAt,
+        ].sort()[1],
+        code: input.diagnosticCode,
+      });
     const next = fold(records);
     return {
       status: next.gaps.length > state.gaps.length ? "partial" : "recorded",

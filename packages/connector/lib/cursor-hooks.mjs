@@ -599,7 +599,8 @@ async function stageHooksDocument(path, document) {
   if (Buffer.byteLength(contents) > maximumInputBytes) throw safeFailure();
   await writeFile(stage, contents, { flag: "wx", mode: 0o600 });
   await securePrivateFile(stage);
-  const handle = await open(stage, "r");
+  // Windows FlushFileBuffers requires a writable handle.
+  const handle = await open(stage, "r+");
   try {
     await handle.sync();
   } finally {

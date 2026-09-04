@@ -8,6 +8,7 @@ import {
   lstat,
   mkdir,
   readFile,
+  realpath,
   readdir,
   rename,
   rm,
@@ -2017,6 +2018,7 @@ const installedRuntimeFiles = [
   "cursor-ledger.mjs",
   "cursor-hooks.mjs",
   "cursor-capture.mjs",
+  "cursor-cli.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
@@ -2198,7 +2200,7 @@ export async function cursorHookOptions(source) {
   return {
     installationId,
     profileId: source.profileClientSourceId ?? source.clientSourceId,
-    launcher: installedHookLauncherScript(),
+    launcher: join(await realpath(stateDirectory), "bin", "viberacing-hook.mjs"),
   };
 }
 

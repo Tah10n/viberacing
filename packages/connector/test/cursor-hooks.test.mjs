@@ -281,7 +281,11 @@ test("Cursor hooks quote literal paths and ownership markers on the native platf
   await promisify(execFile)(
     shell,
     process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-c", command],
-    { cwd: root, env: { ...process.env, CURSOR_TEST_ARGV: output, INJECT: "& echo injected &" } },
+    {
+      cwd: root,
+      windowsVerbatimArguments: process.platform === "win32",
+      env: { ...process.env, CURSOR_TEST_ARGV: output, INJECT: "& echo injected &" },
+    },
   );
   assert.deepEqual(JSON.parse(await readFile(output, "utf8")), [
     "cursor-hook",
