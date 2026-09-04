@@ -17,10 +17,12 @@ describe("account controls", () => {
     expect(component).toContain("Manage account");
     expect(component).toContain("aria-expanded={open}");
     expect(component).toContain('className="button button-secondary"');
-    expect(component).toContain('className="button"');
+    expect(component).toContain('className={canSync ? "button" : "button sync-unavailable"}');
     expect(component).toContain('result.status === "succeeded"');
     expect(component).toContain("Connector did not respond");
     expect(component).toContain("Sync all agents");
+    expect(component).toContain("{syncUnavailableReason}");
+    expect(component).not.toContain("if (!canSync) return null");
     expect(component).toContain('url.searchParams.set("scope", target.scope)');
   });
 

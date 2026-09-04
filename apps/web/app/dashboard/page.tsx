@@ -82,6 +82,7 @@ interface AccountRow {
 interface SourceRow {
   id: string;
   agent_account_id: string;
+  installation_id: string;
   installation_name: string;
   collection_method: string;
   supported_surface: string;
@@ -489,7 +490,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive, browserInstallationId],
     ),
     query<SourceRow>(
-      `SELECT s.id::text, s.agent_account_id::text, i.name AS installation_name,
+      `SELECT s.id::text, s.agent_account_id::text, s.installation_id::text,
+              i.name AS installation_name,
               s.collection_method, s.supported_surface, s.status,
               s.history_backfill_year, s.history_backfill_status,
               s.last_completeness,
@@ -640,15 +642,47 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const updateCommand = connectorRepairCommand(origin);
   const uninstallCommand = connectorUninstallCommand(origin);
   const minimumVersion = minimumConnectorVersion();
-  const canSyncInstallation = (installation: InstallationRow): boolean =>
-    installation.id === browserInstallationId &&
-    installation.browser_sync_capable &&
-    installation.installed_connector_version !== null &&
-    installation.source_count > 0 &&
-    installation.source_count <= maximumSourcesPerInstallation &&
-    installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol;
+  const installationSyncUnavailableReason = (installation: InstallationRow): string | null => {
+    if (installation.id !== browserInstallationId)
+      return "Link this browser to this computer's current connector to enable Sync.";
+    if (
+      !installation.browser_sync_capable ||
+      installedConnectorUpdateRequired(
+        installation.installed_connector_version,
+        installation.browser_sync_protocol,
+        minimumVersion,
+      ) ||
+      installation.browser_sync_protocol < browserSyncInstallationScopeProtocol
+    )
+      return "Update or repair the connector and Browser Sync handler to enable Sync.";
+    if (installation.source_count < 1)
+      return "Connect at least one local source before using Sync.";
+    if (installation.source_count > maximumSourcesPerInstallation)
+      return `Reduce this computer to ${String(maximumSourcesPerInstallation)} active sources or fewer before using Sync.`;
+    return null;
+  };
+  const browserInstallation = installations.find(
+    (installation) => installation.id === browserInstallationId,
+  );
+  const accountSyncUnavailableReason = (account: AccountRow): string | null => {
+    const linkedSource = sources.some(
+      (source) =>
+        source.status === "active" &&
+        source.agent_account_id === account.id &&
+        source.installation_id === browserInstallationId,
+    );
+    if (!browserInstallation || !linkedSource)
+      return "Link this browser to the current connector that owns this account to enable Sync.";
+    return (
+      installationSyncUnavailableReason(browserInstallation) ??
+      (account.can_browser_sync
+        ? null
+        : "Repair this account's Browser Sync source before using Sync.")
+    );
+  };
   const browserSyncEnabled =
-    accounts.some((account) => account.can_browser_sync) || installations.some(canSyncInstallation);
+    accounts.some((account) => accountSyncUnavailableReason(account) === null) ||
+    installations.some((installation) => installationSyncUnavailableReason(installation) === null);
   const historyUpgradeRequired = installations.some(
     (installation) => installation.protocol_version < currentYearHistoryProtocolVersion,
   );
@@ -964,7 +998,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       <LastSyncTime value={account.last_sync_at} />
                     </strong>
                   </div>
-                  <AccountControls accountId={account.id} canSync={account.can_browser_sync}>
+                  <AccountControls
+                    accountId={account.id}
+                    syncUnavailableReason={accountSyncUnavailableReason(account)}
+                  >
                     <SameOriginActionForm action="/api/accounts/rename">
                       <input name="accountId" type="hidden" value={account.id} />
                       <label>
@@ -1078,7 +1115,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                     </strong>
                   </div>
                   <div className="installation-controls">
-                    <InstallationSyncControl canSync={canSyncInstallation(item)} />
+                    <InstallationSyncControl
+                      syncUnavailableReason={installationSyncUnavailableReason(item)}
+                    />
                     <SameOriginActionForm action="/api/connections/revoke">
                       <input name="installationId" type="hidden" value={item.id} />
                       <button className="text-button danger-text" type="submit">

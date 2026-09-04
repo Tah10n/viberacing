@@ -32,11 +32,13 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("Hide accounts");
     expect(dashboard).toContain("browserSyncInstallationScopeProtocol");
     expect(dashboard).toContain(
-      "installation.browser_sync_protocol >= browserSyncInstallationScopeProtocol",
+      "installation.browser_sync_protocol < browserSyncInstallationScopeProtocol",
     );
-    expect(dashboard).toContain("installation.source_count <= maximumSourcesPerInstallation");
+    expect(dashboard).toContain("installation.source_count > maximumSourcesPerInstallation");
+    expect(dashboard).toContain("active sources or fewer before using Sync");
     expect(dashboard).toContain("installation.browser_sync_capable");
-    expect(dashboard).toContain("installation.installed_connector_version !== null");
+    expect(dashboard).toContain("installedConnectorUpdateRequired(");
+    expect(dashboard).toContain("installation.installed_connector_version");
     expect(dashboard).not.toContain("bundledConnectorVersion");
     expect(dashboard).not.toContain("installationBrowserSyncMinimumVersion");
     expect(dashboard).toContain("<InstallationSyncControl");
