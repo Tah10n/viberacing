@@ -172,12 +172,14 @@ describe("dashboard connection flow", () => {
     );
     expect(dashboard).toContain('accountSwitchMode === "explicit_capture"');
     expect(dashboard).toContain("Explicit capture source");
+    expect(dashboard).toMatch(/accountSwitchMode ===\s+"provider_account_events"/);
+    expect(dashboard).toContain("Desktop + CLI");
     expect(dashboard).not.toContain('account.aggregation_mode === "source_sum" ? (');
     expect(dashboard).toContain(
       "Component breakdown is hidden because this Codex profile has used multiple accounts.",
     );
-    expect(dashboard).toContain(
-      "A new Codex account was detected on this computer and added separately.",
+    expect(dashboard.replace(/\s+/g, " ")).toContain(
+      "A new {agentLabel(agent)} account was detected on this computer and added separately.",
     );
     expect(dashboard).toContain('action="/api/accounts/notices/dismiss"');
     expect(dashboard).not.toContain("providerAccountKey");

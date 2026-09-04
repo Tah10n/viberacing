@@ -1,9 +1,10 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-04: **exact-source evidence accepted; implementation pending**. Cursor is not yet
-a registered Vibe Racing agent and contributes no ranking usage. Rollout remains blocked until a
-reviewed server-first deployment. The historical investigation below describes the earlier gate, not
-the current availability of authenticated token counters.
+Status on 2026-09-04: **exact-source evidence accepted; server implementation in progress**. This
+branch registers Cursor as the eighth server agent with `source_sum` and migration 012. The
+production connector capture path is not implemented yet. Rollout remains blocked until a reviewed
+server-first deployment. The historical investigation below describes the earlier gate, not the
+current availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -48,10 +49,32 @@ timestamp rejection would therefore reject these real events. Do not manufacture
 or add them to fixtures claiming to represent the observed schema. A decision on UTC attribution is
 required before implementing that part of the parser.
 
+A narrow follow-up inspected the installed Desktop 3.19.7 and CLI `2026.09.02-c22c1a3` application
+code. The CLI emits `timestamp_ms` on intermediate stream events using its own `Date.now()`; the
+successful final result deliberately has no timestamp. This field was privacy- hashed by the earlier
+probe, so its absence from `timestampCandidates` alone was not proof that all stream records lacked
+times. Neither an intermediate delta timestamp nor `duration_ms` provides the final run's absolute
+completion time. Official [hook reference](https://prod.cursor.com/docs/hooks) also exposes no
+absolute lifecycle timestamp.
+
+The Desktop hook producer supplies identities, counters, status and version, without an absolute
+time. A read-only metadata query matched the latest generation of the two-turn session without
+returning message content. Its serialized conversation state contained no persisted `turnTimings`.
+Session-level `createdAt`/`lastUpdatedAt` and message creation times are not a durable,
+per-generation completion contract. No provider store, log, transcript, or application-code
+dependency has been added to the production connector. Capture time must not be relabeled as
+provider time.
+
 The existing evidence contains one local account identity across Desktop and CLI. Live A/B/A with a
-second account remains unverified and is a Draft blocker. Production implementation, wrapper
-deduplication, migration 012, packaging, privacy canary tests, and rollout checks are still pending;
-this report does not claim they passed.
+second account remains unverified and is a Draft blocker. The server registry, policy-driven dynamic
+registration, migration 012, Cursor labels/notices, and protocol-v1 account Sync presentation are
+implemented in this branch. Local tests cover fresh/upgrade migration, idempotent registration,
+cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for one server
+account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.
+
+Production capture, local account routing, wrapper deduplication, connector 0.7.0 packaging,
+complete privacy canary tests, remaining live smoke and rollout checks are still pending. Server
+tests do not establish connector capture readiness.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source

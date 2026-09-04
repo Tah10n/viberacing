@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
 import { adapterFor } from "../packages/connector/lib/readers.mjs";
@@ -44,6 +44,118 @@ const githubId = 800_000_000_000_000_000n + BigInt(`0x${randomBytes(7).toString(
 const trustedProxyScenario = process.env.VIBERACING_TEST_TRUSTED_PROXY === "true";
 let userId;
 let pairingClientSequence = 0;
+
+async function verifyCursorMigrationCompatibility() {
+  const migrations = (await readdir(new URL("../apps/web/database/", import.meta.url)))
+    .filter((name) => /^\d{3}_.*\.sql$/.test(name))
+    .sort();
+  check(migrations.length === 12, "Cursor migration test must exercise 001 through 012");
+  for (const upgrade of [false, true]) {
+    const client = await pool.connect();
+    const schema = `cursor_migration_${randomBytes(6).toString("hex")}`;
+    try {
+      await client.query("BEGIN");
+      await client.query(`CREATE SCHEMA ${schema}`);
+      await client.query(`SET LOCAL search_path TO ${schema}`);
+      for (const migration of migrations.slice(0, 11))
+        await client.query(
+          await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
+        );
+      const accountId = randomUUID();
+      let owner;
+      if (upgrade) {
+        owner = (
+          await client.query(
+            "INSERT INTO users (github_id, handle) VALUES (1, 'cursor-upgrade-test') RETURNING id",
+          )
+        ).rows[0].id;
+        await client.query(
+          "INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode) VALUES ($1, $2, 'codex', 'Existing Codex', 'account_max')",
+          [accountId, owner],
+        );
+        await client.query(
+          "INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens) VALUES ('2026-01-01', $1, 'codex', 9007199254740993)",
+          [owner],
+        );
+      }
+      await client.query(
+        await readFile(
+          new URL("../apps/web/database/012_cursor_support.sql", import.meta.url),
+          "utf8",
+        ),
+      );
+      const tables = [
+        "agent_accounts",
+        "installation_sources",
+        "account_dedup_events",
+        "browser_sync_runs",
+        "daily_agent_usage",
+      ];
+      const constraints = await client.query(
+        `SELECT conname, pg_get_expr(conbin, conrelid) AS expression FROM pg_constraint WHERE connamespace = $1::regnamespace AND conname = ANY($2::text[])`,
+        [schema, tables.map((table) => `${table}_agent_id_check`)],
+      );
+      check(constraints.rows.length === 5, "migration 012 missed an agent allowlist");
+      for (const row of constraints.rows) {
+        for (const agent of [
+          "codex",
+          "claude_code",
+          "opencode",
+          "kimi_code",
+          "qwen_code",
+          "antigravity",
+          "gemini_cli",
+          "cursor",
+          "cursor_cli",
+          "unknown",
+        ]) {
+          const result = await client.query(
+            `SELECT ${row.expression} AS accepted FROM (SELECT $1::varchar AS agent_id) candidate`,
+            [agent],
+          );
+          check(
+            result.rows[0].accepted === !["cursor_cli", "unknown"].includes(agent),
+            `${row.conname} has an incorrect agent allowlist`,
+          );
+        }
+      }
+      check(
+        (
+          await client.query(
+            "SELECT count(*)::int AS count FROM daily_agent_usage WHERE agent_id = 'cursor'",
+          )
+        ).rows[0].count === 0,
+        "migration created synthetic Cursor usage",
+      );
+      if (upgrade) {
+        const account = (
+          await client.query("SELECT label, aggregation_mode FROM agent_accounts WHERE id = $1", [
+            accountId,
+          ])
+        ).rows[0];
+        check(
+          account?.label === "Existing Codex" && account.aggregation_mode === "account_max",
+          "migration changed an existing account",
+        );
+        check(
+          (
+            await client.query("SELECT tokens::text FROM daily_agent_usage WHERE user_id = $1", [
+              owner,
+            ])
+          ).rows[0].tokens === "9007199254740993",
+          "migration changed existing exact usage",
+        );
+        await client.query(
+          "INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode) VALUES ($1, $2, 'cursor', 'Cursor account 1', 'source_sum')",
+          [randomUUID(), owner],
+        );
+      }
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  }
+}
 
 async function verifyExpandMigrationCompatibility() {
   const client = await pool.connect();
@@ -600,6 +712,7 @@ async function connectorSyncRequest(path, deviceToken, body) {
 }
 
 const definitions = {
+  cursor: ["cursor_local_events", "desktop"],
   codex: ["codex_app_server", "desktop"],
   claude_code: ["claude_jsonl", "cli"],
   opencode: ["opencode_sqlite", "cli"],
@@ -848,6 +961,10 @@ function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
 }
 
 try {
+  await verifyCursorMigrationCompatibility();
+  console.log(
+    "ok - Cursor fresh 001–012 and populated 011–012 migration preserve existing usage and agent constraints",
+  );
   await verifyExpandMigrationCompatibility();
   console.log(
     "ok - migration 010 preserves sequential and two-session before/after-lock old-version writes",
@@ -3184,80 +3301,147 @@ try {
     "ok - per-user and per-installation installation, source, and agent-account caps are transactional",
   );
 
-  const dynamicCodexInstallation = { id: randomUUID(), secret: token() };
-  const primaryClientSourceId = randomUUID();
-  const dynamicCodexPairing = await pair(dynamicCodexInstallation, [
-    source(primaryClientSourceId, "codex"),
-  ]);
-  const primaryMapping = dynamicCodexPairing.sources[0];
-  const secondaryClientSourceId = randomUUID();
-  const registration = await connectorSyncRequest(
-    "/api/installations/current/sources/register",
-    dynamicCodexPairing.deviceToken,
-    {
-      agentId: "codex",
-      clientSourceId: secondaryClientSourceId,
-      collectionMethod: "codex_app_server",
-      profileClientSourceId: primaryClientSourceId,
-      supportedSurface: "desktop",
-    },
-  );
-  check(registration.status === 200, `dynamic Codex registration failed: ${registration.status}`);
-  const secondaryMapping = (await registration.json()).source;
-  const secondaryUsage = await usage(dynamicCodexPairing.deviceToken, [
-    snapshot(secondaryMapping.sourceId, 1, [[today, 42]]),
-  ]);
-  check(secondaryUsage.status === 200, "dynamic Codex source could not upload usage");
-  let profileDeleteRejected = false;
-  try {
-    await pool.query("DELETE FROM installation_sources WHERE id = $1", [primaryMapping.sourceId]);
-  } catch (error) {
-    profileDeleteRejected = error?.code === "23503";
-  }
-  const protectedAccountDeletion = await form("/api/accounts/delete", {
-    accountId: primaryMapping.agentAccountId,
-    confirm: "delete",
-  });
-  const protectedSecondary = await pool.query(
-    `SELECT account.new_account_notice_pending,
+  for (const agentId of ["codex", "cursor"]) {
+    const collectionMethod = definitions[agentId][0];
+    const dynamicCodexInstallation = { id: randomUUID(), secret: token() };
+    const primaryClientSourceId = randomUUID();
+    const dynamicCodexPairing = await pair(dynamicCodexInstallation, [
+      source(primaryClientSourceId, agentId),
+    ]);
+    const primaryMapping = dynamicCodexPairing.sources[0];
+    const secondaryClientSourceId = randomUUID();
+    const registration = await connectorSyncRequest(
+      "/api/installations/current/sources/register",
+      dynamicCodexPairing.deviceToken,
+      {
+        agentId: agentId,
+        clientSourceId: secondaryClientSourceId,
+        collectionMethod: collectionMethod,
+        profileClientSourceId: primaryClientSourceId,
+        supportedSurface: "desktop",
+      },
+    );
+    check(registration.status === 200, `dynamic Codex registration failed: ${registration.status}`);
+    const secondaryMapping = (await registration.json()).source;
+    const retry = await connectorSyncRequest(
+      "/api/installations/current/sources/register",
+      dynamicCodexPairing.deviceToken,
+      {
+        agentId,
+        clientSourceId: secondaryClientSourceId,
+        collectionMethod,
+        profileClientSourceId: primaryClientSourceId,
+        supportedSurface: "desktop",
+      },
+    );
+    check(
+      retry.status === 200 && (await retry.json()).source.sourceId === secondaryMapping.sourceId,
+      "logical source retry created a duplicate",
+    );
+    const otherAgent = agentId === "codex" ? "cursor" : "codex";
+    const crossAgent = await connectorSyncRequest(
+      "/api/installations/current/sources/register",
+      dynamicCodexPairing.deviceToken,
+      {
+        agentId: otherAgent,
+        clientSourceId: randomUUID(),
+        collectionMethod: definitions[otherAgent][0],
+        profileClientSourceId: primaryClientSourceId,
+        supportedSurface: "desktop",
+      },
+    );
+    check(
+      crossAgent.status === 400 && (await crossAgent.json()).error === "unsupported_profile",
+      "cross-agent profile registration was allowed",
+    );
+    const secondaryUsage = await usage(dynamicCodexPairing.deviceToken, [
+      snapshot(secondaryMapping.sourceId, 1, [[today, 42]]),
+    ]);
+    check(secondaryUsage.status === 200, "dynamic Codex source could not upload usage");
+    if (agentId === "cursor") {
+      const secondMachine = { id: randomUUID(), secret: token() };
+      const secondClient = randomUUID();
+      const secondPairing = await pair(secondMachine, [source(secondClient, "cursor")], {
+        [secondClient]: secondaryMapping.agentAccountId,
+      });
+      check(
+        (
+          await usage(secondPairing.deviceToken, [
+            snapshot(secondPairing.sources[0].sourceId, 1, [[today, 17]]),
+          ])
+        ).status === 200,
+        "second Cursor machine usage failed",
+      );
+      const total = await pool.query(
+        "SELECT tokens::text FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'cursor' AND usage_date = $2",
+        [userId, today],
+      );
+      check(
+        total.rows[0]?.tokens === "59",
+        "Cursor sources assigned to one account did not sum across machines",
+      );
+      const mode = await pool.query(
+        "SELECT aggregation_mode, label FROM agent_accounts WHERE id = $1",
+        [secondaryMapping.agentAccountId],
+      );
+      check(
+        mode.rows[0]?.aggregation_mode === "source_sum" &&
+          mode.rows[0].label === "Cursor account 2",
+        "Cursor registration used the wrong server policy",
+      );
+      await pool.query("DELETE FROM installations WHERE id = $1", [secondMachine.id]);
+    }
+    let profileDeleteRejected = false;
+    try {
+      await pool.query("DELETE FROM installation_sources WHERE id = $1", [primaryMapping.sourceId]);
+    } catch (error) {
+      profileDeleteRejected = error?.code === "23503";
+    }
+    const protectedAccountDeletion = await form("/api/accounts/delete", {
+      accountId: primaryMapping.agentAccountId,
+      confirm: "delete",
+    });
+    const protectedSecondary = await pool.query(
+      `SELECT account.new_account_notice_pending,
             (SELECT count(*)::int FROM daily_usage WHERE source_id = source.id) AS usage_rows
        FROM installation_sources source
        JOIN agent_accounts account ON account.id = source.agent_account_id
       WHERE source.id = $1`,
-    [secondaryMapping.sourceId],
-  );
-  check(
-    profileDeleteRejected &&
-      protectedAccountDeletion.status === 409 &&
-      protectedSecondary.rows[0]?.usage_rows === 1 &&
-      protectedSecondary.rows[0]?.new_account_notice_pending === true,
-    "primary Codex deletion did not preserve its logical sibling and notice",
-  );
-  const dismissedNotice = await form("/api/accounts/notices/dismiss", {});
-  const noticeState = await pool.query(
-    "SELECT new_account_notice_pending FROM agent_accounts WHERE id = $1",
-    [secondaryMapping.agentAccountId],
-  );
-  check(
-    dismissedNotice.status === 303 && noticeState.rows[0]?.new_account_notice_pending === false,
-    "dynamic Codex notice was not acknowledged safely",
-  );
-  const secondaryDeletion = await form("/api/accounts/delete", {
-    accountId: secondaryMapping.agentAccountId,
-    confirm: "delete",
-  });
-  const primaryDeletion = await form("/api/accounts/delete", {
-    accountId: primaryMapping.agentAccountId,
-    confirm: "delete",
-  });
-  check(
-    secondaryDeletion.status === 303 && primaryDeletion.status === 303,
-    "explicit leaf-first Codex account deletion failed",
-  );
-  await pool.query("DELETE FROM installations WHERE id = $1", [dynamicCodexInstallation.id]);
-  console.log(
-    "ok - dynamic Codex registration, notice acknowledgement, and profile deletion remain fail-closed",
-  );
+      [secondaryMapping.sourceId],
+    );
+    check(
+      profileDeleteRejected &&
+        protectedAccountDeletion.status === 409 &&
+        protectedSecondary.rows[0]?.usage_rows === 1 &&
+        protectedSecondary.rows[0]?.new_account_notice_pending === true,
+      "primary Codex deletion did not preserve its logical sibling and notice",
+    );
+    const dismissedNotice = await form("/api/accounts/notices/dismiss", {});
+    const noticeState = await pool.query(
+      "SELECT new_account_notice_pending FROM agent_accounts WHERE id = $1",
+      [secondaryMapping.agentAccountId],
+    );
+    check(
+      dismissedNotice.status === 303 && noticeState.rows[0]?.new_account_notice_pending === false,
+      "dynamic Codex notice was not acknowledged safely",
+    );
+    const secondaryDeletion = await form("/api/accounts/delete", {
+      accountId: secondaryMapping.agentAccountId,
+      confirm: "delete",
+    });
+    const primaryDeletion = await form("/api/accounts/delete", {
+      accountId: primaryMapping.agentAccountId,
+      confirm: "delete",
+    });
+    check(
+      secondaryDeletion.status === 303 && primaryDeletion.status === 303,
+      "explicit leaf-first Codex account deletion failed",
+    );
+    await pool.query("DELETE FROM installations WHERE id = $1", [dynamicCodexInstallation.id]);
+    console.log(
+      `ok - dynamic ${agentId} registration, retry, cross-agent isolation, notice acknowledgement, and profile deletion remain fail-closed`,
+    );
+  }
 
   const stablePrimaryClientSourceId = randomUUID();
   const stableSecondaryClientSourceId = randomUUID();
