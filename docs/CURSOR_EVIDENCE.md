@@ -128,6 +128,12 @@ the output probe identity, exact command, state, runtime manifest, hashes, and A
 `hooks.json`. Installation also fails closed for linked, oversized, non-regular, or other-user hook
 files. It never changes Cursor hook trust or bypasses an approval UI.
 
+If a process is killed while writing its private stage, startup removes the unpublished, owner-only
+single-link stage without parsing its potentially partial JSON. If it is killed after no-replace
+publication but before the stage link is removed, startup removes that stage only when it is the
+single second hard link to the same validated `hooks.json` inode and bytes. Ambiguous or additional
+links remain preserved and fail closed.
+
 ### Headless CLI
 
 Wrap an explicitly chosen absolute `agent` executable. Arguments after `--` are forwarded; the
@@ -193,11 +199,13 @@ node scripts/cursor-evidence-probe.mjs report \
 These are exact canonical schema paths selected after reviewing minimized output. Merely matching a
 field name is never enough. Candidates below `prompt`, `response`, `content`, `message`,
 `attachments`, `args`, or any `tool*` descendant cannot qualify even when a selected name appears
-there. Candidates under other wrappers qualify only when their full exact path is selected. Raw
-version text is accepted only from the explicit CLI `--version` source or an installed/pre-approved
-top-level provider path. Version evidence is required for every qualifying surface/schema contract.
-Traversal truncation confined to unselected paths is reported separately and cannot disqualify a
-complete exact-path tuple; a truncated or missing selected tuple still cannot qualify.
+there. Unknown keys remain visible only as HMACed `field1_*` schema segments for structural review;
+paths containing those privacy-hashed segments are rejected as qualifying selections, so candidates
+under unknown wrappers never qualify. Raw version text is accepted only from a clean, successful CLI
+`--version` process or an installed/pre-approved top-level provider path. Version evidence is
+required for every qualifying surface/schema contract. Traversal truncation confined to unselected
+paths is reported separately and cannot disqualify a complete exact-path tuple; a truncated or
+missing selected tuple still cannot qualify.
 
 `mechanicalCoverageComplete: true` means only that the probe mechanically verified the structural
 one-turn, same/different-account, CLI/Desktop A/B/A, three-surface, and adjacent chronological UTC

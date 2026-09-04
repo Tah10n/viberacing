@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import {
   chmod,
   link,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -41,6 +42,9 @@ const runB = "22222222-2222-4222-8222-222222222222";
 const probeScript = fileURLToPath(new URL("./cursor-evidence-probe.mjs", import.meta.url));
 const closeFixture = fileURLToPath(
   new URL("./fixtures/cursor-evidence-cli-close-fixture.mjs", import.meta.url),
+);
+const crashFixture = fileURLToPath(
+  new URL("./fixtures/cursor-evidence-stage-crash-fixture.mjs", import.meta.url),
 );
 
 function context(overrides = {}) {
@@ -390,6 +394,26 @@ test("exact paths exclude content and unknown-wrapper candidates without leaking
   assert.equal(report.exactPathQualifiedTruncationCount, 1);
   assert.deepEqual(report.versions, ["3.18.0"]);
   assert.equal(report.distinctLocallyLinkedAccounts, 1);
+  const unknownSelections = [
+    ["counterPaths", observation.tokenGroups],
+    ["accountPaths", observation.accountIdentityCandidates],
+    ["eventIdPaths", observation.eventIdentities],
+    ["timestampPaths", observation.timestampCandidates],
+  ];
+  for (const [selection, candidates] of unknownSelections) {
+    const candidate = candidates.find(
+      ({ path, contentDerived }) => path.startsWith("$.field1_") && !contentDerived,
+    );
+    assert.ok(candidate, selection);
+    await assert.rejects(
+      buildEvidenceReport(outputDirectory, {
+        ...reportSelections,
+        [selection]: [candidate.path],
+        eventIdentityKind: "request_id",
+      }),
+      /recognized structural fields/,
+    );
+  }
 });
 
 test("truncation at a selected array path remains non-qualifying", async (testContext) => {
@@ -1104,6 +1128,100 @@ test("hook recovery accepts the hard-linked current/recovery crash state", async
   await assert.rejects(readFile(recovery), { code: "ENOENT" });
 });
 
+test(
+  "hook recovery removes a published orphan stage after a real child crash",
+  { skip: process.platform === "win32" },
+  async (testContext) => {
+    const outputDirectory = await privateTemporaryDirectory(
+      testContext,
+      "viberacing-cursor-output-",
+    );
+    const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+    const hooksFile = join(cursorRoot, "hooks.json");
+    const child = spawn(process.execPath, [crashFixture, hooksFile], { stdio: "ignore" });
+    const termination = await new Promise((resolveTermination, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolveTermination({ code, signal }));
+    });
+    assert.deepEqual(termination, { code: null, signal: "SIGKILL" });
+    const stagePrefix = "hooks.json.viberacing-cursor-evidence.stage-";
+    assert.equal((await lstat(hooksFile)).nlink, 2);
+    assert.equal(
+      (await readdir(cursorRoot)).filter((name) => name.startsWith(stagePrefix)).length,
+      1,
+    );
+
+    const installed = await installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+    });
+    const document = JSON.parse(await readFile(hooksFile, "utf8"));
+    assert.ok(document.hooks.stop.some(({ command }) => command === "foreign-stage-crash"));
+    assert.ok(document.hooks.stop.some(({ command }) => command === installed.command));
+    assert.equal((await lstat(hooksFile)).nlink, 1);
+    assert.equal(
+      (await readdir(cursorRoot)).filter((name) => name.startsWith(stagePrefix)).length,
+      0,
+    );
+  },
+);
+
+test("hook recovery removes an unpublished truncated orphan stage", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const stage = `${hooksFile}.viberacing-cursor-evidence.stage-${process.pid}-${randomUUID()}`;
+  await writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-before-stage"))}\n`);
+  await writePrivateFile(stage, '{"version":1,"hooks":');
+
+  const installed = await installProbeHooks({
+    outputDirectory,
+    surface: "desktop",
+    scenario: "desktop-one-turn",
+    runId: runA,
+    step: "single",
+    hooksFile,
+  });
+
+  const document = JSON.parse(await readFile(hooksFile, "utf8"));
+  assert.ok(document.hooks.stop.some(({ command }) => command === "foreign-before-stage"));
+  assert.ok(document.hooks.stop.some(({ command }) => command === installed.command));
+  await assert.rejects(readFile(stage), { code: "ENOENT" });
+});
+
+test("hook recovery preserves a published stage that is not the current file", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const stage = `${hooksFile}.viberacing-cursor-evidence.stage-${process.pid}-${randomUUID()}`;
+  const otherLink = join(cursorRoot, "foreign-stage-link.json");
+  await writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-current"))}\n`);
+  await writePrivateFile(stage, `${JSON.stringify(hooksDocument("foreign-stage"))}\n`);
+  await link(stage, otherLink);
+  const before = await Promise.all([readFile(hooksFile), readFile(stage), readFile(otherLink)]);
+
+  await assert.rejects(
+    installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+    }),
+    /orphan stage recovery is ambiguous/,
+  );
+
+  const after = await Promise.all([readFile(hooksFile), readFile(stage), readFile(otherLink)]);
+  for (let index = 0; index < before.length; index += 1)
+    assert.ok(before[index].equals(after[index]));
+  assert.equal((await lstat(stage)).nlink, 2);
+});
+
 test("single-journal recovery never replaces a concurrently created hooks file", async (testContext) => {
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
@@ -1382,6 +1500,66 @@ test(
     );
     assert.match(forwarded.join(""), /split-€-utf8/);
     assert.match(forwarded.join(""), /request-late/);
+  },
+);
+
+test(
+  "run-cli trusts version text only after a clean version process exit",
+  { skip: process.platform === "win32" },
+  async (testContext) => {
+    const timeout = Object.assign(new Error("version timed out"), { code: "ETIMEDOUT" });
+    const cases = [
+      {
+        name: "success",
+        result: { stdout: "1.2.3\n", status: 0, signal: null },
+        expectedVersions: ["1.2.3"],
+      },
+      {
+        name: "nonzero",
+        result: { stdout: "9.9.9\n", status: 7, signal: null },
+        expectedVersions: [],
+      },
+      {
+        name: "signal",
+        result: { stdout: "9.9.9\n", status: null, signal: "SIGTERM" },
+        expectedVersions: [],
+      },
+      {
+        name: "timeout",
+        result: { stdout: "9.9.9\n", status: null, signal: "SIGTERM", error: timeout },
+        expectedVersions: [],
+      },
+    ];
+    for (const { name, result, expectedVersions } of cases) {
+      const outputDirectory = await privateTemporaryDirectory(
+        testContext,
+        `viberacing-cursor-version-${name}-`,
+      );
+      const agent = join(outputDirectory, `version-agent-${name}.mjs`);
+      await writeExecutable(
+        agent,
+        `#!/usr/bin/env node
+process.stdout.write(${JSON.stringify(`${JSON.stringify(usagePayload(name))}\n`)});
+`,
+      );
+      assert.deepEqual(
+        await runCursorCli({
+          outputDirectory,
+          executable: agent,
+          scenario: "cli-headless-one-turn",
+          runId: randomUUID(),
+          step: "single",
+          outputStream: { write() {} },
+          spawnSyncImplementation: () => result,
+        }),
+        { code: 0, signal: null },
+      );
+      const report = await buildEvidenceReport(outputDirectory, {
+        ...reportSelections,
+        eventIdentityKind: "request_id",
+      });
+      assert.deepEqual(report.versions, expectedVersions, name);
+    }
   },
 );
 

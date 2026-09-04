@@ -17,7 +17,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acquireOwnedLock, releaseOwnedLock } from "../packages/connector/lib/owned-lock.mjs";
 import {
@@ -158,6 +158,9 @@ const safeVersionPattern = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const stepPattern = /^(?:single|a1|b|a2|desktop|cli|parent|subagent|before|after)$/;
 const schemaPathPattern = /^\$(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})|\[\])*$/;
+const qualifyingSchemaPathPattern = /^\$(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\])*$/;
+const qualifyingTopLevelSchemaPathPattern = /^\$\.[A-Za-z_][A-Za-z0-9_]*$/;
+const privacyHashedSchemaSegmentPattern = /\.field1_[A-Za-z0-9_-]{22}(?=\.|\[\]|$)/;
 const manifestFailureCodes = new Set([
   "child_exit_failure",
   "child_signal_failure",
@@ -437,14 +440,11 @@ function manifestDescriptor({
   if (!(
     expectedEventIdentity === null ||
     (["event_id", "request_id", "generation_id"].includes(expectedEventIdentity?.kind) &&
-      schemaPathPattern.test(expectedEventIdentity?.path ?? "") &&
+      isQualifyingSchemaPath(expectedEventIdentity?.path) &&
       /^evt1_[A-Za-z0-9_-]{43}$/.test(expectedEventIdentity?.hash ?? ""))
   ))
     throw new Error("Cursor expected event identity binding is invalid");
-  if (!(
-    versionPath === null ||
-    /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(versionPath ?? "")
-  ))
+  if (!(versionPath === null || isQualifyingTopLevelSchemaPath(versionPath)))
     throw new Error("Cursor approved version path is invalid");
   return {
     probeId,
@@ -558,13 +558,10 @@ async function readRunManifest(path, { allowMissing = false } = {}) {
     !(
       manifest.expectedEventIdentity === null ||
       (["event_id", "request_id", "generation_id"].includes(manifest.expectedEventIdentity?.kind) &&
-        schemaPathPattern.test(manifest.expectedEventIdentity?.path ?? "") &&
+        isQualifyingSchemaPath(manifest.expectedEventIdentity?.path) &&
         /^evt1_[A-Za-z0-9_-]{43}$/.test(manifest.expectedEventIdentity?.hash ?? ""))
     ) ||
-    !(
-      manifest.versionPath === null ||
-      /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(manifest.versionPath ?? "")
-    )
+    !(manifest.versionPath === null || isQualifyingTopLevelSchemaPath(manifest.versionPath))
   )
     throw new Error("Cursor evidence run manifest is invalid");
   return manifest;
@@ -734,9 +731,28 @@ function requireSchemaPath(value, label = "Cursor evidence schema path") {
   return value;
 }
 
-function requireTopLevelSchemaPath(value, label = "Cursor version path") {
+function requireQualifyingSchemaPath(value, label = "Cursor evidence schema path") {
   const path = requireSchemaPath(value, label);
-  if (!/^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(path))
+  if (!qualifyingSchemaPathPattern.test(path) || privacyHashedSchemaSegmentPattern.test(path))
+    throw new Error(`${label} must contain only recognized structural fields`);
+  return path;
+}
+
+function isQualifyingSchemaPath(value) {
+  return (
+    typeof value === "string" &&
+    qualifyingSchemaPathPattern.test(value) &&
+    !privacyHashedSchemaSegmentPattern.test(value)
+  );
+}
+
+function isQualifyingTopLevelSchemaPath(value) {
+  return isQualifyingSchemaPath(value) && qualifyingTopLevelSchemaPathPattern.test(value);
+}
+
+function requireTopLevelSchemaPath(value, label = "Cursor version path") {
+  const path = requireQualifyingSchemaPath(value, label);
+  if (!qualifyingTopLevelSchemaPathPattern.test(path))
     throw new Error(`${label} must be an exact top-level schema path`);
   return path;
 }
@@ -1269,6 +1285,88 @@ function hooksMutationPath(path, kind) {
   return `${path}.viberacing-cursor-evidence.${kind}`;
 }
 
+function isOwnedHooksStageName(path, name) {
+  const prefix = `${basename(path)}.viberacing-cursor-evidence.stage-`;
+  if (!name.startsWith(prefix)) return false;
+  const suffix = name.slice(prefix.length);
+  const separator = suffix.indexOf("-");
+  return (
+    separator > 0 &&
+    /^[1-9]\d*$/.test(suffix.slice(0, separator)) &&
+    uuidPattern.test(suffix.slice(separator + 1))
+  );
+}
+
+function sameFileStat(left, right) {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.nlink === right.nlink
+  );
+}
+
+async function recoverPublishedHooksStage(path) {
+  const directory = dirname(path);
+  const stagePaths = (await readdir(directory))
+    .filter((name) => isOwnedHooksStageName(path, name))
+    .map((name) => join(directory, name));
+  if (stagePaths.length === 0) return;
+  const unpublished = [];
+  const published = [];
+  for (const stagePath of stagePaths) {
+    const info = await assertSafeRegularFile(stagePath, {
+      allowMultipleLinks: true,
+      privateFile: true,
+    });
+    if (info.nlink === 1) unpublished.push({ path: stagePath, info });
+    else if (info.nlink === 2) published.push(stagePath);
+    else
+      throw new Error("Cursor hooks orphan stage recovery is ambiguous; all files were preserved");
+  }
+  for (const candidate of unpublished) {
+    const current = await assertSafeRegularFile(candidate.path, {
+      allowMultipleLinks: true,
+      privateFile: true,
+    });
+    if (!sameFileStat(candidate.info, current) || current.nlink !== 1)
+      throw new Error(
+        "Cursor hooks orphan stage changed during recovery; all files were preserved",
+      );
+    await unlink(candidate.path);
+  }
+  if (published.length === 0) return;
+  if (published.length !== 1)
+    throw new Error("Cursor hooks orphan stage recovery is ambiguous; all files were preserved");
+  const currentState = await readHooksJournalSnapshot(path);
+  if (currentState === null)
+    throw new Error("Cursor hooks orphan stage recovery is ambiguous; all files were preserved");
+  const currentInfo = await lstat(path);
+  const [stagePath] = published;
+  const stageState = await readHooksJournalSnapshot(stagePath);
+  const stageInfo = await lstat(stagePath);
+  if (
+    stageState === null ||
+    !sameFingerprint(currentState.fingerprint, stageState.fingerprint) ||
+    currentInfo.nlink !== 2 ||
+    stageInfo.nlink !== 2
+  )
+    throw new Error("Cursor hooks orphan stage recovery is ambiguous; all files were preserved");
+  await assertHooksJournalUnchanged(path, currentState, "orphan stage recovery");
+  await assertHooksJournalUnchanged(stagePath, stageState, "orphan stage recovery");
+  const [currentAfter, stageAfter] = await Promise.all([lstat(path), lstat(stagePath)]);
+  if (
+    currentAfter.dev !== stageAfter.dev ||
+    currentAfter.ino !== stageAfter.ino ||
+    currentAfter.nlink !== 2 ||
+    stageAfter.nlink !== 2
+  )
+    throw new Error("Cursor hooks orphan stage changed during recovery; all files were preserved");
+  await unlink(stagePath);
+  await assertSafeRegularFile(path, { privateFile: true });
+}
+
 async function restoreDisplacedHooks(path, recovery) {
   try {
     await link(recovery, path);
@@ -1524,6 +1622,7 @@ async function publishRecoveredHooks(
 }
 
 async function recoverInterruptedHooksMutation(path, { recoveryFaults = {} } = {}) {
+  await recoverPublishedHooksStage(path);
   const recovery = hooksMutationPath(path, "recovery");
   const reconcile = hooksMutationPath(path, "reconcile");
   const [currentState, recoveryState, reconcileState] = await Promise.all(
@@ -1863,14 +1962,12 @@ async function validateHookBundle(parent, probeId, installationId, expectedOutpu
         ["event_id", "request_id", "generation_id"].includes(
           configuration.expectedEventIdentity.kind,
         ) &&
-        schemaPathPattern.test(configuration.expectedEventIdentity.path ?? "") &&
+        isQualifyingSchemaPath(configuration.expectedEventIdentity.path) &&
         /^evt1_[A-Za-z0-9_-]{43}$/.test(configuration.expectedEventIdentity.hash ?? ""))
     ) ||
     !(
       configuration.versionPath === null ||
-      /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(
-        configuration.versionPath ?? "",
-      )
+      isQualifyingTopLevelSchemaPath(configuration.versionPath)
     ) ||
     configuration.installationId !== expectedInstallationId ||
     configuration.probeScriptPath !== paths.probeScript ||
@@ -2026,7 +2123,7 @@ export async function installProbeHooks({
   let expectedIdentity = null;
   if (expectedEventIdentity !== null) {
     const kind = requireReconciliationIdentityKind(expectedEventIdentity.kind);
-    const identityPath = requireSchemaPath(
+    const identityPath = requireQualifyingSchemaPath(
       expectedEventIdentity.path,
       "Cursor expected event identity path",
     );
@@ -2354,7 +2451,10 @@ export async function runCursorCli({
       encoding: "utf8",
       timeout: 10_000,
     });
-    cursorVersion = normalizedVersion(version.stdout?.trim()) ?? null;
+    cursorVersion =
+      version?.status === 0 && version.signal === null && version.error === undefined
+        ? (normalizedVersion(version.stdout?.trim()) ?? null)
+        : null;
     arguments_ = [...passthrough];
     if (!arguments_.includes("--print") && !arguments_.includes("-p"))
       arguments_.unshift("--print");
@@ -2802,10 +2902,18 @@ export async function buildEvidenceReport(
   const selectedEventIdentityKind =
     eventIdentityKind === undefined ? null : requireReconciliationIdentityKind(eventIdentityKind);
   const selections = {
-    counterPaths: new Set(selectedValues(counterPaths, (path) => requireSchemaPath(path))),
-    accountPaths: new Set(selectedValues(accountPaths, (path) => requireSchemaPath(path))),
-    eventIdPaths: new Set(selectedValues(eventIdPaths, (path) => requireSchemaPath(path))),
-    timestampPaths: new Set(selectedValues(timestampPaths, (path) => requireSchemaPath(path))),
+    counterPaths: new Set(
+      selectedValues(counterPaths, (path) => requireQualifyingSchemaPath(path)),
+    ),
+    accountPaths: new Set(
+      selectedValues(accountPaths, (path) => requireQualifyingSchemaPath(path)),
+    ),
+    eventIdPaths: new Set(
+      selectedValues(eventIdPaths, (path) => requireQualifyingSchemaPath(path)),
+    ),
+    timestampPaths: new Set(
+      selectedValues(timestampPaths, (path) => requireQualifyingSchemaPath(path)),
+    ),
     versionSources: new Set(
       selectedValues(versionSources, (source) =>
         source === "cli" ? source : requireTopLevelSchemaPath(source, "Cursor version source"),
