@@ -140,8 +140,15 @@ async function writeEvidenceRows(outputDirectory, rows) {
         !candidate.contentDerived,
     );
     const isHook = ["afterAgentResponse", "stop", "sessionEnd"].includes(first.eventName);
-    const directory = join(outputDirectory, "runs", first.declaredRunId, first.declaredStep);
+    const runsDirectory = join(outputDirectory, "runs");
+    const runDirectory = join(runsDirectory, first.declaredRunId);
+    const directory = join(runDirectory, first.declaredStep);
     await mkdir(directory, { recursive: true, mode: 0o700 });
+    if (process.platform === "win32") {
+      await ensurePrivateStateDirectory(runsDirectory, {
+        paths: [runsDirectory, runDirectory, directory],
+      });
+    }
     const manifest = {
       schemaVersion: 1,
       manifestId: randomUUID(),

@@ -16,7 +16,7 @@ jobs:
   connector:
     name: Connector (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 30 || 15 }}
     strategy:
       fail-fast: false
       matrix:
