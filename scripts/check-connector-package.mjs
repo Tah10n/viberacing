@@ -134,6 +134,8 @@ const requiredFiles = [
   "bin/viberacing.mjs",
   "lib/cursor-identity.mjs",
   "lib/cursor-events.mjs",
+  "lib/cursor-ledger.mjs",
+  "lib/adapters/cursor.mjs",
   "lib/diagnostics.mjs",
   "lib/opencode-cleanup.mjs",
   "lib/opencode-plugin.mjs",

@@ -3382,10 +3382,19 @@ test("keeps exactly the 31 UTC dates accepted by ingestion", () => {
   );
 });
 
-test("all seven adapters expose the complete collection contract", () => {
+test("all eight adapters expose the complete collection contract", () => {
   assert.deepEqual(
     adapters.map((adapter) => adapter.id),
-    ["codex", "claude_code", "opencode", "kimi_code", "qwen_code", "antigravity", "gemini_cli"],
+    [
+      "codex",
+      "claude_code",
+      "opencode",
+      "kimi_code",
+      "qwen_code",
+      "antigravity",
+      "gemini_cli",
+      "cursor",
+    ],
   );
   for (const adapter of adapters) {
     assert.equal(typeof adapter.detect, "function");

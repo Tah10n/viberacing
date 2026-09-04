@@ -137,6 +137,23 @@ export async function inspectOwnerOnlyWindowsFile(path, options = {}) {
   }
 }
 
+export async function inspectOwnerOnlyWindowsDirectory(path, options = {}) {
+  if ((options.platform ?? process.platform) !== "win32") return true;
+  const script = inspectOwnerOnlyFileScript
+    .replace("if ($entry.PSIsContainer)", "if (-not $entry.PSIsContainer)")
+    .replace("[IO.File]::GetAccessControl", "[IO.Directory]::GetAccessControl");
+  try {
+    await runWindowsSecurityScript(
+      path,
+      Buffer.from(script, "utf16le").toString("base64"),
+      options,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function ensureOwnerOnlyWindowsFile(path, options = {}) {
   if ((options.platform ?? process.platform) !== "win32") return;
   try {

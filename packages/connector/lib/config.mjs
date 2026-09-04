@@ -163,7 +163,9 @@ function ownedStatePath(path, info) {
       .replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "")
       .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "");
     return (
-      sourceIdPattern.test(base.replace(/\.jsonl$/i, "")) && /\.jsonl$/i.test(base) && info.isFile()
+      sourceIdPattern.test(base.replace(/^cursor-/, "").replace(/\.jsonl$/i, "")) &&
+      /\.jsonl$/i.test(base) &&
+      info.isFile()
     );
   }
   if (top === "runtime") {
@@ -2005,6 +2007,7 @@ const installedRuntimeFiles = [
   "config.mjs",
   "cursor-identity.mjs",
   "cursor-events.mjs",
+  "cursor-ledger.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
@@ -2024,6 +2027,7 @@ const installedRuntimeAdapterFiles = new Set([
   "antigravity.mjs",
   "claude.mjs",
   "codex.mjs",
+  "cursor.mjs",
   "gemini.mjs",
   "kimi.mjs",
   "opencode.mjs",

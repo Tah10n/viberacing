@@ -7,6 +7,7 @@ test("every supported adapter declares exactly one account-switch mode", () => {
     Object.fromEntries(adapters.map((adapter) => [adapter.id, adapter.accountSwitchMode])),
     {
       codex: "provider_account_snapshot",
+      cursor: "provider_account_events",
       claude_code: "combined_local_history",
       opencode: "combined_local_history",
       kimi_code: "combined_local_history",
