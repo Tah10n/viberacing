@@ -21,6 +21,7 @@ import {
   cursorHookCommand,
   cursorHookMarker,
   inspectCursorHooks,
+  observeCursorHooks,
   reconcileCursorHooks,
 } from "../lib/cursor-hooks.mjs";
 import {
@@ -346,4 +347,26 @@ test("Cursor recovers an orphan stage after process death during hard-link publi
     (await readdir(root)).some((name) => name.includes("stage-")),
     false,
   );
+});
+
+test("Cursor continuity observation exposes only file metadata and detects a changed current hooks file", async (t) => {
+  const root = await setup(t);
+  assert.deepEqual(await observeCursorHooks(root, owner), { hooks: missing, fingerprint: null });
+  await reconcileCursorHooks(root, owner);
+  const before = await observeCursorHooks(root, owner);
+  assert.deepEqual(before.hooks, current);
+  assert.deepEqual(Object.keys(before.fingerprint).sort(), [
+    "ctimeMs",
+    "dev",
+    "ino",
+    "mtimeMs",
+    "size",
+  ]);
+  assert.equal(await reconcileCursorHooks(root, owner), false);
+  assert.deepEqual(await observeCursorHooks(root, owner), before);
+  await put(root, { ...(await get(root)), future: "private-observation-canary" });
+  const after = await observeCursorHooks(root, owner);
+  assert.deepEqual(after.hooks, current);
+  assert.notDeepEqual(after.fingerprint, before.fingerprint);
+  assert.ok(!JSON.stringify(after).includes("private-observation-canary"));
 });

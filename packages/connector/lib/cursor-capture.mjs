@@ -1,5 +1,5 @@
 import { decodeCursorInput, maximumCursorInputBytes } from "./cursor-events.mjs";
-import { readCursorLedger, recordCursorCapture } from "./cursor-ledger.mjs";
+import { readCursorLedger, recordCursorCapture, recordCursorCaptureGap } from "./cursor-ledger.mjs";
 import { withCursorCaptureContext } from "./config.mjs";
 import { lifecycleMutationActive, markDirtyIfConnected } from "./runtime.mjs";
 
@@ -67,9 +67,17 @@ export async function captureCursorHook(
   capturedAt,
   { environment = process.env } = {},
 ) {
-  if (!request || (await lifecycleMutationActive())) return false;
+  if (!request) return false;
   return withCursorCaptureContext(request, async ({ source, salt, stateRoot }) => {
-    if (await lifecycleMutationActive()) return false;
+    if (await lifecycleMutationActive()) {
+      await recordCursorCaptureGap(
+        stateRoot,
+        source.clientSourceId,
+        capturedAt,
+        "cursor_hook_stale",
+      );
+      return false;
+    }
     const captureId = environment.VIBERACING_CURSOR_HEADLESS_CAPTURE_ID;
     let owned = false;
     if (captureIdPattern.test(captureId ?? "")) {

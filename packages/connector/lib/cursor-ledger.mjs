@@ -16,6 +16,8 @@ import {
   parseCursorSessionEnd,
   pairCursorHeadless,
   reconcileCursorEvent,
+  cursorVersionSupported,
+  maximumCursorInputBytes,
 } from "./cursor-events.mjs";
 
 export const maximumCursorLedgerBytes = 8 * 1024 * 1024;
@@ -135,8 +137,45 @@ function event(value) {
     usage(rest)
   );
 }
+const hookStates = new Set(["current", "missing", "modified", "stale"]);
+function hookFingerprint(value) {
+  return (
+    value === null ||
+    (keys(value, ["dev", "ino", "size", "mtimeMs", "ctimeMs"]) &&
+      typeof value.dev === "string" &&
+      /^\d{1,32}$/.test(value.dev) &&
+      typeof value.ino === "string" &&
+      /^\d{1,32}$/.test(value.ino) &&
+      Number.isSafeInteger(value.size) &&
+      value.size >= 0 &&
+      value.size <= maximumCursorInputBytes &&
+      Number.isFinite(value.mtimeMs) &&
+      value.mtimeMs >= 0 &&
+      value.mtimeMs <= Number.MAX_SAFE_INTEGER &&
+      Number.isFinite(value.ctimeMs) &&
+      value.ctimeMs >= 0 &&
+      value.ctimeMs <= Number.MAX_SAFE_INTEGER)
+  );
+}
 function validRecord(record) {
   if (!record || record.v !== 1) return false;
+  if (record.kind === "hooks")
+    return (
+      keys(record, ["v", "kind", "at", "hooks", "fingerprint"]) &&
+      time(record.at) &&
+      keys(record.hooks, ["stop", "sessionEnd"]) &&
+      Object.values(record.hooks).every((value) => hookStates.has(value)) &&
+      hookFingerprint(record.fingerprint) &&
+      (!(record.hooks.stop === "current" && record.hooks.sessionEnd === "current") ||
+        record.fingerprint !== null)
+    );
+  if (record.kind === "version")
+    return (
+      keys(record, ["v", "kind", "at", "surface", "value"]) &&
+      time(record.at) &&
+      ["desktop", "cli"].includes(record.surface) &&
+      cursorVersionSupported(record.value, record.surface)
+    );
   if (["start", "current"].includes(record.kind))
     return keys(record, ["v", "kind", "at"]) && time(record.at);
   if (record.kind === "gap")
@@ -241,6 +280,9 @@ function fold(records) {
     lastObservedAt: null,
     sessionAccounts: new Map(),
     blockedSessions: new Set(),
+    hookObservation: null,
+    currentIntervals: [],
+    versions: {},
     captureWindows: [],
     suppressedEvents: new Set(),
   };
@@ -293,6 +335,31 @@ function fold(records) {
     if (record.kind === "start") {
       if (state.captureStartedAt) fail("cursor_schema_unsupported");
       state.captureStartedAt = record.at;
+    } else if (record.kind === "version") state.versions[record.surface] = record.value;
+    else if (record.kind === "hooks") {
+      const previous = state.hookObservation;
+      const current = record.hooks.stop === "current" && record.hooks.sessionEnd === "current";
+      if (previous && record.at < previous.at)
+        gap(record.at, previous.at, "cursor_usage_incomplete");
+      else if (
+        previous &&
+        current &&
+        previous.hooks.stop === "current" &&
+        previous.hooks.sessionEnd === "current" &&
+        JSON.stringify(previous.fingerprint) === JSON.stringify(record.fingerprint)
+      ) {
+        const interval = state.currentIntervals.at(-1);
+        if (interval?.to === previous.at) interval.to = record.at;
+        else state.currentIntervals.push({ from: previous.at, to: record.at });
+      } else if (previous)
+        gap(
+          previous.at,
+          record.at,
+          Object.values(record.hooks).includes("missing")
+            ? "cursor_hook_missing"
+            : "cursor_hook_stale",
+        );
+      state.hookObservation = record;
     } else if (record.kind === "gap")
       state.gaps.push({ from: record.from, to: record.to, code: record.code });
     else if (kind === "accounts") state.accounts = record.accounts;
@@ -585,6 +652,44 @@ export async function initializeCursorLedger(root, profileId, capturedAt) {
   );
 }
 
+export async function recordCursorCaptureGap(root, profileId, capturedAt, code) {
+  if (!time(capturedAt) || !failureCodes.has(code)) fail();
+  return withLedger(root, profileId, async ({ state, append, torn }) => {
+    if (torn || !state.captureStartedAt) fail();
+    await append({ v: 1, kind: "gap", from: capturedAt, to: capturedAt, code });
+  });
+}
+
+export async function recordCursorHookObservation(root, profileId, observation, capturedAt) {
+  const record = {
+    v: 1,
+    kind: "hooks",
+    at: capturedAt,
+    hooks: observation?.hooks,
+    fingerprint: observation?.fingerprint,
+  };
+  if (!validRecord(record)) fail("cursor_hook_stale");
+  return withLedger(root, profileId, async ({ state, append, torn }) => {
+    if (torn || !state.captureStartedAt) fail();
+    const previous = state.hookObservation;
+    const same =
+      previous &&
+      JSON.stringify(previous.hooks) === JSON.stringify(record.hooks) &&
+      JSON.stringify(previous.fingerprint) === JSON.stringify(record.fingerprint);
+    const current = record.hooks.stop === "current" && record.hooks.sessionEnd === "current";
+    // One unchanged current observation per UTC day is sufficient to close past-day coverage.
+    // Repeated missing/stale inspections must not endlessly change the history retry generation.
+    if (
+      same &&
+      capturedAt >= previous.at &&
+      (!current || capturedAt.slice(0, 10) === previous.at.slice(0, 10))
+    )
+      return false;
+    await append(record);
+    return true;
+  });
+}
+
 // A wrapper marker is owned only after this durable, bounded registration succeeds.
 export async function beginCursorHeadlessCapture(root, profileId, captureId, capturedAt) {
   if (!uuid.test(captureId) || !time(capturedAt)) fail();
@@ -614,12 +719,27 @@ export async function readCursorLedger(
     const pending = [...state.pending.values()];
     return {
       captureStartedAt: state.captureStartedAt,
+      currentIntervals: state.currentIntervals,
+      hooks: state.hookObservation?.hooks ?? null,
+      versions: state.versions,
       accounts: state.accounts,
       events: capturedEvents(state, now),
       pendingPairs: pending.length,
       headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
         ...state.gaps,
+        ...(state.hookObservation &&
+        Object.values(state.hookObservation.hooks).some((value) => value !== "current")
+          ? [
+              {
+                from: [state.hookObservation.at, now].sort()[0],
+                to: [state.hookObservation.at, now].sort()[1],
+                code: Object.values(state.hookObservation.hooks).includes("missing")
+                  ? "cursor_hook_missing"
+                  : "cursor_hook_stale",
+              },
+            ]
+          : []),
         ...pending.map((item) => ({
           from: item.firstAt,
           to: now > item.firstAt ? now : item.firstAt,
@@ -782,6 +902,12 @@ export async function recordCursorCapture(root, profileId, input) {
         return { status: "duplicate" };
     }
     await append(record);
+    if (["event", "binding", "result"].includes(record.kind)) {
+      const value = input.kind === "result" ? input.version : input.payload?.cursor_version;
+      const surface = cursorVersionSupported(value, "desktop") ? "desktop" : "cli";
+      if (cursorVersionSupported(value, surface) && state.versions[surface] !== value)
+        await append({ v: 1, kind: "version", at: input.capturedAt, surface, value });
+    }
     if (record.kind === "abort" && failureCodes.has(input.diagnosticCode))
       await append({
         v: 1,

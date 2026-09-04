@@ -1,7 +1,7 @@
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readCursorLedger } from "../cursor-ledger.mjs";
+import { readCursorLedger, recordCursorHookObservation } from "../cursor-ledger.mjs";
 import { diagnosticError } from "../diagnostics.mjs";
 import { inspectOwnerOnlyWindowsDirectory } from "../windows-security.mjs";
 import { mergeEntries } from "./shared.mjs";
@@ -63,12 +63,20 @@ export async function collectCursor(source, range, state = {}, context = {}) {
   )
     throw diagnosticError("Cursor capture range is invalid", "cursor_usage_incomplete");
   const now = context.now ?? new Date().toISOString();
-  const ledger = await readCursorLedger(
-    context.stateRoot ?? (await defaultStateRoot()),
-    profileId(source),
-    now,
-    { checkpoint: state.checkpoint },
-  );
+  const stateRoot = context.stateRoot ?? (await defaultStateRoot());
+  if (context.hookObservation) {
+    await recordCursorHookObservation(stateRoot, profileId(source), context.hookObservation, now);
+  } else if (!context.stateRoot) {
+    try {
+      const { observeCursorProfileHooks } = await import("../config.mjs");
+      if (!(await observeCursorProfileHooks(source, now))) throw new Error("inactive");
+    } catch {
+      throw diagnosticError("Cursor hook continuity is unavailable", "cursor_hook_stale");
+    }
+  }
+  const ledger = await readCursorLedger(stateRoot, profileId(source), now, {
+    checkpoint: state.checkpoint,
+  });
   if (!ledger.previousCheckpointMatches)
     throw diagnosticError("Cursor capture history changed unexpectedly", "cursor_usage_incomplete");
   if (!ledger.accounts.some((account) => account.accountKey === source.providerAccountKey)) {
@@ -92,8 +100,15 @@ export async function collectCursor(source, range, state = {}, context = {}) {
   const gaps = ledger.gaps.filter(
     (gap) => gap.from.slice(0, 10) <= range.rangeEnd && gap.to.slice(0, 10) >= range.rangeStart,
   );
+  const rangeEndExclusive = new Date(
+    Date.parse(`${range.rangeEnd}T00:00:00.000Z`) + 86_400_000,
+  ).toISOString();
+  const covered = ledger.currentIntervals.some(
+    (interval) =>
+      interval.from <= `${range.rangeStart}T00:00:00.000Z` && interval.to >= rangeEndExclusive,
+  );
   const partial =
-    context.hooksCurrent !== true ||
+    !covered ||
     !ledger.captureStartedAt ||
     `${range.rangeStart}T00:00:00.000Z` < ledger.captureStartedAt ||
     range.rangeEnd >= now.slice(0, 10) ||

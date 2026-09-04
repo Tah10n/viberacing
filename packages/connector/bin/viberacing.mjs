@@ -22,6 +22,7 @@ import {
   resolveCursorExecutable,
   runCursorProcess,
 } from "../lib/cursor-cli.mjs";
+import { inspectCursorHooks } from "../lib/cursor-hooks.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 import {
   acknowledgeDiagnosticEvents,
@@ -86,6 +87,7 @@ import {
   connectedSourceMappingExists,
   diagnoseHooks,
   diagnoseHookForSource,
+  cursorHookOptions,
   invalidateConnectAttempt,
   inspectConfig,
   inspectSources,
@@ -3981,6 +3983,7 @@ async function doctor() {
     output(`Detection error (${diagnostic.displayName}): ${diagnostic.error}`);
   const expectedSources = {
     codex: "account/usage/read account usage",
+    cursor: "connector-owned exact capture ledger",
     claude_code: "session JSONL with usage",
     opencode: "compatible OpenCode SQLite message store",
     kimi_code: "current or legacy wire records",
@@ -3993,6 +3996,63 @@ async function doctor() {
     const configured = localSources.filter((source) => source.agentId === adapter.id);
     output(`${adapter.displayName}:`);
     output(`  Expected source type: ${expectedSources[adapter.id]}`);
+    if (adapter.id === "cursor") {
+      output(
+        `  Profile: ${automatic.length ? "detected" : configured.length ? "configured" : "not detected"}`,
+      );
+      const profiles = configured.filter((source) => source.profileClientSourceId === undefined);
+      if (!profiles.length) output("  Capture: not connected");
+      for (const profile of profiles) {
+        let hooks = { stop: "stale", sessionEnd: "stale" };
+        try {
+          hooks = await inspectCursorHooks(
+            profile.hookConfigRoot ?? profile.dataPath,
+            await cursorHookOptions(profile),
+          );
+        } catch {}
+        output(`  stop hook: ${hooks.stop}`);
+        output(`  sessionEnd hook: ${hooks.sessionEnd}`);
+        try {
+          const ledger = await readCursorLedger(stateDirectory, profile.clientSourceId);
+          output(`  Desktop version (last captured): ${ledger.versions.desktop ?? "not observed"}`);
+          output(`  CLI version (last captured): ${ledger.versions.cli ?? "not observed"}`);
+          output(`  Local Cursor accounts: ${ledger.accounts.length}`);
+          output(
+            `  Capture started: ${ledger.captureStartedAt?.slice(0, 10) ?? "not started"} UTC`,
+          );
+          output(`  Pending headless pairs: ${ledger.pendingPairs}`);
+          const today = new Date().toISOString().slice(0, 10);
+          const yesterday = new Date(Date.parse(`${today}T00:00:00.000Z`) - 86_400_000)
+            .toISOString()
+            .slice(0, 10);
+          const complete =
+            !ledger.torn &&
+            ledger.currentIntervals.some(
+              (interval) =>
+                interval.from <= `${yesterday}T00:00:00.000Z` &&
+                interval.to >= `${today}T00:00:00.000Z`,
+            ) &&
+            !ledger.gaps.some(
+              (gap) => gap.from.slice(0, 10) <= yesterday && gap.to.slice(0, 10) >= yesterday,
+            );
+          output(
+            `  Previous UTC day: ${complete ? "complete" : "partial"}; current UTC day: partial`,
+          );
+          for (const code of new Set(
+            ledger.gaps
+              .map((gap) => gap.code)
+              .filter((code) =>
+                ["cursor_schema_unsupported", "cursor_version_unsupported"].includes(code),
+              ),
+          ))
+            output(`  Capture diagnostic: ${code}`);
+        } catch {
+          output("  Capture history: unavailable; partial");
+        }
+      }
+      output("  Headless command: viberacing run cursor -- ...");
+      continue;
+    }
     if (adapter.id === "antigravity") {
       output(
         `  Status: wrapper-only${configured.length ? `; ${configured.length} capture source(s) configured` : ""}`,

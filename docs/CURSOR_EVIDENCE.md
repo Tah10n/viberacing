@@ -2,10 +2,10 @@
 
 Status on 2026-09-04: **exact-source evidence accepted; production implementation in progress**.
 This branch registers Cursor as the eighth server agent with `source_sum` and migration 012. The
-connector implements strict stop capture, account routing and the explicit headless wrapper; final
-continuity and release checks remain in progress. Rollout remains blocked until a reviewed
-server-first deployment. The historical investigation below describes the earlier gate, not the
-current availability of authenticated token counters.
+connector implements strict stop capture, account routing and the explicit headless wrapper. Global
+checkpoint/acknowledgement integration, reset safety and release checks remain in progress. Rollout
+remains blocked until a reviewed server-first deployment. The historical investigation below
+describes the earlier gate, not the current availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -94,9 +94,19 @@ released; ambiguous events in an abandoned bounded invocation remain excluded. S
 the invocation is a separate per-turn event. Replay and lossless compaction preserve these
 decisions.
 
-Durable hook continuity, global checkpoint and acknowledgement compaction integration, the full
-privacy matrix, remaining live smoke and final cross-platform checks are still pending. These local
-tests do not establish production readiness; live A/B/A remains a separate Draft blocker.
+Hook observations now persist the states of stop/sessionEnd and file identity/change metadata.
+Unchanged current observations close reliable intervals; missing/stale hooks, file replacement and
+backward clock observations retain partial gaps. Repeated inspections do not continually change the
+history retry generation. Repair preserves capture history and starts a new observed interval after
+a known interruption. An authenticated hook skipped during a lifecycle mutation records a safe gap.
+The doctor reports both hook states, last captured Desktop/CLI versions, local account count,
+capture start, pending pairs, coverage and allowlisted schema/version failures without exposing
+Cursor paths or provider identities.
+
+Global checkpoint/acknowledgement compaction integration, installation-reset replay safety for
+`source_sum`, the full privacy matrix, remaining live smoke and final cross-platform checks remain
+pending. These local tests do not establish production readiness; live A/B/A remains a separate
+Draft blocker.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source

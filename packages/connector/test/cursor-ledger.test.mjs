@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import {
   initializeCursorLedger,
   beginCursorHeadlessCapture,
+  recordCursorHookObservation,
   readCursorLedger,
   recordCursorCapture,
   maximumCursorLedgerBytes,
@@ -65,12 +66,17 @@ const end = {
   session_id: stop.session_id,
   user_email: stop.user_email,
 };
+const hookObservation = {
+  hooks: { stop: "current", sessionEnd: "current" },
+  fingerprint: { dev: "1", ino: "2", size: 100, mtimeMs: 1234, ctimeMs: 1234 },
+};
 const file = (root) => join(root, "captures", `cursor-${profile}.jsonl`);
 async function fixture(context) {
   const root = await mkdtemp(join(tmpdir(), "viberacing-cursor-ledger-"));
   await ensurePrivateStateDirectory(root);
   context.after(() => rm(root, { recursive: true, force: true }));
   await initializeCursorLedger(root, profile, start);
+  await recordCursorHookObservation(root, profile, hookObservation, start);
   return root;
 }
 const recordStop = (root, payload = stop, capturedAt = at) =>
@@ -455,7 +461,7 @@ test("Cursor adapter isolates accounts, sums per-turn events and preserves compo
     source,
     range,
     {},
-    { stateRoot: root, now: later, hooksCurrent: true },
+    { stateRoot: root, now: later, hookObservation },
   );
   assert.deepEqual(collected.entries, [
     {
@@ -478,7 +484,7 @@ test("Cursor adapter isolates accounts, sums per-turn events and preserves compo
     },
     range,
     {},
-    { stateRoot: root, now: later, hooksCurrent: true },
+    { stateRoot: root, now: later, hookObservation },
   );
   assert.equal(secondary.entries[0].totalTokens, "133");
   assert.equal(JSON.stringify(collected.entries).includes(a.accountKey), false);
@@ -498,7 +504,7 @@ test("Cursor adapter never invents pre-capture zeros and current-day coverage re
     source,
     { rangeStart: "2026-01-01", rangeEnd: "2026-01-31" },
     {},
-    { stateRoot: root, now: later, hooksCurrent: true },
+    { stateRoot: root, now: later, hookObservation },
   );
   assert.deepEqual(old.entries, []);
   assert.equal(old.completeness, "partial");
@@ -506,7 +512,7 @@ test("Cursor adapter never invents pre-capture zeros and current-day coverage re
     source,
     { rangeStart: "2026-09-04", rangeEnd: "2026-09-04" },
     {},
-    { stateRoot: root, now: at, hooksCurrent: true },
+    { stateRoot: root, now: at, hookObservation },
   );
   assert.equal(current.completeness, "partial");
   const unchecked = await collectCursor(
@@ -644,7 +650,7 @@ test("Cursor collection cannot upload the stop day before a midnight headless pa
     source,
     range,
     {},
-    { stateRoot: root, now: at, hooksCurrent: true },
+    { stateRoot: root, now: at, hookObservation },
   );
   assert.deepEqual(before.entries, []);
   assert.equal(before.completeness, "partial");
@@ -653,7 +659,7 @@ test("Cursor collection cannot upload the stop day before a midnight headless pa
   const after = await collectCursor(source, range, before.nextState, {
     stateRoot: root,
     now: later,
-    hooksCurrent: true,
+    hookObservation,
   });
   assert.equal(after.entries.length, 1);
   assert.equal(after.entries[0].date, "2026-09-05");
@@ -670,4 +676,98 @@ test("Cursor pending account conflict cannot release a stop for the same session
   const ledger = await readCursorLedger(root, profile, later);
   assert.equal(ledger.events.length, 0);
   assert.ok(ledger.gaps.some((gap) => gap.code === "cursor_account_identity_conflict"));
+});
+
+test("Cursor hook continuity closes only observed intact past days and retains repair gaps", async (context) => {
+  const root = await fixture(context);
+  await recordStop(root);
+  await recordStop(root, { ...stop, generation_id: "second-observed-turn" });
+  await recordCursorHookObservation(root, profile, hookObservation, "2026-09-05T00:00:00.000Z");
+  const missing = { hooks: { stop: "missing", sessionEnd: "missing" }, fingerprint: null };
+  await recordCursorHookObservation(root, profile, missing, "2026-09-05T12:00:00.000Z");
+  const repaired = {
+    ...hookObservation,
+    fingerprint: { ...hookObservation.fingerprint, ino: "3" },
+  };
+  await recordCursorHookObservation(root, profile, repaired, "2026-09-05T13:00:00.000Z");
+  await recordCursorHookObservation(root, profile, repaired, "2026-09-07T00:00:00.000Z");
+  const ledger = await readCursorLedger(root, profile, "2026-09-07T00:00:00.000Z");
+  const source = {
+    agentId: "cursor",
+    collectionMethod: "cursor_local_events",
+    clientSourceId: profile,
+    providerAccountKey: ledger.accounts[0].accountKey,
+  };
+  for (const [day, expected] of [
+    ["2026-09-03", "partial"],
+    ["2026-09-04", "complete"],
+    ["2026-09-05", "partial"],
+    ["2026-09-06", "complete"],
+    ["2026-09-07", "partial"],
+  ]) {
+    const result = await collectCursor(
+      source,
+      { rangeStart: day, rangeEnd: day },
+      {},
+      { stateRoot: root, now: "2026-09-07T00:00:00.000Z" },
+    );
+    assert.equal(result.completeness, expected, day);
+  }
+  assert.ok(
+    ledger.gaps.some(
+      (gap) => gap.code === "cursor_hook_missing" && gap.from === "2026-09-05T00:00:00.000Z",
+    ),
+  );
+  const before = ledger.currentIntervals;
+  assert.equal(await compactCursorLedger(root, profile, ledger.checkpoint), true);
+  const compacted = await readCursorLedger(root, profile, "2026-09-07T00:00:00.000Z");
+  assert.deepEqual(compacted.currentIntervals, before);
+  assert.deepEqual(compacted.gaps, ledger.gaps);
+  assert.equal(compacted.versions.desktop, "3.19.7");
+});
+
+test("Cursor current hook replacement and backward clock observations cannot silently complete history", async (context) => {
+  const root = await fixture(context);
+  const changed = {
+    ...hookObservation,
+    fingerprint: { ...hookObservation.fingerprint, mtimeMs: 5678 },
+  };
+  await recordCursorHookObservation(root, profile, changed, "2026-09-06T00:00:00.000Z");
+  let ledger = await readCursorLedger(root, profile, "2026-09-06T00:00:00.000Z");
+  assert.equal(ledger.currentIntervals.length, 0);
+  assert.ok(ledger.gaps.some((gap) => gap.code === "cursor_hook_stale"));
+  await recordCursorHookObservation(root, profile, changed, "2026-09-05T12:00:00.000Z");
+  ledger = await readCursorLedger(root, profile, "2026-09-06T00:00:00.000Z");
+  assert.ok(
+    ledger.gaps.some(
+      (gap) => gap.code === "cursor_usage_incomplete" && gap.from === "2026-09-05T12:00:00.000Z",
+    ),
+  );
+});
+
+test("Cursor repeated same-day or unchanged missing-hook inspections do not churn retry generations", async (context) => {
+  const root = await fixture(context);
+  const initial = await readFile(file(root));
+  assert.equal(await recordCursorHookObservation(root, profile, hookObservation, at), false);
+  assert.deepEqual(await readFile(file(root)), initial);
+  await recordCursorHookObservation(root, profile, hookObservation, later);
+  const advanced = await readFile(file(root));
+  assert.ok(advanced.length > initial.length);
+  const missing = {
+    hooks: { stop: "missing", sessionEnd: "current" },
+    fingerprint: hookObservation.fingerprint,
+  };
+  await recordCursorHookObservation(root, profile, missing, "2026-09-05T12:00:00.000Z");
+  const interrupted = await readFile(file(root));
+  assert.equal(
+    await recordCursorHookObservation(root, profile, missing, "2026-09-08T12:00:00.000Z"),
+    false,
+  );
+  assert.deepEqual(await readFile(file(root)), interrupted);
+  const ledger = await readCursorLedger(root, profile, "2026-09-08T12:00:00.000Z");
+  assert.ok(
+    ledger.gaps.some(
+      (gap) => gap.code === "cursor_hook_missing" && gap.to === "2026-09-08T12:00:00.000Z",
+    ),
+  );
 });

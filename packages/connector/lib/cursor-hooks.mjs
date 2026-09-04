@@ -124,6 +124,7 @@ async function readHooksSnapshot(hooksFile) {
     throw new Error("Cursor hooks.json changed while it was read");
   return {
     document: validatedHooksDocument(JSON.parse(contents.toString("utf8"))),
+    changedAt: after.ctimeMs,
     fingerprint: {
       exists: true,
       dev: String(after.dev),
@@ -747,7 +748,8 @@ function hookStatus(document, options) {
   return status;
 }
 /** Read-only; crash journals make the hooks stale until a repair reconciles them. */
-export async function inspectCursorHooks(root, options) {
+export async function observeCursorHooks(root, options) {
+  const stale = { hooks: { stop: "stale", sessionEnd: "stale" }, fingerprint: null };
   try {
     ownership(options);
     await assertRoot(root);
@@ -758,12 +760,26 @@ export async function inspectCursorHooks(root, options) {
         (name) => name.startsWith("hooks.json.viberacing-cursor-hooks.") && !name.endsWith(".lock"),
       )
     )
-      return { stop: "stale", sessionEnd: "stale" };
-    const { document } = await readHooksSnapshot(path);
-    return hookStatus(document, options);
+      return stale;
+    const { document, fingerprint, changedAt } = await readHooksSnapshot(path);
+    return {
+      hooks: hookStatus(document, options),
+      fingerprint: fingerprint.exists
+        ? {
+            dev: fingerprint.dev,
+            ino: fingerprint.ino,
+            size: fingerprint.size,
+            mtimeMs: fingerprint.mtimeMs,
+            ctimeMs: changedAt,
+          }
+        : null,
+    };
   } catch {
-    return { stop: "stale", sessionEnd: "stale" };
+    return stale;
   }
+}
+export async function inspectCursorHooks(root, options) {
+  return (await observeCursorHooks(root, options)).hooks;
 }
 /** Caller owns connection lifecycle. Only these installation/profile entries change. */
 export async function reconcileCursorHooks(root, options, { remove = false, ...faults } = {}) {

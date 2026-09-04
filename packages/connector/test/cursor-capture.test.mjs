@@ -171,6 +171,11 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
       false,
     );
   });
+  assert.ok(
+    (await readCursorLedger(config.stateDirectory, source.clientSourceId)).gaps.some(
+      (gap) => gap.code === "cursor_hook_stale" && gap.from === now,
+    ),
+  );
   const captureId = randomUUID();
   const pairAt = new Date().toISOString();
   const end = {
@@ -240,6 +245,38 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
       await readFile(join(config.stateDirectory, filename), "utf8"),
       /canary-|do-not-count-wrapper-stop|blocked-generation/,
     );
+  await config.removeHookForSource(profile);
+  const observation = await config.observeCursorProfileHooks(
+    (await config.readConfig()).sources[0],
+    new Date().toISOString(),
+  );
+  assert.equal(observation.hooks.stop, "missing");
+  const gapsBeforeRepair = (await readCursorLedger(config.stateDirectory, source.clientSourceId))
+    .gaps;
+  assert.ok(gapsBeforeRepair.some((gap) => gap.code === "cursor_hook_missing"));
+  await config.installHookForSource(profile, script);
+  const repairedHistory = await readCursorLedger(config.stateDirectory, source.clientSourceId);
+  assert.ok(repairedHistory.gaps.some((gap) => gap.code === "cursor_hook_missing"));
+  assert.equal(repairedHistory.captureStartedAt, ledger.captureStartedAt);
+  const doctor = spawnSync(process.execPath, [options.launcher, "doctor"], {
+    encoding: "utf8",
+    timeout: 30000,
+    env: {
+      ...process.env,
+      HOME: join(root, "empty-home"),
+      USERPROFILE: join(root, "empty-home"),
+      CODEX_HOME: join(root, "empty-home", ".codex"),
+    },
+  });
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(doctor.stdout, /Desktop version \(last captured\): 3\.19\.7/);
+  assert.match(doctor.stdout, /CLI version \(last captured\): 2026\.09\.02-c22c1a3/);
+  assert.match(doctor.stdout, /Local Cursor accounts: 1/);
+  assert.match(doctor.stdout, /Pending headless pairs: 0/);
+  assert.match(doctor.stdout, /stop hook: current/);
+  assert.match(doctor.stdout, /sessionEnd hook: current/);
+  assert.ok(!doctor.stdout.includes(providerRoot));
+  assert.doesNotMatch(doctor.stdout + doctor.stderr, /canary-|acct1_|alias1_|evt1_/);
   await config.removeConfig();
   await config.removeInstallationIdentity();
   const namesBefore = await readdir(config.stateDirectory);

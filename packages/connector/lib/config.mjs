@@ -28,8 +28,8 @@ import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { normalizeOrigin } from "./origin.mjs";
 import { mergeStoredSourceMapping, providerAccountPolicy } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
-import { inspectCursorHooks, reconcileCursorHooks } from "./cursor-hooks.mjs";
-import { initializeCursorLedger } from "./cursor-ledger.mjs";
+import { inspectCursorHooks, observeCursorHooks, reconcileCursorHooks } from "./cursor-hooks.mjs";
+import { initializeCursorLedger, recordCursorHookObservation } from "./cursor-ledger.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
@@ -2264,6 +2264,46 @@ export async function withCursorCaptureContext(request, callback) {
   });
 }
 
+// Collection observes the currently connected mapping under the existing lifecycle lock.
+// An old collector cannot publish continuity into a replacement installation or removed source.
+export async function observeCursorProfileHooks(source, capturedAt) {
+  const { lifecycleMutationActive } = await import("./runtime.mjs");
+  if (await lifecycleMutationActive()) return null;
+  return withExistingConnectionStateLock(async () => {
+    if (await lifecycleMutationActive()) return null;
+    const [installation, config] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+    ]);
+    if (!installation || config.installationId !== installation.id) return null;
+    const mapping = config.sources.find(
+      (item) =>
+        item.clientSourceId === source.clientSourceId &&
+        item.sourceId === source.sourceId &&
+        item.agentId === "cursor",
+    );
+    if (!mapping) return null;
+    const profile = config.sources.find(
+      (item) =>
+        item.clientSourceId === (mapping.profileClientSourceId ?? mapping.clientSourceId) &&
+        item.agentId === "cursor" &&
+        item.profileClientSourceId === undefined,
+    );
+    if (!profile) return null;
+    const observation = await observeCursorHooks(
+      hookRoot(profile, "cursor"),
+      await cursorHookOptions({ ...profile, cursorHookInstallationId: installation.id }),
+    );
+    await recordCursorHookObservation(
+      stateDirectory,
+      profile.clientSourceId,
+      observation,
+      capturedAt,
+    );
+    return observation;
+  });
+}
+
 export async function installHookForSource(source, installedScript) {
   if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   if (source.agentId === "cursor") {
@@ -2272,7 +2312,14 @@ export async function installHookForSource(source, installedScript) {
       hookRoot(profile, "cursor"),
       await cursorHookOptions(profile),
     );
-    await initializeCursorLedger(stateDirectory, profile.clientSourceId, new Date().toISOString());
+    const capturedAt = new Date().toISOString();
+    await initializeCursorLedger(stateDirectory, profile.clientSourceId, capturedAt);
+    await recordCursorHookObservation(
+      stateDirectory,
+      profile.clientSourceId,
+      await observeCursorHooks(hookRoot(profile, "cursor"), await cursorHookOptions(profile)),
+      capturedAt,
+    );
     return changed;
   }
   const marker = hookMarkerForSource(source.clientSourceId);
