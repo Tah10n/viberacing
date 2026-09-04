@@ -56,14 +56,19 @@ test("Cursor stop accepts exact Desktop and interactive contracts without invent
   }
 });
 
-test("Cursor version gates reject old releases, new Desktop majors and malformed calendar versions", () => {
+test("Cursor version gates reject every unverified release and build even with a matching field shape", () => {
   for (const value of [
     "3.18.24",
+    "3.18.26",
+    "3.19.8",
+    "3.20.0",
     "2.99.99",
     "4.0.0",
     "3.19.0-beta",
     "3.019.0",
     "2026.09.01-c22c1a3",
+    "2026.09.02-deadbee",
+    "2026.09.03-c22c1a3",
     "2026.02.30-c22c1a3",
     "2026.13.01-c22c1a3",
     "unknown",

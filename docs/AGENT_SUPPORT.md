@@ -21,6 +21,10 @@ approved immutable capture time, remaining live A/B/A validation, and separate s
 
 ## Current-year history coverage
 
+The Cursor version gate accepts verified Desktop releases 3.18.25 and 3.19.7 and CLI build
+`2026.09.02-c22c1a3`. Another release/build requires exact-source verification and a connector
+update; matching field names alone do not establish unchanged counter semantics.
+
 Cursor uses one physical `~/.cursor` profile per OS user for Desktop and CLI. A safe existing root
 or a version-verified official `agent` executable enables discovery; discovery does not create the
 root. Owned `stop` and `sessionEnd` hooks are installed after connection. Up to eight local provider

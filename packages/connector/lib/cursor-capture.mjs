@@ -80,20 +80,26 @@ export async function captureCursorHook(
     }
     const captureId = environment.VIBERACING_CURSOR_HEADLESS_CAPTURE_ID;
     let owned = false;
-    if (captureIdPattern.test(captureId ?? "")) {
-      const ledger = await readCursorLedger(stateRoot, source.clientSourceId, capturedAt);
-      owned = ledger.headlessCaptureIds.includes(captureId);
+    let result;
+    try {
+      if (captureIdPattern.test(captureId ?? "")) {
+        const ledger = await readCursorLedger(stateRoot, source.clientSourceId, capturedAt);
+        owned = ledger.headlessCaptureIds.includes(captureId);
+      }
+      if (request.eventName === "sessionEnd" && !owned) return false;
+      // A foreign or stale headless marker must never suppress an ordinary captured event.
+      result = await recordCursorCapture(stateRoot, source.clientSourceId, {
+        kind: request.eventName === "stop" ? "stop" : "binding",
+        payload,
+        salt,
+        capturedAt,
+        captureId,
+        headlessOwned: owned,
+      });
+    } catch {
+      // A current owned hook still schedules safe collection diagnostics when storage fails.
+      return markDirtyIfConnected(source.clientSourceId, "cursor", new Date(capturedAt));
     }
-    if (request.eventName === "sessionEnd" && !owned) return false;
-    // A foreign or stale headless marker must never suppress an ordinary captured event.
-    const result = await recordCursorCapture(stateRoot, source.clientSourceId, {
-      kind: request.eventName === "stop" ? "stop" : "binding",
-      payload,
-      salt,
-      capturedAt,
-      captureId,
-      headlessOwned: owned,
-    });
     if (result.status === "suppressed") return false;
     return markDirtyIfConnected(source.clientSourceId, "cursor", new Date(capturedAt));
   });

@@ -11,6 +11,12 @@ availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
+Runtime version gates accept only Desktop 3.18.25/3.19.7 and CLI `2026.09.02-c22c1a3`. Unknown patch
+releases and builds fail closed even when their fields have the same shape; expanding this set
+requires authenticated exact-source evidence and parser regressions. Capacity recovery also retains
+a permanent gap for the interval in which a full ledger may have rejected writes, and an owned hook
+with a storage failure schedules safe collection diagnostics without recreating missing history.
+
 Implementation base: `265ce5e82ad19d3867d8f6289fad055527b302d3` (main after PR #64). The accepted
 local evidence establishes Desktop 3.18.25, interactive CLI `2026.09.02-c22c1a3`, successful
 headless aggregate usage, matching Desktop/CLI account identity, matching headless result/sessionEnd
@@ -111,9 +117,43 @@ sync-cache reset and recover controlled atomic replacements. Validated ACKs bind
 to local events; compaction retains all event identities/counters and the unacknowledged suffix.
 Synthetic HTTP/CLI tests cover reset/re-pair, unknown old outcomes, full replay and exact
 old-plus-new totals. CLI-only discovery verifies the executable and leaves filesystem creation to
-hook installation. The full privacy matrix, remaining live smoke and final cross-platform checks
-remain in progress. These local tests do not establish production readiness; live A/B/A remains a
-separate Draft blocker.
+hook installation. The synthetic privacy matrix includes sanitized capture/proof files and rejected
+payload quarantine, as well as sources/config/installation/state/dirty files, logs, diagnostics and
+HTTP. Raw canaries are absent and local HMACs/checkpoints are excluded from network payloads.
+Exact-head cross-platform checks remain in progress; live A/B/A is a separate Draft blocker.
+
+## Production runtime smoke on 2026-09-05 local time
+
+The npm 0.7.0 archive built from `a734c8eb4d9c930a0b7627f015c827c832049a46` was extracted outside
+the monorepo. Its installed launcher/runtime and owned user-level hooks were exercised with CLI
+`2026.09.02-c22c1a3`, isolated temporary connector state and usage uploads disabled. The native
+provider stream remained in memory; only the following minimized observations are retained. All
+three completed events were captured on UTC **2026-09-04**.
+
+| Scenario          | Input | Output | Cache read | Cache write | Total | Result                                                      |
+| ----------------- | ----: | -----: | ---------: | ----------: | ----: | ----------------------------------------------------------- |
+| Headless wrapper  |  6082 |     29 |       7936 |           0 | 14047 | One headless event; final aggregate equals ledger total     |
+| Headless subagent |  8983 |    188 |      19328 |           0 | 28499 | Actual taskToolCall; one aggregate event, no child addition |
+| Interactive CLI   | 14018 |     30 |       9728 |           0 | 23776 | One completed stop event through installed production hook  |
+
+All completed events resolved to one local account. No unresolved headless pair remained. SIGINT
+during a separate native run produced exit code 130 and added zero events. Replay retained the three
+events, their capture times and total **66322**. Owned hook removal reported both hooks missing;
+repair restored both to current, preserved all events/times and retained a known missing hook gap.
+Final cleanup removed only the temporary installation's hooks; the foreign-hook state matched its
+pre-smoke digest. Temporary connector authorization was removed.
+
+The initial new-workspace headless attempts failed with Cursor's workspace-trust requirement and
+added zero usage. The successful retry used documented `--trust` for an empty temporary workspace,
+without `--force`. These failed attempts remained partial gaps. The interactive PTY test harness
+captured its completed stop but hung during macOS PTY shutdown; its identified temporary process was
+terminated. This harness shutdown is not counted as a normal native interactive exit.
+
+A fresh Desktop implementation smoke could not start because the Mac was locked and the UI tool
+could not unlock it. The user was asked to unlock it. Earlier authenticated Desktop 3.19.7 two-turn
+source evidence above remains accepted, but is not presented as a fresh installed-runtime Desktop
+smoke. Live A/B/A still lacks a second real account. These limitations keep the PR Draft; they do
+not authorize Ready, merge or rollout.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source

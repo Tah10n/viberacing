@@ -3389,6 +3389,47 @@ try {
           mode.rows[0].label === "Cursor account 2",
         "Cursor registration used the wrong server policy",
       );
+      const cursorRename = await form("/api/accounts/rename", {
+        accountId: secondaryMapping.agentAccountId,
+        label: "Cursor work",
+      });
+      const cursorLabel = await pool.query("SELECT label FROM agent_accounts WHERE id = $1", [
+        secondaryMapping.agentAccountId,
+      ]);
+      check(
+        cursorRename.status === 303 && cursorLabel.rows[0]?.label === "Cursor work",
+        "Cursor account rename failed",
+      );
+      // Explicitly split and reunite sources; source_sum must stay 42 + 17 across both moves.
+      for (const accountId of [primaryMapping.agentAccountId, secondaryMapping.agentAccountId]) {
+        const moved = await form("/api/sources/reassign", {
+          sourceId: secondPairing.sources[0].sourceId,
+          accountId,
+        });
+        const current = await pool.query(
+          `SELECT source.agent_account_id::text,
+             (SELECT tokens::text FROM daily_agent_usage WHERE user_id = $2 AND agent_id = 'cursor' AND usage_date = $3) AS tokens
+           FROM installation_sources source WHERE source.id = $1`,
+          [secondPairing.sources[0].sourceId, userId, today],
+        );
+        check(
+          moved.status === 303 &&
+            current.rows[0]?.agent_account_id === accountId &&
+            current.rows[0]?.tokens === "59",
+          "Cursor explicit account regrouping changed source_sum usage",
+        );
+      }
+      const disconnected = await form("/api/sources/disconnect", {
+        sourceId: secondPairing.sources[0].sourceId,
+      });
+      const retained = await pool.query(
+        "SELECT tokens::text FROM daily_agent_usage WHERE user_id = $1 AND agent_id = 'cursor' AND usage_date = $2",
+        [userId, today],
+      );
+      check(
+        disconnected.status === 303 && retained.rows[0]?.tokens === "59",
+        "Cursor disconnect deleted captured history",
+      );
       await pool.query("DELETE FROM installations WHERE id = $1", [secondMachine.id]);
     }
     let profileDeleteRejected = false;

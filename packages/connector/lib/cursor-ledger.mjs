@@ -23,6 +23,7 @@ import {
 export const maximumCursorLedgerBytes = 8 * 1024 * 1024;
 export const cursorPairTimeoutMs = 30 * 60 * 1000;
 const maximumLineBytes = 16_384;
+const capacityWarningBytes = maximumCursorLedgerBytes - maximumLineBytes;
 const maximumPendingPairs = 64;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const hash = /^evt1_[A-Za-z0-9_-]{43}$/;
@@ -931,6 +932,15 @@ export async function readCursorLedger(
       headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
         ...state.gaps,
+        ...(bytes.length > capacityWarningBytes
+          ? [
+              {
+                from: [state.captureStartedAt ?? now, now].sort()[0],
+                to: [state.captureStartedAt ?? now, now].sort()[1],
+                code: "local_store_scan_limit",
+              },
+            ]
+          : []),
         ...(state.hookObservation &&
         Object.values(state.hookObservation.hooks).some((value) => value !== "current")
           ? [
@@ -1276,7 +1286,19 @@ export async function compactCursorLedger(root, profileId, acknowledged, options
       `${compacted.map((record) => JSON.stringify(record)).join("\n")}\n`,
     );
     if (newPrefix.length >= prefix.length) return false;
-    await publish(Buffer.concat([newPrefix, bytes.subarray(acknowledged.bytes)]), options);
+    // A writer may have run out of room for even its failure marker. Recovery must retain
+    // that unknown interval before the smaller file can ever prove complete coverage again.
+    const recoveredAt = new Date().toISOString();
+    const capacityGap =
+      bytes.length > capacityWarningBytes
+        ? Buffer.from(
+            `${JSON.stringify({ v: 1, kind: "gap", from: [state.captureStartedAt ?? recoveredAt, recoveredAt].sort()[0], to: [state.captureStartedAt ?? recoveredAt, recoveredAt].sort()[1], code: "local_store_scan_limit" })}\n`,
+          )
+        : Buffer.alloc(0);
+    await publish(
+      Buffer.concat([newPrefix, bytes.subarray(acknowledged.bytes), capacityGap]),
+      options,
+    );
     return true;
   });
 }

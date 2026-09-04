@@ -4,6 +4,8 @@ import { resolveCursorAccount } from "./cursor-identity.mjs";
 export const cursorParserVersion = 1;
 export const maximumCursorInputBytes = 1_048_576;
 const components = ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"];
+const verifiedDesktopVersions = new Set(["3.18.25", "3.19.7"]);
+const verifiedCliVersions = new Set(["2026.09.02-c22c1a3"]);
 
 function fail(code) {
   const error = new Error(code);
@@ -17,18 +19,11 @@ function object(value) {
 
 export function cursorVersionSupported(version, surface) {
   if (typeof version !== "string") return false;
-  if (surface !== "cli") {
-    const desktop = /^3\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/.exec(version);
-    if (desktop)
-      return Number(desktop[1]) > 18 || (Number(desktop[1]) === 18 && Number(desktop[2]) >= 25);
-  }
-  if (surface === "desktop") return false;
-  const cli = /^(20\d{2})\.(\d{2})\.(\d{2})-[a-f0-9]{7,40}$/.exec(version);
-  if (!cli) return false;
-  const date = `${cli[1]}-${cli[2]}-${cli[3]}`;
-  const ms = Date.parse(`${date}T00:00:00.000Z`);
+  // Similar field names or a newer version number do not prove per-turn semantics.
+  // Extend these sets only with authenticated exact-source evidence and parser regressions.
   return (
-    Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === date && date >= "2026-09-02"
+    (surface !== "cli" && verifiedDesktopVersions.has(version)) ||
+    (surface !== "desktop" && verifiedCliVersions.has(version))
   );
 }
 

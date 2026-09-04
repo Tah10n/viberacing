@@ -420,6 +420,27 @@ test("Cursor observed torn suffix cannot be manually removed to erase its covera
   await assert.rejects(readCursorLedger(root, profile, later));
 });
 
+test("Cursor capacity exhaustion stays partial after acknowledged compaction frees space", async (context) => {
+  const root = await fixture(context);
+  await recordStop(root);
+  const bytes = await readFile(file(root));
+  const event = bytes
+    .toString()
+    .split("\n")
+    .find((line) => line.includes('"kind":"event"'));
+  const duplicate = Buffer.from(`${event}\n`);
+  const copies = Math.floor((maximumCursorLedgerBytes - bytes.length) / duplicate.length);
+  await appendFile(file(root), Buffer.from(duplicate.toString().repeat(copies)));
+  const nearLimit = await readCursorLedger(root, profile, later);
+  assert.equal(nearLimit.events.length, 1);
+  assert.ok(nearLimit.gaps.some((gap) => gap.code === "local_store_scan_limit"));
+  assert.equal(await compactCursorLedger(root, profile, nearLimit.checkpoint), true);
+  assert.ok((await stat(file(root))).size < maximumCursorLedgerBytes - 16_384);
+  const compacted = await readCursorLedger(root, profile, later);
+  assert.equal(compacted.events.length, 1);
+  assert.ok(compacted.gaps.some((gap) => gap.code === "local_store_scan_limit"));
+});
+
 test("Cursor contradictory account after headless completion blocks that session", async (context) => {
   const root = await fixture(context);
   await half(root, "result", result);

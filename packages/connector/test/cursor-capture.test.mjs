@@ -307,6 +307,21 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
     (await readCursorLedger(config.stateDirectory, source.clientSourceId)).events.length,
     2,
   );
+  await rm(join(config.stateDirectory, "captures", `cursor-${source.clientSourceId}.jsonl`));
+  await rm(join(config.stateDirectory, "dirty.json"), { force: true });
+  assert.equal(
+    await capture.captureCursorHook(
+      { ...request, installationId: nextInstallation.id },
+      stop,
+      new Date().toISOString(),
+    ),
+    true,
+  );
+  assert.ok((await runtime.readDirty()).sources[source.clientSourceId]);
+  await assert.rejects(
+    readFile(join(config.stateDirectory, "captures", `cursor-${source.clientSourceId}.jsonl`)),
+    { code: "ENOENT" },
+  );
 });
 
 test("Cursor headless begin accounts for abandoned runs from their start and survives replay", async () => {
