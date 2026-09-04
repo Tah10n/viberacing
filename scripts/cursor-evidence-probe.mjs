@@ -30,6 +30,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const repositoryRoot = resolve(dirname(scriptPath), "..");
 const probeStateName = "cursor-evidence-state.json";
 const observationsDirectoryName = "observations";
+const runsDirectoryName = "runs";
 const hookLauncherSourcePath = join(repositoryRoot, "scripts", "cursor-evidence-hook-launcher.mjs");
 const ownedLockSourcePath = join(repositoryRoot, "packages", "connector", "lib", "owned-lock.mjs");
 const windowsSecuritySourcePath = join(
@@ -45,6 +46,7 @@ const hookLauncherCommandName =
 const hookLauncherStateName = "viberacing-cursor-evidence-probe-state.json";
 const hookBundlePrefix = "viberacing-cursor-evidence-";
 const hookLockName = "hooks.json.viberacing-cursor-evidence.lock";
+const runManifestLockSuffix = ".lock";
 const maximumInputBytes = 1_048_576;
 const maximumFileBytes = 100_000_000;
 const maximumObservations = 10_000;
@@ -155,19 +157,92 @@ const structuralKeys = new Set([
 const safeVersionPattern = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const stepPattern = /^(?:single|a1|b|a2|desktop|cli|parent|subagent|before|after)$/;
+const schemaPathPattern = /^\$(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})|\[\])*$/;
+const manifestFailureCodes = new Set([
+  "child_exit_failure",
+  "child_signal_failure",
+  "duplicate_manifest",
+  "event_identity_mismatch",
+  "hook_capture_failure",
+  "hook_install_failure",
+  "input_byte_limit",
+  "input_read_failure",
+  "malformed_json",
+  "observation_limit",
+  "observation_write_failure",
+  "record_byte_limit",
+  "run_manifest_conflict",
+  "stream_invalid",
+  "stream_processing_failure",
+  "unexpected_additional_invocation",
+  "unterminated_record",
+]);
+const contentBearingKeys = new Set([
+  "args",
+  "attachments",
+  "content",
+  "message",
+  "prompt",
+  "response",
+]);
+const evidencePriorityKeys = new Set([
+  ...counterNames.keys(),
+  ...identityNames.keys(),
+  ...accountIdentityNames.keys(),
+  "created_at",
+  "createdAt",
+  "cursor_version",
+  "cursorVersion",
+  "events",
+  "reason",
+  "started_at",
+  "startedAt",
+  "status",
+  "subtype",
+  "timestamp",
+  "token_usage",
+  "tokenUsage",
+  "usage",
+]);
+const windowsDirectoryEnvironmentVariable = "VIBERACING_CURSOR_EVIDENCE_DIRECTORY";
+const windowsDirectoryModeEnvironmentVariable = "VIBERACING_CURSOR_EVIDENCE_DIRECTORY_MODE";
+const windowsDirectoryInspection = [
+  "$ErrorActionPreference='Stop'",
+  `$path=$env:${windowsDirectoryEnvironmentVariable}`,
+  `$mode=$env:${windowsDirectoryModeEnvironmentVariable}`,
+  "if ([string]::IsNullOrWhiteSpace($path)) { throw 'Missing directory path' }",
+  "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+  "if (-not $entry.PSIsContainer) { throw 'Target is not a directory' }",
+  "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Directory is a reparse point' }",
+  "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
+  "$acl=Get-Acl -LiteralPath $entry.FullName -ErrorAction Stop",
+  "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value",
+  "if ($owner -ne $identity.User.Value) { throw 'Directory owner mismatch' }",
+  "if ($mode -eq 'private') {",
+  "  if (-not $acl.AreAccessRulesProtected) { throw 'Private directory inherits access rules' }",
+  "  $rules=@($acl.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier]))",
+  "  if ($rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $identity.User.Value -or $rules[0].AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow -or (($rules[0].FileSystemRights -band [Security.AccessControl.FileSystemRights]::FullControl) -ne [Security.AccessControl.FileSystemRights]::FullControl)) { throw 'Private directory ACL is not owner-only' }",
+  "}",
+].join("; ");
+const encodedWindowsDirectoryInspection = Buffer.from(
+  windowsDirectoryInspection,
+  "utf16le",
+).toString("base64");
 
 function usage() {
   return `Usage:
-  node scripts/cursor-evidence-probe.mjs install-hooks --output-dir DIR --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP --event EVENT
+  node scripts/cursor-evidence-probe.mjs install-hooks --output-dir DIR --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP --event EVENT [--expected-event-id-kind KIND --expected-event-id-path PATH --expected-event-id-file FILE] [--version-path PATH]
   node scripts/cursor-evidence-probe.mjs remove-hooks --output-dir DIR
   node scripts/cursor-evidence-probe.mjs run-cli --output-dir DIR --agent ABSOLUTE_PATH --scenario SCENARIO --run-id UUID --step STEP -- [agent arguments]
-  node scripts/cursor-evidence-probe.mjs inspect-jsonl --output-dir DIR --input ABSOLUTE_PATH --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP
-  node scripts/cursor-evidence-probe.mjs report --output-dir DIR --event-identity-kind KIND
+  node scripts/cursor-evidence-probe.mjs inspect-jsonl --output-dir DIR --input ABSOLUTE_PATH --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP [--version-path PATH]
+  node scripts/cursor-evidence-probe.mjs report --output-dir DIR --event-identity-kind KIND --counter-path PATHS --account-path PATHS --event-id-path PATHS --timestamp-path PATHS --version-source SOURCES
 
 SURFACE is desktop, cli-interactive, or cli-headless. Probe output must be outside the repository.
 STEP is operator-declared metadata: single, a1, b, a2, desktop, cli, parent, subagent, before, or after.
 EVENT is afterAgentResponse, stop, or sessionEnd. Install exactly one lifecycle event per run/step.
 KIND is the reviewer-approved event_id, request_id, or generation_id used for hook/history reconciliation.
+PATHS and SOURCES are comma-separated exact schema paths; CLI version evidence uses source "cli".
+FILE is an owner-only JSON file containing the expected identity as one JSON string; only its HMAC is stored.
 The probe never stores raw Cursor payloads, prompts, responses, code, paths, models, costs, or provider identities.`;
 }
 
@@ -190,6 +265,34 @@ function parseArguments(arguments_) {
 function pathInside(parent, candidate) {
   const child = relative(parent, candidate);
   return child === "" || (!child.startsWith(`..${sep}`) && child !== ".." && !isAbsolute(child));
+}
+
+export function inspectCurrentUserWindowsDirectory(path, { privateDirectory = false } = {}) {
+  if (process.platform !== "win32") return true;
+  const systemRoot = process.env.SystemRoot?.trim();
+  if (!systemRoot || !isAbsolute(systemRoot) || !isAbsolute(path)) return false;
+  const powershell = join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+  const result = spawnSync(
+    powershell,
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      encodedWindowsDirectoryInspection,
+    ],
+    {
+      env: {
+        ...process.env,
+        [windowsDirectoryEnvironmentVariable]: resolve(path),
+        [windowsDirectoryModeEnvironmentVariable]: privateDirectory ? "private" : "shared",
+      },
+      stdio: "ignore",
+      windowsHide: true,
+      timeout: 15_000,
+    },
+  );
+  return result.status === 0;
 }
 
 async function assertPrivateDirectory(path, { create = false } = {}) {
@@ -216,7 +319,9 @@ async function assertPrivateDirectory(path, { create = false } = {}) {
   if (pathInside(actualRepositoryRoot, actualPath))
     throw new Error("Probe output must stay outside the repository");
   if (process.platform === "win32") {
-    await ensurePrivateStateDirectory(actualPath);
+    if (created) await ensurePrivateStateDirectory(actualPath);
+    else if (!inspectCurrentUserWindowsDirectory(actualPath, { privateDirectory: true }))
+      throw new Error("Probe output directory does not have a current-user-only Windows ACL");
   } else {
     if ((info.mode & 0o077) !== 0) throw new Error("Probe output directory is not owner-only");
     if (created) await chmod(path, 0o700);
@@ -226,7 +331,12 @@ async function assertPrivateDirectory(path, { create = false } = {}) {
 
 async function assertSafeRegularFile(
   path,
-  { allowMissing = false, maximumBytes = maximumInputBytes, privateFile = false } = {},
+  {
+    allowMissing = false,
+    allowMultipleLinks = false,
+    maximumBytes = maximumInputBytes,
+    privateFile = false,
+  } = {},
 ) {
   let info;
   try {
@@ -238,7 +348,7 @@ async function assertSafeRegularFile(
   if (
     !info.isFile() ||
     info.isSymbolicLink() ||
-    info.nlink !== 1 ||
+    (!allowMultipleLinks && info.nlink !== 1) ||
     info.size > maximumBytes ||
     (typeof process.getuid === "function" && info.uid !== process.getuid())
   )
@@ -309,6 +419,276 @@ async function readProbeState(outputDirectory, { create = false } = {}) {
   return { output, state };
 }
 
+function runManifestPath(output, runId, step, eventName) {
+  return join(output, runsDirectoryName, runId, step, `${eventName}.json`);
+}
+
+function manifestDescriptor({
+  probeId,
+  surface,
+  scenario,
+  runId,
+  step,
+  eventName,
+  expectedEventIdentity = null,
+  versionPath = null,
+}) {
+  if (!uuidPattern.test(probeId ?? "")) throw new Error("Cursor evidence probe ID is invalid");
+  if (!(
+    expectedEventIdentity === null ||
+    (["event_id", "request_id", "generation_id"].includes(expectedEventIdentity?.kind) &&
+      schemaPathPattern.test(expectedEventIdentity?.path ?? "") &&
+      /^evt1_[A-Za-z0-9_-]{43}$/.test(expectedEventIdentity?.hash ?? ""))
+  ))
+    throw new Error("Cursor expected event identity binding is invalid");
+  if (!(
+    versionPath === null ||
+    /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(versionPath ?? "")
+  ))
+    throw new Error("Cursor approved version path is invalid");
+  return {
+    probeId,
+    declaredSurface: requireSurface(surface),
+    declaredScenario: requireScenario(scenario),
+    declaredRunId: requireRunId(runId),
+    declaredStep: requireStep(step),
+    eventName: requireEvent(eventName),
+    expectedEventIdentity,
+    versionPath,
+  };
+}
+
+function newRunManifest(descriptor) {
+  return {
+    schemaVersion: 1,
+    manifestId: randomUUID(),
+    ...descriptor,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
+    invocationCount: 0,
+    inputComplete: false,
+    failureCode: null,
+    activeInvocationId: null,
+    identityBindingStatus:
+      eventNames.includes(descriptor.eventName) && descriptor.expectedEventIdentity === null
+        ? "unbound"
+        : descriptor.expectedEventIdentity === null
+          ? "not_applicable"
+          : "pending",
+    observationIds: [],
+    schemaSignatures: [],
+    contracts: [],
+  };
+}
+
+function manifestDescriptorMatches(manifest, descriptor) {
+  return (
+    [
+      "probeId",
+      "declaredSurface",
+      "declaredScenario",
+      "declaredRunId",
+      "declaredStep",
+      "eventName",
+      "versionPath",
+    ].every((key) => manifest?.[key] === descriptor[key]) &&
+    JSON.stringify(manifest?.expectedEventIdentity ?? null) ===
+      JSON.stringify(descriptor.expectedEventIdentity ?? null)
+  );
+}
+
+async function withRunManifestLock(output, descriptor, operation) {
+  const directory = dirname(
+    runManifestPath(
+      output,
+      descriptor.declaredRunId,
+      descriptor.declaredStep,
+      descriptor.eventName,
+    ),
+  );
+  await assertPrivateDirectory(join(output, runsDirectoryName), { create: true });
+  await assertPrivateDirectory(join(output, runsDirectoryName, descriptor.declaredRunId), {
+    create: true,
+  });
+  await assertPrivateDirectory(directory, { create: true });
+  const path = runManifestPath(
+    output,
+    descriptor.declaredRunId,
+    descriptor.declaredStep,
+    descriptor.eventName,
+  );
+  const lock = await acquireOwnedLock(`${path}${runManifestLockSuffix}`, {
+    waitMs: 1_000,
+    staleMs: 60_000,
+  });
+  if (!lock) throw new Error("Cursor evidence run manifest is busy");
+  try {
+    await securePrivateFile(lock.path);
+    return await operation(path);
+  } finally {
+    await releaseOwnedLock(lock);
+  }
+}
+
+async function readRunManifest(path, { allowMissing = false } = {}) {
+  const info = await assertSafeRegularFile(path, { allowMissing, privateFile: true });
+  if (info === null) return null;
+  const manifest = JSON.parse(await readFile(path, "utf8"));
+  if (
+    manifest?.schemaVersion !== 1 ||
+    !uuidPattern.test(manifest.manifestId ?? "") ||
+    !uuidPattern.test(manifest.probeId ?? "") ||
+    !surfaces.has(manifest.declaredSurface) ||
+    !scenarios.has(manifest.declaredScenario) ||
+    !uuidPattern.test(manifest.declaredRunId ?? "") ||
+    !stepPattern.test(manifest.declaredStep ?? "") ||
+    ![...eventNames, "stream-json", "local-jsonl"].includes(manifest.eventName) ||
+    !["pending", "completed", "failed"].includes(manifest.status) ||
+    !Number.isInteger(manifest.invocationCount) ||
+    manifest.invocationCount < 0 ||
+    !Array.isArray(manifest.observationIds) ||
+    !Array.isArray(manifest.schemaSignatures) ||
+    !Array.isArray(manifest.contracts) ||
+    !["unbound", "pending", "matched", "mismatched", "not_applicable"].includes(
+      manifest.identityBindingStatus,
+    ) ||
+    !(manifest.failureCode === null || manifestFailureCodes.has(manifest.failureCode)) ||
+    !(
+      manifest.expectedEventIdentity === null ||
+      (["event_id", "request_id", "generation_id"].includes(manifest.expectedEventIdentity?.kind) &&
+        schemaPathPattern.test(manifest.expectedEventIdentity?.path ?? "") &&
+        /^evt1_[A-Za-z0-9_-]{43}$/.test(manifest.expectedEventIdentity?.hash ?? ""))
+    ) ||
+    !(
+      manifest.versionPath === null ||
+      /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(manifest.versionPath ?? "")
+    )
+  )
+    throw new Error("Cursor evidence run manifest is invalid");
+  return manifest;
+}
+
+async function initializeRunManifest(output, descriptor, { allowExistingPending = false } = {}) {
+  return withRunManifestLock(output, descriptor, async (path) => {
+    const existing = await readRunManifest(path, { allowMissing: true });
+    if (existing === null) {
+      const manifest = newRunManifest(descriptor);
+      await atomicJson(path, manifest);
+      return manifest;
+    }
+    if (
+      allowExistingPending &&
+      manifestDescriptorMatches(existing, descriptor) &&
+      existing.status === "pending" &&
+      existing.invocationCount === 0
+    )
+      return existing;
+    const failed = {
+      ...existing,
+      status: "failed",
+      completedAt: new Date().toISOString(),
+      inputComplete: false,
+      failureCode: "run_manifest_conflict",
+      activeInvocationId: null,
+    };
+    await atomicJson(path, failed);
+    throw new Error("Cursor evidence run manifest conflicts with an existing invocation");
+  });
+}
+
+async function beginRunInvocation(output, descriptor) {
+  return withRunManifestLock(output, descriptor, async (path) => {
+    const manifest = await readRunManifest(path);
+    if (
+      !manifestDescriptorMatches(manifest, descriptor) ||
+      manifest.status !== "pending" ||
+      manifest.invocationCount !== 0
+    ) {
+      await atomicJson(path, {
+        ...manifest,
+        status: "failed",
+        completedAt: new Date().toISOString(),
+        invocationCount: (manifest.invocationCount ?? 0) + 1,
+        inputComplete: false,
+        failureCode: "unexpected_additional_invocation",
+        activeInvocationId: null,
+      });
+      throw new Error("Cursor evidence run manifest permits exactly one invocation");
+    }
+    const invocationId = randomUUID();
+    await atomicJson(path, {
+      ...manifest,
+      startedAt: new Date().toISOString(),
+      invocationCount: 1,
+      activeInvocationId: invocationId,
+    });
+    return invocationId;
+  });
+}
+
+async function completeRunInvocation(
+  output,
+  descriptor,
+  invocationId,
+  observations,
+  identityBindingStatus,
+) {
+  return withRunManifestLock(output, descriptor, async (path) => {
+    const manifest = await readRunManifest(path);
+    if (
+      !manifestDescriptorMatches(manifest, descriptor) ||
+      manifest.status !== "pending" ||
+      manifest.activeInvocationId !== invocationId ||
+      manifest.invocationCount !== 1
+    )
+      throw new Error("Cursor evidence run manifest changed during invocation");
+    const observationIds = observations.map((entry) => entry.observationId);
+    if (observationIds.length === 0 || new Set(observationIds).size !== observationIds.length)
+      throw new Error("Cursor evidence invocation did not produce a unique observation set");
+    const completed = {
+      ...manifest,
+      status: "completed",
+      completedAt: new Date().toISOString(),
+      inputComplete: true,
+      failureCode: null,
+      activeInvocationId: null,
+      identityBindingStatus,
+      observationIds,
+      schemaSignatures: [...new Set(observations.map(schemaSignature))].sort(),
+      contracts: [...new Set(observations.map(schemaSignature))].sort().map((signature) => ({
+        schemaSignature: signature,
+        observationIds: observations
+          .filter((entry) => schemaSignature(entry) === signature)
+          .map((entry) => entry.observationId)
+          .sort(),
+      })),
+    };
+    await atomicJson(path, completed);
+    return completed;
+  });
+}
+
+async function failRunInvocation(output, descriptor, failureCode) {
+  if (!manifestFailureCodes.has(failureCode))
+    throw new Error("Unknown Cursor evidence manifest failure code");
+  return withRunManifestLock(output, descriptor, async (path) => {
+    const manifest = await readRunManifest(path, { allowMissing: true });
+    if (manifest === null) return null;
+    const failed = {
+      ...manifest,
+      status: "failed",
+      completedAt: new Date().toISOString(),
+      inputComplete: false,
+      failureCode,
+      activeInvocationId: null,
+    };
+    await atomicJson(path, failed);
+    return failed;
+  });
+}
+
 function requireSurface(value) {
   if (!surfaces.has(value)) throw new Error("Unknown Cursor probe surface");
   return value;
@@ -346,6 +726,25 @@ function requireRunId(value) {
 function requireStep(value) {
   if (!stepPattern.test(value ?? "")) throw new Error("Unknown Cursor evidence scenario step");
   return value;
+}
+
+function requireSchemaPath(value, label = "Cursor evidence schema path") {
+  if (typeof value !== "string" || !schemaPathPattern.test(value))
+    throw new Error(`${label} must be an exact canonical schema path`);
+  return value;
+}
+
+function requireTopLevelSchemaPath(value, label = "Cursor version path") {
+  const path = requireSchemaPath(value, label);
+  if (!/^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(path))
+    throw new Error(`${label} must be an exact top-level schema path`);
+  return path;
+}
+
+function selectedValues(value, validator = (entry) => entry) {
+  if (value === undefined || value === null || value === "") return [];
+  const values = Array.isArray(value) ? value : String(value).split(",");
+  return [...new Set(values.map((entry) => validator(String(entry).trim())).filter(Boolean))];
 }
 
 function valueType(value) {
@@ -470,108 +869,192 @@ export function sanitizeCursorObservation(payload, context) {
   const eventName = requireEvent(context.eventName);
   const schemaPaths = new Set();
   const counterGroups = new Map();
-  const invalidCounterPaths = new Set();
+  const invalidCounterCandidates = [];
   const identities = [];
   const accountCandidates = [];
   const timestamps = [];
-  const invalidTimestampPaths = new Set();
+  const invalidTimestampCandidates = [];
+  const versionCandidates = [];
   const truncationReasons = new Set();
-  let cursorVersion = normalizedVersion(context.cursorVersion);
+  const truncationCandidates = [];
+  const markTruncation = (reason, path, contentDerived) => {
+    truncationReasons.add(reason);
+    if (
+      !truncationCandidates.some(
+        (candidate) =>
+          candidate.reason === reason &&
+          candidate.path === path &&
+          candidate.contentDerived === contentDerived,
+      )
+    )
+      truncationCandidates.push({ reason, path, contentDerived });
+  };
+  const approvedVersionPaths = new Set(
+    selectedValues(context.approvedVersionPaths, (path) =>
+      requireTopLevelSchemaPath(path, "Cursor approved version path"),
+    ),
+  );
+  const cliVersion = normalizedVersion(context.cursorVersion);
+  if (cliVersion !== null)
+    versionCandidates.push({
+      source: "cli",
+      path: null,
+      value: cliVersion,
+      hash: hmacIdentity(context.hmacKey, "cursor-version:cli", cliVersion, "ver1"),
+      contentDerived: false,
+      trusted: true,
+    });
   let status = null;
-  const visit = (value, path = "$", depth = 0) => {
+  const visit = (value, path = "$", depth = 0, insideContent = false) => {
     if (depth > 8) {
-      truncationReasons.add("depth_limit");
+      markTruncation("depth_limit", path, insideContent);
       return;
     }
     if (schemaPaths.size >= 512) {
-      truncationReasons.add("schema_path_limit");
+      if (!truncationCandidates.some(({ reason }) => reason === "schema_path_limit"))
+        markTruncation("schema_path_limit", path, insideContent);
       return;
     }
     if (value === null || typeof value !== "object") return;
     if (Array.isArray(value)) {
       schemaPaths.add(`${path}:array`);
-      if (value.length > 16) truncationReasons.add("array_item_limit");
-      for (const item of value.slice(0, 16)) visit(item, `${path}[]`, depth + 1);
+      if (value.length > 16) markTruncation("array_item_limit", path, insideContent);
+      for (const item of value.slice(0, 16)) visit(item, `${path}[]`, depth + 1, insideContent);
       return;
     }
-    const entries = Object.entries(value);
-    if (entries.length > 256) truncationReasons.add("object_key_limit");
+    const entries = Object.entries(value).sort(([left], [right]) => {
+      const priority = (key) =>
+        contentBearingKeys.has(key) || key.toLowerCase().startsWith("tool")
+          ? 2
+          : evidencePriorityKeys.has(key)
+            ? 0
+            : 1;
+      return priority(left) - priority(right);
+    });
+    if (entries.length > 256) markTruncation("object_key_limit", path, insideContent);
     for (const [key, child] of entries.slice(0, 256)) {
       if (schemaPaths.size >= 512) {
-        truncationReasons.add("schema_path_limit");
+        if (!truncationCandidates.some(({ reason }) => reason === "schema_path_limit"))
+          markTruncation("schema_path_limit", path, insideContent);
         break;
       }
       const childPath = `${path}.${schemaKey(key, context.hmacKey)}`;
+      const contentDerived =
+        insideContent || contentBearingKeys.has(key) || key.toLowerCase().startsWith("tool");
       schemaPaths.add(`${childPath}:${valueType(child)}`);
       if (counterNames.has(key)) {
         const counter = canonicalInteger(child);
-        if (counter === null) invalidCounterPaths.add(childPath);
+        if (counter === null) invalidCounterCandidates.push({ path: childPath, contentDerived });
         else {
-          const group = counterGroups.get(path) ?? {};
+          const group = counterGroups.get(path) ?? { counters: {}, contentDerived };
           const canonical = counterNames.get(key);
-          if (group[canonical] !== undefined && group[canonical] !== counter)
-            invalidCounterPaths.add(childPath);
-          else group[canonical] = counter;
+          if (group.counters[canonical] !== undefined && group.counters[canonical] !== counter)
+            invalidCounterCandidates.push({ path: childPath, contentDerived });
+          else group.counters[canonical] = counter;
+          group.contentDerived ||= contentDerived;
           counterGroups.set(path, group);
         }
       }
       if (identityNames.has(key)) {
         const canonicalField = identityNames.get(key);
         const hash = hmacIdentity(context.hmacKey, `cursor-event:${canonicalField}`, child, "evt1");
-        if (hash !== null) identities.push({ field: canonicalField, hash });
+        if (hash !== null)
+          identities.push({ field: canonicalField, path: childPath, hash, contentDerived });
       }
       if (accountIdentityNames.has(key) && typeof child === "string")
         accountCandidates.push({
           kind: accountIdentityNames.get(key),
+          path: childPath,
           value: normalizedAccountValue(accountIdentityNames.get(key), child),
+          contentDerived,
         });
       if (["timestamp", "created_at", "createdAt", "started_at", "startedAt"].includes(key)) {
         const timestamp = normalizedTimestamp(child);
-        if (timestamp !== null) timestamps.push({ path: childPath, value: timestamp });
-        else invalidTimestampPaths.add(childPath);
+        if (timestamp !== null)
+          timestamps.push({ path: childPath, value: timestamp, contentDerived });
+        else invalidTimestampCandidates.push({ path: childPath, contentDerived });
       }
-      if (key === "cursor_version" || key === "cursorVersion")
-        cursorVersion ??= normalizedVersion(child);
-      if (key === "status" || key === "reason" || key === "subtype")
+      if (key === "cursor_version" || key === "cursorVersion") {
+        const version = normalizedVersion(child);
+        if (version !== null) {
+          const trusted =
+            !contentDerived &&
+            approvedVersionPaths.has(childPath) &&
+            /^\$\.[^.\[]+$/.test(childPath);
+          versionCandidates.push({
+            source: childPath,
+            path: childPath,
+            ...(trusted ? { value: version } : {}),
+            hash: hmacIdentity(context.hmacKey, `cursor-version:${childPath}`, version, "ver1"),
+            contentDerived,
+            trusted,
+          });
+        }
+      }
+      if (
+        !contentDerived &&
+        path === "$" &&
+        (key === "status" || key === "reason" || key === "subtype")
+      )
         status ??= normalizedStatus(child);
-      visit(child, childPath, depth + 1);
+      visit(child, childPath, depth + 1, contentDerived);
     }
   };
   visit(payload);
-  const accountIdentityCandidates = [...new Set(accountIdentityNames.values())].map((kind) => ({
-    kind,
-    hashes: [
-      ...new Set(
-        accountCandidates
-          .filter((candidate) => candidate.kind === kind && candidate.value !== null)
-          .map((candidate) =>
-            hmacIdentity(context.hmacKey, `cursor-account-alias:${kind}`, candidate.value, "acct1"),
-          ),
-      ),
-    ].filter(Boolean),
-  }));
-  const accountAmbiguous = accountIdentityCandidates.some(
-    (candidate) => candidate.hashes.length > 1,
+  const accountIdentityCandidates = [
+    ...new Map(
+      accountCandidates.map((candidate) => {
+        const hash =
+          candidate.value === null
+            ? null
+            : hmacIdentity(
+                context.hmacKey,
+                `cursor-account-alias:${candidate.kind}`,
+                candidate.value,
+                "acct1",
+              );
+        const key = `${candidate.kind}\0${candidate.path}\0${candidate.contentDerived}`;
+        return [key, { ...candidate, value: undefined, hashes: hash === null ? [] : [hash] }];
+      }),
+    ),
+  ].map(([, candidate]) => {
+    delete candidate.value;
+    return candidate;
+  });
+  const accountAmbiguous = [...new Set(accountIdentityCandidates.map(({ kind }) => kind))].some(
+    (kind) =>
+      new Set(
+        accountIdentityCandidates
+          .filter((candidate) => candidate.kind === kind)
+          .flatMap(({ hashes }) => hashes),
+      ).size !== 1,
   );
   const timestampCandidates = timestamps.filter(
     (candidate, index, values) =>
       values.findIndex(
-        (other) => other.path === candidate.path && other.value === candidate.value,
+        (other) =>
+          other.path === candidate.path &&
+          other.value === candidate.value &&
+          other.contentDerived === candidate.contentDerived,
       ) === index,
   );
   const timestampAmbiguous = timestampCandidates.length > 1;
   const eventIdentities = identities.filter(
     (identity, index, values) =>
       values.findIndex(
-        (candidate) => candidate.field === identity.field && candidate.hash === identity.hash,
+        (candidate) =>
+          candidate.field === identity.field &&
+          candidate.path === identity.path &&
+          candidate.hash === identity.hash &&
+          candidate.contentDerived === identity.contentDerived,
       ) === index,
   );
-  if (eventIdentities.length > 32) truncationReasons.add("event_identity_limit");
   const tokenGroups = [...counterGroups.entries()]
-    .map(([path, counters]) => ({
+    .map(([path, group]) => ({
       path,
-      counters,
-      candidateRelationships: candidateRelationships(counters),
+      counters: group.counters,
+      candidateRelationships: candidateRelationships(group.counters),
+      contentDerived: group.contentDerived,
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
   return {
@@ -584,20 +1067,31 @@ export function sanitizeCursorObservation(payload, context) {
     declaredStep,
     eventName,
     parseStatus: payload === null || typeof payload !== "object" ? "invalid" : "parsed",
-    cursorVersion,
+    cursorVersion:
+      [
+        ...new Set(
+          versionCandidates.filter((candidate) => candidate.trusted).map(({ value }) => value),
+        ),
+      ].length === 1
+        ? (versionCandidates.find((candidate) => candidate.trusted)?.value ?? null)
+        : null,
+    versionCandidates,
     status,
     timestampCandidates,
     timestampAmbiguous,
     providerTimestamp: timestampCandidates.length === 1 ? timestampCandidates[0].value : null,
-    invalidTimestampPaths: [...invalidTimestampPaths].sort(),
+    invalidTimestampCandidates,
+    invalidTimestampPaths: [...new Set(invalidTimestampCandidates.map(({ path }) => path))].sort(),
     accountIdentityCandidates,
     accountAmbiguous,
-    eventIdentities: eventIdentities.slice(0, 32),
+    eventIdentities,
     tokenGroups,
-    invalidCounterPaths: [...invalidCounterPaths].sort(),
+    invalidCounterCandidates,
+    invalidCounterPaths: [...new Set(invalidCounterCandidates.map(({ path }) => path))].sort(),
     schemaPaths: [...schemaPaths].sort(),
     truncated: truncationReasons.size > 0,
     truncationReasons: [...truncationReasons].sort(),
+    truncationCandidates,
   };
 }
 
@@ -640,6 +1134,7 @@ async function saveObservation(output, observation) {
     throw new Error("Cursor evidence observation limit reached");
   }
   await atomicJson(join(directory, `${observation.observationId}.json`), observation);
+  return observation;
 }
 
 export async function readBoundedJson(stream, maximumBytes = maximumInputBytes) {
@@ -838,41 +1333,189 @@ function mergeHooksDocuments(original, concurrent) {
   return validatedHooksDocument(merged);
 }
 
-async function reconcileCurrentAndRecovery(path, recovery) {
-  const displacedCurrent = hooksMutationPath(path, "reconcile");
-  const pending = await assertSafeRegularFile(displacedCurrent, {
+async function readHooksJournalSnapshot(path) {
+  const info = await assertSafeRegularFile(path, {
     allowMissing: true,
+    allowMultipleLinks: true,
     privateFile: true,
   });
-  if (pending !== null)
+  if (info === null) return null;
+  const contents = await readFile(path);
+  const after = await lstat(path);
+  if (info.dev !== after.dev || info.ino !== after.ino || info.size !== after.size)
+    throw new Error(`Cursor hooks journal changed while it was read: ${path}`);
+  const sha256 = createHash("sha256").update(contents).digest("hex");
+  return {
+    document: validatedHooksDocument(JSON.parse(contents.toString("utf8"))),
+    sha256,
+    fingerprint: {
+      exists: true,
+      dev: String(after.dev),
+      ino: String(after.ino),
+      size: after.size,
+      mtimeMs: after.mtimeMs,
+      sha256,
+    },
+  };
+}
+
+async function assertHooksJournalUnchanged(path, expected, context) {
+  const actual = await readHooksJournalSnapshot(path);
+  const unchanged =
+    expected === null
+      ? actual === null
+      : actual !== null && sameFingerprint(expected.fingerprint, actual.fingerprint);
+  if (!unchanged)
     throw new Error(
-      `Cursor hooks reconciliation is already pending; all versions were preserved at ${path}, ${recovery}, and ${displacedCurrent}`,
+      `Cursor hooks changed during ${context}; all recoverable versions were preserved`,
     );
-  const [original, concurrent] = await Promise.all([
-    readHooksSnapshot(recovery),
-    readHooksSnapshot(path),
-  ]);
-  const merged = mergeHooksDocuments(original.document, concurrent.document);
-  const stage = await stageHooksDocument(path, merged);
+  return actual;
+}
+
+async function unlinkHooksJournalConditionally(
+  journalPath,
+  expected,
+  checks,
+  { kind, recoveryFaults = {} } = {},
+) {
+  await recoveryFaults.beforeJournalCleanup?.({ kind, path: journalPath });
+  for (const [path, state] of checks)
+    await assertHooksJournalUnchanged(path, state, `${kind} journal cleanup`);
+  await assertHooksJournalUnchanged(journalPath, expected, `${kind} journal cleanup`);
+  await unlink(journalPath);
+}
+
+async function restoreSingleHooksJournal(
+  path,
+  journalPath,
+  expected,
+  { kind, recoveryFaults = {} } = {},
+) {
+  await assertHooksJournalUnchanged(path, null, `${kind} journal restoration`);
+  await assertHooksJournalUnchanged(journalPath, expected, `${kind} journal restoration`);
+  await recoveryFaults.beforeSingleRestore?.({ kind, path, journalPath });
   try {
-    await rename(path, displacedCurrent);
-    if (!sameFingerprint(concurrent.fingerprint, await hooksFingerprint(displacedCurrent))) {
-      await restoreDisplacedHooks(path, displacedCurrent);
-      throw new Error("Cursor hooks changed during recovery; all foreign versions were preserved");
+    await link(journalPath, path);
+  } catch (error) {
+    if (error?.code === "EEXIST")
+      throw new Error(
+        `Cursor hooks changed during ${kind} journal restoration; both versions were preserved at ${path} and ${journalPath}`,
+        { cause: error },
+      );
+    throw error;
+  }
+  const published = await assertHooksJournalUnchanged(
+    path,
+    expected,
+    `${kind} journal restoration`,
+  );
+  await unlinkHooksJournalConditionally(journalPath, expected, [[path, published]], {
+    kind,
+    recoveryFaults,
+  });
+}
+
+function documentSubsumes(document, requiredDocuments) {
+  try {
+    let merged = requiredDocuments[0];
+    for (const required of requiredDocuments.slice(1))
+      merged = mergeHooksDocuments(merged, required);
+    return JSON.stringify(mergeHooksDocuments(merged, document)) === JSON.stringify(document);
+  } catch {
+    return false;
+  }
+}
+
+async function publishRecoveredHooks(
+  path,
+  recovery,
+  reconcile,
+  documents,
+  {
+    currentState = null,
+    recoveryState = null,
+    reconcileState = null,
+    displaceCurrent = false,
+    recoveryFaults = {},
+  } = {},
+) {
+  let merged = documents[0];
+  for (const document of documents.slice(1)) merged = mergeHooksDocuments(merged, document);
+  const stage = await stageHooksDocument(path, merged);
+  const stageState = await readHooksJournalSnapshot(stage);
+  try {
+    if (displaceCurrent) {
+      for (const [candidatePath, state] of [
+        [path, currentState],
+        [recovery, recoveryState],
+        [reconcile, null],
+      ])
+        await assertHooksJournalUnchanged(candidatePath, state, "recovery reconciliation");
+      await recoveryFaults.beforeReconcileDisplace?.({ path, recovery, reconcile });
+      await rename(path, reconcile);
+      await recoveryFaults.afterReconcileRename?.();
+      try {
+        await assertHooksJournalUnchanged(
+          reconcile,
+          currentState,
+          "recovery reconciliation displacement",
+        );
+      } catch (error) {
+        await restoreDisplacedHooks(path, reconcile);
+        throw error;
+      }
+      await assertHooksJournalUnchanged(path, null, "recovery reconciliation publication");
+      await assertHooksJournalUnchanged(
+        recovery,
+        recoveryState,
+        "recovery reconciliation publication",
+      );
+    } else {
+      for (const [candidatePath, state] of [
+        [path, null],
+        [recovery, recoveryState],
+        [reconcile, reconcileState],
+      ])
+        await assertHooksJournalUnchanged(candidatePath, state, "recovery publication");
     }
     try {
       await link(stage, path);
     } catch (error) {
       if (error?.code === "EEXIST")
         throw new Error(
-          `Cursor hooks changed during recovery publication; all versions were preserved at ${path}, ${recovery}, and ${displacedCurrent}`,
+          `Cursor hooks changed during recovery publication; all versions were preserved at ${path}, ${recovery}, and ${reconcile}`,
           { cause: error },
         );
-      await restoreDisplacedHooks(path, displacedCurrent);
       throw error;
     }
-    await unlink(displacedCurrent);
-    await unlink(recovery);
+    const publishedState = await assertHooksJournalUnchanged(
+      path,
+      stageState,
+      "recovery publication verification",
+    );
+    await recoveryFaults.afterMergedPublish?.();
+    const expectedReconcile = displaceCurrent ? currentState : reconcileState;
+    if (expectedReconcile !== null)
+      await unlinkHooksJournalConditionally(
+        reconcile,
+        expectedReconcile,
+        [
+          [path, publishedState],
+          [recovery, recoveryState],
+        ],
+        { kind: "reconcile", recoveryFaults },
+      );
+    await recoveryFaults.afterReconcileCleanup?.();
+    if (recoveryState !== null)
+      await unlinkHooksJournalConditionally(
+        recovery,
+        recoveryState,
+        [
+          [path, publishedState],
+          [reconcile, null],
+        ],
+        { kind: "recovery", recoveryFaults },
+      );
   } finally {
     await unlink(stage).catch((error) => {
       if (error?.code !== "ENOENT") throw error;
@@ -880,19 +1523,100 @@ async function reconcileCurrentAndRecovery(path, recovery) {
   }
 }
 
-async function recoverInterruptedHooksMutation(path) {
+async function recoverInterruptedHooksMutation(path, { recoveryFaults = {} } = {}) {
   const recovery = hooksMutationPath(path, "recovery");
-  const recoveryInfo = await assertSafeRegularFile(recovery, {
-    allowMissing: true,
-    privateFile: true,
-  });
-  if (recoveryInfo === null) return;
-  const current = await assertSafeRegularFile(path, {
-    allowMissing: true,
-    privateFile: true,
-  });
-  if (current === null) await restoreDisplacedHooks(path, recovery);
-  else await reconcileCurrentAndRecovery(path, recovery);
+  const reconcile = hooksMutationPath(path, "reconcile");
+  const [currentState, recoveryState, reconcileState] = await Promise.all(
+    [path, recovery, reconcile].map(readHooksJournalSnapshot),
+  );
+  const present = [currentState, recoveryState, reconcileState].map(Boolean);
+  if (present.every((value) => !value) || (present[0] && !present[1] && !present[2])) return;
+  if (!present[0] && present[1] && !present[2]) {
+    await restoreSingleHooksJournal(path, recovery, recoveryState, {
+      kind: "recovery",
+      recoveryFaults,
+    });
+    return;
+  }
+  if (!present[0] && !present[1] && present[2]) {
+    await restoreSingleHooksJournal(path, reconcile, reconcileState, {
+      kind: "reconcile",
+      recoveryFaults,
+    });
+    return;
+  }
+  if (present[0] && present[1] && !present[2]) {
+    if (currentState.sha256 === recoveryState.sha256) {
+      await unlinkHooksJournalConditionally(recovery, recoveryState, [[path, currentState]], {
+        kind: "recovery",
+        recoveryFaults,
+      });
+      return;
+    }
+    await publishRecoveredHooks(
+      path,
+      recovery,
+      reconcile,
+      [recoveryState.document, currentState.document],
+      {
+        currentState,
+        recoveryState,
+        displaceCurrent: true,
+        recoveryFaults,
+      },
+    );
+    return;
+  }
+  if (present[0] && !present[1] && present[2]) {
+    if (
+      currentState.sha256 === reconcileState.sha256 ||
+      documentSubsumes(currentState.document, [reconcileState.document])
+    ) {
+      await unlinkHooksJournalConditionally(reconcile, reconcileState, [[path, currentState]], {
+        kind: "reconcile",
+        recoveryFaults,
+      });
+      return;
+    }
+    throw new Error(
+      `Cursor hooks recovery is ambiguous; all versions were preserved at ${path} and ${reconcile}`,
+    );
+  }
+  if (!present[0] && present[1] && present[2]) {
+    await publishRecoveredHooks(
+      path,
+      recovery,
+      reconcile,
+      [recoveryState.document, reconcileState.document],
+      { recoveryState, reconcileState, recoveryFaults },
+    );
+    return;
+  }
+  if (documentSubsumes(currentState.document, [recoveryState.document, reconcileState.document])) {
+    await unlinkHooksJournalConditionally(
+      reconcile,
+      reconcileState,
+      [
+        [path, currentState],
+        [recovery, recoveryState],
+      ],
+      { kind: "reconcile", recoveryFaults },
+    );
+    await recoveryFaults.afterReconcileCleanup?.();
+    await unlinkHooksJournalConditionally(
+      recovery,
+      recoveryState,
+      [
+        [path, currentState],
+        [reconcile, null],
+      ],
+      { kind: "recovery", recoveryFaults },
+    );
+    return;
+  }
+  throw new Error(
+    `Cursor hooks recovery is ambiguous; all versions were preserved at ${path}, ${recovery}, and ${reconcile}`,
+  );
 }
 
 async function stageHooksDocument(path, document) {
@@ -957,9 +1681,13 @@ async function publishHooksConditionally(
   }
 }
 
-async function mutateHooksWithCas(path, mutate, { beforeCompareAndSwap, afterDisplace } = {}) {
+async function mutateHooksWithCas(
+  path,
+  mutate,
+  { beforeCompareAndSwap, afterDisplace, recoveryFaults } = {},
+) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await recoverInterruptedHooksMutation(path);
+    await recoverInterruptedHooksMutation(path, { recoveryFaults });
     const { document, fingerprint } = await readHooksSnapshot(path);
     const changed = await mutate(document);
     if (!changed) return false;
@@ -1014,8 +1742,15 @@ function hookBundlePaths(parent, probeId, installationId) {
   };
 }
 
-async function ensurePrivateBundleDirectory(path, { create = false } = {}) {
-  if (create) await mkdir(path, { recursive: true, mode: 0o700 });
+async function ensurePrivateBundleDirectory(path, { create = false, shared = false } = {}) {
+  let created = false;
+  try {
+    await lstat(path);
+  } catch (error) {
+    if (!create || error?.code !== "ENOENT") throw error;
+    await mkdir(path, { recursive: true, mode: 0o700 });
+    created = true;
+  }
   const info = await lstat(path);
   if (
     !info.isDirectory() ||
@@ -1023,8 +1758,14 @@ async function ensurePrivateBundleDirectory(path, { create = false } = {}) {
     (typeof process.getuid === "function" && info.uid !== process.getuid())
   )
     throw new Error("Cursor hook runtime directory must be a current-user real directory");
-  if (process.platform === "win32") await ensurePrivateStateDirectory(path);
-  else if ((info.mode & 0o077) !== 0)
+  if (process.platform === "win32") {
+    if (shared) {
+      if (!inspectCurrentUserWindowsDirectory(path))
+        throw new Error("Cursor shared hook directory owner is unsafe");
+    } else if (created) await ensurePrivateStateDirectory(path);
+    else if (!inspectCurrentUserWindowsDirectory(path, { privateDirectory: true }))
+      throw new Error("Cursor hook runtime directory has an unsafe Windows ACL");
+  } else if ((info.mode & 0o077) !== 0)
     throw new Error("Cursor hook runtime directory must be owner-only");
 }
 
@@ -1045,10 +1786,13 @@ async function installHookBundle(parent, identity) {
       identity.declaredRunId,
       identity.declaredStep,
       identity.declaredEvent,
+      JSON.stringify(identity.expectedEventIdentity),
+      identity.versionPath ?? "",
     ].join("\0"),
   );
   const paths = hookBundlePaths(parent, identity.probeId, installationId);
-  for (const directory of [paths.directory, paths.root, paths.scripts, paths.library])
+  await ensurePrivateBundleDirectory(paths.directory, { create: true, shared: true });
+  for (const directory of [paths.root, paths.scripts, paths.library])
     await ensurePrivateBundleDirectory(directory, { create: true });
   const sources = new Map([
     [paths.launcher, await readFile(hookLauncherSourcePath)],
@@ -1083,7 +1827,8 @@ async function installHookBundle(parent, identity) {
 
 async function validateHookBundle(parent, probeId, installationId, expectedOutputDirectory = null) {
   const paths = hookBundlePaths(parent, probeId, installationId);
-  for (const directory of [paths.directory, paths.root, paths.scripts, paths.library])
+  await ensurePrivateBundleDirectory(paths.directory, { shared: true });
+  for (const directory of [paths.root, paths.scripts, paths.library])
     await ensurePrivateBundleDirectory(directory);
   await assertSafeRegularFile(paths.launcherState, { privateFile: true });
   const configuration = JSON.parse(await readFile(paths.launcherState, "utf8"));
@@ -1096,6 +1841,8 @@ async function validateHookBundle(parent, probeId, installationId, expectedOutpu
       configuration?.declaredRunId,
       configuration?.declaredStep,
       configuration?.declaredEvent,
+      JSON.stringify(configuration?.expectedEventIdentity),
+      configuration?.versionPath ?? "",
     ].join("\0"),
   );
   if (
@@ -1110,6 +1857,21 @@ async function validateHookBundle(parent, probeId, installationId, expectedOutpu
     !scenarios.has(configuration.declaredScenario) ||
     !uuidPattern.test(configuration.declaredRunId ?? "") ||
     !stepPattern.test(configuration.declaredStep ?? "") ||
+    !(
+      configuration.expectedEventIdentity === null ||
+      (configuration.expectedEventIdentity?.kind !== undefined &&
+        ["event_id", "request_id", "generation_id"].includes(
+          configuration.expectedEventIdentity.kind,
+        ) &&
+        schemaPathPattern.test(configuration.expectedEventIdentity.path ?? "") &&
+        /^evt1_[A-Za-z0-9_-]{43}$/.test(configuration.expectedEventIdentity.hash ?? ""))
+    ) ||
+    !(
+      configuration.versionPath === null ||
+      /^\$\.(?:[A-Za-z_][A-Za-z0-9_]*|field1_[A-Za-z0-9_-]{22})$/.test(
+        configuration.versionPath ?? "",
+      )
+    ) ||
     configuration.installationId !== expectedInstallationId ||
     configuration.probeScriptPath !== paths.probeScript ||
     !eventNames.includes(configuration.declaredEvent) ||
@@ -1200,7 +1962,7 @@ async function validateOwnedHookEntries(document, parent, probeId, expectedOutpu
 
 async function discoverProbeBundles(parent, probeId, expectedOutputDirectory) {
   const directory = join(parent, "hooks");
-  await ensurePrivateBundleDirectory(directory);
+  await ensurePrivateBundleDirectory(directory, { shared: true });
   const bundles = new Map();
   const prefix = `${hookBundlePrefix}${probeId}-`;
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -1223,17 +1985,7 @@ async function discoverProbeBundles(parent, probeId, expectedOutputDirectory) {
 
 async function installHookLauncher(parent, configuration) {
   const directory = join(parent, "hooks");
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const directoryInfo = await lstat(directory);
-  if (
-    !directoryInfo.isDirectory() ||
-    directoryInfo.isSymbolicLink() ||
-    (typeof process.getuid === "function" && directoryInfo.uid !== process.getuid())
-  )
-    throw new Error("Cursor hook launcher directory must be a current-user real directory");
-  if (process.platform === "win32") await ensurePrivateStateDirectory(directory);
-  else if ((directoryInfo.mode & 0o077) !== 0)
-    throw new Error("Cursor hook launcher directory must be owner-only");
+  await ensurePrivateBundleDirectory(directory, { create: true, shared: true });
   return installHookBundle(parent, configuration);
 }
 
@@ -1259,8 +2011,11 @@ export async function installProbeHooks({
   step,
   event = "stop",
   hooksFile,
+  expectedEventIdentity = null,
+  versionPath = null,
   beforeCompareAndSwap,
   afterDisplace,
+  recoveryFaults,
 }) {
   const { output, state } = await readProbeState(outputDirectory, { create: true });
   const declaredSurface = requireSurface(surface);
@@ -1268,50 +2023,90 @@ export async function installProbeHooks({
   const declaredRunId = requireRunId(runId);
   const declaredStep = requireStep(step);
   const declaredEvent = requireHookEvent(event);
+  let expectedIdentity = null;
+  if (expectedEventIdentity !== null) {
+    const kind = requireReconciliationIdentityKind(expectedEventIdentity.kind);
+    const identityPath = requireSchemaPath(
+      expectedEventIdentity.path,
+      "Cursor expected event identity path",
+    );
+    const hash = hmacIdentity(
+      state.hmacKey,
+      `cursor-event:${kind}`,
+      expectedEventIdentity.value,
+      "evt1",
+    );
+    if (hash === null) throw new Error("Cursor expected event identity value is invalid");
+    expectedIdentity = { kind, path: identityPath, hash };
+  }
+  const approvedVersionPath =
+    versionPath === null || versionPath === undefined
+      ? null
+      : requireTopLevelSchemaPath(versionPath);
+  const descriptor = manifestDescriptor({
+    probeId: state.probeId,
+    surface: declaredSurface,
+    scenario: declaredScenario,
+    runId: declaredRunId,
+    step: declaredStep,
+    eventName: declaredEvent,
+    expectedEventIdentity: expectedIdentity,
+    versionPath: approvedVersionPath,
+  });
+  await initializeRunManifest(output, descriptor, { allowExistingPending: true });
   const path = resolve(hooksFile ?? join(homedir(), ".cursor", "hooks.json"));
   const parent = dirname(path);
-  await mkdir(parent, { recursive: true, mode: 0o700 });
-  const parentInfo = await lstat(parent);
-  if (
-    !parentInfo.isDirectory() ||
-    parentInfo.isSymbolicLink() ||
-    (typeof process.getuid === "function" && parentInfo.uid !== process.getuid())
-  )
-    throw new Error("Cursor hooks directory must be a current-user real directory");
-  return withHooksLock(parent, async () => {
-    const bundle = await installHookLauncher(parent, {
-      probeId: state.probeId,
-      outputDirectory: output,
-      declaredSurface,
-      declaredScenario,
-      declaredRunId,
-      declaredStep,
-      declaredEvent,
+  try {
+    await mkdir(parent, { recursive: true, mode: 0o700 });
+    const parentInfo = await lstat(parent);
+    if (
+      !parentInfo.isDirectory() ||
+      parentInfo.isSymbolicLink() ||
+      (typeof process.getuid === "function" && parentInfo.uid !== process.getuid())
+    )
+      throw new Error("Cursor hooks directory must be a current-user real directory");
+    if (process.platform === "win32" && !inspectCurrentUserWindowsDirectory(parent))
+      throw new Error("Cursor hooks directory owner is unsafe");
+    return await withHooksLock(parent, async () => {
+      const bundle = await installHookLauncher(parent, {
+        probeId: state.probeId,
+        outputDirectory: output,
+        declaredSurface,
+        declaredScenario,
+        declaredRunId,
+        declaredStep,
+        declaredEvent,
+        expectedEventIdentity: expectedIdentity,
+        versionPath: approvedVersionPath,
+      });
+      const changed = await mutateHooksWithCas(
+        path,
+        async (document) => {
+          await validateOwnedHookEntries(document, parent, state.probeId, output);
+          const before = JSON.stringify(document);
+          document.version ??= 1;
+          document.hooks ??= {};
+          stripOwnedHookEntries(document, state.probeId);
+          const selectedEntries = document.hooks[declaredEvent] ?? [];
+          if (!Array.isArray(selectedEntries))
+            throw new Error(`Cursor ${declaredEvent} hooks must be an array`);
+          document.hooks[declaredEvent] = [...selectedEntries, { command: bundle.hookCommand }];
+          return JSON.stringify(document) !== before;
+        },
+        { beforeCompareAndSwap, afterDisplace, recoveryFaults },
+      );
+      return {
+        changed,
+        probeId: state.probeId,
+        installationId: bundle.installationId,
+        hooks: [declaredEvent],
+        command: bundle.hookCommand,
+      };
     });
-    const changed = await mutateHooksWithCas(
-      path,
-      async (document) => {
-        await validateOwnedHookEntries(document, parent, state.probeId, output);
-        const before = JSON.stringify(document);
-        document.version ??= 1;
-        document.hooks ??= {};
-        stripOwnedHookEntries(document, state.probeId);
-        const selectedEntries = document.hooks[declaredEvent] ?? [];
-        if (!Array.isArray(selectedEntries))
-          throw new Error(`Cursor ${declaredEvent} hooks must be an array`);
-        document.hooks[declaredEvent] = [...selectedEntries, { command: bundle.hookCommand }];
-        return JSON.stringify(document) !== before;
-      },
-      { beforeCompareAndSwap, afterDisplace },
-    );
-    return {
-      changed,
-      probeId: state.probeId,
-      installationId: bundle.installationId,
-      hooks: [declaredEvent],
-      command: bundle.hookCommand,
-    };
-  });
+  } catch (error) {
+    await failRunInvocation(output, descriptor, "hook_install_failure").catch(() => {});
+    throw error;
+  }
 }
 
 export async function removeProbeHooks({ outputDirectory, hooksFile }) {
@@ -1339,39 +2134,122 @@ export async function captureCursorHook(
 ) {
   const { output, state } = await readProbeState(configuration.outputDirectory);
   if (configuration.probeId !== state.probeId) throw new Error("Stale Cursor evidence hook");
-  const payload = await readBoundedJson(input);
-  const eventName = requireEvent(payload?.hook_event_name);
-  if (eventName !== configuration.declaredEvent)
-    throw new Error("Cursor evidence hook event does not match its immutable installation");
-  const observation = sanitizeCursorObservation(payload, {
+  const descriptor = manifestDescriptor({
+    probeId: state.probeId,
     surface: configuration.declaredSurface,
     scenario: configuration.declaredScenario,
     runId: configuration.declaredRunId,
     step: configuration.declaredStep,
-    eventName,
-    hmacKey: state.hmacKey,
+    eventName: configuration.declaredEvent,
+    expectedEventIdentity: configuration.expectedEventIdentity ?? null,
+    versionPath: configuration.versionPath ?? null,
   });
-  await saveObservation(output, observation);
-  outputStream.write("{}\n");
+  let invocationId;
+  try {
+    invocationId = await beginRunInvocation(output, descriptor);
+    const payload = await readBoundedJson(input);
+    const eventName = requireEvent(payload?.hook_event_name);
+    if (eventName !== configuration.declaredEvent)
+      throw new Error("Cursor evidence hook event does not match its immutable installation");
+    const observation = sanitizeCursorObservation(payload, {
+      surface: configuration.declaredSurface,
+      scenario: configuration.declaredScenario,
+      runId: configuration.declaredRunId,
+      step: configuration.declaredStep,
+      eventName,
+      hmacKey: state.hmacKey,
+      approvedVersionPaths: configuration.versionPath === null ? [] : [configuration.versionPath],
+    });
+    const expected = configuration.expectedEventIdentity ?? null;
+    const identityBindingStatus =
+      expected === null
+        ? "unbound"
+        : observation.eventIdentities.filter(
+              (candidate) =>
+                !candidate.contentDerived &&
+                candidate.field === expected.kind &&
+                candidate.path === expected.path &&
+                candidate.hash === expected.hash,
+            ).length === 1
+          ? "matched"
+          : "mismatched";
+    if (identityBindingStatus === "mismatched") {
+      await failRunInvocation(output, descriptor, "event_identity_mismatch");
+      throw new Error("Cursor evidence hook identity does not match its immutable installation");
+    }
+    await saveObservation(output, observation);
+    await completeRunInvocation(
+      output,
+      descriptor,
+      invocationId,
+      [observation],
+      identityBindingStatus,
+    );
+    outputStream.write("{}\n");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const failureCode = message.includes("byte limit")
+      ? "input_byte_limit"
+      : message.includes("observation limit")
+        ? "observation_limit"
+        : message.includes("identity")
+          ? "event_identity_mismatch"
+          : "hook_capture_failure";
+    await failRunInvocation(output, descriptor, failureCode).catch(() => {});
+    throw error;
+  }
 }
 
-async function inspectJsonl(options) {
-  const { output, state } = await readProbeState(options["output-dir"], { create: true });
-  const input = resolve(options.input ?? "");
-  if (!isAbsolute(options.input ?? "")) throw new Error("Cursor JSONL input path must be absolute");
-  const info = await assertSafeRegularFile(input, {
-    maximumBytes: maximumFileBytes,
-    privateFile: true,
+export async function markHookInvocationFailure(configuration) {
+  const { output, state } = await readProbeState(configuration.outputDirectory);
+  if (configuration.probeId !== state.probeId) return;
+  const descriptor = manifestDescriptor({
+    probeId: state.probeId,
+    surface: configuration.declaredSurface,
+    scenario: configuration.declaredScenario,
+    runId: configuration.declaredRunId,
+    step: configuration.declaredStep,
+    eventName: configuration.declaredEvent,
+    expectedEventIdentity: configuration.expectedEventIdentity ?? null,
+    versionPath: configuration.versionPath ?? null,
   });
-  if (info.size > maximumFileBytes) throw new Error("Cursor JSONL input exceeded the byte limit");
+  await failRunInvocation(output, descriptor, "hook_capture_failure");
+}
+
+export async function inspectJsonl(options) {
+  const { output, state } = await readProbeState(options["output-dir"], { create: true });
   const surface = requireSurface(options.surface);
   const scenario = requireScenario(options.scenario);
   const runId = requireRunId(options["run-id"]);
   const step = requireStep(options.step);
-  const handle = await open(input, "r");
+  const versionPath =
+    options["version-path"] === undefined
+      ? null
+      : requireTopLevelSchemaPath(options["version-path"]);
+  const descriptor = manifestDescriptor({
+    probeId: state.probeId,
+    surface,
+    scenario,
+    runId,
+    step,
+    eventName: "local-jsonl",
+    versionPath,
+  });
+  await initializeRunManifest(output, descriptor);
+  const invocationId = await beginRunInvocation(output, descriptor);
+  let handle;
   let pending = "";
-  let count = 0;
+  const observations = [];
   try {
+    const input = resolve(options.input ?? "");
+    if (!isAbsolute(options.input ?? ""))
+      throw new Error("Cursor JSONL input path must be absolute");
+    const info = await assertSafeRegularFile(input, {
+      maximumBytes: maximumFileBytes,
+      privateFile: true,
+    });
+    if (info.size > maximumFileBytes) throw new Error("Cursor JSONL input exceeded the byte limit");
+    handle = await open(input, "r");
     for await (const chunk of handle.createReadStream({ encoding: "utf8", autoClose: false })) {
       pending += chunk;
       if (Buffer.byteLength(pending) > maximumInputBytes)
@@ -1383,27 +2261,42 @@ async function inspectJsonl(options) {
         pending = pending.slice(newline + 1);
         if (!line.trim()) continue;
         const payload = JSON.parse(line);
-        await saveObservation(
-          output,
-          sanitizeCursorObservation(payload, {
-            surface,
-            scenario,
-            runId,
-            step,
-            eventName: "local-jsonl",
-            hmacKey: state.hmacKey,
-          }),
-        );
-        count += 1;
-        if (count >= maximumObservations)
+        const observation = sanitizeCursorObservation(payload, {
+          surface,
+          scenario,
+          runId,
+          step,
+          eventName: "local-jsonl",
+          hmacKey: state.hmacKey,
+          approvedVersionPaths: versionPath === null ? [] : [versionPath],
+        });
+        await saveObservation(output, observation);
+        observations.push(observation);
+        if (observations.length >= maximumObservations)
           throw new Error("Cursor evidence observation limit reached");
       }
     }
     if (pending.trim()) throw new Error("Cursor JSONL input has an unterminated record");
+    await completeRunInvocation(output, descriptor, invocationId, observations, "not_applicable");
+    return { observations: observations.length };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const failureCode = message.includes("unterminated")
+      ? "unterminated_record"
+      : message.includes("record exceeded")
+        ? "record_byte_limit"
+        : message.includes("input exceeded")
+          ? "input_byte_limit"
+          : message.includes("observation limit")
+            ? "observation_limit"
+            : error instanceof SyntaxError
+              ? "malformed_json"
+              : "input_read_failure";
+    await failRunInvocation(output, descriptor, failureCode).catch(() => {});
+    throw error;
   } finally {
-    await handle.close();
+    await handle?.close();
   }
-  return { observations: count };
 }
 
 function invalidStreamObservation(context, reason) {
@@ -1431,35 +2324,60 @@ export async function runCursorCli({
   saveObservationImplementation = saveObservation,
 }) {
   const { output, state } = await readProbeState(outputDirectory, { create: true });
-  if (!isAbsolute(executable ?? "")) throw new Error("Cursor agent path must be absolute");
-  await assertSafeRegularFile(resolve(executable), { maximumBytes: Number.MAX_SAFE_INTEGER });
   const declaredScenario = requireScenario(scenario);
   const declaredRunId = requireRunId(runId);
   const declaredStep = requireStep(step);
-  if (!Number.isInteger(maximumObservationCount) || maximumObservationCount < 1)
-    throw new Error("Cursor evidence observation limit must be a positive integer");
-  const version = spawnSyncImplementation(executable, ["--version"], {
-    encoding: "utf8",
-    timeout: 10_000,
+  const descriptor = manifestDescriptor({
+    probeId: state.probeId,
+    surface: "cli-headless",
+    scenario: declaredScenario,
+    runId: declaredRunId,
+    step: declaredStep,
+    eventName: "stream-json",
   });
-  const cursorVersion = normalizedVersion(version.stdout?.trim()) ?? null;
-  const arguments_ = [...passthrough];
-  if (!arguments_.includes("--print") && !arguments_.includes("-p")) arguments_.unshift("--print");
-  const formatIndex = arguments_.findIndex(
-    (argument) => argument === "--output-format" || argument.startsWith("--output-format="),
-  );
-  if (formatIndex === -1) arguments_.unshift("--output-format", "stream-json");
-  else {
-    const value = arguments_[formatIndex].includes("=")
-      ? arguments_[formatIndex].split("=").slice(1).join("=")
-      : arguments_[formatIndex + 1];
-    if (value !== "stream-json") throw new Error("Cursor probe requires stream-json output");
+  await initializeRunManifest(output, descriptor);
+  const invocationId = await beginRunInvocation(output, descriptor);
+  try {
+    if (!isAbsolute(executable ?? "")) throw new Error("Cursor agent path must be absolute");
+    await assertSafeRegularFile(resolve(executable), { maximumBytes: Number.MAX_SAFE_INTEGER });
+  } catch (error) {
+    await failRunInvocation(output, descriptor, "stream_processing_failure").catch(() => {});
+    throw error;
   }
-  const child = spawnImplementation(executable, arguments_, { stdio: ["inherit", "pipe", "pipe"] });
+  let cursorVersion;
+  let arguments_;
+  let child;
+  try {
+    if (!Number.isInteger(maximumObservationCount) || maximumObservationCount < 1)
+      throw new Error("Cursor evidence observation limit must be a positive integer");
+    const version = spawnSyncImplementation(executable, ["--version"], {
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    cursorVersion = normalizedVersion(version.stdout?.trim()) ?? null;
+    arguments_ = [...passthrough];
+    if (!arguments_.includes("--print") && !arguments_.includes("-p"))
+      arguments_.unshift("--print");
+    const formatIndex = arguments_.findIndex(
+      (argument) => argument === "--output-format" || argument.startsWith("--output-format="),
+    );
+    if (formatIndex === -1) arguments_.unshift("--output-format", "stream-json");
+    else {
+      const value = arguments_[formatIndex].includes("=")
+        ? arguments_[formatIndex].split("=").slice(1).join("=")
+        : arguments_[formatIndex + 1];
+      if (value !== "stream-json") throw new Error("Cursor probe requires stream-json output");
+    }
+    child = spawnImplementation(executable, arguments_, { stdio: ["inherit", "pipe", "pipe"] });
+  } catch (error) {
+    await failRunInvocation(output, descriptor, "stream_processing_failure").catch(() => {});
+    throw error;
+  }
   child.stderr.pipe(errorStream);
   child.stdout.setEncoding("utf8");
   let pending = "";
   let observations = 0;
+  const savedObservations = [];
   let invalidReason = null;
   const context = {
     surface: "cli-headless",
@@ -1484,7 +2402,9 @@ export async function runCursorCli({
       invalidReason ??= "malformed_stream_record";
       return;
     }
-    await saveObservationImplementation(output, sanitizeCursorObservation(payload, context));
+    const observation = sanitizeCursorObservation(payload, context);
+    await saveObservationImplementation(output, observation);
+    savedObservations.push(observation);
     observations += 1;
   };
   const signalHandlers = new Map(
@@ -1568,18 +2488,220 @@ export async function runCursorCli({
       }
     }
     if (pending.trim()) invalidReason ??= "unterminated_stream_record";
+    if (invalidReason !== null || observations === 0) {
+      const observation = invalidStreamObservation(context, invalidReason ?? "empty_stream");
+      await saveObservationImplementation(output, observation);
+      savedObservations.push(observation);
+    }
+    const result = await closed;
     if (invalidReason !== null || observations === 0)
-      await saveObservationImplementation(
+      await failRunInvocation(output, descriptor, "stream_invalid");
+    else if (result.signal !== null)
+      await failRunInvocation(output, descriptor, "child_signal_failure");
+    else if (result.code !== 0) await failRunInvocation(output, descriptor, "child_exit_failure");
+    else
+      await completeRunInvocation(
         output,
-        invalidStreamObservation(context, invalidReason ?? "empty_stream"),
+        descriptor,
+        invocationId,
+        savedObservations,
+        "not_applicable",
       );
-    return await closed;
+    return result;
   } catch (error) {
     await terminateAndAwaitClose();
+    await failRunInvocation(output, descriptor, "stream_processing_failure").catch(() => {});
     throw error;
   } finally {
     for (const [signal, handler] of signalHandlers) signalSource.removeListener(signal, handler);
   }
+}
+
+async function loadRunManifests(output) {
+  const root = join(output, runsDirectoryName);
+  const runEntries = await readdir(root, { withFileTypes: true }).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
+  const manifests = [];
+  for (const runEntry of runEntries) {
+    if (!runEntry.isDirectory() || !uuidPattern.test(runEntry.name)) continue;
+    const runDirectory = join(root, runEntry.name);
+    await assertPrivateDirectory(runDirectory);
+    for (const stepEntry of await readdir(runDirectory, { withFileTypes: true })) {
+      if (!stepEntry.isDirectory() || !stepPattern.test(stepEntry.name)) continue;
+      const stepDirectory = join(runDirectory, stepEntry.name);
+      await assertPrivateDirectory(stepDirectory);
+      for (const file of await readdir(stepDirectory, { withFileTypes: true })) {
+        if (
+          !file.isFile() ||
+          !/^(?:afterAgentResponse|stop|sessionEnd|stream-json|local-jsonl)\.json$/.test(file.name)
+        )
+          continue;
+        manifests.push(await readRunManifest(join(stepDirectory, file.name)));
+      }
+    }
+  }
+  return manifests;
+}
+
+function manifestQualifiedObservationIds(manifests, observations, probeId) {
+  const qualified = new Set();
+  let invalid = 0;
+  let failed = 0;
+  let pending = 0;
+  for (const manifest of manifests) {
+    if (manifest.status === "failed") failed += 1;
+    if (manifest.status === "pending") pending += 1;
+    const matching = observations.filter(
+      (entry) =>
+        entry.declaredRunId === manifest.declaredRunId &&
+        entry.declaredStep === manifest.declaredStep &&
+        entry.eventName === manifest.eventName,
+    );
+    const actualIds = matching.map(({ observationId }) => observationId).sort();
+    const declaredIds = [...manifest.observationIds].sort();
+    const actualSignatures = [...new Set(matching.map(schemaSignature))].sort();
+    const actualContracts = actualSignatures.map((signature) => ({
+      schemaSignature: signature,
+      observationIds: matching
+        .filter((entry) => schemaSignature(entry) === signature)
+        .map(({ observationId }) => observationId)
+        .sort(),
+    }));
+    const declaredContracts = manifest.contracts
+      .map((contract) => ({
+        schemaSignature: contract?.schemaSignature,
+        observationIds: Array.isArray(contract?.observationIds)
+          ? [...contract.observationIds].sort()
+          : null,
+      }))
+      .sort((left, right) =>
+        String(left.schemaSignature).localeCompare(String(right.schemaSignature)),
+      );
+    const hookBindingValid = eventNames.includes(manifest.eventName)
+      ? manifest.identityBindingStatus === "matched" &&
+        manifest.expectedEventIdentity !== null &&
+        declaredIds.length === 1 &&
+        matching.every(
+          (entry) =>
+            (entry.eventIdentities ?? []).filter(
+              (identity) =>
+                !identity.contentDerived &&
+                identity.field === manifest.expectedEventIdentity.kind &&
+                identity.path === manifest.expectedEventIdentity.path &&
+                identity.hash === manifest.expectedEventIdentity.hash,
+            ).length === 1,
+        )
+      : manifest.identityBindingStatus === "not_applicable";
+    const valid =
+      manifest.probeId === probeId &&
+      manifest.status === "completed" &&
+      manifest.inputComplete === true &&
+      manifest.invocationCount === 1 &&
+      manifest.failureCode === null &&
+      hookBindingValid &&
+      declaredIds.length > 0 &&
+      new Set(declaredIds).size === declaredIds.length &&
+      JSON.stringify(declaredIds) === JSON.stringify(actualIds) &&
+      JSON.stringify([...manifest.schemaSignatures].sort()) === JSON.stringify(actualSignatures) &&
+      JSON.stringify(declaredContracts) === JSON.stringify(actualContracts) &&
+      matching.every(
+        (entry) =>
+          entry.declaredSurface === manifest.declaredSurface &&
+          entry.declaredScenario === manifest.declaredScenario,
+      );
+    if (!valid) {
+      invalid += 1;
+      continue;
+    }
+    for (const id of declaredIds) qualified.add(id);
+  }
+  const unmanifested = observations.filter((entry) => !qualified.has(entry.observationId)).length;
+  return { qualified, invalid, failed, pending, unmanifested };
+}
+
+function qualifyObservation(entry, selections) {
+  const tokenGroups = (entry.tokenGroups ?? []).filter(
+    (group) => !group.contentDerived && selections.counterPaths.has(group.path),
+  );
+  const accountIdentityCandidates = (entry.accountIdentityCandidates ?? []).filter(
+    (candidate) => !candidate.contentDerived && selections.accountPaths.has(candidate.path),
+  );
+  const eventIdentities = (entry.eventIdentities ?? []).filter(
+    (candidate) => !candidate.contentDerived && selections.eventIdPaths.has(candidate.path),
+  );
+  const timestampCandidates = (entry.timestampCandidates ?? []).filter(
+    (candidate) => !candidate.contentDerived && selections.timestampPaths.has(candidate.path),
+  );
+  const versionCandidates = (entry.versionCandidates ?? []).filter(
+    (candidate) =>
+      candidate.trusted &&
+      !candidate.contentDerived &&
+      selections.versionSources.has(candidate.source),
+  );
+  const invalidCounterPaths = (entry.invalidCounterCandidates ?? [])
+    .filter(
+      (candidate) =>
+        !candidate.contentDerived &&
+        selections.counterPaths.has(candidate.path.slice(0, candidate.path.lastIndexOf("."))),
+    )
+    .map(({ path }) => path);
+  const invalidTimestampPaths = (entry.invalidTimestampCandidates ?? [])
+    .filter(
+      (candidate) => !candidate.contentDerived && selections.timestampPaths.has(candidate.path),
+    )
+    .map(({ path }) => path);
+  const accountAmbiguous = [...new Set(accountIdentityCandidates.map(({ kind }) => kind))].some(
+    (kind) =>
+      new Set(
+        accountIdentityCandidates
+          .filter((candidate) => candidate.kind === kind)
+          .flatMap(({ hashes }) => hashes ?? []),
+      ).size !== 1,
+  );
+  const versionValues = [...new Set(versionCandidates.map(({ value }) => value).filter(Boolean))];
+  const selectedPaths = [
+    ...selections.counterPaths,
+    ...selections.accountPaths,
+    ...selections.eventIdPaths,
+    ...selections.timestampPaths,
+    ...[...selections.versionSources].filter((source) => source !== "cli"),
+  ];
+  const truncationCandidates =
+    entry.truncationCandidates ??
+    (entry.truncationReasons ?? []).map((reason) => ({
+      reason,
+      path: "$",
+      contentDerived: false,
+    }));
+  const truncationAffectsSelectedPath = truncationCandidates.some(
+    (candidate) =>
+      !candidate.contentDerived &&
+      selectedPaths.some(
+        (path) =>
+          path === candidate.path ||
+          path.startsWith(`${candidate.path}.`) ||
+          path.startsWith(`${candidate.path}[]`),
+      ),
+  );
+  return {
+    ...entry,
+    sourceTruncated: entry.truncated,
+    truncated: entry.truncated && truncationAffectsSelectedPath,
+    truncationIgnoredForExactPaths: entry.truncated && !truncationAffectsSelectedPath,
+    tokenGroups,
+    accountIdentityCandidates,
+    accountAmbiguous,
+    eventIdentities,
+    timestampCandidates,
+    timestampAmbiguous: timestampCandidates.length > 1,
+    providerTimestamp: timestampCandidates.length === 1 ? timestampCandidates[0].value : null,
+    invalidCounterPaths,
+    invalidTimestampPaths,
+    versionCandidates,
+    cursorVersion: versionValues.length === 1 ? versionValues[0] : null,
+  };
 }
 
 function accountGraph(observations) {
@@ -1641,7 +2763,7 @@ function accountGraph(observations) {
   };
 }
 
-function schemaSignature(entry) {
+export function schemaSignature(entry) {
   return `schema1_${createHash("sha256")
     .update(JSON.stringify(entry.schemaPaths ?? []))
     .digest("base64url")
@@ -1665,13 +2787,32 @@ function groupByRun(observations, scenario) {
 
 export async function buildEvidenceReport(
   outputDirectory,
-  { maximumObservationCount = maximumObservations, eventIdentityKind } = {},
+  {
+    maximumObservationCount = maximumObservations,
+    eventIdentityKind,
+    counterPaths,
+    accountPaths,
+    eventIdPaths,
+    timestampPaths,
+    versionSources,
+  } = {},
 ) {
   if (!Number.isInteger(maximumObservationCount) || maximumObservationCount < 1)
     throw new Error("Cursor evidence report observation limit must be a positive integer");
   const selectedEventIdentityKind =
     eventIdentityKind === undefined ? null : requireReconciliationIdentityKind(eventIdentityKind);
-  const { output } = await readProbeState(outputDirectory);
+  const selections = {
+    counterPaths: new Set(selectedValues(counterPaths, (path) => requireSchemaPath(path))),
+    accountPaths: new Set(selectedValues(accountPaths, (path) => requireSchemaPath(path))),
+    eventIdPaths: new Set(selectedValues(eventIdPaths, (path) => requireSchemaPath(path))),
+    timestampPaths: new Set(selectedValues(timestampPaths, (path) => requireSchemaPath(path))),
+    versionSources: new Set(
+      selectedValues(versionSources, (source) =>
+        source === "cli" ? source : requireTopLevelSchemaPath(source, "Cursor version source"),
+      ),
+    ),
+  };
+  const { output, state } = await readProbeState(outputDirectory);
   const directory = join(output, observationsDirectoryName);
   const names = (
     await readdir(directory).catch((error) => {
@@ -1681,13 +2822,18 @@ export async function buildEvidenceReport(
   )
     .filter((name) => /^[0-9a-f-]{36}\.json$/i.test(name))
     .sort();
-  const observations = [];
+  const allObservations = [];
   const observationSetTruncated = observationCapacityReached(names.length, maximumObservationCount);
   for (const name of names.slice(0, maximumObservationCount)) {
     const path = join(directory, name);
     await assertSafeRegularFile(path, { privateFile: true });
-    observations.push(JSON.parse(await readFile(path, "utf8")));
+    allObservations.push(JSON.parse(await readFile(path, "utf8")));
   }
+  const manifests = await loadRunManifests(output);
+  const manifestState = manifestQualifiedObservationIds(manifests, allObservations, state.probeId);
+  const observations = allObservations
+    .filter((entry) => manifestState.qualified.has(entry.observationId))
+    .map((entry) => qualifyObservation(entry, selections));
   const observedScenarios = [
     ...new Set(observations.map((entry) => entry.declaredScenario).filter(Boolean)),
   ].sort();
@@ -1885,6 +3031,10 @@ export async function buildEvidenceReport(
     0,
   );
   const truncatedObservations = observations.filter((entry) => entry.truncated).length;
+  const sourceTruncatedObservations = observations.filter((entry) => entry.sourceTruncated).length;
+  const exactPathQualifiedTruncations = observations.filter(
+    (entry) => entry.truncationIgnoredForExactPaths,
+  ).length;
   const ambiguousAccounts = observations.filter((entry) => entry.accountAmbiguous).length;
   const ambiguousTimestamps = observations.filter((entry) => entry.timestampAmbiguous).length;
   const exactCounterTuple = (entry) =>
@@ -1977,7 +3127,30 @@ export async function buildEvidenceReport(
     "desktop-a-b-a",
     "utc-midnight",
   ];
+  const exactPathSelectionsComplete =
+    selections.counterPaths.size > 0 &&
+    selections.accountPaths.size > 0 &&
+    selections.eventIdPaths.size > 0 &&
+    selections.timestampPaths.size > 0 &&
+    selections.versionSources.size > 0;
+  const versionEvidenceBySurfaceContract = Object.fromEntries(
+    [
+      ...new Set(
+        usageObservations.map((entry) => `${entry.declaredSurface}:${observationContract(entry)}`),
+      ),
+    ]
+      .sort()
+      .map((contract) => [
+        contract,
+        usageObservations
+          .filter((entry) => `${entry.declaredSurface}:${observationContract(entry)}` === contract)
+          .every((entry) => entry.cursorVersion !== null),
+      ]),
+  );
+  const versionEvidenceComplete =
+    usageObservations.length > 0 && Object.values(versionEvidenceBySurfaceContract).every(Boolean);
   const mechanicalCoverageComplete =
+    exactPathSelectionsComplete &&
     mechanicalScenarioNames.every((scenario) => scenarioCoverage[scenario]) &&
     Object.values(coreSurfaceUsage).every(Boolean) &&
     usageObservations.length > 0 &&
@@ -1992,6 +3165,9 @@ export async function buildEvidenceReport(
     truncatedObservations === 0 &&
     ambiguousAccounts === 0 &&
     ambiguousTimestamps === 0 &&
+    versionEvidenceComplete &&
+    manifestState.invalid === 0 &&
+    manifestState.unmanifested === 0 &&
     !observationSetTruncated;
   const limitations = [
     "production_gate_requires_authenticated_review",
@@ -2000,6 +3176,10 @@ export async function buildEvidenceReport(
     "token_relationship_requires_reviewer_interpretation",
   ];
   if (!mechanicalCoverageComplete) limitations.push("mechanical_coverage_incomplete");
+  if (!exactPathSelectionsComplete) limitations.push("exact_schema_paths_not_selected");
+  if (!versionEvidenceComplete) limitations.push("version_evidence_incomplete");
+  if (manifestState.invalid > 0 || manifestState.unmanifested > 0)
+    limitations.push("run_manifest_incomplete_or_conflicting");
   if (selectedEventIdentityKind === null)
     limitations.push("hook_history_identity_kind_not_selected");
   if (!hookHistoryIdentityReconciled) limitations.push("hook_history_identity_not_reconciled");
@@ -2014,18 +3194,33 @@ export async function buildEvidenceReport(
   if (graph.count < 2) limitations.push("distinct_accounts_not_demonstrated");
   if (truncatedObservations > 0 || observationSetTruncated)
     limitations.push("truncated_observations_cannot_qualify");
+  if (exactPathQualifiedTruncations > 0) limitations.push("unselected_schema_truncation_present");
   if (ambiguousAccounts > 0 || ambiguousTimestamps > 0)
     limitations.push("ambiguous_observations_cannot_qualify");
   return {
     schemaVersion: 1,
     productionGate: "closed",
     mechanicalCoverageComplete,
-    observationCount: observations.length,
+    observationCount: allObservations.length,
+    qualifyingObservationCount: observations.length,
     observationSetTruncated,
+    runManifestCount: manifests.length,
+    failedRunManifestCount: manifestState.failed,
+    pendingRunManifestCount: manifestState.pending,
+    invalidRunManifestCount: manifestState.invalid,
+    unmanifestedObservationCount: manifestState.unmanifested,
     observedScenarios,
     observedSurfaces,
     observedEvents,
     versions,
+    selectedExactPaths: {
+      counters: [...selections.counterPaths].sort(),
+      accounts: [...selections.accountPaths].sort(),
+      eventIdentities: [...selections.eventIdPaths].sort(),
+      timestamps: [...selections.timestampPaths].sort(),
+      versions: [...selections.versionSources].sort(),
+    },
+    versionEvidenceBySurfaceContract,
     distinctLocallyLinkedAccounts: graph.count,
     accountAliasConflict: graph.aliasConflict,
     accountAliasConflictCount: graph.aliasConflictCount,
@@ -2038,6 +3233,8 @@ export async function buildEvidenceReport(
     invalidCounterCount: invalidCounters,
     invalidTimestampCount: invalidTimestamps,
     truncatedObservationCount: truncatedObservations,
+    sourceTruncatedObservationCount: sourceTruncatedObservations,
+    exactPathQualifiedTruncationCount: exactPathQualifiedTruncations,
     ambiguousAccountObservationCount: ambiguousAccounts,
     ambiguousTimestampObservationCount: ambiguousTimestamps,
     nonParsedObservationCount: nonParsedObservations.length,
@@ -2065,6 +3262,33 @@ async function main() {
   }
   const { options, passthrough } = parseArguments(arguments_);
   if (command === "install-hooks") {
+    const expectedIdentityValues = [
+      options["expected-event-id-kind"],
+      options["expected-event-id-path"],
+      options["expected-event-id-file"],
+    ];
+    if (
+      expectedIdentityValues.some((value) => value !== undefined) &&
+      expectedIdentityValues.some((value) => value === undefined)
+    )
+      throw new Error(
+        "Cursor expected event identity kind, path, and file must be supplied together",
+      );
+    let expectedEventIdentity = null;
+    if (expectedIdentityValues[0] !== undefined) {
+      if (!isAbsolute(expectedIdentityValues[2]))
+        throw new Error("Cursor expected event identity file path must be absolute");
+      const identityFile = resolve(expectedIdentityValues[2]);
+      await assertSafeRegularFile(identityFile, { maximumBytes: 1_024, privateFile: true });
+      const value = JSON.parse(await readFile(identityFile, "utf8"));
+      if (typeof value !== "string")
+        throw new Error("Cursor expected event identity file must contain one JSON string");
+      expectedEventIdentity = {
+        kind: expectedIdentityValues[0],
+        path: expectedIdentityValues[1],
+        value,
+      };
+    }
     const result = await installProbeHooks({
       outputDirectory: options["output-dir"],
       surface: options.surface,
@@ -2073,6 +3297,8 @@ async function main() {
       step: options.step,
       event: requireHookEvent(options.event),
       hooksFile: options["hooks-file"],
+      expectedEventIdentity,
+      versionPath: options["version-path"],
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
     return;
@@ -2107,6 +3333,11 @@ async function main() {
       `${JSON.stringify(
         await buildEvidenceReport(options["output-dir"], {
           eventIdentityKind: options["event-identity-kind"],
+          counterPaths: options["counter-path"],
+          accountPaths: options["account-path"],
+          eventIdPaths: options["event-id-path"],
+          timestampPaths: options["timestamp-path"],
+          versionSources: options["version-source"],
         }),
         null,
         2,

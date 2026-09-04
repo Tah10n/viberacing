@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import {
   chmod,
@@ -14,23 +15,29 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   ensureOwnerOnlyWindowsFile,
+  ensurePrivateStateDirectory,
   inspectOwnerOnlyWindowsFile,
 } from "../packages/connector/lib/windows-security.mjs";
 import {
   buildEvidenceReport,
+  captureCursorHook,
+  inspectJsonl,
   installProbeHooks,
   observationCapacityReached,
   removeProbeHooks,
   runCursorCli,
   sanitizeCursorObservation,
+  schemaSignature,
 } from "./cursor-evidence-probe.mjs";
 
 const hmacKey = "a".repeat(43);
 const runA = "11111111-1111-4111-8111-111111111111";
+const runB = "22222222-2222-4222-8222-222222222222";
 const probeScript = fileURLToPath(new URL("./cursor-evidence-probe.mjs", import.meta.url));
 const closeFixture = fileURLToPath(
   new URL("./fixtures/cursor-evidence-cli-close-fixture.mjs", import.meta.url),
@@ -44,13 +51,15 @@ function context(overrides = {}) {
     step: "single",
     eventName: "stop",
     hmacKey,
+    approvedVersionPaths: ["$.cursor_version"],
     ...overrides,
   };
 }
 
 async function privateTemporaryDirectory(testContext, prefix) {
   const directory = await mkdtemp(join(tmpdir(), prefix));
-  if (process.platform !== "win32") await chmod(directory, 0o700);
+  if (process.platform === "win32") await ensurePrivateStateDirectory(directory);
+  else await chmod(directory, 0o700);
   testContext.after(() =>
     rm(directory, {
       recursive: true,
@@ -78,6 +87,7 @@ function usagePayload(account, timestamp = "2026-09-03T00:00:01.000Z", extra = {
     user_email: `${account}@example.invalid`,
     request_id: `request-${account}-${timestamp}`,
     timestamp,
+    cursor_version: "3.18.0",
     usage: {
       inputTokens: 10,
       outputTokens: 20,
@@ -87,6 +97,89 @@ function usagePayload(account, timestamp = "2026-09-03T00:00:01.000Z", extra = {
     },
     ...extra,
   };
+}
+
+function hooksDocument(...commands) {
+  return {
+    version: 1,
+    hooks: { stop: commands.map((command) => ({ command })) },
+  };
+}
+
+const reportSelections = {
+  counterPaths: ["$.usage"],
+  accountPaths: ["$.account_id", "$.user_email"],
+  eventIdPaths: ["$.request_id"],
+  timestampPaths: ["$.timestamp"],
+  versionSources: ["$.cursor_version", "cli"],
+};
+
+async function writeEvidenceRows(outputDirectory, rows) {
+  const observationsDirectory = join(outputDirectory, "observations");
+  await mkdir(observationsDirectory, { recursive: true, mode: 0o700 });
+  const state = JSON.parse(
+    await readFile(join(outputDirectory, "cursor-evidence-state.json"), "utf8"),
+  );
+  const groups = new Map();
+  for (const row of rows) {
+    await writePrivateFile(
+      join(observationsDirectory, `${row.observationId}.json`),
+      `${JSON.stringify(row)}\n`,
+    );
+    const key = `${row.declaredRunId}\0${row.declaredStep}\0${row.eventName}`;
+    const group = groups.get(key) ?? [];
+    group.push(row);
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const [first] = group;
+    const identity = (first.eventIdentities ?? []).find(
+      (candidate) =>
+        candidate.field === "request_id" &&
+        candidate.path === "$.request_id" &&
+        !candidate.contentDerived,
+    );
+    const isHook = ["afterAgentResponse", "stop", "sessionEnd"].includes(first.eventName);
+    const directory = join(outputDirectory, "runs", first.declaredRunId, first.declaredStep);
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const manifest = {
+      schemaVersion: 1,
+      manifestId: randomUUID(),
+      probeId: state.probeId,
+      declaredSurface: first.declaredSurface,
+      declaredScenario: first.declaredScenario,
+      declaredRunId: first.declaredRunId,
+      declaredStep: first.declaredStep,
+      eventName: first.eventName,
+      expectedEventIdentity:
+        isHook && identity
+          ? { kind: identity.field, path: identity.path, hash: identity.hash }
+          : null,
+      versionPath: "$.cursor_version",
+      status: "completed",
+      createdAt: "2026-09-03T00:00:00.000Z",
+      startedAt: "2026-09-03T00:00:00.000Z",
+      completedAt: "2026-09-03T00:00:01.000Z",
+      invocationCount: 1,
+      inputComplete: true,
+      failureCode: null,
+      activeInvocationId: null,
+      identityBindingStatus: isHook ? (identity ? "matched" : "unbound") : "not_applicable",
+      observationIds: group.map(({ observationId }) => observationId),
+      schemaSignatures: [...new Set(group.map(schemaSignature))].sort(),
+      contracts: [...new Set(group.map(schemaSignature))].sort().map((signature) => ({
+        schemaSignature: signature,
+        observationIds: group
+          .filter((entry) => schemaSignature(entry) === signature)
+          .map(({ observationId }) => observationId)
+          .sort(),
+      })),
+    };
+    await writePrivateFile(
+      join(directory, `${first.eventName}.json`),
+      `${JSON.stringify(manifest)}\n`,
+    );
+  }
 }
 
 test("sanitizer traverses nested content while hashing unknown keys and dropping scalar canaries", () => {
@@ -140,6 +233,7 @@ test("sanitizer traverses nested content while hashing unknown keys and dropping
       totalTokens: "100",
     },
     candidateRelationships: ["total_equals_input_output_cache_read_cache_write"],
+    contentDerived: true,
   });
   assert.equal(observation.accountAmbiguous, false);
   assert.deepEqual(
@@ -183,7 +277,6 @@ test("sanitizer marks every traversal limit and never lets truncated data qualif
   assert.deepEqual(observation.truncationReasons, [
     "array_item_limit",
     "depth_limit",
-    "event_identity_limit",
     "object_key_limit",
     "schema_path_limit",
   ]);
@@ -224,9 +317,109 @@ test("integer, account, and timestamp validation is conservative and provenance-
   const emailUpper = sanitizeCursorObservation({ user_email: " USER@Example.Invalid " }, context());
   const emailLower = sanitizeCursorObservation({ userEmail: "user@example.invalid" }, context());
   assert.equal(
-    emailUpper.accountIdentityCandidates[1].hashes[0],
-    emailLower.accountIdentityCandidates[1].hashes[0],
+    emailUpper.accountIdentityCandidates.find(({ kind }) => kind === "user_email").hashes[0],
+    emailLower.accountIdentityCandidates.find(({ kind }) => kind === "user_email").hashes[0],
   );
+});
+
+test("exact paths exclude content and unknown-wrapper candidates without leaking raw versions", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  await installProbeHooks({
+    outputDirectory,
+    surface: "desktop",
+    scenario: "desktop-one-turn",
+    runId: runA,
+    step: "single",
+    hooksFile: join(cursorRoot, "hooks.json"),
+  });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
+  const malicious = {
+    ...usagePayload("trusted"),
+    tool_call: {
+      result: {
+        account_id: "content-account",
+        user_email: "content@example.invalid",
+        request_id: "content-request",
+        timestamp: "2026-09-04T00:00:00.000Z",
+        cursor_version: "PRIVATE_VERSION_CANARY",
+        status: "aborted",
+        usage: { inputTokens: 999, outputTokens: 1, totalTokens: 1000 },
+      },
+    },
+    unknownWrapper: {
+      account_id: "wrapped-account",
+      request_id: "wrapped-request",
+      timestamp: "2026-09-05T00:00:00.000Z",
+      cursor_version: "SECOND_PRIVATE_VERSION_CANARY",
+      usage: { inputTokens: 500, outputTokens: 500, totalTokens: 1000 },
+    },
+    content: Object.fromEntries(
+      Array.from({ length: 600 }, (_, index) => [`noise-${index}`, index]),
+    ),
+  };
+  const observation = sanitizeCursorObservation(malicious, context({ eventName: "local-jsonl" }));
+  const serialized = JSON.stringify(observation);
+  assert.doesNotMatch(serialized, /PRIVATE_VERSION_CANARY/);
+  assert.ok(
+    observation.tokenGroups.some(
+      ({ path, contentDerived }) =>
+        path.startsWith("$.tool_call.") && path.endsWith(".usage") && contentDerived,
+    ),
+  );
+  assert.ok(
+    observation.versionCandidates
+      .filter(({ source }) => source !== "$.cursor_version")
+      .every(({ trusted, value }) => !trusted && value === undefined),
+  );
+  await writeEvidenceRows(outputDirectory, [observation]);
+  const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
+    eventIdentityKind: "request_id",
+  });
+  assert.equal(report.qualifyingObservationCount, 1);
+  assert.equal(report.usageObservationCount, 1);
+  assert.equal(report.sourceTruncatedObservationCount, 1);
+  assert.equal(report.exactPathQualifiedTruncationCount, 1);
+  assert.deepEqual(report.versions, ["3.18.0"]);
+  assert.equal(report.distinctLocallyLinkedAccounts, 1);
+});
+
+test("truncation at a selected array path remains non-qualifying", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  await installProbeHooks({
+    outputDirectory,
+    surface: "desktop",
+    scenario: "desktop-one-turn",
+    runId: runA,
+    step: "single",
+    hooksFile: join(cursorRoot, "hooks.json"),
+  });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
+  const events = Array.from({ length: 17 }, (_, index) => ({
+    account_id: index === 16 ? "conflicting-account" : "account-a",
+    request_id: index === 16 ? "conflicting-request" : "request-a",
+    timestamp: "2026-09-03T00:00:01.000Z",
+    usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+  }));
+  const observation = sanitizeCursorObservation(
+    { cursor_version: "3.18.0", events },
+    context({ eventName: "local-jsonl" }),
+  );
+  await writeEvidenceRows(outputDirectory, [observation]);
+  const report = await buildEvidenceReport(outputDirectory, {
+    counterPaths: ["$.events[].usage"],
+    accountPaths: ["$.events[].account_id"],
+    eventIdPaths: ["$.events[].request_id"],
+    timestampPaths: ["$.events[].timestamp"],
+    versionSources: ["$.cursor_version"],
+    eventIdentityKind: "request_id",
+  });
+  assert.equal(report.qualifyingObservationCount, 1);
+  assert.equal(report.truncatedObservationCount, 1);
+  assert.equal(report.exactPathQualifiedTruncationCount, 0);
+  assert.equal(report.usageObservationCount, 0);
 });
 
 test("hook install uses a fixed relative launcher, preserves foreign fields, and removes only owned artifacts", async (testContext) => {
@@ -302,6 +495,63 @@ test("hook install uses a fixed relative launcher, preserves foreign fields, and
       customLifecycle: [{ command: "foreign-custom --keep" }],
     },
   });
+});
+
+test("install CLI reads an owner-only expected identity file and stores only its HMAC", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const expectedIdentityFile = join(cursorRoot, "expected-identity.json");
+  const rawIdentity = "PRIVATE_EXPECTED_REQUEST_ID";
+  await writePrivateFile(expectedIdentityFile, `${JSON.stringify(rawIdentity)}\n`);
+  const installed = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        probeScript,
+        "install-hooks",
+        "--output-dir",
+        outputDirectory,
+        "--surface",
+        "desktop",
+        "--scenario",
+        "desktop-one-turn",
+        "--run-id",
+        runA,
+        "--step",
+        "single",
+        "--event",
+        "stop",
+        "--hooks-file",
+        hooksFile,
+        "--expected-event-id-kind",
+        "request_id",
+        "--expected-event-id-path",
+        "$.request_id",
+        "--expected-event-id-file",
+        expectedIdentityFile,
+        "--version-path",
+        "$.cursor_version",
+      ],
+      { encoding: "utf8" },
+    ),
+  );
+  const bundle = join(
+    cursorRoot,
+    "hooks",
+    `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
+  );
+  const configuration = await readFile(
+    join(bundle, "scripts", "viberacing-cursor-evidence-probe-state.json"),
+    "utf8",
+  );
+  const manifest = await readFile(
+    join(outputDirectory, "runs", runA, "single", "stop.json"),
+    "utf8",
+  );
+  assert.doesNotMatch(configuration, new RegExp(rawIdentity));
+  assert.doesNotMatch(manifest, new RegExp(rawIdentity));
+  assert.match(configuration, /"hash": "evt1_[A-Za-z0-9_-]{43}"/);
 });
 
 test("remove-hooks validates the probe identity before changing hooks or runtime artifacts", async (testContext) => {
@@ -576,6 +826,46 @@ test(
   },
 );
 
+test(
+  "Windows validation never rewrites existing output or shared hook directory ACLs",
+  { skip: process.platform !== "win32" },
+  async (testContext) => {
+    const outputDirectory = await privateTemporaryDirectory(
+      testContext,
+      "viberacing-cursor-output-",
+    );
+    const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+    const sharedHooks = join(cursorRoot, "hooks");
+    await mkdir(sharedHooks, { mode: 0o700 });
+    execFileSync("icacls.exe", [sharedHooks, "/grant", "*S-1-5-32-544:(OI)(CI)(F)"], {
+      stdio: "ignore",
+    });
+    const sharedBefore = execFileSync("icacls.exe", [sharedHooks], { encoding: "utf8" });
+    await installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile: join(cursorRoot, "hooks.json"),
+    });
+    const sharedAfter = execFileSync("icacls.exe", [sharedHooks], { encoding: "utf8" });
+    assert.equal(sharedAfter, sharedBefore);
+
+    const unsafeOutput = await privateTemporaryDirectory(
+      testContext,
+      "viberacing-cursor-unsafe-output-",
+    );
+    execFileSync("icacls.exe", [unsafeOutput, "/grant", "*S-1-1-0:(RX)"], {
+      stdio: "ignore",
+    });
+    const unsafeBefore = execFileSync("icacls.exe", [unsafeOutput], { encoding: "utf8" });
+    await assert.rejects(buildEvidenceReport(unsafeOutput), /current-user-only Windows ACL/);
+    const unsafeAfter = execFileSync("icacls.exe", [unsafeOutput], { encoding: "utf8" });
+    assert.equal(unsafeAfter, unsafeBefore);
+  },
+);
+
 test("hooks.json compare-and-swap retries once and preserves a concurrent foreign update", async (testContext) => {
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
@@ -696,6 +986,257 @@ test("hook mutation merges current and displaced foreign hooks after an interrup
   await assert.rejects(readFile(recovery), { code: "ENOENT" });
 });
 
+test("hook recovery closes every non-empty current/recovery/reconcile state", async (testContext) => {
+  const states = [
+    { name: "current", current: hooksDocument("foreign-A"), expected: ["foreign-A"] },
+    { name: "recovery", recovery: hooksDocument("foreign-A"), expected: ["foreign-A"] },
+    { name: "reconcile", reconcile: hooksDocument("foreign-B"), expected: ["foreign-B"] },
+    {
+      name: "current-recovery",
+      current: hooksDocument("foreign-B"),
+      recovery: hooksDocument("foreign-A"),
+      expected: ["foreign-A", "foreign-B"],
+    },
+    {
+      name: "current-reconcile",
+      current: hooksDocument("foreign-A"),
+      reconcile: hooksDocument("foreign-A"),
+      expected: ["foreign-A"],
+    },
+    {
+      name: "recovery-reconcile",
+      recovery: hooksDocument("foreign-A"),
+      reconcile: hooksDocument("foreign-B"),
+      expected: ["foreign-A", "foreign-B"],
+    },
+    {
+      name: "all",
+      current: hooksDocument("foreign-A", "foreign-B"),
+      recovery: hooksDocument("foreign-A"),
+      reconcile: hooksDocument("foreign-B"),
+      expected: ["foreign-A", "foreign-B"],
+    },
+  ];
+  for (const state of states) {
+    const outputDirectory = await privateTemporaryDirectory(
+      testContext,
+      `viberacing-cursor-output-${state.name}-`,
+    );
+    const cursorRoot = await privateTemporaryDirectory(
+      testContext,
+      `viberacing-cursor-hooks-${state.name}-`,
+    );
+    const hooksFile = join(cursorRoot, "hooks.json");
+    for (const [kind, document] of [
+      ["current", state.current],
+      ["recovery", state.recovery],
+      ["reconcile", state.reconcile],
+    ]) {
+      if (!document) continue;
+      const path =
+        kind === "current" ? hooksFile : `${hooksFile}.viberacing-cursor-evidence.${kind}`;
+      await writePrivateFile(path, `${JSON.stringify(document)}\n`);
+    }
+    await installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+    });
+    const final = JSON.parse(await readFile(hooksFile, "utf8"));
+    const foreign = final.hooks.stop
+      .map(({ command }) => command)
+      .filter((command) => command.startsWith("foreign-"))
+      .sort();
+    assert.deepEqual(foreign, [...state.expected].sort(), state.name);
+    for (const kind of ["recovery", "reconcile"])
+      await assert.rejects(readFile(`${hooksFile}.viberacing-cursor-evidence.${kind}`), {
+        code: "ENOENT",
+      });
+  }
+});
+
+test("hook recovery preserves ambiguous current and reconcile documents", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const reconcile = `${hooksFile}.viberacing-cursor-evidence.reconcile`;
+  await writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-A"))}\n`);
+  await writePrivateFile(reconcile, `${JSON.stringify(hooksDocument("foreign-B"))}\n`);
+  const before = await Promise.all([readFile(hooksFile), readFile(reconcile)]);
+  await assert.rejects(
+    installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+    }),
+    /recovery is ambiguous/,
+  );
+  const after = await Promise.all([readFile(hooksFile), readFile(reconcile)]);
+  assert.ok(before[0].equals(after[0]));
+  assert.ok(before[1].equals(after[1]));
+});
+
+test("hook recovery accepts the hard-linked current/recovery crash state", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
+  await writePrivateFile(recovery, `${JSON.stringify(hooksDocument("foreign-A"))}\n`);
+  await link(recovery, hooksFile);
+  await installProbeHooks({
+    outputDirectory,
+    surface: "desktop",
+    scenario: "desktop-one-turn",
+    runId: runA,
+    step: "single",
+    hooksFile,
+  });
+  const final = JSON.parse(await readFile(hooksFile, "utf8"));
+  assert.ok(final.hooks.stop.some(({ command }) => command === "foreign-A"));
+  await assert.rejects(readFile(recovery), { code: "ENOENT" });
+});
+
+test("single-journal recovery never replaces a concurrently created hooks file", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
+  await writePrivateFile(recovery, `${JSON.stringify(hooksDocument("foreign-A"))}\n`);
+  await assert.rejects(
+    installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+      recoveryFaults: {
+        beforeSingleRestore: async () =>
+          writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-B"))}\n`, {
+            flag: "wx",
+          }),
+      },
+    }),
+    /both versions were preserved/,
+  );
+  assert.ok((await readFile(hooksFile, "utf8")).includes("foreign-B"));
+  assert.ok((await readFile(recovery, "utf8")).includes("foreign-A"));
+});
+
+test("reconciliation restores a current hooks file changed after its snapshot", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
+  const reconcile = `${hooksFile}.viberacing-cursor-evidence.reconcile`;
+  await writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-B"))}\n`);
+  await writePrivateFile(recovery, `${JSON.stringify(hooksDocument("foreign-A"))}\n`);
+  await assert.rejects(
+    installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+      recoveryFaults: {
+        beforeReconcileDisplace: async () =>
+          writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-C"))}\n`),
+      },
+    }),
+    /changed during recovery reconciliation displacement/,
+  );
+  assert.ok((await readFile(hooksFile, "utf8")).includes("foreign-C"));
+  assert.ok((await readFile(recovery, "utf8")).includes("foreign-A"));
+  await assert.rejects(readFile(reconcile), { code: "ENOENT" });
+});
+
+test("journal cleanup preserves a journal changed after recovery inspection", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
+  const original = `${JSON.stringify(hooksDocument("foreign-A"))}\n`;
+  await writePrivateFile(hooksFile, original);
+  await writePrivateFile(recovery, original);
+  await assert.rejects(
+    installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runA,
+      step: "single",
+      hooksFile,
+      recoveryFaults: {
+        beforeJournalCleanup: async ({ kind }) => {
+          if (kind === "recovery")
+            await writePrivateFile(recovery, `${JSON.stringify(hooksDocument("foreign-C"))}\n`);
+        },
+      },
+    }),
+    /changed during recovery journal cleanup/,
+  );
+  assert.equal(await readFile(hooksFile, "utf8"), original);
+  assert.ok((await readFile(recovery, "utf8")).includes("foreign-C"));
+});
+
+test("hook recovery is idempotent across every reconciliation crash boundary", async (testContext) => {
+  for (const phase of ["afterReconcileRename", "afterMergedPublish", "afterReconcileCleanup"]) {
+    const outputDirectory = await privateTemporaryDirectory(
+      testContext,
+      `viberacing-cursor-output-${phase}-`,
+    );
+    const cursorRoot = await privateTemporaryDirectory(
+      testContext,
+      `viberacing-cursor-hooks-${phase}-`,
+    );
+    const hooksFile = join(cursorRoot, "hooks.json");
+    const recovery = `${hooksFile}.viberacing-cursor-evidence.recovery`;
+    await writePrivateFile(hooksFile, `${JSON.stringify(hooksDocument("foreign-B"))}\n`);
+    await writePrivateFile(recovery, `${JSON.stringify(hooksDocument("foreign-A"))}\n`);
+    await assert.rejects(
+      installProbeHooks({
+        outputDirectory,
+        surface: "desktop",
+        scenario: "desktop-one-turn",
+        runId: runA,
+        step: "single",
+        hooksFile,
+        recoveryFaults: {
+          [phase]: () => {
+            throw new Error(`fault-${phase}`);
+          },
+        },
+      }),
+      new RegExp(`fault-${phase}`),
+    );
+    await installProbeHooks({
+      outputDirectory,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      runId: runB,
+      step: "single",
+      hooksFile,
+    });
+    const final = JSON.parse(await readFile(hooksFile, "utf8"));
+    const foreign = final.hooks.stop
+      .map(({ command }) => command)
+      .filter((command) => command.startsWith("foreign-"))
+      .sort();
+    assert.deepEqual(foreign, ["foreign-A", "foreign-B"], phase);
+    for (const kind of ["recovery", "reconcile"])
+      await assert.rejects(readFile(`${hooksFile}.viberacing-cursor-evidence.${kind}`), {
+        code: "ENOENT",
+      });
+  }
+});
+
 test(
   "hook installation fails closed for malformed files, symlinks, and hard links",
   { skip: process.platform === "win32" },
@@ -729,6 +1270,83 @@ test(
     assert.equal(await readFile(target, "utf8"), "not-json\n");
   },
 );
+
+test("failed JSONL inspection persists a failed manifest and excludes partial observations", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const input = join(outputDirectory, "history.jsonl");
+  await writePrivateFile(input, `${JSON.stringify(usagePayload("a"))}\n{"malformed":\n`);
+  await assert.rejects(
+    inspectJsonl({
+      "output-dir": outputDirectory,
+      input,
+      surface: "desktop",
+      scenario: "desktop-one-turn",
+      "run-id": runA,
+      step: "single",
+      "version-path": "$.cursor_version",
+    }),
+    SyntaxError,
+  );
+  const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
+    eventIdentityKind: "request_id",
+  });
+  assert.equal(report.observationCount, 1);
+  assert.equal(report.qualifyingObservationCount, 0);
+  assert.equal(report.failedRunManifestCount, 1);
+  assert.equal(report.invalidRunManifestCount, 1);
+  assert.ok(report.limitations.includes("run_manifest_incomplete_or_conflicting"));
+});
+
+test("a hook manifest is identity-bound and becomes failed after any second invocation", async (testContext) => {
+  const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
+  const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
+  const hooksFile = join(cursorRoot, "hooks.json");
+  const payload = { hook_event_name: "stop", ...usagePayload("a") };
+  const installed = await installProbeHooks({
+    outputDirectory,
+    surface: "desktop",
+    scenario: "desktop-one-turn",
+    runId: runA,
+    step: "single",
+    event: "stop",
+    expectedEventIdentity: {
+      kind: "request_id",
+      path: "$.request_id",
+      value: payload.request_id,
+    },
+    versionPath: "$.cursor_version",
+    hooksFile,
+  });
+  const configuration = JSON.parse(
+    await readFile(
+      join(
+        cursorRoot,
+        "hooks",
+        `viberacing-cursor-evidence-${installed.probeId}-${installed.installationId}`,
+        "scripts",
+        "viberacing-cursor-evidence-probe-state.json",
+      ),
+      "utf8",
+    ),
+  );
+  const output = [];
+  await captureCursorHook(configuration, Readable.from([JSON.stringify(payload)]), {
+    write: (value) => output.push(value),
+  });
+  assert.deepEqual(output, ["{}\n"]);
+  await assert.rejects(
+    captureCursorHook(configuration, Readable.from([JSON.stringify(payload)]), { write() {} }),
+    /exactly one invocation/,
+  );
+  const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
+    eventIdentityKind: "request_id",
+  });
+  assert.equal(report.observationCount, 1);
+  assert.equal(report.qualifyingObservationCount, 0);
+  assert.equal(report.failedRunManifestCount, 1);
+});
 
 test(
   "run-cli waits for close, preserves split UTF-8, continues after malformed records, and awaits writes",
@@ -814,7 +1432,7 @@ for (const account of ["a", "b"]) process.stdout.write(JSON.stringify({ ...${JSO
       outputDirectory,
       executable: cappedAgent,
       scenario: "cli-headless-one-turn",
-      runId: runA,
+      runId: runB,
       step: "single",
       maximumObservationCount: 2,
       signalSource,
@@ -823,6 +1441,44 @@ for (const account of ["a", "b"]) process.stdout.write(JSON.stringify({ ...${JSO
     });
     assert.equal(capped.length, 2);
     assert.deepEqual(capped[1].truncationReasons, ["stream_observation_limit"]);
+  },
+);
+
+test(
+  "run-cli nonzero exit durably excludes otherwise valid records",
+  { skip: process.platform === "win32" },
+  async (testContext) => {
+    const outputDirectory = await privateTemporaryDirectory(
+      testContext,
+      "viberacing-cursor-output-",
+    );
+    const agent = join(outputDirectory, "failing-agent.mjs");
+    await writeExecutable(
+      agent,
+      `#!/usr/bin/env node
+if (process.argv.includes("--version")) { process.stdout.write("1.2.3\\n"); process.exit(0); }
+process.stdout.write(JSON.stringify(${JSON.stringify(usagePayload("a"))}) + "\\n");
+process.exit(7);
+`,
+    );
+    assert.deepEqual(
+      await runCursorCli({
+        outputDirectory,
+        executable: agent,
+        scenario: "cli-headless-one-turn",
+        runId: runA,
+        step: "single",
+        outputStream: { write() {} },
+      }),
+      { code: 7, signal: null },
+    );
+    const report = await buildEvidenceReport(outputDirectory, {
+      ...reportSelections,
+      eventIdentityKind: "request_id",
+    });
+    assert.equal(report.observationCount, 1);
+    assert.equal(report.qualifyingObservationCount, 0);
+    assert.equal(report.failedRunManifestCount, 1);
   },
 );
 
@@ -958,8 +1614,7 @@ test("report requires semantic scenarios but always keeps the production gate cl
     step: "single",
     hooksFile: join(cursorRoot, "hooks.json"),
   });
-  const observationsDirectory = join(outputDirectory, "observations");
-  await mkdir(observationsDirectory, { mode: 0o700 });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
   const rows = [];
   const add = (scenario, surface, runId, step, account, extra = {}, eventName = "stop") => {
     rows.push(
@@ -1039,12 +1694,9 @@ test("report requires semantic scenarios but always keeps the production gate cl
       eventName: "local-jsonl",
     }),
   );
-  for (const row of rows)
-    await writePrivateFile(
-      join(observationsDirectory, `${row.observationId}.json`),
-      `${JSON.stringify(row)}\n`,
-    );
+  await writeEvidenceRows(outputDirectory, rows);
   const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(report.productionGate, "closed");
@@ -1064,6 +1716,7 @@ test("report requires semantic scenarios but always keeps the production gate cl
     "total_equals_input_output_cache_read_cache_write",
   ]);
 
+  const observationsDirectory = join(outputDirectory, "observations");
   add("desktop-one-turn", "desktop", runA, "single", "conflicting-account");
   const conflict = rows.at(-1);
   await writePrivateFile(
@@ -1071,6 +1724,7 @@ test("report requires semantic scenarios but always keeps the production gate cl
     `${JSON.stringify(conflict)}\n`,
   );
   const conflictingReport = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(conflictingReport.scenarioCoverage["desktop-one-turn"], false);
@@ -1108,8 +1762,8 @@ test("report closes coverage for global one-to-one account alias conflicts", asy
       event: "stop",
       hooksFile: join(cursorRoot, "hooks.json"),
     });
-    const observationsDirectory = join(outputDirectory, "observations");
-    await mkdir(observationsDirectory, { mode: 0o700 });
+    await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
+    const observations = [];
     for (const [index, aliases] of payloads.entries()) {
       const observation = sanitizeCursorObservation(
         {
@@ -1117,14 +1771,13 @@ test("report closes coverage for global one-to-one account alias conflicts", asy
           ...aliases,
           request_id: `alias-${index}`,
         },
-        context(),
+        context({ eventName: "local-jsonl" }),
       );
-      await writePrivateFile(
-        join(observationsDirectory, `${observation.observationId}.json`),
-        `${JSON.stringify(observation)}\n`,
-      );
+      observations.push(observation);
     }
+    await writeEvidenceRows(outputDirectory, observations);
     const report = await buildEvidenceReport(outputDirectory, {
+      ...reportSelections,
       eventIdentityKind: "request_id",
     });
     assert.equal(report.accountAliasConflict, true, name);
@@ -1146,8 +1799,8 @@ test("hook/history reconciliation requires a selected event identity and an exac
     event: "stop",
     hooksFile: join(cursorRoot, "hooks.json"),
   });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
   const observationsDirectory = join(outputDirectory, "observations");
-  await mkdir(observationsDirectory, { mode: 0o700 });
   const hook = sanitizeCursorObservation(
     { ...usagePayload("a"), request_id: "reviewed-event", conversation_id: "shared-session" },
     context({ eventName: "stop" }),
@@ -1156,12 +1809,8 @@ test("hook/history reconciliation requires a selected event identity and an exac
     { ...usagePayload("a"), request_id: "reviewed-event", conversation_id: "shared-session" },
     context({ eventName: "local-jsonl" }),
   );
-  for (const observation of [hook, history])
-    await writePrivateFile(
-      join(observationsDirectory, `${observation.observationId}.json`),
-      `${JSON.stringify(observation)}\n`,
-    );
-  const unselected = await buildEvidenceReport(outputDirectory);
+  await writeEvidenceRows(outputDirectory, [hook, history]);
+  const unselected = await buildEvidenceReport(outputDirectory, reportSelections);
   assert.equal(unselected.hookHistoryIdentityReconciled, false);
   assert.ok(unselected.limitations.includes("hook_history_identity_kind_not_selected"));
   await assert.rejects(
@@ -1169,6 +1818,7 @@ test("hook/history reconciliation requires a selected event identity and an exac
     /event_id, request_id, or generation_id/,
   );
   const exact = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(exact.hookHistoryIdentityReconciled, true);
@@ -1184,13 +1834,11 @@ test("hook/history reconciliation requires a selected event identity and an exac
   };
   const missingTimestamp = sanitizeCursorObservation(
     missingTimestampPayload,
-    context({ eventName: "local-jsonl" }),
+    context({ eventName: "local-jsonl", runId: runB }),
   );
-  await writePrivateFile(
-    join(observationsDirectory, `${missingTimestamp.observationId}.json`),
-    `${JSON.stringify(missingTimestamp)}\n`,
-  );
+  await writeEvidenceRows(outputDirectory, [missingTimestamp]);
   const incompleteConflict = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(incompleteConflict.hookHistoryIdentityReconciled, false);
@@ -1202,19 +1850,17 @@ test("hook/history reconciliation requires a selected event identity and an exac
       request_id: "reviewed-event",
       nested: { request_id: "different-event" },
     },
-    context({ eventName: "stop" }),
+    context({ eventName: "stop", runId: "33333333-3333-4333-8333-333333333333" }),
   );
-  await writePrivateFile(
-    join(observationsDirectory, `${ambiguousIdentity.observationId}.json`),
-    `${JSON.stringify(ambiguousIdentity)}\n`,
-  );
+  await writeEvidenceRows(outputDirectory, [ambiguousIdentity]);
   const ambiguous = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
-  assert.equal(ambiguous.selectedEventIdentityAmbiguousObservationCount, 1);
+  assert.equal(ambiguous.selectedEventIdentityAmbiguousObservationCount, 0);
   assert.equal(ambiguous.hookHistoryIdentityReconciled, false);
   assert.equal(ambiguous.mechanicalCoverageComplete, false);
-  assert.ok(ambiguous.limitations.includes("selected_event_identity_ambiguous"));
+  assert.ok(!ambiguous.limitations.includes("selected_event_identity_ambiguous"));
 
   const conflicting = sanitizeCursorObservation(
     {
@@ -1222,13 +1868,14 @@ test("hook/history reconciliation requires a selected event identity and an exac
       request_id: "reviewed-event",
       usage: { ...usagePayload("a").usage, outputTokens: 21, totalTokens: 101 },
     },
-    context({ eventName: "local-jsonl" }),
+    context({
+      eventName: "local-jsonl",
+      runId: "44444444-4444-4444-8444-444444444444",
+    }),
   );
-  await writePrivateFile(
-    join(observationsDirectory, `${conflicting.observationId}.json`),
-    `${JSON.stringify(conflicting)}\n`,
-  );
+  await writeEvidenceRows(outputDirectory, [conflicting]);
   const conflict = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(conflict.hookHistoryIdentityReconciled, false);
@@ -1236,7 +1883,7 @@ test("hook/history reconciliation requires a selected event identity and an exac
   assert.equal(conflict.mechanicalCoverageComplete, false);
 });
 
-test("report separates lifecycle event contracts and exposes non-parsed mandatory evidence", async (testContext) => {
+test("report separates lifecycle contracts and rejects unbound non-parsed hook evidence", async (testContext) => {
   const outputDirectory = await privateTemporaryDirectory(testContext, "viberacing-cursor-output-");
   const cursorRoot = await privateTemporaryDirectory(testContext, "viberacing-cursor-hooks-");
   await installProbeHooks({
@@ -1248,30 +1895,32 @@ test("report separates lifecycle event contracts and exposes non-parsed mandator
     event: "stop",
     hooksFile: join(cursorRoot, "hooks.json"),
   });
-  const observationsDirectory = join(outputDirectory, "observations");
-  await mkdir(observationsDirectory, { mode: 0o700 });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
   const observations = [
     sanitizeCursorObservation(usagePayload("a"), context({ eventName: "stop" })),
     sanitizeCursorObservation(
-      { timestamp: "2026-09-03T00:00:02.000Z", status: "completed" },
+      {
+        request_id: "after-response",
+        timestamp: "2026-09-03T00:00:02.000Z",
+        cursor_version: "3.18.0",
+        status: "completed",
+      },
       context({ eventName: "afterAgentResponse" }),
     ),
     sanitizeCursorObservation(null, context({ eventName: "sessionEnd" })),
   ];
-  for (const observation of observations)
-    await writePrivateFile(
-      join(observationsDirectory, `${observation.observationId}.json`),
-      `${JSON.stringify(observation)}\n`,
-    );
+  await writeEvidenceRows(outputDirectory, observations);
   const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
     eventIdentityKind: "request_id",
   });
   assert.equal(report.scenarioCoverage["desktop-one-turn"], true);
   assert.equal(report.hookEventCandidates.stop.usageObservationCount, 1);
   assert.equal(report.hookEventCandidates.afterAgentResponse.usageObservationCount, 0);
-  assert.equal(report.nonParsedObservationCount, 1);
+  assert.equal(report.nonParsedObservationCount, 0);
+  assert.equal(report.invalidRunManifestCount, 1);
   assert.equal(report.mechanicalCoverageComplete, false);
-  assert.ok(report.limitations.includes("non_parsed_required_observations_cannot_qualify"));
+  assert.ok(report.limitations.includes("run_manifest_incomplete_or_conflicting"));
 });
 
 test("the observation ceiling is itself treated as truncation", async (testContext) => {
@@ -1289,16 +1938,18 @@ test("the observation ceiling is itself treated as truncation", async (testConte
     step: "single",
     hooksFile: join(cursorRoot, "hooks.json"),
   });
-  const observationsDirectory = join(outputDirectory, "observations");
-  await mkdir(observationsDirectory, { mode: 0o700 });
+  await rm(join(outputDirectory, "runs"), { recursive: true, force: true });
+  const observations = [];
   for (const account of ["a", "b"]) {
-    const observation = sanitizeCursorObservation(usagePayload(account), context());
-    await writePrivateFile(
-      join(observationsDirectory, `${observation.observationId}.json`),
-      `${JSON.stringify(observation)}\n`,
+    observations.push(
+      sanitizeCursorObservation(usagePayload(account), context({ eventName: "local-jsonl" })),
     );
   }
-  const report = await buildEvidenceReport(outputDirectory, { maximumObservationCount: 2 });
+  await writeEvidenceRows(outputDirectory, observations);
+  const report = await buildEvidenceReport(outputDirectory, {
+    ...reportSelections,
+    maximumObservationCount: 2,
+  });
   assert.equal(report.observationCount, 2);
   assert.equal(report.observationSetTruncated, true);
   assert.equal(report.mechanicalCoverageComplete, false);

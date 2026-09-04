@@ -48,6 +48,8 @@ const ownerOnlyFileVerification = [
 const encodedOwnerOnlyFileVerification = Buffer.from(ownerOnlyFileVerification, "utf16le").toString(
   "base64",
 );
+let loadedProbeModule = null;
+let loadedConfiguration = null;
 
 function pathInside(parent, candidate) {
   const child = relative(parent, candidate);
@@ -138,6 +140,18 @@ async function main() {
     !uuidPattern.test(configuration.declaredRunId ?? "") ||
     !stepPattern.test(configuration.declaredStep ?? "") ||
     !eventNames.has(configuration.declaredEvent) ||
+    !(
+      configuration.expectedEventIdentity === null ||
+      (["event_id", "request_id", "generation_id"].includes(
+        configuration.expectedEventIdentity?.kind,
+      ) &&
+        typeof configuration.expectedEventIdentity?.path === "string" &&
+        /^evt1_[A-Za-z0-9_-]{43}$/.test(configuration.expectedEventIdentity?.hash ?? ""))
+    ) ||
+    !(
+      configuration.versionPath === null ||
+      /^\$\.[A-Za-z_][A-Za-z0-9_]*$/.test(configuration.versionPath ?? "")
+    ) ||
     !Array.isArray(configuration.runtimeArtifacts) ||
     configuration.runtimeArtifacts.length < 3 ||
     configuration.runtimeArtifacts.length > 8
@@ -152,6 +166,8 @@ async function main() {
       configuration.declaredRunId,
       configuration.declaredStep,
       configuration.declaredEvent,
+      JSON.stringify(configuration.expectedEventIdentity),
+      configuration.versionPath ?? "",
     ].join("\0"),
   );
   if (
@@ -187,10 +203,18 @@ async function main() {
   if (!verified.has(actualLauncherPath) || !verified.has(actualProbeScriptPath))
     throw new Error("Cursor evidence runtime manifest is incomplete");
   const module = await import(pathToFileURL(actualProbeScriptPath).href);
+  loadedProbeModule = module;
+  loadedConfiguration = configuration;
   await module.captureCursorHook(configuration);
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  try {
+    if (typeof loadedProbeModule?.markHookInvocationFailure === "function")
+      await loadedProbeModule.markHookInvocationFailure(loadedConfiguration);
+  } catch {
+    // Cursor remains fail-open even if the durable failure marker cannot be written.
+  }
   if (process.env.VIBERACING_CURSOR_EVIDENCE_DEBUG === "1")
     process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
   process.stdout.write("{}\n");

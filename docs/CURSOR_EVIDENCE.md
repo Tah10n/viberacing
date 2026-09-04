@@ -59,13 +59,15 @@ archive and not a production collector.
 
 Choose a new absolute output directory outside the repository. The probe creates a missing directory
 as owner-only and rejects an existing directory that is accessible to another user. On POSIX it
-enforces owner-only modes. On Windows it applies and verifies current-user-only ACLs for probe
-state, observations, and installed launcher files. It stores only:
+enforces owner-only modes. On Windows it changes ACLs only on newly created probe-owned directories
+and files; existing output and shared Cursor directories are inspected read-only and rejected when
+unsafe. It stores only:
 
 - structural field paths and primitive types, with unrecognized field names replaced by local HMACs;
 - allowlisted non-negative integer token fields as canonical decimal strings;
 - locally HMACed account and event identities;
-- a parse status, safe Cursor version/status, and parseable provider timestamp.
+- a parse status, reviewer-approved exact-path version/status evidence, and a parseable provider
+  timestamp.
 
 It never stores raw prompt, response, code, tool payload, transcript, repository, path, email,
 provider account ID, credential, model, cost, stdout, stderr, or unrecognized scalar value. Review
@@ -83,8 +85,18 @@ node scripts/cursor-evidence-probe.mjs install-hooks \
   --scenario desktop-one-turn \
   --run-id 11111111-1111-4111-8111-111111111111 \
   --step single \
-  --event stop
+  --event stop \
+  --expected-event-id-kind request_id \
+  --expected-event-id-path '$.request_id' \
+  --expected-event-id-file /absolute/private/expected-request-id.json \
+  --version-path '$.cursor_version'
 ```
+
+The expected-ID file contains one JSON string, is read only from an owner-only regular file, and is
+never copied; the installation stores only its local HMAC. A hook installed without this immutable
+binding remains useful for schema discovery but cannot qualify mechanical coverage. The optional
+provider version path must be an exact top-level path. Values from any other payload path are kept
+only as path plus HMAC, never raw.
 
 Run only the named scenario, then remove the probe entries. Foreign hook entries and unknown
 top-level hook configuration are preserved:
@@ -109,9 +121,10 @@ received them.
 
 An owned lock, file fingerprint comparison, exclusive no-replace publication, and displaced-file
 journal preserve concurrent foreign edits. If a concurrent current file appears after displacement,
-the original and concurrent documents are validated and merged without dropping either hook set;
-unmergeable conflicts fail closed with both files preserved. `remove-hooks` validates the output
-probe identity, exact command, state, runtime manifest, hashes, and ACLs before changing
+the original and concurrent documents are validated and merged without dropping either hook set; all
+seven non-empty combinations of current, recovery, and reconcile files are recovered idempotently.
+Unmergeable or ambiguous states fail closed with every version preserved. `remove-hooks` validates
+the output probe identity, exact command, state, runtime manifest, hashes, and ACLs before changing
 `hooks.json`. Installation also fails closed for linked, oversized, non-regular, or other-user hook
 files. It never changes Cursor hook trust or bypasses an approval UI.
 
@@ -134,12 +147,20 @@ node scripts/cursor-evidence-probe.mjs run-cli \
 The wrapper uses a streaming UTF-8 decoder, honors stdout backpressure, processes and saves records
 sequentially, waits for stdio `close`, terminates and awaits the child after a processing failure,
 removes temporary signal listeners, and preserves the child's exit code or terminating signal.
-Malformed middle records, unterminated tails, byte limits, and observation limits leave an explicit
-non-qualifying observation without suppressing later complete records.
+Malformed middle records, unterminated tails, byte limits, observation limits, nonzero exits, and
+signals durably fail that invocation even when earlier complete records were sanitized.
 
 For an already captured local JSONL file, `inspect-jsonl` performs the same bounded streaming
 sanitization and also requires `--run-id` and `--step`. The input must be an absolute, current-user,
-single-link regular file and is never copied into the output directory.
+single-link regular file and is never copied into the output directory. Supply `--version-path` only
+for a reviewer-approved exact top-level provider version field.
+
+Every run/step/event has one content-free durable manifest. Installation creates it as `pending`;
+exactly one invocation may move it to `completed`, while any parse, persistence, identity, child, or
+repeat-invocation failure moves it to `failed`. A completed manifest binds the exact observation IDs
+within each minimized schema contract. The report ignores observations from pending, failed,
+conflicting, incomplete, or multiply invoked manifests. Hook launcher failures remain fail-open to
+Cursor, but the pending/failed manifest keeps their evidence fail-closed.
 
 ### Required scenarios
 
@@ -161,8 +182,22 @@ Generate the minimized coverage report with:
 ```bash
 node scripts/cursor-evidence-probe.mjs report \
   --output-dir /absolute/private/cursor-evidence \
-  --event-identity-kind request_id
+  --event-identity-kind request_id \
+  --counter-path '$.usage' \
+  --account-path '$.account_id,$.user_email' \
+  --event-id-path '$.request_id' \
+  --timestamp-path '$.timestamp' \
+  --version-source '$.cursor_version,cli'
 ```
+
+These are exact canonical schema paths selected after reviewing minimized output. Merely matching a
+field name is never enough. Candidates below `prompt`, `response`, `content`, `message`,
+`attachments`, `args`, or any `tool*` descendant cannot qualify even when a selected name appears
+there. Candidates under other wrappers qualify only when their full exact path is selected. Raw
+version text is accepted only from the explicit CLI `--version` source or an installed/pre-approved
+top-level provider path. Version evidence is required for every qualifying surface/schema contract.
+Traversal truncation confined to unselected paths is reported separately and cannot disqualify a
+complete exact-path tuple; a truncated or missing selected tuple still cannot qualify.
 
 `mechanicalCoverageComplete: true` means only that the probe mechanically verified the structural
 one-turn, same/different-account, CLI/Desktop A/B/A, three-surface, and adjacent chronological UTC
@@ -177,9 +212,10 @@ also have the same account component, exact counter tuple, and provider timestam
 tuple with the same selected identity closes coverage. Email aliases and case-sensitive opaque
 account IDs are HMACed separately and linked only when they co-occur. The report rejects global
 one-to-many account-ID/email relationships as `accountAliasConflict`. Ambiguous timestamps/accounts,
-invalid counters, non-parsed mandatory observations, truncation, conflicting event identities, and
-incomplete scenarios cannot qualify. Each hook event and minimized schema signature is reported as a
-separate candidate contract.
+invalid counters, non-parsed mandatory observations, incomplete run manifests, missing exact path or
+version selections, truncation, conflicting event identities, and incomplete scenarios cannot
+qualify. Each hook event and minimized schema signature is reported as a separate candidate
+contract.
 
 `productionGate` is always `closed`, and `limitations` is never empty. The report lists only
 observed candidate counter equalities; it does not select an authoritative token formula. Before
