@@ -87,13 +87,6 @@
   vertical-align: 0.35em;
 }
 
-.leaderboard-profile-link {
-  color: var(--color-info);
-  font-family: var(--font-mono);
-  font-size: var(--meta-font-size);
-  text-transform: uppercase;
-}
-
 .user-score-line strong {
   margin-left: 0;
 }
