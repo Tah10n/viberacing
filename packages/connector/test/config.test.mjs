@@ -138,6 +138,8 @@ function reconciliationResponse(sources, protocolVersion = connectorProtocolVers
 function connectorEnvironment(home, extra = {}) {
   return {
     ...process.env,
+    HOME: join(home, "user-home"),
+    USERPROFILE: join(home, "user-home"),
     VIBERACING_STATE_DIR: join(home, ".viberacing"),
     CODEX_HOME: join(home, ".codex"),
     CLAUDE_CONFIG_DIR: join(home, ".claude"),

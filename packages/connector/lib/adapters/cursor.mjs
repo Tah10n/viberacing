@@ -1,11 +1,14 @@
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { stateDirectory } from "../config.mjs";
 import { readCursorLedger } from "../cursor-ledger.mjs";
 import { diagnosticError } from "../diagnostics.mjs";
 import { inspectOwnerOnlyWindowsDirectory } from "../windows-security.mjs";
 import { mergeEntries } from "./shared.mjs";
+
+async function defaultStateRoot() {
+  return (await import("../config.mjs")).stateDirectory;
+}
 
 function profileId(source) {
   return source.profileClientSourceId ?? source.clientSourceId;
@@ -61,7 +64,7 @@ export async function collectCursor(source, range, state = {}, context = {}) {
     throw diagnosticError("Cursor capture range is invalid", "cursor_usage_incomplete");
   const now = context.now ?? new Date().toISOString();
   const ledger = await readCursorLedger(
-    context.stateRoot ?? stateDirectory,
+    context.stateRoot ?? (await defaultStateRoot()),
     profileId(source),
     now,
     { checkpoint: state.checkpoint },
@@ -123,10 +126,10 @@ export const cursorAdapter = Object.freeze({
   detect: detectCursorProfile,
   collect: collectCursor,
   historyRetryGeneration: async (source) =>
-    (await readCursorLedger(stateDirectory, profileId(source))).checkpoint?.sha256,
+    (await readCursorLedger(await defaultStateRoot(), profileId(source))).checkpoint?.sha256,
   diagnose: async (source) => {
     try {
-      const ledger = await readCursorLedger(stateDirectory, profileId(source));
+      const ledger = await readCursorLedger(await defaultStateRoot(), profileId(source));
       return {
         status: ledger.torn ? "unavailable" : "ok",
         dataLocationAvailable: !ledger.torn,

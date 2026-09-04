@@ -27,6 +27,8 @@ import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { normalizeOrigin } from "./origin.mjs";
 import { mergeStoredSourceMapping, providerAccountPolicy } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
+import { inspectCursorHooks, reconcileCursorHooks } from "./cursor-hooks.mjs";
+import { initializeCursorLedger } from "./cursor-ledger.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
@@ -1259,6 +1261,8 @@ function validLocalSource(source) {
     typeof source.supportedSurface === "string" &&
     (source.executablePath === undefined || typeof source.executablePath === "string") &&
     (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string") &&
+    (source.cursorHookInstallationId === undefined ||
+      (source.agentId === "cursor" && sourceIdPattern.test(source.cursorHookInstallationId))) &&
     (source.profileClientSourceId === undefined ||
       (providerAccountPolicy(source) && sourceIdPattern.test(source.profileClientSourceId))) &&
     (source.providerAccountKey === undefined ||
@@ -1292,6 +1296,9 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
       : {}),
     ...(typeof source.profileClientSourceId === "string"
       ? { profileClientSourceId: source.profileClientSourceId }
+      : {}),
+    ...(typeof source.cursorHookInstallationId === "string"
+      ? { cursorHookInstallationId: source.cursorHookInstallationId }
       : {}),
     ...(typeof source.providerAccountKey === "string"
       ? { providerAccountKey: source.providerAccountKey }
@@ -2009,6 +2016,7 @@ const installedRuntimeFiles = [
   "cursor-events.mjs",
   "cursor-ledger.mjs",
   "cursor-hooks.mjs",
+  "cursor-capture.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
@@ -2183,8 +2191,88 @@ export function quoteHookArgument(value, platform = process.platform) {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+export async function cursorHookOptions(source) {
+  const installationId = source.cursorHookInstallationId ?? (await readExistingInstallation())?.id;
+  if (!sourceIdPattern.test(installationId ?? ""))
+    throw new Error("Cursor hook installation identity is unavailable");
+  return {
+    installationId,
+    profileId: source.profileClientSourceId ?? source.clientSourceId,
+    launcher: installedHookLauncherScript(),
+  };
+}
+
+async function prepareCursorHookOwner(source) {
+  const installation = await readExistingInstallation();
+  if (!installation) throw new Error("Cursor hook installation identity is unavailable");
+  const known = (await readSources()).find(
+    (candidate) => candidate.clientSourceId === source.clientSourceId,
+  );
+  if (known?.agentId !== "cursor" || known.profileClientSourceId !== undefined)
+    throw new Error("Cursor hook profile is unavailable");
+  if (known.cursorHookInstallationId && known.cursorHookInstallationId !== installation.id)
+    await reconcileCursorHooks(hookRoot(known, "cursor"), await cursorHookOptions(known), {
+      remove: true,
+    });
+  const updated = await withConnectionStateLock(async () => {
+    const current = await readInstallationUnlocked();
+    if (current?.id !== installation.id) throw new Error("Cursor hook installation changed");
+    const sources = await readSourcesUnlocked();
+    const profile = sources.find((candidate) => candidate.clientSourceId === source.clientSourceId);
+    if (profile?.agentId !== "cursor" || profile.profileClientSourceId !== undefined)
+      throw new Error("Cursor hook profile is unavailable");
+    if (profile.cursorHookInstallationId !== installation.id) {
+      profile.cursorHookInstallationId = installation.id;
+      await writeSourcesUnlocked(sources);
+    }
+    return profile;
+  });
+  await readOrCreateProviderIdentitySalt();
+  return updated;
+}
+
+// Existing-state lock is intentional: a stale hook must never recreate a removed installation.
+export async function withCursorCaptureContext(request, callback) {
+  if (
+    !sourceIdPattern.test(request?.installationId ?? "") ||
+    !sourceIdPattern.test(request?.profileId ?? "")
+  )
+    return null;
+  return withExistingConnectionStateLock(async () => {
+    const [installation, config, salt] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+      readProviderIdentitySaltUnlocked(),
+    ]);
+    if (
+      installation?.id !== request.installationId ||
+      config.installationId !== request.installationId ||
+      !salt
+    )
+      return null;
+    const source = config.sources.find(
+      (candidate) =>
+        candidate.clientSourceId === request.profileId &&
+        candidate.agentId === "cursor" &&
+        candidate.profileClientSourceId === undefined &&
+        candidate.cursorHookInstallationId === request.installationId,
+    );
+    if (!source || typeof source.sourceId !== "string") return null;
+    return callback({ source, salt, stateRoot: stateDirectory });
+  });
+}
+
 export async function installHookForSource(source, installedScript) {
   if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
+  if (source.agentId === "cursor") {
+    const profile = await prepareCursorHookOwner(source);
+    const changed = await reconcileCursorHooks(
+      hookRoot(profile, "cursor"),
+      await cursorHookOptions(profile),
+    );
+    await initializeCursorLedger(stateDirectory, profile.clientSourceId, new Date().toISOString());
+    return changed;
+  }
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(
     source.agentId === "codex" ? installedHookLauncherScript() : installedScript,
@@ -2278,6 +2366,21 @@ function hookRoot(source, agentId) {
 }
 
 export async function diagnoseHookForSource(source, options = {}) {
+  if (source.agentId === "cursor") {
+    try {
+      const status = await inspectCursorHooks(
+        hookRoot(source, "cursor"),
+        await cursorHookOptions(source),
+      );
+      return status.stop === "current" && status.sessionEnd === "current"
+        ? "current"
+        : status.stop === "missing" || status.sessionEnd === "missing"
+          ? "missing"
+          : "modified";
+    } catch {
+      return "missing";
+    }
+  }
   const installedScript =
     source.agentId === "codex" ? installedHookLauncherScript() : installedRuntimeScript();
   const marker = hookMarkerForSource(source.clientSourceId);
@@ -2356,6 +2459,8 @@ export async function removeHookForSource(source, options = {}) {
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
   const root = hookRoot(source, source.agentId);
+  if (source.agentId === "cursor")
+    return reconcileCursorHooks(root, await cursorHookOptions(source), { remove: true });
   if (source.agentId === "codex") {
     const path = join(root, "hooks.json");
     const removedStop = await updateHook(path, "Stop", null, hookOptions);

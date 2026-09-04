@@ -178,7 +178,7 @@ function validRecord(record) {
       accounts(record.accounts) &&
       record.accounts.some((item) => item.accountKey === record.binding.accountKey)
     );
-  if (record.kind === "abort")
+  if (["begin", "abort"].includes(record.kind))
     return (
       keys(record, ["v", "kind", "captureId", "at"]) &&
       uuid.test(record.captureId) &&
@@ -256,6 +256,9 @@ function fold(records) {
       if (!state.accounts.some((item) => item.accountKey === record.event.accountKey))
         fail("cursor_account_identity_conflict");
       accept(record.event);
+    } else if (record.kind === "begin") {
+      if (!state.completed.has(record.captureId) && !state.pending.has(record.captureId))
+        state.pending.set(record.captureId, { firstAt: record.at });
     } else if (record.kind === "abort") {
       const pending = state.pending.get(record.captureId);
       gap(pending?.firstAt ?? record.at, record.at, "cursor_headless_pair_incomplete");
@@ -490,6 +493,24 @@ export async function initializeCursorLedger(root, profileId, capturedAt) {
   );
 }
 
+// A wrapper marker is owned only after this durable, bounded registration succeeds.
+export async function beginCursorHeadlessCapture(root, profileId, captureId, capturedAt) {
+  if (!uuid.test(captureId) || !time(capturedAt)) fail();
+  return withLedger(root, profileId, async ({ state, append, torn }) => {
+    if (torn || !state.captureStartedAt || capturedAt < state.captureStartedAt) fail();
+    if (state.pending.has(captureId) || state.completed.has(captureId)) fail();
+    for (const [id, pending] of state.pending)
+      if (Date.parse(capturedAt) - Date.parse(pending.firstAt) > cursorPairTimeoutMs)
+        await append({ v: 1, kind: "abort", captureId: id, at: capturedAt });
+    const active = [...state.pending.values()].filter(
+      (pending) => Date.parse(capturedAt) - Date.parse(pending.firstAt) <= cursorPairTimeoutMs,
+    );
+    if (active.length >= maximumPendingPairs) fail("local_store_scan_limit");
+    await append({ v: 1, kind: "begin", captureId, at: capturedAt });
+    return captureId;
+  });
+}
+
 export async function readCursorLedger(
   root,
   profileId,
@@ -506,6 +527,7 @@ export async function readCursorLedger(
         (item) => !state.blockedSessions.has(item.sessionKey),
       ),
       pendingPairs: pending.length,
+      headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
         ...state.gaps,
         ...pending.map((item) => ({

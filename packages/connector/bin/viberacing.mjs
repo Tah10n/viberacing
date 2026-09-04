@@ -7,6 +7,11 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import {
+  captureCursorHook,
+  parseCursorHookRequest,
+  readCursorHookInput,
+} from "../lib/cursor-capture.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 import {
   acknowledgeDiagnosticEvents,
@@ -953,7 +958,7 @@ async function exactPairingSources(sources) {
     if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) continue;
     const adapter = adapterFor(source.agentId);
     if (!adapter || adapter.exactAccounting === false) continue;
-    if (source.agentId === "antigravity") {
+    if (source.agentId === "antigravity" || source.agentId === "cursor") {
       result.push(source);
       continue;
     }
@@ -3610,6 +3615,21 @@ function parseHookRequest() {
   };
 }
 
+async function cursorHook() {
+  const capturedAt = new Date().toISOString();
+  try {
+    const request = parseCursorHookRequest(arguments_.slice(1));
+    if (request) {
+      const payload = await readCursorHookInput(process.stdin);
+      await assertOpenCodeUpgradeReady(stateDirectory);
+      if (await captureCursorHook(request, payload, capturedAt)) await launchAutomaticScheduler();
+    }
+  } catch {
+    // Never expose provider input or make local capture failure fail a Cursor turn.
+  }
+  process.stdout.write("{}\n");
+}
+
 async function hook() {
   try {
     const request = parseHookRequest();
@@ -4342,7 +4362,8 @@ try {
       fullHistory: syncArguments.includes("--full"),
     });
     if (result?.skipped) throw new Error("Another sync is already running.");
-  } else if (command === "hook") await hook();
+  } else if (command === "cursor-hook") await cursorHook();
+  else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
   else if (command === "handle-url") await browserSync(arguments_[1]);
   else if (command === "doctor") await doctor();
