@@ -2008,6 +2008,7 @@ const installedRuntimeFiles = [
   "cursor-identity.mjs",
   "cursor-events.mjs",
   "cursor-ledger.mjs",
+  "cursor-hooks.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
