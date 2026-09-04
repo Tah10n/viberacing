@@ -12,6 +12,7 @@ import {
   realpath,
   readdir,
   rename,
+  rmdir,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -30,10 +31,19 @@ const repositoryRoot = resolve(dirname(scriptPath), "..");
 const probeStateName = "cursor-evidence-state.json";
 const observationsDirectoryName = "observations";
 const hookLauncherSourcePath = join(repositoryRoot, "scripts", "cursor-evidence-hook-launcher.mjs");
+const ownedLockSourcePath = join(repositoryRoot, "packages", "connector", "lib", "owned-lock.mjs");
+const windowsSecuritySourcePath = join(
+  repositoryRoot,
+  "packages",
+  "connector",
+  "lib",
+  "windows-security.mjs",
+);
 const hookLauncherScriptName = "viberacing-cursor-evidence-probe-hook.mjs";
 const hookLauncherCommandName =
   process.platform === "win32" ? "viberacing-cursor-evidence-probe.cmd" : hookLauncherScriptName;
 const hookLauncherStateName = "viberacing-cursor-evidence-probe-state.json";
+const hookBundlePrefix = "viberacing-cursor-evidence-";
 const hookLockName = "hooks.json.viberacing-cursor-evidence.lock";
 const maximumInputBytes = 1_048_576;
 const maximumFileBytes = 100_000_000;
@@ -148,14 +158,16 @@ const stepPattern = /^(?:single|a1|b|a2|desktop|cli|parent|subagent|before|after
 
 function usage() {
   return `Usage:
-  node scripts/cursor-evidence-probe.mjs install-hooks --output-dir DIR --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP
+  node scripts/cursor-evidence-probe.mjs install-hooks --output-dir DIR --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP --event EVENT
   node scripts/cursor-evidence-probe.mjs remove-hooks --output-dir DIR
   node scripts/cursor-evidence-probe.mjs run-cli --output-dir DIR --agent ABSOLUTE_PATH --scenario SCENARIO --run-id UUID --step STEP -- [agent arguments]
   node scripts/cursor-evidence-probe.mjs inspect-jsonl --output-dir DIR --input ABSOLUTE_PATH --surface SURFACE --scenario SCENARIO --run-id UUID --step STEP
-  node scripts/cursor-evidence-probe.mjs report --output-dir DIR
+  node scripts/cursor-evidence-probe.mjs report --output-dir DIR --event-identity-kind KIND
 
 SURFACE is desktop, cli-interactive, or cli-headless. Probe output must be outside the repository.
 STEP is operator-declared metadata: single, a1, b, a2, desktop, cli, parent, subagent, before, or after.
+EVENT is afterAgentResponse, stop, or sessionEnd. Install exactly one lifecycle event per run/step.
+KIND is the reviewer-approved event_id, request_id, or generation_id used for hook/history reconciliation.
 The probe never stores raw Cursor payloads, prompts, responses, code, paths, models, costs, or provider identities.`;
 }
 
@@ -310,6 +322,19 @@ function requireScenario(value) {
 function requireEvent(value) {
   if (!eventNames.includes(value) && value !== "stream-json" && value !== "local-jsonl")
     throw new Error("Unknown Cursor probe event");
+  return value;
+}
+
+function requireHookEvent(value) {
+  if (!eventNames.includes(value)) throw new Error("Unknown Cursor hook event");
+  return value;
+}
+
+function requireReconciliationIdentityKind(value) {
+  if (!["event_id", "request_id", "generation_id"].includes(value))
+    throw new Error(
+      "Cursor evidence reconciliation identity must be event_id, request_id, or generation_id",
+    );
   return value;
 }
 
@@ -629,14 +654,62 @@ export async function readBoundedJson(stream, maximumBytes = maximumInputBytes) 
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-function hookCommandFor(platform = process.platform) {
-  return platform === "win32"
-    ? ".\\hooks\\viberacing-cursor-evidence-probe.cmd"
-    : `./hooks/${hookLauncherScriptName}`;
+function deterministicInstallationId(value) {
+  const hex = createHash("sha256").update(value).digest("hex").slice(0, 32).split("");
+  hex[12] = "4";
+  hex[16] = "8";
+  const canonical = hex.join("");
+  return `${canonical.slice(0, 8)}-${canonical.slice(8, 12)}-${canonical.slice(12, 16)}-${canonical.slice(16, 20)}-${canonical.slice(20)}`;
 }
 
-function isOwnedHook(entry, platform = process.platform) {
-  return typeof entry?.command === "string" && entry.command === hookCommandFor(platform);
+function hookBundleName(probeId, installationId) {
+  return `${hookBundlePrefix}${probeId}-${installationId}`;
+}
+
+function hookCommandFor(probeId, installationId, platform = process.platform) {
+  const bundle = hookBundleName(probeId, installationId);
+  return platform === "win32"
+    ? `.\\hooks\\${bundle}\\scripts\\${hookLauncherCommandName}`
+    : `./hooks/${bundle}/scripts/${hookLauncherScriptName}`;
+}
+
+function parseOwnedHookCommand(command, platform = process.platform) {
+  if (typeof command !== "string") return null;
+  const prefix = platform === "win32" ? ".\\hooks\\" : "./hooks/";
+  const suffix =
+    platform === "win32"
+      ? `\\scripts\\${hookLauncherCommandName}`
+      : `/scripts/${hookLauncherScriptName}`;
+  if (!command.startsWith(prefix) || !command.endsWith(suffix)) return null;
+  const bundle = command.slice(prefix.length, -suffix.length);
+  if (!bundle.startsWith(hookBundlePrefix)) return null;
+  const identity = bundle.slice(hookBundlePrefix.length);
+  if (identity.length !== 73 || identity[36] !== "-") return null;
+  const probeId = identity.slice(0, 36);
+  const installationId = identity.slice(37);
+  return uuidPattern.test(probeId) && uuidPattern.test(installationId)
+    ? { probeId: probeId.toLowerCase(), installationId: installationId.toLowerCase() }
+    : null;
+}
+
+function isOwnedHook(entry, probeId, platform = process.platform) {
+  const parsed = parseOwnedHookCommand(entry?.command, platform);
+  return parsed?.probeId === probeId.toLowerCase();
+}
+
+function stripOwnedHookEntries(document, probeId) {
+  if (document.hooks === undefined) return;
+  for (const eventName of Object.keys(document.hooks)) {
+    const entries = document.hooks[eventName];
+    if (!Array.isArray(entries)) {
+      if (eventNames.includes(eventName))
+        throw new Error(`Cursor ${eventName} hooks must be an array`);
+      continue;
+    }
+    const retained = entries.filter((entry) => !isOwnedHook(entry, probeId));
+    if (retained.length === 0) delete document.hooks[eventName];
+    else document.hooks[eventName] = retained;
+  }
 }
 
 function validatedHooksDocument(value) {
@@ -714,6 +787,99 @@ async function restoreDisplacedHooks(path, recovery) {
   }
 }
 
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function mergeHooksDocuments(original, concurrent) {
+  const merged = Object.create(null);
+  for (const key of new Set([...Object.keys(original), ...Object.keys(concurrent)])) {
+    if (key === "hooks") continue;
+    if (!Object.hasOwn(original, key)) merged[key] = cloneJson(concurrent[key]);
+    else if (!Object.hasOwn(concurrent, key)) merged[key] = cloneJson(original[key]);
+    else if (JSON.stringify(original[key]) === JSON.stringify(concurrent[key]))
+      merged[key] = cloneJson(concurrent[key]);
+    else
+      throw new Error(
+        `Cursor hooks concurrent top-level field ${key} conflicts; both versions were preserved`,
+      );
+  }
+  const originalHooks = Object.hasOwn(original, "hooks") ? original.hooks : Object.create(null);
+  const concurrentHooks = Object.hasOwn(concurrent, "hooks")
+    ? concurrent.hooks
+    : Object.create(null);
+  const hooks = Object.create(null);
+  for (const eventName of new Set([
+    ...Object.keys(originalHooks),
+    ...Object.keys(concurrentHooks),
+  ])) {
+    const left = Object.hasOwn(originalHooks, eventName) ? originalHooks[eventName] : [];
+    const right = Object.hasOwn(concurrentHooks, eventName) ? concurrentHooks[eventName] : [];
+    if (!Array.isArray(left) || !Array.isArray(right))
+      throw new Error(
+        `Cursor hooks concurrent ${eventName} field is not mergeable; both versions were preserved`,
+      );
+    const seen = new Set();
+    hooks[eventName] = [...left, ...right]
+      .filter((entry) => {
+        const serialized = JSON.stringify(entry);
+        if (seen.has(serialized)) return false;
+        seen.add(serialized);
+        return true;
+      })
+      .map(cloneJson);
+  }
+  if (
+    Object.keys(hooks).length > 0 ||
+    Object.hasOwn(original, "hooks") ||
+    Object.hasOwn(concurrent, "hooks")
+  )
+    merged.hooks = hooks;
+  return validatedHooksDocument(merged);
+}
+
+async function reconcileCurrentAndRecovery(path, recovery) {
+  const displacedCurrent = hooksMutationPath(path, "reconcile");
+  const pending = await assertSafeRegularFile(displacedCurrent, {
+    allowMissing: true,
+    privateFile: true,
+  });
+  if (pending !== null)
+    throw new Error(
+      `Cursor hooks reconciliation is already pending; all versions were preserved at ${path}, ${recovery}, and ${displacedCurrent}`,
+    );
+  const [original, concurrent] = await Promise.all([
+    readHooksSnapshot(recovery),
+    readHooksSnapshot(path),
+  ]);
+  const merged = mergeHooksDocuments(original.document, concurrent.document);
+  const stage = await stageHooksDocument(path, merged);
+  try {
+    await rename(path, displacedCurrent);
+    if (!sameFingerprint(concurrent.fingerprint, await hooksFingerprint(displacedCurrent))) {
+      await restoreDisplacedHooks(path, displacedCurrent);
+      throw new Error("Cursor hooks changed during recovery; all foreign versions were preserved");
+    }
+    try {
+      await link(stage, path);
+    } catch (error) {
+      if (error?.code === "EEXIST")
+        throw new Error(
+          `Cursor hooks changed during recovery publication; all versions were preserved at ${path}, ${recovery}, and ${displacedCurrent}`,
+          { cause: error },
+        );
+      await restoreDisplacedHooks(path, displacedCurrent);
+      throw error;
+    }
+    await unlink(displacedCurrent);
+    await unlink(recovery);
+  } finally {
+    await unlink(stage).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
+}
+
 async function recoverInterruptedHooksMutation(path) {
   const recovery = hooksMutationPath(path, "recovery");
   const recoveryInfo = await assertSafeRegularFile(recovery, {
@@ -726,7 +892,7 @@ async function recoverInterruptedHooksMutation(path) {
     privateFile: true,
   });
   if (current === null) await restoreDisplacedHooks(path, recovery);
-  else await unlink(recovery);
+  else await reconcileCurrentAndRecovery(path, recovery);
 }
 
 async function stageHooksDocument(path, document) {
@@ -780,7 +946,6 @@ async function publishHooksConditionally(
         await restoreDisplacedHooks(path, recovery);
         throw error;
       }
-      await unlink(recovery);
       return false;
     }
     await unlink(recovery);
@@ -793,10 +958,10 @@ async function publishHooksConditionally(
 }
 
 async function mutateHooksWithCas(path, mutate, { beforeCompareAndSwap, afterDisplace } = {}) {
-  await recoverInterruptedHooksMutation(path);
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    await recoverInterruptedHooksMutation(path);
     const { document, fingerprint } = await readHooksSnapshot(path);
-    const changed = mutate(document);
+    const changed = await mutate(document);
     if (!changed) return false;
     const published = await publishHooksConditionally(path, document, fingerprint, {
       beforeCompareAndSwap: () => beforeCompareAndSwap?.({ attempt, path }),
@@ -815,18 +980,245 @@ function windowsLauncherContents(nodePath = process.execPath) {
   return `@echo off\r\nsetlocal DisableDelayedExpansion\r\n"${escapedNodePath}" "%~dp0${hookLauncherScriptName}"\r\nexit /b %ERRORLEVEL%\r\n`;
 }
 
-async function writeOwnedArtifact(path, contents, { executable = false, allowOwnedState } = {}) {
+async function writeOwnedArtifact(path, contents, { executable = false } = {}) {
+  const expected = Buffer.isBuffer(contents) ? contents : Buffer.from(contents);
   const info = await assertSafeRegularFile(path, {
     allowMissing: true,
-    maximumBytes: maximumInputBytes,
+    maximumBytes: 2_000_000,
     privateFile: true,
   });
   if (info !== null) {
-    const current = await readFile(path, "utf8");
-    if (current !== contents && !allowOwnedState)
+    const current = await readFile(path);
+    if (!current.equals(expected))
       throw new Error(`Cursor probe-owned artifact changed unexpectedly: ${path}`);
   }
-  await atomicBytes(path, contents, { executable });
+  await atomicBytes(path, expected, { executable });
+}
+
+function hookBundlePaths(parent, probeId, installationId) {
+  const directory = join(parent, "hooks");
+  const root = join(directory, hookBundleName(probeId, installationId));
+  const scripts = join(root, "scripts");
+  const library = join(root, "packages", "connector", "lib");
+  return {
+    directory,
+    root,
+    scripts,
+    library,
+    launcher: join(scripts, hookLauncherScriptName),
+    launcherState: join(scripts, hookLauncherStateName),
+    command: join(scripts, hookLauncherCommandName),
+    probeScript: join(scripts, "cursor-evidence-probe.mjs"),
+    ownedLock: join(library, "owned-lock.mjs"),
+    windowsSecurity: join(library, "windows-security.mjs"),
+  };
+}
+
+async function ensurePrivateBundleDirectory(path, { create = false } = {}) {
+  if (create) await mkdir(path, { recursive: true, mode: 0o700 });
+  const info = await lstat(path);
+  if (
+    !info.isDirectory() ||
+    info.isSymbolicLink() ||
+    (typeof process.getuid === "function" && info.uid !== process.getuid())
+  )
+    throw new Error("Cursor hook runtime directory must be a current-user real directory");
+  if (process.platform === "win32") await ensurePrivateStateDirectory(path);
+  else if ((info.mode & 0o077) !== 0)
+    throw new Error("Cursor hook runtime directory must be owner-only");
+}
+
+async function runtimeArtifact(path, contents) {
+  return {
+    path,
+    sha256: createHash("sha256").update(contents).digest("hex"),
+  };
+}
+
+async function installHookBundle(parent, identity) {
+  const installationId = deterministicInstallationId(
+    [
+      identity.probeId,
+      identity.outputDirectory,
+      identity.declaredSurface,
+      identity.declaredScenario,
+      identity.declaredRunId,
+      identity.declaredStep,
+      identity.declaredEvent,
+    ].join("\0"),
+  );
+  const paths = hookBundlePaths(parent, identity.probeId, installationId);
+  for (const directory of [paths.directory, paths.root, paths.scripts, paths.library])
+    await ensurePrivateBundleDirectory(directory, { create: true });
+  const sources = new Map([
+    [paths.launcher, await readFile(hookLauncherSourcePath)],
+    [paths.probeScript, await readFile(scriptPath)],
+    [paths.ownedLock, await readFile(ownedLockSourcePath)],
+    [paths.windowsSecurity, await readFile(windowsSecuritySourcePath)],
+  ]);
+  if (process.platform === "win32")
+    sources.set(paths.command, Buffer.from(windowsLauncherContents()));
+  for (const [path, contents] of sources)
+    await writeOwnedArtifact(path, contents, {
+      executable: path === paths.launcher || path === paths.probeScript || path === paths.command,
+    });
+  const runtimeArtifacts = await Promise.all(
+    [...sources].map(([path, contents]) => runtimeArtifact(path, contents)),
+  );
+  const configuration = {
+    schemaVersion: 2,
+    ...identity,
+    installationId,
+    probeScriptPath: paths.probeScript,
+    runtimeArtifacts,
+  };
+  await writeOwnedArtifact(paths.launcherState, `${JSON.stringify(configuration, null, 2)}\n`);
+  return {
+    ...paths,
+    configuration,
+    installationId,
+    hookCommand: hookCommandFor(identity.probeId, installationId),
+  };
+}
+
+async function validateHookBundle(parent, probeId, installationId, expectedOutputDirectory = null) {
+  const paths = hookBundlePaths(parent, probeId, installationId);
+  for (const directory of [paths.directory, paths.root, paths.scripts, paths.library])
+    await ensurePrivateBundleDirectory(directory);
+  await assertSafeRegularFile(paths.launcherState, { privateFile: true });
+  const configuration = JSON.parse(await readFile(paths.launcherState, "utf8"));
+  const expectedInstallationId = deterministicInstallationId(
+    [
+      configuration?.probeId,
+      configuration?.outputDirectory,
+      configuration?.declaredSurface,
+      configuration?.declaredScenario,
+      configuration?.declaredRunId,
+      configuration?.declaredStep,
+      configuration?.declaredEvent,
+    ].join("\0"),
+  );
+  if (
+    configuration?.schemaVersion !== 2 ||
+    configuration.probeId !== probeId ||
+    configuration.installationId !== installationId ||
+    typeof configuration.outputDirectory !== "string" ||
+    !isAbsolute(configuration.outputDirectory) ||
+    (expectedOutputDirectory !== null &&
+      configuration.outputDirectory !== expectedOutputDirectory) ||
+    !surfaces.has(configuration.declaredSurface) ||
+    !scenarios.has(configuration.declaredScenario) ||
+    !uuidPattern.test(configuration.declaredRunId ?? "") ||
+    !stepPattern.test(configuration.declaredStep ?? "") ||
+    configuration.installationId !== expectedInstallationId ||
+    configuration.probeScriptPath !== paths.probeScript ||
+    !eventNames.includes(configuration.declaredEvent) ||
+    !Array.isArray(configuration.runtimeArtifacts)
+  )
+    throw new Error("Cursor evidence hook runtime ownership state is invalid");
+  const expectedArtifacts = new Set([
+    paths.launcher,
+    paths.probeScript,
+    paths.ownedLock,
+    paths.windowsSecurity,
+    ...(process.platform === "win32" ? [paths.command] : []),
+  ]);
+  if (
+    configuration.runtimeArtifacts.length !== expectedArtifacts.size ||
+    new Set(configuration.runtimeArtifacts.map((artifact) => artifact?.path)).size !==
+      expectedArtifacts.size ||
+    configuration.runtimeArtifacts.some(
+      (artifact) =>
+        !expectedArtifacts.has(artifact?.path) || !/^[0-9a-f]{64}$/.test(artifact.sha256),
+    )
+  )
+    throw new Error("Cursor evidence hook runtime manifest is invalid");
+  for (const artifact of configuration.runtimeArtifacts) {
+    await assertSafeRegularFile(artifact.path, {
+      maximumBytes: 2_000_000,
+      privateFile: true,
+    });
+    const digest = createHash("sha256")
+      .update(await readFile(artifact.path))
+      .digest("hex");
+    if (digest !== artifact.sha256)
+      throw new Error("Cursor evidence hook runtime changed; artifacts were preserved");
+  }
+  const expectedEntries = new Map([
+    [paths.root, ["packages", "scripts"]],
+    [join(paths.root, "packages"), ["connector"]],
+    [join(paths.root, "packages", "connector"), ["lib"]],
+    [paths.library, ["owned-lock.mjs", "windows-security.mjs"]],
+    [
+      paths.scripts,
+      [
+        "cursor-evidence-probe.mjs",
+        hookLauncherScriptName,
+        hookLauncherStateName,
+        ...(process.platform === "win32" ? [hookLauncherCommandName] : []),
+      ],
+    ],
+  ]);
+  for (const [directory, expected] of expectedEntries) {
+    const actual = (await readdir(directory)).sort();
+    if (JSON.stringify(actual) !== JSON.stringify([...expected].sort()))
+      throw new Error("Cursor evidence hook runtime contains unexpected artifacts");
+  }
+  return { paths, configuration, hookCommand: hookCommandFor(probeId, installationId) };
+}
+
+async function removeHookBundle(bundle) {
+  const { paths, configuration } = bundle;
+  for (const artifact of configuration.runtimeArtifacts) await unlink(artifact.path);
+  await unlink(paths.launcherState);
+  for (const directory of [
+    paths.scripts,
+    paths.library,
+    join(paths.root, "packages", "connector"),
+    join(paths.root, "packages"),
+    paths.root,
+  ])
+    await rmdir(directory);
+}
+
+async function validateOwnedHookEntries(document, parent, probeId, expectedOutputDirectory) {
+  const installations = new Map();
+  for (const entries of Object.values(document.hooks ?? {})) {
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      const parsed = parseOwnedHookCommand(entry?.command);
+      if (parsed?.probeId !== probeId) continue;
+      if (!installations.has(parsed.installationId))
+        installations.set(
+          parsed.installationId,
+          await validateHookBundle(parent, probeId, parsed.installationId, expectedOutputDirectory),
+        );
+    }
+  }
+  return installations;
+}
+
+async function discoverProbeBundles(parent, probeId, expectedOutputDirectory) {
+  const directory = join(parent, "hooks");
+  await ensurePrivateBundleDirectory(directory);
+  const bundles = new Map();
+  const prefix = `${hookBundlePrefix}${probeId}-`;
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    if (!entry.name.startsWith(prefix)) continue;
+    const installationId = entry.name.slice(prefix.length);
+    if (!entry.isDirectory() || !uuidPattern.test(installationId))
+      throw new Error("Cursor evidence hook runtime has an invalid owned bundle name");
+    bundles.set(
+      installationId,
+      await validateHookBundle(
+        parent,
+        probeId,
+        installationId.toLowerCase(),
+        expectedOutputDirectory,
+      ),
+    );
+  }
+  return bundles;
 }
 
 async function installHookLauncher(parent, configuration) {
@@ -842,28 +1234,7 @@ async function installHookLauncher(parent, configuration) {
   if (process.platform === "win32") await ensurePrivateStateDirectory(directory);
   else if ((directoryInfo.mode & 0o077) !== 0)
     throw new Error("Cursor hook launcher directory must be owner-only");
-  const launcher = join(directory, hookLauncherScriptName);
-  const launcherState = join(directory, hookLauncherStateName);
-  const source = await readFile(hookLauncherSourcePath, "utf8");
-  await writeOwnedArtifact(launcher, source, { executable: true });
-  if (process.platform === "win32") {
-    await writeOwnedArtifact(join(directory, hookLauncherCommandName), windowsLauncherContents(), {
-      executable: true,
-    });
-  }
-  const priorStateInfo = await assertSafeRegularFile(launcherState, {
-    allowMissing: true,
-    privateFile: true,
-  });
-  if (priorStateInfo !== null) {
-    const priorState = JSON.parse(await readFile(launcherState, "utf8"));
-    if (priorState?.probeId !== configuration.probeId)
-      throw new Error("A foreign Cursor evidence launcher state already exists");
-  }
-  await writeOwnedArtifact(launcherState, `${JSON.stringify(configuration, null, 2)}\n`, {
-    allowOwnedState: true,
-  });
-  return { launcher, launcherState };
+  return installHookBundle(parent, configuration);
 }
 
 async function withHooksLock(parent, operation) {
@@ -886,6 +1257,7 @@ export async function installProbeHooks({
   scenario,
   runId,
   step,
+  event = "stop",
   hooksFile,
   beforeCompareAndSwap,
   afterDisplace,
@@ -895,6 +1267,7 @@ export async function installProbeHooks({
   const declaredScenario = requireScenario(scenario);
   const declaredRunId = requireRunId(runId);
   const declaredStep = requireStep(step);
+  const declaredEvent = requireHookEvent(event);
   const path = resolve(hooksFile ?? join(homedir(), ".cursor", "hooks.json"));
   const parent = dirname(path);
   await mkdir(parent, { recursive: true, mode: 0o700 });
@@ -906,86 +1279,56 @@ export async function installProbeHooks({
   )
     throw new Error("Cursor hooks directory must be a current-user real directory");
   return withHooksLock(parent, async () => {
-    await installHookLauncher(parent, {
-      schemaVersion: 1,
+    const bundle = await installHookLauncher(parent, {
       probeId: state.probeId,
       outputDirectory: output,
-      probeScriptPath: scriptPath,
       declaredSurface,
       declaredScenario,
       declaredRunId,
       declaredStep,
+      declaredEvent,
     });
     const changed = await mutateHooksWithCas(
       path,
-      (document) => {
+      async (document) => {
+        await validateOwnedHookEntries(document, parent, state.probeId, output);
+        const before = JSON.stringify(document);
         document.version ??= 1;
         document.hooks ??= {};
-        let mutated = false;
-        for (const eventName of eventNames) {
-          const entries = document.hooks[eventName] ?? [];
-          if (!Array.isArray(entries))
-            throw new Error(`Cursor ${eventName} hooks must be an array`);
-          const retained = entries.filter((entry) => !isOwnedHook(entry));
-          const next = [...retained, { command: hookCommandFor() }];
-          document.hooks[eventName] = next;
-          if (JSON.stringify(next) !== JSON.stringify(entries)) mutated = true;
-        }
-        return mutated;
+        stripOwnedHookEntries(document, state.probeId);
+        const selectedEntries = document.hooks[declaredEvent] ?? [];
+        if (!Array.isArray(selectedEntries))
+          throw new Error(`Cursor ${declaredEvent} hooks must be an array`);
+        document.hooks[declaredEvent] = [...selectedEntries, { command: bundle.hookCommand }];
+        return JSON.stringify(document) !== before;
       },
       { beforeCompareAndSwap, afterDisplace },
     );
     return {
       changed,
       probeId: state.probeId,
-      hooks: [...eventNames],
-      command: hookCommandFor(),
+      installationId: bundle.installationId,
+      hooks: [declaredEvent],
+      command: bundle.hookCommand,
     };
   });
 }
 
 export async function removeProbeHooks({ outputDirectory, hooksFile }) {
-  const { state } = await readProbeState(outputDirectory);
+  const { output, state } = await readProbeState(outputDirectory);
   const path = resolve(hooksFile ?? join(homedir(), ".cursor", "hooks.json"));
   const parent = dirname(path);
   return withHooksLock(parent, async () => {
-    const changed = await mutateHooksWithCas(path, (document) => {
-      let mutated = false;
-      for (const eventName of eventNames) {
-        if (!Array.isArray(document.hooks?.[eventName])) continue;
-        const retained = document.hooks[eventName].filter((entry) => !isOwnedHook(entry));
-        if (retained.length !== document.hooks[eventName].length) mutated = true;
-        if (retained.length === 0) delete document.hooks[eventName];
-        else document.hooks[eventName] = retained;
-      }
-      return mutated;
+    const bundles = await discoverProbeBundles(parent, state.probeId, output);
+    const changed = await mutateHooksWithCas(path, async (document) => {
+      const active = await validateOwnedHookEntries(document, parent, state.probeId, output);
+      for (const [installationId, bundle] of active) bundles.set(installationId, bundle);
+      const before = JSON.stringify(document);
+      stripOwnedHookEntries(document, state.probeId);
+      return JSON.stringify(document) !== before;
     });
-    const directory = join(parent, "hooks");
-    const launcherState = join(directory, hookLauncherStateName);
-    let artifactsRemoved = false;
-    const stateInfo = await assertSafeRegularFile(launcherState, {
-      allowMissing: true,
-      privateFile: true,
-    });
-    if (stateInfo !== null) {
-      const configuration = JSON.parse(await readFile(launcherState, "utf8"));
-      if (configuration?.probeId !== state.probeId)
-        throw new Error("Cursor evidence launcher state is foreign; artifacts were preserved");
-      const expected = new Map([
-        [join(directory, hookLauncherScriptName), await readFile(hookLauncherSourcePath, "utf8")],
-        [launcherState, `${JSON.stringify(configuration, null, 2)}\n`],
-      ]);
-      if (process.platform === "win32")
-        expected.set(join(directory, hookLauncherCommandName), windowsLauncherContents());
-      for (const [artifact, expectedContents] of expected) {
-        await assertSafeRegularFile(artifact, { privateFile: true });
-        if ((await readFile(artifact, "utf8")) !== expectedContents)
-          throw new Error("Cursor evidence launcher artifact changed; artifacts were preserved");
-      }
-      for (const artifact of expected.keys()) await unlink(artifact);
-      artifactsRemoved = true;
-    }
-    return { changed, artifactsRemoved };
+    for (const bundle of bundles.values()) await removeHookBundle(bundle);
+    return { changed, artifactsRemoved: bundles.size > 0 };
   });
 }
 
@@ -998,6 +1341,8 @@ export async function captureCursorHook(
   if (configuration.probeId !== state.probeId) throw new Error("Stale Cursor evidence hook");
   const payload = await readBoundedJson(input);
   const eventName = requireEvent(payload?.hook_event_name);
+  if (eventName !== configuration.declaredEvent)
+    throw new Error("Cursor evidence hook event does not match its immutable installation");
   const observation = sanitizeCursorObservation(payload, {
     surface: configuration.declaredSurface,
     scenario: configuration.declaredScenario,
@@ -1239,6 +1584,8 @@ export async function runCursorCli({
 
 function accountGraph(observations) {
   const parent = new Map();
+  const emailsByAccountId = new Map();
+  const accountIdsByEmail = new Map();
   const find = (value) => {
     const current = parent.get(value) ?? value;
     if (current === value) {
@@ -1264,34 +1611,66 @@ function accountGraph(observations) {
         );
   for (const entry of observations) {
     const nodes = nodesFor(entry);
+    const accountIds = nodes.filter((node) => node.startsWith("account_id:"));
+    const emails = nodes.filter((node) => node.startsWith("user_email:"));
+    for (const accountId of accountIds) {
+      const aliases = emailsByAccountId.get(accountId) ?? new Set();
+      for (const email of emails) aliases.add(email);
+      emailsByAccountId.set(accountId, aliases);
+    }
+    for (const email of emails) {
+      const aliases = accountIdsByEmail.get(email) ?? new Set();
+      for (const accountId of accountIds) aliases.add(accountId);
+      accountIdsByEmail.set(email, aliases);
+    }
     for (const node of nodes) find(node);
     for (const node of nodes.slice(1)) union(nodes[0], node);
   }
+  const aliasConflicts = new Set([
+    ...[...emailsByAccountId].filter(([, aliases]) => aliases.size > 1).map(([node]) => node),
+    ...[...accountIdsByEmail].filter(([, aliases]) => aliases.size > 1).map(([node]) => node),
+  ]);
   return {
     component(entry) {
       const roots = [...new Set(nodesFor(entry).map(find))];
       return roots.length === 1 ? roots[0] : null;
     },
     count: new Set([...parent.keys()].map(find)).size,
+    aliasConflict: aliasConflicts.size > 0,
+    aliasConflictCount: aliasConflicts.size,
   };
+}
+
+function schemaSignature(entry) {
+  return `schema1_${createHash("sha256")
+    .update(JSON.stringify(entry.schemaPaths ?? []))
+    .digest("base64url")
+    .slice(0, 22)}`;
+}
+
+function observationContract(entry) {
+  return `${entry.eventName}:${schemaSignature(entry)}`;
 }
 
 function groupByRun(observations, scenario) {
   const grouped = new Map();
   for (const entry of observations.filter((candidate) => candidate.declaredScenario === scenario)) {
-    const run = grouped.get(entry.declaredRunId) ?? [];
+    const key = `${entry.declaredRunId}\0${observationContract(entry)}`;
+    const run = grouped.get(key) ?? [];
     run.push(entry);
-    grouped.set(entry.declaredRunId, run);
+    grouped.set(key, run);
   }
   return [...grouped.values()];
 }
 
 export async function buildEvidenceReport(
   outputDirectory,
-  { maximumObservationCount = maximumObservations } = {},
+  { maximumObservationCount = maximumObservations, eventIdentityKind } = {},
 ) {
   if (!Number.isInteger(maximumObservationCount) || maximumObservationCount < 1)
     throw new Error("Cursor evidence report observation limit must be a positive integer");
+  const selectedEventIdentityKind =
+    eventIdentityKind === undefined ? null : requireReconciliationIdentityKind(eventIdentityKind);
   const { output } = await readProbeState(outputDirectory);
   const directory = join(output, observationsDirectoryName);
   const names = (
@@ -1320,6 +1699,7 @@ export async function buildEvidenceReport(
     ...new Set(observations.map((entry) => entry.cursorVersion).filter(Boolean)),
   ].sort();
   const graph = accountGraph(observations);
+  const nonParsedObservations = observations.filter((entry) => entry.parseStatus !== "parsed");
   const eligible = observations.filter(
     (entry) =>
       entry.parseStatus === "parsed" &&
@@ -1407,6 +1787,57 @@ export async function buildEvidenceReport(
       });
       return Boolean(values.every(Boolean) && values[0] === values[2] && values[0] !== values[1]);
     });
+  const explicitZeroUsage = (entry) =>
+    (entry.tokenGroups?.length ?? 0) > 0 &&
+    entry.tokenGroups.every((group) =>
+      Object.values(group.counters ?? {}).every((value) => BigInt(value) === 0n),
+    );
+  const exactPositiveUsage = (entry) =>
+    (entry.tokenGroups?.length ?? 0) > 0 &&
+    entry.tokenGroups.some((group) =>
+      Object.values(group.counters ?? {}).some((value) => BigInt(value) > 0n),
+    );
+  const totalFor = (entry) => {
+    const totals = (entry.tokenGroups ?? [])
+      .map((group) => group.counters?.totalTokens)
+      .filter((value) => value !== undefined);
+    return totals.length === 1 ? BigInt(totals[0]) : null;
+  };
+  const subagentEvidence = groupByRun(eligible, "subagent")
+    .map((entries) => {
+      if (!hasOnlySteps(entries, ["parent", "subagent"])) return null;
+      const parent = consistentStep(entries, "parent", hasUsage);
+      const subagent = consistentStep(entries, "subagent", hasUsage);
+      if (!parent || !subagent || account(parent) !== account(subagent)) return null;
+      const parentTotal = totalFor(parent);
+      const subagentTotal = totalFor(subagent);
+      const candidateRelationships = ["separate_parent_and_subagent_usage_observed"];
+      if (parentTotal !== null && subagentTotal !== null)
+        candidateRelationships.push(
+          parentTotal === subagentTotal
+            ? "parent_total_equals_subagent_total"
+            : parentTotal > subagentTotal
+              ? "parent_total_greater_than_subagent_total"
+              : "parent_total_less_than_subagent_total",
+        );
+      return {
+        runId: parent.declaredRunId,
+        eventName: parent.eventName,
+        schemaSignature: schemaSignature(parent),
+        candidateRelationships,
+      };
+    })
+    .filter(Boolean);
+  const abortedErrorEntries = eligible.filter(
+    (entry) =>
+      entry.declaredScenario === "aborted-error" &&
+      ["aborted", "error", "failure"].includes(entry.status),
+  );
+  const abortedErrorEvidence = {
+    exactUsageObserved: abortedErrorEntries.some(exactPositiveUsage),
+    explicitZeroObserved: abortedErrorEntries.some(explicitZeroUsage),
+    usageAbsent: abortedErrorEntries.some((entry) => (entry.tokenGroups?.length ?? 0) === 0),
+  };
   const scenarioCoverage = {
     "desktop-one-turn": oneTurn("desktop-one-turn", "desktop"),
     "cli-interactive-one-turn": oneTurn("cli-interactive-one-turn", "cli-interactive"),
@@ -1415,19 +1846,8 @@ export async function buildEvidenceReport(
     "desktop-cli-different-accounts": pairedAccount("desktop-cli-different-accounts", false),
     "cli-a-b-a": aba("cli-a-b-a", "cli-interactive"),
     "desktop-a-b-a": aba("desktop-a-b-a", "desktop"),
-    subagent: groupByRun(eligible, "subagent").some(
-      (entries) =>
-        hasOnlySteps(entries, ["parent", "subagent"]) &&
-        consistentStep(entries, "parent", hasUsage) !== null &&
-        consistentStep(entries, "subagent", hasUsage) !== null,
-    ),
-    "aborted-error": groupByRun(eligible, "aborted-error").some(
-      (entries) =>
-        hasOnlySteps(entries, ["single"]) &&
-        consistentStep(entries, "single", (entry) =>
-          ["aborted", "error", "failure"].includes(entry.status),
-        ) !== null,
-    ),
+    subagent: subagentEvidence.length > 0,
+    "aborted-error": Object.values(abortedErrorEvidence).some(Boolean),
     "utc-midnight": groupByRun(eligible, "utc-midnight").some((entries) => {
       if (!hasOnlySteps(entries, ["before", "after"])) return false;
       const before = consistentStep(entries, "before", hasUsage);
@@ -1436,7 +1856,10 @@ export async function buildEvidenceReport(
         before &&
         after &&
         account(before) === account(after) &&
-        before.providerTimestamp.slice(0, 10) !== after.providerTimestamp.slice(0, 10),
+        Date.parse(before.providerTimestamp) < Date.parse(after.providerTimestamp) &&
+        Date.parse(`${after.providerTimestamp.slice(0, 10)}T00:00:00.000Z`) -
+          Date.parse(`${before.providerTimestamp.slice(0, 10)}T00:00:00.000Z`) ===
+          86_400_000,
       );
     }),
   };
@@ -1464,27 +1887,108 @@ export async function buildEvidenceReport(
   const truncatedObservations = observations.filter((entry) => entry.truncated).length;
   const ambiguousAccounts = observations.filter((entry) => entry.accountAmbiguous).length;
   const ambiguousTimestamps = observations.filter((entry) => entry.timestampAmbiguous).length;
-  const hookIdentities = new Set(
-    eventIdentityObservations
-      .filter((entry) => eventNames.includes(entry.eventName))
-      .flatMap((entry) => entry.eventIdentities.map(({ hash }) => hash)),
+  const exactCounterTuple = (entry) =>
+    JSON.stringify(
+      (entry.tokenGroups ?? [])
+        .map((group) =>
+          Object.fromEntries(
+            Object.entries(group.counters ?? {}).sort(([left], [right]) =>
+              left.localeCompare(right),
+            ),
+          ),
+        )
+        .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+    );
+  const selectedIdentityHashes = (entry) =>
+    selectedEventIdentityKind === null
+      ? []
+      : [
+          ...new Set(
+            (entry.eventIdentities ?? [])
+              .filter((identity) => identity.field === selectedEventIdentityKind)
+              .map((identity) => identity.hash),
+          ),
+        ];
+  const identityHash = (entry) => {
+    const hashes = selectedIdentityHashes(entry);
+    return hashes.length === 1 ? hashes[0] : null;
+  };
+  const selectedEventIdentityAmbiguousObservations = observations.filter(
+    (entry) => selectedIdentityHashes(entry).length > 1,
+  ).length;
+  const reconciliationCandidates = observations.filter(
+    (entry) =>
+      entry.parseStatus === "parsed" &&
+      !entry.truncated &&
+      !entry.accountAmbiguous &&
+      !entry.timestampAmbiguous &&
+      identityHash(entry) !== null,
   );
-  const historyIdentities = new Set(
-    eventIdentityObservations
-      .filter((entry) => entry.eventName === "local-jsonl")
-      .flatMap((entry) => entry.eventIdentities.map(({ hash }) => hash)),
+  const hookIdentityEntries = reconciliationCandidates.filter((entry) =>
+    eventNames.includes(entry.eventName),
   );
-  const hookHistoryIdentityReconciled = [...hookIdentities].some((hash) =>
-    historyIdentities.has(hash),
+  const historyIdentityEntries = reconciliationCandidates.filter(
+    (entry) => entry.eventName === "local-jsonl",
   );
+  let hookHistoryIdentityConflict = false;
+  let hookHistoryIdentityReconciled = false;
+  for (const hook of hookIdentityEntries) {
+    for (const history of historyIdentityEntries) {
+      if (identityHash(hook) !== identityHash(history)) continue;
+      const compatible =
+        (hook.invalidCounterPaths?.length ?? 0) === 0 &&
+        (history.invalidCounterPaths?.length ?? 0) === 0 &&
+        (hook.invalidTimestampPaths?.length ?? 0) === 0 &&
+        (history.invalidTimestampPaths?.length ?? 0) === 0 &&
+        account(hook) !== null &&
+        account(hook) === account(history) &&
+        hook.providerTimestamp !== null &&
+        hook.providerTimestamp === history.providerTimestamp &&
+        (hook.tokenGroups?.length ?? 0) > 0 &&
+        (history.tokenGroups?.length ?? 0) > 0 &&
+        exactCounterTuple(hook) === exactCounterTuple(history);
+      if (compatible) hookHistoryIdentityReconciled = true;
+      else hookHistoryIdentityConflict = true;
+    }
+  }
+  if (hookHistoryIdentityConflict || selectedEventIdentityAmbiguousObservations > 0)
+    hookHistoryIdentityReconciled = false;
+  const hookEventCandidates = Object.fromEntries(
+    eventNames.map((eventName) => {
+      const entries = eligible.filter((entry) => entry.eventName === eventName);
+      return [
+        eventName,
+        {
+          observationCount: entries.length,
+          usageObservationCount: entries.filter(hasUsage).length,
+          observedScenarios: [...new Set(entries.map((entry) => entry.declaredScenario))].sort(),
+          schemaSignatures: [...new Set(entries.map(schemaSignature))].sort(),
+        },
+      ];
+    }),
+  );
+  const mechanicalScenarioNames = [
+    "desktop-one-turn",
+    "cli-interactive-one-turn",
+    "cli-headless-one-turn",
+    "desktop-cli-same-account",
+    "desktop-cli-different-accounts",
+    "cli-a-b-a",
+    "desktop-a-b-a",
+    "utc-midnight",
+  ];
   const mechanicalCoverageComplete =
-    Object.values(scenarioCoverage).every(Boolean) &&
+    mechanicalScenarioNames.every((scenario) => scenarioCoverage[scenario]) &&
     Object.values(coreSurfaceUsage).every(Boolean) &&
     usageObservations.length > 0 &&
     hookHistoryIdentityReconciled &&
+    !hookHistoryIdentityConflict &&
+    selectedEventIdentityAmbiguousObservations === 0 &&
     graph.count >= 2 &&
+    !graph.aliasConflict &&
     invalidCounters === 0 &&
     invalidTimestamps === 0 &&
+    nonParsedObservations.length === 0 &&
     truncatedObservations === 0 &&
     ambiguousAccounts === 0 &&
     ambiguousTimestamps === 0 &&
@@ -1496,7 +2000,17 @@ export async function buildEvidenceReport(
     "token_relationship_requires_reviewer_interpretation",
   ];
   if (!mechanicalCoverageComplete) limitations.push("mechanical_coverage_incomplete");
+  if (selectedEventIdentityKind === null)
+    limitations.push("hook_history_identity_kind_not_selected");
   if (!hookHistoryIdentityReconciled) limitations.push("hook_history_identity_not_reconciled");
+  if (hookHistoryIdentityConflict) limitations.push("hook_history_identity_conflict");
+  if (selectedEventIdentityAmbiguousObservations > 0)
+    limitations.push("selected_event_identity_ambiguous");
+  if (graph.aliasConflict) limitations.push("account_alias_conflict");
+  if (nonParsedObservations.length > 0)
+    limitations.push("non_parsed_required_observations_cannot_qualify");
+  limitations.push("subagent_accounting_requires_reviewer_interpretation");
+  limitations.push("aborted_error_accounting_requires_reviewer_interpretation");
   if (graph.count < 2) limitations.push("distinct_accounts_not_demonstrated");
   if (truncatedObservations > 0 || observationSetTruncated)
     limitations.push("truncated_observations_cannot_qualify");
@@ -1513,8 +2027,11 @@ export async function buildEvidenceReport(
     observedEvents,
     versions,
     distinctLocallyLinkedAccounts: graph.count,
+    accountAliasConflict: graph.aliasConflict,
+    accountAliasConflictCount: graph.aliasConflictCount,
     usageObservationCount: usageObservations.length,
     eventIdentityObservationCount: eventIdentityObservations.length,
+    selectedEventIdentityKind,
     observationsWithProviderTimestamp: observations.filter(
       (entry) => entry.providerTimestamp !== null,
     ).length,
@@ -1523,7 +2040,16 @@ export async function buildEvidenceReport(
     truncatedObservationCount: truncatedObservations,
     ambiguousAccountObservationCount: ambiguousAccounts,
     ambiguousTimestampObservationCount: ambiguousTimestamps,
+    nonParsedObservationCount: nonParsedObservations.length,
     hookHistoryIdentityReconciled,
+    hookHistoryIdentityConflict,
+    selectedEventIdentityAmbiguousObservationCount: selectedEventIdentityAmbiguousObservations,
+    hookEventCandidates,
+    semanticEvidence: {
+      subagent: subagentEvidence,
+      abortedError: abortedErrorEvidence,
+    },
+    semanticCoverageComplete: false,
     observedCandidateRelationships,
     scenarioCoverage,
     coreSurfaceUsage,
@@ -1545,6 +2071,7 @@ async function main() {
       scenario: options.scenario,
       runId: options["run-id"],
       step: options.step,
+      event: requireHookEvent(options.event),
       hooksFile: options["hooks-file"],
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
@@ -1577,7 +2104,13 @@ async function main() {
   }
   if (command === "report") {
     process.stdout.write(
-      `${JSON.stringify(await buildEvidenceReport(options["output-dir"]), null, 2)}\n`,
+      `${JSON.stringify(
+        await buildEvidenceReport(options["output-dir"], {
+          eventIdentityKind: options["event-identity-kind"],
+        }),
+        null,
+        2,
+      )}\n`,
     );
     return;
   }

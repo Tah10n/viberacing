@@ -82,7 +82,8 @@ node scripts/cursor-evidence-probe.mjs install-hooks \
   --surface desktop \
   --scenario desktop-one-turn \
   --run-id 11111111-1111-4111-8111-111111111111 \
-  --step single
+  --step single \
+  --event stop
 ```
 
 Run only the named scenario, then remove the probe entries. Foreign hook entries and unknown
@@ -93,13 +94,26 @@ node scripts/cursor-evidence-probe.mjs remove-hooks \
   --output-dir /absolute/private/cursor-evidence
 ```
 
-Repeat installation with `--surface cli-interactive` for interactive CLI scenarios. `surface`,
+Repeat installation with `--surface cli-interactive` for interactive CLI scenarios. Select exactly
+one of `afterAgentResponse`, `stop`, or `sessionEnd` with `--event` for each run/step; lifecycle
+events are evaluated as separate schema contracts rather than assumed to be equivalent. `surface`,
 `scenario`, `run-id`, and `step` are operator-declared labels, not claims inferred from Cursor.
-Installation writes a fixed relative launcher under `~/.cursor/hooks/`; dynamic paths never enter a
-shell command. An owned lock, file fingerprint comparison, exclusive no-replace publication, and a
-recoverable displaced-file journal preserve concurrent foreign edits, with one retry before failing
-closed. Installation also fails closed for linked, oversized, non-regular, or other-user hook files.
-It never changes Cursor hook trust or bypasses an approval UI.
+
+Each installation gets a deterministic probe/run/step/event-specific relative command and an
+immutable owner-only runtime bundle under `~/.cursor/hooks/`. The bundle contains its own probe and
+required helpers instead of importing the repository checkout. Before every import the launcher
+rechecks regular-file ownership/mode (or the current-user-only Windows ACL), size, and SHA-256 for
+every runtime file. A later branch switch or file edit therefore cannot change the installed hook;
+bundle tampering is a safe no-op. Delayed events keep the immutable labels of the installation that
+received them.
+
+An owned lock, file fingerprint comparison, exclusive no-replace publication, and displaced-file
+journal preserve concurrent foreign edits. If a concurrent current file appears after displacement,
+the original and concurrent documents are validated and merged without dropping either hook set;
+unmergeable conflicts fail closed with both files preserved. `remove-hooks` validates the output
+probe identity, exact command, state, runtime manifest, hashes, and ACLs before changing
+`hooks.json`. Installation also fails closed for linked, oversized, non-regular, or other-user hook
+files. It never changes Cursor hook trust or bypasses an approval UI.
 
 ### Headless CLI
 
@@ -146,16 +160,26 @@ Generate the minimized coverage report with:
 
 ```bash
 node scripts/cursor-evidence-probe.mjs report \
-  --output-dir /absolute/private/cursor-evidence
+  --output-dir /absolute/private/cursor-evidence \
+  --event-identity-kind request_id
 ```
 
-`mechanicalCoverageComplete: true` means only that the probe mechanically verified the explicit
-steps for all ten scenarios: same/different account relationships, CLI and Desktop A/B/A reuse,
-three usage-bearing surfaces, parent/subagent observations, aborted/error status, UTC rollover, and
-one hook/history identity reconciliation. Ambiguous timestamps/accounts, invalid counters,
-truncation, and incomplete scenarios cannot qualify. Email aliases and case-sensitive opaque account
-IDs are HMACed separately and are linked into one local account only when they co-occur in an
-unambiguous observation.
+`mechanicalCoverageComplete: true` means only that the probe mechanically verified the structural
+one-turn, same/different-account, CLI/Desktop A/B/A, three-surface, and adjacent chronological UTC
+rollover checks. It does not claim that parent/subagent totals or aborted/error accounting semantics
+are authoritative. Those observations are listed separately under `semanticEvidence`, with candidate
+parent/subagent relationships and distinct `exactUsageObserved`, `explicitZeroObserved`, and
+`usageAbsent` states; `semanticCoverageComplete` remains false pending reviewer interpretation.
+
+Hook/history reconciliation requires a reviewer-selected `event_id`, `request_id`, or
+`generation_id`. Conversation and session IDs never qualify automatically. Matching records must
+also have the same account component, exact counter tuple, and provider timestamp; a contradictory
+tuple with the same selected identity closes coverage. Email aliases and case-sensitive opaque
+account IDs are HMACed separately and linked only when they co-occur. The report rejects global
+one-to-many account-ID/email relationships as `accountAliasConflict`. Ambiguous timestamps/accounts,
+invalid counters, non-parsed mandatory observations, truncation, conflicting event identities, and
+incomplete scenarios cannot qualify. Each hook event and minimized schema signature is reported as a
+separate candidate contract.
 
 `productionGate` is always `closed`, and `limitations` is never empty. The report lists only
 observed candidate counter equalities; it does not select an authoritative token formula. Before

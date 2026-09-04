@@ -770,11 +770,6 @@
   opacity: 0.55;
 }
 
-.account-control-buttons .sync-unavailable:disabled,
-.installation-sync-control .sync-unavailable:disabled {
-  cursor: not-allowed;
-}
-
 .installation-controls {
   display: flex;
   align-items: center;
