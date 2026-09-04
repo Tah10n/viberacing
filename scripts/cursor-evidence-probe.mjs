@@ -215,7 +215,7 @@ const windowsDirectoryInspection = [
   "if (-not $entry.PSIsContainer) { throw 'Target is not a directory' }",
   "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Directory is a reparse point' }",
   "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
-  "$acl=Get-Acl -LiteralPath $entry.FullName -ErrorAction Stop",
+  "$acl=[IO.Directory]::GetAccessControl($entry.FullName)",
   "$owner=$acl.GetOwner([Security.Principal.SecurityIdentifier]).Value",
   "if ($owner -ne $identity.User.Value) { throw 'Directory owner mismatch' }",
   "if ($mode -eq 'private') {",
