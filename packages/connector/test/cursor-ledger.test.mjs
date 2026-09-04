@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   initializeCursorLedger,
+  beginCursorHeadlessCapture,
   readCursorLedger,
   recordCursorCapture,
   maximumCursorLedgerBytes,
@@ -545,4 +546,128 @@ test("Cursor adapter rejects truncated history and cannot substitute another acc
     collectCursor(source, range, collected.nextState, { stateRoot: root, now: later }),
     { diagnosticCode: "cursor_usage_incomplete" },
   );
+});
+
+for (const order of ["stop-first", "headless-first"]) {
+  test(`Cursor secondary dedup ${order} preserves the final result UTC date across replay and compaction`, async (context) => {
+    const root = await fixture(context);
+    await beginCursorHeadlessCapture(root, profile, captureId, "2026-09-04T23:59:50.000Z");
+    if (order === "stop-first") {
+      await recordStop(root);
+      assert.equal((await readCursorLedger(root, profile, at)).events.length, 0);
+    }
+    await half(root, "result", result, later);
+    await half(root, "binding", end, "2026-09-05T00:00:00.100Z");
+    if (order === "headless-first") await recordStop(root);
+    let ledger = await readCursorLedger(root, profile, later);
+    assert.equal(ledger.events.length, 1);
+    assert.equal(ledger.events[0].origin, "headless");
+    assert.equal(ledger.events[0].date, "2026-09-05");
+    assert.equal(ledger.events[0].capturedAt, later);
+    assert.equal(ledger.events[0].tokens.totalTokens, "133");
+    assert.equal(ledger.gaps.length, 0);
+    const before = await readFile(file(root));
+    await recordStop(root, stop, "2026-09-06T00:00:00.000Z");
+    assert.deepEqual(await readFile(file(root)), before);
+    assert.equal(await compactCursorLedger(root, profile, ledger.checkpoint), true);
+    ledger = await readCursorLedger(root, profile, later);
+    assert.equal(ledger.events.length, 1);
+    assert.equal(ledger.events[0].capturedAt, later);
+    // A later normal turn may reuse the session and exact tuple without being the same run.
+    await recordStop(
+      root,
+      { ...stop, generation_id: "later-normal-turn" },
+      "2026-09-05T00:00:01.000Z",
+    );
+    assert.equal(
+      (await readCursorLedger(root, profile, "2026-09-05T00:00:02.000Z")).events.length,
+      2,
+    );
+  });
+
+  test(`Cursor secondary tuple conflict ${order} retains the first confirmed event with a partial gap`, async (context) => {
+    const root = await fixture(context);
+    await beginCursorHeadlessCapture(root, profile, captureId, "2026-09-04T23:59:50.000Z");
+    const conflict = { ...stop, input_tokens: 200 };
+    if (order === "stop-first") await recordStop(root, conflict);
+    await half(root, "result", result, later);
+    await half(root, "binding", end, later);
+    if (order === "headless-first") await recordStop(root, conflict);
+    const ledger = await readCursorLedger(root, profile, later);
+    assert.equal(ledger.events.length, 1);
+    assert.equal(ledger.events[0].origin, order === "stop-first" ? "stop" : "headless");
+    assert.equal(ledger.events[0].tokens.totalTokens, order === "stop-first" ? "233" : "133");
+    assert.ok(ledger.gaps.some((gap) => gap.code === "cursor_event_identity_conflict"));
+  });
+}
+
+test("Cursor unresolved wrapper holds ambiguous stops but releases a proven independent Desktop session", async (context) => {
+  const root = await fixture(context);
+  await beginCursorHeadlessCapture(root, profile, captureId, "2026-09-04T23:59:50.000Z");
+  await recordStop(root, { ...stop, session_id: "independent-desktop-session" });
+  assert.equal((await readCursorLedger(root, profile, at)).events.length, 0);
+  await half(root, "binding", end, later);
+  assert.equal((await readCursorLedger(root, profile, later)).events.length, 1);
+  await half(root, "result", result, later);
+  const ledger = await readCursorLedger(root, profile, later);
+  assert.equal(ledger.events.length, 2);
+  assert.equal(ledger.gaps.length, 0);
+});
+
+test("Cursor abandoned wrapper excludes ambiguous stops only inside its bounded failed interval", async (context) => {
+  const root = await fixture(context);
+  await beginCursorHeadlessCapture(root, profile, captureId, at);
+  await recordStop(root);
+  assert.equal((await readCursorLedger(root, profile, at)).events.length, 0);
+  // A later independent capture expires the old marker without discarding subsequent days.
+  await recordStop(root, { ...stop, generation_id: "next-day-turn" }, "2026-09-06T00:00:00.000Z");
+  const ledger = await readCursorLedger(root, profile, "2026-09-06T00:00:00.000Z");
+  assert.equal(ledger.pendingPairs, 0);
+  assert.equal(ledger.events.length, 1);
+  assert.equal(ledger.events[0].date, "2026-09-06");
+  assert.ok(ledger.gaps.some((gap) => gap.code === "cursor_headless_pair_incomplete"));
+});
+
+test("Cursor collection cannot upload the stop day before a midnight headless pair resolves", async (context) => {
+  const root = await fixture(context);
+  await beginCursorHeadlessCapture(root, profile, captureId, "2026-09-04T23:59:50.000Z");
+  await recordStop(root);
+  const account = (await readCursorLedger(root, profile, at)).accounts[0];
+  const source = {
+    agentId: "cursor",
+    collectionMethod: "cursor_local_events",
+    clientSourceId: profile,
+    providerAccountKey: account.accountKey,
+  };
+  const range = { rangeStart: "2026-09-04", rangeEnd: "2026-09-05" };
+  const before = await collectCursor(
+    source,
+    range,
+    {},
+    { stateRoot: root, now: at, hooksCurrent: true },
+  );
+  assert.deepEqual(before.entries, []);
+  assert.equal(before.completeness, "partial");
+  await half(root, "result", result, later);
+  await half(root, "binding", end, later);
+  const after = await collectCursor(source, range, before.nextState, {
+    stateRoot: root,
+    now: later,
+    hooksCurrent: true,
+  });
+  assert.equal(after.entries.length, 1);
+  assert.equal(after.entries[0].date, "2026-09-05");
+  assert.equal(after.entries[0].totalTokens, "133");
+});
+
+test("Cursor pending account conflict cannot release a stop for the same session", async (context) => {
+  const root = await fixture(context);
+  await beginCursorHeadlessCapture(root, profile, captureId, "2026-09-04T23:59:50.000Z");
+  await recordStop(root);
+  await half(root, "binding", { ...end, user_email: "conflicting-account@example.test" }, later);
+  assert.equal((await readCursorLedger(root, profile, later)).events.length, 0);
+  await half(root, "result", result, later);
+  const ledger = await readCursorLedger(root, profile, later);
+  assert.equal(ledger.events.length, 0);
+  assert.ok(ledger.gaps.some((gap) => gap.code === "cursor_account_identity_conflict"));
 });

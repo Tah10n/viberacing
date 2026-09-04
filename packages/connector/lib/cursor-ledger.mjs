@@ -187,6 +187,49 @@ function validRecord(record) {
   return false;
 }
 
+// A compatible stop must fall inside the same durable wrapper invocation. Session reuse
+// outside that interval remains a separate per-turn event, even with identical counters.
+function captureWindow(pending, end, eventKey) {
+  const times = [pending.firstAt, pending.result?.capturedAt, pending.binding?.capturedAt, end]
+    .filter(Boolean)
+    .sort();
+  return {
+    from: times[0],
+    to: times.at(-1),
+    sessionKey: pending.result?.sessionKey ?? pending.binding?.sessionKey,
+    accountKey: pending.binding?.accountKey,
+    eventKey,
+  };
+}
+function insideCapture(event, window) {
+  return (
+    event.capturedAt >= window.from &&
+    event.capturedAt <= window.to &&
+    (!window.sessionKey || event.sessionKey === window.sessionKey) &&
+    (!window.accountKey || event.accountKey === window.accountKey)
+  );
+}
+function capturedEvents(state, now) {
+  const pending = [...state.pending.values()].map((item) => ({
+    ...captureWindow(
+      item,
+      new Date(
+        Math.min(Date.parse(now), Date.parse(item.firstAt) + cursorPairTimeoutMs),
+      ).toISOString(),
+    ),
+    // A conflicting account on the same session is not proof of an independent stop.
+    accountKey: undefined,
+  }));
+  return [...state.events.values()].filter(
+    (item) =>
+      !state.blockedSessions.has(item.sessionKey) &&
+      !state.suppressedEvents.has(item.eventKey) &&
+      // Defer a possibly duplicated stop until the wrapper's outcome is known. This also
+      // prevents an early stop upload on the day before the final result crosses midnight.
+      (item.origin !== "stop" || !pending.some((window) => insideCapture(item, window))),
+  );
+}
+
 function fold(records) {
   const state = {
     accounts: [],
@@ -198,6 +241,8 @@ function fold(records) {
     lastObservedAt: null,
     sessionAccounts: new Map(),
     blockedSessions: new Set(),
+    captureWindows: [],
+    suppressedEvents: new Set(),
   };
   const gap = (from, to, code) =>
     state.gaps.push({ from: from < to ? from : to, to: from < to ? to : from, code });
@@ -262,6 +307,15 @@ function fold(records) {
     } else if (record.kind === "abort") {
       const pending = state.pending.get(record.captureId);
       gap(pending?.firstAt ?? record.at, record.at, "cursor_headless_pair_incomplete");
+      if (pending)
+        state.captureWindows.push(
+          captureWindow(
+            pending,
+            new Date(
+              Math.min(Date.parse(record.at), Date.parse(pending.firstAt) + cursorPairTimeoutMs),
+            ).toISOString(),
+          ),
+        );
       state.pending.delete(record.captureId);
       state.completed.set(record.captureId, null);
     } else if (kind === "result" || kind === "binding") {
@@ -287,15 +341,40 @@ function fold(records) {
       }
       pending[kind] ??= half;
       if (pending.result && pending.binding) {
-        if (pending.result.sessionKey !== pending.binding.sessionKey)
+        if (pending.result.sessionKey !== pending.binding.sessionKey) {
           gap(pending.firstAt, at, "cursor_account_identity_conflict");
-        else accept(pairCursorHeadless(pending.result, pending.binding));
+          state.blockedSessions.add(pending.result.sessionKey);
+          state.blockedSessions.add(pending.binding.sessionKey);
+        } else {
+          accept(pairCursorHeadless(pending.result, pending.binding));
+          state.captureWindows.push(captureWindow(pending, at, pending.result.eventKey));
+        }
         state.pending.delete(record.captureId);
         state.completed.set(record.captureId, pending.result.eventKey);
       } else state.pending.set(record.captureId, pending);
     }
   }
   if (state.pending.size > maximumPendingPairs) fail("local_store_scan_limit");
+  const positions = new Map([...state.events.keys()].map((key, index) => [key, index]));
+  const stops = [...state.events.values()].filter((item) => item.origin === "stop");
+  for (const window of state.captureWindows) {
+    const headless = window.eventKey && state.events.get(window.eventKey);
+    const matching = stops.filter((stop) => insideCapture(stop, window));
+    if (
+      !headless ||
+      matching.every((stop) => JSON.stringify(stop.tokens) === JSON.stringify(headless.tokens))
+    ) {
+      for (const stop of matching) state.suppressedEvents.add(stop.eventKey);
+      continue;
+    }
+    const candidates = [headless, ...matching].sort(
+      (left, right) => positions.get(left.eventKey) - positions.get(right.eventKey),
+    );
+    for (const other of candidates.slice(1)) {
+      gap(candidates[0].capturedAt, other.capturedAt, "cursor_event_identity_conflict");
+      state.suppressedEvents.add(other.eventKey);
+    }
+  }
   return state;
 }
 
@@ -536,9 +615,7 @@ export async function readCursorLedger(
     return {
       captureStartedAt: state.captureStartedAt,
       accounts: state.accounts,
-      events: [...state.events.values()].filter(
-        (item) => !state.blockedSessions.has(item.sessionKey),
-      ),
+      events: capturedEvents(state, now),
       pendingPairs: pending.length,
       headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
@@ -722,9 +799,7 @@ export async function recordCursorCapture(root, profileId, input) {
     const next = fold(records);
     return {
       status: next.gaps.length > state.gaps.length ? "partial" : "recorded",
-      events: [...next.events.values()].filter(
-        (item) => !next.blockedSessions.has(item.sessionKey),
-      ),
+      events: capturedEvents(next, input.capturedAt),
       pendingPairs: next.pending.size,
     };
   });
