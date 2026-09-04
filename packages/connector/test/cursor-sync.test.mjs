@@ -174,7 +174,8 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
   async function run(...args) {
     const output = await exec(process.execPath, [cli, ...args], {
       env: environment,
-      timeout: 30_000,
+      // Native Windows ACL validation launches PowerShell for durable filesystem operations.
+      timeout: process.platform === "win32" ? 120_000 : 30_000,
     });
     outputs.push(output);
     return output;
