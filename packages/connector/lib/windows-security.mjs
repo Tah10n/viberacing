@@ -117,7 +117,7 @@ async function runWindowsSecurityScript(
       [ownerOnlyFileEnvironmentVariable]: win32.resolve(path),
     },
     windowsHide: true,
-    timeout: 15_000,
+    timeout: 30_000,
   };
   try {
     await run(powershell, arguments_, options);
@@ -220,7 +220,7 @@ export async function ensurePrivateStateDirectory(
         [statePathsEnvironmentVariable]: JSON.stringify(normalizedPaths),
       },
       windowsHide: true,
-      timeout: 15_000,
+      timeout: 30_000,
     };
     try {
       await run(powershell, arguments_, options);

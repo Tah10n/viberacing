@@ -279,7 +279,15 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
     "handle-url",
     `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
   );
-  assert.equal(rollingSince(before).length, 3);
+  assert.equal(
+    rollingSince(before).length,
+    3,
+    JSON.stringify({
+      output: outputs.at(-1),
+      report: reports.at(-1),
+      errors: usages.slice(before).flatMap((body) => body.sourceErrors ?? []),
+    }),
+  );
   assert.deepEqual(rollingSince(before).map(total).sort(), ["1009", "109", "48"]);
   assert.equal(await runtime.readDirty(), null);
   assert.equal(reports.at(-1).status, "succeeded");

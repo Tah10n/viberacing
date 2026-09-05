@@ -94,7 +94,7 @@ test("Windows ACL retries one killed timeout and remains fail-closed after a sec
   });
   assert.equal(recoveredCalls.length, 2);
   assert.deepEqual(recoveredCalls[1], recoveredCalls[0]);
-  assert.equal(recoveredCalls[0][2].timeout, 15_000);
+  assert.equal(recoveredCalls[0][2].timeout, 30_000);
 
   let exhaustedCalls = 0;
   await assert.rejects(

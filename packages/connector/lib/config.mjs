@@ -595,7 +595,8 @@ async function waitForTestConnectionBarrier(stage) {
 }
 
 function connectionStateLockWaitMs() {
-  return process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  // Native Windows ACL subprocesses run inside this lock; tests need the production budget.
+  return process.env.NODE_ENV === "test" && process.platform !== "win32" ? 5_000 : 60_000;
 }
 
 export async function withConnectionStateLock(callback) {
