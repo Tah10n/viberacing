@@ -15,13 +15,21 @@ prompts, responses, code, paths, repositories, hostnames, provider identities, c
 names, exception messages, stack traces, or costs.
 
 Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Antigravity
-CLI, and Gemini CLI. Antigravity Desktop is not supported. See
+CLI, Gemini CLI, and Cursor Desktop + CLI. Antigravity Desktop is not supported. See
 [agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
-Cursor is not counted yet. The current official Desktop hook and CLI output schemas do not expose a
-confirmed exact token source shared by both surfaces. The dated
-[Cursor evidence gate](docs/CURSOR_EVIDENCE.md) documents the closed production boundary and an
-opt-in, privacy-minimized local probe for future schema verification.
+This branch implements Cursor as the eighth agent in connector 0.7.0. Desktop and interactive CLI
+are captured automatically through owned hooks after connection; headless runs use
+`viberacing run cursor -- <agent arguments>`. The same local account shares one logical source
+across Desktop and CLI, while different accounts remain separate. Machine-local sources add with
+`source_sum`. Exact history starts with hook installation; earlier usage remains partial. The UTC
+day is fixed at first capture, using the approved capture-time policy. Reasoning and subagents are
+already included in the aggregate run usage. Unknown schemas fail closed. Direct headless runs, Tab,
+Bugbot, Cloud Agents and SDK usage are outside this support contract.
+
+The [Cursor evidence and rollout gates](docs/CURSOR_EVIDENCE.md) distinguish accepted exact-source
+evidence, this implementation, remaining live A/B/A validation, and the separate server-first
+release. This Draft branch has not been deployed or published.
 
 Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
 all active mapped OpenCode databases for that installation together. One short-lived detached

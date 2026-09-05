@@ -92,8 +92,16 @@ through the request's current UTC date; future dates are never inferred missing.
 new inferred gaps but retains already known incompleteness. An authoritative complete sibling can
 prove an `account_max` account-day, whereas every unresolved contributor keeps `source_sum` partial.
 
-Seven agents currently contribute authoritative token totals: Codex, Claude Code, OpenCode, Kimi
-Code, Qwen Code, Antigravity, and Gemini CLI.
+Eight agents are registered in this branch: Codex, Claude Code, OpenCode, Kimi Code, Qwen Code,
+Antigravity, Gemini CLI, and Cursor. Cursor uses the existing `source_sum` math. Separate computers
+and separate accounts add; Desktop and CLI on the same local account share one event stream.
+`provider_account_events` controls only local account routing, not aggregation. The first durable
+capture fixes the UTC day, including a headless result whose sessionEnd arrives later. This is
+capture-dated exact usage, not provider-dated lifetime history. Earlier history, current-day
+coverage, hook gaps, unresolved pairs and unavailable earlier-source reservations remain partial.
+Event reservations survive reset and prevent the same local events from moving to a new server
+source while old source rows remain. Rename, explicit reassign, merge and deletion use the existing
+account/source lifecycle and summary transactions.
 
 Operational correction requires no admin portal: restore/correct the authoritative local usage store
 and run `viberacing sync`. Run `viberacing sync --full` to explicitly rescan the current year after

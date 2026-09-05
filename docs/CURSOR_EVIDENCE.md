@@ -1,7 +1,182 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-03: **closed**. Cursor is not a registered Vibe Racing agent and contributes no
-ranking usage.
+Status on 2026-09-05: **exact-source evidence passed; production implementation implemented in this
+PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
+eighth server agent with `source_sum` and migration 012. The connector implements strict stop
+capture, account routing, the explicit headless wrapper, durable integrity proofs, source
+reservations across reset and ACK-driven lossless compaction. Cross-platform release checks and
+Desktop/CLI installed-runtime smoke have passed; live A/B/A with a second real account remains a
+Draft gate. Rollout remains blocked until a reviewed server-first deployment. The historical
+investigation below describes the earlier gate, not the current availability of authenticated token
+counters.
+
+## Authenticated contract and narrow follow-up
+
+Runtime version gates accept only Desktop 3.18.25/3.19.7 and CLI `2026.09.02-c22c1a3`. Unknown patch
+releases and builds fail closed even when their fields have the same shape; expanding this set
+requires authenticated exact-source evidence and parser regressions. Capacity recovery also retains
+a permanent gap for the interval in which a full ledger may have rejected writes, and an owned hook
+with a storage failure schedules safe collection diagnostics without recreating missing history.
+
+Implementation base: `265ce5e82ad19d3867d8f6289fad055527b302d3` (main after PR #64). The accepted
+local evidence establishes Desktop 3.18.25, interactive CLI `2026.09.02-c22c1a3`, successful
+headless aggregate usage, matching Desktop/CLI account identity, matching headless result/sessionEnd
+session identity, aggregate subagent accounting, and failed aborted invocations. Raw observations
+and local identity hashes are not included here.
+
+Selected exact paths in the minimized schemas:
+
+| Contract                     | Counters                                                                                             | Account identity    | Event/correlation identity        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------- | --------------------------------- |
+| Desktop / interactive `stop` | `$.input_tokens`, `$.output_tokens`, `$.cache_read_tokens`, `$.cache_write_tokens`                   | `$.user_email`      | `$.generation_id`, `$.session_id` |
+| Headless final result        | `$.usage.inputTokens`, `$.usage.outputTokens`, `$.usage.cacheReadTokens`, `$.usage.cacheWriteTokens` | Bound by sessionEnd | `$.request_id`, `$.session_id`    |
+| `sessionEnd`                 | None                                                                                                 | `$.user_email`      | `$.session_id`                    |
+
+Hook version evidence uses `$.cursor_version`; headless CLI version evidence comes from the CLI
+version invocation. The normalized probe counter names must not be mistaken for raw hook paths. The
+accepted formula is input + output + cache read + cache write; reasoning is already in output. There
+is no separately observed total counter in these contracts.
+
+On 2026-09-04, two consecutive live Desktop turns were captured in one fresh session on Desktop
+**3.19.7**. Session and account HMAC equality passed; generation HMAC inequality passed. Only the
+following minimized counters are retained in this report:
+
+| Turn   | Input | Output | Cache read | Cache write | Computed sum |
+| ------ | ----: | -----: | ---------: | ----------: | -----------: |
+| First  | 17193 |    230 |       2176 |           0 |        19599 |
+| Second | 17467 |     29 |       2176 |           0 |        19672 |
+
+The second output counter is smaller than the first in the same session, consistent with per-turn
+usage and inconsistent with a monotonic cumulative session snapshot. The first test prompt was
+affected by keyboard input translation and received a clarification response; the second was pasted
+correctly and requested a minimal response. Both completed successfully. Temporary probe hooks and
+their runtime artifacts were removed after capture; foreign hooks were preserved.
+
+**Approved capture-time policy (2026-09-04):** the user explicitly approved using immutable
+`capturedAt` and the UTC day of capture in place of the originally requested provider timestamp. A
+stop hook fixes this time at invocation; the wrapper fixes it on receipt of the successful final
+result. The first durable event keeps that time across retries, replay and delayed synchronization.
+Headless attribution uses the result's capture time regardless of when sessionEnd arrives. Missing
+or invalid capture time fails closed. This is exact captured usage, not provider-dated history.
+
+None of the reviewed stop, final stream result, or sessionEnd observations contains a provider
+timestamp. Production fixtures must not invent one. The approved policy changes UTC attribution; it
+does not weaken counter, identity, schema, deduplication or lifecycle validation.
+
+A narrow follow-up inspected the installed Desktop 3.19.7 and CLI `2026.09.02-c22c1a3` application
+code. The CLI emits `timestamp_ms` on intermediate stream events using its own `Date.now()`; the
+successful final result deliberately has no timestamp. This field was privacy- hashed by the earlier
+probe, so its absence from `timestampCandidates` alone was not proof that all stream records lacked
+times. Neither an intermediate delta timestamp nor `duration_ms` provides the final run's absolute
+completion time. Official [hook reference](https://prod.cursor.com/docs/hooks) also exposes no
+absolute lifecycle timestamp.
+
+The Desktop hook producer supplies identities, counters, status and version, without an absolute
+time. A read-only metadata query matched the latest generation of the two-turn session without
+returning message content. Its serialized conversation state contained no persisted `turnTimings`.
+Session-level `createdAt`/`lastUpdatedAt` and message creation times are not a durable,
+per-generation completion contract. No provider store, log, transcript, or application-code
+dependency has been added to the production connector. Capture time must not be relabeled as
+provider time.
+
+The existing evidence contains one local account identity across Desktop and CLI. Live A/B/A with a
+second account remains unverified and is a Draft blocker. The server registry, policy-driven dynamic
+registration, migration 012, Cursor labels/notices, and protocol-v1 account Sync presentation are
+implemented in this branch. Local tests cover fresh/upgrade migration, idempotent registration,
+cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for one server
+account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.
+
+The connector now implements a sanitized durable capture ledger, installation-owned stop/sessionEnd
+hooks, physical-profile/logical-account routing, account-scoped and automatic synchronization, and
+`viberacing run cursor -- <agent arguments>`. The wrapper selects a version-checked executable,
+requires stream-json, preserves stdout/stderr and the child outcome, and commits only after a
+successful process exit. A durable random marker suppresses its stop hook. Result/sessionEnd halves
+pair in either order; the first result receipt determines UTC attribution. Aborted or malformed
+streams add no usage. Synthetic installed-runtime tests cover these paths and raw-data exclusion.
+
+Secondary correlation also handles a missing marker: a stop must match the account/session and fall
+inside the durably registered wrapper invocation. Identical tuples produce one headless event using
+the first final-result capture date. Conflicting tuples retain the first confirmed event and mark
+the interval partial. Potentially matching stops wait locally while the wrapper outcome is unknown,
+preventing an early upload on the previous UTC day. A confirmed independent Desktop session is
+released; ambiguous events in an abandoned bounded invocation remain excluded. Session reuse outside
+the invocation is a separate per-turn event. Replay and lossless compaction preserve these
+decisions.
+
+Hook observations now persist the states of stop/sessionEnd and file identity/change metadata.
+Unchanged current observations close reliable intervals; missing/stale hooks, file replacement and
+backward clock observations retain partial gaps. Repeated inspections do not continually change the
+history retry generation. Repair preserves capture history and starts a new observed interval after
+a known interruption. An authenticated hook skipped during a lifecycle mutation records a safe gap.
+The doctor reports both hook states, last captured Desktop/CLI versions, local account count,
+capture start, pending pairs, coverage and allowlisted schema/version failures without exposing
+Cursor paths or provider identities.
+
+Durable source reservations now precede possible upload, preventing installation reset from
+replaying the same local events into another server source. Integrity high-water proofs survive
+sync-cache reset and recover controlled atomic replacements. Validated ACKs bind source/range/prefix
+to local events; compaction retains all event identities/counters and the unacknowledged suffix.
+Synthetic HTTP/CLI tests cover reset/re-pair, unknown old outcomes, full replay and exact
+old-plus-new totals. CLI-only discovery verifies the executable and leaves filesystem creation to
+hook installation. The synthetic privacy matrix includes sanitized capture/proof files and rejected
+payload quarantine, as well as sources/config/installation/state/dirty files, logs, diagnostics and
+HTTP. Raw canaries are absent and local HMACs/checkpoints are excluded from network payloads.
+Cross-platform validation results are tracked in the Draft PR; live A/B/A is a separate Draft
+blocker. Logical accounts of one physical profile are collected sequentially within the existing
+bounded pool, while independent profiles remain parallel. A regression adds two seconds to each
+ledger read: previously, competing collectors returned only two of three account snapshots; the
+grouped collection preserves all three exact totals. This exercises slow filesystem behavior without
+changing lock safety or the aggregate protocol.
+
+## Production runtime smoke on 2026-09-05 local time
+
+The npm 0.7.0 archive built from `a734c8eb4d9c930a0b7627f015c827c832049a46` was extracted outside
+the monorepo. Its installed launcher/runtime and owned user-level hooks were exercised with CLI
+`2026.09.02-c22c1a3`, isolated temporary connector state and usage uploads disabled. The native
+provider stream remained in memory; only the following minimized observations are retained. All
+three completed events were captured on UTC **2026-09-04**.
+
+| Scenario          | Input | Output | Cache read | Cache write | Total | Result                                                      |
+| ----------------- | ----: | -----: | ---------: | ----------: | ----: | ----------------------------------------------------------- |
+| Headless wrapper  |  6082 |     29 |       7936 |           0 | 14047 | One headless event; final aggregate equals ledger total     |
+| Headless subagent |  8983 |    188 |      19328 |           0 | 28499 | Actual taskToolCall; one aggregate event, no child addition |
+| Interactive CLI   | 14018 |     30 |       9728 |           0 | 23776 | One completed stop event through installed production hook  |
+
+All completed events resolved to one local account. No unresolved headless pair remained. SIGINT
+during a separate native run produced exit code 130 and added zero events. Replay retained the three
+events, their capture times and total **66322**. Owned hook removal reported both hooks missing;
+repair restored both to current, preserved all events/times and retained a known missing hook gap.
+Final cleanup removed only the temporary installation's hooks; the foreign-hook state matched its
+pre-smoke digest. Temporary connector authorization was removed.
+
+The initial new-workspace headless attempts failed with Cursor's workspace-trust requirement and
+added zero usage. The successful retry used documented `--trust` for an empty temporary workspace,
+without `--force`. These failed attempts remained partial gaps. The interactive PTY test harness
+captured its completed stop but hung during macOS PTY shutdown; its identified temporary process was
+terminated. This harness shutdown is not counted as a normal native interactive exit.
+
+After the Mac was unlocked, a fresh Desktop implementation smoke used the autonomous npm 0.7.0
+archive built from `2683a8cf078d4ab4678d8a9bb53276f75b01c8e9`. The installed production hooks
+captured two successful replies in one new Desktop **3.19.7** session; a minimal headless CLI turn
+then checked account equality in the same isolated connector state. Uploads remained disabled and
+raw payloads/streams were not persisted. All three events have capture date **2026-09-05 UTC**.
+
+| Scenario                    | Input | Output | Cache read | Cache write | Total |
+| --------------------------- | ----: | -----: | ---------: | ----------: | ----: |
+| Desktop first turn          | 17225 |     33 |      11520 |           0 | 28778 |
+| Desktop second turn         | 17318 |     24 |      17152 |           0 | 34494 |
+| Headless account comparison |  4290 |     29 |       9728 |           0 | 14047 |
+
+The Desktop events shared session/account identity and had distinct event identities. The CLI final
+aggregate matched exactly one additional headless event, exited 0, and resolved to the same single
+local account. No pending pair or capture diagnostic remained before the deliberate repair check.
+Two collections retained all three events, their capture times and total **77319**. Owned hook
+removal/repair preserved the events and retained the expected missing-hook gap. Final cleanup
+removed temporary authorization and owned hooks; foreign-hook state matched the pre-smoke digest.
+
+The user confirmed that a second real account is available. Live A/B/A is awaiting the user-managed
+switch from the captured account A to B and then back to A. This remains the open Draft gate;
+successful Desktop smoke does not authorize Ready, merge or rollout.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source
@@ -14,7 +189,7 @@ publish exact `tokenUsage` for some team usage events, but they are credentialed
 organization-level, non-universal feeds and are outside this local Desktop/CLI evidence gate. They
 do not establish the required local source or account-switch contract.
 
-## Evidence reviewed
+## Historical evidence reviewed on 2026-09-03
 
 The repository base was `de23c761ff08686a69e96c8c4ea67625fca4d6e4` from `main`.
 

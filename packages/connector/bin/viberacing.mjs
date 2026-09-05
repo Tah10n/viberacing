@@ -7,6 +7,25 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import {
+  captureCursorHook,
+  parseCursorHookRequest,
+  readCursorHookInput,
+} from "../lib/cursor-capture.mjs";
+import {
+  readCursorLedger,
+  beginCursorHeadlessCapture,
+  recordCursorCapture,
+  acknowledgeCursorCapture,
+  compactAcknowledgedCursorCapture,
+  validCursorAcknowledgement,
+} from "../lib/cursor-ledger.mjs";
+import {
+  cursorRunArguments,
+  resolveCursorExecutable,
+  runCursorProcess,
+} from "../lib/cursor-cli.mjs";
+import { inspectCursorHooks } from "../lib/cursor-hooks.mjs";
 import { connectorVersion } from "../lib/version.mjs";
 import {
   acknowledgeDiagnosticEvents,
@@ -16,7 +35,12 @@ import {
   pendingDiagnosticEvents,
   reconcileDiagnosticPhase,
 } from "../lib/diagnostics.mjs";
-import { connectorProtocolVersion, parseProtocolResponse } from "../lib/protocol.mjs";
+import {
+  connectorProtocolVersion,
+  parseProtocolResponse,
+  providerAccountPolicy,
+  sourceRegistrationBody,
+} from "../lib/protocol.mjs";
 import { normalizeOrigin, officialProductionOrigin } from "../lib/origin.mjs";
 import { assertOpenCodeUpgradeReady } from "../lib/opencode-cutover-preflight.mjs";
 import {
@@ -57,6 +81,7 @@ import {
   addSource,
   beginConnectAttempt,
   bindCodexProviderAccount,
+  bindProviderAccount,
   clearConnectAttempt,
   clearOpenCodePluginCleanupTarget,
   commitConnectionState,
@@ -64,6 +89,8 @@ import {
   connectedStateExists,
   connectedSourceMappingExists,
   diagnoseHooks,
+  diagnoseHookForSource,
+  cursorHookOptions,
   invalidateConnectAttempt,
   inspectConfig,
   inspectSources,
@@ -91,6 +118,7 @@ import {
   stateDirectory,
   writeConfig,
   withConnectionConfig,
+  withCursorCaptureContext,
 } from "../lib/config.mjs";
 import {
   automaticDueAt,
@@ -663,7 +691,7 @@ function commandRequiresOpenCodeGuard() {
   if (command === "connect" || command === "sync") return true;
   if (command === "auto-sync" || command === "handle-url" || command === "doctor") return true;
   if (command === "reset-installation") return true;
-  if (command === "run" && arguments_[1] === "antigravity") return true;
+  if (command === "run" && ["antigravity", "cursor"].includes(arguments_[1])) return true;
   return command === "source" && ["add", "remove"].includes(arguments_[1]);
 }
 
@@ -945,10 +973,10 @@ function publicSource(source) {
 async function exactPairingSources(sources) {
   const result = [];
   for (const source of sources) {
-    if (source.agentId === "codex" && source.profileClientSourceId !== undefined) continue;
+    if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) continue;
     const adapter = adapterFor(source.agentId);
     if (!adapter || adapter.exactAccounting === false) continue;
-    if (source.agentId === "antigravity") {
+    if (source.agentId === "antigravity" || source.agentId === "cursor") {
       result.push(source);
       continue;
     }
@@ -1071,7 +1099,7 @@ async function connect() {
     .filter(
       (source) =>
         !localSourceIds.has(source.clientSourceId) &&
-        !(source.agentId === "codex" && source.profileClientSourceId !== undefined),
+        !(providerAccountPolicy(source) && source.profileClientSourceId !== undefined),
     )
     .map((source) => source.clientSourceId);
   const exactSources = await exactPairingSources(localSources);
@@ -1107,7 +1135,7 @@ async function connect() {
     const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
     for (const previous of previousConfig.sources) {
       const local = localById.get(previous.clientSourceId);
-      if (local?.agentId === "codex" && local.profileClientSourceId !== undefined) continue;
+      if (providerAccountPolicy(local) && local.profileClientSourceId !== undefined) continue;
       if (
         local &&
         local.agentId === previous.agentId &&
@@ -1211,19 +1239,22 @@ async function connect() {
             protocol: result.protocol,
           };
           for (const local of localSources) {
-            if (local.agentId !== "codex" || local.profileClientSourceId === undefined) continue;
+            if (!providerAccountPolicy(local) || local.profileClientSourceId === undefined)
+              continue;
             const profile = nextConfig.sources.find(
               (source) => source.clientSourceId === local.profileClientSourceId,
             );
             if (!profile)
-              throw new Error("Codex logical source profile was not paired on this installation");
-            const registered = await requestCodexLogicalSourceRegistration(
+              throw new Error(
+                "Provider logical source profile was not paired on this installation",
+              );
+            const registered = await requestProviderLogicalSourceRegistration(
               nextConfig,
               local,
               profile,
             );
             if (registered.profileSourceId !== profile.sourceId)
-              throw new Error("Codex logical source profile mapping changed during pairing");
+              throw new Error("Provider logical source profile mapping changed during pairing");
             nextConfig.sources.push(registered);
           }
           const currentLocalSources = await commitConnectionState(nextConfig, localSources, {
@@ -1648,6 +1679,27 @@ async function compactPendingCaptures(config) {
   const pending = new Set(
     (await pendingPayloads()).map((path) => path.split(/[\\/]/).at(-1)?.split(".")[0]),
   );
+  const cursorProfiles = new Set();
+  for (const source of config.sources) {
+    if (source.collectionMethod !== "cursor_local_events") continue;
+    const profile = source.profileClientSourceId ?? source.clientSourceId;
+    if (cursorProfiles.has(profile)) continue;
+    cursorProfiles.add(profile);
+    if (
+      config.sources.some(
+        (candidate) =>
+          candidate.collectionMethod === "cursor_local_events" &&
+          (candidate.profileClientSourceId ?? candidate.clientSourceId) === profile &&
+          (pending.has(candidate.sourceId) || state.quarantine?.[candidate.sourceId]),
+      )
+    )
+      continue;
+    try {
+      await compactAcknowledgedCursorCapture(stateDirectory, profile);
+    } catch {
+      warning("Vibe Racing warning: Cursor capture cleanup was deferred.");
+    }
+  }
   for (const source of config.sources) {
     const proof = state.captureCompactionPending[source.sourceId];
     if (
@@ -1749,6 +1801,35 @@ function validatedCaptureCleanupProof(payload, sourceId) {
 }
 
 async function applyCaptureCleanupAcknowledgement(config, item) {
+  const cursorProofs = item.payload.cursorAcknowledgements ?? [];
+  if (
+    !Array.isArray(cursorProofs) ||
+    cursorProofs.length > 1 ||
+    cursorProofs.some(
+      (proof) => !validCursorAcknowledgement(proof) || proof.sourceId !== item.sourceId,
+    )
+  )
+    throw new Error("Pending Cursor acknowledgement is invalid");
+  if (cursorProofs.length) {
+    const source = config.sources.find((candidate) => candidate.sourceId === item.sourceId);
+    const snapshot = item.payload.snapshots?.[0];
+    const cursorProof = cursorProofs[0];
+    if (
+      source?.collectionMethod !== "cursor_local_events" ||
+      cursorProof.rangeStart !== snapshot?.rangeStart ||
+      cursorProof.rangeEnd !== snapshot?.rangeEnd
+    )
+      throw new Error("Pending Cursor acknowledgement is invalid");
+    try {
+      await acknowledgeCursorCapture(
+        stateDirectory,
+        source.profileClientSourceId ?? source.clientSourceId,
+        cursorProof,
+      );
+    } catch {
+      warning("Vibe Racing warning: Cursor capture acknowledgement was deferred.");
+    }
+  }
   const proof = validatedCaptureCleanupProof(item.payload, item.sourceId);
   if (proof === null) return;
   const state = await readState();
@@ -2496,18 +2577,29 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   };
 }
 
-async function settleLimited(items, worker, limit = 4) {
+async function settleSourceTasks(items, worker, limit = 4) {
   const results = new Array(items.length);
+  const byProfile = new Map();
+  for (const [index, item] of items.entries()) {
+    const group = byProfile.get(item.physicalClientSourceId) ?? [];
+    group.push(index);
+    byProfile.set(item.physicalClientSourceId, group);
+  }
+  // Logical accounts share a capture file and lifecycle lock. Run their collectors in order
+  // instead of spending their bounded lock waits competing with this same sync invocation.
+  const groups = [...byProfile.values()];
   let cursor = 0;
   await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
+    Array.from({ length: Math.min(limit, groups.length) }, async () => {
       for (;;) {
-        const index = cursor++;
-        if (index >= items.length) return;
-        try {
-          results[index] = { status: "fulfilled", value: await worker(items[index]) };
-        } catch (reason) {
-          results[index] = { status: "rejected", reason };
+        const groupIndex = cursor++;
+        if (groupIndex >= groups.length) return;
+        for (const index of groups[groupIndex]) {
+          try {
+            results[index] = { status: "fulfilled", value: await worker(items[index]) };
+          } catch (reason) {
+            results[index] = { status: "rejected", reason };
+          }
         }
       }
     }),
@@ -2515,7 +2607,7 @@ async function settleLimited(items, worker, limit = 4) {
   return results;
 }
 
-async function requestCodexLogicalSourceRegistration(config, localSource, profileSource) {
+async function requestProviderLogicalSourceRegistration(config, localSource, profileSource) {
   const existing = config.sources.find(
     (source) => source.clientSourceId === localSource.clientSourceId,
   );
@@ -2529,13 +2621,7 @@ async function requestCodexLogicalSourceRegistration(config, localSource, profil
           Authorization: `Bearer ${config.deviceToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          agentId: "codex",
-          clientSourceId: localSource.clientSourceId,
-          collectionMethod: "codex_app_server",
-          profileClientSourceId: profileSource.clientSourceId,
-          supportedSurface: "desktop",
-        }),
+        body: JSON.stringify(sourceRegistrationBody(localSource, profileSource)),
       },
       1,
       {
@@ -2554,11 +2640,11 @@ async function requestCodexLogicalSourceRegistration(config, localSource, profil
   }
 }
 
-async function registerCodexLogicalSource(config, localSource, profileSource) {
+async function registerProviderLogicalSource(config, localSource, profileSource) {
   const existing = config.sources.find(
     (source) => source.clientSourceId === localSource.clientSourceId,
   );
-  const registered = await requestCodexLogicalSourceRegistration(
+  const registered = await requestProviderLogicalSourceRegistration(
     config,
     existing ?? localSource,
     profileSource,
@@ -2567,6 +2653,60 @@ async function registerCodexLogicalSource(config, localSource, profileSource) {
   else config.sources.push(registered);
   await writeConfig(config);
   return existing ?? registered;
+}
+
+function dirtyProfileId(source, localById) {
+  return providerAccountPolicy(source)
+    ? (localById.get(source.clientSourceId)?.profileClientSourceId ??
+        source.profileClientSourceId ??
+        source.clientSourceId)
+    : source.clientSourceId;
+}
+
+async function prepareCursorAccounts(config, requestedSourceIds, installationScoped) {
+  const failures = new Map();
+  const addedSourceIds = [];
+  const profiles = config.sources.filter(
+    (source) =>
+      source.agentId === "cursor" &&
+      source.profileClientSourceId === undefined &&
+      (!requestedSourceIds ||
+        config.sources.some(
+          (member) =>
+            member.agentId === "cursor" &&
+            (member.profileClientSourceId ?? member.clientSourceId) === source.clientSourceId &&
+            requestedSourceIds.has(member.sourceId),
+        )),
+  );
+  for (const profile of profiles) {
+    try {
+      const ledger = await readCursorLedger(stateDirectory, profile.clientSourceId);
+      for (const account of ledger.accounts) {
+        const binding = await bindProviderAccount(
+          "cursor",
+          profile.clientSourceId,
+          account.accountKey,
+        );
+        const mapped = config.sources.find(
+          (source) => source.clientSourceId === binding.source.clientSourceId,
+        );
+        if (mapped) Object.assign(mapped, binding.source);
+        else {
+          try {
+            const registered = await registerProviderLogicalSource(config, binding.source, profile);
+            addedSourceIds.push(registered.sourceId);
+            if (installationScoped && requestedSourceIds)
+              requestedSourceIds.add(registered.sourceId);
+          } catch (error) {
+            failures.set(profile.clientSourceId, error);
+          }
+        }
+      }
+    } catch (error) {
+      failures.set(profile.clientSourceId, error);
+    }
+  }
+  return { failures, addedSourceIds };
 }
 
 function syncTasksForSources(sources, localById, allMappedSources) {
@@ -2586,7 +2726,8 @@ function syncTasksForSources(sources, localById, allMappedSources) {
     const physicalMapped =
       allMappedSources.find((candidate) => candidate.clientSourceId === taskId) ?? physicalLocal;
     tasks.set(taskId, {
-      physicalClientSourceId: taskId,
+      physicalClientSourceId:
+        source.agentId === "cursor" ? dirtyProfileId(source, localById) : taskId,
       source: physicalMapped,
       requestedSources: [source],
     });
@@ -2683,6 +2824,28 @@ async function syncRange(providedConfig, options = {}) {
       state.historyRetryGenerations ??= {};
       state.fingerprints ??= {};
       state.collectionWarnings ??= {};
+      const dirty = await readDirty();
+      const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
+      const cursorPreparationScope =
+        options.automatic && !requestedSourceIds
+          ? new Set(
+              config.sources
+                .filter(
+                  (source) =>
+                    dirtyIds.has(source.profileClientSourceId ?? source.clientSourceId) ||
+                    previous.reobserveSourceIds.includes(source.sourceId),
+                )
+                .map((source) => source.sourceId),
+            )
+          : requestedSourceIds;
+      const cursorAccounts =
+        snapshotKind === "rolling"
+          ? await prepareCursorAccounts(
+              config,
+              cursorPreparationScope,
+              options.installationScoped === true,
+            )
+          : { failures: new Map(), addedSourceIds: [] };
       const localSources = await readSources();
       const localById = new Map(localSources.map((source) => [source.clientSourceId, source]));
       state.pendingAccountRegistrations ??= {};
@@ -2700,12 +2863,12 @@ async function syncRange(providedConfig, options = {}) {
         const profileSource = config.sources.find(
           (source) => source.clientSourceId === pending.profileClientSourceId,
         );
-        if (!localSource || typeof profileSource.sourceId !== "string") {
+        if (!localSource || typeof profileSource?.sourceId !== "string") {
           backfillAccountSetupPending = true;
           continue;
         }
         try {
-          const mapped = await registerCodexLogicalSource(config, localSource, profileSource);
+          const mapped = await registerProviderLogicalSource(config, localSource, profileSource);
           if (!requestedSourceIds || requestedSourceIds.has(mapped.sourceId)) {
             registrationBackfills.push({ clientSourceId, source: mapped, pending });
           } else if (!options.installationScoped) backfillAccountSetupPending = true;
@@ -2714,41 +2877,25 @@ async function syncRange(providedConfig, options = {}) {
         }
       }
       const mappedSources = config.sources.filter((source) => typeof source.sourceId === "string");
-      const dirty = await readDirty();
-      const dirtyIds = new Set(dirtyEntries(dirty).map(([clientSourceId]) => clientSourceId));
       const syncSources = requestedSourceIds
         ? mappedSources.filter((source) => requestedSourceIds.has(source.sourceId))
         : options.automatic
           ? mappedSources.filter(
               (source) =>
-                dirtyIds.has(
-                  source.agentId === "codex"
-                    ? (localById.get(source.clientSourceId)?.profileClientSourceId ??
-                        source.clientSourceId)
-                    : source.clientSourceId,
-                ) || previous.reobserveSourceIds.includes(source.sourceId),
+                dirtyIds.has(dirtyProfileId(source, localById)) ||
+                previous.reobserveSourceIds.includes(source.sourceId),
             )
           : mappedSources;
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
-      const activeIds = new Set(
-        mappedSources.map((source) =>
-          source.agentId === "codex"
-            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
-            : source.clientSourceId,
-        ),
-      );
+      const activeIds = new Set(mappedSources.map((source) => dirtyProfileId(source, localById)));
       const unmappedDirtyIds = [...dirtyIds].filter(
         (clientSourceId) => !activeIds.has(clientSourceId),
       );
       if (unmappedDirtyIds.length > 0) await clearDirtyForSources(unmappedDirtyIds);
       const claims = dirtyClaims(
         dirty,
-        syncSources.map((source) =>
-          source.agentId === "codex"
-            ? (localById.get(source.clientSourceId)?.profileClientSourceId ?? source.clientSourceId)
-            : source.clientSourceId,
-        ),
+        syncSources.map((source) => dirtyProfileId(source, localById)),
       );
       if (options.automatic && syncSources.length > 0) {
         state.lastAutomaticSyncAt = Date.now();
@@ -2758,7 +2905,7 @@ async function syncRange(providedConfig, options = {}) {
       const providerIdentitySaltPromise = syncTasks.some((task) => task.source.agentId === "codex")
         ? readOrCreateProviderIdentitySalt()
         : null;
-      const collected = await settleLimited(syncTasks, async (task) => {
+      const collected = await settleSourceTasks(syncTasks, async (task) => {
         const source = task.source;
         if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
           await appendFile(
@@ -2822,7 +2969,7 @@ async function syncRange(providedConfig, options = {}) {
           }
           if (!activeSource)
             try {
-              activeSource = await registerCodexLogicalSource(
+              activeSource = await registerProviderLogicalSource(
                 config,
                 binding.source,
                 profileMapping,
@@ -2870,29 +3017,44 @@ async function syncRange(providedConfig, options = {}) {
               : null,
           };
         }
-        const result = await adapter.collect(
-          source,
-          range,
-          snapshotKind === "year_backfill"
-            ? (state.historyAdapters[source.sourceId] ?? {})
-            : (state.adapters[source.sourceId] ?? {}),
-          { historical: snapshotKind === "year_backfill" },
-        );
+        let result;
+        try {
+          result = await adapter.collect(
+            source,
+            range,
+            snapshotKind === "year_backfill"
+              ? (state.historyAdapters[source.sourceId] ?? {})
+              : (state.adapters[source.sourceId] ?? {}),
+            { historical: snapshotKind === "year_backfill" },
+          );
+        } catch (error) {
+          if (source.agentId !== "cursor" || error.inactiveProviderAccount !== true) throw error;
+          return {
+            source,
+            result: null,
+            inactiveSourceIds: [source.sourceId],
+            checkedClientSourceId: task.physicalClientSourceId,
+            accountSetupPending: false,
+            supersededPendingClientSourceId: null,
+          };
+        }
         return {
           source,
           result,
           historyRetryGeneration:
             snapshotKind === "rolling" ? await adapter.historyRetryGeneration(source) : undefined,
           inactiveSourceIds: [],
-          checkedClientSourceId: source.clientSourceId,
+          checkedClientSourceId: task.physicalClientSourceId,
           accountSetupPending: false,
           supersededPendingClientSourceId: null,
         };
       });
       const snapshots = [];
       const sourceErrors = [];
-      const failures = [];
-      const failedClientSourceIds = [];
+      const failures = [...cursorAccounts.failures.values()].map(
+        (error) => `cursor: ${collectorDiagnostic(error).code}`,
+      );
+      const failedClientSourceIds = [...cursorAccounts.failures.keys()];
       const failedHistorySourceIds = [];
       const blockedHistorySourceIds = new Set([
         ...previous.retiredSources,
@@ -2902,10 +3064,17 @@ async function syncRange(providedConfig, options = {}) {
       const successfullyChecked = [];
       const successfullyCheckedSourceIds = [];
       const inactiveSourceIds = [];
-      let accountSetupPending = backfillAccountSetupPending;
+      let accountSetupPending =
+        backfillAccountSetupPending ||
+        [...cursorAccounts.failures.values()].some(
+          (error) =>
+            error.diagnosticCode === "provider_account_registration_pending" ||
+            error.diagnosticCode === "provider_account_limit_reached",
+        );
       const pendingRegistrationSupersessions = new Map();
       const historyAdvances = [];
       const captureCleanupProofs = [];
+      const cursorAcknowledgements = [];
       let terminalCollectorDiagnostic;
       for (const sourceId of previous.retiredSources)
         failures.push(`server disconnected source ${sourceId}`);
@@ -2966,7 +3135,16 @@ async function syncRange(providedConfig, options = {}) {
             state,
             activeSource.sourceId,
             "collect",
-            normalizeAdapterDiagnostics(outcome.value.result.diagnostics),
+            normalizeAdapterDiagnostics([
+              ...(outcome.value.result.diagnostics ?? []),
+              ...(cursorAccounts.failures.has(outcome.value.checkedClientSourceId)
+                ? [
+                    collectorDiagnostic(
+                      cursorAccounts.failures.get(outcome.value.checkedClientSourceId),
+                    ),
+                  ]
+                : []),
+            ]),
           );
         }
         const resultWarnings = [...new Set(outcome.value.result.warnings ?? [])].sort();
@@ -3012,6 +3190,15 @@ async function syncRange(providedConfig, options = {}) {
           ...history.snapshot,
         });
         if (history.advance !== null) historyAdvances.push(history.advance);
+        if (
+          activeSource.collectionMethod === "cursor_local_events" &&
+          outcome.value.result.cursorCheckpoint
+        )
+          cursorAcknowledgements.push({
+            sourceId: activeSource.sourceId,
+            ...range,
+            checkpoint: outcome.value.result.cursorCheckpoint,
+          });
         if (activeSource.collectionMethod === "antigravity_cli_capture") {
           state.captureCompactionPending ??= {};
           if (outcome.value.result.retentionSafe !== true) {
@@ -3081,7 +3268,25 @@ async function syncRange(providedConfig, options = {}) {
         clearDirty(
           Object.fromEntries(
             successfullyChecked
-              .filter((clientSourceId) => claims[clientSourceId])
+              .filter(
+                (clientSourceId) =>
+                  claims[clientSourceId] &&
+                  (!mappedSources.some(
+                    (source) =>
+                      source.agentId === "cursor" &&
+                      dirtyProfileId(source, localById) === clientSourceId,
+                  ) ||
+                    (!failedClientSourceIds.includes(clientSourceId) &&
+                      mappedSources
+                        .filter(
+                          (source) =>
+                            source.agentId === "cursor" &&
+                            dirtyProfileId(source, localById) === clientSourceId,
+                        )
+                        .every((source) =>
+                          syncSources.some((selected) => selected.sourceId === source.sourceId),
+                        ))),
+              )
               .map((clientSourceId) => [clientSourceId, claims[clientSourceId]]),
           ),
         );
@@ -3105,7 +3310,7 @@ async function syncRange(providedConfig, options = {}) {
         if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
         if (inactiveSourceIds.length > 0)
           warning(
-            "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+            "Vibe Racing partial sync: some provider accounts are inactive or have no captured usage; switch accounts and sync again.",
           );
         return {
           accepted,
@@ -3113,6 +3318,7 @@ async function syncRange(providedConfig, options = {}) {
           unchanged: previous.snapshotDeliveries === 0,
           inactiveSourceIds,
           accountSetupPending,
+          registeredSourceIds: cursorAccounts.addedSourceIds,
           failedHistorySourceIds,
           blockedHistorySourceIds: [...blockedHistorySourceIds],
           historyProgress: previous.historyDeliveries > 0,
@@ -3125,6 +3331,7 @@ async function syncRange(providedConfig, options = {}) {
         pendingRegistrationSupersessions: [...pendingRegistrationSupersessions.values()],
         historyAdvances,
         captureCleanupProofs,
+        cursorAcknowledgements,
       };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
@@ -3170,13 +3377,14 @@ async function syncRange(providedConfig, options = {}) {
       if (failures.length) warning(`Vibe Racing partial sync: ${failures.join("; ")}`);
       if (inactiveSourceIds.length > 0)
         warning(
-          "Vibe Racing partial sync: some Codex accounts are inactive; switch accounts and sync again.",
+          "Vibe Racing partial sync: some provider accounts are inactive or have no captured usage; switch accounts and sync again.",
         );
       return {
         accepted,
         failures,
         inactiveSourceIds,
         accountSetupPending,
+        registeredSourceIds: cursorAccounts.addedSourceIds,
         failedHistorySourceIds,
         blockedHistorySourceIds: [...blockedHistorySourceIds],
         historyProgress: previous.historyDeliveries + delivered.historyDeliveries > 0,
@@ -3212,7 +3420,12 @@ async function sync(providedConfig, options = {}) {
     options.automatic || options.browser
       ? 1
       : (testMaximumHistoryChunks ?? Number.POSITIVE_INFINITY);
-  const allowed = Array.isArray(options.sourceIds) ? new Set(options.sourceIds) : null;
+  const allowed = Array.isArray(options.sourceIds)
+    ? new Set([
+        ...options.sourceIds,
+        ...(options.installationScoped ? (rolling?.registeredSourceIds ?? []) : []),
+      ])
+    : null;
 
   while (historyChunks < maximumHistoryChunks) {
     const config = providedConfig ?? (await readConfig());
@@ -3608,6 +3821,21 @@ function parseHookRequest() {
   };
 }
 
+async function cursorHook() {
+  const capturedAt = new Date().toISOString();
+  try {
+    const request = parseCursorHookRequest(arguments_.slice(1));
+    if (request) {
+      const payload = await readCursorHookInput(process.stdin);
+      await assertOpenCodeUpgradeReady(stateDirectory);
+      if (await captureCursorHook(request, payload, capturedAt)) await launchAutomaticScheduler();
+    }
+  } catch {
+    // Never expose provider input or make local capture failure fail a Cursor turn.
+  }
+  process.stdout.write("{}\n");
+}
+
 async function hook() {
   try {
     const request = parseHookRequest();
@@ -3830,6 +4058,7 @@ async function doctor() {
     output(`Detection error (${diagnostic.displayName}): ${diagnostic.error}`);
   const expectedSources = {
     codex: "account/usage/read account usage",
+    cursor: "connector-owned exact capture ledger",
     claude_code: "session JSONL with usage",
     opencode: "compatible OpenCode SQLite message store",
     kimi_code: "current or legacy wire records",
@@ -3842,6 +4071,66 @@ async function doctor() {
     const configured = localSources.filter((source) => source.agentId === adapter.id);
     output(`${adapter.displayName}:`);
     output(`  Expected source type: ${expectedSources[adapter.id]}`);
+    if (adapter.id === "cursor") {
+      output(
+        `  Profile: ${automatic.length ? "detected" : configured.length ? "configured" : "not detected"}`,
+      );
+      const profiles = configured.filter((source) => source.profileClientSourceId === undefined);
+      if (!profiles.length) output("  Capture: not connected");
+      for (const profile of profiles) {
+        let hooks = { stop: "stale", sessionEnd: "stale" };
+        try {
+          hooks = await inspectCursorHooks(
+            profile.hookConfigRoot ?? profile.dataPath,
+            await cursorHookOptions(profile),
+          );
+        } catch {}
+        output(`  stop hook: ${hooks.stop}`);
+        output(`  sessionEnd hook: ${hooks.sessionEnd}`);
+        try {
+          const ledger = await readCursorLedger(stateDirectory, profile.clientSourceId);
+          output(`  Desktop version (last captured): ${ledger.versions.desktop ?? "not observed"}`);
+          output(`  CLI version (last captured): ${ledger.versions.cli ?? "not observed"}`);
+          output(`  Local Cursor accounts: ${ledger.accounts.length}`);
+          output(
+            `  Capture started: ${ledger.captureStartedAt?.slice(0, 10) ?? "not started"} UTC`,
+          );
+          output(`  Pending headless pairs: ${ledger.pendingPairs}`);
+          const today = new Date().toISOString().slice(0, 10);
+          const yesterday = new Date(Date.parse(`${today}T00:00:00.000Z`) - 86_400_000)
+            .toISOString()
+            .slice(0, 10);
+          const complete =
+            !ledger.torn &&
+            ledger.currentIntervals.some(
+              (interval) =>
+                interval.from <= `${yesterday}T00:00:00.000Z` &&
+                interval.to >= `${today}T00:00:00.000Z`,
+            ) &&
+            !ledger.gaps.some(
+              (gap) => gap.from.slice(0, 10) <= yesterday && gap.to.slice(0, 10) >= yesterday,
+            );
+          output(
+            `  Captured profile history: previous UTC day ${complete ? "complete" : "partial"}; current UTC day partial`,
+          );
+          output(
+            "  Source coverage can remain partial for events reserved before installation reset.",
+          );
+          for (const code of new Set(
+            ledger.gaps
+              .map((gap) => gap.code)
+              .filter((code) =>
+                ["cursor_schema_unsupported", "cursor_version_unsupported"].includes(code),
+              ),
+          ))
+            output(`  Capture diagnostic: ${code}`);
+        } catch {
+          output("  Capture history: unavailable; partial");
+        }
+      }
+      output("  Headless command: viberacing run cursor -- ...");
+      continue;
+    }
     if (adapter.id === "antigravity") {
       output(
         `  Status: wrapper-only${configured.length ? `; ${configured.length} capture source(s) configured` : ""}`,
@@ -4244,6 +4533,89 @@ async function wrapperSource(agentId) {
   return { source: sources[0], separator, sourceOption };
 }
 
+async function wrapCursor() {
+  const separator = arguments_.indexOf("--");
+  const controls = arguments_.slice(2, separator < 0 ? undefined : separator);
+  if (
+    separator < 0 ||
+    !(
+      controls.length === 0 ||
+      (controls.length === 2 && controls[0] === "--source" && uuidPattern.test(controls[1]))
+    )
+  )
+    throw new Error("Usage: viberacing run cursor [--source ID] -- <Cursor agent arguments>");
+  const passed = arguments_.slice(separator + 1);
+  cursorRunArguments(passed);
+  const config = await readConnectedConfig();
+  const selected = controls.length
+    ? config.sources.find(
+        (source) => source.clientSourceId === controls[1] && source.agentId === "cursor",
+      )
+    : config.sources.find(
+        (source) => source.agentId === "cursor" && source.profileClientSourceId === undefined,
+      );
+  const profile =
+    selected &&
+    config.sources.find(
+      (source) =>
+        source.agentId === "cursor" &&
+        source.clientSourceId === (selected.profileClientSourceId ?? selected.clientSourceId),
+    );
+  if (!profile)
+    throw new Error("Connect the Cursor profile before running captured headless usage.");
+  if ((await diagnoseHookForSource(profile)) !== "current")
+    throw new Error("Cursor capture hooks are not current; run `viberacing doctor --repair`.");
+  let executable;
+  if (!process.env.VIBERACING_CURSOR_BIN && profile.executablePath) {
+    try {
+      executable = await resolveCursorExecutable({
+        environment: { ...process.env, VIBERACING_CURSOR_BIN: profile.executablePath },
+      });
+    } catch {}
+  }
+  executable ??= await resolveCursorExecutable();
+  const request = { installationId: config.installationId, profileId: profile.clientSourceId };
+  const captureId = randomUUID();
+  const context = await withCursorCaptureContext(request, async (current) => {
+    if (await lifecycleMutationActive()) return null;
+    await beginCursorHeadlessCapture(
+      stateDirectory,
+      profile.clientSourceId,
+      captureId,
+      new Date().toISOString(),
+    );
+    return current;
+  });
+  if (!context) throw new Error("Cursor capture installation changed; reconnect before retrying.");
+  let outcome;
+  try {
+    outcome = await runCursorProcess({ executable, args: passed, salt: context.salt, captureId });
+  } catch (error) {
+    outcome = { code: 1, signal: null, diagnostic: collectorDiagnostic(error).code };
+  }
+  try {
+    const marked = await withCursorCaptureContext(request, async (current) => {
+      if (await lifecycleMutationActive()) return false;
+      const result = outcome.result;
+      await recordCursorCapture(stateDirectory, profile.clientSourceId, {
+        kind: result ? "result" : "abort",
+        captureId,
+        salt: current.salt,
+        version: executable.version,
+        capturedAt: result?.capturedAt ?? new Date().toISOString(),
+        payload: result?.payload,
+        diagnosticCode: outcome.diagnostic,
+      });
+      return markDirtyIfConnected(profile.clientSourceId, "cursor");
+    });
+    if (marked) await launchAutomaticScheduler();
+  } catch {
+    // Capture failure does not replace the provider's process outcome or expose its payload.
+  }
+  if (outcome.signal) process.kill(process.pid, outcome.signal);
+  else process.exitCode = outcome.code ?? 1;
+}
+
 async function wrap(agentId) {
   const { source, separator, sourceOption, executable } = await withOpenCodeLifecycleMutation(
     async () => {
@@ -4340,7 +4712,8 @@ try {
       fullHistory: syncArguments.includes("--full"),
     });
     if (result?.skipped) throw new Error("Another sync is already running.");
-  } else if (command === "hook") await hook();
+  } else if (command === "cursor-hook") await cursorHook();
+  else if (command === "hook") await hook();
   else if (command === "auto-sync") await automaticSync();
   else if (command === "handle-url") await browserSync(arguments_[1]);
   else if (command === "doctor") await doctor();
@@ -4350,6 +4723,7 @@ try {
   } else if (command === "source" && (arguments_[1] === "add" || arguments_[1] === "remove"))
     await withOpenCodeLifecycleMutation(() => sourceCommand());
   else if (command === "source") await sourceCommand();
+  else if (command === "run" && arguments_[1] === "cursor") await wrapCursor();
   else if (command === "run" && arguments_[1] === "antigravity") await wrap("antigravity");
   else if (command === "disconnect") {
     let remoteError;
@@ -4532,7 +4906,7 @@ try {
     }
   } else
     output(
-      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync [--full] | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run antigravity [--source ID] -- …",
+      "Usage: viberacing upgrade-preflight | connect [--origin URL] | sync [--full] | doctor [--repair] | accounts | source … | disconnect | uninstall | reset-installation | run cursor [--source ID] -- … | run antigravity [--source ID] -- …",
     );
 } catch (error) {
   if (error?.diagnosticCode === "opencode_cutover_required")

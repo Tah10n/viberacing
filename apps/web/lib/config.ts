@@ -112,7 +112,7 @@ export const maximumSourcesPerInstallation = 32;
 export const maximumActiveSourcesPerUser = 100;
 export const maximumAgentAccountsPerUser = 100;
 export const installedStateAttestationMinimumVersion = "0.4.3";
-export const expectedSchemaVersion = "011_remove_weekly_compatibility.sql";
+export const expectedSchemaVersion = "012_cursor_support.sql";
 
 export type ConnectorDistribution = "npm" | "archive";
 

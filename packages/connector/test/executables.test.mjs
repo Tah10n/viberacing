@@ -127,7 +127,7 @@ test(
     const target = join(directory, "capture-args.mjs");
     await writeFile(target, "process.stdout.write(JSON.stringify(process.argv.slice(2)))\n");
     const expected = ["app-server", "path with spaces", 'quoted "value"', "a&b", "c|d", "x<y>z"];
-    for (const name of ["codex.cmd", "agy.cmd"]) {
+    for (const name of ["codex.cmd", "agy.cmd", "agent.bat"]) {
       const shim = join(directory, name);
       await writeFile(shim, `@echo off\r\n"${process.execPath}" "${target}" %*\r\n`);
       const child = spawnResolvedExecutable(shim, expected, {

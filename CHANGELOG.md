@@ -10,15 +10,26 @@ experience or protocol.
 
 ### Added
 
+- Connector 0.7.0 implements Cursor as the eighth agent: automatic Desktop/interactive stop hooks,
+  `viberacing run cursor` for headless runs, exact aggregate counters, local account separation and
+  stable A → B → A routing. Desktop and CLI share one physical profile and one logical source per
+  account. Existing `source_sum` adds machine-local sources; migration 012 and server-derived
+  Codex/Cursor registration policy preserve protocol v5 and older connector compatibility.
+- Cursor uses the approved immutable capture-time UTC policy. Reasoning and subagents are already
+  included in aggregate usage. Durable result/sessionEnd pairing, duplicate/conflict checks, owned
+  hook repair, source reservations across reset, integrity proofs and acknowledged compaction retain
+  exact captured history without raw provider content. Earlier history, current-day coverage and
+  known capture failures remain partial. This unreleased Draft implementation still requires live
+  A/B/A validation and a separately approved server-first rollout.
+
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
   records only minimized schemas (HMACing unknown field names), exact integer counter candidates,
   local HMAC identities, safe status/version fields, and unambiguous timestamps outside the
   repository. Its per-run/event immutable runtime bundle, execution-time POSIX/Windows integrity
   checks, lossless compare-and-swap recovery, pre-mutation ownership validation, close-aware UTF-8
   CLI stream handling, explicit scenario steps, strict alias/event reconciliation, and always-closed
-  production gate harden research collection without asserting a token formula. Cursor remains
-  unsupported and is not registered because current Desktop and CLI evidence does not prove one
-  authoritative exact source.
+  production gate harden research collection. Authenticated follow-up evidence now establishes exact
+  per-turn counters; see `docs/CURSOR_EVIDENCE.md` for accepted paths and versions.
 
 - Connector 0.6.0 and protocol v5 add a resumable current-UTC-year import after the normal rolling
   snapshot. History moves newest-first in acknowledged chunks of at most 31 dates, uses isolated
