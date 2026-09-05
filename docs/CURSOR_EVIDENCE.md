@@ -4,10 +4,11 @@ Status on 2026-09-05: **exact-source evidence passed; production implementation 
 PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
 eighth server agent with `source_sum` and migration 012. The connector implements strict stop
 capture, account routing, the explicit headless wrapper, durable integrity proofs, source
-reservations across reset and ACK-driven lossless compaction. Release checks and final
-implementation smoke remain in progress. Rollout remains blocked until a reviewed server-first
-deployment. The historical investigation below describes the earlier gate, not the current
-availability of authenticated token counters.
+reservations across reset and ACK-driven lossless compaction. Cross-platform release checks and
+Desktop/CLI installed-runtime smoke have passed; live A/B/A with a second real account remains a
+Draft gate. Rollout remains blocked until a reviewed server-first deployment. The historical
+investigation below describes the earlier gate, not the current availability of authenticated token
+counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -154,11 +155,28 @@ without `--force`. These failed attempts remained partial gaps. The interactive 
 captured its completed stop but hung during macOS PTY shutdown; its identified temporary process was
 terminated. This harness shutdown is not counted as a normal native interactive exit.
 
-A fresh Desktop implementation smoke could not start because the Mac was locked and the UI tool
-could not unlock it. The user was asked to unlock it. Earlier authenticated Desktop 3.19.7 two-turn
-source evidence above remains accepted, but is not presented as a fresh installed-runtime Desktop
-smoke. Live A/B/A still lacks a second real account. These limitations keep the PR Draft; they do
-not authorize Ready, merge or rollout.
+After the Mac was unlocked, a fresh Desktop implementation smoke used the autonomous npm 0.7.0
+archive built from `2683a8cf078d4ab4678d8a9bb53276f75b01c8e9`. The installed production hooks
+captured two successful replies in one new Desktop **3.19.7** session; a minimal headless CLI turn
+then checked account equality in the same isolated connector state. Uploads remained disabled and
+raw payloads/streams were not persisted. All three events have capture date **2026-09-05 UTC**.
+
+| Scenario                    | Input | Output | Cache read | Cache write | Total |
+| --------------------------- | ----: | -----: | ---------: | ----------: | ----: |
+| Desktop first turn          | 17225 |     33 |      11520 |           0 | 28778 |
+| Desktop second turn         | 17318 |     24 |      17152 |           0 | 34494 |
+| Headless account comparison |  4290 |     29 |       9728 |           0 | 14047 |
+
+The Desktop events shared session/account identity and had distinct event identities. The CLI final
+aggregate matched exactly one additional headless event, exited 0, and resolved to the same single
+local account. No pending pair or capture diagnostic remained before the deliberate repair check.
+Two collections retained all three events, their capture times and total **77319**. Owned hook
+removal/repair preserved the events and retained the expected missing-hook gap. Final cleanup
+removed temporary authorization and owned hooks; foreign-hook state matched the pre-smoke digest.
+
+The user confirmed that a second real account is available. Live A/B/A is awaiting the user-managed
+switch from the captured account A to B and then back to A. This remains the open Draft gate;
+successful Desktop smoke does not authorize Ready, merge or rollout.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source
