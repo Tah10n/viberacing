@@ -620,6 +620,21 @@ async function withLedger(...args) {
   try {
     return await withLedgerFile(...args);
   } catch (error) {
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.VIBERACING_TEST_CURSOR_LEDGER_FAILURE === "1"
+    ) {
+      const sites = [...(error?.stack ?? "").matchAll(/cursor-ledger\.mjs:(\d+):\d+/g)]
+        .slice(0, 4)
+        .map((match) => match[1])
+        .join(",");
+      const code = ["EACCES", "EPERM", "ENOENT", "EEXIST", "EBUSY"].includes(error?.code)
+        ? error.code
+        : "unavailable";
+      process.stderr.write(
+        `Cursor ledger test failure: sites=${sites || "external"}; code=${code}\n`,
+      );
+    }
     fail(
       failureCodes.has(error?.diagnosticCode) ? error.diagnosticCode : "cursor_usage_incomplete",
     );

@@ -167,6 +167,7 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
     USERPROFILE: join(root, "home"),
     VIBERACING_STATE_DIR: stateRoot,
     NODE_ENV: "test",
+    VIBERACING_TEST_CURSOR_LEDGER_FAILURE: "1",
     VIBERACING_TEST_MAX_HISTORY_CHUNKS: "1",
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5,5,20",
   };

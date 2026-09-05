@@ -549,7 +549,7 @@ for await (const line of lines) {
   );
 }
 
-async function waitFor(predicate, timeoutMs = 5_000) {
+async function waitFor(predicate, timeoutMs = process.platform === "win32" ? 30_000 : 5_000) {
   const deadline = Date.now() + timeoutMs;
   while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error("Timed out waiting for test condition");

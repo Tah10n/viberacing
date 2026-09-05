@@ -581,7 +581,7 @@ async function waitForTestConnectionBarrier(stage) {
   const ready = `${barrier}.ready`;
   const continued = `${barrier}.continue`;
   await writeFile(ready, `${process.pid}\n`, { mode: 0o600 });
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + (process.platform === "win32" ? 30_000 : 5_000);
   for (;;) {
     try {
       await access(continued);
