@@ -2577,18 +2577,29 @@ async function drainPending(config, retryStale = true, allowedSourceIds) {
   };
 }
 
-async function settleLimited(items, worker, limit = 4) {
+async function settleSourceTasks(items, worker, limit = 4) {
   const results = new Array(items.length);
+  const byProfile = new Map();
+  for (const [index, item] of items.entries()) {
+    const group = byProfile.get(item.physicalClientSourceId) ?? [];
+    group.push(index);
+    byProfile.set(item.physicalClientSourceId, group);
+  }
+  // Logical accounts share a capture file and lifecycle lock. Run their collectors in order
+  // instead of spending their bounded lock waits competing with this same sync invocation.
+  const groups = [...byProfile.values()];
   let cursor = 0;
   await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
+    Array.from({ length: Math.min(limit, groups.length) }, async () => {
       for (;;) {
-        const index = cursor++;
-        if (index >= items.length) return;
-        try {
-          results[index] = { status: "fulfilled", value: await worker(items[index]) };
-        } catch (reason) {
-          results[index] = { status: "rejected", reason };
+        const groupIndex = cursor++;
+        if (groupIndex >= groups.length) return;
+        for (const index of groups[groupIndex]) {
+          try {
+            results[index] = { status: "fulfilled", value: await worker(items[index]) };
+          } catch (reason) {
+            results[index] = { status: "rejected", reason };
+          }
         }
       }
     }),
@@ -2894,7 +2905,7 @@ async function syncRange(providedConfig, options = {}) {
       const providerIdentitySaltPromise = syncTasks.some((task) => task.source.agentId === "codex")
         ? readOrCreateProviderIdentitySalt()
         : null;
-      const collected = await settleLimited(syncTasks, async (task) => {
+      const collected = await settleSourceTasks(syncTasks, async (task) => {
         const source = task.source;
         if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
           await appendFile(

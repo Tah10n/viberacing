@@ -120,7 +120,12 @@ old-plus-new totals. CLI-only discovery verifies the executable and leaves files
 hook installation. The synthetic privacy matrix includes sanitized capture/proof files and rejected
 payload quarantine, as well as sources/config/installation/state/dirty files, logs, diagnostics and
 HTTP. Raw canaries are absent and local HMACs/checkpoints are excluded from network payloads.
-Exact-head cross-platform checks remain in progress; live A/B/A is a separate Draft blocker.
+Cross-platform validation results are tracked in the Draft PR; live A/B/A is a separate Draft
+blocker. Logical accounts of one physical profile are collected sequentially within the existing
+bounded pool, while independent profiles remain parallel. A regression adds two seconds to each
+ledger read: previously, competing collectors returned only two of three account snapshots; the
+grouped collection preserves all three exact totals. This exercises slow filesystem behavior without
+changing lock safety or the aggregate protocol.
 
 ## Production runtime smoke on 2026-09-05 local time
 

@@ -4,10 +4,10 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { initializeCursorLedger, recordCursorCapture } from "../lib/cursor-ledger.mjs";
 
@@ -167,16 +167,48 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
     USERPROFILE: join(root, "home"),
     VIBERACING_STATE_DIR: stateRoot,
     NODE_ENV: "test",
-    VIBERACING_TEST_CURSOR_LEDGER_FAILURE: "1",
     VIBERACING_TEST_MAX_HISTORY_CHUNKS: "1",
     VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "5,5,20",
   };
   const outputs = [];
+  const slowLedgerModule = join(root, "slow-ledger-read.mjs");
+  await writeFile(
+    slowLedgerModule,
+    String.raw`
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { setTimeout as delay } from "node:timers/promises";
+const open = fs.promises.open;
+fs.promises.open = async (path, ...args) => {
+  const handle = await open(path, ...args);
+  if (typeof path === "string" && /[\\/]captures[\\/]cursor-[^\\/]+\.jsonl$/.test(path)) {
+    const read = handle.read.bind(handle);
+    handle.read = async (...values) => {
+      await delay(2_000);
+      return read(...values);
+    };
+  }
+  return handle;
+};
+syncBuiltinESMExports();
+`,
+  );
+  let slowLedgerReads = false;
   async function run(...args) {
-    const output = await exec(process.execPath, [cli, ...args], {
+    const nodeArgs = slowLedgerReads
+      ? ["--import", pathToFileURL(slowLedgerModule).href, cli, ...args]
+      : [cli, ...args];
+    const output = await exec(process.execPath, nodeArgs, {
       env: environment,
       // Native Windows ACL validation launches PowerShell for durable filesystem operations.
-      timeout: process.platform === "win32" ? 120_000 : 30_000,
+      timeout:
+        process.platform === "win32"
+          ? slowLedgerReads
+            ? 180_000
+            : 120_000
+          : slowLedgerReads
+            ? 90_000
+            : 30_000,
     });
     outputs.push(output);
     return output;
@@ -276,10 +308,12 @@ test("Cursor sync routes captured A/B/A accounts, retries registration, scopes B
   await record("C", "canary-generation-c1", 1000);
   claimedIds = [primarySourceId, secondary.sourceId];
   before = usages.length;
+  slowLedgerReads = true;
   await run(
     "handle-url",
     `viberacing://sync?requestId=${requestId}&scope=installation&grant=${"g".repeat(32)}`,
   );
+  slowLedgerReads = false;
   assert.equal(
     rollingSince(before).length,
     3,
