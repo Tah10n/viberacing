@@ -1,14 +1,13 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-05: **exact-source evidence passed; production implementation implemented in this
+Status on 2026-09-06: **exact-source evidence passed; production implementation implemented in this
 PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
 eighth server agent with `source_sum` and migration 012. The connector implements strict stop
 capture, account routing, the explicit headless wrapper, durable integrity proofs, source
 reservations across reset and ACK-driven lossless compaction. Cross-platform release checks and
-Desktop/CLI installed-runtime smoke have passed; live A/B/A with a second real account remains a
-Draft gate. Rollout remains blocked until a reviewed server-first deployment. The historical
-investigation below describes the earlier gate, not the current availability of authenticated token
-counters.
+Desktop/CLI installed-runtime smoke and live A/B/A with two real accounts have passed. Rollout
+remains blocked until a reviewed server-first deployment. The historical investigation below
+describes the earlier gate, not the current availability of authenticated token counters.
 
 ## Authenticated contract and narrow follow-up
 
@@ -79,12 +78,12 @@ per-generation completion contract. No provider store, log, transcript, or appli
 dependency has been added to the production connector. Capture time must not be relabeled as
 provider time.
 
-The existing evidence contains one local account identity across Desktop and CLI. Live A/B/A with a
-second account remains unverified and is a Draft blocker. The server registry, policy-driven dynamic
-registration, migration 012, Cursor labels/notices, and protocol-v1 account Sync presentation are
-implemented in this branch. Local tests cover fresh/upgrade migration, idempotent registration,
-cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for one server
-account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.
+The evidence confirms one local account identity across Desktop and CLI, distinct A/B accounts, and
+reuse of the original account and local source after A → B → A. The server registry, policy-driven
+dynamic registration, migration 012, Cursor labels/notices, and protocol-v1 account Sync
+presentation are implemented in this branch. Local tests cover fresh/upgrade migration, idempotent
+registration, cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for
+one server account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.
 
 The connector now implements a sanitized durable capture ledger, installation-owned stop/sessionEnd
 hooks, physical-profile/logical-account routing, account-scoped and automatic synchronization, and
@@ -121,10 +120,10 @@ old-plus-new totals. CLI-only discovery verifies the executable and leaves files
 hook installation. The synthetic privacy matrix includes sanitized capture/proof files and rejected
 payload quarantine, as well as sources/config/installation/state/dirty files, logs, diagnostics and
 HTTP. Raw canaries are absent and local HMACs/checkpoints are excluded from network payloads.
-Cross-platform validation results are tracked in the Draft PR; live A/B/A is a separate Draft
-blocker. Logical accounts of one physical profile are collected sequentially within the existing
-bounded pool, while independent profiles remain parallel. A regression adds two seconds to each
-ledger read: previously, competing collectors returned only two of three account snapshots; the
+Cross-platform validation results are tracked in the Draft PR; the completed live A/B/A evidence is
+recorded below. Logical accounts of one physical profile are collected sequentially within the
+existing bounded pool, while independent profiles remain parallel. A regression adds two seconds to
+each ledger read: previously, competing collectors returned only two of three account snapshots; the
 grouped collection preserves all three exact totals. This exercises slow filesystem behavior without
 changing lock safety or the aggregate protocol.
 
@@ -174,9 +173,32 @@ Two collections retained all three events, their capture times and total **77319
 removal/repair preserved the events and retained the expected missing-hook gap. Final cleanup
 removed temporary authorization and owned hooks; foreign-hook state matched the pre-smoke digest.
 
-The user confirmed that a second real account is available. Live A/B/A is awaiting the user-managed
-switch from the captured account A to B and then back to A. This remains the open Draft gate;
-successful Desktop smoke does not authorize Ready, merge or rollout.
+## Live account switching completed on 2026-09-06
+
+The same autonomous production runtime from `2683a8c` captured A → B → A on Desktop **3.19.7**. The
+user performed both account sign-ins; each stage used a new session and a minimal successful reply.
+A first control event was retained while temporary hooks were paused overnight, then the same
+private installation state and salt were reused for B and the return to A.
+
+| Stage      | Capture date (UTC) | Input | Output | Cache read | Cache write | Total |
+| ---------- | ------------------ | ----: | -----: | ---------: | ----------: | ----: |
+| A first    | 2026-09-05         | 17024 |     31 |      11520 |           0 | 28575 |
+| B          | 2026-09-06         | 17409 |     25 |       1280 |           0 | 18714 |
+| A returned | 2026-09-06         | 17220 |     25 |       1280 |           0 | 18525 |
+
+Local comparisons confirmed `accountKey(A first) == accountKey(A returned)` and
+`accountKey(A first) != accountKey(B)`. All three event identities were distinct. The production
+account binder created exactly two local sources; returning A reused its original source. The
+production collector returned separate totals **47100 for A** and **18714 for B**; repeating each
+collection left those totals unchanged. No provider identity or local hash is included in this
+report. Uploads were disabled throughout, so this is installed local capture/routing evidence;
+server registration and HTTP behavior are covered separately by the integration tests.
+
+The ledger retained `cursor_hook_missing` and `cursor_hook_stale` gaps for the deliberately paused
+interval; it did not claim uninterrupted history. No unresolved headless pair remained. Cleanup
+removed owned hooks and temporary authorization, verified the foreign-hook digest, and deleted the
+private test state. The live account-switch gate is satisfied. The PR remains Draft under the
+existing authorization; Ready, merge and server-first rollout still require separate approval.
 
 This document records the investigation boundary for adding Cursor Desktop and Cursor CLI as one
 future `cursor` agent. Vibe Racing enables a collector only after a current, reproducible source
