@@ -394,7 +394,8 @@ test("shared Windows inspection is read-only and rejects untrusted write rules i
     assert.match(scripts[0], /S-1-5-18/);
     assert.match(scripts[0], /S-1-5-32-544/);
     assert.match(scripts[0], /Untrusted shared write access/);
-    assert.doesNotMatch(scripts[0], /SetAccessControl|SetAccessRuleProtection|SetOwner/);
+    assert.doesNotMatch(scripts[0], /Get-Acl|SetAccessControl|SetAccessRuleProtection|SetOwner/);
+    assert.match(scripts[0], /\[IO\.Directory\]::GetAccessControl/);
   }
 });
 

@@ -340,7 +340,7 @@ test(
         "-NoProfile",
         "-NonInteractive",
         "-EncodedCommand",
-        Buffer.from(script, "utf16le").toString("base64"),
+        Buffer.from(`$ErrorActionPreference='Stop'; ${script}`, "utf16le").toString("base64"),
       ],
       { env: { ...process.env, CURSOR_TEST_ACL_PATH: path }, windowsHide: true, timeout: 15_000 },
     );
@@ -475,7 +475,7 @@ test(
             "-NoProfile",
             "-NonInteractive",
             "-EncodedCommand",
-            Buffer.from(script, "utf16le").toString("base64"),
+            Buffer.from(`$ErrorActionPreference='Stop'; ${script}`, "utf16le").toString("base64"),
           ],
           {
             env: {
@@ -505,7 +505,7 @@ test(
     await writeFile(hooks, `{"version":1,"hooks":{"stop":[${foreignBytes}]}}`);
     const snapshot = () =>
       ps(
-        "@($env:CURSOR_SHARED_PARENT,$env:CURSOR_SHARED_ROOT,$env:CURSOR_SHARED_FILE) | ForEach-Object { (Get-Acl -LiteralPath $_).Sddl }",
+        "foreach ($path in @($env:CURSOR_SHARED_PARENT,$env:CURSOR_SHARED_ROOT)) { ([IO.Directory]::GetAccessControl($path)).Sddl }; ([IO.File]::GetAccessControl($env:CURSOR_SHARED_FILE)).Sddl",
       );
     const before = await snapshot();
     const {
@@ -548,7 +548,7 @@ test(
     for (const sid of ["S-1-1-0", "S-1-5-11"]) {
       await ps(
         [
-          "$acl=Get-Acl -LiteralPath $env:CURSOR_SHARED_ROOT",
+          "$acl=[IO.Directory]::GetAccessControl($env:CURSOR_SHARED_ROOT)",
           "$principal=New-Object Security.Principal.SecurityIdentifier($env:CURSOR_UNTRUSTED_SID)",
           "$rule=New-Object Security.AccessControl.FileSystemAccessRule($principal,'Write','ContainerInherit,ObjectInherit','None','Allow')",
           "[void]$acl.AddAccessRule($rule); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl)",
@@ -558,7 +558,7 @@ test(
       assert.equal(await inspectSafeSharedWindowsDirectory(root), false);
       await assert.rejects(reconcileCursorHooks(root, owner), safeError);
       await ps(
-        "$acl=Get-Acl -LiteralPath $env:CURSOR_SHARED_ROOT; $principal=New-Object Security.Principal.SecurityIdentifier($env:CURSOR_UNTRUSTED_SID); $acl.PurgeAccessRules($principal); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl)",
+        "$acl=[IO.Directory]::GetAccessControl($env:CURSOR_SHARED_ROOT); $principal=New-Object Security.Principal.SecurityIdentifier($env:CURSOR_UNTRUSTED_SID); $acl.PurgeAccessRules($principal); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl)",
         { CURSOR_UNTRUSTED_SID: sid },
       );
     }

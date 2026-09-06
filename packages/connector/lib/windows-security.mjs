@@ -162,7 +162,7 @@ const sharedAclVerification = [
   "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
   "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Shared path is a reparse point' }",
   "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
-  "$acl=Get-Acl -LiteralPath $entry.FullName",
+  "if ($entry.PSIsContainer) { $acl=[IO.Directory]::GetAccessControl($entry.FullName) } else { $acl=[IO.File]::GetAccessControl($entry.FullName) }",
   "if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $identity.User.Value) { throw 'Shared owner mismatch' }",
   "$trusted=@($identity.User.Value,'S-1-5-18','S-1-5-32-544')",
   "$writes=[Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership",
