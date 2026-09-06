@@ -6,7 +6,9 @@ token counters; Vibe Racing never estimates tokens from text.
 
 Cursor is implemented as the eighth agent in this 0.7.0 Draft PR. Its
 [evidence and rollout gates](CURSOR_EVIDENCE.md) record the accepted exact per-turn contract,
-approved immutable capture time, remaining live A/B/A validation, and separate server-first rollout.
+approved immutable capture time, and authenticated A → B → A, which passed: A reused its original
+logical source, B used a second source, and replay did not change either total. Rollout remains
+blocked by review and server-first release authorization.
 
 | Agent       | Source and formula                                                                                                                                                                                   | Surface               | Profiles                                                 | Aggregation   | Trigger and limitations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -21,9 +23,9 @@ approved immutable capture time, remaining live A/B/A validation, and separate s
 
 ## Current-year history coverage
 
-The Cursor version gate accepts verified Desktop releases 3.18.25 and 3.19.7 and CLI build
-`2026.09.02-c22c1a3`. Another release/build requires exact-source verification and a connector
-update; matching field names alone do not establish unchanged counter semantics.
+The Cursor version gate accepts the verified Desktop releases and CLI build recorded in
+[CURSOR_EVIDENCE.md](CURSOR_EVIDENCE.md). Unknown versions fail closed until their aggregate
+contract is verified.
 
 Cursor uses one physical `~/.cursor` profile per OS user for Desktop and CLI. A safe existing root
 or a version-verified official `agent` executable enables discovery; discovery does not create the

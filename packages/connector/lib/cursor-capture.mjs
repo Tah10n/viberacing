@@ -1,3 +1,4 @@
+import { decodeCursorOwner } from "./cursor-owner.mjs";
 import { decodeCursorInput, maximumCursorInputBytes } from "./cursor-events.mjs";
 import { readCursorLedger, recordCursorCapture, recordCursorCaptureGap } from "./cursor-ledger.mjs";
 import { withCursorCaptureContext } from "./config.mjs";
@@ -9,6 +10,13 @@ const captureIdPattern = new RegExp(`^${uuid}$`, "i");
 export function parseCursorHookRequest(values) {
   if (values.length !== 3 || values[0] !== "--event" || !["stop", "sessionEnd"].includes(values[1]))
     return null;
+  const owner = decodeCursorOwner(values[2]);
+  if (owner)
+    return {
+      eventName: values[1],
+      installationId: owner.installationId,
+      profileId: owner.profileId,
+    };
   const match = marker.exec(values[2]);
   return match
     ? {
@@ -65,7 +73,7 @@ export async function captureCursorHook(
   request,
   payload,
   capturedAt,
-  { environment = process.env } = {},
+  { environment = process.env, onDurable = async () => {} } = {},
 ) {
   if (!request) return false;
   return withCursorCaptureContext(request, async ({ source, salt, stateRoot }) => {
@@ -76,6 +84,7 @@ export async function captureCursorHook(
         capturedAt,
         "cursor_hook_stale",
       );
+      await onDurable();
       return false;
     }
     const captureId = environment.VIBERACING_CURSOR_HEADLESS_CAPTURE_ID;
@@ -86,8 +95,20 @@ export async function captureCursorHook(
         const ledger = await readCursorLedger(stateRoot, source.clientSourceId, capturedAt);
         owned = ledger.headlessCaptureIds.includes(captureId);
       }
-      if (request.eventName === "sessionEnd" && !owned) return false;
-      // A foreign or stale headless marker must never suppress an ordinary captured event.
+      if (typeof captureId === "string" && captureId.length > 0 && !owned) {
+        await recordCursorCaptureGap(
+          stateRoot,
+          source.clientSourceId,
+          capturedAt,
+          "cursor_headless_pair_incomplete",
+        );
+        await onDurable();
+        return false;
+      }
+      if (request.eventName === "sessionEnd" && !owned) {
+        await onDurable();
+        return false;
+      }
       result = await recordCursorCapture(stateRoot, source.clientSourceId, {
         kind: request.eventName === "stop" ? "stop" : "binding",
         payload,
@@ -100,6 +121,7 @@ export async function captureCursorHook(
       // A current owned hook still schedules safe collection diagnostics when storage fails.
       return markDirtyIfConnected(source.clientSourceId, "cursor", new Date(capturedAt));
     }
+    await onDurable();
     if (result.status === "suppressed") return false;
     return markDirtyIfConnected(source.clientSourceId, "cursor", new Date(capturedAt));
   });

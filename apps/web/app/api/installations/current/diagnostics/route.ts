@@ -43,6 +43,8 @@ export const diagnosticCodesByPhase = {
     "cursor_headless_pair_incomplete",
     "cursor_hook_missing",
     "cursor_hook_stale",
+    "cursor_profile_already_owned",
+    "cursor_capture_deadline",
   ]),
   sync: new Set(["automatic_sync_failed"]),
   deliver: new Set(["pending_payload_rejected"]),

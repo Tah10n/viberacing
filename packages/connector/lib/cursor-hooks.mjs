@@ -1,14 +1,25 @@
+import { cursorHookTimeoutSeconds } from "./cursor-deadline.mjs";
 // Cursor-only CAS journal extracted from the verified hook reconciliation mechanism.
 // Runtime has no dependency on the evidence probe or any observation files.
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { chmod, link, lstat, open, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
+import {
+  cursorOwner,
+  encodeCursorOwner,
+  decodeCursorOwner,
+  sameCursorOwner,
+  cursorOwnerFailure,
+  lockInactiveCursorOwner,
+} from "./cursor-owner.mjs";
 import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { quoteWindowsCommandArgument } from "./executables.mjs";
 import {
   ensureOwnerOnlyWindowsFile,
-  inspectOwnerOnlyWindowsDirectory,
+  preserveSharedWindowsFileAcl,
+  inspectSafeSharedWindowsDirectory,
+  inspectSafeSharedWindowsFile,
   inspectOwnerOnlyWindowsFile,
 } from "./windows-security.mjs";
 
@@ -28,7 +39,7 @@ async function assertRoot(root) {
     info.isSymbolicLink() ||
     (typeof process.getuid === "function" &&
       (info.uid !== process.getuid() || (info.mode & 0o022) !== 0)) ||
-    !(await inspectOwnerOnlyWindowsDirectory(root))
+    !(await inspectSafeSharedWindowsDirectory(root))
   )
     throw safeFailure();
   return info;
@@ -53,9 +64,11 @@ async function assertSafeRegularFile(
   )
     throw safeFailure();
   if (
-    privateFile &&
-    ((process.platform !== "win32" && (info.mode & 0o077) !== 0) ||
-      !(await inspectOwnerOnlyWindowsFile(path)))
+    (privateFile &&
+      ((process.platform !== "win32" && (info.mode & 0o077) !== 0) ||
+        !(await inspectOwnerOnlyWindowsFile(path)))) ||
+    (!privateFile && process.platform !== "win32" && (info.mode & 0o022) !== 0) ||
+    (!privateFile && !(await inspectSafeSharedWindowsFile(path, { allowMultipleLinks })))
   )
     throw safeFailure();
   return info;
@@ -111,8 +124,75 @@ function validatedHooksDocument(value) {
   return value;
 }
 
+// Retain the original lexical representation of every unchanged foreign JSON subtree.
+// JSON.parse validates syntax first; this bounded scanner only records object/array spans.
+const originalJson = new WeakMap();
+function parseHooksJson(contents) {
+  const text = contents.toString("utf8");
+  const document = validatedHooksDocument(JSON.parse(text));
+  let offset = 0;
+  const whitespace = () => {
+    while (/\s/.test(text[offset] ?? "") && offset < text.length) offset++;
+  };
+  const stringEnd = () => {
+    offset++;
+    while (offset < text.length) {
+      const character = text[offset++];
+      if (character === "\\") offset++;
+      else if (character === '"') break;
+    }
+  };
+  function scan(value) {
+    whitespace();
+    const start = offset;
+    if (text[offset] === '"') stringEnd();
+    else if (text[offset] === "{" || text[offset] === "[") {
+      const object = text[offset++] === "{";
+      whitespace();
+      let index = 0;
+      const keys = new Set();
+      while (text[offset] !== (object ? "}" : "]")) {
+        let key = index++;
+        if (object) {
+          whitespace();
+          const keyStart = offset;
+          stringEnd();
+          key = JSON.parse(text.slice(keyStart, offset));
+          if (keys.has(key)) throw safeFailure();
+          keys.add(key);
+          whitespace();
+          offset++;
+        }
+        scan(value[key]);
+        whitespace();
+        if (text[offset] !== ",") break;
+        offset++;
+        whitespace();
+      }
+      offset++;
+      originalJson.set(value, {
+        serialized: JSON.stringify(value),
+        raw: text.slice(start, offset),
+      });
+    } else {
+      while (offset < text.length && !/[,\]}\s]/.test(text[offset])) offset++;
+    }
+  }
+  scan(document);
+  return document;
+}
+function serializeHooksJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  const original = originalJson.get(value);
+  if (original?.serialized === JSON.stringify(value)) return original.raw;
+  if (Array.isArray(value)) return `[${value.map(serializeHooksJson).join(",")} ]`;
+  return `{${Object.entries(value)
+    .map(([key, child]) => `${JSON.stringify(key)}:${serializeHooksJson(child)}`)
+    .join(",")} }`;
+}
+
 async function readHooksSnapshot(hooksFile) {
-  const info = await assertSafeRegularFile(hooksFile, { allowMissing: true, privateFile: true });
+  const info = await assertSafeRegularFile(hooksFile, { allowMissing: true, privateFile: false });
   if (info === null)
     return {
       document: { version: 1, hooks: {} },
@@ -123,7 +203,7 @@ async function readHooksSnapshot(hooksFile) {
   if (info.dev !== after.dev || info.ino !== after.ino || info.size !== after.size)
     throw new Error("Cursor hooks.json changed while it was read");
   return {
-    document: validatedHooksDocument(JSON.parse(contents.toString("utf8"))),
+    document: parseHooksJson(contents),
     changedAt: after.ctimeMs,
     fingerprint: {
       exists: true,
@@ -137,7 +217,7 @@ async function readHooksSnapshot(hooksFile) {
 }
 
 async function hooksFingerprint(hooksFile) {
-  const info = await assertSafeRegularFile(hooksFile, { allowMissing: true, privateFile: true });
+  const info = await assertSafeRegularFile(hooksFile, { allowMissing: true, privateFile: false });
   if (info === null) return { exists: false };
   const contents = await readBoundedFile(hooksFile, info);
   const after = await lstat(hooksFile);
@@ -240,7 +320,7 @@ async function recoverPublishedHooksStage(path) {
   )
     throw new Error("Cursor hooks orphan stage changed during recovery; all files were preserved");
   await unlink(stagePath);
-  await assertSafeRegularFile(path, { privateFile: true });
+  await assertSafeRegularFile(path, { privateFile: false });
 }
 
 async function restoreDisplacedHooks(path, recovery) {
@@ -257,7 +337,12 @@ async function restoreDisplacedHooks(path, recovery) {
 }
 
 function cloneJson(value) {
-  return JSON.parse(JSON.stringify(value));
+  if (value === null || typeof value !== "object") return value;
+  const cloned = Array.isArray(value)
+    ? value.map(cloneJson)
+    : Object.fromEntries(Object.entries(value).map(([key, child]) => [key, cloneJson(child)]));
+  if (originalJson.has(value)) originalJson.set(cloned, originalJson.get(value));
+  return cloned;
 }
 
 function mergeHooksDocuments(original, concurrent) {
@@ -311,7 +396,7 @@ async function readHooksJournalSnapshot(path) {
   const info = await assertSafeRegularFile(path, {
     allowMissing: true,
     allowMultipleLinks: true,
-    privateFile: true,
+    privateFile: isOwnedHooksStageName(path.split(".viberacing-cursor-hooks.")[0], basename(path)),
   });
   if (info === null) return null;
   const contents = await readBoundedFile(path, info);
@@ -320,7 +405,7 @@ async function readHooksJournalSnapshot(path) {
     throw new Error(`Cursor hooks journal changed while it was read: ${path}`);
   const sha256 = createHash("sha256").update(contents).digest("hex");
   return {
-    document: validatedHooksDocument(JSON.parse(contents.toString("utf8"))),
+    document: parseHooksJson(contents),
     sha256,
     fingerprint: {
       exists: true,
@@ -468,6 +553,10 @@ async function publishRecoveredHooks(
       "recovery publication verification",
     );
     await recoveryFaults.afterMergedPublish?.();
+    await unlink(stage);
+    if (recoveryState !== null) await preserveSharedWindowsFileAcl(recovery, path);
+    else if (reconcileState !== null || displaceCurrent)
+      await preserveSharedWindowsFileAcl(reconcile, path);
     const expectedReconcile = displaceCurrent ? currentState : reconcileState;
     if (expectedReconcile !== null)
       await unlinkHooksJournalConditionally(
@@ -596,7 +685,7 @@ async function recoverInterruptedHooksMutation(path, { recoveryFaults = {} } = {
 
 async function stageHooksDocument(path, document) {
   const stage = hooksMutationPath(path, `stage-${process.pid}-${randomUUID()}`);
-  const contents = `${JSON.stringify(document, null, 2)}\n`;
+  const contents = `${serializeHooksJson(document)}\n`;
   if (Buffer.byteLength(contents) > maximumInputBytes) throw safeFailure();
   await writeFile(stage, contents, { flag: "wx", mode: 0o600 });
   await securePrivateFile(stage);
@@ -657,6 +746,8 @@ async function publishHooksConditionally(
       }
       return false;
     }
+    await unlink(stage);
+    await preserveSharedWindowsFileAcl(recovery, path);
     await syncDirectory(dirname(path));
     if (!sameFingerprint(expected, await hooksFingerprint(recovery))) throw safeFailure();
     await unlink(recovery);
@@ -698,7 +789,10 @@ function ownership(options) {
   return `${options.installationId.toLowerCase()}:${options.profileId.toLowerCase()}`;
 }
 export function cursorHookMarker(options) {
-  return `--viberacing-cursor-hook-v1=${ownership(options)}`;
+  ownership(options);
+  return options.launcher === undefined
+    ? `--viberacing-cursor-hook-v1=${ownership(options)}`
+    : encodeCursorOwner(options);
 }
 function quote(value, platform) {
   if (typeof value !== "string" || /[\0\r\n]/.test(value)) throw safeFailure();
@@ -720,18 +814,73 @@ export function cursorHookCommand(options, eventName, platform = process.platfor
   const command = values.map((value) => quote(value, platform)).join(" ");
   return platform === "win32" ? `"${command}"` : command;
 }
-function ownsEntry(entry, options) {
-  if (typeof entry?.command !== "string") return false;
-  const marker = cursorHookMarker(options);
-  // The final, literal argument is the installation/profile ownership marker.
-  return (
-    entry.command.endsWith(` '${marker}'`) || entry.command.endsWith(` ${quote(marker, "win32")}"`)
+function entryOwner(entry, options) {
+  if (typeof entry?.command !== "string") return null;
+  const match = entry.command.match(/--viberacing-cursor-hook-v2=([A-Za-z0-9_-]+)/);
+  if (match) {
+    const owner = decodeCursorOwner(match[0]);
+    if (
+      !owner ||
+      !eventNames.some((event) =>
+        ["win32", "linux"].some(
+          (platform) => entry.command === cursorHookCommand(owner, event, platform),
+        ),
+      )
+    )
+      throw cursorOwnerFailure();
+    return owner;
+  }
+  const legacy = entry.command.match(
+    /--viberacing-cursor-hook-v1=([0-9a-f-]{36}):([0-9a-f-]{36})/i,
   );
+  if (!legacy) return null;
+  // Legacy entries do not attest their origin/launcher. Only an exact known own command can migrate.
+  if (
+    legacy[1].toLowerCase() === options.installationId.toLowerCase() &&
+    legacy[2].toLowerCase() === options.profileId.toLowerCase() &&
+    eventNames.some((event) =>
+      ["win32", "linux"].some(
+        (platform) =>
+          entry.command ===
+          cursorHookCommand(options, event, platform).replace(cursorHookMarker(options), legacy[0]),
+      ),
+    )
+  )
+    return cursorOwner(options);
+  throw cursorOwnerFailure();
+}
+function ownsEntry(entry, options) {
+  try {
+    const owner = entryOwner(entry, options);
+    return (
+      owner !== null &&
+      sameCursorOwner(
+        owner,
+        cursorOwner(options.ignoreOrigin ? { ...options, originKey: owner.originKey } : options),
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+function otherOwners(document, options) {
+  const current = cursorOwner(options);
+  const result = new Map();
+  for (const entries of Object.values(document.hooks ?? {})) {
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      const owner = entryOwner(entry, options);
+      if (owner && owner.originKey === current.originKey && !sameCursorOwner(owner, current))
+        result.set(JSON.stringify(owner), owner);
+    }
+  }
+  return [...result.values()];
 }
 function desiredEntry(options, eventName) {
-  return { command: cursorHookCommand(options, eventName), timeout: 10 };
+  return { command: cursorHookCommand(options, eventName), timeout: cursorHookTimeoutSeconds };
 }
 function hookStatus(document, options) {
+  if (otherOwners(document, options).length) throw cursorOwnerFailure();
   const status = {};
   for (const eventName of eventNames) {
     const entries = document.hooks?.[eventName] ?? [];
@@ -774,16 +923,28 @@ export async function observeCursorHooks(root, options) {
           }
         : null,
     };
-  } catch {
-    return stale;
+  } catch (error) {
+    return {
+      ...stale,
+      ...(error?.diagnosticCode === "cursor_profile_already_owned"
+        ? { diagnosticCode: error.diagnosticCode }
+        : {}),
+    };
   }
 }
 export async function inspectCursorHooks(root, options) {
-  return (await observeCursorHooks(root, options)).hooks;
+  const observation = await observeCursorHooks(root, options);
+  if (observation.diagnosticCode) throw cursorOwnerFailure();
+  return observation.hooks;
 }
 /** Caller owns connection lifecycle. Only these installation/profile entries change. */
-export async function reconcileCursorHooks(root, options, { remove = false, ...faults } = {}) {
+export async function reconcileCursorHooks(
+  root,
+  options,
+  { remove = false, reclaim = false, ...faults } = {},
+) {
   let lock;
+  const heldLocks = new Map();
   try {
     ownership(options);
     const initialRoot = await assertRoot(root);
@@ -795,11 +956,15 @@ export async function reconcileCursorHooks(root, options, { remove = false, ...f
       waitMs: process.platform === "win32" ? 60_000 : 5_000,
     });
     if (!lock) throw safeFailure();
+    await securePrivateFile(lockPath);
     const afterRoot = await assertRoot(root);
     if (afterRoot.dev !== initialRoot.dev || afterRoot.ino !== initialRoot.ino) throw safeFailure();
     const changed = await mutateHooksWithCas(
       path,
-      (document) => {
+      async (document) => {
+        const competitors = remove ? [] : otherOwners(document, options);
+        if (competitors.length && !reclaim) throw cursorOwnerFailure();
+        for (const owner of competitors) await lockInactiveCursorOwner(owner, heldLocks);
         const before = JSON.stringify(document);
         // Remove this installation's entries even if a prior version used another hook event.
         for (const name of Object.keys(document.hooks ?? {})) {
@@ -808,7 +973,14 @@ export async function reconcileCursorHooks(root, options, { remove = false, ...f
             if (eventNames.includes(name)) throw safeFailure();
             continue;
           }
-          const retained = entries.filter((entry) => !ownsEntry(entry, options));
+          const retained = entries.filter((entry) => {
+            if (remove) return !ownsEntry(entry, { ...options, ignoreOrigin: true });
+            const owner = entryOwner(entry, options);
+            return (
+              !ownsEntry(entry, options) &&
+              !competitors.some((other) => owner && sameCursorOwner(owner, other))
+            );
+          });
           if (retained.length) document.hooks[name] = retained;
           else if (entries.length) delete document.hooks[name];
         }
@@ -826,10 +998,12 @@ export async function reconcileCursorHooks(root, options, { remove = false, ...f
     );
     await syncDirectory(root);
     return changed;
-  } catch {
+  } catch (error) {
+    if (error?.diagnosticCode === "cursor_profile_already_owned") throw cursorOwnerFailure();
     // Foreign config can contain paths, commands and credentials. Never surface them.
     throw safeFailure();
   } finally {
+    for (const held of heldLocks.values()) await releaseOwnedLock(held).catch(() => {});
     if (lock) await releaseOwnedLock(lock).catch(() => {});
   }
 }

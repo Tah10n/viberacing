@@ -837,6 +837,7 @@ test(
       join(bundle, "scripts", "cursor-evidence-probe.mjs"),
       join(bundle, "scripts", "viberacing-cursor-evidence-probe.cmd"),
       join(bundle, "packages", "connector", "lib", "owned-lock.mjs"),
+      join(bundle, "packages", "connector", "lib", "cursor-deadline.mjs"),
       join(bundle, "packages", "connector", "lib", "windows-security.mjs"),
     ])
       assert.equal(await inspectOwnerOnlyWindowsFile(path), true, path);

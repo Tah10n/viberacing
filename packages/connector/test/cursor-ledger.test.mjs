@@ -912,3 +912,41 @@ test("Cursor repeated same-day or unchanged missing-hook inspections do not chur
     ),
   );
 });
+
+test("an unfinished durable hook intent changes a complete past day to partial and survives repair", async (context) => {
+  const { prepareCursorIngress, beginCursorIngress, completeCursorIngress } =
+    await import("../lib/cursor-ingress.mjs");
+  const { ensureOwnerOnlyWindowsFile } = await import("../lib/windows-security.mjs");
+  const root = await fixture(context);
+  await recordStop(root);
+  const ledger = await readCursorLedger(root, profile, later);
+  const source = {
+    agentId: "cursor",
+    collectionMethod: "cursor_local_events",
+    clientSourceId: profile,
+    providerAccountKey: ledger.accounts[0].accountKey,
+  };
+  const range = { rangeStart: "2026-09-04", rangeEnd: "2026-09-04" };
+  const collect = () =>
+    collectCursor(source, range, {}, { stateRoot: root, now: later, hookObservation });
+  assert.equal((await collect()).completeness, "complete");
+  const request = { profileId: profile, installationId: randomUUID() };
+  await writeFile(join(root, "config.json"), "{}", { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(join(root, "config.json"));
+  await prepareCursorIngress(root, request);
+  const intent = await beginCursorIngress(root, request, at);
+  assert.ok(intent);
+  assert.equal(await readFile(intent.file, "utf8"), at);
+  const partial = await collect();
+  assert.equal(partial.completeness, "partial");
+  assert.ok(partial.diagnostics.some((item) => item.code === "cursor_capture_deadline"));
+  await initializeCursorLedger(root, profile, later);
+  await prepareCursorIngress(root, request);
+  assert.equal((await collect()).completeness, "partial");
+  // Existing exact event is durable; completing its retry may now remove the intent.
+  await completeCursorIngress(intent);
+  assert.equal((await collect()).completeness, "complete");
+  await rm(join(root, "captures", `cursor-${profile}.ingress`), { recursive: true });
+  await assert.rejects(readCursorLedger(root, profile, later));
+  await assert.rejects(initializeCursorLedger(root, profile, later));
+});

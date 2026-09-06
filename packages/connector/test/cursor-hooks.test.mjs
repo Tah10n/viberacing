@@ -81,16 +81,32 @@ test("Cursor clean install and repair preserve foreign entries and top-level fie
   assert.deepEqual(await inspectCursorHooks(root, owner), missing);
 });
 
-test("Cursor installations and profile ownership are independent under parallel installs", async (t) => {
+test("Cursor parallel installations elect exactly one owner and reject a second pair", async (t) => {
   const root = await setup(t);
   const other = { ...owner, installationId: randomUUID() };
-  await Promise.all([reconcileCursorHooks(root, owner), reconcileCursorHooks(root, other)]);
-  assert.deepEqual(await inspectCursorHooks(root, owner), current);
-  assert.deepEqual(await inspectCursorHooks(root, other), current);
-  assert.equal((await get(root)).hooks.stop.length, 2);
-  await reconcileCursorHooks(root, owner, { remove: true });
-  assert.deepEqual(await inspectCursorHooks(root, other), current);
+  const outcomes = await Promise.allSettled([
+    reconcileCursorHooks(root, owner),
+    reconcileCursorHooks(root, other),
+  ]);
+  assert.equal(outcomes.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(
+    outcomes.find((result) => result.status === "rejected").reason.diagnosticCode,
+    "cursor_profile_already_owned",
+  );
+  const winner = outcomes[0].status === "fulfilled" ? owner : other;
+  const loser = winner === owner ? other : owner;
+  assert.deepEqual(await inspectCursorHooks(root, winner), current);
   assert.equal((await get(root)).hooks.stop.length, 1);
+  const before = await readFile(join(root, "hooks.json"));
+  await assert.rejects(
+    reconcileCursorHooks(root, loser, { reclaim: true }),
+    /cursor_profile_already_owned/,
+  );
+  await reconcileCursorHooks(root, loser, { remove: true });
+  assert.deepEqual(await readFile(join(root, "hooks.json")), before);
+  await reconcileCursorHooks(root, winner, { remove: true });
+  await reconcileCursorHooks(root, loser);
+  assert.deepEqual(await inspectCursorHooks(root, loser), current);
 });
 
 test("Cursor modified and duplicate owned entries are repaired without touching another installation", async (t) => {
@@ -117,6 +133,7 @@ test("Cursor malformed, oversized and unsupported config fails closed with safe 
     '"private-secret"',
     '{"version":2}',
     '{"hooks":[]}',
+    '{"hooks":{"stop":[],"stop":[{"command":"private-foreign"}]}}',
     '{"hooks":{"stop":{}}}',
     "x".repeat(1024 * 1024 + 1),
     Buffer.from([0xff]).toString("latin1"),
@@ -292,7 +309,7 @@ test("Cursor hooks quote literal paths and ownership markers on the native platf
     "cursor-hook",
     "--event",
     "sessionEnd",
-    cursorHookMarker(owner),
+    cursorHookMarker({ ...owner, launcher }),
   ]);
   assert.equal((await readdir(root)).includes("injected"), false);
   assert.throws(() => cursorHookCommand({ ...owner, launcher: "bad\npath" }, "stop"));
@@ -300,7 +317,7 @@ test("Cursor hooks quote literal paths and ownership markers on the native platf
 });
 
 test(
-  "Cursor refuses a Windows hooks file whose ACL grants another principal access",
+  "Cursor refuses a Windows hooks file whose ACL grants another principal write access",
   { skip: process.platform !== "win32" },
   async (t) => {
     const root = await setup(t);
@@ -312,7 +329,7 @@ test(
       "$path=$env:CURSOR_TEST_ACL_PATH",
       "$acl=[IO.File]::GetAccessControl($path)",
       "$everyone=New-Object Security.Principal.SecurityIdentifier('S-1-1-0')",
-      "$rule=New-Object Security.AccessControl.FileSystemAccessRule($everyone,'Read','None','None','Allow')",
+      "$rule=New-Object Security.AccessControl.FileSystemAccessRule($everyone,'Write','None','None','Allow')",
       "[void]$acl.AddAccessRule($rule)",
       "[IO.File]::SetAccessControl($path,$acl)",
     ].join("; ");
@@ -369,4 +386,185 @@ test("Cursor continuity observation exposes only file metadata and detects a cha
   assert.deepEqual(after.hooks, current);
   assert.notDeepEqual(after.fingerprint, before.fingerprint);
   assert.ok(!JSON.stringify(after).includes("private-observation-canary"));
+});
+
+test("Cursor safe reclaim proves the inactive marker and launcher; stale or active owners survive", async (t) => {
+  const root = await setup(t);
+  const oldState = join(root, "private-old-state");
+  const bin = join(oldState, "bin");
+  await mkdir(bin, { recursive: true, mode: 0o700 });
+  await ensurePrivateStateDirectory(oldState, { paths: [oldState, bin] });
+  const launcher = join(bin, "viberacing-hook.mjs");
+  const bytes = "// synthetic owned launcher\n";
+  await writeFile(launcher, bytes, { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(launcher);
+  const { createHash } = await import("node:crypto");
+  const previous = {
+    ...owner,
+    launcher,
+    launcherHash: createHash("sha256").update(bytes).digest("hex"),
+  };
+  const next = { ...owner, installationId: randomUUID() };
+  const foreignBytes = '{ "command" : "echo \\u0066oreign", "timeout" : 3 }';
+  await put(root, `{"version":1,"hooks":{"stop":[${foreignBytes}]}}`);
+  await reconcileCursorHooks(root, previous);
+  const before = await readFile(join(root, "hooks.json"), "utf8");
+  assert.ok(before.includes(foreignBytes));
+  await assert.rejects(reconcileCursorHooks(root, next), /cursor_profile_already_owned/);
+  await writeFile(join(oldState, "config.json"), "{}", { mode: 0o600 });
+  await ensureOwnerOnlyWindowsFile(join(oldState, "config.json"));
+  await assert.rejects(
+    reconcileCursorHooks(root, next, { reclaim: true }),
+    /cursor_profile_already_owned/,
+  );
+  assert.equal(await readFile(join(root, "hooks.json"), "utf8"), before);
+  await rm(join(oldState, "config.json"));
+  await writeFile(launcher, "// changed launcher\n", { mode: 0o600 });
+  await assert.rejects(
+    reconcileCursorHooks(root, next, { reclaim: true }),
+    /cursor_profile_already_owned/,
+  );
+  assert.equal(await readFile(join(root, "hooks.json"), "utf8"), before);
+  await writeFile(launcher, bytes, { mode: 0o600 });
+  assert.equal(await reconcileCursorHooks(root, next, { reclaim: true }), true);
+  assert.deepEqual(await inspectCursorHooks(root, next), current);
+  assert.equal((await get(root)).hooks.stop.length, 2);
+  assert.ok((await readFile(join(root, "hooks.json"), "utf8")).includes(foreignBytes));
+  await reconcileCursorHooks(root, previous, { remove: true });
+  assert.deepEqual(await inspectCursorHooks(root, next), current);
+  await reconcileCursorHooks(root, next, { remove: true });
+  assert.ok((await readFile(join(root, "hooks.json"), "utf8")).includes(foreignBytes));
+});
+
+test("Cursor unknown legacy owners are preserved and cannot be silently reclaimed", async (t) => {
+  const root = await setup(t);
+  const command = cursorHookCommand(owner, "stop").replace(
+    cursorHookMarker(owner),
+    `--viberacing-cursor-hook-v1=${randomUUID()}:${randomUUID()}`,
+  );
+  await put(root, { version: 1, hooks: { stop: [{ command, timeout: 10 }, foreign] } });
+  const before = await readFile(join(root, "hooks.json"));
+  await assert.rejects(
+    reconcileCursorHooks(root, owner, { reclaim: true }),
+    /cursor_profile_already_owned/,
+  );
+  await reconcileCursorHooks(root, owner, { remove: true });
+  assert.deepEqual(await readFile(join(root, "hooks.json")), before);
+});
+
+test(
+  "Windows inherited Cursor profile ACL survives install, repair and removal",
+  { skip: process.platform !== "win32" },
+  async (t) => {
+    const parent = await mkdtemp(join(tmpdir(), "viberacing-cursor-shared-acl-"));
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    const root = join(parent, ".cursor");
+    const hooks = join(root, "hooks.json");
+    const ps = async (script, environment = {}) =>
+      (
+        await promisify(execFile)(
+          win32.join(
+            process.env.SystemRoot,
+            "System32",
+            "WindowsPowerShell",
+            "v1.0",
+            "powershell.exe",
+          ),
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            Buffer.from(script, "utf16le").toString("base64"),
+          ],
+          {
+            env: {
+              ...process.env,
+              CURSOR_SHARED_PARENT: parent,
+              CURSOR_SHARED_ROOT: root,
+              CURSOR_SHARED_FILE: hooks,
+              ...environment,
+            },
+            windowsHide: true,
+            timeout: 30_000,
+          },
+        )
+      ).stdout.trim();
+    await ps(
+      [
+        "$ErrorActionPreference='Stop'",
+        "$identity=[Security.Principal.WindowsIdentity]::GetCurrent().User",
+        "$acl=New-Object Security.AccessControl.DirectorySecurity",
+        "$acl.SetOwner($identity); $acl.SetAccessRuleProtection($true,$false)",
+        "foreach ($sid in @($identity.Value,'S-1-5-18','S-1-5-32-544')) { $principal=New-Object Security.Principal.SecurityIdentifier($sid); $rule=New-Object Security.AccessControl.FileSystemAccessRule($principal,'FullControl','ContainerInherit,ObjectInherit','None','Allow'); [void]$acl.AddAccessRule($rule) }",
+        "[IO.Directory]::SetAccessControl($env:CURSOR_SHARED_PARENT,$acl)",
+      ].join("; "),
+    );
+    await mkdir(root);
+    const foreignBytes = '{ "command" : "echo \\u0066oreign", "timeout": 2 }';
+    await writeFile(hooks, `{"version":1,"hooks":{"stop":[${foreignBytes}]}}`);
+    const snapshot = () =>
+      ps(
+        "@($env:CURSOR_SHARED_PARENT,$env:CURSOR_SHARED_ROOT,$env:CURSOR_SHARED_FILE) | ForEach-Object { (Get-Acl -LiteralPath $_).Sddl }",
+      );
+    const before = await snapshot();
+    const {
+      inspectSafeSharedWindowsDirectory,
+      inspectSafeSharedWindowsFile,
+      inspectOwnerOnlyWindowsDirectory,
+    } = await import("../lib/windows-security.mjs");
+    assert.equal(await inspectSafeSharedWindowsDirectory(root), true);
+    assert.equal(await inspectSafeSharedWindowsFile(hooks), true);
+    assert.equal(await inspectOwnerOnlyWindowsDirectory(root), false);
+    await reconcileCursorHooks(root, owner);
+    assert.deepEqual(await inspectCursorHooks(root, owner), current);
+    assert.equal(await reconcileCursorHooks(root, owner, { reclaim: true }), false);
+    assert.equal(await snapshot(), before);
+    assert.ok((await readFile(hooks, "utf8")).includes(foreignBytes));
+    await reconcileCursorHooks(root, owner, { remove: true });
+    assert.equal(await snapshot(), before);
+    assert.ok((await readFile(hooks, "utf8")).includes(foreignBytes));
+    const privateState = join(parent, "private-state");
+    await ensurePrivateStateDirectory(privateState);
+    assert.equal(await inspectOwnerOnlyWindowsDirectory(privateState), true);
+    await link(hooks, join(root, "hardlink.json"));
+    assert.equal(await inspectSafeSharedWindowsFile(hooks), false);
+    await rm(join(root, "hardlink.json"));
+    const junction = join(parent, "junction");
+    await symlink(root, junction, "junction");
+    assert.equal(await inspectSafeSharedWindowsDirectory(junction), false);
+    await rm(junction);
+    for (const sid of ["S-1-1-0", "S-1-5-11"]) {
+      await ps(
+        [
+          "$acl=Get-Acl -LiteralPath $env:CURSOR_SHARED_ROOT",
+          "$principal=New-Object Security.Principal.SecurityIdentifier($env:CURSOR_UNTRUSTED_SID)",
+          "$rule=New-Object Security.AccessControl.FileSystemAccessRule($principal,'Write','ContainerInherit,ObjectInherit','None','Allow')",
+          "[void]$acl.AddAccessRule($rule); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl)",
+        ].join("; "),
+        { CURSOR_UNTRUSTED_SID: sid },
+      );
+      assert.equal(await inspectSafeSharedWindowsDirectory(root), false);
+      await assert.rejects(reconcileCursorHooks(root, owner), safeError);
+      await ps(
+        "$acl=Get-Acl -LiteralPath $env:CURSOR_SHARED_ROOT; $principal=New-Object Security.Principal.SecurityIdentifier($env:CURSOR_UNTRUSTED_SID); $acl.PurgeAccessRules($principal); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl)",
+        { CURSOR_UNTRUSTED_SID: sid },
+      );
+    }
+    assert.equal(await snapshot(), before);
+  },
+);
+
+test("same Cursor owner can repair its Node executable without creating a second capture pair", async (t) => {
+  const root = await setup(t);
+  await reconcileCursorHooks(root, owner);
+  const updated = { ...owner, nodePath: join(root, "updated-node"), launcherHash: "a".repeat(64) };
+  assert.deepEqual(await inspectCursorHooks(root, updated), {
+    stop: "modified",
+    sessionEnd: "modified",
+  });
+  assert.equal(await reconcileCursorHooks(root, updated), true);
+  assert.deepEqual(await inspectCursorHooks(root, updated), current);
+  assert.equal((await get(root)).hooks.stop.length, 1);
+  assert.equal((await get(root)).hooks.sessionEnd.length, 1);
 });

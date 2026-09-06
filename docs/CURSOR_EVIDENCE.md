@@ -2,12 +2,62 @@
 
 Status on 2026-09-06: **exact-source evidence passed; production implementation implemented in this
 PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
-eighth server agent with `source_sum` and migration 012. The connector implements strict stop
+eighth server agent with `source_sum` and migrations 012–014. The connector implements strict stop
 capture, account routing, the explicit headless wrapper, durable integrity proofs, source
 reservations across reset and ACK-driven lossless compaction. Cross-platform release checks and
 Desktop/CLI installed-runtime smoke and live A/B/A with two real accounts have passed. Rollout
 remains blocked until a reviewed server-first deployment. The historical investigation below
 describes the earlier gate, not the current availability of authenticated token counters.
+
+## Release-blocker review fixes (2026-09-06)
+
+The accepted authenticated A → B → A evidence below is retained. A reused its original logical
+source, B used a second source, and replay changed neither total. No new provider research or paid
+capture was needed for this review. The PR remains Draft for repeat review of its exact head;
+rollout remains blocked by review and server-first release authorization.
+
+One physical Cursor root now admits one capture owner per server origin, including custom
+`VIBERACING_STATE_DIR` installations. Local v2 markers bind the installation, physical profile,
+origin digest and exact launcher identity; none of this metadata enters network payloads. A second
+active installation is rejected before adding hooks with the fixed `cursor_profile_already_owned`
+diagnostic. Disconnect removes only its own entries. `doctor --repair` can reclaim a different owner
+only after verifying its marker and launcher hash and holding its connection lock while proving that
+config and connection transactions are absent. Unknown legacy markers, altered launchers and active
+owners remain intact. Unchanged foreign JSON subtrees retain their original bytes. A foreign
+headless marker cannot become an ordinary stop.
+
+The configured external hook timeout is 30 seconds. Capture shares a monotonic 20-second deadline,
+leaving five seconds each for startup and shutdown. Contended connection/ledger waits are limited to
+one second, and each Windows ACL subprocess is limited to four seconds and the remaining shared
+budget, with no deadline-scoped retry. Before waiting on these operations, the installed hook fsyncs
+a timestamp-only intent in pre-existing private state. An exact event or durable ledger gap permits
+intent cleanup; an interrupted or failed capture leaves the intent visible as a gap. There are 256
+exclusive slots and one permanent overflow marker. Lost or malformed ingress storage fails closed.
+Stale commands perform no mkdir, so uninstall cannot be reversed by a late hook. Network sync still
+runs in the existing detached scheduler.
+
+Shared Windows provider roots and hooks files use read-only ACL inspection: current-user owner, real
+non-reparse objects, a single link for hooks.json, and no untrusted write grants. Inherited
+current-user, SYSTEM and local Administrators rules are allowed. Atomic hook replacement preserves
+the original file ACL; the parent ACL is untouched. State, locks, ledger, proofs, temporary files
+and installed runtime remain private. Native Windows regressions exercise inherited ACLs,
+install/repair/remove, unchanged ACLs and foreign bytes, untrusted writers, junctions and hardlinks.
+
+Migration 012 adds five expanded NOT VALID checks while retaining old checks. Migration 013
+validates them in a separate transaction. Migration 014 performs only constraint drop/rename;
+readiness requires 014. Local PostgreSQL tests cover fresh and populated upgrades with the same
+30-second statement timeout as the production runner. While VALIDATE retains ShareUpdateExclusive
+locks on all five tables, an independent old-agent transaction can hold RowExclusive and perform
+insert/update without waiting for validation to commit. Old checks still reject Cursor after 012 and
+013; 014 activates it. Migrations 001–011 are unchanged.
+
+Synthetic installed-command regressions hold each capture lock longer than the former ten-second
+provider limit, enforce the configured external timeout, and require a durable event or gap. A
+separate test changes an otherwise complete past day to partial with an unfinished intent and proves
+repair cannot erase it. Two actual custom state directories prove only one installed command
+captures a turn, while uninstall permits the next owner and late runtime invocation creates no
+state. The verification and CI results for the final review head are recorded in PR #65; earlier
+counts and live observations below belong to the previously reviewed implementation.
 
 ## Authenticated contract and narrow follow-up
 
@@ -80,7 +130,7 @@ provider time.
 
 The evidence confirms one local account identity across Desktop and CLI, distinct A/B accounts, and
 reuse of the original account and local source after A → B → A. The server registry, policy-driven
-dynamic registration, migration 012, Cursor labels/notices, and protocol-v1 account Sync
+dynamic registration, migrations 012–014, Cursor labels/notices, and protocol-v1 account Sync
 presentation are implemented in this branch. Local tests cover fresh/upgrade migration, idempotent
 registration, cross-agent isolation and two machine-local Cursor sources summing 42 + 17 to 59 for
 one server account. Browser E2E also checks Cursor account Sync with protocol v1 and accessibility.

@@ -1,0 +1,16 @@
+-- Activate only after validation completed in the preceding transaction. No table scan.
+
+ALTER TABLE agent_accounts DROP CONSTRAINT agent_accounts_agent_id_check;
+ALTER TABLE agent_accounts RENAME CONSTRAINT agent_accounts_agent_id_cursor_check TO agent_accounts_agent_id_check;
+
+ALTER TABLE installation_sources DROP CONSTRAINT installation_sources_agent_id_check;
+ALTER TABLE installation_sources RENAME CONSTRAINT installation_sources_agent_id_cursor_check TO installation_sources_agent_id_check;
+
+ALTER TABLE account_dedup_events DROP CONSTRAINT account_dedup_events_agent_id_check;
+ALTER TABLE account_dedup_events RENAME CONSTRAINT account_dedup_events_agent_id_cursor_check TO account_dedup_events_agent_id_check;
+
+ALTER TABLE browser_sync_runs DROP CONSTRAINT browser_sync_runs_agent_id_check;
+ALTER TABLE browser_sync_runs RENAME CONSTRAINT browser_sync_runs_agent_id_cursor_check TO browser_sync_runs_agent_id_check;
+
+ALTER TABLE daily_agent_usage DROP CONSTRAINT daily_agent_usage_agent_id_check;
+ALTER TABLE daily_agent_usage RENAME CONSTRAINT daily_agent_usage_agent_id_cursor_check TO daily_agent_usage_agent_id_check;

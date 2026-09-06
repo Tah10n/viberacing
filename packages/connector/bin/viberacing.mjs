@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { cursorCaptureDeadlineMs, withCursorDeadline } from "../lib/cursor-deadline.mjs";
+import { beginCursorIngress, completeCursorIngress } from "../lib/cursor-ingress.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
@@ -3823,15 +3825,30 @@ function parseHookRequest() {
 
 async function cursorHook() {
   const capturedAt = new Date().toISOString();
+  // The watchdog also bounds stdin, ACL subprocesses and scheduler startup. An unfinished
+  // capture retains its independently fsynced intent; collection exposes it as a durable gap.
+  const watchdog = setTimeout(() => {
+    process.stdout.write("{}\n");
+    process.exit(0);
+  }, cursorCaptureDeadlineMs);
   try {
-    const request = parseCursorHookRequest(arguments_.slice(1));
-    if (request) {
+    await withCursorDeadline(async () => {
+      const request = parseCursorHookRequest(arguments_.slice(1));
+      if (!request) return;
+      const intent = await beginCursorIngress(stateDirectory, request, capturedAt);
+      if (!intent) return;
       const payload = await readCursorHookInput(process.stdin);
       await assertOpenCodeUpgradeReady(stateDirectory);
-      if (await captureCursorHook(request, payload, capturedAt)) await launchAutomaticScheduler();
-    }
+      const marked = await captureCursorHook(request, payload, capturedAt, {
+        onDurable: () => completeCursorIngress(intent),
+      });
+      // The actual network operation runs in the existing detached scheduler process.
+      if (marked) await launchAutomaticScheduler();
+    });
   } catch {
     // Never expose provider input or make local capture failure fail a Cursor turn.
+  } finally {
+    clearTimeout(watchdog);
   }
   process.stdout.write("{}\n");
 }

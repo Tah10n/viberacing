@@ -7,7 +7,7 @@ import {
   reserveCursorEvents,
 } from "../cursor-ledger.mjs";
 import { diagnosticError } from "../diagnostics.mjs";
-import { inspectOwnerOnlyWindowsDirectory } from "../windows-security.mjs";
+import { inspectSafeSharedWindowsDirectory } from "../windows-security.mjs";
 import { mergeEntries } from "./shared.mjs";
 import { resolveCursorExecutable } from "../cursor-cli.mjs";
 
@@ -44,7 +44,7 @@ export async function detectCursorProfile({
       info.isSymbolicLink() ||
       (typeof process.getuid === "function" &&
         (info.uid !== process.getuid() || (info.mode & 0o022) !== 0)) ||
-      !(await inspectOwnerOnlyWindowsDirectory(root))
+      !(await inspectSafeSharedWindowsDirectory(root))
     )
       return [];
     return [source];

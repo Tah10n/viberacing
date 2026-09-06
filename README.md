@@ -28,8 +28,9 @@ already included in the aggregate run usage. Unknown schemas fail closed. Direct
 Bugbot, Cloud Agents and SDK usage are outside this support contract.
 
 The [Cursor evidence and rollout gates](docs/CURSOR_EVIDENCE.md) distinguish accepted exact-source
-evidence, this implementation, remaining live A/B/A validation, and the separate server-first
-release. This Draft branch has not been deployed or published.
+evidence and implementation. Authenticated A → B → A passed: A reused its original logical source, B
+used a second source, and replay did not change either total. Rollout remains blocked by review and
+server-first release authorization. This PR remains Draft.
 
 Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
 all active mapped OpenCode databases for that installation together. One short-lived detached

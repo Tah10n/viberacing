@@ -1,3 +1,4 @@
+import { readCursorIngressGaps, initializeCursorIngress } from "./cursor-ingress.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, rename, unlink } from "node:fs/promises";
@@ -812,6 +813,7 @@ export async function initializeCursorLedger(root, profileId, capturedAt) {
     profileId,
     async ({ state, append, torn }) => {
       if (torn) fail();
+      await initializeCursorIngress(root, profileId, { create: !state.captureStartedAt });
       if (!state.captureStartedAt) await append({ v: 1, kind: "start", at: capturedAt });
       return state.captureStartedAt ?? capturedAt;
     },
@@ -932,6 +934,7 @@ export async function readCursorLedger(
       headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
       gaps: [
         ...state.gaps,
+        ...(await readCursorIngressGaps(root, profileId, now)),
         ...(bytes.length > capacityWarningBytes
           ? [
               {

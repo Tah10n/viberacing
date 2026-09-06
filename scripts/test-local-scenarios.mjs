@@ -49,54 +49,46 @@ async function verifyCursorMigrationCompatibility() {
   const migrations = (await readdir(new URL("../apps/web/database/", import.meta.url)))
     .filter((name) => /^\d{3}_.*\.sql$/.test(name))
     .sort();
-  check(migrations.length === 12, "Cursor migration test must exercise 001 through 012");
+  check(migrations.length === 14, "Cursor migration test must exercise 001 through 014");
+  const tables = [
+    "agent_accounts",
+    "installation_sources",
+    "account_dedup_events",
+    "browser_sync_runs",
+    "daily_agent_usage",
+  ];
   for (const upgrade of [false, true]) {
     const client = await pool.connect();
+    const writer = await pool.connect();
     const schema = `cursor_migration_${randomBytes(6).toString("hex")}`;
-    try {
-      await client.query("BEGIN");
-      await client.query(`CREATE SCHEMA ${schema}`);
-      await client.query(`SET LOCAL search_path TO ${schema}`);
-      for (const migration of migrations.slice(0, 11))
-        await client.query(
-          await readFile(new URL(`../apps/web/database/${migration}`, import.meta.url), "utf8"),
-        );
-      const accountId = randomUUID();
-      let owner;
-      if (upgrade) {
-        owner = (
-          await client.query(
-            "INSERT INTO users (github_id, handle) VALUES (1, 'cursor-upgrade-test') RETURNING id",
-          )
-        ).rows[0].id;
-        await client.query(
-          "INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode) VALUES ($1, $2, 'codex', 'Existing Codex', 'account_max')",
-          [accountId, owner],
-        );
-        await client.query(
-          "INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens) VALUES ('2026-01-01', $1, 'codex', 9007199254740993)",
-          [owner],
-        );
-      }
-      await client.query(
+    const apply = async (index) =>
+      client.query(
         await readFile(
-          new URL("../apps/web/database/012_cursor_support.sql", import.meta.url),
+          new URL(`../apps/web/database/${migrations[index - 1]}`, import.meta.url),
           "utf8",
         ),
       );
-      const tables = [
-        "agent_accounts",
-        "installation_sources",
-        "account_dedup_events",
-        "browser_sync_runs",
-        "daily_agent_usage",
-      ];
-      const constraints = await client.query(
-        `SELECT conname, pg_get_expr(conbin, conrelid) AS expression FROM pg_constraint WHERE connamespace = $1::regnamespace AND conname = ANY($2::text[])`,
-        [schema, tables.map((table) => `${table}_agent_id_check`)],
+    const checkConstraints = async (phase) => {
+      const rows = (
+        await client.query(
+          `SELECT conname, convalidated, pg_get_expr(conbin, conrelid) AS expression FROM pg_constraint WHERE connamespace=$1::regnamespace AND (conname=ANY($2::text[]) OR conname=ANY($3::text[]))`,
+          [
+            schema,
+            tables.map((table) => `${table}_agent_id_check`),
+            tables.map((table) => `${table}_agent_id_cursor_check`),
+          ],
+        )
+      ).rows;
+      check(
+        rows.length === (phase === 14 ? 5 : 10),
+        `migration ${phase} missed an agent constraint`,
       );
-      check(constraints.rows.length === 5, "migration 012 missed an agent allowlist");
-      for (const row of constraints.rows) {
+      for (const row of rows) {
+        const expanded = phase === 14 || row.conname.endsWith("_cursor_check");
+        check(
+          row.convalidated === (phase !== 12 || !expanded),
+          `migration ${phase} has wrong validation state`,
+        );
         for (const agent of [
           "codex",
           "claude_code",
@@ -109,49 +101,142 @@ async function verifyCursorMigrationCompatibility() {
           "cursor_cli",
           "unknown",
         ]) {
-          const result = await client.query(
-            `SELECT ${row.expression} AS accepted FROM (SELECT $1::varchar AS agent_id) candidate`,
-            [agent],
-          );
+          const accepted = (
+            await client.query(
+              `SELECT ${row.expression} AS accepted FROM (SELECT $1::varchar AS agent_id) candidate`,
+              [agent],
+            )
+          ).rows[0].accepted;
           check(
-            result.rows[0].accepted === !["cursor_cli", "unknown"].includes(agent),
-            `${row.conname} has an incorrect agent allowlist`,
+            accepted ===
+              (!["cursor_cli", "unknown"].includes(agent) && (agent !== "cursor" || expanded)),
+            `${row.conname} has wrong ${phase} allowlist`,
           );
         }
       }
+    };
+    try {
+      await client.query(`CREATE SCHEMA ${schema}`);
+      await client.query(`SET search_path TO ${schema}`);
+      await writer.query(`SET search_path TO ${schema}`);
+      // Each migration uses its own transaction, exactly as the production migrator does.
+      for (let index = 1; index <= 11; index++) {
+        await client.query("BEGIN");
+        await apply(index);
+        await client.query("COMMIT");
+      }
+      const owner = (
+        await client.query(
+          "INSERT INTO users (github_id, handle) VALUES (1, 'cursor-upgrade-test') RETURNING id",
+        )
+      ).rows[0].id;
+      const accountId = randomUUID();
+      await client.query(
+        "INSERT INTO agent_accounts (id,user_id,agent_id,label,aggregation_mode) VALUES ($1,$2,'codex','Existing Codex','account_max')",
+        [accountId, owner],
+      );
+      if (upgrade)
+        await client.query(
+          "INSERT INTO daily_agent_usage (usage_date,user_id,agent_id,tokens) VALUES ('2026-01-01',$1,'codex',9007199254740993)",
+          [owner],
+        );
+      await client.query("BEGIN; SET LOCAL statement_timeout='30s'");
+      check(
+        (await client.query("SHOW statement_timeout")).rows[0].statement_timeout === "30s",
+        "migration statement timeout is missing",
+      );
+      await apply(12);
+      await client.query("COMMIT");
+      await checkConstraints(12);
+      for (const phase of [12, 13]) {
+        // An old server can write while expanded constraints are present. Cursor is still
+        // rejected until activation, including between committed migration transactions.
+        await writer.query("UPDATE agent_accounts SET label=label WHERE id=$1", [accountId]);
+        let rejected = false;
+        try {
+          await writer.query(
+            "INSERT INTO agent_accounts (id,user_id,agent_id,label,aggregation_mode) VALUES (gen_random_uuid(),$1,'cursor','Before activation','source_sum')",
+            [owner],
+          );
+        } catch (error) {
+          rejected = error.code === "23514";
+        }
+        check(rejected, `migration ${phase} activated Cursor early`);
+        if (phase === 13) break;
+        await writer.query("BEGIN; SET LOCAL statement_timeout='2s'");
+        await writer.query("UPDATE agent_accounts SET label=label WHERE id=$1", [accountId]);
+        await client.query("BEGIN; SET LOCAL statement_timeout='30s'");
+        await apply(13); // Must acquire VALIDATE locks while the old writer holds RowExclusive.
+        const locks = (
+          await client.query(
+            `SELECT c.relname,l.mode FROM pg_locks l JOIN pg_class c ON c.oid=l.relation WHERE l.pid=pg_backend_pid() AND c.relnamespace=$1::regnamespace AND c.relname=ANY($2::text[]) AND l.granted`,
+            [schema, tables],
+          )
+        ).rows;
+        check(
+          tables.every((table) =>
+            locks.some(
+              (lock) => lock.relname === table && lock.mode === "ShareUpdateExclusiveLock",
+            ),
+          ),
+          "VALIDATE did not retain its expected nonblocking locks",
+        );
+        check(
+          !locks.some((lock) =>
+            ["AccessExclusiveLock", "ShareRowExclusiveLock", "ShareLock"].includes(lock.mode),
+          ),
+          "VALIDATE blocks ordinary writes",
+        );
+        await writer.query(
+          "INSERT INTO agent_accounts (id,user_id,agent_id,label,aggregation_mode) VALUES (gen_random_uuid(),$1,'claude_code','Concurrent old server','source_sum')",
+          [owner],
+        );
+        await writer.query("UPDATE agent_accounts SET label=label WHERE id=$1", [accountId]);
+        await writer.query("COMMIT");
+        await client.query("COMMIT");
+        await checkConstraints(13);
+      }
+      await client.query("BEGIN; SET LOCAL statement_timeout='30s'");
+      await apply(14);
+      await client.query("COMMIT");
+      await checkConstraints(14);
       check(
         (
           await client.query(
-            "SELECT count(*)::int AS count FROM daily_agent_usage WHERE agent_id = 'cursor'",
+            "SELECT count(*)::int AS count FROM daily_agent_usage WHERE agent_id='cursor'",
           )
         ).rows[0].count === 0,
         "migration created synthetic Cursor usage",
       );
-      if (upgrade) {
-        const account = (
-          await client.query("SELECT label, aggregation_mode FROM agent_accounts WHERE id = $1", [
-            accountId,
-          ])
-        ).rows[0];
-        check(
-          account?.label === "Existing Codex" && account.aggregation_mode === "account_max",
-          "migration changed an existing account",
-        );
+      const account = (
+        await client.query("SELECT label,aggregation_mode FROM agent_accounts WHERE id=$1", [
+          accountId,
+        ])
+      ).rows[0];
+      check(
+        account.label === "Existing Codex" && account.aggregation_mode === "account_max",
+        "migration changed existing account semantics",
+      );
+      if (upgrade)
         check(
           (
-            await client.query("SELECT tokens::text FROM daily_agent_usage WHERE user_id = $1", [
+            await client.query("SELECT tokens::text FROM daily_agent_usage WHERE user_id=$1", [
               owner,
             ])
           ).rows[0].tokens === "9007199254740993",
-          "migration changed existing exact usage",
+          "migration changed exact usage",
         );
-        await client.query(
-          "INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode) VALUES ($1, $2, 'cursor', 'Cursor account 1', 'source_sum')",
-          [randomUUID(), owner],
-        );
-      }
+      await client.query(
+        "INSERT INTO agent_accounts (id,user_id,agent_id,label,aggregation_mode) VALUES (gen_random_uuid(),$1,'cursor','Cursor account 1','source_sum')",
+        [owner],
+      );
     } finally {
+      await writer.query("ROLLBACK");
       await client.query("ROLLBACK");
+      await writer.query("RESET search_path");
+      await client.query("RESET search_path");
+      await client.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+      writer.release();
       client.release();
     }
   }
@@ -963,7 +1048,7 @@ function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
 try {
   await verifyCursorMigrationCompatibility();
   console.log(
-    "ok - Cursor fresh 001–012 and populated 011–012 migration preserve existing usage and agent constraints",
+    "ok - Cursor fresh 001–014 and populated 011–012–013–014 migration preserve existing usage and agent constraints",
   );
   await verifyExpandMigrationCompatibility();
   console.log(

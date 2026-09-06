@@ -1,3 +1,4 @@
+import { prepareCursorIngress, revokeCursorIngress } from "./cursor-ingress.mjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import {
@@ -34,6 +35,7 @@ import {
   recordCursorHookObservation,
   reserveCursorEvents,
 } from "./cursor-ledger.mjs";
+import { readPrivateCursorOwnerFile } from "./cursor-owner.mjs";
 import { connectorVersion } from "./version.mjs";
 import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
 
@@ -163,6 +165,10 @@ function ownedStatePath(path, info) {
     if (parts.length === 3 && parts[1] === "quarantine")
       return /^(?:[0-9a-f-]{36})\.json$/i.test(pendingBase) && info.isFile();
     return false;
+  }
+  if (top === "captures" && /^cursor-[0-9a-f-]{36}\.ingress$/.test(parts[1] ?? "")) {
+    if (parts.length === 2) return info.isDirectory();
+    return parts.length === 3 && info.isFile() && /^(?:permit|overflow|\d{3}\.gap)$/.test(parts[2]);
   }
   if (top === "captures" && parts.length === 2) {
     const captureName = parts[1];
@@ -2023,6 +2029,9 @@ const installedRuntimeFiles = [
   "cursor-events.mjs",
   "cursor-ledger.mjs",
   "cursor-hooks.mjs",
+  "cursor-owner.mjs",
+  "cursor-deadline.mjs",
+  "cursor-ingress.mjs",
   "cursor-capture.mjs",
   "cursor-cli.mjs",
   "diagnostics.mjs",
@@ -2207,6 +2216,15 @@ export async function cursorHookOptions(source) {
     installationId,
     profileId: source.profileClientSourceId ?? source.clientSourceId,
     launcher: join(await realpath(stateDirectory), "bin", "viberacing-hook.mjs"),
+    origin: (
+      await inspectConfig().catch((error) => {
+        if (error.code === "ENOENT") return {};
+        throw error;
+      })
+    ).origin,
+    launcherHash: createHash("sha256")
+      .update((await readPrivateCursorOwnerFile(installedHookLauncherScript(), true)) ?? "")
+      .digest("hex"),
   };
 }
 
@@ -2218,10 +2236,6 @@ async function prepareCursorHookOwner(source) {
   );
   if (known?.agentId !== "cursor" || known.profileClientSourceId !== undefined)
     throw new Error("Cursor hook profile is unavailable");
-  if (known.cursorHookInstallationId && known.cursorHookInstallationId !== installation.id)
-    await reconcileCursorHooks(hookRoot(known, "cursor"), await cursorHookOptions(known), {
-      remove: true,
-    });
   const updated = await withConnectionStateLock(async () => {
     const current = await readInstallationUnlocked();
     if (current?.id !== installation.id) throw new Error("Cursor hook installation changed");
@@ -2266,6 +2280,12 @@ export async function withCursorCaptureContext(request, callback) {
         candidate.cursorHookInstallationId === request.installationId,
     );
     if (!source || typeof source.sourceId !== "string") return null;
+    const hooks = await inspectCursorHooks(
+      hookRoot(source, "cursor"),
+      await cursorHookOptions(source),
+    );
+    if (hooks.stop !== "current" || hooks.sessionEnd !== "current")
+      throw new Error("cursor_hook_stale");
     return callback({ source, salt, stateRoot: stateDirectory });
   });
 }
@@ -2322,7 +2342,11 @@ export async function prepareCursorCollection(source, capturedAt, range) {
   });
 }
 
-export async function installHookForSource(source, installedScript) {
+export async function installHookForSource(
+  source,
+  installedScript,
+  { reclaimCursorOwner = false } = {},
+) {
   if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   if (source.agentId === "cursor") {
     const profile = await prepareCursorHookOwner(source);
@@ -2343,14 +2367,16 @@ export async function installHookForSource(source, installedScript) {
         throw new Error("Cursor hook root is unavailable");
       try {
         await mkdir(root, { mode: 0o700 });
-        await secureWindowsStateDirectory(root);
+        // Shared provider root keeps normal inherited Windows ACLs.
       } catch (createError) {
         if (createError.code !== "EEXIST") throw createError;
       }
     }
-    const changed = await reconcileCursorHooks(root, await cursorHookOptions(profile));
     const capturedAt = new Date().toISOString();
     await initializeCursorLedger(stateDirectory, profile.clientSourceId, capturedAt);
+    const owner = await cursorHookOptions(profile);
+    await prepareCursorIngress(stateDirectory, owner);
+    const changed = await reconcileCursorHooks(root, owner, { reclaim: reclaimCursorOwner });
     await recordCursorHookObservation(
       stateDirectory,
       profile.clientSourceId,
@@ -2463,8 +2489,10 @@ export async function diagnoseHookForSource(source, options = {}) {
         : status.stop === "missing" || status.sessionEnd === "missing"
           ? "missing"
           : "modified";
-    } catch {
-      return "missing";
+    } catch (error) {
+      return error?.diagnosticCode === "cursor_profile_already_owned"
+        ? "cursor_profile_already_owned"
+        : "missing";
     }
   }
   const installedScript =
@@ -2545,8 +2573,13 @@ export async function removeHookForSource(source, options = {}) {
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
   const root = hookRoot(source, source.agentId);
-  if (source.agentId === "cursor")
+  if (source.agentId === "cursor") {
+    await revokeCursorIngress(
+      stateDirectory,
+      source.profileClientSourceId ?? source.clientSourceId,
+    );
     return reconcileCursorHooks(root, await cursorHookOptions(source), { remove: true });
+  }
   if (source.agentId === "codex") {
     const path = join(root, "hooks.json");
     const removedStop = await updateHook(path, "Stop", null, hookOptions);
@@ -2600,8 +2633,8 @@ export async function reconcileHooks(
       } catch (error) {
         failures.push({
           agentId: source.agentId,
-          clientSourceId: source.clientSourceId,
-          path: hookRoot(source, source.agentId),
+          clientSourceId: source.agentId === "cursor" ? null : source.clientSourceId,
+          path: source.agentId === "cursor" ? null : hookRoot(source, source.agentId),
           message: error instanceof Error ? error.message : "Hook cleanup failed",
         });
       }
@@ -2609,12 +2642,14 @@ export async function reconcileHooks(
   if (installedScript)
     for (const source of hookSources)
       try {
-        result[source.clientSourceId] = await installHookForSource(source, installedScript);
+        result[source.clientSourceId] = await installHookForSource(source, installedScript, {
+          reclaimCursorOwner: true,
+        });
       } catch (error) {
         failures.push({
           agentId: source.agentId,
-          clientSourceId: source.clientSourceId,
-          path: hookRoot(source, source.agentId),
+          clientSourceId: source.agentId === "cursor" ? null : source.clientSourceId,
+          path: source.agentId === "cursor" ? null : hookRoot(source, source.agentId),
           message: error instanceof Error ? error.message : "Hook installation failed",
         });
       }
@@ -2676,14 +2711,14 @@ export async function removeHooks() {
         await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });
       cleaned.push({
         agentId: source.agentId,
-        clientSourceId: source.clientSourceId ?? null,
-        path: root,
+        clientSourceId: source.agentId === "cursor" ? null : (source.clientSourceId ?? null),
+        path: source.agentId === "cursor" ? null : root,
       });
     } catch (error) {
       failures.push({
         agentId: source.agentId,
-        clientSourceId: source.clientSourceId ?? null,
-        path: root,
+        clientSourceId: source.agentId === "cursor" ? null : (source.clientSourceId ?? null),
+        path: source.agentId === "cursor" ? null : root,
         message: error instanceof Error ? error.message : "Hook cleanup failed",
       });
     }

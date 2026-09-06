@@ -375,3 +375,52 @@ test(
     assert.match(fileAcl.Rights, /FullControl/);
   },
 );
+
+test("shared Windows inspection is read-only and rejects untrusted write rules including inheritance", async () => {
+  const { inspectSafeSharedWindowsDirectory, inspectSafeSharedWindowsFile } =
+    await import("../lib/windows-security.mjs");
+  for (const inspect of [inspectSafeSharedWindowsDirectory, inspectSafeSharedWindowsFile]) {
+    const scripts = [];
+    assert.equal(
+      await inspect("C:\\Users\\racer\\.cursor", {
+        platform: "win32",
+        environment: { SystemRoot: "C:\\Windows" },
+        run: async (_command, args) =>
+          scripts.push(Buffer.from(args.at(-1), "base64").toString("utf16le")),
+      }),
+      true,
+    );
+    assert.match(scripts[0], /GetAccessRules\(\$true,\$true/);
+    assert.match(scripts[0], /S-1-5-18/);
+    assert.match(scripts[0], /S-1-5-32-544/);
+    assert.match(scripts[0], /Untrusted shared write access/);
+    assert.doesNotMatch(scripts[0], /SetAccessControl|SetAccessRuleProtection|SetOwner/);
+  }
+});
+
+test("Cursor's shared deadline bounds every Windows ACL subprocess and disables timeout retries", async () => {
+  const { withCursorDeadline } = await import("../lib/cursor-deadline.mjs");
+  const { inspectSafeSharedWindowsDirectory } = await import("../lib/windows-security.mjs");
+  for (const operation of [
+    inspectSafeSharedWindowsDirectory,
+    inspectOwnerOnlyWindowsFile,
+    ensureOwnerOnlyWindowsFile,
+    ensurePrivateStateDirectory,
+  ]) {
+    const calls = [];
+    await withCursorDeadline(async () => {
+      await Promise.resolve(
+        operation("C:\\Users\\racer\\state", {
+          platform: "win32",
+          environment: { SystemRoot: "C:\\Windows" },
+          run: async (_command, _args, options) => {
+            calls.push(options.timeout);
+            throw Object.assign(new Error("timeout"), { killed: true, signal: "SIGTERM" });
+          },
+        }),
+      ).catch(() => {});
+    }, 150);
+    assert.equal(calls.length, 1);
+    assert.ok(calls[0] > 0 && calls[0] <= 150);
+  }
+});

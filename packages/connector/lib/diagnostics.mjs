@@ -30,6 +30,8 @@ export const diagnosticCodesByPhase = Object.freeze({
     "cursor_headless_pair_incomplete",
     "cursor_hook_missing",
     "cursor_hook_stale",
+    "cursor_profile_already_owned",
+    "cursor_capture_deadline",
   ]),
   sync: Object.freeze(["automatic_sync_failed"]),
   deliver: Object.freeze(["pending_payload_rejected"]),

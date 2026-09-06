@@ -10,5 +10,7 @@
   "009_codex_hook_notice.sql": "75cdbe6b24ed9bc82f5bb7e9bdb2cee3938fcc1e3a9970fc975c4526d2abc0ff",
   "010_current_year_history.sql": "62d9c1872f2a21c026f3a52501e0e7049b8e3f92a03c2366394c8d9270dabb2f",
   "011_remove_weekly_compatibility.sql": "bf5bee969e5bae76877b88a5a1deb2dfc0a19ab119c6d6f1527a4ab03bfdaf77",
-  "012_cursor_support.sql": "d347bc7295542020c7af661d8c18e01c82d04f916a6f7c65a478089dbc23c919"
+  "012_cursor_constraints_add.sql": "b010b12af820e1e1adae65cc65ba939240d5e2a73317bc99be9d0a0ae6e4d467",
+  "013_cursor_constraints_validate.sql": "3059ec9bd80313ad821136c91d18fe9227981ff1878355c13332c010ba806155",
+  "014_cursor_constraints_activate.sql": "fa9c2b91954f567f6f8a7839c6e42071bedfada043fb69c68672e14110db470c"
 }

@@ -6,6 +6,10 @@ import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { acquireOwnedLock, releaseOwnedLock } from "../lib/owned-lock.mjs";
+import { cursorHookTimeoutSeconds } from "../lib/cursor-deadline.mjs";
+import { setTimeout as delay } from "node:timers/promises";
+import { collectCursor } from "../lib/adapters/cursor.mjs";
 import {
   initializeCursorLedger,
   beginCursorHeadlessCapture,
@@ -139,7 +143,7 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
       {
         input: JSON.stringify(stop),
         encoding: "utf8",
-        timeout: 10_000,
+        timeout: cursorHookTimeoutSeconds * 1000,
         env: { ...process.env },
       },
     );
@@ -182,6 +186,61 @@ test("Cursor capture lifecycle owns hooks, records exact private events, rejects
       (gap) => gap.code === "cursor_hook_stale" && gap.from === now,
     ),
   );
+  // A marker registered by another installation must not turn a headless run into a second
+  // ordinary stop event, even if someone manually invokes this installed command.
+  await capture.captureCursorHook(
+    request,
+    { ...stop, generation_id: "foreign-headless-stop" },
+    now,
+    {
+      environment: { VIBERACING_CURSOR_HEADLESS_CAPTURE_ID: randomUUID() },
+    },
+  );
+  assert.equal(
+    (await readCursorLedger(config.stateDirectory, source.clientSourceId)).events.length,
+    1,
+  );
+  // Execute the real installed hook under the timeout from hooks.json. Each lock remains
+  // live for >10 seconds; the independent intent must survive without waiting for that lock.
+  for (const lockPath of [
+    join(config.stateDirectory, "connection-state.lock"),
+    join(config.stateDirectory, "captures", `cursor-${source.clientSourceId}.jsonl.lock`),
+  ]) {
+    const held = await acquireOwnedLock(lockPath);
+    assert.ok(held);
+    const started = Date.now();
+    const hooks = JSON.parse(await readFile(join(providerRoot, "hooks.json"), "utf8"));
+    assert.equal(hooks.hooks.stop[0].timeout, cursorHookTimeoutSeconds);
+    try {
+      const timed = invoke();
+      assert.equal(timed.status, 0, timed.stderr);
+      assert.equal(timed.stdout, "{}\n");
+      assert.ok(Date.now() - started < hooks.hooks.stop[0].timeout * 1000);
+      await delay(Math.max(0, 10_100 - (Date.now() - started)));
+    } finally {
+      await releaseOwnedLock(held);
+    }
+    assert.ok(Date.now() - started > 10_000);
+    const read = await readCursorLedger(config.stateDirectory, source.clientSourceId);
+    assert.ok(
+      read.gaps.some(
+        (gap) =>
+          gap.code === "cursor_capture_deadline" && gap.from.slice(0, 10) === now.slice(0, 10),
+      ),
+    );
+    const nextDay = new Date(Date.parse(now) + 86_400_000).toISOString();
+    const collected = await collectCursor(
+      { ...profile, providerAccountKey: read.accounts[0].accountKey },
+      {
+        rangeStart: now.slice(0, 10),
+        rangeEnd: now.slice(0, 10),
+      },
+      {},
+      { stateRoot: config.stateDirectory, now: nextDay },
+    );
+    assert.equal(collected.completeness, "partial");
+    assert.equal(read.events.length, 1);
+  }
   const captureId = randomUUID();
   const pairAt = new Date().toISOString();
   const end = {

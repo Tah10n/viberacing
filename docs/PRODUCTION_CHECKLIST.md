@@ -176,21 +176,22 @@
 
 ## Cursor 0.7.0 release gate
 
-- Keep the implementation PR Draft until live A/B/A with a second real account passes. Accepted
-  Desktop/interactive/headless exact-source evidence does not replace final implementation smoke.
+- Authenticated A → B → A passed: A reused its original logical source, B used a second source, and
+  replay did not change either total. Keep the PR Draft for repeat review of the exact head; rollout
+  still requires separate server-first authorization. Retain the accepted provider evidence.
 - Validate Desktop one/two turns, interactive CLI, `viberacing run cursor`, aggregate subagents,
   abort, Desktop A + CLI A equality, replay, hook remove/repair, and privacy canaries using only
   minimized reports. Direct headless runs, Tab, Bugbot, Cloud Agents and SDK remain excluded.
 - Check clean install, crash recovery, Windows ACL and `.cmd`/`.bat` argument/signal behavior in the
   actual packaged runtime on macOS, Linux and Windows. Verify reset/re-pair and lost-response
   retries cannot replay old events into new `source_sum` sources. Retain unacknowledged suffixes.
-- Verify fresh migrations 001 → 012 and populated 011 → 012, generic Codex/Cursor registration,
-  cross-agent ownership, two-machine source summation, account lifecycle, protocol-v1 account Sync,
-  protocol-v2 installation Sync, accessibility and exact-head required CI.
-- After separate approval, deploy the server registry, registration policy and migration 012 first;
-  confirm `/ready` reports schema 012 and old connector 0.6.0 still syncs. Only then publish the
-  reviewed 0.7.0 connector. Merge, deployment, Railway changes, npm publication, tags and releases
-  are separate actions; none is part of this implementation PR's authorization.
+- Verify fresh migrations 001 → 014 and populated 011 → 012 → 013 → 014, generic Codex/Cursor
+  registration, cross-agent ownership, two-machine source summation, account lifecycle, protocol-v1
+  account Sync, protocol-v2 installation Sync, accessibility and exact-head required CI.
+- After separate approval, deploy the server registry, registration policy and migrations 012–014
+  first; confirm `/ready` reports schema 014 and old connector 0.6.0 still syncs. Only then publish
+  the reviewed 0.7.0 connector. Merge, deployment, Railway changes, npm publication, tags and
+  releases are separate actions; none is part of this implementation PR's authorization.
 
 ## GitHub and npm manual controls
 

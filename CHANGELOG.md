@@ -13,14 +13,16 @@ experience or protocol.
 - Connector 0.7.0 implements Cursor as the eighth agent: automatic Desktop/interactive stop hooks,
   `viberacing run cursor` for headless runs, exact aggregate counters, local account separation and
   stable A → B → A routing. Desktop and CLI share one physical profile and one logical source per
-  account. Existing `source_sum` adds machine-local sources; migration 012 and server-derived
+  account. Existing `source_sum` adds machine-local sources; migrations 012–014 and server-derived
   Codex/Cursor registration policy preserve protocol v5 and older connector compatibility.
 - Cursor uses the approved immutable capture-time UTC policy. Reasoning and subagents are already
   included in aggregate usage. Durable result/sessionEnd pairing, duplicate/conflict checks, owned
   hook repair, source reservations across reset, integrity proofs and acknowledged compaction retain
   exact captured history without raw provider content. Earlier history, current-day coverage and
-  known capture failures remain partial. This unreleased Draft implementation still requires live
-  A/B/A validation and a separately approved server-first rollout.
+  known capture failures remain partial. This unreleased Draft implementation has passed
+  authenticated A → B → A: A reused its original logical source, B used a second source, and replay
+  did not change either total. Rollout remains blocked by review and server-first release
+  authorization.
 
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
   records only minimized schemas (HMACing unknown field names), exact integer counter candidates,
