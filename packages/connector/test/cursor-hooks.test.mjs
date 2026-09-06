@@ -503,11 +503,18 @@ test(
     await mkdir(root);
     const foreignBytes = '{ "command" : "echo \\u0066oreign", "timeout": 2 }';
     await writeFile(hooks, `{"version":1,"hooks":{"stop":[${foreignBytes}]}}`);
+    // Model the required current-user-owned provider profile, retaining inherited rules.
+    // Elevated CI tokens otherwise default new object ownership to Administrators.
+    await ps(
+      "$owner=[Security.Principal.WindowsIdentity]::GetCurrent().User; $acl=[IO.Directory]::GetAccessControl($env:CURSOR_SHARED_ROOT); $acl.SetOwner($owner); [IO.Directory]::SetAccessControl($env:CURSOR_SHARED_ROOT,$acl); $acl=[IO.File]::GetAccessControl($env:CURSOR_SHARED_FILE); $acl.SetOwner($owner); [IO.File]::SetAccessControl($env:CURSOR_SHARED_FILE,$acl)",
+    );
     const snapshot = () =>
       ps(
-        "foreach ($path in @($env:CURSOR_SHARED_PARENT,$env:CURSOR_SHARED_ROOT)) { ([IO.Directory]::GetAccessControl($path)).Sddl }; ([IO.File]::GetAccessControl($env:CURSOR_SHARED_FILE)).Sddl",
+        "foreach ($path in @($env:CURSOR_SHARED_PARENT,$env:CURSOR_SHARED_ROOT)) { ([IO.Directory]::GetAccessControl($path)).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All) }; ([IO.File]::GetAccessControl($env:CURSOR_SHARED_FILE)).GetSecurityDescriptorSddlForm([Security.AccessControl.AccessControlSections]::All)",
       );
     const before = await snapshot();
+    assert.equal(before.split(/\r?\n/).length, 3);
+    for (const descriptor of before.split(/\r?\n/)) assert.match(descriptor, /^O:.+G:.+D:/);
     const {
       inspectSafeSharedWindowsDirectory,
       inspectSafeSharedWindowsFile,

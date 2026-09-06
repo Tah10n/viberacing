@@ -300,11 +300,36 @@ export async function preserveSharedWindowsFileAcl(original, replacement) {
     "$replacement=$env:VIBERACING_WINDOWS_SHARED_REPLACEMENT",
     "$target=Get-Item -LiteralPath $replacement -Force -ErrorAction Stop",
     "if ($target.PSIsContainer -or ($target.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid replacement' }",
-    "[IO.File]::SetAccessControl($target.FullName,$acl)",
+    "$sections=[Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group",
+    "$copy=New-Object Security.AccessControl.FileSecurity",
+    "$copy.SetSecurityDescriptorSddlForm($acl.GetSecurityDescriptorSddlForm($sections),$sections)",
+    "[IO.File]::SetAccessControl($target.FullName,$copy)",
     "$after=[IO.File]::GetAccessControl($target.FullName)",
-    "if ($after.Sddl -ne $acl.Sddl) { throw 'Shared ACL changed' }",
+    "if ($after.GetSecurityDescriptorSddlForm($sections) -ne $acl.GetSecurityDescriptorSddlForm($sections)) { throw 'Shared ACL changed' }",
   ].join("; ");
   await runWindowsSecurityScript(original, Buffer.from(script, "utf16le").toString("base64"), {
     environment: { ...process.env, VIBERACING_WINDOWS_SHARED_REPLACEMENT: replacement },
   });
+}
+
+// Only call immediately after our successful mkdir, never for an existing provider root.
+// Elevated Windows tokens can default a new directory's owner to Administrators. Set the new
+// directory's owner to the creating user while keeping the inherited access descriptor intact.
+export async function initializeNewSharedWindowsDirectoryOwner(path) {
+  if (process.platform !== "win32") return;
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$path=$env:${ownerOnlyFileEnvironmentVariable}`,
+    "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+    "if (-not $entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid new directory' }",
+    "$acl=[IO.Directory]::GetAccessControl($entry.FullName)",
+    "$access=[Security.AccessControl.AccessControlSections]::Access",
+    "$before=$acl.GetSecurityDescriptorSddlForm($access)",
+    "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User)",
+    "[IO.Directory]::SetAccessControl($entry.FullName,$acl)",
+    "$after=[IO.Directory]::GetAccessControl($entry.FullName)",
+    "if ($after.GetSecurityDescriptorSddlForm($access) -ne $before) { throw 'New directory access changed' }",
+    ...sharedAclVerification,
+  ].join("; ");
+  await runWindowsSecurityScript(path, Buffer.from(script, "utf16le").toString("base64"));
 }

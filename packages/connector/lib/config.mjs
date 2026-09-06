@@ -37,7 +37,10 @@ import {
 } from "./cursor-ledger.mjs";
 import { readPrivateCursorOwnerFile } from "./cursor-owner.mjs";
 import { connectorVersion } from "./version.mjs";
-import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
+import {
+  ensurePrivateStateDirectory as secureWindowsStateDirectory,
+  initializeNewSharedWindowsDirectoryOwner,
+} from "./windows-security.mjs";
 
 const defaultStateDirectory = join(homedir(), ".viberacing");
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
@@ -2369,7 +2372,8 @@ export async function installHookForSource(
         throw new Error("Cursor hook root is unavailable");
       try {
         await mkdir(root, { mode: 0o700 });
-        // Shared provider root keeps normal inherited Windows ACLs.
+        await initializeNewSharedWindowsDirectoryOwner(root);
+        // Existing shared roots are read-only; a new root keeps its inherited access rules.
       } catch (createError) {
         if (createError.code !== "EEXIST") throw createError;
       }

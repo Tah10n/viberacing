@@ -46,7 +46,7 @@ async function assertRoot(root) {
 }
 async function assertSafeRegularFile(
   path,
-  { allowMissing = false, allowMultipleLinks = false, privateFile = true } = {},
+  { allowMissing = false, allowMultipleLinks = false, privateFile = true, inspectAcl = true } = {},
 ) {
   let info;
   try {
@@ -66,9 +66,11 @@ async function assertSafeRegularFile(
   if (
     (privateFile &&
       ((process.platform !== "win32" && (info.mode & 0o077) !== 0) ||
-        !(await inspectOwnerOnlyWindowsFile(path)))) ||
+        (inspectAcl && !(await inspectOwnerOnlyWindowsFile(path))))) ||
     (!privateFile && process.platform !== "win32" && (info.mode & 0o022) !== 0) ||
-    (!privateFile && !(await inspectSafeSharedWindowsFile(path, { allowMultipleLinks })))
+    (!privateFile &&
+      inspectAcl &&
+      !(await inspectSafeSharedWindowsFile(path, { allowMultipleLinks })))
   )
     throw safeFailure();
   return info;
@@ -950,8 +952,14 @@ export async function reconcileCursorHooks(
     const initialRoot = await assertRoot(root);
     const path = join(root, "hooks.json");
     const lockPath = hooksMutationPath(path, "lock");
-    // Lock contains only a PID and random token. The directory is current-user owned.
-    await assertSafeRegularFile(lockPath, { allowMissing: true, privateFile: false });
+    // Contenders may observe a new Windows lock before its owner-only ACL is applied.
+    // The safe shared root admits only trusted writers; check file shape now and enforce
+    // the private ACL after acquiring our own lock, before reading or changing hooks.
+    await assertSafeRegularFile(lockPath, {
+      allowMissing: true,
+      privateFile: false,
+      inspectAcl: false,
+    });
     lock = await acquireOwnedLock(lockPath, {
       waitMs: process.platform === "win32" ? 60_000 : 5_000,
     });
