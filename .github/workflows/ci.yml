@@ -32,12 +32,16 @@ jobs:
       - run: corepack enable
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Verify Cursor release blockers and multi-account sync on Windows
+      - name: Verify Windows shared ACL and Cursor hook ownership
         if: runner.os == 'Windows'
         run: >-
           pnpm --filter @viberacing/connector exec node --test --test-concurrency=1
-          test/windows-security.test.mjs test/cursor-hooks.test.mjs test/cursor-capture.test.mjs
-          test/cursor-ownership.test.mjs test/cursor-sync.test.mjs
+          test/windows-security.test.mjs test/cursor-hooks.test.mjs
+      - name: Verify Windows installed capture deadlines and multi-account sync
+        if: runner.os == 'Windows'
+        run: >-
+          pnpm --filter @viberacing/connector exec node --test --test-concurrency=1
+          test/cursor-capture.test.mjs test/cursor-ownership.test.mjs test/cursor-sync.test.mjs
       - name: Run connector tests
         if: runner.os != 'Windows'
         run: pnpm --filter @viberacing/connector test

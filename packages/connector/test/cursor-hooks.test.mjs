@@ -513,7 +513,18 @@ test(
       inspectSafeSharedWindowsFile,
       inspectOwnerOnlyWindowsDirectory,
     } = await import("../lib/windows-security.mjs");
-    assert.equal(await inspectSafeSharedWindowsDirectory(root), true);
+    let inspectionFailure;
+    const inspected = await inspectSafeSharedWindowsDirectory(root, {
+      run: async (...args) => {
+        try {
+          return await promisify(execFile)(...args);
+        } catch (error) {
+          inspectionFailure = error.stderr;
+          throw error;
+        }
+      },
+    });
+    assert.equal(inspected, true, inspectionFailure);
     assert.equal(await inspectSafeSharedWindowsFile(hooks), true);
     assert.equal(await inspectOwnerOnlyWindowsDirectory(root), false);
     await reconcileCursorHooks(root, owner);

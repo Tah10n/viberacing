@@ -2085,6 +2085,8 @@ function hookLauncherContents(version = connectorVersion) {
 async function installHookLauncher() {
   const path = installedHookLauncherScript();
   await atomicText(path, hookLauncherContents());
+  if (process.platform === "win32")
+    await secureWindowsStateDirectory(dirname(path), { paths: [dirname(path), path] });
   return path;
 }
 
