@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readCursorLedger } from "../lib/cursor-ledger.mjs";
 import { cursorHookMarker } from "../lib/cursor-hooks.mjs";
+import { cursorHookTimeoutSeconds } from "../lib/cursor-deadline.mjs";
 import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "viberacing-cursor-run-"));
@@ -21,10 +22,16 @@ after(async () => {
 });
 const version = "2026.09.02-c22c1a3";
 const usage = { inputTokens: 10, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4 };
+const modes = ["binding-first", "result-first", "failure", "malformed", "disconnect"];
+const wrapperTimeoutMs = 30_000;
+const hookTimeoutMs = cursorHookTimeoutSeconds * 1_000;
+// Five sequential wrappers, three replay/binding hooks, plus setup and ledger ACL reads.
+// The aggregate test budget must not cancel the final scenarios on native Windows.
+const testTimeoutMs = modes.length * wrapperTimeoutMs + 3 * hookTimeoutMs + 120_000;
 
 test(
   "installed Cursor wrapper pairs either arrival order, suppresses owned stop and preserves failure and disconnect boundaries",
-  { timeout: 120_000 },
+  { timeout: testTimeoutMs },
   async () => {
     const providerRoot = join(root, "cursor");
     await mkdir(providerRoot, { mode: 0o700 });
@@ -81,12 +88,12 @@ test(
         {
           input: JSON.stringify(payload),
           encoding: "utf8",
-          timeout: 15_000,
+          timeout: hookTimeoutMs,
           env: { ...environment, VIBERACING_CURSOR_HEADLESS_CAPTURE_ID: captureId },
         },
       );
     let expectedEvents = 0;
-    for (const mode of ["binding-first", "result-first", "failure", "malformed", "disconnect"]) {
+    for (const mode of modes) {
       const session = `canary-session-${mode}`;
       const end = {
         hook_event_name: "sessionEnd",
@@ -130,7 +137,7 @@ if (process.argv.includes('--version')) { console.log(${JSON.stringify(version)}
 else {
   const marker = process.env.VIBERACING_CURSOR_HEADLESS_CAPTURE_ID;
   function hook(name, payload) {
-    const result = require('node:child_process').spawnSync(process.execPath, [...${JSON.stringify(hookArgs)}, name, ${JSON.stringify(cursorHookMarker(options))}], {input: JSON.stringify(payload), encoding:'utf8', env:process.env});
+    const result = require('node:child_process').spawnSync(process.execPath, [...${JSON.stringify(hookArgs)}, name, ${JSON.stringify(cursorHookMarker(options))}], {input: JSON.stringify(payload), encoding:'utf8', env:process.env, timeout:${hookTimeoutMs}});
     if (result.status !== 0 || result.stdout !== '{}\\n' || result.stderr !== '') process.exit(91);
   }
   hook('stop', ${JSON.stringify(stop)});
@@ -151,7 +158,7 @@ else {
       const child = spawnSync(
         process.execPath,
         [options.launcher, "run", "cursor", "--", "canary-prompt"],
-        { env: environment, encoding: "utf8", timeout: 30_000 },
+        { env: environment, encoding: "utf8", timeout: wrapperTimeoutMs },
       );
       assert.equal(child.status, mode === "failure" ? 37 : 0, child.stderr);
       assert.equal(child.stdout, stream);

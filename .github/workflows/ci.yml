@@ -41,7 +41,8 @@ jobs:
         if: runner.os == 'Windows'
         run: >-
           pnpm --filter @viberacing/connector exec node --test --test-concurrency=1
-          test/cursor-capture.test.mjs test/cursor-ownership.test.mjs test/cursor-sync.test.mjs
+          test/cursor-capture.test.mjs test/cursor-ownership.test.mjs test/cursor-run.test.mjs
+          test/cursor-sync.test.mjs
       - name: Run connector tests
         if: runner.os != 'Windows'
         run: pnpm --filter @viberacing/connector test
