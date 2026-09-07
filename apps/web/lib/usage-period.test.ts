@@ -50,7 +50,7 @@ describe("usage period domain", () => {
     });
   });
 
-  it("defines All time as the current UTC year through today", () => {
+  it("defines This year as the current UTC year through today", () => {
     expect(resolveUsagePeriod({ kind: "year" }, september)).toEqual({
       period: { kind: "year" },
       from: "2026-01-01",

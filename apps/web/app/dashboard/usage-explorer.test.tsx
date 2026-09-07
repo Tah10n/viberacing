@@ -12,6 +12,11 @@ describe("usage chart pointer mapping", () => {
     expect(usageChartPointerIndex((firstPoint + lastPoint) / 2, left, width, 366)).toBe(183);
     expect(usageChartPointerIndex(lastPoint, left, width, 366)).toBe(365);
   });
+  it("maps mobile pointers to the resized plot instead of a desktop viewBox", () => {
+    expect(usageChartPointerIndex(72, 0, 332, 31, 332)).toBe(0);
+    expect(usageChartPointerIndex(193, 0, 332, 31, 332)).toBe(15);
+    expect(usageChartPointerIndex(314, 0, 332, 31, 332)).toBe(30);
+  });
 });
 
 describe("usage chart single-day rendering", () => {
@@ -25,5 +30,19 @@ describe("usage chart single-day rendering", () => {
       />,
     );
     expect(markup).toContain('class="usage-series-point"');
+    expect(markup).toContain('aria-label="Zoom in on usage chart" disabled=""');
+  });
+  it("does not offer inert chart controls when no data has been reported", () => {
+    const markup = renderToStaticMarkup(
+      <UsageExplorer
+        days={[]}
+        periodLabel="This week"
+        rangeLabel="7–13 September"
+        status="no-data"
+      />,
+    );
+    expect(markup).toContain("No exact usage was reported");
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain("<svg");
   });
 });

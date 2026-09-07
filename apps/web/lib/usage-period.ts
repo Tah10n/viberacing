@@ -150,7 +150,7 @@ const rangeYearFormatter = new Intl.DateTimeFormat("en-GB", {
 export function usagePeriodTitle(period: UsagePeriod): string {
   if (period.kind === "week") return "This week";
   if (period.kind === "month") return "This month";
-  if (period.kind === "year") return "All time";
+  if (period.kind === "year") return "This year";
   return "Selected range";
 }
 

@@ -74,8 +74,8 @@ incident filtering, levels, and the enforced privacy boundary.
 
 `VIBERACING_CONNECTOR_DISTRIBUTION` accepts only `archive` or `npm` and defaults to `archive` when
 absent. Self-hosted deployments should retain `archive`: the web build and production image include
-stable and versioned same-origin tarballs, and dashboard connect, repair, and uninstall commands do
-not contact `registry.npmjs.org`.
+stable and versioned same-origin tarballs, and dashboard connect, sync, repair, and uninstall
+commands do not contact `registry.npmjs.org`.
 
 The official Vibe Racing Railway service completed the npm rollout on 2026-08-25 and uses:
 
@@ -86,11 +86,21 @@ VIBERACING_CONNECTOR_DISTRIBUTION=npm
 Ordinary connector releases require no Railway change. There are no npm package-name or package-
 version environment variables. The official commands remain:
 
+For an installation created with `VIBERACING_STATE_DIR`, set it to the same value before any of
+these commands. Omitting it selects the default `~/.viberacing` installation instead.
+
 ```bash
 npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
+npx --yes @viberacing/connector@latest sync
 npx --yes @viberacing/connector@latest doctor --repair
 npx --yes @viberacing/connector@latest uninstall
 ```
+
+Browser Sync requires the default state directory, a linked browser, and a compatible installed
+handler. Custom state directories use CLI sync; repair or reconnect cannot enable Browser Sync for
+them. Dashboard buttons remain visible but disabled when unavailable, with a reason and applicable
+**Sync options** guidance. With archive distribution, connect, sync, and repair use the versioned
+same-origin archive, while uninstall uses the stable same-origin archive.
 
 The stable release workflow publishes the reviewed package version to npm `latest`; it never bumps a
 version, publishes a prerelease, or publishes from a pull request. The installed connector refreshes

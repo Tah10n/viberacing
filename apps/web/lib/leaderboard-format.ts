@@ -1,6 +1,7 @@
 export function formatAgentShare(tokens: string, total: string): string {
   const denominator = BigInt(total);
   if (denominator === 0n) return "0%";
+  if (BigInt(tokens) > 0n && BigInt(tokens) * 100n < denominator) return "<1%";
   return `${((BigInt(tokens) * 100n + denominator / 2n) / denominator).toString()}%`;
 }
 

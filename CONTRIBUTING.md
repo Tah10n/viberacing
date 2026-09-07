@@ -19,12 +19,15 @@ run:
 
 ```bash
 corepack pnpm install --frozen-lockfile
-docker compose up -d
+docker compose up -d db
 corepack pnpm db:migrate
 corepack pnpm dev
 ```
 
-Use `corepack pnpm local:up` instead when testing the complete production image locally.
+Use `corepack pnpm local:up` instead when testing the complete production image locally. Stop the
+dev server before starting that preview. If the preview is already running, use
+`corepack pnpm local:down` before the development commands above so its web container releases
+port 3000. Starting only `db` keeps that port available for the dev server and its OAuth callback.
 
 ## Before a pull request
 

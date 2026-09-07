@@ -147,7 +147,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             <span className="eyebrow meta-label">Your position</span>
             {current === null ? (
               <div className="hero-guest">
-                <strong className="meta-value">Your grid is open</strong>
+                <strong className="meta-value">
+                  Join with GitHub · Connect an agent · Sync tokens
+                </strong>
               </div>
             ) : (
               <div className="user-score-line">
@@ -199,7 +201,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <div>
             <h2 id="leaderboard-title">{periodTitle} standings</h2>
             <p>
-              {period.kind === "year" ? "Current calendar year · " : ""}
               {periodRange}. Community totals are self-reported, not proof of cost or productivity.
             </p>
           </div>

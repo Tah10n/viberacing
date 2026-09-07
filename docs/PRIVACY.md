@@ -164,9 +164,9 @@ in PostgreSQL. Local Vibe Racing directories are owner-only; secrets/config file
 installed executable is `0700`.
 
 Public pages expose GitHub handle, selected UTC-period rank, total, and agent breakdown. Week,
-Month, current-year All time, and current-year Custom views all read aggregate daily summaries; they
-do not expose daily source data, account labels, source/installation details, or credentials. Local
-data is under the user's control, so the leaderboard is explicitly self-reported and grants no
+Month, This year, and current-year Custom views all read aggregate daily summaries; they do not
+expose daily source data, account labels, source/installation details, or credentials. Local data is
+under the user's control, so the leaderboard is explicitly self-reported and grants no
 authorization, reward, or access.
 
 Browser sync stores only an installation capability, independently hashed five-minute grants, an

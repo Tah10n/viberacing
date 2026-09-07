@@ -100,6 +100,7 @@ export function RacerProfileDialog({
               <strong title={`${formatExactTokens(row.total)} tokens`}>
                 {formatCompactTokens(row.total)}
               </strong>
+              <small className="exact-tokens">{formatExactTokens(row.total)} tokens</small>
             </div>
           </div>
           <div className="racer-profile-agents" aria-label="Usage by agent">
@@ -110,6 +111,7 @@ export function RacerProfileDialog({
                 <strong title={`${formatExactTokens(item.tokens)} tokens`}>
                   {formatCompactTokens(item.tokens)}
                 </strong>
+                <small className="exact-tokens">{formatExactTokens(item.tokens)} tokens</small>
               </div>
             ))}
           </div>
@@ -161,6 +163,7 @@ export function StandingsTable({
 
   return (
     <>
+      <p className="standings-hint">Select a row for usage details. Names open GitHub profiles.</p>
       <div className="table-scroll" tabIndex={0} aria-label={`Scrollable ${periodLabel} standings`}>
         <table className="ranking-table">
           <thead>

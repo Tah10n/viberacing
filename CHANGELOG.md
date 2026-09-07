@@ -10,6 +10,15 @@ experience or protocol.
 
 ### Added
 
+- Connector 0.7.2 stages a documentation-only package update: terminal sync and custom-state
+  guidance, plus the distinction between visible disabled Sync controls and permission to run them.
+  Collector behavior and protocol v5 are unchanged.
+- Public racer profiles now include a period selector. Profiles and leaderboard dialogs display full
+  integer token totals alongside compact values, and small positive agent shares show `<1%`.
+- Dashboard **Sync options** offers a copyable terminal sync command for npm and archive
+  distributions. It explains preservation of `VIBERACING_STATE_DIR`, the custom-state Browser Sync
+  limitation, and recovery for the default installation.
+
 - Connector 0.7.1 accepts newer stable Cursor Desktop 3.x versions from 3.18.25 and dated CLI builds
   from 2026.09.02 without a per-patch allowlist. Exact counter/identity/completion checks, dedup and
   immutable UTC attribution remain mandatory. Desktop 3.19.13 live capture and newer-version
@@ -44,10 +53,10 @@ experience or protocol.
   and starts a fresh cursor at the next UTC year without deleting older server rows. Automatic and
   browser-triggered runs drain bounded pending payloads and collect at most one new historical
   range; connect and manual Sync finish every eligible chunk.
-- Week, Month, current-year All time, and current-year Custom selectors now drive one shared UTC
-  period across leaderboard, public profiles, and dashboard totals. The dashboard adds a
-  dependency-free accessible SVG daily chart with pointer and keyboard zoom/pan/reset, exact UTC
-  tooltips, a text summary, and an equivalent daily table.
+- Week, Month, This year, and current-year Custom selectors now drive one shared UTC period across
+  leaderboard, public profiles, and dashboard totals. The dashboard adds a dependency-free
+  accessible SVG daily chart with pointer and keyboard zoom/pan/reset, exact UTC tooltips, a text
+  summary, and an equivalent daily table.
 - Migration 010 adds exact per-day `daily_agent_usage` summaries and source-level current-year
   backfill status. It backfills existing data with the same `account_max` and `source_sum`
   precedence used by live ingestion, while temporarily retaining and maintaining the legacy weekly
@@ -75,6 +84,11 @@ experience or protocol.
 
 ### Changed
 
+- Renamed the current-year preset from **All time** to **This year** throughout the interface and
+  documentation. UTC boundaries and ranking calculations are unchanged.
+- Reorganized the main README around quick start, supported agents, maintenance, local development,
+  and a documentation index, using the existing repository artwork.
+
 - Every adapter now applies the requested date range before events consume ledger limits or affect
   chunk completeness. OpenCode uses a range-bounded SQLite query, Qwen opens only intersecting month
   files, and historical collection cannot replace rolling checkpoints, fingerprints, or diagnostics.
@@ -87,6 +101,14 @@ experience or protocol.
   creation or update.
 
 ### Fixed
+
+- Custom date forms, long navigation handles, and computer cards remain usable on narrow screens.
+  Daily charts resize without stretching labels, omit future zeroes, and disable unavailable
+  viewport controls. Empty periods without incomplete-history warnings show an explanation.
+- Guest setup and leaderboard navigation have clearer instructions. The empty-computer link opens
+  the connection section and moves focus to it.
+- Development instructions now start only PostgreSQL before the dev server, preventing the
+  production-container preview from occupying the same port.
 
 - Dashboard Sync actions remain visible when unavailable and now explain whether the browser must be
   linked to the account's connector or that connector/Browser Sync handler must be updated or

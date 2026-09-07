@@ -7,7 +7,7 @@ describe("standings table profile contract", () => {
     const markup = renderToStaticMarkup(
       <StandingsTable
         currentHandle="Tah10n"
-        periodLabel="All time"
+        periodLabel="This year"
         periodSearch="period=year"
         rows={[
           {
@@ -27,7 +27,7 @@ describe("standings table profile contract", () => {
     expect(markup).toContain('class="racer-profile-dialog"');
     expect(markup).not.toContain('class="leaderboard-profile-link"');
     expect(markup).not.toContain(">View profile<");
-    expect(markup).toContain("Tokens · All time");
+    expect(markup).toContain("Tokens · This year");
   });
 
   it("keeps full leaderboard profile navigation inside the dialog", () => {
@@ -35,7 +35,7 @@ describe("standings table profile contract", () => {
       <RacerProfileDialog
         currentHandle="Tah10n"
         onClose={() => undefined}
-        periodLabel="All time"
+        periodLabel="This year"
         periodSearch="period=year"
         row={{
           handle: "Tah10n",
