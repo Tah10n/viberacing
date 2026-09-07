@@ -4613,6 +4613,8 @@ async function wrapCursor() {
   } catch (error) {
     outcome = { code: 1, signal: null, diagnostic: collectorDiagnostic(error).code };
   }
+  // Preserve native close before waiting for the connection lock or ACL inspection.
+  const finishedAt = outcome.closedAt ?? new Date().toISOString();
   try {
     const marked = await withCursorCaptureContext(request, async (current) => {
       if (await lifecycleMutationActive()) return false;
@@ -4622,7 +4624,7 @@ async function wrapCursor() {
         profile.clientSourceId,
         captureId,
         captureLock,
-        new Date().toISOString(),
+        finishedAt,
       );
       await recordCursorCapture(stateDirectory, profile.clientSourceId, {
         kind: result ? "result" : "abort",

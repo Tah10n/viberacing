@@ -324,7 +324,9 @@ export async function runCursorProcess({
     child.once("error", () => {
       processError = true;
     });
-    child.once("close", (code, signal) => resolve({ code, signal }));
+    child.once("close", (code, signal) =>
+      resolve({ code, signal, closedAt: now ? now() : new Date().toISOString() }),
+    );
   });
   closed = true;
   clearTimeout(escalation);

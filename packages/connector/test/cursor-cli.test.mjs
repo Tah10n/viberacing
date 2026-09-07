@@ -71,6 +71,34 @@ async function fakeAgent(body, extension = process.platform === "win32" ? ".cmd"
   return { executable, environment, path, script };
 }
 
+test("Cursor native close time is captured before output drain and stays separate from result time", async () => {
+  const fake = await fakeAgent(
+    `process.stdout.write(${JSON.stringify(bytes(result).toString())});`,
+  );
+  const drained = "2026-09-05T00:10:00.000Z";
+  let clock = before;
+  const output = new Writable({
+    write(chunk, encoding, done) {
+      clock = chunk.length ? afterMidnight : drained;
+      setTimeout(done, chunk.length ? 0 : 10);
+    },
+  });
+  const outcome = await runCursorProcess({
+    ...fake,
+    args: [],
+    salt,
+    captureId: randomUUID(),
+    stdout: output,
+    stderr: sink().stream,
+    stdin: "ignore",
+    now: () => clock,
+  });
+  assert.equal(clock, drained);
+  assert.equal(outcome.code, 0);
+  assert.equal(outcome.result.capturedAt, before);
+  assert.equal(outcome.closedAt, afterMidnight);
+});
+
 test("Cursor CLI-only discovery verifies the executable and creates no hook root", async () => {
   const agent = await fakeAgent("process.exit(0)");
   const home = join(root, `home-${randomUUID()}`);
