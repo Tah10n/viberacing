@@ -61,6 +61,30 @@ counts and live observations below belong to the previously reviewed implementat
 
 ## Authenticated contract and narrow follow-up
 
+### Long-running headless capture review fix (2026-09-07)
+
+Synthetic result-first and binding-first regressions reproduced the loss of a successful 31-minute
+run on reviewed head `457c5ba9c424c2fc005e2e0508ab7d66393f3435`: both produced zero headless events
+instead of one. No provider call or real-time 31-minute wait was used.
+
+A new wrapper holds a private PID/token owned lock from its durable begin through native close and
+outcome recording. A live owner is never expired merely because begin is older than 30 minutes.
+Native close is durably recorded separately: an incomplete pair then has 30 minutes from that close
+to receive its missing half. Missing/dead owners without a close record abort after the bounded
+crash-recovery grace, retain a gap and cannot revive from a late half. Legacy unowned records retain
+bounded recovery. Collection and capture share this cleanup.
+
+The suppression window remains open while a long wrapper can still produce its aggregate, including
+when Desktop traffic or another wrapper arrives. Its close boundary includes the actual native
+close; the event's immutable `capturedAt` and UTC date still come from the first accepted result
+observation. Local owner tokens and lifecycle records never enter network payloads. Regression
+coverage includes both arrival orders, real child-owner death, live 64-pair capacity, markerless
+stop deferral, UTC transitions, replay and lossless compaction.
+
+The 20-second internal hook deadline and 30-second external hook timeout are unchanged.
+Authenticated A → B → A evidence above remains accepted; migrations 001–014 are unchanged. The
+exact-head verification results are recorded in Draft PR #65.
+
 Runtime version gates accept only Desktop 3.18.25/3.19.7 and CLI `2026.09.02-c22c1a3`. Unknown patch
 releases and builds fail closed even when their fields have the same shape; expanding this set
 requires authenticated exact-source evidence and parser regressions. Capacity recovery also retains

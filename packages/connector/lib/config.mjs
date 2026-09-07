@@ -176,6 +176,7 @@ function ownedStatePath(path, info) {
   if (top === "captures" && parts.length === 2) {
     const captureName = parts[1];
     const base = captureName
+      .replace(/\.[0-9a-f-]{36}\.run(?=\.lock)/i, "")
       .replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "")
       .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "")
       .replace(/^((?:cursor-)[0-9a-f-]{36}\.jsonl)\.proof\.json$/i, "$1");

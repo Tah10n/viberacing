@@ -16,7 +16,8 @@ jobs:
   connector:
     name: Connector (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'windows-2025' && 75 || 15 }}
+    # The previous native Windows job took 72 minutes; include the real 64-owner regression.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 90 || 15 }}
     strategy:
       fail-fast: false
       matrix:

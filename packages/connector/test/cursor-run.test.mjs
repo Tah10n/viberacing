@@ -136,6 +136,9 @@ const fs = require('node:fs');
 if (process.argv.includes('--version')) { console.log(${JSON.stringify(version)}); }
 else {
   const marker = process.env.VIBERACING_CURSOR_HEADLESS_CAPTURE_ID;
+  const ownerPath = ${JSON.stringify(join(config.stateDirectory, "captures", `cursor-${source.clientSourceId}.jsonl.`))} + marker + '.run.lock';
+  if (!fs.existsSync(ownerPath)) process.exit(92);
+  process.kill(Number(fs.readFileSync(ownerPath, 'utf8').split(':')[0]), 0);
   function hook(name, payload) {
     const result = require('node:child_process').spawnSync(process.execPath, [...${JSON.stringify(hookArgs)}, name, ${JSON.stringify(cursorHookMarker(options))}], {input: JSON.stringify(payload), encoding:'utf8', env:process.env, timeout:${hookTimeoutMs}});
     if (result.status !== 0 || result.stdout !== '{}\\n' || result.stderr !== '') process.exit(91);
@@ -207,6 +210,12 @@ else {
       return content;
     }
     const persisted = await privateFiles(config.stateDirectory);
+    assert.equal(
+      (await readdir(join(config.stateDirectory, "captures"))).filter((name) =>
+        name.endsWith(".run.lock"),
+      ).length,
+      0,
+    );
     for (const value of [
       "canary-email",
       "canary-session",

@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, rename, unlink } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
+import { acquireOwnedLock, releaseOwnedLock, ownedLockActive } from "./owned-lock.mjs";
 import {
   ensureOwnerOnlyWindowsFile,
   ensurePrivateStateDirectory,
@@ -241,7 +241,15 @@ function validRecord(record) {
       accounts(record.accounts) &&
       record.accounts.some((item) => item.accountKey === record.binding.accountKey)
     );
-  if (["begin", "abort"].includes(record.kind))
+  if (record.kind === "begin" && record.owner !== undefined)
+    return (
+      keys(record, ["v", "kind", "captureId", "at", "owner"]) &&
+      uuid.test(record.captureId) &&
+      time(record.at) &&
+      typeof record.owner === "string" &&
+      /^[1-9]\d{0,9}:[0-9a-f-]{36}\n$/i.test(record.owner)
+    );
+  if (["begin", "finish", "abort"].includes(record.kind))
     return (
       keys(record, ["v", "kind", "captureId", "at"]) &&
       uuid.test(record.captureId) &&
@@ -253,7 +261,13 @@ function validRecord(record) {
 // A compatible stop must fall inside the same durable wrapper invocation. Session reuse
 // outside that interval remains a separate per-turn event, even with identical counters.
 function captureWindow(pending, end, eventKey) {
-  const times = [pending.firstAt, pending.result?.capturedAt, pending.binding?.capturedAt, end]
+  const times = [
+    pending.firstAt,
+    pending.finishedAt,
+    pending.result?.capturedAt,
+    pending.binding?.capturedAt,
+    end,
+  ]
     .filter(Boolean)
     .sort();
   return {
@@ -274,12 +288,7 @@ function insideCapture(event, window) {
 }
 function capturedEvents(state, now) {
   const pending = [...state.pending.values()].map((item) => ({
-    ...captureWindow(
-      item,
-      new Date(
-        Math.min(Date.parse(now), Date.parse(item.firstAt) + cursorPairTimeoutMs),
-      ).toISOString(),
-    ),
+    ...captureWindow(item, pendingWindowEnd(item, now)),
     // A conflicting account on the same session is not proof of an independent stop.
     accountKey: undefined,
   }));
@@ -291,6 +300,19 @@ function capturedEvents(state, now) {
       // prevents an early stop upload on the day before the final result crosses midnight.
       (item.origin !== "stop" || !pending.some((window) => insideCapture(item, window))),
   );
+}
+
+function pendingDeadline(pending) {
+  // Legacy begins and unowned halves retain their bounded recovery behavior.
+  if (pending.owner && !pending.finishedAt) return null;
+  return new Date(
+    Date.parse(pending.finishedAt ?? pending.firstAt) + cursorPairTimeoutMs,
+  ).toISOString();
+}
+
+function pendingWindowEnd(pending, now) {
+  const deadline = pendingDeadline(pending);
+  return deadline && deadline < now ? deadline : now;
 }
 
 function fold(records) {
@@ -411,19 +433,15 @@ function fold(records) {
       accept(record.event);
     } else if (record.kind === "begin") {
       if (!state.completed.has(record.captureId) && !state.pending.has(record.captureId))
-        state.pending.set(record.captureId, { firstAt: record.at });
+        state.pending.set(record.captureId, { firstAt: record.at, owner: record.owner });
+    } else if (record.kind === "finish") {
+      const pending = state.pending.get(record.captureId);
+      if (pending) pending.finishedAt ??= record.at;
     } else if (record.kind === "abort") {
       const pending = state.pending.get(record.captureId);
       gap(pending?.firstAt ?? record.at, record.at, "cursor_headless_pair_incomplete");
       if (pending)
-        state.captureWindows.push(
-          captureWindow(
-            pending,
-            new Date(
-              Math.min(Date.parse(record.at), Date.parse(pending.firstAt) + cursorPairTimeoutMs),
-            ).toISOString(),
-          ),
-        );
+        state.captureWindows.push(captureWindow(pending, pendingWindowEnd(pending, record.at)));
       state.pending.delete(record.captureId);
       state.completed.set(record.captureId, null);
     } else if (kind === "result" || kind === "binding") {
@@ -448,6 +466,9 @@ function fold(records) {
         continue;
       }
       pending[kind] ??= half;
+      // Results enter the ledger only after a successful native close. New wrappers
+      // persist the actual close time first; old/unowned records use the result time.
+      if (kind === "result") pending.finishedAt ??= half.capturedAt;
       if (pending.result && pending.binding) {
         if (pending.result.sessionKey !== pending.binding.sessionKey) {
           gap(pending.firstAt, at, "cursor_account_identity_conflict");
@@ -489,6 +510,60 @@ function fold(records) {
 function pathFor(root, profileId) {
   if (!isAbsolute(root) || !uuid.test(profileId)) fail("cursor_schema_unsupported");
   return join(root, "captures", `cursor-${profileId}.jsonl`);
+}
+
+function captureLockPath(root, profileId, captureId) {
+  if (!uuid.test(captureId)) fail();
+  return `${pathFor(root, profileId)}.${captureId}.run.lock`;
+}
+
+async function captureOwnerActive(root, profileId, captureId, owner) {
+  const path = captureLockPath(root, profileId, captureId);
+  // Like the ledger lock preflight, this only reads PID/token ownership inside an
+  // already validated private directory. Creation sets the owner-only ACL; avoid
+  // one Windows ACL subprocess per running wrapper inside the hook deadline.
+  const info = await safeFile(path, true, false);
+  if (!info) return false;
+  if (info.size > 64) fail();
+  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = await handle.stat();
+    if (
+      opened.ino !== info.ino ||
+      opened.dev !== info.dev ||
+      opened.nlink !== 1 ||
+      opened.size !== info.size
+    )
+      fail();
+    const bytes = Buffer.alloc(64);
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
+    if (bytesRead !== info.size) fail();
+    return bytes.subarray(0, bytesRead).toString("utf8") === owner && (await ownedLockActive(path));
+  } finally {
+    await handle.close();
+  }
+}
+
+async function expirePendingCaptures(root, profileId, state, append, records, now) {
+  for (const [captureId, pending] of state.pending) {
+    const deadline = pendingDeadline(pending);
+    // An unclosed owner gets the same bounded crash-recovery grace as legacy begins.
+    // Only old running captures require a liveness probe; their age is never an abort proof.
+    if (!deadline && Date.parse(now) - Date.parse(pending.firstAt) <= cursorPairTimeoutMs) continue;
+    if (
+      deadline
+        ? now > deadline
+        : !(await captureOwnerActive(root, profileId, captureId, pending.owner))
+    ) {
+      await append({ v: 1, kind: "abort", captureId, at: now });
+      if (pending.owner)
+        await releaseOwnedLock({
+          path: captureLockPath(root, profileId, captureId),
+          owner: pending.owner,
+        });
+    }
+  }
+  return fold(records);
 }
 async function safeDirectory(path) {
   const info = await lstat(path);
@@ -799,7 +874,17 @@ async function withLedgerFile(root, profileId, operation, initialize = false) {
         });
       }
     };
-    return await operation({ state, append, torn, records, bytes, opened, publish, lastNewline });
+    return await operation({
+      state,
+      append,
+      torn,
+      records,
+      bytes,
+      opened,
+      publish,
+      lastNewline,
+      currentBytes: () => durableBytes,
+    });
   } finally {
     await handle?.close();
     await releaseOwnedLock(lock);
@@ -833,8 +918,9 @@ export async function reserveCursorEvents(root, profileId, scope, now) {
     scope.rangeStart > scope.rangeEnd
   )
     fail();
-  return withLedger(root, profileId, async ({ state, append, torn }) => {
+  return withLedger(root, profileId, async ({ state, append, torn, records }) => {
     if (torn || !state.captureStartedAt) fail();
+    state = await expirePendingCaptures(root, profileId, state, append, records, now);
     const eventKeys = capturedEvents(state, now)
       .filter(
         (event) =>
@@ -898,18 +984,39 @@ export async function recordCursorHookObservation(root, profileId, observation, 
 // A wrapper marker is owned only after this durable, bounded registration succeeds.
 export async function beginCursorHeadlessCapture(root, profileId, captureId, capturedAt) {
   if (!uuid.test(captureId) || !time(capturedAt)) fail();
-  return withLedger(root, profileId, async ({ state, append, torn }) => {
+  return withLedger(root, profileId, async ({ state, append, torn, records }) => {
     if (torn || !state.captureStartedAt || capturedAt < state.captureStartedAt) fail();
     if (state.pending.has(captureId) || state.completed.has(captureId)) fail();
-    for (const [id, pending] of state.pending)
-      if (Date.parse(capturedAt) - Date.parse(pending.firstAt) > cursorPairTimeoutMs)
-        await append({ v: 1, kind: "abort", captureId: id, at: capturedAt });
-    const active = [...state.pending.values()].filter(
-      (pending) => Date.parse(capturedAt) - Date.parse(pending.firstAt) <= cursorPairTimeoutMs,
-    );
-    if (active.length >= maximumPendingPairs) fail("local_store_scan_limit");
-    await append({ v: 1, kind: "begin", captureId, at: capturedAt });
-    return captureId;
+    state = await expirePendingCaptures(root, profileId, state, append, records, capturedAt);
+    if (state.pending.size >= maximumPendingPairs) fail("local_store_scan_limit");
+    const path = captureLockPath(root, profileId, captureId);
+    await safeFile(path, true);
+    const lock = await acquireOwnedLock(path);
+    if (!lock) fail();
+    try {
+      await ensureOwnerOnlyWindowsFile(path);
+      await append({ v: 1, kind: "begin", captureId, at: capturedAt, owner: lock.owner });
+      return lock;
+    } catch (error) {
+      await releaseOwnedLock(lock);
+      throw error;
+    }
+  });
+}
+
+export async function finishCursorHeadlessCapture(root, profileId, captureId, lock, finishedAt) {
+  if (!time(finishedAt) || lock?.path !== captureLockPath(root, profileId, captureId)) fail();
+  return withLedger(root, profileId, async ({ state, append, torn }) => {
+    if (torn || !state.captureStartedAt) fail();
+    const pending = state.pending.get(captureId);
+    if (!pending || pending.finishedAt) return false;
+    if (
+      pending.owner !== lock.owner ||
+      !(await captureOwnerActive(root, profileId, captureId, lock.owner))
+    )
+      fail();
+    await append({ v: 1, kind: "finish", captureId, at: finishedAt });
+    return true;
   });
 }
 
@@ -920,68 +1027,76 @@ export async function readCursorLedger(
   options = {},
 ) {
   if (!time(now)) fail();
-  return withLedger(root, profileId, async ({ state, torn, bytes, opened }) => {
-    const pending = [...state.pending.values()];
-    return {
-      captureStartedAt: state.captureStartedAt,
-      currentIntervals: state.currentIntervals,
-      hooks: state.hookObservation?.hooks ?? null,
-      versions: state.versions,
-      accounts: state.accounts,
-      events: capturedEvents(state, now),
-      eventOwners: Object.fromEntries(state.owners),
-      pendingPairs: pending.length,
-      headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
-      gaps: [
-        ...state.gaps,
-        ...(await readCursorIngressGaps(root, profileId, now)),
-        ...(bytes.length > capacityWarningBytes
-          ? [
-              {
-                from: [state.captureStartedAt ?? now, now].sort()[0],
-                to: [state.captureStartedAt ?? now, now].sort()[1],
-                code: "local_store_scan_limit",
-              },
-            ]
-          : []),
-        ...(state.hookObservation &&
-        Object.values(state.hookObservation.hooks).some((value) => value !== "current")
-          ? [
-              {
-                from: [state.hookObservation.at, now].sort()[0],
-                to: [state.hookObservation.at, now].sort()[1],
-                code: Object.values(state.hookObservation.hooks).includes("missing")
-                  ? "cursor_hook_missing"
-                  : "cursor_hook_stale",
-              },
-            ]
-          : []),
-        ...pending.map((item) => ({
-          from: item.firstAt,
-          to: now > item.firstAt ? now : item.firstAt,
-          code: "cursor_headless_pair_incomplete",
-        })),
-        ...(torn
-          ? [
-              {
-                from: [state.captureStartedAt ?? now, now].sort()[0],
-                to: [state.captureStartedAt ?? now, now].sort()[1],
-                code: "cursor_usage_incomplete",
-              },
-            ]
-          : []),
-      ],
-      torn,
-      checkpoint: torn ? null : checkpoint(bytes, opened),
-      previousCheckpointMatches:
-        !options.checkpoint ||
-        (options.checkpoint.bytes <= bytes.length &&
-          options.checkpoint.ino === String(opened.ino) &&
-          options.checkpoint.dev === String(opened.dev) &&
-          checkpoint(bytes.subarray(0, options.checkpoint.bytes), opened).sha256 ===
-            options.checkpoint.sha256),
-    };
-  });
+  return withLedger(
+    root,
+    profileId,
+    async ({ state, torn, bytes, opened, append, records, currentBytes }) => {
+      if (!torn) {
+        state = await expirePendingCaptures(root, profileId, state, append, records, now);
+        bytes = currentBytes();
+      }
+      const pending = [...state.pending.values()];
+      return {
+        captureStartedAt: state.captureStartedAt,
+        currentIntervals: state.currentIntervals,
+        hooks: state.hookObservation?.hooks ?? null,
+        versions: state.versions,
+        accounts: state.accounts,
+        events: capturedEvents(state, now),
+        eventOwners: Object.fromEntries(state.owners),
+        pendingPairs: pending.length,
+        headlessCaptureIds: [...new Set([...state.pending.keys(), ...state.completed.keys()])],
+        gaps: [
+          ...state.gaps,
+          ...(await readCursorIngressGaps(root, profileId, now)),
+          ...(bytes.length > capacityWarningBytes
+            ? [
+                {
+                  from: [state.captureStartedAt ?? now, now].sort()[0],
+                  to: [state.captureStartedAt ?? now, now].sort()[1],
+                  code: "local_store_scan_limit",
+                },
+              ]
+            : []),
+          ...(state.hookObservation &&
+          Object.values(state.hookObservation.hooks).some((value) => value !== "current")
+            ? [
+                {
+                  from: [state.hookObservation.at, now].sort()[0],
+                  to: [state.hookObservation.at, now].sort()[1],
+                  code: Object.values(state.hookObservation.hooks).includes("missing")
+                    ? "cursor_hook_missing"
+                    : "cursor_hook_stale",
+                },
+              ]
+            : []),
+          ...pending.map((item) => ({
+            from: item.firstAt,
+            to: now > item.firstAt ? now : item.firstAt,
+            code: "cursor_headless_pair_incomplete",
+          })),
+          ...(torn
+            ? [
+                {
+                  from: [state.captureStartedAt ?? now, now].sort()[0],
+                  to: [state.captureStartedAt ?? now, now].sort()[1],
+                  code: "cursor_usage_incomplete",
+                },
+              ]
+            : []),
+        ],
+        torn,
+        checkpoint: torn ? null : checkpoint(bytes, opened),
+        previousCheckpointMatches:
+          !options.checkpoint ||
+          (options.checkpoint.bytes <= bytes.length &&
+            options.checkpoint.ino === String(opened.ino) &&
+            options.checkpoint.dev === String(opened.dev) &&
+            checkpoint(bytes.subarray(0, options.checkpoint.bytes), opened).sha256 ===
+              options.checkpoint.sha256),
+      };
+    },
+  );
 }
 
 // The caller must verify current installation ownership and hold the connection lifecycle lock.
@@ -1000,11 +1115,7 @@ export async function recordCursorCapture(root, profileId, input) {
       });
       return { status: "partial" };
     }
-    for (const [captureId, pending] of state.pending) {
-      if (Date.parse(input.capturedAt) - Date.parse(pending.firstAt) > cursorPairTimeoutMs)
-        await append({ v: 1, kind: "abort", captureId, at: input.capturedAt });
-    }
-    state = fold(records);
+    state = await expirePendingCaptures(root, profileId, state, append, records, input.capturedAt);
     const options = { salt: input.salt, capturedAt: input.capturedAt, accounts: state.accounts };
     let record;
     try {
@@ -1073,12 +1184,7 @@ export async function recordCursorCapture(root, profileId, input) {
         }
         if (!state.pending.has(input.captureId) && state.pending.size >= maximumPendingPairs)
           fail("local_store_scan_limit");
-        const pending = state.pending.get(input.captureId);
-        if (
-          input.kind === "abort" ||
-          (pending &&
-            Date.parse(input.capturedAt) - Date.parse(pending.firstAt) > cursorPairTimeoutMs)
-        )
+        if (input.kind === "abort")
           record = { v: 1, kind: "abort", captureId: input.captureId, at: input.capturedAt };
         else if (input.kind === "result")
           record = {

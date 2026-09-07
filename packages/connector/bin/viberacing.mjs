@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cursorCaptureDeadlineMs, withCursorDeadline } from "../lib/cursor-deadline.mjs";
 import { beginCursorIngress, completeCursorIngress } from "../lib/cursor-ingress.mjs";
+import { releaseOwnedLock } from "../lib/owned-lock.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
@@ -17,6 +18,7 @@ import {
 import {
   readCursorLedger,
   beginCursorHeadlessCapture,
+  finishCursorHeadlessCapture,
   recordCursorCapture,
   acknowledgeCursorCapture,
   compactAcknowledgedCursorCapture,
@@ -4593,9 +4595,10 @@ async function wrapCursor() {
   executable ??= await resolveCursorExecutable();
   const request = { installationId: config.installationId, profileId: profile.clientSourceId };
   const captureId = randomUUID();
+  let captureLock;
   const context = await withCursorCaptureContext(request, async (current) => {
     if (await lifecycleMutationActive()) return null;
-    await beginCursorHeadlessCapture(
+    captureLock = await beginCursorHeadlessCapture(
       stateDirectory,
       profile.clientSourceId,
       captureId,
@@ -4614,6 +4617,13 @@ async function wrapCursor() {
     const marked = await withCursorCaptureContext(request, async (current) => {
       if (await lifecycleMutationActive()) return false;
       const result = outcome.result;
+      await finishCursorHeadlessCapture(
+        stateDirectory,
+        profile.clientSourceId,
+        captureId,
+        captureLock,
+        new Date().toISOString(),
+      );
       await recordCursorCapture(stateDirectory, profile.clientSourceId, {
         kind: result ? "result" : "abort",
         captureId,
@@ -4628,6 +4638,8 @@ async function wrapCursor() {
     if (marked) await launchAutomaticScheduler();
   } catch {
     // Capture failure does not replace the provider's process outcome or expose its payload.
+  } finally {
+    await releaseOwnedLock(captureLock).catch(() => {});
   }
   if (outcome.signal) process.kill(process.pid, outcome.signal);
   else process.exitCode = outcome.code ?? 1;
