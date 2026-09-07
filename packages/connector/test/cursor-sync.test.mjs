@@ -252,7 +252,7 @@ syncBuiltinESMExports();
   function total(snapshot) {
     return snapshot.entries.reduce((sum, entry) => sum + BigInt(entry.totalTokens), 0n).toString();
   }
-  await record("A", "canary-generation-a1", 10);
+  await record("A", "canary-generation-a1", 10, "3.19.13");
   await run("sync");
   assert.equal(registrations.length, 0);
   assert.equal(total(rollingSince(0)[0]), "19");
@@ -260,7 +260,7 @@ syncBuiltinESMExports();
   const boundA = (await config.readSources())[0];
   assert.match(boundA.providerAccountKey, /^acct1_/);
 
-  await record("B", "canary-generation-b1", 100, "2026.09.02-c22c1a3");
+  await record("B", "canary-generation-b1", 100, "2026.09.07-abcdef0");
   await runtime.markDirty(source.clientSourceId);
   let before = usages.length;
   assert.match((await run("sync")).stderr, /provider_account_registration_pending/);

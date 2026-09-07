@@ -18,8 +18,8 @@ Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen C
 CLI, Gemini CLI, and Cursor Desktop + CLI. Antigravity Desktop is not supported. See
 [agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
 
-This branch implements Cursor as the eighth agent in connector 0.7.0. Desktop and interactive CLI
-are captured automatically through owned hooks after connection; headless runs use
+Connector 0.7.1 implements Cursor as the eighth agent. Desktop and interactive CLI are captured
+automatically through owned hooks after connection; headless runs use
 `viberacing run cursor -- <agent arguments>`. The same local account shares one logical source
 across Desktop and CLI, while different accounts remain separate. Machine-local sources add with
 `source_sum`. Exact history starts with hook installation; earlier usage remains partial. The UTC
@@ -29,8 +29,9 @@ Bugbot, Cloud Agents and SDK usage are outside this support contract.
 
 The [Cursor evidence and rollout gates](docs/CURSOR_EVIDENCE.md) distinguish accepted exact-source
 evidence and implementation. Authenticated A → B → A passed: A reused its original logical source, B
-used a second source, and replay did not change either total. Rollout remains blocked by review and
-server-first release authorization. This PR remains Draft.
+used a second source, and replay did not change either total. New stable Desktop 3.x releases from
+3.18.25 and dated CLI builds from 2026.09.02 are accepted when their events satisfy the exact
+capture contract. Publication follows the reviewed server-first release sequence.
 
 Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
 all active mapped OpenCode databases for that installation together. One short-lived detached

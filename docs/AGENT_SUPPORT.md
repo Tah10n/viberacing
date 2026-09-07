@@ -4,11 +4,11 @@ The original supported-agent matrix was researched against upstream sources on 2
 authenticated Cursor follow-up evidence was accepted on 2026-09-04. “Exact” means provider-recorded
 token counters; Vibe Racing never estimates tokens from text.
 
-Cursor is implemented as the eighth agent in this 0.7.0 Draft PR. Its
+Cursor is implemented as the eighth agent in connector 0.7.1. Its
 [evidence and rollout gates](CURSOR_EVIDENCE.md) record the accepted exact per-turn contract,
 approved immutable capture time, and authenticated A → B → A, which passed: A reused its original
-logical source, B used a second source, and replay did not change either total. Rollout remains
-blocked by review and server-first release authorization.
+logical source, B used a second source, and replay did not change either total. Publication follows
+the reviewed server-first release sequence.
 
 | Agent       | Source and formula                                                                                                                                                                                   | Surface               | Profiles                                                 | Aggregation   | Trigger and limitations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -23,24 +23,26 @@ blocked by review and server-first release authorization.
 
 ## Current-year history coverage
 
-The Cursor version gate accepts the verified Desktop releases and CLI build recorded in
-[CURSOR_EVIDENCE.md](CURSOR_EVIDENCE.md). Unknown versions fail closed until their aggregate
-contract is verified.
+The Cursor compatibility gate accepts stable Desktop 3.x from 3.18.25 and correctly dated CLI builds
+from 2026.09.02, without enumerating every patch or build hash. New versions must still satisfy the
+complete counter, identity and completion contract. Older releases, Desktop 4.x, prereleases and
+malformed versions fail closed. This compatibility policy is separate from the specific live
+versions observed in [CURSOR_EVIDENCE.md](CURSOR_EVIDENCE.md).
 
 Cursor uses one physical `~/.cursor` profile per OS user for Desktop and CLI. A safe existing root
-or a version-verified official `agent` executable enables discovery; discovery does not create the
-root. Owned `stop` and `sessionEnd` hooks are installed after connection. Up to eight local provider
+or a compatible official `agent` executable enables discovery; discovery does not create the root.
+Owned `stop` and `sessionEnd` hooks are installed after connection. Up to eight local provider
 accounts route to stable logical sources; Desktop A + CLI A shares one, A → B → A reuses A, and
 Desktop A + CLI B stays separate. Assign sources from another computer to the same server account
 explicitly; `source_sum` adds their disjoint events without comparing provider identities.
 
 Desktop and interactive CLI capture completed per-turn stop counters. Headless CLI requires
 `viberacing run cursor -- <native arguments>` and combines the successful final stream result with
-its sessionEnd identity. Either order is supported. Missing halves, aborts, unknown versions and
-schema drift fail closed. Direct `agent --print` outside the wrapper is not guaranteed to count. The
-total is input + output + cache read + cache write. Reasoning is included in output and child agents
-are included in the final aggregate; neither is added again. Tab, Bugbot, Cloud Agents and SDK usage
-are excluded.
+its sessionEnd identity. Either order is supported. Missing halves, aborts, incompatible versions
+and schema drift fail closed. Direct `agent --print` outside the wrapper is not guaranteed to count.
+The total is input + output + cache read + cache write. Reasoning is included in output and child
+agents are included in the final aggregate; neither is added again. Tab, Bugbot, Cloud Agents and
+SDK usage are excluded.
 
 Cursor history begins at capture installation. Capture fixes UTC attribution once, independently of
 upload time and delayed sessionEnd. Current-day coverage and time before installation remain

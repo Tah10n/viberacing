@@ -1,20 +1,48 @@
 # Cursor exact-usage evidence gate
 
-Status on 2026-09-06: **exact-source evidence passed; production implementation implemented in this
-PR; rollout blocked until reviewed server-first deployment**. This branch registers Cursor as the
-eighth server agent with `source_sum` and migrations 012–014. The connector implements strict stop
-capture, account routing, the explicit headless wrapper, durable integrity proofs, source
-reservations across reset and ACK-driven lossless compaction. Cross-platform release checks and
-Desktop/CLI installed-runtime smoke and live A/B/A with two real accounts have passed. Rollout
-remains blocked until a reviewed server-first deployment. The historical investigation below
-describes the earlier gate, not the current availability of authenticated token counters.
+Status on 2026-09-07: **exact-source evidence passed; PR #65 merged; connector 0.7.1 adds forward
+compatibility for stable Desktop 3.x and dated CLI builds**. The server registers Cursor as the
+eighth agent with `source_sum` and migrations 012–014. The connector implements strict stop capture,
+account routing, the explicit headless wrapper, durable integrity proofs, source reservations and
+ACK-driven lossless compaction. The accepted A/B/A evidence is retained. Publication follows the
+reviewed server-first release sequence after current-head CI and server readiness.
+
+## Forward-compatible versions (2026-09-07)
+
+The per-patch allowlist rejected installed Desktop 3.19.13 with `cursor_version_unsupported` even
+though its producer still sends the four exact counters from `turnTokenUsage` in the stop hook. A
+new regression reproduced the old rejection before the policy change.
+
+Connector 0.7.1 accepts stable Desktop 3.x from 3.18.25 and CLI calendar versions from 2026.09.02
+with a valid date and 7–40 lowercase hexadecimal revision characters. The build hash is opaque. This
+is a forward-compatibility policy, not a claim of authenticated testing of every future build.
+Version acceptance only permits parsing: required integer counters, identities, successful status,
+aggregate consistency, bounded input, headless pairing, dedup and immutable capture UTC semantics
+remain unchanged. Incompatible Desktop majors, prereleases, older builds and malformed versions fail
+closed. Future changes to the semantic event contract still require a parser update.
+
+Two authenticated Desktop 3.19.13 turns and one CLI `2026.09.02-c22c1a3` headless turn ran through
+an autonomous 0.7.1 archive with temporary owned hooks and uploads disabled:
+
+| Event                    | Input | Output | Cache read | Cache write | Total |
+| ------------------------ | ----: | -----: | ---------: | ----------: | ----: |
+| Desktop first turn       | 17229 |     30 |       6400 |           0 | 23659 |
+| Desktop second turn      | 17323 |     16 |      11520 |           0 | 28859 |
+| Headless final aggregate |  8636 |     25 |       5376 |           0 | 14037 |
+
+The Desktop turns shared a session and had distinct event identities. All three events resolved to
+one local account; the headless final aggregate matched exactly one captured event, exit 0. There
+were zero gaps and zero pending pairs. Repeated collection stayed at **66555** tokens. Temporary
+hook removal preserved the original foreign-hook configuration. No prompts, replies, paths, provider
+credentials or raw identities were retained in the minimized evidence. This pre-publication runtime
+check is separate from the subsequent production dashboard smoke.
 
 ## Release-blocker review fixes (2026-09-06)
 
 The accepted authenticated A → B → A evidence below is retained. A reused its original logical
 source, B used a second source, and replay changed neither total. No new provider research or paid
-capture was needed for this review. The PR remains Draft for repeat review of its exact head;
-rollout remains blocked by review and server-first release authorization.
+capture was needed for that review. PR #65 subsequently passed review and was merged; its accepted
+evidence remains intact.
 
 One physical Cursor root now admits one capture owner per server origin, including custom
 `VIBERACING_STATE_DIR` installations. Local v2 markers bind the installation, physical profile,
@@ -83,13 +111,12 @@ stop deferral, UTC transitions, replay and lossless compaction.
 
 The 20-second internal hook deadline and 30-second external hook timeout are unchanged.
 Authenticated A → B → A evidence above remains accepted; migrations 001–014 are unchanged. The
-exact-head verification results are recorded in Draft PR #65.
+exact-head verification results are recorded in merged PR #65.
 
-Runtime version gates accept only Desktop 3.18.25/3.19.7 and CLI `2026.09.02-c22c1a3`. Unknown patch
-releases and builds fail closed even when their fields have the same shape; expanding this set
-requires authenticated exact-source evidence and parser regressions. Capacity recovery also retains
-a permanent gap for the interval in which a full ledger may have rejected writes, and an owned hook
-with a storage failure schedules safe collection diagnostics without recreating missing history.
+The original PR #65 used an exact-version allowlist. The 0.7.1 compatibility policy above supersedes
+that gate without changing the parser contract. Capacity recovery retains a permanent gap for the
+interval in which a full ledger may have rejected writes, and an owned hook with a storage failure
+schedules safe collection diagnostics without recreating missing history.
 
 Implementation base: `265ce5e82ad19d3867d8f6289fad055527b302d3` (main after PR #64). The accepted
 local evidence establishes Desktop 3.18.25, interactive CLI `2026.09.02-c22c1a3`, successful

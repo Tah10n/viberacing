@@ -91,8 +91,12 @@ The Cursor wrapper requires a connected profile with current stop/sessionEnd hoo
 Arguments and provider stdout/stderr remain unchanged; exact usage is committed only for a
 successful final result paired with its authenticated sessionEnd. The result's first capture time
 determines the UTC date. Direct headless runs outside this wrapper are not guaranteed to be counted.
-Cursor 0.7.0 support remains under validation in the Draft implementation; see
-[the evidence and remaining gates](../../docs/CURSOR_EVIDENCE.md).
+Connector 0.7.1 accepts stable Desktop 3.x versions from 3.18.25 and CLI versions in the
+`YYYY.MM.DD-<hex revision>` format from 2026.09.02. New patch/minor releases and dated builds do not
+require a connector update when the event contract is unchanged. Every event still requires exact
+integer counters, the supported identity fields and a successful status. Old versions, Desktop 4.x,
+prereleases, malformed dates/versions and changed schemas fail closed. See
+[the evidence and release gates](../../docs/CURSOR_EVIDENCE.md).
 
 Cursor Desktop and interactive CLI use the same owned `~/.cursor/hooks.json` profile (Windows:
 `%USERPROFILE%\.cursor`). Discovery accepts a safe existing root or a verified official `agent`

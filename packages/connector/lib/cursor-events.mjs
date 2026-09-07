@@ -4,8 +4,6 @@ import { resolveCursorAccount } from "./cursor-identity.mjs";
 export const cursorParserVersion = 1;
 export const maximumCursorInputBytes = 1_048_576;
 const components = ["inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"];
-const verifiedDesktopVersions = new Set(["3.18.25", "3.19.7"]);
-const verifiedCliVersions = new Set(["2026.09.02-c22c1a3"]);
 
 function fail(code) {
   const error = new Error(code);
@@ -18,12 +16,33 @@ function object(value) {
 }
 
 export function cursorVersionSupported(version, surface) {
-  if (typeof version !== "string") return false;
-  // Similar field names or a newer version number do not prove per-turn semantics.
-  // Extend these sets only with authenticated exact-source evidence and parser regressions.
+  if (
+    typeof version !== "string" ||
+    version.length > 64 ||
+    version.trim() !== version ||
+    ![undefined, "desktop", "cli"].includes(surface)
+  )
+    return false;
+  // Version compatibility permits the parser to inspect an event; it never proves usage.
+  // Accept stable Desktop 3.x from the first supported release. A new major needs review.
+  const desktop = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (surface !== "cli" && desktop) {
+    const [major, minor, patch] = desktop.slice(1).map(Number);
+    return (
+      [major, minor, patch].every(Number.isSafeInteger) &&
+      major === 3 &&
+      (minor > 18 || (minor === 18 && patch >= 25))
+    );
+  }
+  // CLI uses calendar versions with an opaque build revision, not Desktop SemVer.
+  const cli = /^(\d{4})\.(\d{2})\.(\d{2})-[0-9a-f]{7,40}$/.exec(version);
+  if (surface === "desktop" || !cli) return false;
+  const day = `${cli[1]}-${cli[2]}-${cli[3]}`;
+  const parsed = new Date(`${day}T00:00:00.000Z`);
   return (
-    (surface !== "cli" && verifiedDesktopVersions.has(version)) ||
-    (surface !== "desktop" && verifiedCliVersions.has(version))
+    day >= "2026-09-02" &&
+    Number.isFinite(parsed.valueOf()) &&
+    parsed.toISOString().slice(0, 10) === day
   );
 }
 
