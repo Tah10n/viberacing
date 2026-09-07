@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 
 const definitions = Object.freeze({
+  cursor: { command: "agent", override: "VIBERACING_CURSOR_BIN" },
   codex: {
     command: "codex",
     override: "VIBERACING_CODEX_BIN",
@@ -158,7 +159,7 @@ export function resolvedExecutableInvocation(
   const commandLine = [
     escapeCommand(executablePath),
     ...args.map((argument) =>
-      quoteWindowsCommandArgument(argument, /\.cmd$/i.test(executablePath)),
+      quoteWindowsCommandArgument(argument, /\.(?:cmd|bat)$/i.test(executablePath)),
     ),
   ].join(" ");
   return {

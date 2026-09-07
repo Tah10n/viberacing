@@ -1,3 +1,4 @@
+import { cursorOperationBudget } from "./cursor-deadline.mjs";
 import { randomUUID } from "node:crypto";
 import { open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
@@ -39,12 +40,13 @@ function existingLockContention(error, info) {
 export async function acquireOwnedLock(path, options = {}) {
   const ownershipToken = randomUUID();
   const owner = `${process.pid}:${ownershipToken}\n`;
-  const deadline = Date.now() + (options.waitMs ?? 0);
+  const deadline = Date.now() + cursorOperationBudget(options.waitMs ?? 0, 1_000);
   const staleMs = options.staleMs ?? 10 * 60_000;
   const openFile = options.openFile ?? open;
   const unlinkFile = options.unlinkFile ?? unlink;
   let missingContentionRetryAvailable = true;
   for (;;) {
+    cursorOperationBudget(1);
     let handle;
     let created = false;
     try {
@@ -77,6 +79,7 @@ export async function acquireOwnedLock(path, options = {}) {
         let recoveryAcquired = false;
         let missingRecoveryContentionRetryAvailable = true;
         while (!recoveryAcquired) {
+          cursorOperationBudget(1);
           let recoveryHandle;
           let recoveryCreated = false;
           try {

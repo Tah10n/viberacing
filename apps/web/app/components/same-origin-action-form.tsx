@@ -11,7 +11,7 @@ interface SameOriginActionFormProps {
 function actionError(status: number, code: unknown): string {
   if (status === 403) return "The action was rejected. Refresh the page and try again.";
   if (code === "primary_account_has_linked_accounts")
-    return "This is the physical Codex profile for other accounts. Delete those linked accounts first.";
+    return "This is the physical profile for other accounts. Delete those linked accounts first.";
   return `The action failed (${status.toString()}). Please try again.`;
 }
 

@@ -6,12 +6,16 @@ export const supportedAgents = [
   "qwen_code",
   "antigravity",
   "gemini_cli",
+  "cursor",
 ] as const;
 
 export type SupportedAgent = (typeof supportedAgents)[number];
 export type AggregationMode = "account_max" | "source_sum";
 export type AccountSwitchMode =
-  "provider_account_snapshot" | "combined_local_history" | "explicit_capture";
+  | "provider_account_snapshot"
+  | "provider_account_events"
+  | "combined_local_history"
+  | "explicit_capture";
 export type SupportedSurface = "cli" | "desktop";
 
 interface AgentDefinition {
@@ -23,6 +27,13 @@ interface AgentDefinition {
 }
 
 export const agentRegistry: Readonly<Record<SupportedAgent, AgentDefinition>> = {
+  cursor: {
+    displayName: "Cursor",
+    aggregationMode: "source_sum",
+    accountSwitchMode: "provider_account_events",
+    countsExactTokens: true,
+    methods: { cursor_local_events: ["desktop", "cli"] },
+  },
   codex: {
     displayName: "Codex",
     aggregationMode: "account_max",

@@ -16,7 +16,20 @@ import {
 } from "@/lib/rate-limit";
 import { withRequestLogging } from "@/lib/request-log";
 
-const maximumCodexAccountsPerProfile = 8;
+const registrationPolicies = {
+  codex: {
+    collectionMethod: "codex_app_server",
+    profileSurface: "desktop",
+    labelPrefix: "Codex",
+    maximumAccountsPerProfile: 8,
+  },
+  cursor: {
+    collectionMethod: "cursor_local_events",
+    profileSurface: "desktop",
+    labelPrefix: "Cursor",
+    maximumAccountsPerProfile: 8,
+  },
+} as const;
 
 function bearer(request: Request): string | null {
   const authorization = request.headers.get("authorization");
@@ -33,9 +46,9 @@ function rateLimited(): Response {
 }
 
 interface RegistrationBody {
-  agentId: "codex";
+  agentId: keyof typeof registrationPolicies;
   clientSourceId: string;
-  collectionMethod: "codex_app_server";
+  collectionMethod: (typeof registrationPolicies)[keyof typeof registrationPolicies]["collectionMethod"];
   profileClientSourceId: string;
   supportedSurface: "desktop";
 }
@@ -51,9 +64,9 @@ export function parseSourceRegistrationBody(value: unknown): RegistrationBody | 
         "profileClientSourceId",
         "supportedSurface",
       ]) ||
-    value.agentId !== "codex" ||
-    value.collectionMethod !== "codex_app_server" ||
-    value.supportedSurface !== "desktop" ||
+    (value.agentId !== "codex" && value.agentId !== "cursor") ||
+    value.collectionMethod !== registrationPolicies[value.agentId].collectionMethod ||
+    value.supportedSurface !== registrationPolicies[value.agentId].profileSurface ||
     !isUuid(value.clientSourceId) ||
     !isUuid(value.profileClientSourceId) ||
     value.clientSourceId === value.profileClientSourceId
@@ -61,9 +74,9 @@ export function parseSourceRegistrationBody(value: unknown): RegistrationBody | 
     return null;
   }
   return {
-    agentId: "codex",
+    agentId: value.agentId,
     clientSourceId: value.clientSourceId,
-    collectionMethod: "codex_app_server",
+    collectionMethod: registrationPolicies[value.agentId].collectionMethod,
     profileClientSourceId: value.profileClientSourceId,
     supportedSurface: "desktop",
   };
@@ -142,6 +155,7 @@ async function post(request: Request): Promise<Response> {
     if (!(await consumeRateLimit("source_register_global", "all", 2_000, 60))) return rateLimited();
     const body = parseSourceRegistrationBody(await readBoundedJson(request, 1_024));
     if (body === null) return problem(400, "invalid_request");
+    const policy = registrationPolicies[body.agentId];
 
     const outcome = await transaction(async (client) => {
       const lockedUser = await client.query<{ id: string }>(
@@ -208,7 +222,8 @@ async function post(request: Request): Promise<Response> {
           : { kind: "unsupported_profile" as const };
       if (existing.rows[0]) {
         return existing.rows[0].profile_source_id === physical.id &&
-          existing.rows[0].agent_id === "codex" &&
+          existing.rows[0].agent_id === body.agentId &&
+          existing.rows[0].collection_method === body.collectionMethod &&
           existing.rows[0].status === "active"
           ? { kind: "ok" as const, mapping: existing.rows[0] }
           : { kind: "conflict" as const };
@@ -268,7 +283,7 @@ async function post(request: Request): Promise<Response> {
       )
         return { kind: "source_limit" as const };
       if (
-        currentCounts.profile_count >= maximumCodexAccountsPerProfile ||
+        currentCounts.profile_count >= policy.maximumAccountsPerProfile ||
         (reusableAccount === undefined &&
           currentCounts.account_count >= maximumAgentAccountsPerUser)
       )
@@ -277,7 +292,8 @@ async function post(request: Request): Promise<Response> {
       const accountId = reusableAccount?.[0] ?? randomUUID();
       const sourceId = randomUUID();
       const accountLabel =
-        reusableAccount?.[1] ?? `Codex account ${String(currentCounts.profile_count + 1)}`;
+        reusableAccount?.[1] ??
+        `${policy.labelPrefix} account ${String(currentCounts.profile_count + 1)}`;
       if (reusableAccount === undefined)
         await client.query(
           `INSERT INTO agent_accounts
@@ -288,7 +304,7 @@ async function post(request: Request): Promise<Response> {
             owner.user_id,
             body.agentId,
             accountLabel,
-            agentRegistry.codex.aggregationMode,
+            agentRegistry[body.agentId].aggregationMode,
           ],
         );
       const inserted = await client.query<SourceMapping>(

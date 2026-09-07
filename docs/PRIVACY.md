@@ -2,6 +2,25 @@
 
 Vibe Racing sends only the data needed to compute a self-reported ranking.
 
+Cursor Desktop/interactive hooks and the explicit headless wrapper parse bounded provider input in
+memory and immediately discard content. Local event, account, alias and session identities use
+domain-separated HMACs under an owner-only random identity salt. No provider identity, credential,
+prompt, response, code, tool arguments, repository, model or cost enters the sanitized ledger. The
+wrapper transparently forwards the user's native stdout/stderr but does not save the stream or reuse
+provider error text as diagnostics. The first capture time fixes UTC attribution; it is not
+presented as a provider timestamp.
+
+The private Cursor ledger contains exact token tuples, local HMACs, capture times, version and
+lifecycle markers, hook file identity/change metadata, opaque server-source reservations and ACKs.
+Its adjacent integrity proof contains only file identity, bounded length and digest. Event
+reservations and identity salt survive reconnect/reset to prevent duplicate source summation and
+unexpected account changes. Pending upload envelopes contain only source/range/file proof in
+addition to aggregate snapshots; these local proofs never enter HTTP requests. Lossless compaction
+keeps event identities/counters and the unacknowledged suffix. Captures are limited to 8 MiB and
+headless pending pairs to 64 with a 30-minute timeout. Unknown schemas, versions, conflicts and
+unsafe files produce only allowlisted diagnostics and partial coverage. Cursor never reads
+dashboards, cookies, private APIs, provider stores or transcripts for token counting.
+
 During pairing the connector sends protocol/connector versions, a small installed browser-handler
 protocol/capability value, a random installation identity and proof, opaque client source IDs, agent
 IDs, allowlisted collection methods, supported surface, and a neutral agent/profile label.

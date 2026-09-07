@@ -4,6 +4,7 @@ import {
   connectorProtocolVersion,
   mergeStoredSourceMapping,
   parseProtocolResponse,
+  sourceRegistrationBody,
 } from "../lib/protocol.mjs";
 import { sanitizeTerminalText } from "../lib/terminal.mjs";
 
@@ -496,54 +497,102 @@ test("stored network mappings cannot override local collection authority", () =>
   assert.equal(restored.agentId, local.agentId);
 });
 
-test("dynamic source registration preserves local Codex profile authority", async () => {
-  const codex = {
-    ...local,
-    agentId: "codex",
-    collectionMethod: "codex_app_server",
-    suggestedLabel: "Codex account",
-    profileClientSourceId: "77777777-7777-4777-8777-777777777777",
-    providerAccountKey: `acct1_${"a".repeat(43)}`,
-  };
-  const response = {
-    source: {
-      ...mapping({
-        clientSourceId: codex.clientSourceId,
-        agentId: "codex",
-        accountLabel: "Codex account 2",
-        collectionMethod: "codex_app_server",
+for (const [agentId, collectionMethod] of [
+  ["codex", "codex_app_server"],
+  ["cursor", "cursor_local_events"],
+]) {
+  test(`dynamic source registration preserves local ${agentId} profile authority`, async () => {
+    const logical = {
+      ...local,
+      agentId,
+      collectionMethod,
+      suggestedLabel: "Provider account",
+      supportedSurface: "desktop",
+      profileClientSourceId: "77777777-7777-4777-8777-777777777777",
+      providerAccountKey: `acct1_${"a".repeat(43)}`,
+    };
+    const response = {
+      source: {
+        ...mapping({
+          clientSourceId: logical.clientSourceId,
+          agentId,
+          accountLabel: "Codex account 2",
+          collectionMethod,
+        }),
+        profileSourceId: "88888888-8888-4888-8888-888888888888",
+      },
+    };
+    const profile = {
+      ...logical,
+      clientSourceId: logical.profileClientSourceId,
+      profileClientSourceId: undefined,
+    };
+    const body = sourceRegistrationBody(logical, profile);
+    assert.deepEqual(body, {
+      agentId,
+      collectionMethod,
+      clientSourceId: logical.clientSourceId,
+      profileClientSourceId: profile.clientSourceId,
+      supportedSurface: "desktop",
+    });
+    for (const forbidden of [logical.dataPath, logical.executablePath, logical.providerAccountKey])
+      assert.equal(JSON.stringify(body).includes(forbidden), false);
+    for (const patch of [
+      { agentId: agentId === "cursor" ? "codex" : "cursor" },
+      { collectionMethod: "unknown_method" },
+      { supportedSurface: "cli" },
+      { clientSourceId: logical.clientSourceId },
+      { profileClientSourceId: logical.clientSourceId },
+    ])
+      assert.throws(() => sourceRegistrationBody(logical, { ...profile, ...patch }), /invalid/);
+    for (const patch of [
+      { agentId: agentId === "cursor" ? "codex" : "cursor" },
+      { collectionMethod: "unknown_method" },
+      { profileSourceId: sourceId },
+      { providerAccountKey: logical.providerAccountKey },
+      { dataPath: logical.dataPath },
+    ])
+      await assert.rejects(
+        parseProtocolResponse(json({ source: { ...response.source, ...patch } }), {
+          kind: "sourceRegistration",
+          localSource: logical,
+          profileClientSourceId: logical.profileClientSourceId,
+          profileSourceId: response.source.profileSourceId,
+        }),
+        /invalid protocol response/,
+      );
+    const restored = mergeStoredSourceMapping(logical, response.source);
+    assert.equal(restored.profileSourceId, response.source.profileSourceId);
+    assert.equal(restored.providerAccountKey, logical.providerAccountKey);
+    const result = await parseProtocolResponse(json(response), {
+      kind: "sourceRegistration",
+      localSource: logical,
+      profileClientSourceId: logical.profileClientSourceId,
+      profileSourceId: response.source.profileSourceId,
+    });
+    assert.equal(result.source.dataPath, logical.dataPath);
+    assert.equal(result.source.providerAccountKey, logical.providerAccountKey);
+    const renamed = await parseProtocolResponse(
+      json({ source: { ...response.source, accountLabel: "Work" } }),
+      {
+        kind: "sourceRegistration",
+        localSource: logical,
+        profileClientSourceId: logical.profileClientSourceId,
+        profileSourceId: response.source.profileSourceId,
+      },
+    );
+    assert.equal(renamed.source.accountLabel, "Work");
+    await assert.rejects(
+      parseProtocolResponse(json({ source: { ...response.source, accountLabel: "Work\u0000" } }), {
+        kind: "sourceRegistration",
+        localSource: logical,
+        profileClientSourceId: logical.profileClientSourceId,
+        profileSourceId: response.source.profileSourceId,
       }),
-      profileSourceId: "88888888-8888-4888-8888-888888888888",
-    },
-  };
-  const result = await parseProtocolResponse(json(response), {
-    kind: "sourceRegistration",
-    localSource: codex,
-    profileClientSourceId: codex.profileClientSourceId,
-    profileSourceId: response.source.profileSourceId,
+      /invalid protocol response/,
+    );
   });
-  assert.equal(result.source.dataPath, codex.dataPath);
-  assert.equal(result.source.providerAccountKey, codex.providerAccountKey);
-  const renamed = await parseProtocolResponse(
-    json({ source: { ...response.source, accountLabel: "Work" } }),
-    {
-      kind: "sourceRegistration",
-      localSource: codex,
-      profileClientSourceId: codex.profileClientSourceId,
-      profileSourceId: response.source.profileSourceId,
-    },
-  );
-  assert.equal(renamed.source.accountLabel, "Work");
-  await assert.rejects(
-    parseProtocolResponse(json({ source: { ...response.source, accountLabel: "Work\u0000" } }), {
-      kind: "sourceRegistration",
-      localSource: codex,
-      profileClientSourceId: codex.profileClientSourceId,
-      profileSourceId: response.source.profileSourceId,
-    }),
-    /invalid protocol response/,
-  );
-});
+}
 
 test("diagnostic delivery accepts only the exact acknowledged event count", async () => {
   assert.deepEqual(

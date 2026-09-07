@@ -1,5 +1,6 @@
+import { cursorOperationBudget, cursorDeadlineActive } from "./cursor-deadline.mjs";
 import { execFile } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { win32 } from "node:path";
 import { promisify } from "node:util";
 
@@ -117,12 +118,12 @@ async function runWindowsSecurityScript(
       [ownerOnlyFileEnvironmentVariable]: win32.resolve(path),
     },
     windowsHide: true,
-    timeout: 15_000,
+    timeout: cursorOperationBudget(30_000, 4_000),
   };
   try {
     await run(powershell, arguments_, options);
   } catch (error) {
-    if (!timedOutWindowsProcess(error)) throw error;
+    if (cursorDeadlineActive() || !timedOutWindowsProcess(error)) throw error;
     await run(powershell, arguments_, options);
   }
 }
@@ -135,6 +136,72 @@ export async function inspectOwnerOnlyWindowsFile(path, options = {}) {
   } catch {
     return false;
   }
+}
+
+export async function inspectOwnerOnlyWindowsDirectory(path, options = {}) {
+  if ((options.platform ?? process.platform) !== "win32") return true;
+  const script = inspectOwnerOnlyFileScript
+    .replace("if ($entry.PSIsContainer)", "if (-not $entry.PSIsContainer)")
+    .replace("[IO.File]::GetAccessControl", "[IO.Directory]::GetAccessControl");
+  try {
+    await runWindowsSecurityScript(
+      path,
+      Buffer.from(script, "utf16le").toString("base64"),
+      options,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Provider-owned roots keep their inherited ACLs. Only untrusted write access is rejected.
+const sharedAclVerification = [
+  "$ErrorActionPreference='Stop'",
+  `$path=$env:${ownerOnlyFileEnvironmentVariable}`,
+  "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+  "if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Shared path is a reparse point' }",
+  "$identity=[Security.Principal.WindowsIdentity]::GetCurrent()",
+  "if ($entry.PSIsContainer) { $acl=[IO.Directory]::GetAccessControl($entry.FullName) } else { $acl=[IO.File]::GetAccessControl($entry.FullName) }",
+  "if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $identity.User.Value) { throw 'Shared owner mismatch' }",
+  "$trusted=@($identity.User.Value,'S-1-5-18','S-1-5-32-544')",
+  "$writes=[Security.AccessControl.FileSystemRights]::WriteData -bor [Security.AccessControl.FileSystemRights]::AppendData -bor [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor [Security.AccessControl.FileSystemRights]::WriteAttributes -bor [Security.AccessControl.FileSystemRights]::Delete -bor [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor [Security.AccessControl.FileSystemRights]::ChangePermissions -bor [Security.AccessControl.FileSystemRights]::TakeOwnership",
+  "foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) { if ($rule.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and ($rule.FileSystemRights -band $writes) -ne 0 -and $trusted -notcontains $rule.IdentityReference.Value) { throw 'Untrusted shared write access' } }",
+];
+async function inspectSafeSharedWindowsPath(path, directory, options = {}) {
+  if ((options.platform ?? process.platform) !== "win32") return true;
+  try {
+    if (process.platform === "win32" && !options.run) {
+      const info = await lstat(path);
+      if (
+        info.isSymbolicLink() ||
+        (directory
+          ? !info.isDirectory()
+          : !info.isFile() || (!options.allowMultipleLinks && info.nlink !== 1))
+      )
+        return false;
+    }
+    const script = [
+      ...sharedAclVerification,
+      directory
+        ? "if (-not $entry.PSIsContainer) { throw 'Shared directory required' }"
+        : "if ($entry.PSIsContainer) { throw 'Shared file required' }",
+    ].join("; ");
+    await runWindowsSecurityScript(
+      path,
+      Buffer.from(script, "utf16le").toString("base64"),
+      options,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+export function inspectSafeSharedWindowsDirectory(path, options = {}) {
+  return inspectSafeSharedWindowsPath(path, true, options);
+}
+export function inspectSafeSharedWindowsFile(path, options = {}) {
+  return inspectSafeSharedWindowsPath(path, false, options);
 }
 
 export async function ensureOwnerOnlyWindowsFile(path, options = {}) {
@@ -203,12 +270,12 @@ export async function ensurePrivateStateDirectory(
         [statePathsEnvironmentVariable]: JSON.stringify(normalizedPaths),
       },
       windowsHide: true,
-      timeout: 15_000,
+      timeout: cursorOperationBudget(30_000, 4_000),
     };
     try {
       await run(powershell, arguments_, options);
     } catch (error) {
-      if (!timedOutWindowsProcess(error)) throw error;
+      if (cursorDeadlineActive() || !timedOutWindowsProcess(error)) throw error;
       await run(powershell, arguments_, options);
     }
   } catch (error) {
@@ -217,4 +284,52 @@ export async function ensurePrivateStateDirectory(
       { cause: error },
     );
   }
+}
+
+// Atomic replacement changes the inode, but must retain the existing shared file's ACL.
+// The stage has already been unlinked; no private temporary file receives a shared ACL.
+export async function preserveSharedWindowsFileAcl(original, replacement) {
+  if (process.platform !== "win32") return;
+  if (
+    !(await inspectSafeSharedWindowsFile(original)) ||
+    !(await inspectSafeSharedWindowsFile(replacement))
+  )
+    throw new Error("Cursor shared ACL is unavailable");
+  const script = [
+    ...sharedAclVerification,
+    "$replacement=$env:VIBERACING_WINDOWS_SHARED_REPLACEMENT",
+    "$target=Get-Item -LiteralPath $replacement -Force -ErrorAction Stop",
+    "if ($target.PSIsContainer -or ($target.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid replacement' }",
+    "$sections=[Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group",
+    "$copy=New-Object Security.AccessControl.FileSecurity",
+    "$copy.SetSecurityDescriptorSddlForm($acl.GetSecurityDescriptorSddlForm($sections),$sections)",
+    "[IO.File]::SetAccessControl($target.FullName,$copy)",
+    "$after=[IO.File]::GetAccessControl($target.FullName)",
+    "if ($after.GetSecurityDescriptorSddlForm($sections) -ne $acl.GetSecurityDescriptorSddlForm($sections)) { throw 'Shared ACL changed' }",
+  ].join("; ");
+  await runWindowsSecurityScript(original, Buffer.from(script, "utf16le").toString("base64"), {
+    environment: { ...process.env, VIBERACING_WINDOWS_SHARED_REPLACEMENT: replacement },
+  });
+}
+
+// Only call immediately after our successful mkdir, never for an existing provider root.
+// Elevated Windows tokens can default a new directory's owner to Administrators. Set the new
+// directory's owner to the creating user while keeping the inherited access descriptor intact.
+export async function initializeNewSharedWindowsDirectoryOwner(path) {
+  if (process.platform !== "win32") return;
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$path=$env:${ownerOnlyFileEnvironmentVariable}`,
+    "$entry=Get-Item -LiteralPath $path -Force -ErrorAction Stop",
+    "if (-not $entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Invalid new directory' }",
+    "$acl=[IO.Directory]::GetAccessControl($entry.FullName)",
+    "$access=[Security.AccessControl.AccessControlSections]::Access",
+    "$before=$acl.GetSecurityDescriptorSddlForm($access)",
+    "$acl.SetOwner([Security.Principal.WindowsIdentity]::GetCurrent().User)",
+    "[IO.Directory]::SetAccessControl($entry.FullName,$acl)",
+    "$after=[IO.Directory]::GetAccessControl($entry.FullName)",
+    "if ($after.GetSecurityDescriptorSddlForm($access) -ne $before) { throw 'New directory access changed' }",
+    ...sharedAclVerification,
+  ].join("; ");
+  await runWindowsSecurityScript(path, Buffer.from(script, "utf16le").toString("base64"));
 }

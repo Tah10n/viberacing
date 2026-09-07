@@ -1,5 +1,6 @@
 import { antigravityAdapter } from "./adapters/antigravity.mjs";
 import { claudeAdapter } from "./adapters/claude.mjs";
+import { cursorAdapter } from "./adapters/cursor.mjs";
 import { codexAdapter } from "./adapters/codex.mjs";
 import { geminiAdapter } from "./adapters/gemini.mjs";
 import { kimiAdapter } from "./adapters/kimi.mjs";
@@ -9,6 +10,7 @@ import { canonicalPathKey } from "./adapters/shared.mjs";
 
 export const accountSwitchModes = Object.freeze([
   "provider_account_snapshot",
+  "provider_account_events",
   "combined_local_history",
   "explicit_capture",
 ]);
@@ -32,6 +34,7 @@ export const adapters = Object.freeze([
   qwenAdapter,
   antigravityAdapter,
   geminiAdapter,
+  cursorAdapter,
 ]);
 
 export function adapterFor(agentId) {

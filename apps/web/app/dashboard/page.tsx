@@ -683,7 +683,13 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const historyUpgradeRequired = installations.some(
     (installation) => installation.protocol_version < currentYearHistoryProtocolVersion,
   );
-  const hasNewCodexAccountNotice = accounts.some((account) => account.new_account_notice_pending);
+  const newAccountAgents = [
+    ...new Set(
+      accounts
+        .filter((account) => account.new_account_notice_pending)
+        .map((account) => account.agent_id),
+    ),
+  ];
   const notice =
     params.connected === "1"
       ? "Computer connected. Its first sync is ready."
@@ -749,9 +755,13 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         </Panel>
       ) : null}
 
-      {hasNewCodexAccountNotice ? (
+      {newAccountAgents.length > 0 ? (
         <Panel className="dashboard-notice new-account-notice">
-          <p>A new Codex account was detected on this computer and added separately.</p>
+          {newAccountAgents.map((agent) => (
+            <p key={agent}>
+              A new {agentLabel(agent)} account was detected on this computer and added separately.
+            </p>
+          ))}
           <SameOriginActionForm action="/api/accounts/notices/dismiss">
             <button className="text-button" type="submit">
               Dismiss
@@ -982,6 +992,11 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                       {isSupportedAgent(account.agent_id) &&
                       agentRegistry[account.agent_id].accountSwitchMode === "explicit_capture" ? (
                         <span className="agent-chip">Explicit capture source</span>
+                      ) : null}
+                      {isSupportedAgent(account.agent_id) &&
+                      agentRegistry[account.agent_id].accountSwitchMode ===
+                        "provider_account_events" ? (
+                        <span className="agent-chip">Desktop + CLI</span>
                       ) : null}
                       {account.shared_profile ? (
                         <span className="agent-chip">Shared Codex profile</span>

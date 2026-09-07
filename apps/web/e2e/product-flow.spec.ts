@@ -547,6 +547,44 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(accountDisclosure.locator(".device-list")).not.toBeVisible();
   await accountDisclosure.locator("summary").click();
   await expect(accountDisclosure.locator(".device-list")).toBeVisible();
+  const cursorDatabase = new Client({ connectionString: databaseUrl });
+  await cursorDatabase.connect();
+  const cursorAccountId = randomUUID();
+  const cursorSourceId = randomUUID();
+  try {
+    await cursorDatabase.query(
+      `INSERT INTO agent_accounts (id, user_id, agent_id, label, aggregation_mode, new_account_notice_pending)
+       SELECT $1, user_id, 'cursor', 'Cursor account 1', 'source_sum', true FROM installations WHERE id = $2`,
+      [cursorAccountId, installationId],
+    );
+    await cursorDatabase.query(
+      `INSERT INTO installation_sources (id, installation_id, user_id, agent_account_id, agent_id, client_source_id, collection_method, supported_surface, status)
+       SELECT $1, id, user_id, $2, 'cursor', $3, 'cursor_local_events', 'desktop', 'active' FROM installations WHERE id = $4`,
+      [cursorSourceId, cursorAccountId, randomUUID(), installationId],
+    );
+    await cursorDatabase.query(
+      "UPDATE installations SET installed_connector_version = '0.4.3', browser_sync_protocol = 1 WHERE id = $1",
+      [installationId],
+    );
+    await page.reload();
+    const cursorCard = page.locator(".device-card").filter({ hasText: "Cursor account 1" });
+    await expect(cursorCard).toHaveCount(1);
+    await expect(cursorCard).toContainText("Desktop + CLI");
+    await expect(cursorCard).toContainText("Summed");
+    await expect(cursorCard.getByRole("button", { name: "Sync", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Sync all agents" })).toBeDisabled();
+    await expect(page.locator(".new-account-notice")).toContainText(
+      "A new Cursor account was detected",
+    );
+    expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+    await page.locator(".new-account-notice").getByRole("button", { name: "Dismiss" }).click();
+    await expect(page.locator(".new-account-notice")).toHaveCount(0);
+  } finally {
+    await cursorDatabase.query("DELETE FROM installation_sources WHERE id = $1", [cursorSourceId]);
+    await cursorDatabase.query("DELETE FROM agent_accounts WHERE id = $1", [cursorAccountId]);
+    await cursorDatabase.end();
+  }
+
   const featureDatabase = new Client({ connectionString: databaseUrl });
   await featureDatabase.connect();
   try {

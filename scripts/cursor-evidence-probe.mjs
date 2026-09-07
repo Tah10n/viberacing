@@ -33,6 +33,13 @@ const observationsDirectoryName = "observations";
 const runsDirectoryName = "runs";
 const hookLauncherSourcePath = join(repositoryRoot, "scripts", "cursor-evidence-hook-launcher.mjs");
 const ownedLockSourcePath = join(repositoryRoot, "packages", "connector", "lib", "owned-lock.mjs");
+const cursorDeadlineSourcePath = join(
+  repositoryRoot,
+  "packages",
+  "connector",
+  "lib",
+  "cursor-deadline.mjs",
+);
 const windowsSecuritySourcePath = join(
   repositoryRoot,
   "packages",
@@ -1837,6 +1844,7 @@ function hookBundlePaths(parent, probeId, installationId) {
     command: join(scripts, hookLauncherCommandName),
     probeScript: join(scripts, "cursor-evidence-probe.mjs"),
     ownedLock: join(library, "owned-lock.mjs"),
+    cursorDeadline: join(library, "cursor-deadline.mjs"),
     windowsSecurity: join(library, "windows-security.mjs"),
   };
 }
@@ -1897,6 +1905,7 @@ async function installHookBundle(parent, identity) {
     [paths.launcher, await readFile(hookLauncherSourcePath)],
     [paths.probeScript, await readFile(scriptPath)],
     [paths.ownedLock, await readFile(ownedLockSourcePath)],
+    [paths.cursorDeadline, await readFile(cursorDeadlineSourcePath)],
     [paths.windowsSecurity, await readFile(windowsSecuritySourcePath)],
   ]);
   if (process.platform === "win32")
@@ -1979,6 +1988,7 @@ async function validateHookBundle(parent, probeId, installationId, expectedOutpu
     paths.launcher,
     paths.probeScript,
     paths.ownedLock,
+    paths.cursorDeadline,
     paths.windowsSecurity,
     ...(process.platform === "win32" ? [paths.command] : []),
   ]);
@@ -2007,7 +2017,7 @@ async function validateHookBundle(parent, probeId, installationId, expectedOutpu
     [paths.root, ["packages", "scripts"]],
     [join(paths.root, "packages"), ["connector"]],
     [join(paths.root, "packages", "connector"), ["lib"]],
-    [paths.library, ["owned-lock.mjs", "windows-security.mjs"]],
+    [paths.library, ["owned-lock.mjs", "windows-security.mjs", "cursor-deadline.mjs"]],
     [
       paths.scripts,
       [

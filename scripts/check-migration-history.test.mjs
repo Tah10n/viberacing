@@ -140,3 +140,41 @@ test("the stable required CI check fails when any mandatory job fails", async ()
     assert.equal(workflow.includes(result), true);
   }
 });
+
+test("unmerged Cursor migration expansion validates separately before short activation", async () => {
+  const directory = new URL("../apps/web/database/", import.meta.url);
+  const add = await readFile(new URL("012_cursor_constraints_add.sql", directory), "utf8");
+  const validate = await readFile(
+    new URL("013_cursor_constraints_validate.sql", directory),
+    "utf8",
+  );
+  const activate = await readFile(
+    new URL("014_cursor_constraints_activate.sql", directory),
+    "utf8",
+  );
+  for (const table of [
+    "agent_accounts",
+    "installation_sources",
+    "account_dedup_events",
+    "browser_sync_runs",
+    "daily_agent_usage",
+  ]) {
+    assert.match(
+      add,
+      new RegExp(`ALTER TABLE ${table}\\s+ADD CONSTRAINT ${table}_agent_id_cursor_check CHECK`),
+    );
+    assert.match(
+      validate,
+      new RegExp(`ALTER TABLE ${table} VALIDATE CONSTRAINT ${table}_agent_id_cursor_check;`),
+    );
+    assert.match(activate, new RegExp(`DROP CONSTRAINT ${table}_agent_id_check`));
+    assert.match(
+      activate,
+      new RegExp(`RENAME CONSTRAINT ${table}_agent_id_cursor_check TO ${table}_agent_id_check`),
+    );
+  }
+  assert.equal((add.match(/\) NOT VALID;/g) ?? []).length, 5);
+  assert.doesNotMatch(add, /DROP CONSTRAINT|VALIDATE CONSTRAINT/);
+  assert.doesNotMatch(validate, /DROP CONSTRAINT|ADD CONSTRAINT/);
+  assert.doesNotMatch(activate, /ADD CONSTRAINT|VALIDATE CONSTRAINT/);
+});

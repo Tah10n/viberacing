@@ -1,3 +1,4 @@
+import { prepareCursorIngress, revokeCursorIngress } from "./cursor-ingress.mjs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import {
@@ -8,6 +9,7 @@ import {
   lstat,
   mkdir,
   readFile,
+  realpath,
   readdir,
   rename,
   rm,
@@ -25,10 +27,20 @@ import { parseQwenJsonc, setQwenJsoncProperty } from "./adapters/qwen-settings.m
 import { quoteWindowsCommandArgument } from "./executables.mjs";
 import { acquireOwnedLock, releaseOwnedLock } from "./owned-lock.mjs";
 import { normalizeOrigin } from "./origin.mjs";
-import { mergeStoredSourceMapping } from "./protocol.mjs";
+import { mergeStoredSourceMapping, providerAccountPolicy } from "./protocol.mjs";
 import { hasTerminalControlCharacters } from "./terminal.mjs";
+import { inspectCursorHooks, observeCursorHooks, reconcileCursorHooks } from "./cursor-hooks.mjs";
+import {
+  initializeCursorLedger,
+  recordCursorHookObservation,
+  reserveCursorEvents,
+} from "./cursor-ledger.mjs";
+import { readPrivateCursorOwnerFile } from "./cursor-owner.mjs";
 import { connectorVersion } from "./version.mjs";
-import { ensurePrivateStateDirectory as secureWindowsStateDirectory } from "./windows-security.mjs";
+import {
+  ensurePrivateStateDirectory as secureWindowsStateDirectory,
+  initializeNewSharedWindowsDirectoryOwner,
+} from "./windows-security.mjs";
 
 const defaultStateDirectory = join(homedir(), ".viberacing");
 export const stateDirectory = process.env.VIBERACING_STATE_DIR
@@ -100,7 +112,6 @@ const providerAccountKeyPattern = /^acct1_[A-Za-z0-9_-]{43}$/;
 const sourcesSchemaVersion = 2;
 const maximumLocalSources = 32;
 const maximumOpenCodePluginCleanupTargets = 32;
-const maximumCodexAccountsPerProfile = 8;
 const legacyCollectionMethods = new Set([
   "antigravity\0antigravity_cli_capture",
   "claude_code\0claude_jsonl",
@@ -158,13 +169,21 @@ function ownedStatePath(path, info) {
       return /^(?:[0-9a-f-]{36})\.json$/i.test(pendingBase) && info.isFile();
     return false;
   }
+  if (top === "captures" && /^cursor-[0-9a-f-]{36}\.ingress$/.test(parts[1] ?? "")) {
+    if (parts.length === 2) return info.isDirectory();
+    return parts.length === 3 && info.isFile() && /^(?:permit|overflow|\d{3}\.gap)$/.test(parts[2]);
+  }
   if (top === "captures" && parts.length === 2) {
     const captureName = parts[1];
     const base = captureName
+      .replace(/\.[0-9a-f-]{36}\.run(?=\.lock)/i, "")
       .replace(/\.\d+\.[0-9a-f-]{36}\.tmp$/i, "")
-      .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "");
+      .replace(/\.lock(?:\.recovery(?:\.stale\.[0-9a-f-]{36})?|\.stale\.[0-9a-f-]{36})?$/i, "")
+      .replace(/^((?:cursor-)[0-9a-f-]{36}\.jsonl)\.proof\.json$/i, "$1");
     return (
-      sourceIdPattern.test(base.replace(/\.jsonl$/i, "")) && /\.jsonl$/i.test(base) && info.isFile()
+      sourceIdPattern.test(base.replace(/^cursor-/, "").replace(/\.jsonl$/i, "")) &&
+      /\.jsonl$/i.test(base) &&
+      info.isFile()
     );
   }
   if (top === "runtime") {
@@ -572,7 +591,7 @@ async function waitForTestConnectionBarrier(stage) {
   const ready = `${barrier}.ready`;
   const continued = `${barrier}.continue`;
   await writeFile(ready, `${process.pid}\n`, { mode: 0o600 });
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + (process.platform === "win32" ? 30_000 : 5_000);
   for (;;) {
     try {
       await access(continued);
@@ -586,7 +605,8 @@ async function waitForTestConnectionBarrier(stage) {
 }
 
 function connectionStateLockWaitMs() {
-  return process.env.NODE_ENV === "test" ? 5_000 : 60_000;
+  // Native Windows ACL subprocesses run inside this lock; tests need the production budget.
+  return process.env.NODE_ENV === "test" && process.platform !== "win32" ? 5_000 : 60_000;
 }
 
 export async function withConnectionStateLock(callback) {
@@ -709,8 +729,8 @@ async function normalizedSources(sources) {
     }
     const primary = byId.get(source.profileClientSourceId);
     if (
-      source.agentId !== "codex" ||
-      primary?.agentId !== "codex" ||
+      !providerAccountPolicy(source) ||
+      primary?.agentId !== source.agentId ||
       primary.profileClientSourceId !== undefined ||
       primary.clientSourceId === source.clientSourceId ||
       (await canonicalPathKey(primary.dataPath)) !== root ||
@@ -720,7 +740,7 @@ async function normalizedSources(sources) {
       primary.hookConfigRoot !== source.hookConfigRoot ||
       source.providerAccountKey === undefined
     ) {
-      throw new Error("Codex logical source configuration is unsupported");
+      throw new Error("Provider logical source configuration is unsupported");
     }
   }
   for (const source of normalized) {
@@ -730,13 +750,13 @@ async function normalizedSources(sources) {
     profileMembers.set(primaryId, members);
   }
   for (const members of profileMembers.values()) {
-    if (members.length > maximumCodexAccountsPerProfile)
-      throw new Error("Codex profile exceeds the logical account limit");
+    if (members.length > (providerAccountPolicy(members[0])?.maximumAccounts ?? 1))
+      throw new Error("Provider profile exceeds the logical account limit");
     const accountKeys = members
       .map((source) => source.providerAccountKey)
       .filter((value) => value !== undefined);
     if (new Set(accountKeys).size !== accountKeys.length)
-      throw new Error("Codex profile contains a duplicate provider account key");
+      throw new Error("Provider profile contains a duplicate provider account key");
   }
   return normalized;
 }
@@ -1258,10 +1278,12 @@ function validLocalSource(source) {
     typeof source.supportedSurface === "string" &&
     (source.executablePath === undefined || typeof source.executablePath === "string") &&
     (source.hookConfigRoot === undefined || typeof source.hookConfigRoot === "string") &&
+    (source.cursorHookInstallationId === undefined ||
+      (source.agentId === "cursor" && sourceIdPattern.test(source.cursorHookInstallationId))) &&
     (source.profileClientSourceId === undefined ||
-      (source.agentId === "codex" && sourceIdPattern.test(source.profileClientSourceId))) &&
+      (providerAccountPolicy(source) && sourceIdPattern.test(source.profileClientSourceId))) &&
     (source.providerAccountKey === undefined ||
-      (source.agentId === "codex" && providerAccountKeyPattern.test(source.providerAccountKey)))
+      (providerAccountPolicy(source) && providerAccountKeyPattern.test(source.providerAccountKey)))
   );
 }
 
@@ -1291,6 +1313,9 @@ function normalizedLocalSource(source, clientSourceId = source.clientSourceId ??
       : {}),
     ...(typeof source.profileClientSourceId === "string"
       ? { profileClientSourceId: source.profileClientSourceId }
+      : {}),
+    ...(typeof source.cursorHookInstallationId === "string"
+      ? { cursorHookInstallationId: source.cursorHookInstallationId }
       : {}),
     ...(typeof source.providerAccountKey === "string"
       ? { providerAccountKey: source.providerAccountKey }
@@ -1473,21 +1498,27 @@ export function codexPrimaryClientSourceId(source) {
     : source?.clientSourceId;
 }
 
-export async function bindCodexProviderAccount(clientSourceId, providerAccountKey) {
+export function bindCodexProviderAccount(clientSourceId, providerAccountKey) {
+  return bindProviderAccount("codex", clientSourceId, providerAccountKey);
+}
+
+export async function bindProviderAccount(agentId, clientSourceId, providerAccountKey) {
   if (!sourceIdPattern.test(clientSourceId) || !providerAccountKeyPattern.test(providerAccountKey))
-    throw new Error("Invalid Codex provider account binding");
+    throw new Error("Invalid provider account binding");
   return withConnectionStateLock(async () => {
     await recoverConnectionCommitUnlocked();
     const sources = await readSourcesUnlocked();
     const selected = sources.find((source) => source.clientSourceId === clientSourceId);
-    if (selected?.agentId !== "codex") throw new Error("Codex profile source is unavailable");
+    const policy = providerAccountPolicy(selected);
+    if (!policy || selected.agentId !== agentId)
+      throw new Error("Provider profile source is unavailable");
     const primaryId = selected.profileClientSourceId ?? selected.clientSourceId;
     const primary = sources.find((source) => source.clientSourceId === primaryId);
-    if (primary?.agentId !== "codex" || primary.profileClientSourceId !== undefined)
-      throw new Error("Codex profile source is invalid");
+    if (primary?.agentId !== agentId || primary.profileClientSourceId !== undefined)
+      throw new Error("Provider profile source is invalid");
     const members = sources.filter(
       (source) =>
-        source.agentId === "codex" &&
+        source.agentId === agentId &&
         (source.profileClientSourceId ?? source.clientSourceId) === primary.clientSourceId,
     );
     const existing = members.find((source) => source.providerAccountKey === providerAccountKey);
@@ -1502,8 +1533,8 @@ export async function bindCodexProviderAccount(clientSourceId, providerAccountKe
         boundPrimary: true,
       };
     }
-    if (members.length >= maximumCodexAccountsPerProfile) {
-      const error = new Error("Codex profile has reached the logical account limit");
+    if (members.length >= policy.maximumAccounts) {
+      const error = new Error("Provider profile has reached the logical account limit");
       error.diagnosticCode = "provider_account_limit_reached";
       throw error;
     }
@@ -1511,7 +1542,10 @@ export async function bindCodexProviderAccount(clientSourceId, providerAccountKe
       {
         ...primary,
         clientSourceId: undefined,
-        suggestedLabel: "Codex account",
+        suggestedLabel:
+          agentId === "cursor"
+            ? `${policy.label} account ${members.length + 1}`
+            : `${policy.label} account`,
         profileClientSourceId: primary.clientSourceId,
         providerAccountKey,
       },
@@ -1606,11 +1640,11 @@ export async function removeSource(clientSourceId) {
     const removed = sources.find((source) => source.clientSourceId === clientSourceId);
     if (!removed) return null;
     if (
-      removed.agentId === "codex" &&
+      providerAccountPolicy(removed) &&
       removed.profileClientSourceId === undefined &&
       sources.some((source) => source.profileClientSourceId === removed.clientSourceId)
     )
-      throw new Error("Remove the logical Codex accounts before removing their physical profile");
+      throw new Error("Remove the logical accounts before removing their physical profile");
     await writeSourcesUnlocked(
       sources.filter((source) => source.clientSourceId !== clientSourceId),
     );
@@ -1995,6 +2029,15 @@ const installedRuntimeFiles = [
   "browser.mjs",
   "connection-lifecycle.mjs",
   "config.mjs",
+  "cursor-identity.mjs",
+  "cursor-events.mjs",
+  "cursor-ledger.mjs",
+  "cursor-hooks.mjs",
+  "cursor-owner.mjs",
+  "cursor-deadline.mjs",
+  "cursor-ingress.mjs",
+  "cursor-capture.mjs",
+  "cursor-cli.mjs",
   "diagnostics.mjs",
   "executables.mjs",
   "owned-lock.mjs",
@@ -2014,6 +2057,7 @@ const installedRuntimeAdapterFiles = new Set([
   "antigravity.mjs",
   "claude.mjs",
   "codex.mjs",
+  "cursor.mjs",
   "gemini.mjs",
   "kimi.mjs",
   "opencode.mjs",
@@ -2045,6 +2089,8 @@ function hookLauncherContents(version = connectorVersion) {
 async function installHookLauncher() {
   const path = installedHookLauncherScript();
   await atomicText(path, hookLauncherContents());
+  if (process.platform === "win32")
+    await secureWindowsStateDirectory(dirname(path), { paths: [dirname(path), path] });
   return path;
 }
 
@@ -2168,8 +2214,184 @@ export function quoteHookArgument(value, platform = process.platform) {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-export async function installHookForSource(source, installedScript) {
-  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
+export async function cursorHookOptions(source) {
+  const installationId = source.cursorHookInstallationId ?? (await readExistingInstallation())?.id;
+  if (!sourceIdPattern.test(installationId ?? ""))
+    throw new Error("Cursor hook installation identity is unavailable");
+  return {
+    installationId,
+    profileId: source.profileClientSourceId ?? source.clientSourceId,
+    launcher: join(await realpath(stateDirectory), "bin", "viberacing-hook.mjs"),
+    origin: (
+      await inspectConfig().catch((error) => {
+        if (error.code === "ENOENT") return {};
+        throw error;
+      })
+    ).origin,
+    launcherHash: createHash("sha256")
+      .update((await readPrivateCursorOwnerFile(installedHookLauncherScript(), true)) ?? "")
+      .digest("hex"),
+  };
+}
+
+async function prepareCursorHookOwner(source) {
+  const installation = await readExistingInstallation();
+  if (!installation) throw new Error("Cursor hook installation identity is unavailable");
+  const known = (await readSources()).find(
+    (candidate) => candidate.clientSourceId === source.clientSourceId,
+  );
+  if (known?.agentId !== "cursor" || known.profileClientSourceId !== undefined)
+    throw new Error("Cursor hook profile is unavailable");
+  const updated = await withConnectionStateLock(async () => {
+    const current = await readInstallationUnlocked();
+    if (current?.id !== installation.id) throw new Error("Cursor hook installation changed");
+    const sources = await readSourcesUnlocked();
+    const profile = sources.find((candidate) => candidate.clientSourceId === source.clientSourceId);
+    if (profile?.agentId !== "cursor" || profile.profileClientSourceId !== undefined)
+      throw new Error("Cursor hook profile is unavailable");
+    if (profile.cursorHookInstallationId !== installation.id) {
+      profile.cursorHookInstallationId = installation.id;
+      await writeSourcesUnlocked(sources);
+    }
+    return profile;
+  });
+  await readOrCreateProviderIdentitySalt();
+  return updated;
+}
+
+// Existing-state lock is intentional: a stale hook must never recreate a removed installation.
+export async function withCursorCaptureContext(request, callback) {
+  if (
+    !sourceIdPattern.test(request?.installationId ?? "") ||
+    !sourceIdPattern.test(request?.profileId ?? "")
+  )
+    return null;
+  return withExistingConnectionStateLock(async () => {
+    const [installation, config, salt] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+      readProviderIdentitySaltUnlocked(),
+    ]);
+    if (
+      installation?.id !== request.installationId ||
+      config.installationId !== request.installationId ||
+      !salt
+    )
+      return null;
+    const source = config.sources.find(
+      (candidate) =>
+        candidate.clientSourceId === request.profileId &&
+        candidate.agentId === "cursor" &&
+        candidate.profileClientSourceId === undefined &&
+        candidate.cursorHookInstallationId === request.installationId,
+    );
+    if (!source || typeof source.sourceId !== "string") return null;
+    const hooks = await inspectCursorHooks(
+      hookRoot(source, "cursor"),
+      await cursorHookOptions(source),
+    );
+    if (hooks.stop !== "current" || hooks.sessionEnd !== "current")
+      throw new Error("cursor_hook_stale");
+    return callback({ source, salt, stateRoot: stateDirectory });
+  });
+}
+
+// Collection observes the currently connected mapping under the existing lifecycle lock.
+// An old collector cannot publish continuity into a replacement installation or removed source.
+export async function prepareCursorCollection(source, capturedAt, range) {
+  const { lifecycleMutationActive } = await import("./runtime.mjs");
+  if (await lifecycleMutationActive()) return null;
+  return withExistingConnectionStateLock(async () => {
+    if (await lifecycleMutationActive()) return null;
+    const [installation, config] = await Promise.all([
+      readInstallationUnlocked(),
+      readConfigUnlocked(),
+    ]);
+    if (!installation || config.installationId !== installation.id) return null;
+    const mapping = config.sources.find(
+      (item) =>
+        item.clientSourceId === source.clientSourceId &&
+        item.sourceId === source.sourceId &&
+        item.agentId === "cursor",
+    );
+    if (!mapping) return null;
+    const profile = config.sources.find(
+      (item) =>
+        item.clientSourceId === (mapping.profileClientSourceId ?? mapping.clientSourceId) &&
+        item.agentId === "cursor" &&
+        item.profileClientSourceId === undefined,
+    );
+    if (!profile) return null;
+    const observation = await observeCursorHooks(
+      hookRoot(profile, "cursor"),
+      await cursorHookOptions({ ...profile, cursorHookInstallationId: installation.id }),
+    );
+    await recordCursorHookObservation(
+      stateDirectory,
+      profile.clientSourceId,
+      observation,
+      capturedAt,
+    );
+    if (range)
+      await reserveCursorEvents(
+        stateDirectory,
+        profile.clientSourceId,
+        {
+          sourceId: mapping.sourceId,
+          accountKey: mapping.providerAccountKey,
+          rangeStart: range.rangeStart,
+          rangeEnd: range.rangeEnd,
+        },
+        capturedAt,
+      );
+    return observation;
+  });
+}
+
+export async function installHookForSource(
+  source,
+  installedScript,
+  { reclaimCursorOwner = false } = {},
+) {
+  if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
+  if (source.agentId === "cursor") {
+    const profile = await prepareCursorHookOwner(source);
+    const root = hookRoot(profile, "cursor");
+    try {
+      await lstat(root);
+    } catch (error) {
+      if (error.code !== "ENOENT" || resolve(root) !== resolve(join(homedir(), ".cursor")))
+        throw error;
+      // CLI-only discovery does not create directories. Pairing installs the one default root.
+      const parent = await lstat(homedir());
+      if (
+        !parent.isDirectory() ||
+        parent.isSymbolicLink() ||
+        (typeof process.getuid === "function" &&
+          (parent.uid !== process.getuid() || (parent.mode & 0o022) !== 0))
+      )
+        throw new Error("Cursor hook root is unavailable");
+      try {
+        await mkdir(root, { mode: 0o700 });
+        await initializeNewSharedWindowsDirectoryOwner(root);
+        // Existing shared roots are read-only; a new root keeps its inherited access rules.
+      } catch (createError) {
+        if (createError.code !== "EEXIST") throw createError;
+      }
+    }
+    const capturedAt = new Date().toISOString();
+    await initializeCursorLedger(stateDirectory, profile.clientSourceId, capturedAt);
+    const owner = await cursorHookOptions(profile);
+    await prepareCursorIngress(stateDirectory, owner);
+    const changed = await reconcileCursorHooks(root, owner, { reclaim: reclaimCursorOwner });
+    await recordCursorHookObservation(
+      stateDirectory,
+      profile.clientSourceId,
+      await observeCursorHooks(hookRoot(profile, "cursor"), await cursorHookOptions(profile)),
+      capturedAt,
+    );
+    return changed;
+  }
   const marker = hookMarkerForSource(source.clientSourceId);
   const command = sourceHookCommand(
     source.agentId === "codex" ? installedHookLauncherScript() : installedScript,
@@ -2220,7 +2442,7 @@ export async function installHooks(sourceUrl, sources) {
 }
 
 function physicalHookSource(source) {
-  if (source.agentId !== "codex" || source.profileClientSourceId === undefined) return source;
+  if (!providerAccountPolicy(source) || source.profileClientSourceId === undefined) return source;
   const { profileClientSourceId, providerAccountKey: _providerAccountKey, ...rest } = source;
   return { ...rest, clientSourceId: profileClientSourceId };
 }
@@ -2231,7 +2453,7 @@ function physicalHookSources(sources, knownLocalSources = sources) {
   const seen = new Set();
   for (const source of sources) {
     const hookSource =
-      source.agentId === "codex" && source.profileClientSourceId !== undefined
+      providerAccountPolicy(source) && source.profileClientSourceId !== undefined
         ? (knownById.get(source.profileClientSourceId) ?? physicalHookSource(source))
         : source;
     const key = `${hookSource.agentId}\0${hookSource.clientSourceId}`;
@@ -2263,6 +2485,23 @@ function hookRoot(source, agentId) {
 }
 
 export async function diagnoseHookForSource(source, options = {}) {
+  if (source.agentId === "cursor") {
+    try {
+      const status = await inspectCursorHooks(
+        hookRoot(source, "cursor"),
+        await cursorHookOptions(source),
+      );
+      return status.stop === "current" && status.sessionEnd === "current"
+        ? "current"
+        : status.stop === "missing" || status.sessionEnd === "missing"
+          ? "missing"
+          : "modified";
+    } catch (error) {
+      return error?.diagnosticCode === "cursor_profile_already_owned"
+        ? "cursor_profile_already_owned"
+        : "missing";
+    }
+  }
   const installedScript =
     source.agentId === "codex" ? installedHookLauncherScript() : installedRuntimeScript();
   const marker = hookMarkerForSource(source.clientSourceId);
@@ -2336,11 +2575,18 @@ function mergeHookStatus(previous, next) {
 }
 
 export async function removeHookForSource(source, options = {}) {
-  if (source.agentId === "codex" && source.profileClientSourceId !== undefined) return false;
+  if (providerAccountPolicy(source) && source.profileClientSourceId !== undefined) return false;
   const marker = hookMarkerForSource(source.clientSourceId);
   const markers = options.removeLegacy ? [marker, legacyHookMarker] : [marker];
   const hookOptions = { remove: true, markers, removeAll: options.removeAll === true };
   const root = hookRoot(source, source.agentId);
+  if (source.agentId === "cursor") {
+    await revokeCursorIngress(
+      stateDirectory,
+      source.profileClientSourceId ?? source.clientSourceId,
+    );
+    return reconcileCursorHooks(root, await cursorHookOptions(source), { remove: true });
+  }
   if (source.agentId === "codex") {
     const path = join(root, "hooks.json");
     const removedStop = await updateHook(path, "Stop", null, hookOptions);
@@ -2394,8 +2640,8 @@ export async function reconcileHooks(
       } catch (error) {
         failures.push({
           agentId: source.agentId,
-          clientSourceId: source.clientSourceId,
-          path: hookRoot(source, source.agentId),
+          clientSourceId: source.agentId === "cursor" ? null : source.clientSourceId,
+          path: source.agentId === "cursor" ? null : hookRoot(source, source.agentId),
           message: error instanceof Error ? error.message : "Hook cleanup failed",
         });
       }
@@ -2403,12 +2649,14 @@ export async function reconcileHooks(
   if (installedScript)
     for (const source of hookSources)
       try {
-        result[source.clientSourceId] = await installHookForSource(source, installedScript);
+        result[source.clientSourceId] = await installHookForSource(source, installedScript, {
+          reclaimCursorOwner: true,
+        });
       } catch (error) {
         failures.push({
           agentId: source.agentId,
-          clientSourceId: source.clientSourceId,
-          path: hookRoot(source, source.agentId),
+          clientSourceId: source.agentId === "cursor" ? null : source.clientSourceId,
+          path: source.agentId === "cursor" ? null : hookRoot(source, source.agentId),
           message: error instanceof Error ? error.message : "Hook installation failed",
         });
       }
@@ -2470,14 +2718,14 @@ export async function removeHooks() {
         await updateKimiHook(root, "", legacyHookMarker, { remove: true, removeAll: true });
       cleaned.push({
         agentId: source.agentId,
-        clientSourceId: source.clientSourceId ?? null,
-        path: root,
+        clientSourceId: source.agentId === "cursor" ? null : (source.clientSourceId ?? null),
+        path: source.agentId === "cursor" ? null : root,
       });
     } catch (error) {
       failures.push({
         agentId: source.agentId,
-        clientSourceId: source.clientSourceId ?? null,
-        path: root,
+        clientSourceId: source.agentId === "cursor" ? null : (source.clientSourceId ?? null),
+        path: source.agentId === "cursor" ? null : root,
         message: error instanceof Error ? error.message : "Hook cleanup failed",
       });
     }
