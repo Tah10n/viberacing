@@ -33,6 +33,6 @@
   "devDependencies": {
     "@viberacing/connector-0.4.3": "npm:@viberacing/connector@0.4.3",
     "@viberacing/connector-0.4.4": "npm:@viberacing/connector@0.4.4",
-    "prettier": "3.9.4"
+    "prettier": "3.9.6"
   }
 }
