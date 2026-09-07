@@ -2,7 +2,7 @@ import Link from "next/link";
 import { usagePeriodSearch, type ResolvedUsagePeriod, type UsagePeriod } from "@/lib/usage-period";
 
 interface PeriodSelectorProps {
-  readonly basePath: "/" | "/dashboard";
+  readonly basePath: "/" | "/dashboard" | `/u/${string}`;
   readonly period: UsagePeriod;
   readonly resolved: ResolvedUsagePeriod;
   readonly today: string;
@@ -11,7 +11,7 @@ interface PeriodSelectorProps {
 const presets = [
   ["week", "Week"],
   ["month", "Month"],
-  ["year", "All time"],
+  ["year", "This year"],
 ] as const;
 
 export function periodSelectorDefaults(

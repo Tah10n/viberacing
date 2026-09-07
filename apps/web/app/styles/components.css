@@ -87,6 +87,14 @@
   white-space: nowrap;
 }
 
+.nav-account-name {
+  display: block;
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-nav > a:first-child {
   min-width: 11.25rem;
 }
@@ -488,7 +496,12 @@
 }
 
 .custom-period {
-  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.custom-period[open] {
+  flex-basis: 100%;
 }
 
 .custom-period > summary {
@@ -500,12 +513,9 @@
 }
 
 .custom-period-form {
-  position: absolute;
-  z-index: 5;
-  top: calc(100% + var(--space-2));
-  right: 0;
   display: grid;
-  width: min(26rem, calc(100vw - 2 * var(--space-4)));
+  width: min(26rem, 100%);
+  margin-top: var(--space-2);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
   border: 0.0625rem solid var(--color-line-strong);
@@ -526,8 +536,52 @@
 
 .custom-period-form input {
   min-width: 0;
+  width: 100%;
+  min-height: var(--control-height);
+  border: 0.0625rem solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  background: var(--color-track);
+  color: var(--color-ink);
 }
 
 .custom-period-form .button {
   grid-column: 1 / -1;
+}
+
+/* Exact totals remain visible on touch screens and when hovering is unavailable. */
+.exact-tokens,
+.score-card .exact-tokens {
+  display: block;
+  margin: var(--space-2) 0 0;
+  color: var(--color-muted-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
+.sync-recovery {
+  width: 100%;
+  min-width: 0;
+  max-width: 30rem;
+  color: var(--color-muted-strong);
+  font-size: var(--text-sm);
+}
+
+.sync-recovery summary {
+  width: fit-content;
+  min-height: var(--control-height);
+  padding: var(--space-2) 0;
+  color: var(--color-info);
+  cursor: pointer;
+}
+
+.sync-recovery pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: var(--space-3);
+  background: var(--color-track);
 }

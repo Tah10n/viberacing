@@ -328,10 +328,12 @@ export function BrowserSyncProvider({
 export function AccountControls({
   accountId,
   syncUnavailableReason,
+  recovery,
   children,
 }: {
   accountId: string;
   syncUnavailableReason: string | null;
+  recovery?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -369,6 +371,7 @@ export function AccountControls({
           {syncUnavailableReason}
         </p>
       )}
+      {canSync ? null : recovery}
       {current === null ? null : (
         <p
           className={`browser-sync-message ${current.tone}`}
@@ -386,8 +389,10 @@ export function AccountControls({
 
 export function InstallationSyncControl({
   syncUnavailableReason,
+  recovery,
 }: {
   syncUnavailableReason: string | null;
+  recovery?: ReactNode;
 }) {
   const unavailableDescriptionId = useId();
   const sync = useContext(BrowserSyncContext);
@@ -409,6 +414,7 @@ export function InstallationSyncControl({
           {syncUnavailableReason}
         </p>
       )}
+      {canSync ? null : recovery}
       {current === null ? null : (
         <p
           className={`browser-sync-message ${current.tone}`}

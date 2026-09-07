@@ -139,8 +139,8 @@
   hook-trust bypass or write `trusted_hash` from the connector.
 - Verify two linked Codex computers follow `complete 100` then newer `complete 90`; dashboard, daily
   summary, chart, leaderboard, and component selection must all show the same corrected value for
-  Week, Month, All time, and Custom. Verify invalid/custom-out-of-year query parameters fall back
-  safely, **All time** ends today and means the current UTC calendar year, and the accessible SVG
+  Week, Month, This year, and Custom. Verify invalid/custom-out-of-year query parameters fall back
+  safely, **This year** ends today and means the current UTC calendar year, and the accessible SVG
   chart supports keyboard/pointer zoom, pan, reset, exact UTC tooltips, a text summary, and an
   equivalent daily table. A later partial may provisionally advance the value, and the next complete
   must correct it down. Verify an explicit complete zero inside an outer partial snapshot corrects a
@@ -154,13 +154,30 @@
   partial entry cannot. Verify v4 still rejects the older range and applies a collector error only
   at its exact observed sequence. Re-run v2-v4 pairing and usage compatibility scenarios, including
   replacement of an unsequenced pending v2/v3 error by the current ordered observation.
+- On widths 320, 390, 720, 768, 906, and 1440 px, open Custom on the leaderboard, dashboard, and
+  public profile. Confirm the date form and its Apply button remain within the viewport and profile
+  submission stays on that profile. Check long handles in navigation and computer names with
+  disabled Sync explanations on tablet widths.
+- During an unfinished UTC week or month, confirm the chart and daily table end today without future
+  zeroes. Check a completed custom range, a one-day period, and a period with no reported usage or
+  incomplete-history warning. Empty charts have no inert controls; zoom, pan, and reset become
+  disabled at their bounds. Resizing must keep axis labels readable and pointer selection aligned,
+  without changing totals.
+- On touch screens, verify exact integers are visible in public profiles and leaderboard dialogs
+  without hover, small positive shares show `<1%`, and zero shows `0%`. Confirm Escape restores
+  focus to the originating leaderboard row and the empty-computer link opens, scrolls to, and
+  focuses the connection instructions.
+- Verify disabled Sync controls retain their reason. **Sync options** must explain preservation of
+  `VIBERACING_STATE_DIR` before offering commands, provide CLI sync, and restrict Browser Sync
+  recovery to the default installation. A custom-state installation must remain CLI-only after
+  repair/reconnect; no step should silently select `~/.viberacing` instead.
 - Pair fixtures or disposable accounts for each enabled adapter; do not use real transcripts in
   screenshots or issue reports.
 - Recheck the documented upstream versions before release. Antigravity Desktop is not supported.
-- With archive distribution, verify dashboard connect and repair use the exact same-origin versioned
-  tarball and uninstall uses the stable same-origin tarball. With npm distribution, verify all three
-  use fixed `@viberacing/connector@latest` commands without `--package`, `--allow-remote`, a
-  concrete version, or a downloads URL.
+- With archive distribution, verify dashboard connect, sync, and repair use the exact same-origin
+  versioned tarball and uninstall uses the stable same-origin tarball. With npm distribution, verify
+  all four use fixed `@viberacing/connector@latest` commands without `--package`, `--allow-remote`,
+  a concrete version, or a downloads URL.
 - Pair or retain an installation below `VIBERACING_MIN_CONNECTOR_VERSION` and verify its computer
   card and the signed-in home page show **Connector update required** on desktop and mobile. Confirm
   a version at or above the minimum does not advertise an unpublished bundled version. Run a newer
@@ -169,7 +186,7 @@
   interrupt its first reconciliation, and verify a later normal sync repeats the pending handler
   attestation. Only the matching server acknowledgement may clear pending state and update both
   notices. Finally downgrade and remove the owned handler after protocol 2 and verify later contacts
-  retract the all-agent action.
+  disable the all-agent action while retaining its explanation.
 - Confirm the macOS CI gate receives a synthetic custom-scheme URL through the real LaunchServices
   applet.
 - Confirm public copy reports eight counted agents after the Cursor server-first rollout.

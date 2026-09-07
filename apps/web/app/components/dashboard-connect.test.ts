@@ -10,7 +10,7 @@ describe("dashboard connection flow", () => {
 
   it("puts the connection action and instructions before account status", () => {
     expect(dashboard).toContain('id="connect-computer"');
-    expect(dashboard).not.toContain('href="#connect-computer"');
+    expect(dashboard).toContain("<ConnectComputerLink />");
     expect(dashboard.indexOf('className="panel connect-disclosure"')).toBeLessThan(
       dashboard.indexOf('<section className="summary-grid"'),
     );

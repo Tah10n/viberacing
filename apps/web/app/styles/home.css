@@ -98,6 +98,10 @@
   align-items: center;
 }
 
+.hero-guest .meta-value {
+  white-space: normal;
+}
+
 .hero-race {
   display: flex;
   align-items: center;
@@ -479,4 +483,16 @@ body:has(.racer-profile-dialog[open]) {
 
 .standings-pagination .button:last-child {
   justify-self: end;
+}
+
+.standings-hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-muted-strong);
+  font-size: var(--text-sm);
+}
+
+.racer-profile-agents .exact-tokens {
+  grid-column: 1 / -1;
+  margin: calc(-1 * var(--space-2)) 0 var(--space-2);
+  text-align: right;
 }

@@ -1,10 +1,12 @@
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { PeriodSelector } from "../../components/period-selector";
 import { PageHeader, PageShell, Panel } from "../../components/ui";
 import { formatCompactTokens, formatExactTokens, publicProfile } from "@/lib/leaderboard";
 import {
   parseUsagePeriod,
+  utcToday,
   resolveUsagePeriod,
   usagePeriodRangeLabel,
   usagePeriodSearch,
@@ -37,6 +39,12 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
         eyebrow="Racer profile"
         title={`@${profile.handle}`}
       />
+      <PeriodSelector
+        basePath={`/u/${encodeURIComponent(profile.handle)}`}
+        period={period}
+        resolved={resolved}
+        today={utcToday(now)}
+      />
       <section className="score-card" aria-label={`${periodTitle} score`}>
         <div>
           <span>{periodTitle} rank</span>
@@ -47,7 +55,7 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
           <strong title={`${formatExactTokens(profile.total)} tokens`}>
             {formatCompactTokens(profile.total)}
           </strong>
-          <small>tokens</small>
+          <small className="exact-tokens">{formatExactTokens(profile.total)} tokens</small>
         </div>
       </section>
       <Panel>
@@ -64,9 +72,10 @@ export default async function ProfilePage({ params, searchParams }: ProfileProps
               <strong>{item.label}</strong>
               <span>{periodTitle} aggregate</span>
             </div>
-            <strong title={`${formatExactTokens(item.tokens)} tokens`}>
-              {formatCompactTokens(item.tokens)}
-            </strong>
+            <div className="profile-token-value">
+              <strong>{formatCompactTokens(item.tokens)}</strong>
+              <small className="exact-tokens">{formatExactTokens(item.tokens)} tokens</small>
+            </div>
           </div>
         ))}
         <p className="muted">Token totals are self-reported by local connectors.</p>

@@ -297,7 +297,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   ).toBeVisible();
   await page.goto("/dashboard");
   const usageChart = page.getByRole("figure", { name: "Tokens by day" });
-  await expect(usageChart.locator(".usage-values tbody tr")).toHaveCount(7);
+  const observedWeekDays = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  await expect(usageChart.locator(".usage-values tbody tr")).toHaveCount(observedWeekDays);
   await expect(page.locator(".summary-grid > div")).toHaveCount(4);
   const desktopSummaryColumns = await page
     .locator(".summary-grid")
@@ -321,13 +322,17 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     "page",
   );
   const monthChart = page.getByRole("figure", { name: "Tokens by day" });
-  const [year, month] = today.split("-").map(Number);
-  const daysInCurrentMonth = new Date(Date.UTC(year ?? 0, month ?? 0, 0)).getUTCDate();
-  await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(daysInCurrentMonth);
+  const observedMonthDays = Number(today.slice(8));
+  await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(observedMonthDays);
   const viewport = monthChart.locator(".usage-explorer-controls output");
   const fullMonthViewport = await viewport.textContent();
-  await monthChart.getByRole("button", { name: "Zoom in on usage chart" }).click();
-  await expect(viewport).not.toHaveText(fullMonthViewport ?? "");
+  const zoomIn = monthChart.getByRole("button", { name: "Zoom in on usage chart" });
+  if (observedMonthDays > 7) {
+    await zoomIn.click();
+    await expect(viewport).not.toHaveText(fullMonthViewport ?? "");
+  } else {
+    await expect(zoomIn).toBeDisabled();
+  }
   const chartCanvas = monthChart.locator(".usage-explorer-canvas");
   await chartCanvas.focus();
   await page.keyboard.press("ArrowRight");
@@ -602,6 +607,21 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     const updateReason = "Update or repair the connector and Browser Sync handler to enable Sync.";
     await expect(page.getByLabel("Accounts in your total").getByText(updateReason)).toHaveCount(0);
     await expect(page.getByLabel("Connected computers").getByText(updateReason)).toBeVisible();
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const computerNameWidth = await page.locator(".installation-controls").evaluate((controls) => {
+      const main = controls.parentElement?.querySelector(".device-main");
+      return main?.getBoundingClientRect().width ?? 0;
+    });
+    expect(computerNameWidth).toBeGreaterThan(150);
+    const recovery = page.getByLabel("Connected computers").locator(".sync-recovery");
+    await recovery.locator("summary").click();
+    await expect(recovery.getByRole("button", { name: "Copy repair command" })).toBeVisible();
+    await expect(recovery.getByRole("button", { name: "Copy sync command" })).toBeVisible();
+    await expect(recovery).toContainText(
+      "Browser Sync is unavailable for custom state directories",
+    );
+    await expect(recovery.locator("pre code").nth(1)).toContainText("doctor --repair");
+    await page.setViewportSize({ width: 1280, height: 720 });
     await expect(page.locator(".connector-update")).toBeVisible();
     await featureDatabase.query(
       "UPDATE installations SET browser_sync_protocol = $1 WHERE id = $2",
@@ -640,6 +660,24 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await expect(page.locator(".hero-race")).toContainText("This week");
   await expect(page.locator(".hero-race")).toContainText("UTC");
 
+  for (const width of [320, 390, 720, 768, 906, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?period=custom&from=${today}&to=${today}`);
+    const bounds = await page.locator(".custom-period-form").evaluate((form) => {
+      const box = form.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        viewport: innerWidth,
+        page: document.documentElement.scrollWidth,
+      };
+    });
+    expect(bounds.left).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+    expect(bounds.page).toBeLessThanOrEqual(bounds.viewport);
+    await expect(page.getByRole("button", { name: "Apply range" })).toBeVisible();
+  }
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
@@ -656,7 +694,15 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.goto("/dashboard");
   await expect(page.locator(".connector-update")).toBeVisible();
-  await expect(page.locator(".usage-values tbody tr")).toHaveCount(7);
+  await expect(page.locator(".usage-values tbody tr")).toHaveCount(observedWeekDays);
+  await expect
+    .poll(() =>
+      page.locator(".usage-explorer-canvas svg").evaluate((svg) => {
+        const logicalWidth = Number(svg.getAttribute("viewBox")?.split(" ")[2]);
+        return Math.abs(svg.getBoundingClientRect().width - logicalWidth);
+      }),
+    )
+    .toBeLessThan(1);
   const mobileSummaryBoxes = await page.locator(".summary-grid > div").evaluateAll((elements) =>
     elements.map((element) => {
       const box = element.getBoundingClientRect();

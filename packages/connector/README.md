@@ -28,6 +28,19 @@ process-local deduplicated fallback. The plugin starts the stable local launcher
 immediately. It never reads or forwards a session ID, prompt, response, code, model, project path,
 working directory, or other event payload.
 
+If this installation uses `VIBERACING_STATE_DIR`, set it to the same value before running connect,
+sync, repair, or uninstall. Omitting it selects `~/.viberacing` instead of the intended
+installation.
+
+Sync the selected installation from the terminal:
+
+```bash
+npx --yes @viberacing/connector@latest sync
+```
+
+Browser Sync is unavailable for custom state directories. Use CLI sync with the original state
+directory; repairing or reconnecting cannot enable Browser Sync there.
+
 Refresh the installed runtime and repair owned hooks explicitly:
 
 ```bash
@@ -42,7 +55,7 @@ npx --yes @viberacing/connector@latest uninstall
 
 These are permanent `@latest` commands; a concrete version is never copied into onboarding. The
 installed runtime does not update silently. A self-hosted archive dashboard generates corresponding
-same-origin repair and uninstall commands.
+same-origin sync, repair, and uninstall commands.
 
 Discovery is independent of the directory where the command runs. Provider data comes only from
 documented token-store roots, supported environment overrides, Qwen's user-level settings, and roots
@@ -126,13 +139,16 @@ unacknowledged suffix. The 8 MiB bound fails closed rather than discarding unkno
 default state directory is used. The dashboard uses it only after that browser approved the same
 installation. A click starts the installed connector copy, claims a short-lived device-authenticated
 grant, and syncs either the selected account's sources or every active agent on that computer. The
-all-agent control appears only after `connect` or `doctor --repair` confirms a compatible installed
-runtime and handler. That confirmation is saved locally before the network request and retried on
-later connector contacts until the server acknowledges it. Running a newer package once with `npx`
-reports only that CLI version and does not claim that its runtime was installed. Later OS inspection
-also retracts the capability if the owned handler is downgraded or removed. The connector reports a
-safe result code and exits. Custom state roots continue to use `viberacing sync` and never replace
-the global handler.
+all-agent control stays visible when unavailable, with a reason and disabled state. It becomes
+usable only after the browser is linked and `connect` or `doctor --repair` confirms a compatible
+installed runtime and handler, subject to source-count and run-state checks. **Sync options**
+explains terminal sync for custom state directories and Browser Sync recovery for the default
+installation. That confirmation is saved locally before the network request and retried on later
+connector contacts until the server acknowledges it. Running a newer package once with `npx` reports
+only that CLI version and does not claim that its runtime was installed. Later OS inspection also
+retracts the capability if the owned handler is downgraded or removed. The connector reports a safe
+result code and exits. Custom state roots continue to use `viberacing sync` and never replace the
+global handler.
 
 `source add` works before the first connection. A random `clientSourceId`, normalized local root,
 collection method, surface, and user-provided safe label are stored only in local `sources.json`.

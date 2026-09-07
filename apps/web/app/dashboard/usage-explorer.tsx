@@ -29,8 +29,6 @@ interface Viewport {
   readonly start: number;
 }
 
-const chartWidth = 1_000;
-const chartHeight = 300;
 const plotLeft = 72;
 const plotRight = 18;
 const plotTop = 18;
@@ -41,6 +39,7 @@ export function usageChartPointerIndex(
   boundsLeft: number,
   boundsWidth: number,
   length: number,
+  chartWidth = 1_000,
 ): number {
   const viewBoxX = ((clientX - boundsLeft) / Math.max(1, boundsWidth)) * chartWidth;
   const ratio = Math.max(
@@ -86,6 +85,11 @@ function clampViewport(viewport: Viewport, length: number): Viewport {
 }
 
 export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageExplorerProps) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [{ width: chartWidth, height: chartHeight }, setChartSize] = useState({
+    width: 1_000,
+    height: 300,
+  });
   const [viewport, setViewport] = useState<Viewport>({ size: Math.max(1, days.length), start: 0 });
   const [hovered, setHovered] = useState<number | null>(null);
   const drag = useRef<{ pointerId: number; start: number; x: number } | null>(null);
@@ -118,6 +122,20 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
     [],
   );
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry === undefined || entry.contentRect.width <= 0 || entry.contentRect.height <= 0)
+        return;
+      setChartSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(canvas);
+    return () => {
+      observer.disconnect();
+    };
+  }, [status]);
+
   function changeZoom(factor: number) {
     if (days.length === 0) return;
     setViewport((current) => {
@@ -149,7 +167,13 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
 
   function pointerIndex(event: PointerEvent<SVGSVGElement>): number {
     const bounds = event.currentTarget.getBoundingClientRect();
-    return usageChartPointerIndex(event.clientX, bounds.left, bounds.width, visible.length);
+    return usageChartPointerIndex(
+      event.clientX,
+      bounds.left,
+      bounds.width,
+      visible.length,
+      chartWidth,
+    );
   }
 
   function onPointerDown(event: PointerEvent<SVGSVGElement>) {
@@ -194,6 +218,16 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
     return [...new Set([0, Math.floor((visible.length - 1) / 2), visible.length - 1])];
   }, [visible.length]);
 
+  if (status === "no-data") {
+    return (
+      <figure aria-labelledby="usage-chart-title" className="usage-explorer">
+        <p className="usage-explorer-empty">
+          No exact usage was reported for this period. Connect an agent or choose another period.
+        </p>
+      </figure>
+    );
+  }
+
   return (
     <figure aria-labelledby="usage-chart-title" className="usage-explorer">
       <figcaption>
@@ -203,6 +237,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
         <div className="usage-explorer-controls" role="group" aria-label="Chart viewport controls">
           <button
             aria-label="Zoom in on usage chart"
+            disabled={bounded.size <= minimumSize}
             onClick={() => {
               changeZoom(0.65);
             }}
@@ -212,6 +247,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
           </button>
           <button
             aria-label="Zoom out of usage chart"
+            disabled={bounded.size >= days.length}
             onClick={() => {
               changeZoom(1.5);
             }}
@@ -221,6 +257,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
           </button>
           <button
             aria-label="Pan usage chart left"
+            disabled={bounded.start === 0}
             onClick={() => {
               pan(-Math.max(1, Math.round(bounded.size / 5)));
             }}
@@ -230,6 +267,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
           </button>
           <button
             aria-label="Pan usage chart right"
+            disabled={bounded.start + bounded.size >= days.length}
             onClick={() => {
               pan(Math.max(1, Math.round(bounded.size / 5)));
             }}
@@ -239,6 +277,7 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
           </button>
           <button
             aria-label="Reset usage chart view"
+            disabled={bounded.start === 0 && bounded.size >= days.length}
             onClick={() => {
               reset();
             }}
@@ -256,12 +295,10 @@ export function UsageExplorer({ days, periodLabel, rangeLabel, status }: UsageEx
           Partial current-year history. Available exact totals are shown.
         </p>
       ) : null}
-      {status === "no-data" ? (
-        <p className="usage-explorer-empty">No exact usage was reported for this period.</p>
-      ) : null}
       <div
         aria-label="Interactive daily token chart. Use arrow keys to pan, plus and minus to zoom, and Home to reset."
         className="usage-explorer-canvas"
+        ref={canvasRef}
         onKeyDown={onKeyDown}
         role="group"
         tabIndex={0}

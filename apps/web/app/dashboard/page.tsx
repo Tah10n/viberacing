@@ -5,8 +5,11 @@ import {
   connectorConnectCommand,
   connectorRepairCommand,
   connectorUninstallCommand,
+  connectorSyncCommand,
 } from "@/lib/connector";
 import { Badge, PageHeader, PageShell, Panel } from "../components/ui";
+import { ConnectComputerLink } from "../components/connect-computer-link";
+import { SyncRecovery } from "../components/sync-recovery";
 import { CopyCommandButton } from "../components/copy-command-button";
 import { ConnectorUpdateNotice } from "../components/connector-update-notice";
 import { PeriodSelector } from "../components/period-selector";
@@ -34,14 +37,14 @@ import { localInstallationId, viewer } from "@/lib/session";
 import { sourcePeriodIncomplete, usageChartStatus } from "@/lib/history-coverage";
 import { accountMaxDailyTokensSql, accountMaxObservationIsEligibleSql } from "@/lib/usage-summary";
 import {
-  addUtcDays,
   parseUsagePeriod,
   resolveUsagePeriod,
   utcToday,
   usagePeriodRangeLabel,
   usagePeriodTitle,
 } from "@/lib/usage-period";
-import { UsageExplorer, type UsageExplorerDay } from "./usage-explorer";
+import { usageSeries } from "@/lib/usage-series";
+import { UsageExplorer } from "./usage-explorer";
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -121,13 +124,6 @@ interface DailyUsageRow {
   usage_date: string;
   tokens: string;
 }
-
-const fullDayFormatter = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-  year: "numeric",
-});
 
 function agentLabel(agent: string): string {
   return isSupportedAgent(agent) ? agentNames[agent] : agent;
@@ -252,23 +248,6 @@ function AccountMatchHistory({
       </div>
     </details>
   );
-}
-
-function usageSeries(
-  from: string,
-  toExclusive: string,
-  usage: readonly DailyUsageRow[],
-): readonly UsageExplorerDay[] {
-  const totals = new Map(usage.map((entry) => [entry.usage_date, entry.tokens]));
-  const days: UsageExplorerDay[] = [];
-  for (let date = from; date < toExclusive; date = addUtcDays(date, 1)) {
-    days.push({
-      date,
-      label: fullDayFormatter.format(new Date(`${date}T00:00:00.000Z`)),
-      tokens: totals.get(date) ?? "0",
-    });
-  }
-  return days;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardProps) {
@@ -594,8 +573,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
     ),
   ]);
-  const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, dailyUsage);
-  const periodTotal = chartDays.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
+  const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, today, dailyUsage);
+  const periodTotal = dailyUsage.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
   const provenDatesByAccount = new Map<string, Set<string>>();
   for (const row of accountProvenDates) {
@@ -640,6 +619,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   const origin = publicOrigin().origin;
   const command = connectorConnectCommand(origin);
   const updateCommand = connectorRepairCommand(origin);
+  const syncCommand = connectorSyncCommand(origin);
   const uninstallCommand = connectorUninstallCommand(origin);
   const minimumVersion = minimumConnectorVersion();
   const installationSyncUnavailableReason = (installation: InstallationRow): string | null => {
@@ -1013,6 +993,14 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   <AccountControls
                     accountId={account.id}
                     syncUnavailableReason={accountSyncUnavailableReason(account)}
+                    recovery={
+                      <SyncRecovery
+                        repairCommand={updateCommand}
+                        connectCommand={command}
+                        syncCommand={syncCommand}
+                        computer="the computer that owns this agent account"
+                      />
+                    }
                   >
                     <SameOriginActionForm action="/api/accounts/rename">
                       <input name="accountId" type="hidden" value={account.id} />
@@ -1103,7 +1091,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
           {installations.length === 0 ? (
             <div className="empty-state">
               <h3>No computers connected</h3>
-              <p>Run the command below on each computer you want to include.</p>
+              <p>
+                <ConnectComputerLink /> to add its agents.
+              </p>
             </div>
           ) : (
             <div className="device-list">
@@ -1129,6 +1119,16 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
                   <div className="installation-controls">
                     <InstallationSyncControl
                       syncUnavailableReason={installationSyncUnavailableReason(item)}
+                      recovery={
+                        item.source_count > maximumSourcesPerInstallation ? undefined : (
+                          <SyncRecovery
+                            repairCommand={updateCommand}
+                            connectCommand={command}
+                            syncCommand={syncCommand}
+                            computer={item.name}
+                          />
+                        )
+                      }
                     />
                     <SameOriginActionForm action="/api/connections/revoke">
                       <input name="installationId" type="hidden" value={item.id} />

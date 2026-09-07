@@ -1,170 +1,168 @@
 # Vibe Racing
 
+**A privacy-first leaderboard for coding-agent token usage.**
+
 [![CI](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml/badge.svg)](https://github.com/Tah10n/viberacing/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/Tah10n/viberacing)](LICENSE)
 
-Vibe Racing is a fast period-aware leaderboard for exact, self-reported coding-agent token usage.
-Week, Month, All time, and Custom views all use UTC boundaries; **All time** means January 1 through
-today in the current UTC calendar year, not lifetime usage. One GitHub user can connect several
-computers, several agents, and several accounts of the same agent.
+[Open the leaderboard](https://viberacing.up.railway.app) · [Get started](#get-started) ·
+[Agent support](docs/AGENT_SUPPORT.md) · [Run locally](#run-locally) ·
+[Documentation](#documentation)
 
-The production shape stays deliberately small: one Next.js service, one PostgreSQL database, and one
-local connector. Usage sync contains only UTC dates and aggregate token counters. A separate,
-strictly allowlisted diagnostics channel can send fixed machine codes and state transitions—never
-prompts, responses, code, paths, repositories, hostnames, provider identities, credentials, model
-names, exception messages, stack traces, or costs.
+![Vibe Racing — privacy-first coding-agent token leaderboard](docs/assets/social-preview.png)
 
-Exact collection paths exist for Codex, Claude Code, OpenCode, Kimi Code, Qwen Code, Antigravity
-CLI, Gemini CLI, and Cursor Desktop + CLI. Antigravity Desktop is not supported. See
-[agent support](docs/AGENT_SUPPORT.md) and [ranking semantics](docs/RANKING_SEMANTICS.md).
+Connect your coding agents, compare token totals, and follow your usage over time. One GitHub
+account can bring together multiple computers and agent accounts. The connector reads exact local
+token counters and sends aggregate totals; your conversations and code stay on your computer.
 
-Connector 0.7.1 implements Cursor as the eighth agent. Desktop and interactive CLI are captured
-automatically through owned hooks after connection; headless runs use
-`viberacing run cursor -- <agent arguments>`. The same local account shares one logical source
-across Desktop and CLI, while different accounts remain separate. Machine-local sources add with
-`source_sum`. Exact history starts with hook installation; earlier usage remains partial. The UTC
-day is fixed at first capture, using the approved capture-time policy. Reasoning and subagents are
-already included in the aggregate run usage. Unknown schemas fail closed. Direct headless runs, Tab,
-Bugbot, Cloud Agents and SDK usage are outside this support contract.
+Rankings are self-reported and just for fun. They do not measure productivity, quality, or cost.
 
-The [Cursor evidence and rollout gates](docs/CURSOR_EVIDENCE.md) distinguish accepted exact-source
-evidence and implementation. Authenticated A → B → A passed: A reused its original logical source, B
-used a second source, and replay did not change either total. New stable Desktop 3.x releases from
-3.18.25 and dated CLI builds from 2026.09.02 are accepted when their events satisfy the exact
-capture contract. Publication follows the reviewed server-first release sequence.
+## Get started
 
-Supported lifecycle hooks mark only their owning local source dirty; one OpenCode idle event marks
-all active mapped OpenCode databases for that installation together. One short-lived detached
-scheduler coalesces source events and sends at most about one automatic batch every two minutes; it
-drains saved payloads first and runs collectors only for currently dirty sources. There is no retry
-loop: one dirty generation gets one automatic attempt, and a later hook or manual sync retries saved
-failures. There is no daemon, watcher, or polling loop. Manual `viberacing sync` and the first
-successful `connect` still collect every active source immediately. Every sync first refreshes the
-rolling range of at most 31 UTC dates. Connector 0.6.0 then backfills the rest of the current UTC
-year in resumable, newest-first chunks of at most 31 dates: automatic and browser Sync drain bounded
-pending payloads and collect at most one new historical range. `connect` and manual
-`viberacing sync` continue through every eligible chunk. If rolling ranges are separated by an
-offline interval, the server retains the missing UTC dates and protocol v5 returns a resumable gap
-cursor; later Sync drains it with the same limits. Explicit `viberacing sync --full` starts a full
-current-year rescan even after a terminal `complete` or `partial` pass. Acknowledged cursors make
-retries idempotent and survive interruption. Later JSONL reads resume from safe byte offsets.
-Automatic hooks suppress an unchanged normalized rolling snapshot. Manual and browser-triggered Sync
-still submit a content-equivalent rolling confirmation so the dashboard's **Last sync** time
-advances after a successful check.
+You need **Node.js 24 LTS**, a GitHub account, and usage from a supported agent.
 
-Codex marks its physical profile dirty after each completed turn. One `CODEX_HOME` can safely track
-up to eight ChatGPT logins: each collection reads local `tokens.account_id` before starting App
-Server, brackets `account/usage/read` with two non-refreshing `account/read` calls, and reads the
-local ID again afterward. It accepts the snapshot only when both local IDs and both normalized,
-non-null App Server emails match. The connector derives an `acct1_…` HMAC locally from email plus
-account ID and a separate random salt that survives `reset-installation`; none of those values is
-sent to Vibe Racing. Either value alone is insufficient to distinguish an account. A newly observed
-stable login gets a generic logical source, while API-key, Bedrock, identifier-unavailable, and
-mid-collection account states fail closed. While its account-wide App Server daily buckets lag, Sync
-uses every exact locally observed non-overlapping daily total after the newest authoritative bucket
-as a partial value, including across UTC rollovers. The dashboard and ranking therefore update
-immediately; later App Server buckets may correct each value up or down. Provider-recorded local
-input/output/cache/reasoning counters remain separately visible for a single-login profile; they are
-hidden once a physical profile has multiple logical accounts because the local transcript components
-are not account-scoped. Neither counter is estimated. One physical Codex profile has one Vibe Racing
-`Stop` hook, which runs only after the user reviews and trusts it through `/hooks`; `doctor` reports
-whether that hook is current or still needs review.
+1. Run this command on the computer whose usage you want to include:
 
-OpenCode automatic Sync uses one installation-owned global plugin at
-`$XDG_CONFIG_HOME/opencode/plugins` (default `~/.config/opencode/plugins`). `connect` or
-`doctor --repair` creates it, and OpenCode must be restarted once after a create or update. The
-plugin reacts primarily to `session.status` becoming `idle`, with `session.idle` as a two-second
-deduplicated fallback, then starts the stable local Vibe Racing launcher without waiting for Sync.
-It does not read or forward the session ID, prompt, response, code, model, project path, or event
-payload. Manual `viberacing sync` remains available, including when OpenCode is killed before idle.
+   ```bash
+   npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
+   ```
 
-Connector 0.6.0 uses protocol v5 to distinguish rolling snapshots from bounded current-year history
-chunks and to reconcile each source's `pending`, `complete`, or `partial` backfill status. It keeps
-durable unresolved UTC dates when a partial snapshot omits a day or rolling windows leave a gap, and
-returns the bounded gap to the connector until an acknowledged complete backfill closes it. It keeps
-the v4 sequence rule for allowlisted collector errors. The server remains wire-compatible with
-protocol v2, v3, and v4 during the rollout, so older connectors continue syncing recent usage but do
-not import the current year's earlier dates. A saved unsequenced v2/v3 collector error is replaced
-by a fresh ordered observation on its next in-scope collection instead of being relabeled.
-Account-wide sources are automatically matched only after seven complete positive days spanning at
-least a week, with three distinct totals and no complete contradiction; manual reassignment and Undo
-stay available.
+2. Sign in with GitHub in the browser that opens, then review and approve the detected agents.
+3. The first sync runs automatically. Open your dashboard to inspect totals and connected computers.
 
-Qwen Code's user-level `SessionEnd` hook fires for interactive TUI exits and is wired into ACP, but
-Qwen Code 0.21.12 does not emit that event after headless `qwen -p` runs. Headless usage is still
-recorded exactly and is collected by `viberacing sync` or the next supported lifecycle trigger.
+No global npm installation is required. The connector keeps its working copy in local Vibe Racing
+state. Repeat the setup on another computer to include its agents. For a self-hosted instance, use
+the exact command shown by its dashboard.
 
-After a current connector is paired in a browser, that browser can launch an on-demand
-`viberacing://` handler to sync either one agent account or every active agent on the same computer.
-The all-agent action appears only after the connector confirms that the installed OS handler
-supports it. The handler exits after the bounded sync; it does not install a resident process or let
-the web service read local histories.
+**After connecting:** Codex users must review and trust the Vibe Racing `Stop` hook through `/hooks`
+before automatic sync can run. OpenCode users should restart OpenCode once when the connector
+reports a plugin create or update. Manual sync remains available in both cases.
 
-## Connector distribution
+## What you can track
 
-After the verified npm rollout, the official Vibe Racing service uses one permanent command:
+- **Your place in the leaderboard**, with an agent breakdown and public racer profile.
+- **Week, Month, This year, or Custom**, using the same UTC period throughout the app.
+- **Daily usage**, with a zoomable chart and an exact-value table. Future days are not drawn as
+  zero.
+- **Multiple computers and accounts**, with account-wide totals deduplicated and machine-local
+  histories added according to each agent's collection method.
 
-```bash
-npx --yes @viberacing/connector@latest connect --origin https://viberacing.up.railway.app
-```
+`This year` means January 1 through today in the current UTC calendar year. Custom ranges stay
+within that year through today. Full token values are visible in racer profiles and their dialogs;
+small positive agent shares display as `<1%`.
 
-No global npm installation is performed. `npx` starts the official package, and the connector keeps
-its working copy only in local Vibe Racing state. Update or repair that copy explicitly with
-`npx --yes @viberacing/connector@latest doctor --repair`; uninstall it with
-`npx --yes @viberacing/connector@latest uninstall`. It never updates silently.
+### Supported agents
 
-After connecting Codex, open Codex CLI, run `/hooks`, inspect the Vibe Racing `Stop` command, and
-trust it. Until that one-time review is complete, manual Sync remains available but automatic Sync
-after a completed turn does not run. A full uninstall and reconnect creates a new source identity
-and therefore requires a new review; routine `doctor --repair` keeps the trusted command identity
-stable.
+| Agent       | Supported surface     | Setup or limitation                                                                                      |
+| ----------- | --------------------- | -------------------------------------------------------------------------------------------------------- |
+| Codex       | CLI + Desktop account | Review the `Stop` hook; account switching requires file-backed authentication.                           |
+| Claude Code | CLI                   | Collects exact local usage; automatic sync uses the `Stop` hook.                                         |
+| OpenCode    | CLI                   | Restart once after the owned plugin is created or updated.                                               |
+| Kimi Code   | CLI                   | Detects the current token store; legacy roots can be added explicitly.                                   |
+| Qwen Code   | CLI                   | Headless usage needs manual sync or a later supported lifecycle trigger.                                 |
+| Antigravity | Wrapped CLI sessions  | Use `viberacing run antigravity`; Desktop and earlier direct sessions are not included.                  |
+| Gemini CLI  | CLI                   | Collects exact local usage; automatic sync uses the `SessionEnd` hook.                                   |
+| Cursor      | Desktop + CLI         | Automatic interactive hooks; headless runs use `viberacing run cursor`. History starts at capture setup. |
 
-After connecting an OpenCode source, restart OpenCode once when the connector asks. Multiple Vibe
-Racing installations use separate plugin files, and custom `VIBERACING_STATE_DIR` roots remain
-isolated. An unchanged OpenCode SQLite profile may be checked locally after idle, but fingerprint
-suppression prevents another usage payload.
+The [support matrix](docs/AGENT_SUPPORT.md) documents versions, discovery, account limits, and exact
+collection boundaries. The [connector guide](packages/connector/README.md) covers wrapper commands
+and source configuration. See [Cursor evidence](docs/CURSOR_EVIDENCE.md) for its verified capture
+contract and rollout gates.
 
-Self-hosted deployments default to a same-origin connector archive and show their exact command on
-the dashboard. Set `VIBERACING_CONNECTOR_DISTRIBUTION=npm` only after the public package is
-verified, or retain `archive` to avoid any runtime dependency on the public npm registry. The
-setting is made once, not changed for each release; there are no connector package-name or version
-variables. Neither distribution changes the self-reported ranking model or sends prompts, responses,
-code, repositories, paths, provider credentials, model names, or costs.
+## Sync and maintenance
 
-## Local production preview
+Supported agent hooks schedule automatic sync, coalescing events into about one batch every two
+minutes. Manual sync collects all active sources immediately and continues through available
+current-year history. Coverage varies by agent; unavailable history is marked partial.
 
-Requirements: Node 24 LTS, pnpm 11 through Corepack, Docker Compose, curl, and a GitHub OAuth app.
+If you connected with **`VIBERACING_STATE_DIR`**, set it to the same value before every command
+below. Omitting it selects the default installation in `~/.viberacing` instead.
 
-1. Copy `.env.example` to `apps/web/.env.local` and add the OAuth client ID and secret.
-2. Configure the OAuth app homepage as `http://localhost:3000` and callback as
-   `http://localhost:3000/api/auth/github/callback`. Device Flow is not needed.
-3. Start the production image and PostgreSQL:
+| Action                                                     | Command for the official service                         |
+| ---------------------------------------------------------- | -------------------------------------------------------- |
+| Sync now                                                   | `npx --yes @viberacing/connector@latest sync`            |
+| Retry a full current-year import                           | `npx --yes @viberacing/connector@latest sync --full`     |
+| Update the installed runtime and repair owned integrations | `npx --yes @viberacing/connector@latest doctor --repair` |
+| Remove an installation and its owned local integrations    | `npx --yes @viberacing/connector@latest uninstall`       |
+
+Dashboard Sync buttons stay visible when unavailable and explain why they are disabled. Browser Sync
+requires that browser to be linked to the computer and a compatible installed handler. Open **Sync
+options** for the appropriate terminal or recovery command.
+
+Browser Sync is unavailable for custom state directories. Use CLI sync with the original
+`VIBERACING_STATE_DIR`; repair or reconnect cannot enable Browser Sync there. For the default
+installation, repair the handler and reconnect in the browser you want to use when needed.
+
+Self-hosted dashboards can provide equivalent same-origin archive commands. See
+[deployment and distribution](docs/DEPLOYMENT.md#connector-distribution-and-publication).
+
+## Privacy and ranking
+
+Usage uploads contain UTC dates and aggregate token counters. A separate, strictly allowlisted
+diagnostics channel can send fixed machine codes and state transitions.
+
+**Never uploaded:** prompts, responses, code, transcripts, repository names, local paths, hostnames,
+provider identities or credentials, model names, costs, exception messages, or stack traces.
+
+Vibe Racing uses one Next.js service, one PostgreSQL database, and one local connector. The
+connector does not install a resident daemon or polling service. Rankings grant no rewards,
+permissions, or access. Read the [privacy boundary](docs/PRIVACY.md),
+[ranking rules](docs/RANKING_SEMANTICS.md), and [architecture](docs/ARCHITECTURE.md) for the
+details.
+
+## Run locally
+
+Development also requires **pnpm 11.7 through Corepack**, **Docker Compose**, and a GitHub OAuth
+app. Run the following from the repository root:
 
 ```bash
-corepack pnpm local:up
+corepack pnpm install --frozen-lockfile
+cp .env.example apps/web/.env.local
 ```
 
-The command waits for `/ready`. The web app is at `http://localhost:3000`; PostgreSQL is exposed
-only at `127.0.0.1:55432`. Pair the local connector with:
+Fill in the OAuth client ID and secret in `apps/web/.env.local`. Configure the OAuth app with:
+
+| Setting  | Local value                                      |
+| -------- | ------------------------------------------------ |
+| Homepage | `http://localhost:3000`                          |
+| Callback | `http://localhost:3000/api/auth/github/callback` |
+
+Start only PostgreSQL, then run the app with live reloading:
+
+```bash
+docker compose up -d db
+corepack pnpm db:migrate
+corepack pnpm dev
+```
+
+The app runs at `http://localhost:3000`; PostgreSQL is exposed only at `127.0.0.1:55432`. GitHub
+Device Flow is not needed. To pair a connector from this checkout:
 
 ```bash
 node packages/connector/bin/viberacing.mjs connect --origin http://localhost:3000
 ```
 
-Useful commands:
+For a production-container preview, stop the dev server and run `corepack pnpm local:up` instead; it
+starts both services and waits for `/ready` (requires `curl`). Before switching back to live
+reloading, run `corepack pnpm local:down` to release port 3000.
 
-```bash
-corepack pnpm local:test   # isolated HTTP/SQL end-to-end scenarios
-corepack pnpm local:down   # stop services; retain the database volume
-corepack pnpm local:reset  # explicitly delete only the local Vibe Racing volume and restart
-corepack pnpm verify       # privacy, format, lint, types, unit tests, production build
-```
+| Development task                                         | Command                     |
+| -------------------------------------------------------- | --------------------------- |
+| Full repository checks and production build              | `corepack pnpm verify`      |
+| Synthetic HTTP/SQL scenarios against the local stack     | `corepack pnpm local:test`  |
+| Stop the local stack and retain its database             | `corepack pnpm local:down`  |
+| Delete the local Vibe Racing database volume and restart | `corepack pnpm local:reset` |
 
-The local scenario creates and removes synthetic users. See [deployment](docs/DEPLOYMENT.md) and the
-[production checklist](docs/PRODUCTION_CHECKLIST.md) before inviting users.
+## Documentation
 
-Reference: [Architecture](docs/ARCHITECTURE.md) · [Privacy](docs/PRIVACY.md) ·
-[Security policy](SECURITY.md) · [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) ·
-[Governance](GOVERNANCE.md) · [Changelog](CHANGELOG.md) · [Releasing](docs/RELEASING.md)
+| You want to…                                      | Read                                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Configure agents, accounts, and CLI commands      | [Connector guide](packages/connector/README.md) · [Agent support](docs/AGENT_SUPPORT.md)                                         |
+| Understand totals, corrections, and deduplication | [Ranking semantics](docs/RANKING_SEMANTICS.md)                                                                                   |
+| Understand storage, protocols, and privacy        | [Architecture](docs/ARCHITECTURE.md) · [Privacy](docs/PRIVACY.md)                                                                |
+| Deploy, verify, or troubleshoot the service       | [Deployment](docs/DEPLOYMENT.md) · [Production checklist](docs/PRODUCTION_CHECKLIST.md) · [Observability](docs/OBSERVABILITY.md) |
+| Contribute or publish a release                   | [Contributing](CONTRIBUTING.md) · [Releasing](docs/RELEASING.md) · [Changelog](CHANGELOG.md)                                     |
+| Get help or report a vulnerability                | [Support](SUPPORT.md) · [Security policy](SECURITY.md)                                                                           |
 
-Licensed under Apache-2.0.
+Licensed under [Apache-2.0](LICENSE). See [Governance](GOVERNANCE.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md) for project participation.

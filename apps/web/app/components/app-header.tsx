@@ -49,7 +49,7 @@ export function AppHeader({ handle }: AppHeaderProps) {
         ) : (
           <>
             <Link aria-current={currentPage(pathname, "account")} href="/dashboard">
-              @{handle}
+              <span className="nav-account-name">@{handle}</span>
             </Link>
             <SameOriginActionForm action="/api/auth/logout">
               <button className="link-button" type="submit">

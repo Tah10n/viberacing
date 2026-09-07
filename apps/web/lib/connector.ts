@@ -59,6 +59,13 @@ export function connectorRepairCommand(origin: string): string {
     : archiveCommand(safeOrigin, connectorArchiveName(), "doctor --repair");
 }
 
+export function connectorSyncCommand(origin: string): string {
+  const safeOrigin = commandOrigin(origin);
+  return connectorDistribution() === "npm"
+    ? `${npmNpxPrefix} sync`
+    : archiveCommand(safeOrigin, connectorArchiveName(), "sync");
+}
+
 export function connectorUninstallCommand(origin: string): string {
   const safeOrigin = commandOrigin(origin);
   return connectorDistribution() === "npm"

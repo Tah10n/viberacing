@@ -312,11 +312,6 @@
     justify-content: flex-start;
   }
 
-  .custom-period-form {
-    right: auto;
-    left: 0;
-  }
-
   .usage-explorer-controls output {
     width: 100%;
     margin-left: 0;

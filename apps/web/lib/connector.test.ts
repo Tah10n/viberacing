@@ -4,6 +4,7 @@ import {
   connectorConnectCommand,
   connectorNpmPackage,
   connectorRepairCommand,
+  connectorSyncCommand,
   connectorUninstallCommand,
 } from "./connector";
 
@@ -20,7 +21,7 @@ afterEach(() => {
 describe("connector commands", () => {
   const origin = "https://viberacing.example";
 
-  it("uses the fixed latest npm package for connect, repair, and uninstall", () => {
+  it("uses the fixed latest npm package for connect, repair, sync, and uninstall", () => {
     process.env.VIBERACING_CONNECTOR_DISTRIBUTION = "npm";
 
     expect(connectorNpmPackage).toBe("@viberacing/connector");
@@ -30,6 +31,7 @@ describe("connector commands", () => {
     expect(connectorRepairCommand(origin)).toBe(
       "npx --yes @viberacing/connector@latest doctor --repair",
     );
+    expect(connectorSyncCommand(origin)).toBe("npx --yes @viberacing/connector@latest sync");
     expect(connectorUninstallCommand(origin)).toBe(
       "npx --yes @viberacing/connector@latest uninstall",
     );
@@ -41,6 +43,7 @@ describe("connector commands", () => {
     for (const command of [
       connectorConnectCommand(origin),
       connectorRepairCommand(origin),
+      connectorSyncCommand(origin),
       connectorUninstallCommand(origin),
     ]) {
       expect(command).toContain("@viberacing/connector@latest");
@@ -53,7 +56,7 @@ describe("connector commands", () => {
     }
   });
 
-  it("keeps the versioned same-origin archive fallback for connect and repair", () => {
+  it("keeps the versioned same-origin archive fallback for connect, repair, and sync", () => {
     process.env.VIBERACING_CONNECTOR_DISTRIBUTION = "archive";
     const archive = `${origin}/downloads/viberacing-connector-${bundledConnectorVersion}.tgz`;
 
@@ -62,6 +65,9 @@ describe("connector commands", () => {
     );
     expect(connectorRepairCommand(origin)).toBe(
       `npx --allow-remote=all --yes --prefer-online --package ${archive} -- viberacing doctor --repair`,
+    );
+    expect(connectorSyncCommand(origin)).toBe(
+      `npx --allow-remote=all --yes --prefer-online --package ${archive} -- viberacing sync`,
     );
   });
 
@@ -85,6 +91,7 @@ describe("connector commands", () => {
         for (const command of [
           connectorConnectCommand,
           connectorRepairCommand,
+          connectorSyncCommand,
           connectorUninstallCommand,
         ]) {
           expect(() => command(unsafeOrigin)).toThrow(

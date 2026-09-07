@@ -2,8 +2,8 @@
 
 The leaderboard measures exact token volume reported by paired local connectors for one selected UTC
 period. **Week** is the current Monday-Sunday UTC week, **Month** is the current UTC calendar month,
-**All time** is January 1 through today in the current UTC calendar year, and **Custom** is an
-inclusive date range restricted to that same year through today. “All time” never means lifetime
+**This year** is January 1 through today in the current UTC calendar year, and **Custom** is an
+inclusive date range restricted to that same year through today. “This year” never means lifetime
 usage. It does not measure cost, requests, productivity, output quality, or work value. A
 user-controlled machine can alter its local data, so results are self-reported rather than
 cryptographically verified.
@@ -58,6 +58,15 @@ Ranks use SQL `dense_rank` by selected-period total descending, so ties share a 
 within a tie is deterministic by case-folded handle and user ID. Public profiles, leaderboard pages,
 and the signed-in dashboard resolve the same validated half-open UTC range and sum the same
 `daily_agent_usage` rows. Changing period never changes source ownership or correction semantics.
+
+The dashboard chart and its daily table end at the current UTC day even when the selected week or
+month extends further. Future dates are not rendered as zero usage. A period with no reported usage
+and no incomplete-history warning shows an empty-state explanation instead of an interactive chart.
+Past missing dates retain the existing chart zero-fill behavior; coverage warnings still distinguish
+partial history. Chart zoom and pan affect only the viewport, never period totals or the daily
+table. Public profiles offer the same period selector, and full integer totals remain visible
+alongside compact values in profiles and leaderboard dialogs. Positive agent shares below one
+percent display as `<1%`; a true zero remains `0%`.
 
 ## Corrections
 

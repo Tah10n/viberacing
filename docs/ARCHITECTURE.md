@@ -113,7 +113,7 @@ pending snapshot is rewritten to `server + 1` and retried once; there is no unbo
 Accepted updates rebuild only affected `(UTC date, user, agent)` rows in `daily_agent_usage`.
 Leaderboard, public profile, and dashboard reads resolve one shared half-open UTC period and sum the
 same daily rows. Week means the current Monday-Sunday UTC week, Month means the current UTC calendar
-month, All time means January 1 through today in the current UTC year, and Custom is restricted to
+month, This year means January 1 through today in the current UTC year, and Custom is restricted to
 that same year through today. SQL `numeric(30,0)` values remain decimal strings at application
 boundaries. Within an account, account-wide sources use only complete observations tied at the
 newest complete `updated_at`, plus provisional observations accepted later than that boundary; a
@@ -217,9 +217,9 @@ five seconds after a claim and has a separate authenticated per-user quota. A re
 claim stores only a terminal `busy` result under its opaque request ID so the originating dashboard
 stops polling promptly; these rejected rows do not extend the installation cooldown. Pairing
 enforces the protocol-wide maximum of 32 active sources per installation; an oversized legacy
-installation does not expose the all-agent action or consume a grant. Account-scoped runs retain
-their account owner, while an installation-scoped run is owned only by the installation and survives
-deletion of any one account.
+installation shows a disabled all-agent action with the source-limit reason and cannot consume a
+grant. Account-scoped runs retain their account owner, while an installation-scoped run is owned
+only by the installation and survives deletion of any one account.
 
 The connector owns only registrations marked with `viberacing-browser-handler-v1`. Linux uses an XDG
 desktop handler, Windows uses an owner-marked per-user registry key, and macOS uses a signed
@@ -228,6 +228,12 @@ replacement is staged beside the target app, validated and signed before an atom
 back the prior owned app if registration fails. Foreign handlers are never overwritten. Connect and
 `doctor --repair` point each owned handler at the current versioned runtime; custom state roots do
 not mutate the normal user's global handler.
+
+Dashboard Sync controls remain visible when unavailable. Their explanations distinguish browser
+linking, handler compatibility, and source limits. Recovery guidance preserves the original
+`VIBERACING_STATE_DIR`: custom state roots use CLI sync, while handler repair and browser relinking
+apply to the default installation. The server never needs the local state path to render this
+guidance. Connect, sync, and repair use the same distribution-aware command helpers.
 
 A stale-aware atomic sync lock provides cross-process single flight. Normalized snapshot
 fingerprints include range, completeness, entries, and warning/error state; unchanged sources with

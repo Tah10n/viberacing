@@ -577,7 +577,7 @@
 .device-card {
   display: grid;
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr) 13.125rem auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 13.125rem);
   align-items: center;
   gap: var(--space-4) var(--space-5);
   border-bottom: 0.0625rem solid var(--color-line);
@@ -776,13 +776,18 @@
 }
 
 .installation-controls {
+  grid-column: 1 / -1;
+  min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-3);
 }
 
 .installation-sync-control {
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   justify-items: end;
   gap: var(--space-2);
@@ -1298,4 +1303,30 @@ pre {
   font-family: var(--font-mono);
   font-size: var(--text-body);
   text-transform: uppercase;
+}
+
+.device-main,
+.device-meta,
+.profile-token-value {
+  min-width: 0;
+}
+
+.profile-token-value {
+  text-align: right;
+}
+
+.profile-token-value > strong {
+  color: var(--color-action);
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  font-weight: 800;
+}
+
+.usage-explorer-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#connect-computer {
+  scroll-margin-top: var(--space-5);
 }

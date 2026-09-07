@@ -45,5 +45,10 @@ describe("leaderboard helpers", () => {
     expect(formatAgentShare("720", "1000")).toBe("72%");
     expect(formatAgentShare("1", "3")).toBe("33%");
     expect(formatAgentShare("0", "0")).toBe("0%");
+    expect(formatAgentShare("0", "1000")).toBe("0%");
+    expect(formatAgentShare("1", "1000")).toBe("<1%");
+    expect(formatAgentShare("9", "1000")).toBe("<1%");
+    expect(formatAgentShare("10", "1000")).toBe("1%");
+    expect(formatAgentShare("1", "999999999999999999999999999999")).toBe("<1%");
   });
 });
