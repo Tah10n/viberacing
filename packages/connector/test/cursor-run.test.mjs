@@ -23,8 +23,10 @@ after(async () => {
 const version = "2026.09.02-c22c1a3";
 const usage = { inputTokens: 10, outputTokens: 2, cacheReadTokens: 3, cacheWriteTokens: 4 };
 const modes = ["binding-first", "result-first", "failure", "malformed", "disconnect"];
-const wrapperTimeoutMs = 30_000;
 const hookTimeoutMs = cursorHookTimeoutSeconds * 1_000;
+// The provider invokes two hooks sequentially before wrapper finalization. Its outer
+// test process must cover both hook budgets plus startup and ledger/ACL cleanup.
+const wrapperTimeoutMs = 2 * hookTimeoutMs + 30_000;
 // Five sequential wrappers, three replay/binding hooks, plus setup and ledger ACL reads.
 // The aggregate test budget must not cancel the final scenarios on native Windows.
 const testTimeoutMs = modes.length * wrapperTimeoutMs + 3 * hookTimeoutMs + 120_000;
@@ -163,7 +165,9 @@ else {
         [options.launcher, "run", "cursor", "--", "canary-prompt"],
         { env: environment, encoding: "utf8", timeout: wrapperTimeoutMs },
       );
-      assert.equal(child.status, mode === "failure" ? 37 : 0, child.stderr);
+      assert.ifError(child.error);
+      assert.equal(child.signal, null, `${mode}: wrapper was terminated`);
+      assert.equal(child.status, mode === "failure" ? 37 : 0, `${mode}: ${child.stderr}`);
       assert.equal(child.stdout, stream);
       assert.equal(child.stderr, "provider-stderr-canary\n");
       const recorded = JSON.parse(await readFile(receipt));

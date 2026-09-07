@@ -10,6 +10,12 @@ experience or protocol.
 
 ### Added
 
+- Connector 0.7.1 accepts newer stable Cursor Desktop 3.x versions from 3.18.25 and dated CLI builds
+  from 2026.09.02 without a per-patch allowlist. Exact counter/identity/completion checks, dedup and
+  immutable UTC attribution remain mandatory. Desktop 3.19.13 live capture and newer-version
+  parser/CLI/sync regressions verify this compatibility policy. Old, malformed, prerelease and new
+  major Desktop versions remain unsupported.
+
 - Connector 0.7.0 implements Cursor as the eighth agent: automatic Desktop/interactive stop hooks,
   `viberacing run cursor` for headless runs, exact aggregate counters, local account separation and
   stable A → B → A routing. Desktop and CLI share one physical profile and one logical source per
@@ -19,10 +25,9 @@ experience or protocol.
   included in aggregate usage. Durable result/sessionEnd pairing, duplicate/conflict checks, owned
   hook repair, source reservations across reset, integrity proofs and acknowledged compaction retain
   exact captured history without raw provider content. Earlier history, current-day coverage and
-  known capture failures remain partial. This unreleased Draft implementation has passed
-  authenticated A → B → A: A reused its original logical source, B used a second source, and replay
-  did not change either total. Rollout remains blocked by review and server-first release
-  authorization.
+  known capture failures remain partial. Authenticated A → B → A passed: A reused its original
+  logical source, B used a second source, and replay did not change either total. Publication
+  follows the reviewed server-first release sequence.
 
 - Added an opt-in, repository-only Cursor evidence probe and a dated evidence report. The probe
   records only minimized schemas (HMACing unknown field names), exact integer counter candidates,

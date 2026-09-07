@@ -174,11 +174,13 @@
   applet.
 - Confirm public copy reports eight counted agents after the Cursor server-first rollout.
 
-## Cursor 0.7.0 release gate
+## Cursor 0.7.1 release gate
 
 - Authenticated A → B → A passed: A reused its original logical source, B used a second source, and
-  replay did not change either total. Keep the PR Draft for repeat review of the exact head; rollout
-  still requires separate server-first authorization. Retain the accepted provider evidence.
+  replay did not change either total. Retain the accepted provider evidence and require exact-head
+  review/CI before the separately authorized server-first rollout.
+- Verify newer stable Desktop 3.x and dated CLI builds through the strict event contract. Reject
+  incompatible majors, prereleases, malformed versions and incomplete or conflicting counters.
 - Validate Desktop one/two turns, interactive CLI, `viberacing run cursor`, aggregate subagents,
   abort, Desktop A + CLI A equality, replay, hook remove/repair, and privacy canaries using only
   minimized reports. Direct headless runs, Tab, Bugbot, Cloud Agents and SDK remain excluded.
@@ -190,7 +192,7 @@
   account Sync, protocol-v2 installation Sync, accessibility and exact-head required CI.
 - After separate approval, deploy the server registry, registration policy and migrations 012–014
   first; confirm `/ready` reports schema 014 and old connector 0.6.0 still syncs. Only then publish
-  the reviewed 0.7.0 connector. Merge, deployment, Railway changes, npm publication, tags and
+  the reviewed 0.7.1 connector. Merge, deployment, Railway changes, npm publication, tags and
   releases are separate actions; none is part of this implementation PR's authorization.
 
 ## GitHub and npm manual controls

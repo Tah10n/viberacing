@@ -56,19 +56,49 @@ test("Cursor stop accepts exact Desktop and interactive contracts without invent
   }
 });
 
-test("Cursor version gates reject every unverified release and build even with a matching field shape", () => {
+test("Cursor newer compatible releases retain the exact stop and headless contracts", () => {
+  for (const cursor_version of [
+    "3.18.26",
+    "3.19.13",
+    "3.20.0",
+    "3.100.0",
+    "2026.09.02-deadbee",
+    "2026.09.03-1234567",
+    "2027.01.01-abcdef0123456789",
+  ]) {
+    const parsed = parseCursorStop({ ...stop, cursor_version }, options);
+    assert.equal(parsed.event.tokens.totalTokens, "146");
+    assert.equal(parsed.event.capturedAt, capturedAt);
+    assert.equal(parsed.event.date, "2026-09-04");
+    if (cursor_version.startsWith("3.")) continue;
+    const usage = parseCursorResult(result, { ...options, version: cursor_version });
+    const binding = parseCursorSessionEnd(
+      { ...end, cursor_version },
+      { salt, capturedAt: later },
+    ).binding;
+    assert.equal(pairCursorHeadless(usage, binding).tokens.totalTokens, "146");
+    assert.equal(pairCursorHeadless(usage, binding).date, "2026-09-04");
+  }
+});
+
+test("Cursor version gates reject older, malformed, prerelease and incompatible version families", () => {
   for (const value of [
     "3.18.24",
-    "3.18.26",
-    "3.19.8",
-    "3.20.0",
+    "3.17.99",
     "2.99.99",
     "4.0.0",
     "3.19.0-beta",
     "3.019.0",
     "2026.09.01-c22c1a3",
-    "2026.09.02-deadbee",
-    "2026.09.03-c22c1a3",
+    "2026.09.03-invalid",
+    "2026.09.03-123456",
+    "2026.9.03-c22c1a3",
+    "2026.09.03-c22c1a3-beta",
+    "2027.02.29-c22c1a3",
+    "3.19.13+canary",
+    "3.19.13\n",
+    "3.9007199254740992.0",
+    `3.${"1".repeat(100)}.0`,
     "2026.02.30-c22c1a3",
     "2026.13.01-c22c1a3",
     "unknown",
@@ -80,6 +110,37 @@ test("Cursor version gates reject every unverified release and build even with a
   assert.throws(() => parseCursorResult(result, { ...options, version: "4.0.0" }), {
     diagnosticCode: "cursor_version_unsupported",
   });
+});
+
+test("Cursor newer versions cannot bypass incomplete counters, identities, status or aggregate conflicts", () => {
+  for (const cursor_version of ["3.19.13", "3.20.0", "2026.09.03-1234567"]) {
+    for (const patch of [
+      { input_tokens: undefined },
+      { output_tokens: 0.5 },
+      { cache_read_tokens: "30" },
+      { total_tokens: 145 },
+      { user_email: undefined },
+      { generation_id: undefined },
+      { status: "error" },
+    ]) {
+      assert.throws(() => parseCursorStop({ ...stop, cursor_version, ...patch }, options));
+    }
+  }
+  const newer = { ...options, version: "2026.09.03-1234567" };
+  for (const patch of [
+    { is_error: true },
+    { request_id: undefined },
+    { usage: { ...result.usage, cacheWriteTokens: undefined } },
+    { usage: { ...result.usage, totalTokens: 145 } },
+  ]) {
+    assert.throws(() => parseCursorResult({ ...result, ...patch }, newer));
+  }
+  assert.throws(() =>
+    parseCursorSessionEnd(
+      { ...end, cursor_version: newer.version, user_email: undefined },
+      options,
+    ),
+  );
 });
 
 test("Cursor exact counters reject missing, noncanonical, fractional and unsafe numbers", () => {

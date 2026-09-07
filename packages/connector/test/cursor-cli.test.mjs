@@ -342,8 +342,30 @@ test(
   },
 );
 
+test("Cursor executable discovery and result streaming accept newer dated CLI builds", async () => {
+  const fake = await fakeAgent(
+    `process.stdout.write(${JSON.stringify(bytes(result).toString())});`,
+  );
+  const newer = "2026.09.07-abcdef0";
+  await writeFile(fake.script, (await readFile(fake.script, "utf8")).replace(version, newer));
+  const executable = await resolveCursorExecutable({ environment: fake.environment });
+  assert.equal(executable.version, newer);
+  const outcome = await runCursorProcess({
+    ...fake,
+    executable,
+    args: [],
+    salt,
+    captureId: randomUUID(),
+    stdout: sink().stream,
+    stderr: sink().stream,
+    stdin: "ignore",
+  });
+  assert.equal(outcome.code, 0);
+  assert.deepEqual(outcome.result.payload.usage, result.usage);
+});
+
 test(
-  "Cursor version probe rejects unknown builds and bounds descendant processes",
+  "Cursor version probe rejects malformed versions and bounds descendant processes",
   { timeout: 15000 },
   async () => {
     const fake = await fakeAgent("process.exitCode = 0;");
