@@ -1,3 +1,4 @@
+import { readUsageObservation } from "@/lib/usage-observation";
 import {
   isSupportedConnectorProtocolVersion,
   maximumDailyTokens,
@@ -26,6 +27,7 @@ interface UsageBody {
 }
 
 interface SnapshotInput {
+  observationToken?: unknown;
   sourceId?: unknown;
   syncSequence?: unknown;
   rangeStart?: unknown;
@@ -54,6 +56,7 @@ interface SourceErrorInput {
 }
 
 interface InstallationRow {
+  observation_key_hash?: Buffer | null;
   id: string;
   user_id: string;
 }
@@ -82,6 +85,7 @@ interface ParsedEntry {
 }
 
 interface ParsedSnapshot {
+  observationToken?: string;
   sourceId: string;
   syncSequence: string;
   rangeStart: string;
@@ -119,7 +123,12 @@ const legacySnapshotKeys = new Set([
   "completeness",
   "entries",
 ]);
-const snapshotKeys = new Set([...legacySnapshotKeys, "kind", "historyYearComplete"]);
+const snapshotKeys = new Set([
+  ...legacySnapshotKeys,
+  "kind",
+  "historyYearComplete",
+  "observationToken",
+]);
 const legacyEntryKeys = new Set([
   "date",
   "totalTokens",
@@ -169,6 +178,11 @@ export function parseSnapshots(
       throw new UsageError(400, "invalid_snapshot");
     }
     const snapshot = raw as SnapshotInput;
+    if (
+      snapshot.observationToken !== undefined &&
+      (typeof snapshot.observationToken !== "string" || snapshot.observationToken.length !== 89)
+    )
+      throw new UsageError(400, "invalid_observation");
     const start = utcDate(snapshot.rangeStart);
     const end = utcDate(snapshot.rangeEnd);
     const kind = protocolVersion >= 5 ? snapshot.kind : "rolling";
@@ -266,6 +280,9 @@ export function parseSnapshots(
       };
     });
     return {
+      ...(snapshot.observationToken === undefined
+        ? {}
+        : { observationToken: snapshot.observationToken }),
       sourceId: snapshot.sourceId,
       syncSequence: snapshot.syncSequence,
       rangeStart: snapshot.rangeStart as string,
@@ -409,7 +426,7 @@ async function post(request: Request): Promise<Response> {
       );
     }
     const installations = await query<InstallationRow>(
-      `SELECT id::text, user_id::text FROM installations
+      `SELECT id::text, user_id::text, observation_key_hash FROM installations
         WHERE device_token_hash = $1 AND status = 'active' LIMIT 1`,
       [digest(token)],
     );
@@ -456,13 +473,17 @@ async function post(request: Request): Promise<Response> {
       return problem(400, "invalid_request");
     }
     const transactionResult = await transaction(async (client) => {
-      const lockedUser = await client.query<{ id: string }>(
-        "SELECT id::text FROM users WHERE id = $1 FOR UPDATE",
+      const lockedUser = await client.query<{
+        id: string;
+        usage_observation_cutover_at: Date | null;
+        usage_observation_latest_at: Date | null;
+      }>(
+        "SELECT id::text, usage_observation_cutover_at, usage_observation_latest_at FROM users WHERE id = $1 FOR UPDATE",
         [installation.user_id],
       );
       if (lockedUser.rows[0] === undefined) throw new UsageError(401, "unauthorized");
       const active = await client.query<InstallationRow>(
-        `SELECT id::text, user_id::text FROM installations
+        `SELECT id::text, user_id::text, observation_key_hash FROM installations
           WHERE id = $1 AND device_token_hash = $2 AND status = 'active'
           FOR UPDATE`,
         [installation.id, digest(token)],
@@ -506,6 +527,24 @@ async function post(request: Request): Promise<Response> {
           throw new UsageError(400, "unsupported_source");
         }
         if (BigInt(snapshot.syncSequence) <= BigInt(source.last_accepted_sync_sequence)) continue;
+        let observedAt = acceptedAt;
+        if (snapshot.observationToken !== undefined) {
+          const verified = lockedInstallation.observation_key_hash
+            ? readUsageObservation(
+                lockedInstallation.observation_key_hash,
+                snapshot.observationToken,
+                lockedUser.rows[0].usage_observation_latest_at ?? acceptedAt,
+              )
+            : null;
+          if (verified === null) throw new UsageError(400, "invalid_observation");
+          observedAt = verified;
+        } else if (source.agent_id === "codex") {
+          // Unticketed legacy deliveries cannot supersede observations collected
+          // after this account entered the server-ordered protocol.
+          const cutover = lockedUser.rows[0].usage_observation_cutover_at;
+          if (cutover !== null)
+            observedAt = new Date(Math.min(acceptedAt.getTime(), cutover.getTime() - 1));
+        }
         if (!componentTotalsAccepted(source.agent_id, snapshot.entries)) {
           throw new UsageError(400, "token_components_mismatch");
         }
@@ -557,8 +596,9 @@ async function post(request: Request): Promise<Response> {
             `DELETE FROM daily_usage
               WHERE source_id = $1
                 AND usage_date BETWEEN $2::date AND $3::date
-                AND NOT (usage_date::text = ANY($4::text[]))`,
-            [snapshot.sourceId, snapshot.rangeStart, snapshot.rangeEnd, dates],
+                AND NOT (usage_date::text = ANY($4::text[]))
+                AND updated_at <= $5::timestamptz`,
+            [snapshot.sourceId, snapshot.rangeStart, snapshot.rangeEnd, dates, observedAt],
           );
         }
         if (snapshot.entries.length > 0) {
@@ -622,8 +662,9 @@ async function post(request: Request): Promise<Response> {
                       AND (EXCLUDED.total_tokens < daily_usage.total_tokens
                         OR (EXCLUDED.total_tokens = daily_usage.total_tokens
                           AND daily_usage.completeness = 'complete'))
-                     THEN daily_usage.updated_at ELSE $3::timestamptz END`,
-            [snapshot.sourceId, JSON.stringify(snapshot.entries), acceptedAt],
+                     THEN daily_usage.updated_at ELSE $3::timestamptz END
+             WHERE daily_usage.updated_at <= $3::timestamptz`,
+            [snapshot.sourceId, JSON.stringify(snapshot.entries), observedAt],
           );
         }
         if (snapshot.kind === "rolling") {

@@ -102,6 +102,17 @@ experience or protocol.
 
 ### Fixed
 
+- Connector 0.7.3 preserves completed OpenCode usage after streaming, deduplicates provisional JSONL
+  tails against complete copies, and retries conflicting complete records without advancing their
+  checkpoint. A durable write intent recovers pending snapshots after a crash between local state
+  and outbox persistence.
+- Codex snapshots retain their server-issued observation order across delayed delivery and retries,
+  so an older computer cannot overwrite a newer correction. Observation-request failures isolate
+  Codex collection while other agents still sync; installation revocation and required updates
+  remain installation-wide. Deploy migration `015_usage_observation_order.sql` and its compatible
+  server before releasing connector 0.7.3. After a user's first ticket, older connectors can fill
+  missing history but cannot replace ticketed data; linked computers must upgrade for corrections.
+
 - Custom date forms, long navigation handles, and computer cards remain usable on narrow screens.
   Daily charts resize without stretching labels, omit future zeroes, and disable unavailable
   viewport controls. Empty periods without incomplete-history warnings show an explanation.

@@ -4651,6 +4651,7 @@ test("OpenCode ledger adds an account switch after deletion from the current dat
     Date.parse("2026-08-10T12:00:00Z"),
     JSON.stringify({
       role: "assistant",
+      time: { completed: 1786363201000 },
       tokens: { input: 10, output: 5, cache: { read: 3, write: 2 }, reasoning: 0 },
     }),
   );
@@ -4669,6 +4670,7 @@ test("OpenCode ledger adds an account switch after deletion from the current dat
     Date.parse("2026-08-11T12:00:00Z"),
     JSON.stringify({
       role: "assistant",
+      time: { completed: 1786363201000 },
       tokens: { input: 4, output: 3, cache: { read: 0, write: 0 }, reasoning: 0 },
     }),
   );
@@ -4736,23 +4738,27 @@ test("OpenCode confirmed 0.4.4 cutover counts a scan-to-accept race exactly once
   const { DatabaseSync } = await import("node:sqlite");
   const database = new DatabaseSync(path);
   database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "accepted-message",
-      Date.parse("2026-08-10T12:00:00Z"),
-      JSON.stringify({ role: "assistant", tokens: { input: 60, output: 40, total: 100 } }),
-    );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "accepted-message",
+    Date.parse("2026-08-10T12:00:00Z"),
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 60, output: 40, total: 100 },
+    }),
+  );
   const oldScan = parseOpenCodeMessages(
     database.prepare("SELECT id, time_created, data FROM message").all(),
   );
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "race-before-server-accept",
-      Date.parse("2026-08-11T12:00:00Z"),
-      JSON.stringify({ role: "assistant", tokens: { input: 4, output: 3, total: 7 } }),
-    );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "race-before-server-accept",
+    Date.parse("2026-08-11T12:00:00Z"),
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 4, output: 3, total: 7 },
+    }),
+  );
   database.close();
   const result = await adapterFor("opencode").collect(
     { dataPath: path },
@@ -4791,13 +4797,15 @@ test("OpenCode confirmed 0.4.4 cutover counts a scan-to-accept race exactly once
   );
 
   const afterCutover = new DatabaseSync(path);
-  afterCutover
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "post-cutover-message",
-      Date.parse("2026-08-12T12:00:00Z"),
-      JSON.stringify({ role: "assistant", tokens: { input: 5, output: 4, total: 9 } }),
-    );
+  afterCutover.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "post-cutover-message",
+    Date.parse("2026-08-12T12:00:00Z"),
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 5, output: 4, total: 9 },
+    }),
+  );
   afterCutover.close();
   const next = await adapterFor("opencode").collect(
     { dataPath: path },
@@ -4825,7 +4833,11 @@ test("OpenCode cutover ignores server clock skew and counts only locally unseen 
   database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
   const insert = database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)");
   const message = (total) =>
-    JSON.stringify({ role: "assistant", tokens: { input: total, output: 0, total } });
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: total, output: 0, total },
+    });
   const acceptedAt = Date.parse("2026-08-10T12:00:00Z");
   insert.run("legacy-minus-five", acceptedAt - 5 * 60_000, message(11));
   insert.run("legacy-plus-five", acceptedAt + 5 * 60_000, message(13));
@@ -4925,32 +4937,38 @@ test("OpenCode retains a conflicting tuple while committing unrelated new events
   const timestamp = Date.parse("2026-08-10T12:00:00Z");
   let database = new DatabaseSync(path);
   database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "stable-message",
-      timestamp,
-      JSON.stringify({ role: "assistant", tokens: { input: 10, output: 5, total: 15 } }),
-    );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "stable-message",
+    timestamp,
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 10, output: 5, total: 15 },
+    }),
+  );
   database.close();
   const adapter = adapterFor("opencode");
   const range = { rangeStart: "2026-07-15", rangeEnd: "2026-08-14" };
   const first = await adapter.collect({ dataPath: path }, range, {});
 
   database = new DatabaseSync(path);
-  database
-    .prepare("UPDATE message SET data = ? WHERE id = ?")
-    .run(
-      JSON.stringify({ role: "assistant", tokens: { input: 20, output: 5, total: 25 } }),
-      "stable-message",
-    );
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "new-message",
-      timestamp + 1_000,
-      JSON.stringify({ role: "assistant", tokens: { input: 2, output: 3, total: 5 } }),
-    );
+  database.prepare("UPDATE message SET data = ? WHERE id = ?").run(
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 20, output: 5, total: 25 },
+    }),
+    "stable-message",
+  );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "new-message",
+    timestamp + 1_000,
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: 1786363201000 },
+      tokens: { input: 2, output: 3, total: 5 },
+    }),
+  );
   database.close();
 
   const conflict = await adapter.collect({ dataPath: path }, range, first.nextState);
@@ -4982,7 +5000,11 @@ test("OpenCode bounds the SQLite scan before materializing an oversized ledger",
     )
     .run(
       Date.parse("2026-08-10T12:00:00Z"),
-      JSON.stringify({ role: "assistant", tokens: { input: 1, output: 0, total: 1 } }),
+      JSON.stringify({
+        role: "assistant",
+        time: { completed: 1786363201000 },
+        tokens: { input: 1, output: 0, total: 1 },
+      }),
     );
   database.close();
 
@@ -5118,4 +5140,118 @@ test("capture wrapper uses the current executable and required headless structur
     },
   );
   assert.throws(() => wrapperInvocation("unknown", ["hello"]), /Unsupported wrapper agent/);
+});
+
+test("OpenCode finalizes streaming usage once and repairs an old provisional ledger", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-finalize-"));
+  let database;
+  context.after(async () => {
+    database?.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const { DatabaseSync } = await import("node:sqlite");
+  const path = join(directory, "opencode.db");
+  database = new DatabaseSync(path);
+  database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
+  const created = Date.parse("2026-08-10T12:00:00Z");
+  const message = (completed, total) =>
+    JSON.stringify({
+      role: "assistant",
+      time: { created, ...(completed ? { completed: created + 1000 } : {}) },
+      tokens: { input: total, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    });
+  database
+    .prepare("INSERT INTO message VALUES (?, ?, ?)")
+    .run("stream", created, message(false, 0));
+  const adapter = adapterFor("opencode");
+  const range = { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" };
+  const source = { dataPath: path };
+  const streaming = await adapter.collect(source, range, {});
+  assert.deepEqual(streaming.entries, []);
+  assert.equal(streaming.completeness, "partial");
+  assert.equal(Object.keys(streaming.nextState.ledger).length, 0);
+  database.prepare("UPDATE message SET data = ?").run(message(true, 100));
+  const final = await adapter.collect(source, range, streaming.nextState);
+  const repeat = await adapter.collect(source, range, final.nextState);
+  for (const result of [final, repeat]) {
+    assert.equal(result.entries[0].totalTokens, "100");
+    assert.equal(result.completeness, "complete");
+    assert.deepEqual(result.warnings, []);
+  }
+  const legacy = structuredClone(final.nextState);
+  delete legacy.finalized;
+  for (const event of Object.values(legacy.ledger)) {
+    for (const component of Object.keys(event.usage)) event.usage[component] = "0";
+  }
+  const repaired = await adapter.collect(source, range, legacy);
+  assert.equal(repaired.entries[0].totalTokens, "100");
+  assert.equal(repaired.completeness, "complete");
+  assert.deepEqual(repaired.warnings, []);
+});
+
+test("JSONL identity spans provisional tails and complete copies in either traversal order", async (context) => {
+  const { collectJsonl } = await import("../lib/adapters/shared.mjs");
+  const { utimes } = await import("node:fs/promises");
+  const directory = await mkdtemp(join(tmpdir(), "viberacing-jsonl-identity-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const complete = join(directory, "complete.jsonl");
+  const tail = join(directory, "tail.jsonl");
+  const record = JSON.stringify({ id: "same-event", date: "2026-08-10", totalTokens: "100" });
+  const eventKey = (line) => {
+    const event = JSON.parse(line);
+    return {
+      id: event.id,
+      date: event.date,
+      entry: { date: event.date, totalTokens: event.totalTokens },
+    };
+  };
+  const collect = (state = {}) =>
+    collectJsonl(
+      { dataPath: directory },
+      () => [],
+      () => true,
+      state,
+      { rangeStart: "2026-08-01", rangeEnd: "2026-08-31" },
+      eventKey,
+    );
+  for (const tailFirst of [true, false]) {
+    await writeFile(complete, `${record}\n`);
+    await writeFile(tail, record);
+    await utimes(complete, 100, tailFirst ? 100 : 200);
+    await utimes(tail, 100, tailFirst ? 200 : 100);
+    const first = await collect();
+    assert.equal(first.entries[0].totalTokens, "100");
+    assert.equal((await collect(first.nextState)).entries[0].totalTokens, "100");
+    await appendFile(tail, "\n");
+    const promoted = await collect(first.nextState);
+    assert.equal(promoted.entries[0].totalTokens, "100");
+    assert.equal(promoted.completeness, "complete");
+  }
+  for (const checkpointed of [false, true]) {
+    await rm(tail, { force: true });
+    const prefix = checkpointed
+      ? `${JSON.stringify({ id: "earlier-event", date: "2026-08-10", totalTokens: "7" })}\n`
+      : "";
+    await writeFile(complete, prefix);
+    const initial = checkpointed ? (await collect()).nextState : {};
+    await writeFile(tail, record);
+    await appendFile(complete, `${record.replace('"100"', '"200"')}\n`);
+    await utimes(tail, 100, 300);
+    await utimes(complete, 100, 200);
+    const conflict = await collect(initial);
+    const repeated = await collect(conflict.nextState);
+    for (const result of [conflict, repeated]) {
+      assert.equal(result.entries[0].totalTokens, checkpointed ? "107" : "100");
+      assert.equal(result.completeness, "partial");
+      assert.ok(result.warnings.includes("local_event_identity_conflict"));
+      assert.deepEqual(result.nextState.files[complete], initial.files?.[complete]);
+    }
+    await rm(tail);
+    const recovered = await collect(repeated.nextState);
+    for (const result of [recovered, await collect(recovered.nextState)]) {
+      assert.equal(result.entries[0].totalTokens, checkpointed ? "207" : "200");
+      assert.equal(result.completeness, "complete");
+      assert.deepEqual(result.warnings, []);
+    }
+  }
 });

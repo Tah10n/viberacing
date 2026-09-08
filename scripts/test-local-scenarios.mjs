@@ -49,7 +49,7 @@ async function verifyCursorMigrationCompatibility() {
   const migrations = (await readdir(new URL("../apps/web/database/", import.meta.url)))
     .filter((name) => /^\d{3}_.*\.sql$/.test(name))
     .sort();
-  check(migrations.length === 14, "Cursor migration test must exercise 001 through 014");
+  check(migrations.length >= 14, "Cursor migration test must exercise 001 through 014");
   const tables = [
     "agent_accounts",
     "installation_sources",
@@ -1045,7 +1045,139 @@ function collectedCodexHistorySnapshot(sourceId, sequence, collected) {
   };
 }
 
+async function verifyUsageObservationOrdering() {
+  const fixtureUser = (
+    await pool.query("INSERT INTO users (github_id, handle) VALUES ($1, $2) RETURNING id::text", [
+      `9${randomBytes(8).readBigUInt64BE().toString().slice(0, 17)}`,
+      `observation-${randomBytes(4).toString("hex")}`,
+    ])
+  ).rows[0].id;
+  try {
+    const account = randomUUID();
+    await pool.query(
+      `INSERT INTO agent_accounts (id,user_id,agent_id,label,aggregation_mode)
+      VALUES ($1,$2,'codex','Observation ordering','account_max')`,
+      [account, fixtureUser],
+    );
+    const computers = [];
+    for (let index = 0; index < 2; index += 1) {
+      const installationId = randomUUID();
+      const sourceId = randomUUID();
+      const deviceToken = token();
+      await pool.query(
+        `INSERT INTO installations
+        (id,user_id,name,status,installation_secret_hash,device_token_hash,connector_version,protocol_version)
+        VALUES ($1,$2,'Observation test','active',$3,$4,'0.7.2',5)`,
+        [installationId, fixtureUser, digest(token()), digest(deviceToken)],
+      );
+      await pool.query(
+        `INSERT INTO installation_sources
+        (id,installation_id,user_id,agent_account_id,client_source_id,agent_id,collection_method,supported_surface,status)
+        VALUES ($1,$2,$3,$4,$5,'codex','codex_app_server','cli','active')`,
+        [sourceId, installationId, fixtureUser, account, randomUUID()],
+      );
+      computers.push({ sourceId, deviceToken, sequence: 0 });
+    }
+    const observationSession = token();
+    await pool.query(
+      "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1,$2,now()+interval '1 hour')",
+      [digest(observationSession), fixtureUser],
+    );
+    const dashboardTotal = async (expected) => {
+      const page = await fetch(`${appUrl}/dashboard`, {
+        headers: { cookie: `vr_session=${observationSession}` },
+      });
+      const html = await page.text();
+      const start = html.indexOf("<h3>Codex · Observation ordering</h3>");
+      const end = html.indexOf("</article>", start);
+      check(
+        page.status === 200 &&
+          start >= 0 &&
+          end > start &&
+          new RegExp(`${expected}(?:<!-- -->)? tokens`).test(html.slice(start, end)),
+        "dashboard account total diverged from server observation order",
+      );
+    };
+    const [a, b] = computers;
+    const observe = async (computer) => {
+      const result = await json(
+        "/api/installations/current",
+        {
+          sourceIds: [computer.sourceId],
+          protocolVersion: 5,
+          startObservation: true,
+        },
+        { authorization: `Bearer ${computer.deviceToken}` },
+      );
+      check(result.status === 200, `observation issuance failed: ${JSON.stringify(result)}`);
+      return (await result.json()).observationToken;
+    };
+    const send = async (computer, observationToken, total, completeness = "complete") => {
+      const result = await usage(computer.deviceToken, [
+        {
+          ...snapshot(
+            computer.sourceId,
+            ++computer.sequence,
+            [[today, total]],
+            completeness,
+            today,
+            today,
+          ),
+          ...(observationToken === undefined ? {} : { observationToken }),
+        },
+      ]);
+      check(result.status === 200, `observation ingestion failed: ${JSON.stringify(result)}`);
+    };
+    const total = async () =>
+      (
+        await pool.query(
+          "SELECT tokens::text FROM daily_agent_usage WHERE user_id=$1 AND agent_id='codex' AND usage_date=$2",
+          [fixtureUser, today],
+        )
+      ).rows[0]?.tokens;
+    await send(a, undefined, 150);
+    const old = await observe(a);
+    const fresh = await observe(b);
+    await send(b, fresh, 200);
+    await send(a, old, 100);
+    check((await total()) === "200", "late old observation displaced newer data");
+    await dashboardTotal(200);
+    await send(a, old, 100);
+    check((await total()) === "200", "rebased retry displaced newer data");
+    await send(a, undefined, 300);
+    check((await total()) === "200", "unticketed legacy delivery displaced server-ordered data");
+    const correction = await observe(a);
+    await send(a, correction, 80);
+    check((await total()) === "80", "genuine downward correction was suppressed");
+    await dashboardTotal(80);
+    await send(b, fresh, 200);
+    check((await total()) === "80", "old snapshot replay undid downward correction");
+    const partial = await observe(b);
+    await send(b, partial, 210, "partial");
+    check((await total()) === "210", "newer partial observation did not advance the total");
+    const zero = await observe(a);
+    await send(a, zero, 0);
+    check((await total()) === "0", "authoritative zero did not supersede older partial usage");
+    const forged = await usage(b.deviceToken, [
+      {
+        ...snapshot(b.sourceId, ++b.sequence, [[today, 999]], "complete", today, today),
+        observationToken: zero,
+      },
+    ]);
+    check(
+      forged.status === 400 && (await total()) === "0",
+      "cross-installation ticket was accepted",
+    );
+    console.log(
+      "ok - server observation order survives delayed delivery, retries, legacy uploads, corrections, and authoritative zero",
+    );
+  } finally {
+    await pool.query("DELETE FROM users WHERE id=$1", [fixtureUser]);
+  }
+}
+
 try {
+  await verifyUsageObservationOrdering();
   await verifyCursorMigrationCompatibility();
   console.log(
     "ok - Cursor fresh 001–014 and populated 011–012–013–014 migration preserve existing usage and agent constraints",

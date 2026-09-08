@@ -1,4 +1,5 @@
-import { digest } from "@/lib/crypto";
+import { issueUsageObservation } from "@/lib/usage-observation";
+import { digest, randomToken } from "@/lib/crypto";
 import {
   browserSyncInstallationScopeProtocol,
   isSemanticVersion,
@@ -30,6 +31,7 @@ function rateLimited(): Response {
 }
 
 interface ReconciliationBody {
+  startObservation?: true;
   cliVersion?: string;
   connectorVersion?: string;
   handlerAttestation?: HandlerAttestation;
@@ -83,6 +85,7 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
       (key) =>
         ![
           "sourceIds",
+          "startObservation",
           "bootstrapSourceIds",
           "connectorVersion",
           "cliVersion",
@@ -102,6 +105,7 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   ) {
     return null;
   }
+  if (value.startObservation !== undefined && value.startObservation !== true) return null;
   const sourceIds: string[] = value.sourceIds;
   if (
     value.bootstrapSourceIds !== undefined &&
@@ -137,6 +141,7 @@ export function parseReconciliationBody(value: unknown): ReconciliationBody | nu
   if (handlerAttestation === null) return null;
   return {
     sourceIds,
+    ...(value.startObservation === true ? { startObservation: true as const } : {}),
     ...(value.bootstrapSourceIds === undefined
       ? {}
       : { bootstrapSourceIds: value.bootstrapSourceIds }),
@@ -181,6 +186,39 @@ async function post(request: Request): Promise<Response> {
     if (body === null) return problem(400, "invalid_request");
     const cliVersion = body.cliVersion ?? body.connectorVersion;
     const result = await transaction(async (client) => {
+      let observationToken: string | undefined;
+      if (body.startObservation) {
+        // Match usage ingestion's user-before-installation lock order.
+        const owner = await client.query<{ id: string }>(
+          `SELECT id::text FROM users WHERE id =
+            (SELECT user_id FROM installations WHERE id = $1) FOR UPDATE`,
+          [installation.id],
+        );
+        if (!owner.rows[0]) throw new Error("Observation owner is unavailable");
+        const issued = await client.query<{ observation_key_hash: Buffer }>(
+          `UPDATE installations SET observation_key_hash = coalesce(observation_key_hash, $2)
+            WHERE id = $1 AND status = 'active' AND device_token_hash = $3
+            RETURNING observation_key_hash`,
+          [installation.id, digest(randomToken()), digest(token)],
+        );
+        const observation = issued.rows[0];
+        if (!observation) throw new Error("Observation installation is unavailable");
+        const clock = await client.query<{ started_at: Date }>(
+          `WITH observation_clock AS MATERIALIZED (
+            SELECT greatest(date_trunc('milliseconds', clock_timestamp()),
+              coalesce(usage_observation_latest_at, '-infinity'::timestamptz) + interval '1 millisecond') AS started_at
+              FROM users WHERE id = $1
+          )
+          UPDATE users SET usage_observation_latest_at = observation_clock.started_at,
+            usage_observation_cutover_at = coalesce(usage_observation_cutover_at, observation_clock.started_at)
+            FROM observation_clock WHERE users.id = $1
+            RETURNING usage_observation_latest_at AS started_at`,
+          [owner.rows[0].id],
+        );
+        const startedAt = clock.rows[0]?.started_at;
+        if (!(startedAt instanceof Date)) throw new Error("Observation clock is unavailable");
+        observationToken = issueUsageObservation(observation.observation_key_hash, startedAt);
+      }
       if (cliVersion !== undefined && body.handlerAttestation !== undefined) {
         await client.query(
           `UPDATE installations
@@ -298,10 +336,13 @@ async function post(request: Request): Promise<Response> {
                 [installation.id, body.bootstrapSourceIds],
               )
             ).rows;
-      return { rows: result.rows, baselines };
+      return { rows: result.rows, baselines, observationToken };
     });
     return Response.json(
       {
+        ...(result.observationToken === undefined
+          ? {}
+          : { observationToken: result.observationToken }),
         sources: result.rows.map((source) => ({
           sourceId: source.source_id,
           status: source.status,

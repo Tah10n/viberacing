@@ -281,8 +281,22 @@ function pendingPath(sourceId, kind = "snapshot") {
 async function atomicJson(path, value) {
   await ensurePrivateStateDirectory();
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600 });
-  await rename(temporary, path);
+  try {
+    await writeFile(temporary, `${JSON.stringify(value)}\n`, { mode: 0o600, flush: true });
+    await rename(temporary, path);
+    if (process.platform !== "win32") {
+      const directory = await open(dirname(path), "r");
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    }
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
+  }
 }
 
 async function atomicJsonExisting(path, value) {
@@ -1018,6 +1032,30 @@ export async function inspectState() {
 export async function writeState(value) {
   await ensurePrivateStateDirectory();
   await atomicJson(statePath, normalizedRuntimeState(value));
+}
+
+// Called under the sync lock before any pending delivery or adapter collection.
+export async function recoverPendingWrite() {
+  const state = await readState();
+  if (state.pendingWrite === undefined) return;
+  await savePending(state.pendingWrite);
+  delete state.pendingWrite;
+  await writeState(state);
+}
+
+export async function persistPendingWrite(state, payload) {
+  // The state and delivery intent share one atomic rename. Recovery can repeat
+  // per-source pending writes safely, including after a partially written batch.
+  state.pendingWrite = payload;
+  await writeState(state);
+  if (
+    process.env.NODE_ENV === "test" &&
+    process.env.VIBERACING_TEST_EXIT_AFTER_PENDING_INTENT === "1"
+  )
+    process.exit(86);
+  await savePending(payload);
+  delete state.pendingWrite;
+  await writeState(state);
 }
 
 export function lifecycleMutationActive(activeCheck = ownedLockActive) {

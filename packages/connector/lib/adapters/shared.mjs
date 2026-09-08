@@ -588,6 +588,7 @@ export async function collectJsonl(
       }
       const unseenLines = [];
       let overflowed = false;
+      let uncommittedIdentityConflict = false;
       let lineCount = appended ? (previous.lineCount ?? 0) : 0;
       for (let index = 0; index < chunk.lines.length; index += 1) {
         const line = chunk.lines[index];
@@ -628,6 +629,16 @@ export async function collectJsonl(
           }
           continue;
         }
+        if (
+          provisionalLedger[key] !== undefined &&
+          JSON.stringify(provisionalLedger[key]) !== JSON.stringify(candidate)
+        ) {
+          incomplete = true;
+          identityConflict = true;
+          // This row is not durable yet; retain the checkpoint so a later pass can retry it.
+          uncommittedIdentityConflict = true;
+          continue;
+        }
         const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
         if (
           ledgerCount >= maximumLedgerEvents ||
@@ -638,6 +649,7 @@ export async function collectJsonl(
           overflowed = true;
           break;
         }
+        delete provisionalLedger[key];
         ledger[key] = candidate;
         ledgerCount += 1;
         ledgerBytes += candidateBytes;
@@ -690,7 +702,7 @@ export async function collectJsonl(
         }
         continue;
       }
-      if (hasUnterminatedTail) {
+      if (hasUnterminatedTail || uncommittedIdentityConflict) {
         if (previous) nextState.files[file.path] = previous;
         continue;
       }

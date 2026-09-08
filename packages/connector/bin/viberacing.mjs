@@ -158,6 +158,8 @@ import {
   removePending,
   removePendingForSource,
   savePending,
+  recoverPendingWrite,
+  persistPendingWrite,
   withLifecycleMutation,
   withSyncLock,
   writeState,
@@ -1621,6 +1623,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, o
     : publicHandlerAttestation(inspection.state.handlerAttestation);
   const body = {
     sourceIds,
+    ...(options.startObservation ? { startObservation: true } : {}),
     ...(bootstrapSourceIds === undefined ? {} : { bootstrapSourceIds }),
     cliVersion: connectorVersion,
     protocolVersion,
@@ -1641,6 +1644,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, o
       requestAttempts,
       {
         kind: "reconciliation",
+        startObservation: options.startObservation === true,
         sourceIds,
         protocolVersion: payload.protocolVersion ?? 4,
         handlerAttestationId: attestationId,
@@ -1660,7 +1664,7 @@ async function requestReconciliation(config, attempts = 1, bootstrapSourceIds, o
     if (error?.status !== 400 || error?.code !== "invalid_request") {
       throw error;
     }
-    if (bootstrapSourceIds !== undefined) throw error;
+    if (bootstrapSourceIds !== undefined || options.startObservation) throw error;
     const remote = await send({ sourceIds, connectorVersion }, 1);
     await options.beforeResponseMutation?.(remote);
     return remote;
@@ -2806,6 +2810,7 @@ async function syncRange(providedConfig, options = {}) {
       const requestedSourceIds = Array.isArray(options.sourceIds)
         ? new Set(options.sourceIds)
         : undefined;
+      await recoverPendingWrite();
       await compactPendingCaptures(config);
       await applyDurablePendingRegistrationSupersessions();
       const previous = await drainPending(config, true, requestedSourceIds);
@@ -2890,6 +2895,18 @@ async function syncRange(providedConfig, options = {}) {
                 previous.reobserveSourceIds.includes(source.sourceId),
             )
           : mappedSources;
+      let observation = null;
+      let observationError = null;
+      if (syncSources.some((source) => source.agentId === "codex")) {
+        try {
+          observation = await requestReconciliation(config, 3, undefined, {
+            startObservation: true,
+          });
+        } catch (error) {
+          if ([401, 403, 426].includes(error?.status)) await lifecycleFailure(error);
+          observationError = error;
+        }
+      }
       if (requestedSourceIds && syncSources.length !== requestedSourceIds.size)
         throw new Error("Browser sync requested an unavailable source");
       const activeIds = new Set(mappedSources.map((source) => dirtyProfileId(source, localById)));
@@ -2906,9 +2923,10 @@ async function syncRange(providedConfig, options = {}) {
         await writeState(state);
       }
       const syncTasks = syncTasksForSources(syncSources, localById, mappedSources);
-      const providerIdentitySaltPromise = syncTasks.some((task) => task.source.agentId === "codex")
-        ? readOrCreateProviderIdentitySalt()
-        : null;
+      const providerIdentitySaltPromise =
+        observationError === null && syncTasks.some((task) => task.source.agentId === "codex")
+          ? readOrCreateProviderIdentitySalt()
+          : null;
       const collected = await settleSourceTasks(syncTasks, async (task) => {
         const source = task.source;
         if (process.env.NODE_ENV === "test" && process.env.VIBERACING_TEST_COLLECTOR_TRACE)
@@ -2932,6 +2950,7 @@ async function syncRange(providedConfig, options = {}) {
           }
         }
         if (source.agentId === "codex") {
+          if (observationError !== null) throw observationError;
           const providerIdentitySalt = await providerIdentitySaltPromise;
           const profileMembers = localSources.filter(
             (candidate) =>
@@ -3161,6 +3180,7 @@ async function syncRange(providedConfig, options = {}) {
           collectionWarnings.push(`${activeSource.agentId}: ${collectorWarningMessage(code)}`);
         const entries = entriesWithinRange(outcome.value.result.entries, range);
         const nextFingerprint = fingerprint({
+          accountingVersion: 2,
           ...range,
           completeness: outcome.value.result.completeness,
           entries,
@@ -3185,6 +3205,9 @@ async function syncRange(providedConfig, options = {}) {
           outcome.value.result.retentionSafe === true,
         );
         snapshots.push({
+          ...(activeSource.agentId === "codex" && observation
+            ? { observationToken: observation.observationToken }
+            : {}),
           sourceId: activeSource.sourceId,
           syncSequence: sequence,
           kind: snapshotKind,
@@ -3267,7 +3290,6 @@ async function syncRange(providedConfig, options = {}) {
       }
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
-      await writeState(state);
       const clearSuccessfulDirty = () =>
         clearDirty(
           Object.fromEntries(
@@ -3295,6 +3317,7 @@ async function syncRange(providedConfig, options = {}) {
           ),
         );
       if (snapshots.length === 0 && sourceErrors.length === 0) {
+        await writeState(state);
         await clearSuccessfulDirty();
         const diagnosticDelivery =
           snapshotKind === "rolling"
@@ -3339,7 +3362,7 @@ async function syncRange(providedConfig, options = {}) {
       };
       if (await lifecycleMutationActive())
         throw new Error("Sync persistence stopped by a local lifecycle operation");
-      await savePending(payload);
+      await persistPendingWrite(state, payload);
       await applyDurablePendingRegistrationSupersessions();
       const deliverySourceIds =
         options.installationScoped && requestedSourceIds
