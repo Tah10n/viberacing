@@ -5144,11 +5144,14 @@ test("capture wrapper uses the current executable and required headless structur
 
 test("OpenCode finalizes streaming usage once and repairs an old provisional ledger", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "viberacing-opencode-finalize-"));
-  context.after(() => rm(directory, { recursive: true, force: true }));
+  let database;
+  context.after(async () => {
+    database?.close();
+    await rm(directory, { recursive: true, force: true });
+  });
   const { DatabaseSync } = await import("node:sqlite");
   const path = join(directory, "opencode.db");
-  const database = new DatabaseSync(path);
-  context.after(() => database.close());
+  database = new DatabaseSync(path);
   database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
   const created = Date.parse("2026-08-10T12:00:00Z");
   const message = (completed, total) =>
