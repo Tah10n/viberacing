@@ -63,7 +63,6 @@ async function expectLeftAlignedHero(page: Page): Promise<void> {
       copyText: style(".hero-copy").textAlign,
       positionText: style(".user-callout").textAlign,
       tokenMargin: style(".user-score-line strong").marginLeft,
-      raceText: style(".hero-race").textAlign,
     };
   });
 
@@ -72,35 +71,19 @@ async function expectLeftAlignedHero(page: Page): Promise<void> {
     copyText: "left",
     positionText: "left",
     tokenMargin: "0px",
-    raceText: "left",
   });
 }
 
-async function expectConsistentMobileHeroBlocks(page: Page): Promise<void> {
-  const blocks = await page.locator(".hero").evaluate((hero) =>
-    [".user-callout", ".hero-race", ".hero-agents", ".hero-privacy"].map((selector) => {
-      const element = hero.querySelector(selector);
-      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
-      const style = getComputedStyle(element);
-      return {
-        alignItems: style.alignItems,
-        flexDirection: style.flexDirection,
-        gap: style.gap,
-        paddingLeft: style.paddingLeft,
-        paddingRight: style.paddingRight,
-      };
-    }),
-  );
-
-  expect(blocks).toEqual(
-    Array.from({ length: 4 }, () => ({
-      alignItems: "start",
-      flexDirection: "column",
-      gap: "4px",
-      paddingLeft: "16px",
-      paddingRight: "16px",
-    })),
-  );
+async function expectCompactMobileHero(page: Page): Promise<void> {
+  const row = page.locator(".ranking-table tbody tr").first();
+  const bounds = await row.boundingBox();
+  const hero = await page.locator(".hero").boundingBox();
+  expect(bounds).not.toBeNull();
+  if (bounds === null || hero === null) throw new Error("Missing hero or first racer row");
+  // Required connector notices above the hero must remain visible and may extend the page.
+  expect(bounds.y + bounds.height - hero.y).toBeLessThan(600);
+  await expect(page.getByText("Supported agents & privacy")).toBeVisible();
+  await expect(page.locator(".hero-summary")).not.toHaveAttribute("open", "");
 }
 
 test.beforeAll(async () => {
@@ -657,8 +640,8 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
 
   await page.goto("/");
   await expectLeftAlignedHero(page);
-  await expect(page.locator(".hero-race")).toContainText("This week");
-  await expect(page.locator(".hero-race")).toContainText("UTC");
+  await expect(page.locator(".leaderboard-heading")).toContainText("This week");
+  await expect(page.locator(".leaderboard-heading")).toContainText("UTC");
 
   for (const width of [320, 390, 720, 768, 906, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -682,7 +665,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expectLeftAlignedHero(page);
-  await expectConsistentMobileHeroBlocks(page);
+  await expectCompactMobileHero(page);
   await expect(page.getByText("Self-reported", { exact: true }).first()).toBeVisible();
   const row = page.getByRole("row", { name: new RegExp(`@${handle}`) });
   await row.focus();

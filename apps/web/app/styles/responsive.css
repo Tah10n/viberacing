@@ -20,35 +20,6 @@
   .app-nav > form .link-button {
     min-width: 8.75rem;
   }
-
-  .hero-primary {
-    height: auto;
-    min-height: 0;
-    grid-template-columns: 1fr;
-    padding: 0;
-  }
-
-  .hero-copy,
-  .user-callout,
-  .hero-race,
-  .hero-summary > div {
-    min-height: var(--shell-row-height);
-    padding: 0 var(--shell-inline-padding);
-  }
-
-  .user-callout,
-  .hero-race,
-  .hero-summary > div {
-    border-top: 0.0625rem solid var(--color-line);
-    border-left: 0;
-  }
-
-  .hero-summary {
-    height: auto;
-    min-height: 0;
-    grid-template-columns: 1fr;
-    border-top: 0;
-  }
 }
 
 @media (max-width: 60rem) {
@@ -138,7 +109,7 @@
   }
 
   .token-cell strong {
-    font-size: 1.375rem;
+    font-size: 1.75rem;
   }
 }
 
@@ -159,19 +130,20 @@
     font-size: 1.25rem;
   }
 
-  .user-callout,
-  .hero-race,
-  .hero-summary > div {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: start;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-4);
+  .hero-primary {
+    padding: var(--space-5) var(--space-4) var(--space-3);
   }
 
-  .hero-race small {
-    margin-top: 0;
+  .user-callout {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .hero-summary-content {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
   }
 
   .app-nav {
@@ -207,7 +179,7 @@
   }
 
   .hero-copy h1 {
-    font-size: 1.25rem;
+    font-size: 2rem;
   }
 
   .user-score-line {
@@ -220,7 +192,7 @@
   }
 
   .leaderboard {
-    padding: var(--space-5) var(--space-4) 0;
+    padding: var(--space-4) var(--space-4) 0;
   }
 
   .standings-pagination {
@@ -495,6 +467,11 @@
 }
 
 @media (max-width: 22.5rem) {
+  .period-option {
+    padding-inline: var(--space-2);
+    font-size: 0.6875rem;
+  }
+
   .racer-cell .badge {
     display: none;
   }

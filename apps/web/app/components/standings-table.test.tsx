@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { RacerProfileDialog, StandingsTable } from "./standings-table";
 
 describe("standings table profile contract", () => {
-  it("renders an interactive row and keeps the nickname as a direct GitHub link", () => {
+  it("opens the selected-period profile from the nickname and keeps a quick view", () => {
     const markup = renderToStaticMarkup(
       <StandingsTable
         currentHandle="Tah10n"
@@ -21,11 +21,10 @@ describe("standings table profile contract", () => {
     );
 
     expect(markup).toContain('aria-haspopup="dialog"');
-    expect(markup).toContain('href="https://github.com/Tah10n"');
-    expect(markup).toContain('target="_blank"');
-    expect(markup).toContain('rel="noreferrer"');
+    expect(markup).toContain('href="/u/Tah10n?period=year"');
+    expect(markup).toContain('aria-label="Quick view for @Tah10n"');
     expect(markup).toContain('class="racer-profile-dialog"');
-    expect(markup).not.toContain('class="leaderboard-profile-link"');
+    expect(markup).toContain('class="leaderboard-profile-link"');
     expect(markup).not.toContain(">View profile<");
     expect(markup).toContain("Tokens · This year");
   });
@@ -47,5 +46,11 @@ describe("standings table profile contract", () => {
     );
     expect(markup).toContain('href="/u/Tah10n?period=year"');
     expect(markup).toContain(">View leaderboard profile<");
+    expect(markup).toContain('href="https://github.com/Tah10n"');
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noreferrer"');
+    expect(markup.indexOf('href="/u/Tah10n?period=year"')).toBeLessThan(
+      markup.indexOf('href="https://github.com/Tah10n"'),
+    );
   });
 });

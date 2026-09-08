@@ -1,19 +1,20 @@
+import Link from "next/link";
+
 interface RacerLinkProps {
   readonly handle: string;
+  readonly periodSearch: string;
 }
 
-export function RacerLink({ handle }: RacerLinkProps) {
+export function RacerLink({ handle, periodSearch }: RacerLinkProps) {
   const label = `@${handle}`;
 
   return (
-    <a
-      aria-label={`${label} on GitHub (opens in a new tab)`}
-      className="github-profile-link"
-      href={`https://github.com/${encodeURIComponent(handle)}`}
-      rel="noreferrer"
-      target="_blank"
+    <Link
+      aria-label={`${label} leaderboard profile`}
+      className="leaderboard-profile-link"
+      href={`/u/${encodeURIComponent(handle)}?${periodSearch}`}
     >
       {label}
-    </a>
+    </Link>
   );
 }

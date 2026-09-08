@@ -138,25 +138,25 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       <section className="hero" aria-labelledby="race-title">
         <div className="hero-primary">
           <div className="hero-copy">
-            <h1 id="race-title">The coding-agent token race</h1>
+            <h1 id="race-title">
+              The coding-agent <span>token race.</span>
+            </h1>
+            <p>Connect your agents. Compare token usage. Keep your code private.</p>
           </div>
-          <div
-            className={`user-callout${current === null ? " user-callout-guest" : ""}`}
-            aria-label={`Your ${periodTitle.toLowerCase()} position`}
-          >
-            <span className="eyebrow meta-label">Your position</span>
-            {current === null ? (
-              <div className="hero-guest">
-                <strong className="meta-value">
-                  Join with GitHub · Connect an agent · Sync tokens
-                </strong>
-              </div>
-            ) : (
+          {current === null ? null : (
+            <div className="user-callout" aria-label={`Your ${periodTitle.toLowerCase()} position`}>
+              <span className="eyebrow meta-label">Your position</span>
               <div className="user-score-line">
                 <span className="user-rank">
                   {profile === null || profile.rank === null ? "—" : `#${profile.rank}`}
                 </span>
-                <RacerLink handle={current.handle} />
+                {profile === null ? (
+                  <Link href={`/dashboard?${periodSearch}#connect-computer`}>
+                    @{current.handle}
+                  </Link>
+                ) : (
+                  <RacerLink handle={current.handle} periodSearch={periodSearch} />
+                )}
                 {profile === null ? null : (
                   <span className="user-agent">
                     {profile.breakdown.length === 1
@@ -169,40 +169,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 </strong>
                 <small>tokens</small>
               </div>
-            )}
-          </div>
-          <div className="hero-race" aria-label="Current race">
-            <span className="meta-label">Selected period</span>
-            <strong className="meta-value">{periodTitle}</strong>
-            <small className="meta-value">{periodRange}</small>
-          </div>
-        </div>
-        <aside className="hero-summary" aria-label="How Vibe Racing works">
-          <div className="hero-agents">
-            <span className="meta-label">Supported agents</span>
-            <p>{supportedAgentLabels}</p>
-          </div>
-          <div className="hero-privacy">
-            <span className="meta-label">Privacy</span>
-            <div className="hero-privacy-copy">
-              <p>
-                <b>Collects</b> Agent · UTC date · aggregate token counters
-              </p>
-              <p>
-                <b>Never collects</b> Prompts · responses · code · transcripts · repos · paths ·
-                hostnames · provider identities · credentials · models · costs
-              </p>
             </div>
-          </div>
-        </aside>
+          )}
+        </div>
       </section>
       <section className="leaderboard" aria-labelledby="leaderboard-title">
         <div className="leaderboard-heading">
           <div>
             <h2 id="leaderboard-title">{periodTitle} standings</h2>
-            <p>
-              {periodRange}. Community totals are self-reported, not proof of cost or productivity.
-            </p>
+            <p>{periodRange}</p>
           </div>
           <span className="badge">Self-reported</span>
         </div>
@@ -245,6 +220,30 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             )}
           </nav>
         ) : null}
+        <p className="standings-note">
+          Rankings are for fun. Self-reported totals do not measure productivity, quality, or cost.
+        </p>
+        <details className="hero-summary">
+          <summary>Supported agents &amp; privacy</summary>
+          <div className="hero-summary-content">
+            <div className="hero-agents">
+              <span className="meta-label">Supported agents</span>
+              <p>{supportedAgentLabels}</p>
+            </div>
+            <div className="hero-privacy">
+              <span className="meta-label">Privacy</span>
+              <div className="hero-privacy-copy">
+                <p>
+                  <b>Collects</b> Agent · UTC date · aggregate token counters
+                </p>
+                <p>
+                  <b>Never collects</b> Prompts · responses · code · transcripts · repos · paths ·
+                  hostnames · provider identities · credentials · models · costs
+                </p>
+              </div>
+            </div>
+          </div>
+        </details>
       </section>
     </main>
   );
