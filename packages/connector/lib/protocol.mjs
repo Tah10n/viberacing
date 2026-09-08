@@ -268,6 +268,13 @@ function parseReconciliation(value, context) {
   const expectedAttestationId = context.handlerAttestationId;
   const expectedBootstrapIds = new Set(context.bootstrapSourceIds ?? []);
   const allowedKeys = new Set(["sources"]);
+  if (context.startObservation) allowedKeys.add("observationToken");
+  if (
+    context.startObservation &&
+    (typeof value?.observationToken !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\.[0-9a-f]{64}$/.test(value.observationToken))
+  )
+    throw invalid();
   if (expectedAttestationId !== undefined) allowedKeys.add("acceptedHandlerAttestationId");
   if (context.bootstrapSourceIds !== undefined) allowedKeys.add("sourceBaselines");
   if (

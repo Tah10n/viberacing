@@ -243,13 +243,15 @@ async function writeOpenCode043Installation(home, origin) {
   const date = new Date().toISOString().slice(0, 10);
   const database = new DatabaseSync(databasePath);
   database.exec("CREATE TABLE message (id TEXT PRIMARY KEY, time_created INTEGER, data TEXT)");
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "accepted-before-upgrade",
-      Date.parse(`${date}T08:00:00.000Z`),
-      JSON.stringify({ role: "assistant", tokens: { input: 60, output: 40, total: 100 } }),
-    );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "accepted-before-upgrade",
+    Date.parse(`${date}T08:00:00.000Z`),
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: Date.now() },
+      tokens: { input: 60, output: 40, total: 100 },
+    }),
+  );
   database.close();
   const directory = await writeMappedInstallation(home, origin, [
     {
@@ -4263,6 +4265,16 @@ test("Codex account switches register once and route snapshots without sending p
     request.on("end", () => {
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current" && body?.startObservation) {
+        response.end(
+          JSON.stringify({
+            ...reconciliationResponse(body.sourceIds.map((sourceId) => ({ sourceId }))),
+            observationToken: `${new Date().toISOString()}.${"a".repeat(64)}`,
+          }),
+        );
+        return;
+      }
+
       if (request.url === "/api/installations/current") {
         response.end(
           JSON.stringify(reconciliationResponse(body.sourceIds.map((sourceId) => ({ sourceId })))),
@@ -4546,6 +4558,16 @@ test("a current Codex B snapshot durably supersedes a stale registration backfil
     request.on("end", () => {
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : null;
       response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current" && body?.startObservation) {
+        response.end(
+          JSON.stringify({
+            ...reconciliationResponse(body.sourceIds.map((sourceId) => ({ sourceId }))),
+            observationToken: `${new Date().toISOString()}.${"a".repeat(64)}`,
+          }),
+        );
+        return;
+      }
+
       if (request.url === "/api/installations/current/sync/claim") {
         response.end(
           JSON.stringify({
@@ -4746,6 +4768,7 @@ for await (const line of lines) {
     [
       {
         sourceId: secondarySourceId,
+        observationToken: usageBodies[0].snapshots[0].observationToken,
         syncSequence: "1",
         kind: "rolling",
         rangeStart: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
@@ -10450,13 +10473,15 @@ test("confirmed real 0.4.4 cutover migrates once and preserves the accepted base
   assert.match(preflight.stdout, /OpenCode upgrade preflight passed/);
   assert.deepEqual(await snapshotStateTree(installation.directory), confirmedTree);
   const database = new DatabaseSync(installation.databasePath);
-  database
-    .prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)")
-    .run(
-      "post-cutover-once",
-      Date.parse(`${installation.date}T09:00:00.000Z`),
-      JSON.stringify({ role: "assistant", tokens: { input: 4, output: 3, total: 7 } }),
-    );
+  database.prepare("INSERT INTO message (id, time_created, data) VALUES (?, ?, ?)").run(
+    "post-cutover-once",
+    Date.parse(`${installation.date}T09:00:00.000Z`),
+    JSON.stringify({
+      role: "assistant",
+      time: { completed: Date.now() },
+      tokens: { input: 4, output: 3, total: 7 },
+    }),
+  );
   database.close();
 
   await execFileAsync(process.execPath, [connectorPath, "sync"], { env: environment });
@@ -14046,3 +14071,159 @@ test(
     assert.doesNotMatch(await readFile(antigravitySources[1].dataPath, "utf8"), /profile-0/);
   },
 );
+
+test("Codex observation failures isolate collection and preserve installation lifecycle", async (context) => {
+  for (const status of [503, 401, 403, 426]) {
+    await context.test(`observation responds with ${status}`, async (context) => {
+      const usageBodies = [];
+      let observationRequests = 0;
+      let configuredSources;
+      const server = createServer((request, response) => {
+        const chunks = [];
+        request.on("data", (chunk) => chunks.push(chunk));
+        request.on("end", () => {
+          const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          response.setHeader("content-type", "application/json");
+          if (request.url === "/api/installations/current") {
+            if (body.startObservation === true) {
+              observationRequests += 1;
+              response.statusCode = status;
+              response.end(JSON.stringify({ error: "observation_unavailable" }));
+            } else response.end(JSON.stringify(reconciliationResponse(configuredSources)));
+          } else if (request.url === "/api/usage") {
+            usageBodies.push(body);
+            response.end(JSON.stringify(usageResponse(body)));
+          } else if (request.url === "/api/installations/current/diagnostics") {
+            response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+          } else {
+            response.statusCode = 500;
+            response.end(JSON.stringify({ error: "unexpected_request" }));
+          }
+        });
+      });
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      context.after(() => server.close());
+      const home = await mkdtemp(join(tmpdir(), "viberacing-observation-failure-"));
+      context.after(() => rm(home, { recursive: true, force: true }));
+      const origin = `http://127.0.0.1:${server.address().port}`;
+      const installation = await writeCaptureInstallation(home, origin);
+      const local = await readLocalSources(installation.directory);
+      const codex = {
+        clientSourceId: "10101010-1010-4010-8010-101010101010",
+        sourceId: "20202020-2020-4020-8020-202020202020",
+        agentId: "codex",
+        dataPath: join(home, "codex"),
+        collectionMethod: "codex_app_server",
+        supportedSurface: "cli",
+        suggestedLabel: "Codex",
+      };
+      await writeMappedInstallation(home, origin, [
+        { ...local[0], sourceId: installation.sourceId },
+        codex,
+      ]);
+      configuredSources = [{ sourceId: installation.sourceId }, { sourceId: codex.sourceId }];
+      const options = {
+        env: connectorEnvironment(home, { VIBERACING_CODEX_BIN: join(home, "missing-codex") }),
+      };
+      if (status === 503) {
+        const result = await execFileAsync(process.execPath, [connectorPath, "sync"], options);
+        assert.match(result.stderr, /codex:.*503/);
+        assert.equal(observationRequests, 3);
+        const snapshots = usageBodies.flatMap((body) => body.snapshots);
+        assert.equal(snapshots.length, 1);
+        assert.equal(snapshots[0].sourceId, installation.sourceId);
+        assert.equal(snapshots[0].entries[0].totalTokens, "3");
+        assert.deepEqual(
+          usageBodies.flatMap((body) => body.sourceErrors ?? []),
+          [{ sourceId: codex.sourceId, code: "collector_failed", observedAfterSequence: "0" }],
+        );
+        await access(join(installation.directory, "config.json"));
+      } else {
+        await assert.rejects(
+          execFileAsync(process.execPath, [connectorPath, "sync"], options),
+          status === 426 ? /Connector update required/ : /authorization was revoked/,
+        );
+        assert.equal(observationRequests, 1);
+        assert.deepEqual(usageBodies, []);
+        if (status === 426) {
+          const state = JSON.parse(
+            await readFile(join(installation.directory, "state.json"), "utf8"),
+          );
+          assert.equal(state.automaticDisabledReason, "unsupported_connector");
+          await access(join(installation.directory, "config.json"));
+        } else await assert.rejects(access(join(installation.directory, "config.json")));
+      }
+    });
+  }
+});
+
+test("automatic sync recovers a process exit between state and pending persistence", async (context) => {
+  const delivered = [];
+  const server = createServer((request, response) => {
+    const chunks = [];
+    request.on("data", (chunk) => chunks.push(chunk));
+    request.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString());
+      response.setHeader("content-type", "application/json");
+      if (request.url === "/api/installations/current") {
+        response.end(JSON.stringify(reconciliationResponse([{ sourceId: installation.sourceId }])));
+      } else if (request.url === "/api/usage") {
+        delivered.push(body);
+        response.end(JSON.stringify(usageResponse(body)));
+      } else if (request.url === "/api/installations/current/diagnostics") {
+        response.end(JSON.stringify({ acceptedEvents: body.events.length }));
+      } else {
+        response.statusCode = 500;
+        response.end(JSON.stringify({ error: "unexpected_request" }));
+      }
+    });
+  });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+  const home = await mkdtemp(join(tmpdir(), "viberacing-outbox-recovery-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const installation = await writeCaptureInstallation(
+    home,
+    `http://127.0.0.1:${server.address().port}`,
+  );
+  const schedulerTrace = join(home, "scheduler-trace.txt");
+  const environment = connectorEnvironment(home, {
+    NODE_ENV: "test",
+    VIBERACING_TEST_AUTOMATIC_SYNC_TIMINGS: "10,10,10",
+    VIBERACING_TEST_SCHEDULER_TRACE: schedulerTrace,
+  });
+  await assert.rejects(
+    execFileAsync(process.execPath, [connectorPath, "sync"], {
+      env: { ...environment, VIBERACING_TEST_EXIT_AFTER_PENDING_INTENT: "1" },
+    }),
+    (error) => error.code === 86,
+  );
+  const persisted = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.ok(persisted.pendingWrite);
+  assert.equal(delivered.length, 0);
+  assert.ok(persisted.fingerprints[installation.sourceId]);
+  await runWithInput(
+    ["hook", "--source", installation.clientSourceId, "--agent", "antigravity"],
+    environment,
+    "{}",
+  );
+  await waitFor(() => delivered.length > 0);
+  await waitFor(async () => {
+    const trace = await readFile(schedulerTrace, "utf8");
+    const owner = /^acquired:(\d+)$/m.exec(trace);
+    if (owner === null) return false;
+    try {
+      process.kill(Number(owner[1]), 0);
+      return false;
+    } catch (error) {
+      return error?.code === "ESRCH";
+    }
+  });
+  const recovered = JSON.parse(await readFile(join(installation.directory, "state.json"), "utf8"));
+  assert.equal(recovered.pendingWrite, undefined);
+  assert.deepEqual(await readdir(join(installation.directory, "pending")), []);
+  assert.equal(delivered[0].snapshots[0].entries[0].totalTokens, "3");
+  assert.equal(delivered[0].snapshots[0].syncSequence, persisted.sequences[installation.sourceId]);
+});

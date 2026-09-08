@@ -1,2 +1,2 @@
 // Generated from packages/connector/package.json; do not edit by hand.
-export const connectorVersion = "0.7.2";
+export const connectorVersion = "0.7.3";

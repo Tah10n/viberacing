@@ -33,10 +33,24 @@ subtracts or overwrites another account's last accepted snapshot. Installation-w
 the active identity and reports inactive identities as partial, while account-scoped Sync asks the
 user to switch Codex when the selected identity is not active.
 
+Codex collection obtains a signed observation ticket from the server before reading usage. The
+server serializes issuance per user with a strictly increasing millisecond clock, and signs it with
+a per-installation random key hash kept only in PostgreSQL. Pending delivery retains the original
+ticket; retrying or rebasing a sequence never refreshes its observation time. In `daily_usage`,
+`updated_at` records this observation order; installation/source Last sync still records delivery
+time. No workstation timestamp determines precedence. Overlapping collections are ordered by their
+start tickets.
+
+After the first ticket is issued for a user, unticketed Codex observations from older connectors are
+capped below that cutover. They may fill missing history but cannot displace ticketed data; downward
+corrections across linked computers require upgrading their connectors. Deploy migration 015 and the
+server before installing this connector. Rollback to the old ingestion code loses this ordering
+protection and must not be used while delayed uploads are outstanding.
+
 For an `account_max` account and UTC day, the newest complete observation wins. The server finds the
 greatest `updated_at` among complete rows, excludes every older complete and partial row, and takes
 the maximum only among complete rows tied at that exact timestamp. A partial observation is eligible
-only when no complete row exists or when it was accepted after the newest complete; eligible partial
+only when no complete row exists or when it was observed after the newest complete; eligible partial
 rows may provisionally advance the value. The next complete observation excludes those provisional
 rows and may correct the total either up or down. This prevents an account-wide Codex bucket
 reported from two computers from doubling without letting an offline computer's older complete value
@@ -118,3 +132,14 @@ either a `complete` or `partial` terminal pass. Ordinary Sync automatically repa
 rolling gaps without otherwise restarting a terminal full-year pass. To delete retained history,
 disconnect and explicitly delete the agent account in the dashboard. Use **Leave leaderboard** for
 all ranking rows or **Delete Vibe Racing account** for the complete user record.
+
+Connector recovery writes adapter state, sequences, fingerprints, and the pending write intent in
+one atomic state replacement before materializing per-source pending files. On restart, the sync
+lock protects replay of this intent before delivery or collection. JSON writes flush file contents
+and, on POSIX, their directory entries. An unchanged automatic fingerprint therefore always has a
+durable delivery intent or an already materialized/acknowledged snapshot.
+
+OpenCode ledger entries become immutable only after `time.completed` is present. Old ledger entries
+without finalization markers can be replaced once by a completed observation of the same hashed ID;
+missing historical IDs remain retained. JSONL tails and complete lines share the same event
+identity, so a completed copy promotes a matching provisional event without adding its tokens twice.

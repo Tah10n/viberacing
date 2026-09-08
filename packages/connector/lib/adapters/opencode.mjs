@@ -65,7 +65,7 @@ function analyzeOpenCodeMessages(rows) {
     parsedRecords += 1;
     seen.add(row.id);
     entries.push(entry);
-    records.push({ id: row.id, entry });
+    records.push({ id: row.id, entry, completed: Number.isFinite(message?.time?.completed) });
   }
   return {
     entries: mergeEntries(entries),
@@ -172,6 +172,17 @@ async function collect(source, range, state = {}) {
     )
       throw new Error("OpenCode legacy alias state is invalid");
     const ledger = { ...previousLedger };
+    // Older ledgers did not distinguish streaming observations from final usage.
+    // Keep missing historical events, but allow a visible event to finalize once.
+    const finalized = { ...(state.finalized ?? {}) };
+    if (
+      Object.entries(finalized).some(
+        ([key, value]) => !/^[0-9a-f]{64}$/.test(key) || value !== true,
+      ) ||
+      Object.keys(finalized).length > maximumOpenCodeLedgerEvents
+    )
+      throw new Error("OpenCode finalization state is invalid");
+    let unfinished = false;
     for (const [key, event] of Object.entries(ledger))
       if (event.date < range.rangeStart || event.date > range.rangeEnd) delete ledger[key];
     let ledgerCount = Object.keys(ledger).length;
@@ -201,15 +212,30 @@ async function collect(source, range, state = {}) {
         }
       }
     }
-    for (const { id, entry } of analysis.records) {
+    for (const { id, entry, completed } of analysis.records) {
       const key = createHash("sha256").update(id).digest("hex");
       if (legacyAliases[key] !== undefined) {
         if (legacyAliases[key] !== entry.date) identityConflict = true;
         continue;
       }
+      if (!completed) {
+        unfinished = true;
+        if (!finalized[key] && ledger[key] !== undefined) {
+          delete ledger[key];
+          ledgerCount -= 1;
+          ledgerBytes = Buffer.byteLength(JSON.stringify(ledger));
+        }
+        if (overflow?.key === key) overflow = undefined;
+        continue;
+      }
       const { date, ...usage } = entry;
       const candidate = { date, usage, parserVersion: openCodeParserVersion };
       const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
+      if (ledger[key] !== undefined && !finalized[key]) {
+        ledgerBytes -= Buffer.byteLength(JSON.stringify([key, ledger[key]]));
+        delete ledger[key];
+        ledgerCount -= 1;
+      }
       if (overflow?.key === key) {
         if (JSON.stringify(overflow.event) !== JSON.stringify(candidate)) identityConflict = true;
       } else if (ledger[key] === undefined) {
@@ -221,10 +247,12 @@ async function collect(source, range, state = {}) {
           break;
         }
         ledger[key] = candidate;
+        finalized[key] = true;
         ledgerCount += 1;
         ledgerBytes += candidateBytes;
       } else if (JSON.stringify(ledger[key]) !== JSON.stringify(candidate)) identityConflict = true;
     }
+    for (const key of Object.keys(finalized)) if (ledger[key] === undefined) delete finalized[key];
     const bounded =
       Object.keys(ledger).length <= maximumOpenCodeLedgerEvents &&
       Buffer.byteLength(JSON.stringify(ledger)) <= maximumOpenCodeLedgerBytes;
@@ -238,6 +266,7 @@ async function collect(source, range, state = {}) {
       throw new Error("OpenCode cutover state is invalid");
     const legacyWindowActive = legacyCutoverDate !== null && range.rangeStart <= legacyCutoverDate;
     const partial =
+      unfinished ||
       unsupported ||
       identityConflict ||
       scanLimited ||
@@ -257,6 +286,7 @@ async function collect(source, range, state = {}) {
           legacyBaseline,
           legacyAliases,
           ledger,
+          finalized,
           ...(overflow === undefined ? {} : { overflow }),
         }
       : state;
