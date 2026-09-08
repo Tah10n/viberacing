@@ -458,10 +458,9 @@
   border-color: var(--color-danger-border);
 }
 .period-selector {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   align-items: start;
-  justify-content: start;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -472,20 +471,41 @@
   gap: var(--space-2);
 }
 
-.custom-period,
-.custom-period::details-content {
-  display: contents;
+.custom-period {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.custom-period[open] {
+  flex-basis: 100%;
 }
 
 .custom-period > summary {
-  grid-column: 2;
-  grid-row: 1;
-  justify-self: start;
   list-style: none;
 }
 
 .custom-period > summary::-webkit-details-marker {
   display: none;
+}
+
+/* Keep the native disclosure usable when ::details-content is unsupported. */
+@supports selector(::details-content) {
+  .period-selector {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    justify-content: start;
+  }
+
+  .custom-period,
+  .custom-period::details-content {
+    display: contents;
+  }
+
+  .custom-period > summary {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+  }
 }
 
 .period-option {
