@@ -117,8 +117,9 @@ describe("pairing start admission ordering", () => {
 
   it("stores the explicitly reported installed-handler protocol with its capability", async () => {
     consumeRateLimitMock.mockResolvedValue(true);
-    const clientQuery = vi.fn((sql: string, parameters?: unknown[]) => {
-      void parameters;
+    const clientQuery = vi.fn<
+      (sql: string, parameters?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number }>
+    >((sql) => {
       if (sql.includes("SELECT count(*)::int AS count")) {
         return Promise.resolve({ rows: [{ count: 0 }] });
       }

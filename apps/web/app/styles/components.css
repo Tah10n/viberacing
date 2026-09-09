@@ -459,8 +459,8 @@
 }
 .period-selector {
   display: flex;
-  align-items: flex-start;
   flex-wrap: wrap;
+  align-items: start;
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
@@ -471,9 +471,46 @@
   gap: var(--space-2);
 }
 
+.custom-period {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.custom-period[open] {
+  flex-basis: 100%;
+}
+
+.custom-period > summary {
+  list-style: none;
+}
+
+.custom-period > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Keep the native disclosure usable when ::details-content is unsupported. */
+@supports selector(::details-content) {
+  .period-selector {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    justify-content: start;
+  }
+
+  .custom-period,
+  .custom-period::details-content {
+    display: contents;
+  }
+
+  .custom-period > summary {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+  }
+}
+
 .period-option {
   display: inline-flex;
-  min-height: 2.5rem;
+  min-height: var(--control-height);
   align-items: center;
   border: 0.0625rem solid var(--color-line-strong);
   border-radius: var(--radius-sm);
@@ -495,25 +532,9 @@
   color: var(--color-action);
 }
 
-.custom-period {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.custom-period[open] {
-  flex-basis: 100%;
-}
-
-.custom-period > summary {
-  list-style: none;
-}
-
-.custom-period > summary::-webkit-details-marker {
-  display: none;
-}
-
 .custom-period-form {
   display: grid;
+  grid-column: 1 / -1;
   width: min(26rem, 100%);
   margin-top: var(--space-2);
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -523,6 +544,10 @@
   padding: var(--space-4);
   background: var(--color-track-raised);
   box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 45%);
+}
+
+.custom-period:not([open]) .custom-period-form {
+  display: none;
 }
 
 .custom-period-form label {

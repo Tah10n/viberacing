@@ -115,20 +115,20 @@ export function RacerProfileDialog({
               </div>
             ))}
           </div>
-          <a
-            className="button button-secondary racer-github-button"
-            href={`https://github.com/${encodeURIComponent(row.handle)}`}
-            rel="noreferrer"
-            target="_blank"
-          >
-            Open GitHub profile ↗
-          </a>
           <Link
-            className="button button-secondary racer-leaderboard-profile-button"
+            className="button racer-leaderboard-profile-button"
             href={`/u/${encodeURIComponent(row.handle)}?${periodSearch}`}
           >
             View leaderboard profile
           </Link>
+          <a
+            className="racer-github-link"
+            href={`https://github.com/${encodeURIComponent(row.handle)}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            GitHub profile ↗
+          </a>
           {currentHandle?.toLowerCase() === row.handle.toLowerCase() ? (
             <span className="profile-you-label">This is your leaderboard profile</span>
           ) : null}
@@ -163,7 +163,6 @@ export function StandingsTable({
 
   return (
     <>
-      <p className="standings-hint">Select a row for usage details. Names open GitHub profiles.</p>
       <div className="table-scroll" tabIndex={0} aria-label={`Scrollable ${periodLabel} standings`}>
         <table className="ranking-table">
           <thead>
@@ -196,7 +195,7 @@ export function StandingsTable({
                   <td className="rank-cell">{row.rank}</td>
                   <td className="racer-cell">
                     <div className="racer-line">
-                      <RacerLink handle={row.handle} />
+                      <RacerLink handle={row.handle} periodSearch={periodSearch} />
                       {isCurrent ? <Badge>You</Badge> : null}
                     </div>
                     <div className="mobile-agent-mix">
@@ -208,6 +207,16 @@ export function StandingsTable({
                   </td>
                   <td className="token-cell" title={`${formatExactTokens(row.total)} tokens`}>
                     <strong>{formatCompactTokens(row.total)}</strong>
+                    <button
+                      aria-label={`Quick view for @${row.handle}`}
+                      className="racer-quick-view"
+                      onClick={() => {
+                        setSelectedRow(row);
+                      }}
+                      type="button"
+                    >
+                      Quick view
+                    </button>
                   </td>
                 </tr>
               );
