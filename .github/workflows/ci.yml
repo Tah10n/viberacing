@@ -103,6 +103,20 @@ jobs:
         if: always() && runner.os == 'Windows'
         run: node scripts/ci/summarize-windows-profile.mjs
 
+  # Preserve the status name required by Protect main after sharding Windows tests.
+  # The matrix result includes every shard and both other supported host platforms.
+  connector-windows-required:
+    name: Connector (windows-2025)
+    if: always()
+    needs: [connector]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require the complete connector matrix
+        env:
+          CONNECTOR_RESULT: ${{ needs.connector.result }}
+        run: test "$CONNECTOR_RESULT" = success
+
   local-smoke:
     name: Documented local startup
     runs-on: ubuntu-24.04

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,6 +32,28 @@ test("Windows matrix covers every native shard once and keeps the required aggre
     workflow,
     /name: Verify Cursor evidence probe on the host OS\n\s+if: runner.os != 'Windows' \|\| matrix.shard == '1\/4'/,
   );
+});
+
+test("the required Windows check waits for the matrix and rejects every non-success result", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const job = workflow
+    .split(/^ {2}(?=\S)/m)
+    .find((section) => section.startsWith("connector-windows-required:\n"));
+  assert.ok(job, "The ruleset requires a stable Windows aggregate job");
+  assert.match(job, /^    name: Connector \(windows-2025\)$/m);
+  assert.match(job, /^    if: always\(\)$/m);
+  assert.match(job, /^    needs: \[connector\]$/m);
+  assert.match(job, /CONNECTOR_RESULT: \$\{\{ needs\.connector\.result \}\}/);
+  const command = job.match(/^        run: (.+)$/m)?.[1];
+  assert.ok(command);
+  for (const result of ["success", "failure", "cancelled", "skipped", ""]) {
+    const check = spawnSync("sh", ["-c", command], {
+      env: { ...process.env, CONNECTOR_RESULT: result },
+      encoding: "utf8",
+    });
+    assert.ifError(check.error);
+    assert.equal(check.status, result === "success" ? 0 : 1, `matrix result: ${result}`);
+  }
 });
 
 test("subprocess timing preserves success, nonzero exit and spawn errors without recording arguments", async (context) => {
