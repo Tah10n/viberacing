@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
 
-nodeVersion: 24.19.0
+nodeVersion: 24.20.0
 engineStrict: true
 autoInstallPeers: false
 strictPeerDependencies: true
@@ -17,5 +17,5 @@ allowBuilds: {}
 
 overrides:
   nanoid@<3.3.18: 3.3.18
-  next@16.3.3>baseline-browser-mapping: "2.11.0"
-  next@16.3.3>sharp: "-"
+  next@16.3.4>baseline-browser-mapping: "2.11.0"
+  next@16.3.4>sharp: "-"
