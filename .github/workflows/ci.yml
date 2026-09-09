@@ -50,28 +50,29 @@ jobs:
       - run: corepack install --global pnpm@11.7.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Enable Windows subprocess timing
+        id: windows_profile
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $timingDirectory = Join-Path $env:RUNNER_TEMP 'windows-process-profile'
           New-Item -ItemType Directory -Path $timingDirectory -Force | Out-Null
           "VIBERACING_CI_PROCESS_PROFILE=$timingDirectory" >> $env:GITHUB_ENV
+          $preload = (Join-Path $env:GITHUB_WORKSPACE 'scripts/ci/windows-process-profile.cjs').Replace('\', '/')
+          "node_options=--require `"$preload`"" >> $env:GITHUB_OUTPUT
       - name: Run connector tests
         if: runner.os != 'Windows'
         run: pnpm --filter @viberacing/connector test
       - name: Run one complete Windows connector shard
         if: runner.os == 'Windows'
         env:
-          NODE_OPTIONS: --require "${{ github.workspace }}/scripts/ci/windows-process-profile.cjs"
+          NODE_OPTIONS: ${{ steps.windows_profile.outputs.node_options }}
         run: >-
           pnpm --filter @viberacing/connector exec node --test --test-concurrency=1 --test-shard=${{
           matrix.shard }}
       - name: Verify Cursor evidence probe on the host OS
         if: runner.os != 'Windows' || matrix.shard == '1/4'
         env:
-          NODE_OPTIONS:
-            ${{ runner.os == 'Windows' && format('--require
-            "{0}/scripts/ci/windows-process-profile.cjs"', github.workspace) || '' }}
+          NODE_OPTIONS: ${{ steps.windows_profile.outputs.node_options }}
         run: node --test scripts/cursor-evidence-probe.test.mjs
       - name: Install the OpenCode-compatible Bun runtime
         if: runner.os != 'Windows' || matrix.shard == '1/4'

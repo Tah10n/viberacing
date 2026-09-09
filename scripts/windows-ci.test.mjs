@@ -22,6 +22,12 @@ test("Windows matrix covers every native shard once and keeps the required aggre
   assert.match(workflow, /needs: \[connector, local-smoke, browser-e2e, production\]/);
   assert.match(workflow, /test "\$CONNECTOR_RESULT" = success/);
   assert.doesNotMatch(workflow, /continue-on-error:/);
+  assert.ok(workflow.includes(".Replace('\\', '/')"));
+  assert.equal(
+    workflow.match(/NODE_OPTIONS: \$\{\{ steps\.windows_profile\.outputs\.node_options \}\}/g)
+      ?.length,
+    2,
+  );
   assert.match(
     workflow,
     /name: Verify Cursor evidence probe on the host OS\n\s+if: runner.os != 'Windows' \|\| matrix.shard == '1\/4'/,
