@@ -169,7 +169,8 @@
   position: relative;
   min-height: 18rem;
   outline: none;
-  touch-action: none;
+  touch-action: pan-y;
+  user-select: none;
 }
 
 .usage-explorer-canvas:focus-visible {
@@ -195,13 +196,18 @@
   vector-effect: non-scaling-stroke;
 }
 
-.usage-series-line {
-  fill: none;
-  stroke: var(--color-action);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 3;
-  vector-effect: non-scaling-stroke;
+.usage-series-bar {
+  fill: var(--color-action);
+  opacity: 0.8;
+}
+
+.usage-series-bar-active {
+  opacity: 1;
+}
+
+.usage-explorer-hint {
+  color: var(--color-muted);
+  font-size: var(--meta-font-size);
 }
 
 .usage-axis-label,
@@ -217,14 +223,6 @@
 
 .usage-date-label {
   text-anchor: middle;
-}
-
-.usage-hover-point,
-.usage-series-point {
-  fill: var(--color-action);
-  stroke: var(--color-track-raised);
-  stroke-width: 3;
-  vector-effect: non-scaling-stroke;
 }
 
 .usage-tooltip {
@@ -1330,4 +1328,24 @@ pre {
 
 #connect-computer {
   scroll-margin-top: var(--space-5);
+}
+
+.usage-explorer-context {
+  margin: 0 0 var(--space-3);
+  color: var(--color-muted);
+  font-size: var(--meta-font-size);
+}
+
+.usage-explorer-loading {
+  position: absolute;
+  top: 40%;
+  right: var(--space-3);
+  left: var(--space-3);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-track);
+  color: var(--color-muted-strong);
+  text-align: center;
+  pointer-events: none;
 }

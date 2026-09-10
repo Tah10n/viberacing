@@ -66,6 +66,15 @@ for (const width of [390, 1440]) {
             [sourceIds[index], today, index === 0 ? "100" : "200"],
           );
         }
+        const exploreHistory =
+          width === 1440 && scenario.period === "custom" && scenario.status === "succeeded";
+        if (exploreHistory) {
+          await database.query(
+            `INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+             VALUES ($1::date - 1, $2, 'codex', 10), ($1::date, $2, 'codex', 300)`,
+            [today, userId],
+          );
+        }
         await page.context().addCookies([
           { name: "vr_session", value: session, url: "http://127.0.0.1:3015" },
           { name: "vr_local_installation", value: installationId, url: "http://127.0.0.1:3015" },
@@ -109,10 +118,27 @@ for (const width of [390, 1440]) {
             },
           });
           expect(usage.status()).toBe(200);
+          if (exploreHistory) {
+            await database.query(
+              `INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+               VALUES ($1::date - 100, $2, 'codex', 25)
+               ON CONFLICT (usage_date, user_id, agent_id) DO NOTHING`,
+              [today, userId],
+            );
+          }
           await route.fulfill({
             json: { status: scenario.status, resultCode: scenario.resultCode },
           });
         });
+        const historyChart = page.getByRole("figure", { name: "Tokens over time" });
+        if (exploreHistory) {
+          await historyChart.locator(".usage-explorer-canvas").hover();
+          await page.mouse.wheel(0, 240);
+          await expect(historyChart.locator(".usage-series-bar")).toHaveCount(2);
+          await expect(
+            historyChart.locator(".usage-values tbody tr").last().locator("td").last(),
+          ).toHaveText("300");
+        }
         await sync.click();
         await expect(active.locator(".agent-chip").first()).toHaveText("456 tokens");
         await expect(active.locator(".device-meta time")).not.toHaveAttribute("datetime", oldSync);
@@ -127,6 +153,12 @@ for (const width of [390, 1440]) {
             { exact: true },
           ),
         ).toBeVisible();
+        if (exploreHistory) {
+          await expect(historyChart.locator(".usage-series-bar")).toHaveCount(2);
+          await expect(
+            historyChart.locator(".usage-values tbody tr").last().locator("td").last(),
+          ).toHaveText("656");
+        }
         await expect(sync).toBeEnabled();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
         await page.screenshot({ path: test.info().outputPath("sync-result.png"), fullPage: true });
