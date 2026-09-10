@@ -12,6 +12,9 @@ import {
 } from "../lib/windows-security.mjs";
 
 const execFileAsync = promisify(execFile);
+// Native fixture setup/readback needs the same process budget as the ACL operations
+// it verifies; a busy Windows runner can exceed 15 seconds before returning a snapshot.
+const aclFixtureTimeout = 30_000;
 
 test("Windows state ACL is owner-only and failure is fail-closed", async () => {
   const calls = [];
@@ -209,7 +212,7 @@ test(
               VIBERACING_TEST_ACL_FILE: targetFile,
             },
             windowsHide: true,
-            timeout: 15_000,
+            timeout: aclFixtureTimeout,
           },
         )
       ).stdout.trim();
@@ -289,7 +292,7 @@ test(
       {
         env: { ...process.env, VIBERACING_WINDOWS_STATE_ACL_TARGET: existingCapability },
         windowsHide: true,
-        timeout: 15_000,
+        timeout: aclFixtureTimeout,
       },
     );
 
@@ -334,7 +337,7 @@ test(
       {
         env: { ...process.env, VIBERACING_WINDOWS_STATE_ACL_TARGET: directory },
         windowsHide: true,
-        timeout: 15_000,
+        timeout: aclFixtureTimeout,
       },
     );
     const acl = JSON.parse(result.stdout.trim());
@@ -363,7 +366,7 @@ test(
       {
         env: { ...process.env, VIBERACING_WINDOWS_STATE_ACL_TARGET: existingCapability },
         windowsHide: true,
-        timeout: 15_000,
+        timeout: aclFixtureTimeout,
       },
     );
     const fileAcl = JSON.parse(fileResult.stdout.trim());

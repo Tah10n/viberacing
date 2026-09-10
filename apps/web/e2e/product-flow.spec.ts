@@ -279,7 +279,7 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     homeConnectorUpdate.getByRole("button", { name: "Copy update command" }),
   ).toBeVisible();
   await page.goto("/dashboard");
-  const usageChart = page.getByRole("figure", { name: "Tokens by day" });
+  const usageChart = page.getByRole("figure", { name: "Tokens over time" });
   const observedWeekDays = ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
   await expect(usageChart.locator(".usage-values tbody tr")).toHaveCount(observedWeekDays);
   await expect(page.locator(".summary-grid > div")).toHaveCount(4);
@@ -304,19 +304,20 @@ test("OAuth, pairing, dashboard mutations, mobile keyboard flow, and accessibili
     "aria-current",
     "page",
   );
-  const monthChart = page.getByRole("figure", { name: "Tokens by day" });
+  const monthChart = page.getByRole("figure", { name: "Tokens over time" });
   const observedMonthDays = Number(today.slice(8));
   await expect(monthChart.locator(".usage-values tbody tr")).toHaveCount(observedMonthDays);
   const viewport = monthChart.locator(".usage-explorer-controls output");
   const fullMonthViewport = await viewport.textContent();
-  const zoomIn = monthChart.getByRole("button", { name: "Zoom in on usage chart" });
-  if (observedMonthDays > 7) {
-    await zoomIn.click();
+  const chartCanvas = monthChart.locator(".usage-explorer-canvas");
+  await expect(monthChart.getByRole("button", { name: /Zoom|Pan/ })).toHaveCount(0);
+  await chartCanvas.hover();
+  await page.mouse.wheel(0, -240);
+  if (observedMonthDays > 1) {
     await expect(viewport).not.toHaveText(fullMonthViewport ?? "");
   } else {
-    await expect(zoomIn).toBeDisabled();
+    await expect(viewport).toHaveText(fullMonthViewport ?? "");
   }
-  const chartCanvas = monthChart.locator(".usage-explorer-canvas");
   await chartCanvas.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("Home");

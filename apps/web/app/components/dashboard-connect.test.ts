@@ -224,8 +224,7 @@ describe("dashboard connection flow", () => {
     expect(dashboard).toContain("total + BigInt(day.tokens)");
     expect(dashboard).toContain("formatExactTokens(periodTotal)");
     expect(dashboard).toContain("<UsageExplorer");
-    expect(explorer).toContain("Zoom in");
-    expect(explorer).toContain("Zoom out");
+    expect(explorer).toContain("Scroll or pinch to zoom");
     expect(explorer).toContain("Reset view");
     expect(explorer).toContain("requestAnimationFrame");
     expect(explorer).toContain("BigInt(day.tokens)");

@@ -281,7 +281,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     sources,
     codexHookNotices,
     dedupEvents,
-    dailyUsage,
+    allDailyUsage,
     accountProvenDates,
   ] = await Promise.all([
     query<InstallationRow>(
@@ -537,11 +537,10 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
     query<DailyUsageRow>(
       `SELECT usage_date::text, sum(tokens)::text AS tokens
          FROM daily_agent_usage
-        WHERE user_id = $1
-          AND usage_date >= $2::date AND usage_date < $3::date
+        WHERE user_id = $1 AND usage_date <= $2::date
         GROUP BY usage_date
         ORDER BY usage_date`,
-      [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
+      [current.id, today],
     ),
     query<AccountProvenDateRow>(
       `SELECT candidate.agent_account_id::text, candidate.usage_date::text
@@ -579,6 +578,9 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       [current.id, resolvedPeriod.from, resolvedPeriod.toExclusive],
     ),
   ]);
+  const dailyUsage = allDailyUsage.filter(
+    (day) => day.usage_date >= resolvedPeriod.from && day.usage_date < resolvedPeriod.toExclusive,
+  );
   const chartDays = usageSeries(resolvedPeriod.from, resolvedPeriod.toExclusive, today, dailyUsage);
   const periodTotal = dailyUsage.reduce((total, day) => total + BigInt(day.tokens), 0n).toString();
   const accountsById = new Map(accounts.map((account) => [account.id, account]));
@@ -898,13 +900,14 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       <section className="dashboard-section" aria-labelledby="usage-chart-title">
         <div className="section-heading plain-heading">
           <div>
-            <p className="eyebrow">{periodTitle.toUpperCase()} USAGE</p>
-            <h2 id="usage-chart-title">Tokens by day</h2>
+            <p className="eyebrow">Usage history</p>
+            <h2 id="usage-chart-title">Tokens over time</h2>
           </div>
-          <span>{periodRange}</span>
         </div>
         <UsageExplorer
           days={chartDays}
+          history={allDailyUsage.map((day) => ({ date: day.usage_date, tokens: day.tokens }))}
+          historyTo={today}
           key={`${resolvedPeriod.from}:${resolvedPeriod.toExclusive}`}
           periodLabel={periodTitle}
           rangeLabel={periodRange}
