@@ -1,4 +1,4 @@
-FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS build
+FROM node:24.21.0-bookworm-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS build
 
 ENV CI=true
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -14,7 +14,7 @@ COPY apps/web apps/web
 RUN corepack pnpm --filter @viberacing/web build
 RUN corepack pnpm --filter @viberacing/web deploy --prod /runtime-deps
 
-FROM node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS runtime
+FROM node:24.21.0-bookworm-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS runtime
 
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
