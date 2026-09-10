@@ -86,6 +86,33 @@ const rankedSummarySql = `WITH per_user AS (
     FROM per_user
 )`;
 
+// Keep discovery and metadata under the same visibility rules as the public profile.
+const publicProfileVisibilitySql = `(
+  EXISTS (SELECT 1 FROM daily_agent_usage retained WHERE retained.user_id = u.id)
+  OR EXISTS (
+    SELECT 1 FROM installations installation
+     WHERE installation.user_id = u.id AND installation.status = 'active'
+  )
+)`;
+
+export async function publicProfileHandle(handle: string): Promise<string | null> {
+  const rows = await query<{ handle: string }>(
+    `SELECT u.handle FROM users u
+      WHERE lower(u.handle) = lower($1) AND ${publicProfileVisibilitySql}
+      LIMIT 1`,
+    [handle],
+  );
+  return rows[0]?.handle ?? null;
+}
+
+export async function publicProfileHandles(): Promise<readonly string[]> {
+  const rows = await query<{ handle: string }>(
+    `SELECT u.handle FROM users u WHERE ${publicProfileVisibilitySql}
+      ORDER BY lower(u.handle), u.id LIMIT 49999`,
+  );
+  return rows.map((row) => row.handle);
+}
+
 export async function leaderboard(
   { limit = 100, offset = 0 }: LeaderboardOptions = {},
   resolved: ResolvedUsagePeriod = resolveUsagePeriod({ kind: "week" }),
@@ -134,13 +161,7 @@ export async function publicProfile(
                ) agent) AS breakdown
        FROM users u LEFT JOIN ranked r ON r.user_id = u.id
       WHERE lower(u.handle) = lower($3)
-        AND (
-          EXISTS (SELECT 1 FROM daily_agent_usage retained WHERE retained.user_id = u.id)
-          OR EXISTS (
-            SELECT 1 FROM installations installation
-             WHERE installation.user_id = u.id AND installation.status = 'active'
-          )
-        )
+        AND ${publicProfileVisibilitySql}
       LIMIT 1`,
     [resolved.from, resolved.toExclusive, handle],
   );
