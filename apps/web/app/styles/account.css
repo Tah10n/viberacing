@@ -813,7 +813,8 @@
   font-size: var(--text-xs);
 }
 
-.browser-sync-message.status {
+.browser-sync-message.status,
+.browser-sync-message.success {
   color: var(--color-info);
 }
 

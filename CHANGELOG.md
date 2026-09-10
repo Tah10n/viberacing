@@ -6,6 +6,16 @@ The connector follows [Semantic Versioning](https://semver.org/). The web applic
 continuously; its changes are grouped with the connector release when they affect the shared user
 experience or protocol.
 
+## [0.7.4] - 2026-09-10
+
+### Fixed
+
+- Browser Sync refreshes dashboard totals and sync timestamps after successful or partial completion
+  while preserving the selected UTC period and displaying the result in place.
+- Claude and shared JSONL collectors retain unresolved event identity conflicts across subsequent
+  syncs and restarts. Older checkpoints are revalidated without discarding accepted usage, and clean
+  files resume incremental reads after validation.
+
 ## [Unreleased]
 
 ### Added
