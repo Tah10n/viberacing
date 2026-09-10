@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyCommandButton } from "./components/copy-command-button";
 import { ConnectorUpdateNotice } from "./components/connector-update-notice";
@@ -28,6 +29,7 @@ import {
   publicOrigin,
 } from "@/lib/config";
 import { query } from "@/lib/db";
+import { publicPageMetadata, siteDescription, siteTitle, standingsCanonical } from "@/lib/seo";
 
 interface HomePageProps {
   readonly searchParams: Promise<{
@@ -57,6 +59,20 @@ function pageHref(page: number, periodSearch: string): string {
   const params = new URLSearchParams(periodSearch);
   if (page > 1) params.set("page", page.toString());
   return `/?${params.toString()}`;
+}
+
+export async function generateMetadata({ searchParams }: HomePageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const period = parseUsagePeriod(params);
+  const page = parsePage(params.page);
+  const title =
+    period.kind === "week" && page === 1
+      ? siteTitle
+      : `${usagePeriodTitle(period)} AI coding leaderboard${page > 1 ? ` — Page ${page.toString()}` : ""} | Vibe Racing`;
+  return {
+    ...publicPageMetadata(title, siteDescription, standingsCanonical("/", period, page)),
+    ...(period.kind === "custom" ? { robots: { index: false, follow: true } } : {}),
+  };
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {

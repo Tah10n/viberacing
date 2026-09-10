@@ -2,6 +2,9 @@
 
 ## Railway
 
+For public search metadata, sitemap behavior and Google ownership verification, see
+[Search discovery](SEO.md).
+
 1. Create a Railway project, add PostgreSQL, and deploy the repository root as one service.
 2. Assign an HTTPS domain and create a dedicated production GitHub OAuth app. Set its homepage to
    the origin and callback to `https://your-domain.example/api/auth/github/callback`. Device Flow is

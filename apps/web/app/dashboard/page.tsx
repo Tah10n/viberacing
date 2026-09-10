@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+
 import {
   connectorConnectCommand,
   connectorRepairCommand,
@@ -45,6 +46,11 @@ import {
 } from "@/lib/usage-period";
 import { usageSeries } from "@/lib/usage-series";
 import { UsageExplorer } from "./usage-explorer";
+
+export const metadata = {
+  title: "Your dashboard | Vibe Racing",
+  robots: { index: false, follow: false },
+};
 
 interface DashboardProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

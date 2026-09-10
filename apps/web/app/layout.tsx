@@ -2,13 +2,24 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppHeader } from "./components/app-header";
 import { viewer } from "@/lib/session";
+import { publicPageMetadata, siteDescription, siteTitle } from "@/lib/seo";
+import { publicOrigin } from "@/lib/config";
 import "./styles.css";
 
-export const metadata: Metadata = {
-  title: "Vibe Racing — AI coding token leaderboard",
-  description: "A privacy-first community leaderboard for tokens used in Codex and Claude Code.",
-  icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }] },
-};
+export function generateMetadata(): Metadata {
+  return {
+    ...publicPageMetadata(siteTitle, siteDescription),
+    icons: { icon: [{ url: "/favicon.svg", type: "image/svg+xml" }] },
+    verification: {
+      google:
+        process.env.VIBERACING_GOOGLE_SITE_VERIFICATION ||
+        // Public ownership proof supplied by the maintainer's Search Console account.
+        (publicOrigin().origin === "https://viberacing.up.railway.app"
+          ? "C__amjwDCo_CrfK-5Y2raodeKafPUc0kTTrXwo6Lx1E"
+          : undefined),
+    },
+  };
+}
 
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const current = await viewer();

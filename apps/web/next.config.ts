@@ -26,6 +26,10 @@ const config: NextConfig = {
         source: "/(.*)",
         headers: applicationHeaders(process.env.NODE_ENV === "production"),
       },
+      {
+        source: "/:path(api|dashboard|connect|health|ready)/:rest*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
     ]);
   },
 };

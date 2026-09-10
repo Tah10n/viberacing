@@ -6,6 +6,11 @@ import { digest, normalizePairingCode } from "@/lib/crypto";
 import { query } from "@/lib/db";
 import { viewer } from "@/lib/session";
 
+export const metadata = {
+  title: "Connect your agent | Vibe Racing",
+  robots: { index: false, follow: false },
+};
+
 interface ConnectPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }

@@ -1,9 +1,16 @@
 import { connection } from "next/server";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PeriodSelector } from "../../components/period-selector";
 import { PageHeader, PageShell, Panel } from "../../components/ui";
-import { formatCompactTokens, formatExactTokens, publicProfile } from "@/lib/leaderboard";
+import {
+  formatCompactTokens,
+  formatExactTokens,
+  publicProfile,
+  publicProfileHandle,
+} from "@/lib/leaderboard";
+import { publicPageMetadata, standingsCanonical } from "@/lib/seo";
 import {
   parseUsagePeriod,
   utcToday,
@@ -16,6 +23,21 @@ import {
 interface ProfileProps {
   params: Promise<{ handle: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export async function generateMetadata({ params, searchParams }: ProfileProps): Promise<Metadata> {
+  const [{ handle }, search] = await Promise.all([params, searchParams]);
+  const publicHandle = await publicProfileHandle(handle);
+  if (publicHandle === null) notFound();
+  const period = parseUsagePeriod(search);
+  return {
+    ...publicPageMetadata(
+      `@${publicHandle} — ${usagePeriodTitle(period)} token usage | Vibe Racing`,
+      `See @${publicHandle}'s self-reported AI coding token totals and agent breakdown on Vibe Racing. Compare Codex, Claude Code, Cursor and other coding agents.`,
+      standingsCanonical(`/u/${encodeURIComponent(publicHandle)}`, period),
+    ),
+    ...(period.kind === "custom" ? { robots: { index: false, follow: true } } : {}),
+  };
 }
 
 export default async function ProfilePage({ params, searchParams }: ProfileProps) {
