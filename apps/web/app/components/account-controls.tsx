@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -20,7 +21,7 @@ interface Grant {
 interface SyncState {
   target: string;
   message: string;
-  tone: "status" | "error";
+  tone: "status" | "error" | "success";
 }
 
 interface BrowserSyncContextValue {
@@ -162,6 +163,7 @@ export function BrowserSyncProvider({
   children: ReactNode;
   enabled: boolean;
 }) {
+  const router = useRouter();
   const [grant, setGrant] = useState<Grant | null>(null);
   const [state, setState] = useState<SyncState | null>(null);
   const [grantRetryAt, setGrantRetryAt] = useState<number | null>(null);
@@ -231,7 +233,9 @@ export function BrowserSyncProvider({
         pause: wait,
       });
       if (outcome.kind === "terminal" && outcome.status === "succeeded") {
-        window.location.assign("/dashboard?browserSynced=1");
+        setState({ target, message: "Sync complete.", tone: "success" });
+        router.refresh();
+        void prepare();
         return;
       }
       if (outcome.kind === "terminal" && outcome.status === "partial") {
@@ -245,6 +249,7 @@ export function BrowserSyncProvider({
                 : "Sync completed with warnings. Run viberacing doctor.",
           tone: "error",
         });
+        router.refresh();
         void prepare();
         return;
       }
@@ -280,7 +285,7 @@ export function BrowserSyncProvider({
       });
       void prepare();
     },
-    [prepare],
+    [prepare, router],
   );
 
   const launch = useCallback(

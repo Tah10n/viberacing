@@ -1,0 +1,136 @@
+{
+  "generatedFrom": "9305c148b978f04a80f6ad3ac0eff9e47ac3f177",
+  "description": "Synthetic state emitted by the pre-fix Claude and shared JSONL collectors; file path and filesystem metadata are placeholders.",
+  "range": {
+    "rangeStart": "2026-08-01",
+    "rangeEnd": "2026-08-31"
+  },
+  "collectors": {
+    "Claude": {
+      "clean": {
+        "records": [
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}",
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}"
+        ],
+        "completeness": "complete",
+        "state": {
+          "files": {
+            "$SOURCE_FILE": {
+              "size": 304,
+              "modifiedAt": 0,
+              "safeOffset": 304,
+              "tailFingerprint": "bb3010f50bcf3f3e724955e5c82c232ec8da27738c0426c32998e3dd7b8aa9e6"
+            }
+          },
+          "ledger": {
+            "ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d": {
+              "date": "2026-08-19",
+              "usage": {
+                "totalTokens": "15",
+                "inputTokens": "15",
+                "outputTokens": "0",
+                "cacheReadTokens": "0",
+                "cacheWriteTokens": "0",
+                "reasoningTokens": "0"
+              },
+              "parserVersion": 2
+            }
+          },
+          "parserVersion": 2
+        }
+      },
+      "conflict": {
+        "records": [
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}",
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":22,\"output_tokens\":0}}}"
+        ],
+        "completeness": "partial",
+        "state": {
+          "files": {
+            "$SOURCE_FILE": {
+              "size": 304,
+              "modifiedAt": 0,
+              "safeOffset": 304,
+              "tailFingerprint": "b86da213c7920db370f8bbc42bd6378281f0c94ea5a4cf7a874895d6a28edf36"
+            }
+          },
+          "ledger": {
+            "ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d": {
+              "date": "2026-08-19",
+              "usage": {
+                "totalTokens": "15",
+                "inputTokens": "15",
+                "outputTokens": "0",
+                "cacheReadTokens": "0",
+                "cacheWriteTokens": "0",
+                "reasoningTokens": "0"
+              },
+              "parserVersion": 2
+            }
+          },
+          "parserVersion": 2
+        }
+      }
+    },
+    "JSONL": {
+      "clean": {
+        "records": [
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}",
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}"
+        ],
+        "completeness": "complete",
+        "state": {
+          "files": {
+            "$SOURCE_FILE": {
+              "size": 304,
+              "modifiedAt": 0,
+              "safeOffset": 304,
+              "tailFingerprint": "bb3010f50bcf3f3e724955e5c82c232ec8da27738c0426c32998e3dd7b8aa9e6",
+              "lineCount": 2
+            }
+          },
+          "ledger": {
+            "ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d": {
+              "date": "2026-08-19",
+              "usage": {
+                "totalTokens": "15"
+              },
+              "parserVersion": 1
+            }
+          },
+          "legacyBaseline": [],
+          "legacyEventDays": {}
+        }
+      },
+      "conflict": {
+        "records": [
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":15,\"output_tokens\":0}}}",
+          "{\"type\":\"assistant\",\"timestamp\":\"2026-08-19T12:00:00.000Z\",\"message\":{\"id\":\"message\",\"role\":\"assistant\",\"usage\":{\"input_tokens\":22,\"output_tokens\":0}}}"
+        ],
+        "completeness": "partial",
+        "state": {
+          "files": {
+            "$SOURCE_FILE": {
+              "size": 304,
+              "modifiedAt": 0,
+              "safeOffset": 304,
+              "tailFingerprint": "b86da213c7920db370f8bbc42bd6378281f0c94ea5a4cf7a874895d6a28edf36",
+              "lineCount": 2
+            }
+          },
+          "ledger": {
+            "ab530a13e45914982b79f9b7e3fba994cfd1f3fb22f71cea1afbf02b460c6d1d": {
+              "date": "2026-08-19",
+              "usage": {
+                "totalTokens": "15"
+              },
+              "parserVersion": 1
+            }
+          },
+          "legacyBaseline": [],
+          "legacyEventDays": {}
+        }
+      }
+    }
+  }
+}

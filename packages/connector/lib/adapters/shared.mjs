@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 
 export const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 
+// Older JSONL checkpoints may cover unresolved conflicts; the event ledger remains authoritative.
+const jsonlCheckpointVersion = 1;
 const maximumLedgerEvents = 65_536;
 const maximumLedgerBytes = 16 * 1_024 * 1_024;
 const ledgerHashPattern = /^[0-9a-f]{64}$/;
@@ -555,6 +557,7 @@ export async function collectJsonl(
     const previous = normalized.files[file.path];
     if (
       previous &&
+      previous.checkpointVersion === jsonlCheckpointVersion &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
       previous.safeOffset === file.size &&
@@ -576,7 +579,8 @@ export async function collectJsonl(
         appended = false;
       }
     }
-    const offset = appended ? previous.safeOffset : 0;
+    const resumeCheckpoint = appended && previous.checkpointVersion === jsonlCheckpointVersion;
+    const offset = resumeCheckpoint ? previous.safeOffset : 0;
     try {
       const chunk = await jsonLinesChunk(file.path, offset, file.size);
       const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
@@ -588,8 +592,8 @@ export async function collectJsonl(
       }
       const unseenLines = [];
       let overflowed = false;
-      let uncommittedIdentityConflict = false;
-      let lineCount = appended ? (previous.lineCount ?? 0) : 0;
+      let fileIdentityConflict = false;
+      let lineCount = resumeCheckpoint ? (previous.lineCount ?? 0) : 0;
       for (let index = 0; index < chunk.lines.length; index += 1) {
         const line = chunk.lines[index];
         const event = eventKey?.(line, {
@@ -619,6 +623,7 @@ export async function collectJsonl(
           if (legacyDates.some((date) => date !== event.date)) {
             incomplete = true;
             identityConflict = true;
+            fileIdentityConflict = true;
           }
           continue;
         }
@@ -626,6 +631,7 @@ export async function collectJsonl(
           if (JSON.stringify(ledger[key]) !== JSON.stringify(candidate)) {
             incomplete = true;
             identityConflict = true;
+            fileIdentityConflict = true;
           }
           continue;
         }
@@ -635,8 +641,8 @@ export async function collectJsonl(
         ) {
           incomplete = true;
           identityConflict = true;
-          // This row is not durable yet; retain the checkpoint so a later pass can retry it.
-          uncommittedIdentityConflict = true;
+          // Retain the checkpoint so a later pass can retry the unresolved record.
+          fileIdentityConflict = true;
           continue;
         }
         const candidateBytes = Buffer.byteLength(JSON.stringify([key, candidate]));
@@ -702,11 +708,12 @@ export async function collectJsonl(
         }
         continue;
       }
-      if (hasUnterminatedTail || uncommittedIdentityConflict) {
+      if (hasUnterminatedTail || fileIdentityConflict) {
         if (previous) nextState.files[file.path] = previous;
         continue;
       }
       nextState.files[file.path] = {
+        checkpointVersion: jsonlCheckpointVersion,
         size: file.size,
         modifiedAt: file.modifiedAt,
         ino: file.ino,

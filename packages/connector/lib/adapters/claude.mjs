@@ -15,6 +15,8 @@ import {
 } from "./shared.mjs";
 
 const claudeParserVersion = 2;
+// Older checkpoints may cover an unresolved identity conflict; recheck without discarding usage.
+const claudeCheckpointVersion = 1;
 
 function classifiedContribution(line) {
   let record;
@@ -118,6 +120,7 @@ export async function collectClaude(
   let partial = discovered.incomplete;
   let schemaUnsupported = false;
   let identityConflict = false;
+  let fileIdentityConflict = false;
   let unreadable = discovered.issues.some((issue) => issue.reason === "unreadable");
   let limited = discovered.issues.some((issue) => ["limit", "oversized"].includes(issue.reason));
   const provisionalLedger = {};
@@ -132,6 +135,7 @@ export async function collectClaude(
       if (JSON.stringify(existing) !== JSON.stringify(candidate)) {
         partial = true;
         identityConflict = true;
+        fileIdentityConflict = true;
       }
       return true;
     }
@@ -150,6 +154,7 @@ export async function collectClaude(
   };
   let bytes = 0;
   for (const file of discovered.files) {
+    fileIdentityConflict = false;
     if (bytes + file.size > maximumBytes) {
       partial = true;
       limited = true;
@@ -159,6 +164,7 @@ export async function collectClaude(
     const previous = nextState.files[file.path];
     if (
       previous &&
+      previous.checkpointVersion === claudeCheckpointVersion &&
       previous.size === file.size &&
       previous.modifiedAt === file.modifiedAt &&
       previous.safeOffset === file.size &&
@@ -178,7 +184,8 @@ export async function collectClaude(
         appended = false;
       }
     }
-    const offset = appended ? (previous.safeOffset ?? previous.size) : 0;
+    const resumeCheckpoint = appended && previous.checkpointVersion === claudeCheckpointVersion;
+    const offset = resumeCheckpoint ? (previous.safeOffset ?? previous.size) : 0;
     try {
       const chunk = await readChunk(file.path, offset, file.size);
       const hasUnterminatedTail = (chunk.tailBytes ?? 0) > 0;
@@ -209,11 +216,13 @@ export async function collectClaude(
           overflowed = true;
           break;
         }
-      if (overflowed) {
+      // Retry unresolved records instead of checkpointing them as trusted on the next sync.
+      if (overflowed || fileIdentityConflict) {
         if (previous) nextState.files[file.path] = previous;
         continue;
       }
       const fileState = {
+        checkpointVersion: claudeCheckpointVersion,
         size: file.size,
         modifiedAt: file.modifiedAt,
         ino: file.ino,
