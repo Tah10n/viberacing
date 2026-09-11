@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { RacerProfileDialog, StandingsTable } from "./standings-table";
 
 describe("standings table profile contract", () => {
-  it("opens the selected-period profile from the nickname and keeps a quick view", () => {
+  it("opens the selected-period profile from the nickname and keeps the row dialog", () => {
     const markup = renderToStaticMarkup(
       <StandingsTable
         currentHandle="Tah10n"
@@ -22,7 +22,7 @@ describe("standings table profile contract", () => {
 
     expect(markup).toContain('aria-haspopup="dialog"');
     expect(markup).toContain('href="/u/Tah10n?period=year"');
-    expect(markup).toContain('aria-label="Quick view for @Tah10n"');
+    expect(markup).not.toContain("Quick view");
     expect(markup).toContain('class="racer-profile-dialog"');
     expect(markup).toContain('class="leaderboard-profile-link"');
     expect(markup).not.toContain(">View profile<");

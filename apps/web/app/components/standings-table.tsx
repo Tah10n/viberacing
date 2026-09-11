@@ -207,16 +207,6 @@ export function StandingsTable({
                   </td>
                   <td className="token-cell" title={`${formatExactTokens(row.total)} tokens`}>
                     <strong>{formatCompactTokens(row.total)}</strong>
-                    <button
-                      aria-label={`Quick view for @${row.handle}`}
-                      className="racer-quick-view"
-                      onClick={() => {
-                        setSelectedRow(row);
-                      }}
-                      type="button"
-                    >
-                      Quick view
-                    </button>
                   </td>
                 </tr>
               );
