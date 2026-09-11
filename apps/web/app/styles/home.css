@@ -433,23 +433,6 @@ body:has(.racer-profile-dialog[open]) {
   text-underline-offset: 0.2em;
 }
 
-.racer-quick-view {
-  display: block;
-  min-height: 1.75rem;
-  margin: var(--space-1) 0 0 auto;
-  border: 0;
-  padding: 0 var(--space-1);
-  background: transparent;
-  color: var(--color-info);
-  font-family: var(--font-body);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.racer-quick-view:hover {
-  text-decoration: underline;
-}
-
 .profile-you-label {
   margin-top: var(--space-4);
   color: var(--color-action);
