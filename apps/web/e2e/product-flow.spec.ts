@@ -82,8 +82,13 @@ async function expectCompactMobileHero(page: Page): Promise<void> {
   if (bounds === null || hero === null) throw new Error("Missing hero or first racer row");
   // Required connector notices above the hero must remain visible and may extend the page.
   expect(bounds.y + bounds.height - hero.y).toBeLessThan(600);
-  await expect(page.getByText("Supported agents & privacy")).toBeVisible();
-  await expect(page.locator(".hero-summary")).not.toHaveAttribute("open", "");
+  for (const title of ["Supported agents & privacy", "How token totals are counted"]) {
+    const section = page
+      .locator(".hero-summary")
+      .filter({ has: page.getByText(title, { exact: true }) });
+    await expect(section.locator("summary")).toBeVisible();
+    await expect(section).not.toHaveAttribute("open", "");
+  }
 }
 
 test.beforeAll(async () => {
