@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyCommandButton } from "./components/copy-command-button";
@@ -29,7 +30,7 @@ import {
   publicOrigin,
 } from "@/lib/config";
 import { query } from "@/lib/db";
-import { publicPageMetadata, siteDescription, siteTitle, standingsCanonical } from "@/lib/seo";
+import { publicPageMetadata, siteTitle, standingsCanonical, standingsDescription } from "@/lib/seo";
 
 interface HomePageProps {
   readonly searchParams: Promise<{
@@ -65,12 +66,27 @@ export async function generateMetadata({ searchParams }: HomePageProps): Promise
   const params = await searchParams;
   const period = parseUsagePeriod(params);
   const page = parsePage(params.page);
+  if (
+    page > 1 &&
+    (
+      await leaderboard(
+        { limit: 1, offset: (page - 1) * leaderboardPageSize },
+        resolveUsagePeriod(period),
+      )
+    ).length === 0
+  ) {
+    notFound();
+  }
   const title =
     period.kind === "week" && page === 1
       ? siteTitle
       : `${usagePeriodTitle(period)} AI coding leaderboard${page > 1 ? ` — Page ${page.toString()}` : ""} | Vibe Racing`;
   return {
-    ...publicPageMetadata(title, siteDescription, standingsCanonical("/", period, page)),
+    ...publicPageMetadata(
+      title,
+      standingsDescription(period, page),
+      standingsCanonical("/", period, page),
+    ),
     ...(period.kind === "custom" ? { robots: { index: false, follow: true } } : {}),
   };
 }
@@ -117,6 +133,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   );
   const hasNextPage = pageRows.length > leaderboardPageSize;
   const rows = pageRows.slice(0, leaderboardPageSize);
+  if (page > 1 && rows.length === 0) notFound();
   return (
     <main className="home-page">
       {connectorUpdateRequired ? (
@@ -200,14 +217,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         <PeriodSelector basePath="/" period={period} resolved={resolvedPeriod} today={today} />
         {rows.length === 0 ? (
           <div className="empty">
-            <strong>
-              {page === 1 ? "The starting grid is empty." : "No racers on this page."}
-            </strong>
-            <p>
-              {page === 1
-                ? "Be the first racer to connect an agent."
-                : "Return to the previous page of standings."}
-            </p>
+            <strong>The starting grid is empty.</strong>
+            <p>Be the first racer to connect an agent.</p>
           </div>
         ) : (
           <StandingsTable
@@ -257,6 +268,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   hostnames · provider identities · credentials · models · costs
                 </p>
               </div>
+            </div>
+          </div>
+        </details>
+        <details className="hero-summary">
+          <summary>How token totals are counted</summary>
+          <div className="hero-summary-content">
+            <div>
+              <h3>Daily totals, UTC periods</h3>
+              <p>
+                Your score adds daily token totals across your connected agents for the selected UTC
+                period. Weeks run Monday through Sunday; months follow the calendar. This year runs
+                from January 1 through today. Custom ranges include both selected dates.
+              </p>
+            </div>
+            <div>
+              <h3>What counts as a token</h3>
+              <p>
+                We use the provider&apos;s reported total when available. Otherwise, we add input,
+                output, cache read, cache write and separately reported reasoning tokens, removing
+                overlap so the same tokens are not counted twice. Linked account-wide totals are
+                deduplicated across computers; separate local histories add together.
+              </p>
+              <p>
+                Coverage varies by agent and available history. Recent totals can be partial and
+                change after a later sync. Different agents report usage differently, so this is a
+                comparison of self-reported token volume, not cost, quality or productivity.
+              </p>
+              <a href="https://github.com/Tah10n/viberacing/blob/main/docs/RANKING_SEMANTICS.md">
+                Read the detailed counting rules
+              </a>
             </div>
           </div>
         </details>

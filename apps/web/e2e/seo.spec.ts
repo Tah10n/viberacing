@@ -26,6 +26,20 @@ test("public HTML, discovery and private-route indexing policy", async ({ page, 
       "INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens) VALUES (CURRENT_DATE, $1, 'codex', 123456)",
       [ids[0]],
     );
+    // Keep a real second page: canonical coverage must not depend on an empty URL.
+    const racers = await database.query<{ id: string }>(
+      `INSERT INTO users (github_id, handle)
+       SELECT $1::bigint + n, 'SeoPage-' || $2 || '-' || n
+       FROM generate_series(1, 100) n RETURNING id::text`,
+      [(BigInt(Date.now()) * 1000n + 100n).toString(), suffix],
+    );
+    const racerIds = racers.rows.map((row) => row.id);
+    ids.push(...racerIds);
+    await database.query(
+      `INSERT INTO daily_agent_usage (usage_date, user_id, agent_id, tokens)
+       SELECT CURRENT_DATE, id, 'codex', 100 FROM users WHERE id = ANY($1::bigint[])`,
+      [racerIds],
+    );
     const hash = () => createHash("sha256").update(randomUUID()).digest();
     await database.query(
       `INSERT INTO installations (id, user_id, name, status, installation_secret_hash,
@@ -60,12 +74,43 @@ test("public HTML, discovery and private-route indexing policy", async ({ page, 
       "summary_large_image",
     );
     await expect(page.getByRole("heading", { level: 1 })).toContainText("token race");
+    const weekDescription = await page.locator('meta[name="description"]').getAttribute("content");
+    expect(weekDescription).toContain("this UTC week");
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const counting = page.locator("details").filter({ hasText: "How token totals are counted" });
+      await counting.locator("summary").click();
+      await expect(counting.getByRole("heading", { name: "What counts as a token" })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+      await counting.scrollIntoViewIfNeeded();
+      await counting.screenshot({
+        path: test.info().outputPath(`counting-${width.toString()}.png`),
+      });
+      await counting.locator("summary").click();
+    }
     const homeTitle = await page.title();
-    await page.goto("/?period=month&page=2&utm_source=test");
+    const secondPage = await page.goto("/?period=month&page=2&utm_source=test");
+    expect(secondPage?.status()).toBe(200);
+    await expect(page.getByRole("link", { name: "Previous 100" })).toBeVisible();
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
       "href",
       `${origin}/?period=month&page=2`,
     );
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+      "content",
+      /this UTC calendar month\. Page 2\./,
+    );
+    for (const path of ["/?page=99999", "/?period=month&page=3"]) {
+      const missingPage = await page.goto(path);
+      expect(missingPage?.status()).toBe(404);
+      await expect(page.locator('meta[name="robots"]').first()).toHaveAttribute(
+        "content",
+        /noindex/,
+      );
+      await expect(page.getByText("No racers on this page.")).toHaveCount(0);
+    }
 
     await page.goto(`/u/${handles[0].toLowerCase()}?period=year&utm_source=test`);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(

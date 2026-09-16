@@ -29,6 +29,7 @@ describe("home personal profile navigation", () => {
     );
     expect(markup).toContain('href="/dashboard?period=year#connect-computer"');
     expect(markup).not.toContain('href="/u/NewRacer?period=year"');
+    expect(markup).toContain("The starting grid is empty.");
   });
 
   it.each([null, "1"])("keeps an existing profile available with rank %s", async (rank) => {
