@@ -4,7 +4,19 @@ import { usagePeriodSearch, type UsagePeriod } from "./usage-period";
 
 export const siteTitle = "Vibe Racing — AI coding token leaderboard";
 export const siteDescription =
-  "Compare AI coding token usage across Codex, Claude Code, Cursor and more. Join the community leaderboard with daily totals and private prompts, code and credentials.";
+  "Compare AI coding token usage across Codex, Claude Code, Cursor and more. Join the community leaderboard while keeping your prompts, code and credentials private.";
+
+export function standingsDescription(period: UsagePeriod, page = 1): string {
+  const range =
+    period.kind === "week"
+      ? "this UTC week"
+      : period.kind === "month"
+        ? "this UTC calendar month"
+        : period.kind === "year"
+          ? "from January 1 through today (UTC)"
+          : `from ${period.from} to ${period.to}, inclusive (UTC)`;
+  return `Compare self-reported AI coding token totals ${range}.${page > 1 ? ` Page ${page.toString()}.` : ""} Explore agent breakdowns while keeping prompts, code and credentials private.`;
+}
 
 export function publicPageMetadata(title: string, description: string, path?: string): Metadata {
   const origin = publicOrigin();
