@@ -275,7 +275,7 @@ jobs:
           psql "$DATABASE_URL" --command="DELETE FROM schema_migrations WHERE version = '$future_migration'"
       - name: Run server integration scenarios
         run: |
-          node apps/web/.next/standalone/apps/web/server.js &
+          node apps/web/scripts/server.mjs &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 60); do

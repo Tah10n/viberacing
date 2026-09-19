@@ -13,16 +13,16 @@ describe("leaderboard query", () => {
   });
 
   it("uses bounded server-side pagination", async () => {
-    queryMock.mockResolvedValue([]);
+    queryMock.mockResolvedValueOnce([{ count: "2000" }]).mockResolvedValue([]);
 
     await leaderboard({ limit: 101, offset: 100 });
 
-    expect(queryMock).toHaveBeenCalledOnce();
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(/LIMIT \$3 OFFSET \$4/);
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(/dense_rank\(\) OVER \(ORDER BY total DESC\)/);
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(/ORDER BY r\.rank, lower\(u\.handle\), u\.id/);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(/LIMIT \$3 OFFSET \$4/);
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(/dense_rank\(\) OVER \(ORDER BY total DESC\)/);
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(/ORDER BY r\.rank, lower\(u\.handle\), u\.id/);
     const weekStart = currentWeekStart();
-    expect(queryMock.mock.calls[0]?.[1]).toEqual([weekStart, addUtcDays(weekStart, 7), 101, 100]);
+    expect(queryMock.mock.calls[1]?.[1]).toEqual([weekStart, addUtcDays(weekStart, 7), 101, 100]);
   });
 
   it("rejects requests that could return an unbounded page", async () => {
@@ -43,11 +43,11 @@ describe("leaderboard query", () => {
       total: "0",
       breakdown: [],
     });
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(/FROM users u LEFT JOIN ranked r/);
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(/FROM users u LEFT JOIN ranked r/);
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(
       /EXISTS \(SELECT 1 FROM daily_agent_usage retained/,
     );
-    expect(queryMock.mock.calls[0]?.[0]).toMatch(/installation\.status = 'active'/);
-    expect(queryMock.mock.calls[0]?.[1]).toEqual(["2026-08-01", "2026-08-03", "known"]);
+    expect(queryMock.mock.calls[1]?.[0]).toMatch(/installation\.status = 'active'/);
+    expect(queryMock.mock.calls[1]?.[1]).toEqual(["2026-08-01", "2026-08-03", "known"]);
   });
 });

@@ -14,7 +14,6 @@ export function applicationHeaders(production: boolean) {
 }
 
 const config: NextConfig = {
-  output: "standalone",
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
   reactStrictMode: true,

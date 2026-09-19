@@ -1,7 +1,13 @@
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { config, proxy } from "./proxy";
+
+vi.mock("@/lib/rate-limit", () => ({
+  clientAddress: () => ({ trusted: true, key: "192.0.2.1" }),
+  clientAdmissionLimit: () => 120,
+  consumeAdmissionRateLimit: vi.fn().mockResolvedValue({ allowed: true, reason: null }),
+}));
 
 // Next 16.2.11's experimental helper declaration references a renamed internal type.
 const nextTesting = createRequire(import.meta.url)("next/experimental/testing/server") as {
@@ -15,9 +21,9 @@ const doesProxyMatch = (input: Parameters<typeof nextTesting.unstable_doesMiddle
   nextTesting.unstable_doesMiddlewareMatch(input);
 
 describe("HTML security proxy", () => {
-  it("returns a fresh nonce-based CSP for every page response", () => {
-    const first = proxy(new NextRequest("https://viberacing.example/"));
-    const second = proxy(new NextRequest("https://viberacing.example/dashboard"));
+  it("returns a fresh nonce-based CSP for every page response", async () => {
+    const first = await proxy(new NextRequest("https://viberacing.example/"));
+    const second = await proxy(new NextRequest("https://viberacing.example/dashboard"));
     const firstPolicy = first.headers.get("content-security-policy");
     const secondPolicy = second.headers.get("content-security-policy");
 
@@ -47,13 +53,13 @@ describe("HTML security proxy", () => {
     expect(doesProxyMatch({ config, url: `https://viberacing.example${path}` })).toBe(false);
   });
 
-  it("skips router prefetch requests", () => {
+  it("protects router prefetch requests", () => {
     expect(
       doesProxyMatch({
         config,
         url: "https://viberacing.example/dashboard",
         headers: { "next-router-prefetch": "1" },
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
