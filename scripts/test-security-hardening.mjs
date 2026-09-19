@@ -351,6 +351,40 @@ try {
     locked.release();
   }
   results.downstreamSqlTimeout = "503 with Retry-After";
+  const blocker = await pool.connect();
+  let interrupted;
+  try {
+    await blocker.query("BEGIN");
+    await blocker.query("LOCK daily_agent_usage IN ACCESS EXCLUSIVE MODE");
+    const {
+      rows: [{ pid: blockerPid }],
+    } = await blocker.query("SELECT pg_backend_pid() AS pid");
+    interrupted = send(0, "/", { ip: "127.0.0.42" });
+    let target;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const { rows } = await pool.query(
+        "SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%daily_agent_usage%'",
+        [blockerPid],
+      );
+      if (rows.length === 1) {
+        target = rows[0].pid;
+        break;
+      }
+      await delay(10);
+    }
+    assert.ok(target, "Expected exactly one synthetic public read blocked on the fixture lock");
+    await pool.query("SELECT pg_terminate_backend($1)", [target]);
+    const response = await interrupted;
+    assert.equal(response.status, 503);
+    assert.equal(response.headers["retry-after"], "1");
+  } finally {
+    await blocker.query("ROLLBACK");
+    blocker.release();
+    if (interrupted) await interrupted;
+  }
+  assert.equal((await send(0, "/", { ip: "127.0.0.43" })).status, 200);
+  results.inFlightDatabaseShutdown = "503 with Retry-After; next request recovers to 200";
+
   async function rawHttp(payload) {
     assert.ok(++requests <= 400, "Request budget exceeded");
     return new Promise((resolve, reject) => {

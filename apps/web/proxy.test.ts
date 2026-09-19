@@ -2,6 +2,13 @@ import { createRequire } from "node:module";
 import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { config, proxy } from "./proxy";
+import { consumeAdmissionRateLimit } from "@/lib/rate-limit";
+import { logError } from "@/lib/log";
+import { allowRequestLog } from "@/lib/metrics";
+import { ResourceOverloaded } from "@/lib/overload";
+
+vi.mock("@/lib/log", async (original) => ({ ...(await original<object>()), logError: vi.fn() }));
+vi.mock("@/lib/metrics", () => ({ allowRequestLog: vi.fn().mockReturnValue(true) }));
 
 vi.mock("@/lib/rate-limit", () => ({
   clientAddress: () => ({ trusted: true, key: "192.0.2.1" }),
@@ -62,4 +69,34 @@ describe("HTML security proxy", () => {
       }),
     ).toBe(true);
   });
+});
+
+it("logs a bounded safe diagnostic for admission failure and correlates the 503", async () => {
+  const cause = Object.assign(new Error("connect ECONNREFUSED private-password@private-host"), {
+    code: "ECONNREFUSED",
+  });
+  const error = Object.assign(new ResourceOverloaded(), { cause });
+  vi.mocked(consumeAdmissionRateLimit).mockRejectedValueOnce(error);
+  vi.mocked(logError).mockClear();
+  const response = await proxy(new NextRequest("https://viberacing.example/"));
+  expect(response.status).toBe(503);
+  expect(response.headers.get("Retry-After")).toBe("1");
+  expect(response.headers.get("X-Request-Id")).toMatch(/^[a-f0-9-]{36}$/);
+  expect(logError).toHaveBeenCalledWith(
+    "public_admission_failed",
+    expect.objectContaining({
+      requestId: response.headers.get("X-Request-Id"),
+      status: 503,
+      errorCode: "ECONNREFUSED",
+      diagnosticCode: "CONNECTION_REFUSED",
+    }),
+  );
+  expect(JSON.stringify(vi.mocked(logError).mock.calls)).not.toMatch(
+    /private-password|private-host|stack/,
+  );
+  vi.mocked(allowRequestLog).mockReturnValueOnce(false);
+  vi.mocked(logError).mockClear();
+  vi.mocked(consumeAdmissionRateLimit).mockRejectedValueOnce(error);
+  expect((await proxy(new NextRequest("https://viberacing.example/"))).status).toBe(503);
+  expect(logError).not.toHaveBeenCalled();
 });

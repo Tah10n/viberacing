@@ -32,15 +32,24 @@ function databaseFailure(error: unknown): never {
     ].includes(error.message)
   ) {
     markOverload();
-    throw new ResourceOverloaded();
+    throw new ResourceOverloaded(error);
   }
   if (
-    ["54000", "55P03", "57014", "53300", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"].includes(
-      String(code),
-    )
+    [
+      "54000",
+      "55P03",
+      "57014",
+      "57P01",
+      "57P02",
+      "57P03",
+      "53300",
+      "ECONNREFUSED",
+      "ETIMEDOUT",
+      "ECONNRESET",
+    ].includes(String(code))
   ) {
     markOverload();
-    throw new ResourceOverloaded();
+    throw new ResourceOverloaded(error);
   }
   throw error;
 }
@@ -97,16 +106,23 @@ async function runTransaction<T>(work: (client: PoolClient) => Promise<T>): Prom
   metric("dbOperations");
   metric("dbWaiting", database().waitingCount, true);
   const client = await database().connect();
+  let discard = false;
   try {
     await client.query("BEGIN");
     const result = await work(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // A lost connection cannot roll back. Preserve the original error for
+      // overload classification and discard the unusable pool client.
+      discard = true;
+    }
     throw error;
   } finally {
     metric("dbDurationMs", performance.now() - started);
-    client.release();
+    client.release(discard);
   }
 }

@@ -41,9 +41,12 @@ function threshold(name: string, fallback: string): bigint {
 export async function refreshRankingSignals(client: PoolClient, userId: string): Promise<void> {
   const rows = await client.query<DailyTotal>(
     `SELECT usage_date::text AS date, sum(tokens)::text AS total FROM daily_agent_usage
-      WHERE user_id = $1 AND usage_date >= date_trunc('year', now() AT TIME ZONE 'UTC')::date
+      WHERE user_id = $1 AND usage_date >= LEAST(
+        date_trunc('year', now() AT TIME ZONE 'UTC')::date - 1,
+        (now() AT TIME ZONE 'UTC')::date - 31
+      )
         AND usage_date <= (now() AT TIME ZONE 'UTC')::date
-      GROUP BY usage_date ORDER BY usage_date DESC LIMIT 366`,
+      GROUP BY usage_date ORDER BY usage_date DESC LIMIT 367`,
     [userId],
   );
   const signals = rankingSignals(

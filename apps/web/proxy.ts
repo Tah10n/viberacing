@@ -1,4 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { logError, safeErrorFields } from "@/lib/log";
+import { allowRequestLog } from "@/lib/metrics";
+import { isResourceOverloaded } from "@/lib/overload";
 import { contentSecurityPolicy } from "@/lib/csp";
 import { clientAddress, clientAdmissionLimit, consumeAdmissionRateLimit } from "@/lib/rate-limit";
 
@@ -35,11 +38,25 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
           },
         });
       }
-    } catch {
+    } catch (error) {
+      const requestId = crypto.randomUUID();
+      try {
+        if (allowRequestLog()) {
+          const cause = isResourceOverloaded(error) && error instanceof Error ? error.cause : error;
+          logError("public_admission_failed", {
+            requestId,
+            status: 503,
+            ...safeErrorFields(cause ?? error),
+          });
+        }
+      } catch {
+        // Diagnostics must not prevent the bounded unavailable response.
+      }
       return new NextResponse("Temporarily unavailable", {
         status: 503,
         headers: {
           "Retry-After": "1",
+          "X-Request-Id": requestId,
           "Cache-Control": "private, no-store",
           "Content-Security-Policy": policy,
         },

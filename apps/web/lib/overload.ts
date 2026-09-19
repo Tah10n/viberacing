@@ -1,7 +1,7 @@
 export class ResourceOverloaded extends Error {
   readonly code = "VIBERACING_OVERLOADED";
-  constructor() {
-    super("temporarily_overloaded");
+  constructor(cause?: unknown) {
+    super("temporarily_overloaded", { cause });
     this.name = "ResourceOverloaded";
   }
 }

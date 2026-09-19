@@ -416,9 +416,9 @@ jobs:
           done
           test "$database_container_ready" = true
           response_status="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3012/)"
-          test "$response_status" = 500
+          test "$response_status" = 503
           docker logs viberacing-ci-database-unavailable >"$database_log" 2>&1
-          grep --fixed-strings '"event":"next_request_error"' "$database_log" >/dev/null
+          grep --fixed-strings '"event":"public_admission_failed"' "$database_log" >/dev/null
           grep --fixed-strings '"diagnosticCode":"CONNECTION_REFUSED"' "$database_log" >/dev/null
           grep --fixed-strings '"errorCode":"ECONNREFUSED"' "$database_log" >/dev/null
           if grep --extended-regexp 'private-user|private-password|private-database|private-client-secret|127\.0\.0\.1:1|"message"|"stack"|/app/' "$database_log" >/dev/null; then

@@ -24,6 +24,10 @@ HTTP 503 before Next.js streams HTML, and to set header/body/connection deadline
 | Limiter storage        | Migration 016 caps new allocations at 200,000 rows transactionally, independent of cleanup; existing over-cap installations must drain expired rows before new allocation |
 | Cleanup                | At most seven batches of 10,000 expired buckets, at most once/minute/instance; signal/audit cleanup adds at most 1,000 rows each                                          |
 
+The migration runner locks bucket mutations before initializing the counter in published
+migration 016. Migration 018 reconciles previously applied counters under the same lock; readiness
+requires 018. Published migration SQL and checksums are unchanged.
+
 Per-instance concurrency multiplies with replicas; database admission and storage bounds are shared.
 These limits are not an RPS capacity promise. A distributed attack or a physically exhausted
 database can still make service unavailable. PostgreSQL backpressure and HTTP overload return 503

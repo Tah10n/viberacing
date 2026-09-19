@@ -162,7 +162,7 @@ Railway access. Do not describe production as protected by this candidate.
 ## Reproduction
 
 Use only a disposable local PostgreSQL container with the fixed loopback endpoint, migrations
-001–017, and `pg_stat_statements` enabled with track=all. Build base and candidate separately, use
+001–018, and `pg_stat_statements` enabled with track=all. Build base and candidate separately, use
 identical synthetic environment settings, and run the standard test commands above. The measurement
 seed option creates aggregate-only synthetic users; the complete API fixture is tested separately by
 local:test.
@@ -177,3 +177,47 @@ VIBERACING_TEST_ADMISSION_DATABASE=synthetic-local node scripts/test-security-ha
 The scripts are opt-in diagnostic fixtures, not production load tools. Their exact origin/database
 checks deliberately reject other targets. Raw measurement JSON and full plans are generated locally;
 only synthetic aggregate findings are included in this report.
+
+## Review regression checks (2026-09-19)
+
+The follow-up preserves published SQL/checksums 001–017. Before executing 016, the migration runner
+now blocks bucket mutations until the count and triggers commit. Migration 018 repairs
+already-applied stale counts under a table lock; readiness requires 018. PostgreSQL regressions
+cover a live old writer, a deliberately stale counter, cleanup after reconciliation, a clean
+installation, and no-op repeated migrations.
+
+Database shutdown errors retain their original cause when converted to an unavailable response. A
+failed rollback also preserves that cause and discards the unusable connection. Public admission
+logs bounded, sanitized diagnostics with a request ID and returns 503 with Retry-After. The CI
+unavailable-database check now requires that response and the safe admission diagnostic; its
+secret-exclusion checks remain intact.
+
+Signal refresh includes the current UTC year, the accepted rolling window and a preceding day for
+jump comparisons, with at most 367 daily rows. Real PostgreSQL checks execute the refresh SQL with a
+controlled January 1/January 15 clock, including December rolling delivery, cross-year jumps and
+downward corrections. They do not change the host or production clock.
+
+Validation uses Node 24.20.0, pnpm 11.7.0 and disposable PostgreSQL 17.10:
+
+- Final `corepack pnpm verify` passed, including 436 web unit tests and the existing repository,
+  connector and production-build gates. The final browser/accessibility run passed 19 tests.
+- Final `corepack pnpm local:test` passed through the Docker image, including missing-018 readiness
+  refusal and full account deletion. Docker readiness reports schema 018.
+- `corepack pnpm audit --prod --audit-level moderate` found no known vulnerabilities;
+  `git diff --check` passed.
+- Three new unit regressions failed on the reviewed code and pass with these changes.
+- Targeted unit/PostgreSQL/connection-timeout suite: 29 passed. Database integration tests require
+  the explicit synthetic-local opt-in and are skipped by the ordinary unit run.
+- The production Docker unavailable-database scenario returned 503 with Retry-After, a matching
+  request ID and CONNECTION_REFUSED/ECONNREFUSED fields; no fixture secrets, message or stack
+  leaked.
+- The two-instance HTTP fixture completed 124 requests, including termination of the specific
+  blocked test backend: 503 with Retry-After, then recovery to 200. Its bounded 40-request burst
+  returned 20 successful and 20 unavailable responses. These are local functional checks, not a new
+  production capacity claim.
+
+The first HTTP attempt lacked the documented benchmark seed; another crossed a fixed-minute quota
+boundary. The API fixture also requires its participants to appear on the first page, so the
+separate 2,000-user benchmark seed was removed before that fixture. These setup failures are not
+counted as passes. The full API check exposed the missing readiness version update; that check
+remains intact and the application now requires migration 018.
