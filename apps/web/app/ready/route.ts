@@ -23,6 +23,9 @@ async function get(): Promise<Response> {
                 AND to_regclass('public.account_dedup_events') IS NOT NULL
                 AND to_regclass('public.browser_sync_runs') IS NOT NULL
                 AND to_regclass('public.browser_sync_grants') IS NOT NULL
+                AND to_regclass('public.rate_limit_capacity') IS NOT NULL
+                AND to_regclass('public.ranking_signals') IS NOT NULL
+                AND to_regclass('public.ranking_moderation_log') IS NOT NULL
                 AND EXISTS (
                   SELECT 1 FROM information_schema.columns
                    WHERE table_schema = 'public'

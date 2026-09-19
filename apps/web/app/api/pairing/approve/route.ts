@@ -1,3 +1,4 @@
+import { refreshRankingSignals } from "@/lib/ranking-signals";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { agentRegistry, type SupportedAgent } from "@/lib/agents";
@@ -330,6 +331,7 @@ async function post(request: Request): Promise<Response> {
       }
       for (const agentId of summariesToRebuild) {
         await rebuildAgentDailySummaries(client, current.id, agentId);
+        await refreshRankingSignals(client, current.id);
       }
       return installation.id;
     });

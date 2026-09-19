@@ -17,6 +17,7 @@ import {
   consumeRateLimit,
 } from "@/lib/rate-limit";
 import { rebuildAgentDailySummaries, refreshAgentRange } from "@/lib/usage-summary";
+import { refreshRankingSignals } from "@/lib/ranking-signals";
 import { addUtcDays } from "@/lib/usage-period";
 import { withRequestLogging } from "@/lib/request-log";
 
@@ -805,6 +806,7 @@ async function post(request: Request): Promise<Response> {
         await rebuildAgentDailySummaries(client, userId, agentId);
       }
       if (acceptedSnapshots > 0) {
+        await refreshRankingSignals(client, lockedInstallation.user_id);
         await client.query(
           "UPDATE installations SET last_sync_at = now(), updated_at = now() WHERE id = $1",
           [lockedInstallation.id],

@@ -2,6 +2,12 @@
 
 Vibe Racing sends only the data needed to compute a self-reported ranking.
 
+Server-side review signals use only existing deduplicated daily aggregates. A private row per user
+holds at most 32 UTC date/rule pairs, retained for 30 days; no provider details or new connector
+fields are collected. Operator moderation stores a private timestamped hide/restore journal, capped
+at 100 actions per user and 365 days. User deletion removes both. Signals never automatically hide
+users or alter totals. See [operator procedures and cleanup](SECURITY_OPERATIONS.md).
+
 Cursor Desktop/interactive hooks and the explicit headless wrapper parse bounded provider input in
 memory and immediately discard content. Local event, account, alias and session identities use
 domain-separated HMACs under an owner-only random identity salt. No provider identity, credential,

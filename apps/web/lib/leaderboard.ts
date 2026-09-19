@@ -100,10 +100,11 @@ const rankedSummarySql = `WITH per_user AS (
 ), ranked AS (
   SELECT user_id, total, dense_rank() OVER (ORDER BY total DESC) AS rank
     FROM per_user
+   WHERE NOT EXISTS (SELECT 1 FROM users hidden WHERE hidden.id = user_id AND hidden.ranking_hidden)
 )`;
 
 // Keep discovery and metadata under the same visibility rules as the public profile.
-const publicProfileVisibilitySql = `(
+const publicProfileVisibilitySql = `NOT u.ranking_hidden AND (
   EXISTS (SELECT 1 FROM daily_agent_usage retained WHERE retained.user_id = u.id)
   OR EXISTS (
     SELECT 1 FROM installations installation

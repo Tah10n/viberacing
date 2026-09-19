@@ -71,6 +71,10 @@ function scheduleExpiredRateLimitBucketCleanup(): void {
   admissionState.lastCleanupStartedAt = startedAt;
   admissionState.cleanupInFlight = transaction(async (client) => {
     await deleteExpiredRateLimitBuckets(client);
+    await client.query(`DELETE FROM ranking_signals WHERE user_id IN
+      (SELECT user_id FROM ranking_signals WHERE observed_at <= now()-interval '30 days' LIMIT 1000)`);
+    await client.query(`DELETE FROM ranking_moderation_log WHERE id IN
+      (SELECT id FROM ranking_moderation_log WHERE acted_at <= now()-interval '365 days' LIMIT 1000)`);
   })
     .catch(() => {})
     .finally(() => {
