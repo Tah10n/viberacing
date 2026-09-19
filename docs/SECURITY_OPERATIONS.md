@@ -34,6 +34,11 @@ database can still make service unavailable. PostgreSQL backpressure and HTTP ov
 with `Retry-After: 1`; quota rejection returns 429. NAT users share a client quota. No unverified
 bearer value, URL, or client-selected label becomes a new limiter dimension.
 
+At startup the server inventories regular files in `public`. Those exact paths (including fonts and
+packaged connector archives), plus Next static assets, use the general request/connection limits
+without occupying a public-render slot or entering the HTML response buffer. Unknown paths under
+`/fonts` or `/downloads` still count as dynamic work; a prefix is not an exemption.
+
 Public dynamic responses are buffered up to 2 MiB (32 MiB for the existing 50,000-URL sitemap
 contract), with at most four such responses per instance. Buffer storage can temporarily be copied
 once when writing the response. A downstream SQL timeout discards partial output and returns HTTP
@@ -66,18 +71,24 @@ Use an operator shell with direct database access, never a browser session or co
 
 ```sh
 node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs list
+node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs list AFTER_USER_ID
+node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs hidden
+node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs hidden AFTER_USER_ID
 node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs hide USER_ID
 node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs restore USER_ID
 node --env-file=/secure/operator.env apps/web/scripts/moderate.mjs prune
 ```
 
 `USER_ID` is the immutable internal numeric ID. CLI output is private operator data; do not paste it
-in ordinary application logs or a public issue. `list` shows up to 100 recent signals. Hide/restore
-lock the user and are idempotent; only actual changes append a timestamped audit action. Hiding
-filters users before dense ranking, hides their profile/metadata/sitemap entry, and preserves their
-private dashboard, sources, usage, and account deletion. Restoring makes retained data public again
-under the ordinary visibility rule. There is no administrative HTTP API and no connector
-administrative power.
+in ordinary application logs or a public issue. `list` returns up to 100 recent signals ordered by
+numeric user ID. Pass the last row's `user_id` as `AFTER_USER_ID` to continue until an empty JSON
+array; restart from the first page for a fresh scan if signals change during review. `hidden` uses
+the same pagination and includes hidden users regardless of signal age or presence. Both commands
+retain the JSON array format and never change moderation state. Hide/restore lock the user and are
+idempotent; only actual changes append a timestamped audit action. Hiding filters users before dense
+ranking, hides their profile/metadata/sitemap entry, and preserves their private dashboard, sources,
+usage, and account deletion. Restoring makes retained data public again under the ordinary
+visibility rule. There is no administrative HTTP API and no connector administrative power.
 
 ## Production inspection and changes
 
@@ -130,9 +141,12 @@ Sources:
 DB duration/waiting, public SQL reads/duration, HTTP 429/5xx and suppressed logs, plus limiter keys
 and RSS. `http_resource_summary` reports launcher requests, overloads and current active/public
 work. Summaries are emitted at most once/minute when traffic arrives. Absence during idle time is
-expected. API per-request logs are capped at 100 records/minute/process; every response retains a
-request ID, while repeated excess requests are represented by aggregate counters. Labels contain no
-client or user identities, URLs, token totals, request bodies, credentials or model data.
+expected. Request/admission logs reserve separate per-process minute budgets: 100 ordinary records
+and 20 error diagnostics. Disabled log levels consume neither budget. Ordinary successes, health
+checks and expected refusals cannot spend the error reserve; excess errors remain bounded and are
+represented by counters. Responses retain request IDs even when their detailed log is suppressed.
+Labels contain no client or user identities, URLs, token totals, request bodies, credentials or
+model data.
 
 The following are proposed operating thresholds, not measured capacity claims. Delivery channel: the
 project owner's existing operational email/incident channel, to be selected and confirmed in

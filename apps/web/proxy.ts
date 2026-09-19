@@ -41,7 +41,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     } catch (error) {
       const requestId = crypto.randomUUID();
       try {
-        if (allowRequestLog()) {
+        if (allowRequestLog("error")) {
           const cause = isResourceOverloaded(error) && error instanceof Error ? error.cause : error;
           logError("public_admission_failed", {
             requestId,

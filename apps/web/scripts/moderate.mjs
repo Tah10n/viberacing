@@ -2,13 +2,19 @@ import pg from "pg";
 import console from "node:console";
 import { databaseClientConfig } from "./database-config.js";
 
-const [action, userId] = process.argv.slice(2);
+const [action, userId, ...extra] = process.argv.slice(2);
+const listing = action === "list" || action === "hidden";
+const validId = (id) => /^[1-9][0-9]{0,18}$/.test(id ?? "") && BigInt(id) <= 9223372036854775807n;
 if (
-  !["list", "hide", "restore", "prune"].includes(action) ||
-  (["hide", "restore"].includes(action) && !/^[1-9][0-9]{0,18}$/.test(userId ?? "")) ||
-  process.argv.length > (["hide", "restore"].includes(action) ? 4 : 3)
+  !["list", "hidden", "hide", "restore", "prune"].includes(action) ||
+  extra.length > 0 ||
+  (listing && userId !== undefined && !validId(userId)) ||
+  (["hide", "restore"].includes(action) && !validId(userId)) ||
+  (action === "prune" && userId !== undefined)
 ) {
-  console.error("Usage: node scripts/moderate.mjs list|prune|hide USER_ID|restore USER_ID");
+  console.error(
+    "Usage: node scripts/moderate.mjs list [AFTER_USER_ID]|hidden [AFTER_USER_ID]|prune|hide USER_ID|restore USER_ID",
+  );
   process.exit(2);
 }
 // Operator-only database access. No route, session, or connector capability invokes this CLI.
@@ -19,11 +25,19 @@ const pool = new pg.Pool({
   statement_timeout: 8000,
 });
 try {
-  if (action === "list") {
-    const result =
-      await pool.query(`SELECT u.id::text AS user_id, u.ranking_hidden, s.signals, s.observed_at
-      FROM ranking_signals s JOIN users u ON u.id=s.user_id
-      WHERE s.observed_at > now()-interval '30 days' ORDER BY s.observed_at DESC, u.id LIMIT 100`);
+  if (listing) {
+    // Keyset pagination preserves bounded pages without ever-growing OFFSET scans.
+    // Keep the existing JSON array contract; pass the last user_id to get the next page.
+    const result = await pool.query(
+      action === "list"
+        ? `SELECT u.id::text AS user_id, u.ranking_hidden, s.signals, s.observed_at
+           FROM ranking_signals s JOIN users u ON u.id=s.user_id
+           WHERE s.observed_at > now()-interval '30 days' AND u.id > $1::bigint
+           ORDER BY u.id LIMIT 100`
+        : `SELECT id::text AS user_id, ranking_hidden FROM users
+           WHERE ranking_hidden AND id > $1::bigint ORDER BY id LIMIT 100`,
+      [userId ?? "0"],
+    );
     process.stdout.write(JSON.stringify(result.rows, null, 2) + "\n");
   } else if (action === "prune") {
     await pool.query(`DELETE FROM ranking_signals WHERE user_id IN

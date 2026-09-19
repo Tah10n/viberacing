@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from "node:url";
 import { setTimeout } from "node:timers";
 import next from "next";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { publicAssetPaths } from "./public-assets.mjs";
 import { holdPublicResponse } from "./public-response.mjs";
 
 const publicResponse = (globalThis.viberacingPublicResponse ??= new AsyncLocalStorage());
@@ -16,6 +17,7 @@ process.chdir(appDirectory);
 const manifest = JSON.parse(
   await readFile(new URL("../.next/required-server-files.json", import.meta.url), "utf8"),
 );
+const publicAssets = await publicAssetPaths(new URL("../public/", import.meta.url));
 const app = next({
   dev: false,
   dir: appDirectory,
@@ -70,7 +72,7 @@ const server = createServer(
     const control = /^\/(?:api(?:\/|$)|health$|ready$|dashboard(?:\/|$)|connect(?:\/|$))/.test(
       pathname,
     );
-    const asset = pathname.startsWith("/_next/static/") || /^\/favicon\.(ico|svg)$/.test(pathname);
+    const asset = pathname.startsWith("/_next/static/") || publicAssets.has(pathname);
     const costly = !control && !asset;
     if (active >= 32 || (costly && publicActive >= 4)) {
       overloads += 1;

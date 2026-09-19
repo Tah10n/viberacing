@@ -10,8 +10,8 @@ interface RequestLoggingOptions {
 type RequestLogLevel = "debug" | "info" | "warn" | "error";
 
 function bestEffortLog(level: RequestLogLevel, event: string, fields: LogFields): void {
-  if (!allowRequestLog()) return;
   try {
+    if (!allowRequestLog(level)) return;
     if (level === "error") logError(event, fields);
     else if (level === "warn") logWarn(event, fields);
     else if (level === "debug") logDebug(event, fields);

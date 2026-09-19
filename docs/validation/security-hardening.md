@@ -221,3 +221,36 @@ boundary. The API fixture also requires its participants to appear on the first 
 separate 2,000-user benchmark seed was removed before that fixture. These setup failures are not
 counted as passes. The full API check exposed the missing readiness version update; that check
 remains intact and the application now requires migration 018.
+
+## Logging, static assets and operator follow-up (2026-09-19)
+
+A production-info regression reproduced the disabled-debug budget defect on head
+`a8ed102e434d6a3e33dc6801a24c7160bcf5e280`. Request logging now checks whether its level is enabled
+before spending capacity. Ordinary events have 100 slots/minute/process and errors have a separate
+20-slot reserve. The test sends 200 debug-only requests, 150 ordinary successes and 101 failures; it
+checks safe PostgreSQL codes, request ID correlation, bounded output and the next-minute reset.
+
+The original HTTP launcher also reproduced 503 for a font while four actual PostgreSQL reads were
+blocked. The launcher now inventories exact regular files in `public` at startup. Known fonts and
+connector archives retain the global bounds but bypass the four-render budget and HTML buffering;
+unknown paths remain limited. The bounded HTTP regression verifies downloaded bytes against the
+packaged files and reads the connector name/version from the downloaded tar archive.
+
+The operator CLI preserves JSON-array output and adds keyset pagination: `list [AFTER_USER_ID]` and
+`hidden [AFTER_USER_ID]`, at most 100 rows per page. Hidden users are discoverable without a fresh
+signal. An isolated PostgreSQL regression walks 205 signals and finds/restores two hidden users with
+absent/expired signals without deleting those signals.
+
+Production CI now provisions a separate disposable PostgreSQL service on the guarded loopback
+port 55439. Its mandatory sequential opt-in test step covers all four previously skipped PostgreSQL
+suites plus the CLI suite (11 cases). A subsequent mandatory step runs the real HTTP static-asset
+saturation regression and tears down its server with an EXIT trap. Service containers are scoped to
+the GitHub Actions job. No comparative benchmark was added to CI.
+
+Final local results for this follow-up: `corepack pnpm verify` passed (437 web tests; the 11 opt-in
+cases passed separately with the exact sequential CI command), `corepack pnpm local:test` passed,
+browser/accessibility checks passed 19/19, and production dependency audit found no known
+vulnerabilities. The new production HTTP test passed: four genuinely blocked renders, successful
+font and archive downloads, refusal of extra/unknown dynamic work, and recovery of all four renders.
+The previously recorded latency/RSS benchmark was not repeated. Remote CI is a separate check of the
+published head; these local results do not claim that the new remote steps have completed.
