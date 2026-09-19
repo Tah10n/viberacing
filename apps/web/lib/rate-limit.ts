@@ -3,6 +3,22 @@ import type { PoolClient } from "pg";
 import { trustedProxyMode } from "./config";
 import { digest } from "./crypto";
 import { transaction } from "./db";
+import { RejectionBackoff } from "./overload";
+import { metric } from "./metrics";
+
+const shared = globalThis as typeof globalThis & {
+  viberacingAdmissionState?: {
+    backoff: RejectionBackoff;
+    lastCleanupStartedAt: number;
+    cleanupInFlight: Promise<void> | null;
+  };
+};
+const admissionState = (shared.viberacingAdmissionState ??= {
+  backoff: new RejectionBackoff(),
+  lastCleanupStartedAt: 0,
+  cleanupInFlight: null,
+});
+const rejectionBackoff = admissionState.backoff;
 
 const cleanupIntervalMilliseconds = 60_000;
 export const rateLimitCleanupBatchSize = 10_000;
@@ -12,8 +28,6 @@ export const publicAdmissionGlobalLimit = 10_000;
 export const publicAdmissionMaximumAllocatedBuckets =
   publicAdmissionGlobalLimit * publicAdmissionMaximumBucketsPerRequest;
 const publicAdmissionWindowSeconds = 60;
-let lastCleanupStartedAt = 0;
-let cleanupInFlight: Promise<void> | null = null;
 
 export function rateLimitCleanupDue(lastStartedAt: number, now: number): boolean {
   return lastStartedAt === 0 || now - lastStartedAt >= cleanupIntervalMilliseconds;
@@ -49,14 +63,18 @@ export async function deleteExpiredRateLimitBuckets(client: PoolClient): Promise
 
 function scheduleExpiredRateLimitBucketCleanup(): void {
   const startedAt = Date.now();
-  if (cleanupInFlight !== null || !rateLimitCleanupDue(lastCleanupStartedAt, startedAt)) return;
-  lastCleanupStartedAt = startedAt;
-  cleanupInFlight = transaction(async (client) => {
+  if (
+    admissionState.cleanupInFlight !== null ||
+    !rateLimitCleanupDue(admissionState.lastCleanupStartedAt, startedAt)
+  )
+    return;
+  admissionState.lastCleanupStartedAt = startedAt;
+  admissionState.cleanupInFlight = transaction(async (client) => {
     await deleteExpiredRateLimitBuckets(client);
   })
     .catch(() => {})
     .finally(() => {
-      cleanupInFlight = null;
+      admissionState.cleanupInFlight = null;
     });
 }
 
@@ -76,7 +94,7 @@ async function incrementRateLimitBucket(
        to_timestamp((floor(extract(epoch FROM now()) / $3) + 1) * $3)
      )
      ON CONFLICT (scope, key_hash, window_started_at) DO UPDATE
-       SET request_count = rate_limit_buckets.request_count + 1
+       SET request_count = least(rate_limit_buckets.request_count, 2147483646) + 1
      RETURNING request_count`,
     [scope, digest(key), windowSeconds],
   );
@@ -99,6 +117,12 @@ export async function consumeRateLimit(
 export type AdmissionResult =
   { allowed: true; reason: null } | { allowed: false; reason: "global" | "client" };
 
+class AdmissionRejected extends Error {
+  constructor(readonly reason: "global" | "client") {
+    super("admission_rejected");
+  }
+}
+
 export async function consumeAdmissionRateLimit(
   scope: string,
   clientKey: string,
@@ -109,24 +133,53 @@ export async function consumeAdmissionRateLimit(
   const globalScope = `admit_${scope}`;
   validateRateLimit(scope, clientLimit, windowSeconds);
   validateRateLimit(globalScope, globalLimit, windowSeconds);
+  const backoffKey = `${scope}:${digest(clientKey).toString("hex")}`;
+  metric("limiterKeys", rejectionBackoff.size, true);
+  if (rejectionBackoff.has(`global:${scope}`)) {
+    metric("earlyRejected");
+    return { allowed: false, reason: "global" };
+  }
+  if (rejectionBackoff.has(backoffKey)) {
+    metric("earlyRejected");
+    return { allowed: false, reason: "client" };
+  }
   scheduleExpiredRateLimitBucketCleanup();
-  return transaction(async (client) => {
+  return transaction<AdmissionResult>(async (client) => {
     const publicGlobalCount = await incrementRateLimitBucket(
       client,
-      "admit_public",
+      scope === "public_read" ? "admit_read" : "admit_public",
       "all",
       publicAdmissionWindowSeconds,
     );
     if (publicGlobalCount > publicAdmissionGlobalLimit) {
-      return { allowed: false, reason: "global" };
+      throw new AdmissionRejected("global");
     }
     const globalCount = await incrementRateLimitBucket(client, globalScope, "all", windowSeconds);
-    if (globalCount > globalLimit) return { allowed: false, reason: "global" };
+    if (globalCount > globalLimit) throw new AdmissionRejected("global");
     const clientCount = await incrementRateLimitBucket(client, scope, clientKey, windowSeconds);
-    return clientCount <= clientLimit
-      ? { allowed: true, reason: null }
-      : { allowed: false, reason: "client" };
-  });
+    if (clientCount > clientLimit) throw new AdmissionRejected("client");
+    return { allowed: true, reason: null };
+  })
+    .then((result) => {
+      metric("admitted");
+      return result;
+    })
+    .catch((error: unknown) => {
+      // The transaction rolls back ALL increments, including the global admission budgets.
+      // Keep global-first locking: a rejected new client cannot allocate a persistent bucket.
+      if (error instanceof AdmissionRejected) {
+        metric(error.reason === "client" ? "deniedClient" : "deniedGlobal");
+        const now = Date.now();
+        const nextWindow = (Math.floor(now / (windowSeconds * 1000)) + 1) * windowSeconds * 1000;
+        rejectionBackoff.add(
+          error.reason === "client" ? backoffKey : `global:${scope}`,
+          now,
+          nextWindow,
+        );
+        return { allowed: false, reason: error.reason };
+      }
+      throw error;
+    });
 }
 
 export type ClientAddress =

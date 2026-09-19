@@ -1,6 +1,49 @@
+import type { AsyncLocalStorage } from "node:async_hooks";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { databaseClientConfig } from "./config";
 import { logError, safeErrorFields } from "./log";
+import { ConcurrencyLimit, ResourceOverloaded, isResourceOverloaded } from "./overload";
+
+import { metric } from "./metrics";
+
+const shared = globalThis as typeof globalThis & {
+  viberacingDatabaseWork?: ConcurrencyLimit;
+  viberacingPublicResponse?: AsyncLocalStorage<{ overloaded: boolean }>;
+};
+const databaseWork = (shared.viberacingDatabaseWork ??= new ConcurrencyLimit(10, 32, 1000));
+
+function markOverload(): void {
+  const response = shared.viberacingPublicResponse?.getStore();
+  if (response) response.overloaded = true;
+  metric("overloaded");
+}
+
+function databaseFailure(error: unknown): never {
+  if (isResourceOverloaded(error)) {
+    markOverload();
+    throw error;
+  }
+  const code = (error as { code?: unknown } | null)?.code;
+  if (
+    error instanceof Error &&
+    [
+      "Connection terminated due to connection timeout",
+      "timeout exceeded when trying to connect",
+    ].includes(error.message)
+  ) {
+    markOverload();
+    throw new ResourceOverloaded();
+  }
+  if (
+    ["54000", "55P03", "57014", "53300", "ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"].includes(
+      String(code),
+    )
+  ) {
+    markOverload();
+    throw new ResourceOverloaded();
+  }
+  throw error;
+}
 
 const globalPool = globalThis as typeof globalThis & { viberacingPool?: Pool };
 
@@ -9,9 +52,11 @@ function createPool(): Pool {
   const pool = new Pool({
     ...connection,
     max: 10,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 1_000,
     idleTimeoutMillis: 30_000,
     statement_timeout: 8_000,
+    lock_timeout: 1_000,
+    idle_in_transaction_session_timeout: 10_000,
   });
   pool.on("error", (error) => {
     logError("database_pool_error", safeErrorFields(error));
@@ -28,11 +73,29 @@ export async function query<T extends QueryResultRow>(
   text: string,
   values: readonly unknown[] = [],
 ): Promise<T[]> {
-  const result = await database().query<T>(text, [...values]);
-  return result.rows;
+  return databaseWork
+    .run(async () => {
+      const started = performance.now();
+      metric("dbOperations");
+      metric("dbWaiting", database().waitingCount, true);
+      try {
+        const result = await database().query<T>(text, [...values]);
+        return result.rows;
+      } finally {
+        metric("dbDurationMs", performance.now() - started);
+      }
+    })
+    .catch(databaseFailure);
 }
 
 export async function transaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  return databaseWork.run(() => runTransaction(work)).catch(databaseFailure);
+}
+
+async function runTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
+  const started = performance.now();
+  metric("dbOperations");
+  metric("dbWaiting", database().waitingCount, true);
   const client = await database().connect();
   try {
     await client.query("BEGIN");
@@ -43,6 +106,7 @@ export async function transaction<T>(work: (client: PoolClient) => Promise<T>): 
     await client.query("ROLLBACK");
     throw error;
   } finally {
+    metric("dbDurationMs", performance.now() - started);
     client.release();
   }
 }
