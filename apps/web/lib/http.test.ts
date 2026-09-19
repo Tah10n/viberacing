@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isRecord, isSafeDisplayText, isUuid, readBoundedForm, readBoundedJson } from "./http";
 
 describe("request value validation", () => {
@@ -21,6 +21,21 @@ describe("request value validation", () => {
 });
 
 describe("bounded request bodies", () => {
+  it("expires a slow streaming body without waiting for cancellation", async () => {
+    vi.useFakeTimers();
+    try {
+      const request = new Request("http://localhost/api", {
+        method: "POST",
+        body: new ReadableStream({ cancel: () => new Promise(() => {}) }),
+        duplex: "half",
+      } as RequestInit & { duplex: "half" });
+      const result = expect(readBoundedJson(request)).rejects.toThrow("request_timeout");
+      await vi.advanceTimersByTimeAsync(5000);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("parses JSON within the byte limit", async () => {
     const request = new Request("http://localhost/api", {
       method: "POST",

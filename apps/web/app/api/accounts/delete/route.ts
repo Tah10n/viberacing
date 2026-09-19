@@ -1,3 +1,4 @@
+import { refreshRankingSignals } from "@/lib/ranking-signals";
 import { NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/config";
 import { transaction } from "@/lib/db";
@@ -46,6 +47,7 @@ async function post(request: Request): Promise<Response> {
         current.id,
       ]);
       await rebuildAgentDailySummaries(client, current.id, row.agent_id);
+      await refreshRankingSignals(client, current.id);
       return "deleted";
     });
     if (outcome === "missing") return problem(404, "account_not_found");

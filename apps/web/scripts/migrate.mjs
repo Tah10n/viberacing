@@ -142,6 +142,11 @@ try {
     const checksum = migrationChecksums.get(version);
     await client.query("BEGIN");
     try {
+      // 016 is published and immutable. Fence old writers before its initial count,
+      // keeping this lock until the capacity triggers and ledger entry commit.
+      if (version === "016_rate_limit_capacity.sql") {
+        await client.query("LOCK TABLE rate_limit_buckets IN SHARE ROW EXCLUSIVE MODE");
+      }
       await client.query(sql);
       await client.query("INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)", [
         version,

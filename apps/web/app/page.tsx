@@ -70,7 +70,7 @@ export async function generateMetadata({ searchParams }: HomePageProps): Promise
     page > 1 &&
     (
       await leaderboard(
-        { limit: 1, offset: (page - 1) * leaderboardPageSize },
+        { limit: leaderboardPageSize + 1, offset: (page - 1) * leaderboardPageSize },
         resolveUsagePeriod(period),
       )
     ).length === 0

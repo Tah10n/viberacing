@@ -1,5 +1,9 @@
 # Deployment
 
+See [abuse protection and recovery](SECURITY_OPERATIONS.md) for the production HTTP launcher,
+resource limits, operator moderation, proposed alerts, and backup/restore procedures. Settings in
+that document require separate application and verification; they are not enabled by documentation.
+
 ## Railway
 
 For public search metadata, sitemap behavior and Google ownership verification, see

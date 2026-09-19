@@ -1,3 +1,4 @@
+vi.mock("@/lib/ranking-signals", () => ({ refreshRankingSignals: vi.fn() }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({

@@ -1,3 +1,4 @@
+import { refreshRankingSignals } from "@/lib/ranking-signals";
 import { NextResponse } from "next/server";
 import { agentRegistry, type SupportedAgent } from "@/lib/agents";
 import { publicOrigin } from "@/lib/config";
@@ -57,6 +58,7 @@ async function post(request: Request): Promise<Response> {
         [sourceId, current.id],
       );
       await rebuildAgentDailySummaries(client, current.id, source.agent_id);
+      await refreshRankingSignals(client, current.id);
       return true;
     });
     if (!changed) return problem(404, "source_or_account_not_found");

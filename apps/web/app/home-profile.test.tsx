@@ -37,7 +37,9 @@ describe("home personal profile navigation", () => {
       Promise.resolve(
         sql.includes("FROM users u LEFT JOIN ranked")
           ? [{ handle: "NewRacer", rank, total: "0", breakdown: null }]
-          : [],
+          : sql.includes("SELECT u.handle FROM users u")
+            ? [{ handle: "NewRacer" }]
+            : [],
       ),
     );
     const markup = renderToStaticMarkup(

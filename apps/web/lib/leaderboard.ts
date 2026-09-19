@@ -1,6 +1,22 @@
 import { agentNames, isSupportedAgent, type SupportedAgent } from "./agents";
+import { cache } from "react";
+import type { QueryResultRow } from "pg";
+import { metric } from "./metrics";
 import { query } from "./db";
 import { currentUtcWeekStart, resolveUsagePeriod, type ResolvedUsagePeriod } from "./usage-period";
+
+async function publicQuery<T extends QueryResultRow>(
+  sql: string,
+  values: readonly unknown[] = [],
+): Promise<T[]> {
+  const started = performance.now();
+  metric("publicReads");
+  try {
+    return await query<T>(sql, values);
+  } finally {
+    metric("publicReadMs", performance.now() - started);
+  }
+}
 
 export { formatAgentShare, formatCompactTokens, formatExactTokens } from "./leaderboard-format";
 
@@ -84,10 +100,11 @@ const rankedSummarySql = `WITH per_user AS (
 ), ranked AS (
   SELECT user_id, total, dense_rank() OVER (ORDER BY total DESC) AS rank
     FROM per_user
+   WHERE NOT EXISTS (SELECT 1 FROM users hidden WHERE hidden.id = user_id AND hidden.ranking_hidden)
 )`;
 
 // Keep discovery and metadata under the same visibility rules as the public profile.
-const publicProfileVisibilitySql = `(
+const publicProfileVisibilitySql = `NOT u.ranking_hidden AND (
   EXISTS (SELECT 1 FROM daily_agent_usage retained WHERE retained.user_id = u.id)
   OR EXISTS (
     SELECT 1 FROM installations installation
@@ -95,18 +112,19 @@ const publicProfileVisibilitySql = `(
   )
 )`;
 
-export async function publicProfileHandle(handle: string): Promise<string | null> {
-  const rows = await query<{ handle: string }>(
+export const publicProfileHandle = cache(async (handle: string): Promise<string | null> => {
+  if (!/^[A-Za-z0-9-]{1,39}$/.test(handle)) return null;
+  const rows = await publicQuery<{ handle: string }>(
     `SELECT u.handle FROM users u
       WHERE lower(u.handle) = lower($1) AND ${publicProfileVisibilitySql}
       LIMIT 1`,
     [handle],
   );
   return rows[0]?.handle ?? null;
-}
+});
 
 export async function publicProfileHandles(): Promise<readonly string[]> {
-  const rows = await query<{ handle: string }>(
+  const rows = await publicQuery<{ handle: string }>(
     `SELECT u.handle FROM users u WHERE ${publicProfileVisibilitySql}
       ORDER BY lower(u.handle), u.id LIMIT 49999`,
   );
@@ -125,8 +143,25 @@ export async function leaderboard(
   if (!Number.isSafeInteger(offset) || offset < 0) {
     throw new RangeError("Leaderboard offset must be a non-negative safe integer.");
   }
-  const rows = await query<LeaderboardRowDb>(
-    `${rankedSummarySql}
+  return cachedLeaderboard(limit, offset, resolved.from, resolved.toExclusive);
+}
+
+const cachedLeaderboard = cache(
+  async (
+    limit: number,
+    offset: number,
+    from: string,
+    toExclusive: string,
+  ): Promise<readonly LeaderboardRow[]> => {
+    // A cheap indexed user count rules out impossible offsets before aggregating usage.
+    if (offset > 0) {
+      const counts = await publicQuery<{ count: string }>(
+        "SELECT count(*)::text AS count FROM users",
+      );
+      if (BigInt(offset) >= BigInt(counts[0]?.count ?? "0")) return [];
+    }
+    const rows = await publicQuery<LeaderboardRowDb>(
+      `${rankedSummarySql}
      SELECT u.handle, r.rank::text, r.total::text,
             (SELECT jsonb_object_agg(agent.agent_id, agent.tokens::text)
                FROM (
@@ -139,17 +174,24 @@ export async function leaderboard(
        FROM ranked r JOIN users u ON u.id = r.user_id
       ORDER BY r.rank, lower(u.handle), u.id
       LIMIT $3 OFFSET $4`,
-    [resolved.from, resolved.toExclusive, limit, offset],
-  );
-  return rows.map((row) => ({ ...projectRow(row), rank: row.rank as string }));
-}
+      [from, toExclusive, limit, offset],
+    );
+    return rows.map((row) => ({ ...projectRow(row), rank: row.rank as string }));
+  },
+);
 
 export async function publicProfile(
   handle: string,
   resolved: ResolvedUsagePeriod = resolveUsagePeriod({ kind: "week" }),
 ): Promise<PublicProfile | null> {
-  const rows = await query<LeaderboardRowDb>(
-    `${rankedSummarySql}
+  return cachedPublicProfile(handle, resolved.from, resolved.toExclusive);
+}
+
+const cachedPublicProfile = cache(
+  async (handle: string, from: string, toExclusive: string): Promise<PublicProfile | null> => {
+    if ((await publicProfileHandle(handle)) === null) return null;
+    const rows = await publicQuery<LeaderboardRowDb>(
+      `${rankedSummarySql}
      SELECT u.handle, r.rank::text, coalesce(r.total, 0)::text AS total,
             (SELECT jsonb_object_agg(agent.agent_id, agent.tokens::text)
                FROM (
@@ -163,8 +205,9 @@ export async function publicProfile(
       WHERE lower(u.handle) = lower($3)
         AND ${publicProfileVisibilitySql}
       LIMIT 1`,
-    [resolved.from, resolved.toExclusive, handle],
-  );
-  const row = rows[0];
-  return row === undefined ? null : projectRow(row);
-}
+      [from, toExclusive, handle],
+    );
+    const row = rows[0];
+    return row === undefined ? null : projectRow(row);
+  },
+);

@@ -13,5 +13,8 @@
   "012_cursor_constraints_add.sql": "b010b12af820e1e1adae65cc65ba939240d5e2a73317bc99be9d0a0ae6e4d467",
   "013_cursor_constraints_validate.sql": "3059ec9bd80313ad821136c91d18fe9227981ff1878355c13332c010ba806155",
   "014_cursor_constraints_activate.sql": "fa9c2b91954f567f6f8a7839c6e42071bedfada043fb69c68672e14110db470c",
-  "015_usage_observation_order.sql": "3774b8e5d67c9a0e3bfc2681bd9aa53e96882d1653518a6e3447749eaf06756d"
+  "015_usage_observation_order.sql": "3774b8e5d67c9a0e3bfc2681bd9aa53e96882d1653518a6e3447749eaf06756d",
+  "016_rate_limit_capacity.sql": "c1d7680b0745ce2e9211ef011ad71a43645a4e33bcb318cb6c019fd6a92be5aa",
+  "017_ranking_moderation.sql": "52e3bd07837f19e2e1d565692d782ed387c549d54fc3828fd958994cb566d430",
+  "018_reconcile_rate_limit_capacity.sql": "fb6148d33157102234b6a86dc9fccaff1145c1c04bee671ede1f12690b90d053"
 }

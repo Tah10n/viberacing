@@ -2,6 +2,8 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { createRequire } from "node:module";
+import { setTimeout as delay } from "node:timers/promises";
+import { rankingSignals } from "../apps/web/lib/ranking-signals.ts";
 import { adapterFor } from "../packages/connector/lib/readers.mjs";
 
 const requireFromWeb = createRequire(new URL("../apps/web/package.json", import.meta.url));
@@ -903,11 +905,29 @@ async function usage(
   const wireSnapshots = snapshots.map((item) =>
     protocolVersion >= 5 && item.kind === undefined ? { ...item, kind: "rolling" } : item,
   );
-  return json(
+  const response = await json(
     "/api/usage",
     { protocolVersion, snapshots: wireSnapshots, sourceErrors },
     { authorization: `Bearer ${deviceToken}` },
   );
+  if (response.status === 200) {
+    const days = (
+      await pool.query(
+        `SELECT usage_date::text AS date, sum(tokens)::text AS total FROM daily_agent_usage
+        WHERE user_id=$1 AND usage_date >= date_trunc('year', now() AT TIME ZONE 'UTC')::date
+        AND usage_date <= (now() AT TIME ZONE 'UTC')::date GROUP BY usage_date`,
+        [userId],
+      )
+    ).rows;
+    const signals =
+      (await pool.query("SELECT signals FROM ranking_signals WHERE user_id=$1", [userId])).rows[0]
+        ?.signals ?? [];
+    check(
+      JSON.stringify(signals) === JSON.stringify(rankingSignals(days, 10000000000n, 20n)),
+      "signals differ from final deduplicated daily totals after HTTP sync",
+    );
+  }
+  return response;
 }
 
 function rawUsage(
@@ -1528,8 +1548,62 @@ try {
         "DELETE FROM rate_limit_buckets WHERE scope IN ('pairing_start', 'admit_pairing_start')",
       );
     }
+    // Direct fixture deletion cannot invalidate the bounded per-instance negative backoff.
+    await delay(1100);
     console.log("ok - global admission caps unique client bucket cardinality before parsing");
   }
+
+  const signalInstallation = { id: randomUUID(), secret: token() };
+  const signalPairing = await pair(signalInstallation, [source("signal-codex", "codex")]);
+  const signalSource = signalPairing.sources[0];
+  check(
+    (
+      await usage(signalPairing.deviceToken, [
+        snapshot(signalSource.sourceId, 1, [[today, "10000000001"]]),
+      ])
+    ).status === 200,
+    "signal fixture sync failed",
+  );
+  const signalBefore = (
+    await pool.query("SELECT signals, observed_at FROM ranking_signals WHERE user_id=$1", [userId])
+  ).rows;
+  check(
+    signalBefore.length === 1 &&
+      signalBefore[0].signals.some((item) => item.rule === "daily_total"),
+    "high aggregate did not create review signal",
+  );
+  await usage(signalPairing.deviceToken, [
+    snapshot(signalSource.sourceId, 1, [[today, "10000000001"]]),
+  ]);
+  check(
+    JSON.stringify(
+      (
+        await pool.query("SELECT signals, observed_at FROM ranking_signals WHERE user_id=$1", [
+          userId,
+        ])
+      ).rows,
+    ) === JSON.stringify(signalBefore),
+    "replay duplicated or refreshed review signal",
+  );
+  await usage(signalPairing.deviceToken, [snapshot(signalSource.sourceId, 2, [[today, "1"]])]);
+  check(
+    (await pool.query("SELECT count(*)::int n FROM ranking_signals WHERE user_id=$1", [userId]))
+      .rows[0].n === 0,
+    "downward correction retained stale review signal",
+  );
+  check(
+    (
+      await form("/api/accounts/delete", {
+        accountId: signalSource.agentAccountId,
+        confirm: "delete",
+      })
+    ).status === 303,
+    "signal fixture cleanup failed",
+  );
+  await pool.query("DELETE FROM installations WHERE id=$1", [signalInstallation.id]);
+  console.log(
+    "ok - review signals use post-dedup totals, replay is idempotent, corrections clear signals",
+  );
 
   const firstInstallation = { id: randomUUID(), secret: token() };
   const first = await pair(firstInstallation, [

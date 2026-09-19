@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { responseLogMetadata } from "./http";
+import { problem, responseLogMetadata } from "./http";
+import { allowRequestLog, metric } from "./metrics";
 import { logDebug, logError, logInfo, logWarn, safeErrorFields, type LogFields } from "./log";
 
 interface RequestLoggingOptions {
@@ -10,6 +11,7 @@ type RequestLogLevel = "debug" | "info" | "warn" | "error";
 
 function bestEffortLog(level: RequestLogLevel, event: string, fields: LogFields): void {
   try {
+    if (!allowRequestLog(level)) return;
     if (level === "error") logError(event, fields);
     else if (level === "warn") logWarn(event, fields);
     else if (level === "debug") logDebug(event, fields);
@@ -52,6 +54,9 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
     bestEffortLog("debug", "http_request_started", base);
     try {
       const response = await handler(...arguments_);
+      metric("httpRequests");
+      if (response.status >= 500) metric("http5xx");
+      if (response.status === 429) metric("http429");
       const metadata = responseLogMetadata(response);
       const defaultOutcome =
         response.status === 401
@@ -93,21 +98,19 @@ export function withRequestLogging<Arguments extends readonly unknown[]>(
       } else bestEffortLog("info", "http_request_completed", fields);
       return response;
     } catch (error) {
+      const response = problem(500, "server_error", error);
+      metric("httpRequests");
+      if (response.status >= 500) metric("http5xx");
       const fields: LogFields = {
         ...base,
-        status: 500,
-        outcome: "server_error",
+        status: response.status,
+        outcome: responseLogMetadata(response)?.outcome ?? "server_error",
         durationMs: durationMilliseconds(startedAt),
         ...safeErrorFields(error),
       };
       bestEffortLog("error", "http_request_failed", fields);
-      return Response.json(
-        { error: "server_error" },
-        {
-          status: 500,
-          headers: { "Cache-Control": "no-store", "X-Request-Id": requestId },
-        },
-      );
+      response.headers.set("X-Request-Id", requestId);
+      return response;
     }
   };
 }

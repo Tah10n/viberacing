@@ -122,7 +122,7 @@ export function safeDiagnosticFields(...values: readonly unknown[]): LogFields {
   return diagnosticCode === undefined ? {} : { diagnosticCode };
 }
 
-function shouldWrite(level: Exclude<LogLevel, "silent">): boolean {
+export function isLogLevelEnabled(level: Exclude<LogLevel, "silent">): boolean {
   return logLevelOrder[level] >= logLevelOrder[configuredLogLevel()];
 }
 
@@ -168,7 +168,7 @@ export function writeLog(
   event: string,
   fields: LogFields = {},
 ): void {
-  if (!shouldWrite(level)) return;
+  if (!isLogLevelEnabled(level)) return;
   writeSerializedRecord(level, serializedLogRecord(level, event, fields));
 }
 

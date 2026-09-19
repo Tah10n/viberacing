@@ -1,5 +1,4 @@
 import { execFileSync, spawn } from "node:child_process";
-import { cp } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,17 +14,8 @@ execFileSync(process.execPath, [next, "build"], {
   env: process.env,
   stdio: "inherit",
 });
-const standaloneRoot = resolve(root, ".next/standalone/apps/web");
-await cp(resolve(root, ".next/static"), resolve(standaloneRoot, ".next/static"), {
-  recursive: true,
-  force: true,
-});
-await cp(resolve(root, "public"), resolve(standaloneRoot, "public"), {
-  recursive: true,
-  force: true,
-});
-const child = spawn(process.execPath, [resolve(standaloneRoot, "server.js")], {
-  cwd: standaloneRoot,
+const child = spawn(process.execPath, [resolve(root, "scripts/server.mjs")], {
+  cwd: root,
   env: { ...process.env, HOSTNAME: "127.0.0.1", PORT: "3015" },
   stdio: "inherit",
 });

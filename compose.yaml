@@ -30,7 +30,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["sh", "-c", "node scripts/migrate.mjs && exec node server.js"]
+    command: ["sh", "-c", "node scripts/migrate.mjs && exec node scripts/server.mjs"]
     ports:
       - "127.0.0.1:${VIBERACING_LOCAL_WEB_PORT:-3000}:3000"
 
