@@ -30,6 +30,12 @@ experience or protocol.
 
 ## [Unreleased]
 
+### Fixed
+
+- Connector 0.7.6 preserves the original observation token when Codex account registration fails and
+  its saved usage is sent after recovery. Recovered observations retain their original order
+  relative to later corrections; legacy pending records without a token remain supported.
+
 ### Added
 
 - Connector 0.7.2 stages a documentation-only package update: terminal sync and custom-state
