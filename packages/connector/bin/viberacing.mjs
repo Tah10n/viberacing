@@ -238,6 +238,10 @@ function codexHookGuidance(status) {
     return "Codex automatic sync is disabled. In Codex CLI, run `/hooks`, then enable and trust the Vibe Racing Stop hook.";
   if (status === "trust-unknown")
     return "Codex automatic sync trust could not be verified. In Codex CLI, run `/hooks` and verify the Vibe Racing Stop hook.";
+  if (status === "executable-missing")
+    return "Codex hook inspection could not start: executable unavailable. Install Codex or set VIBERACING_CODEX_BIN to its executable, then run `viberacing doctor --repair`.";
+  if (status === "inspection-timeout" || status === "inspection-failed")
+    return `Codex hook inspection ${status === "inspection-timeout" ? "timed out" : "failed"}; hook trust was not determined. Check that Codex App Server starts and supports hooks/list.`;
   return "Codex automatic sync hook needs repair. Run `viberacing doctor --repair`.";
 }
 
@@ -4204,6 +4208,15 @@ async function doctor() {
     );
   }
   try {
+    if (repairRequested) {
+      for (const source of localSources.filter((source) => source.agentId === "codex")) {
+        const executablePath = await resolveAgentExecutable("codex", {
+          executablePath: source.executablePath,
+        });
+        if (executablePath && executablePath !== source.executablePath)
+          await rememberSourceExecutable(source.clientSourceId, executablePath);
+      }
+    }
     let config = await (repairRequested ? readConfig() : inspectConfig());
     let state = await (repairRequested ? readState() : inspectState());
     let repairedPlugin = null;
@@ -4388,7 +4401,7 @@ async function doctor() {
       try {
         const diagnostic = await adapter.diagnose(source);
         output(
-          `${source.agentId} diagnostics: ${diagnostic.status}; method ${diagnostic.collectionMethod}; surfaces ${diagnostic.supportedSurfaces.join(",")}; data ${diagnostic.dataLocationAvailable === false ? "unavailable" : "available"}${diagnostic.excluded.length ? `; excluded ${diagnostic.excluded.join(", ")}` : ""}`,
+          `${source.agentId} diagnostics: ${diagnostic.status}; method ${diagnostic.collectionMethod}; surfaces ${diagnostic.supportedSurfaces.join(",")}; data ${diagnostic.dataLocationAvailable === false ? "unavailable" : "available"}${diagnostic.excluded.length ? `; excluded ${diagnostic.excluded.join(", ")}` : ""}${diagnostic.error ? `; reason: ${diagnostic.error}` : ""}`,
         );
       } catch (error) {
         output(`${source.agentId} (${source.accountLabel}): error, ${error.message}`);
@@ -4674,8 +4687,9 @@ async function wrap(agentId) {
   const { source, separator, sourceOption, executable } = await withOpenCodeLifecycleMutation(
     async () => {
       const selected = await wrapperSource(agentId);
-      const resolvedExecutable =
-        selected.source.executablePath ?? (await resolveAgentExecutable(agentId));
+      const resolvedExecutable = await resolveAgentExecutable(agentId, {
+        executablePath: selected.source.executablePath,
+      });
       if (!resolvedExecutable)
         throw new Error(
           `${adapterFor(agentId).displayName} executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride(agentId)} to its absolute path`,

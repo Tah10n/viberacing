@@ -1390,7 +1390,9 @@ export function codexProfileEnvironment(source, environment = process.env) {
 }
 
 async function withCodexAppServer(source, callback) {
-  const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
+  const executable = await resolveAgentExecutable("codex", {
+    executablePath: source?.executablePath,
+  });
   if (!executable)
     throw diagnosticError(
       `Codex executable was not found in installed apps, package-manager bins, or PATH; set ${executableOverride("codex")} to its absolute path`,
@@ -1652,7 +1654,9 @@ export const codexAdapter = Object.freeze({
   diagnose: async (source) => {
     try {
       await access(source.dataPath);
-      const executable = source?.executablePath ?? (await resolveAgentExecutable("codex"));
+      const executable = await resolveAgentExecutable("codex", {
+        executablePath: source?.executablePath,
+      });
       if (executable === null) throw new Error("Codex executable is unavailable");
       return {
         status: "ok",

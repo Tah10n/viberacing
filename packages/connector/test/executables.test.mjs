@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -19,6 +19,63 @@ test("finds a bundled macOS Codex even when PATH does not contain it", async () 
     accessible: async (candidate) => candidate === bundled,
   });
   assert.equal(resolved, bundled);
+});
+
+test("finds the nested macOS Codex CLI in system and user applications without PATH", async () => {
+  for (const root of ["/Applications", "/Users/racer/Applications"])
+    for (const app of ["ChatGPT.app", "Codex.app"]) {
+      const bundled = `${root}/${app}/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`;
+      assert.equal(
+        await resolveAgentExecutable("codex", {
+          platform: "darwin",
+          home: "/Users/racer",
+          environment: { PATH: "/usr/bin:/bin" },
+          accessible: async (candidate) => candidate === bundled,
+        }),
+        bundled,
+      );
+    }
+});
+
+test("keeps a usable stored executable and recovers a missing one with override precedence", async () => {
+  const options = {
+    platform: "linux",
+    home: "/home/racer",
+    executablePath: "/stored/codex",
+    environment: { PATH: "/new/bin" },
+    accessible: async () => true,
+  };
+  assert.equal(await resolveAgentExecutable("codex", options), "/stored/codex");
+  assert.equal(
+    await resolveAgentExecutable("codex", {
+      ...options,
+      accessible: async (path) => path !== "/stored/codex",
+    }),
+    "/new/bin/codex",
+  );
+  assert.equal(
+    await resolveAgentExecutable("codex", {
+      ...options,
+      environment: { ...options.environment, VIBERACING_CODEX_BIN: "/override/codex" },
+    }),
+    "/override/codex",
+  );
+});
+
+test("does not resolve a directory as an executable", async (context) => {
+  const home = await mkdtemp(join(tmpdir(), "viberacing-executable-directory-"));
+  context.after(() => rm(home, { recursive: true, force: true }));
+  const directory = join(home, "agy");
+  await mkdir(directory);
+  assert.equal(
+    await resolveAgentExecutable("antigravity", {
+      platform: "linux",
+      home,
+      environment: { PATH: home },
+      executablePath: directory,
+    }),
+    null,
+  );
 });
 
 test("prefers an explicit executable and then the user's PATH", async () => {

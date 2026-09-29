@@ -47,6 +47,13 @@ Refresh the installed runtime and repair owned hooks explicitly:
 npx --yes @viberacing/connector@latest doctor --repair
 ```
 
+If an application update moves Codex, sync and hook inspection find an available executable again;
+`doctor --repair` also saves the recovered path for the existing source. This preserves the source
+identity and the trusted hook command. macOS discovery supports both the standalone binary and the
+nested CodexCLI app bundle. `VIBERACING_CODEX_BIN` can select an executable explicitly. Ordinary
+`doctor` does not save changes. Hook inspection failures are reported separately from untrusted or
+disabled hooks; a failed inspection does not mean you need to trust the hook again.
+
 Remove an installation and its owned local integration:
 
 ```bash

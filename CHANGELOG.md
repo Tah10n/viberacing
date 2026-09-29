@@ -6,6 +6,18 @@ The connector follows [Semantic Versioning](https://semver.org/). The web applic
 continuously; its changes are grouped with the connector release when they affect the shared user
 experience or protocol.
 
+## [0.7.5] - 2026-09-29
+
+### Fixed
+
+- Codex sync and hook inspection recover when an application update moves the executable, including
+  the nested CodexCLI bundle on macOS. `doctor --repair` saves the recovered path without replacing
+  source identities or changing the trusted hook command.
+- Hook inspection distinguishes missing executables and App Server failures from unknown trust.
+  Codex diagnostics no longer accept a missing stored executable as available.
+- Antigravity wrapper launches recover from stale executable paths while preserving source identity
+  and captured usage. Executable discovery rejects directories and honors explicit overrides.
+
 ## [0.7.4] - 2026-09-10
 
 ### Fixed
