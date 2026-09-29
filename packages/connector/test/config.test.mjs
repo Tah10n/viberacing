@@ -522,6 +522,10 @@ for await (const line of lines) {
     continue;
   }
   if (message.id !== 1 || message.method !== "hooks/list") continue;
+  if (process.env.VIBERACING_TEST_CODEX_HOOK_API_ERROR) {
+    process.stdout.write(JSON.stringify({ id: 1, error: { message: "synthetic unavailable API" } }) + "\\n");
+    continue;
+  }
   const sourcePath = join(process.env.CODEX_HOME, "hooks.json");
   const settings = JSON.parse(readFileSync(sourcePath, "utf8"));
   const handler = (settings.hooks?.Stop ?? [])
@@ -674,8 +678,22 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
           throw new Error("synthetic unavailable inspector");
         },
       }),
-      "trust-unknown",
+      "inspection-failed",
     );
+    for (const [code, status] of [
+      ["agent_executable_missing", "executable-missing"],
+      ["agent_api_timeout", "inspection-timeout"],
+      ["agent_api_invalid_response", "inspection-failed"],
+    ]) {
+      assert.equal(
+        await module.diagnoseHookForSource(source("codex"), {
+          inspectCodexHookTrust: async () => {
+            throw Object.assign(new Error("synthetic"), { diagnosticCode: code });
+          },
+        }),
+        status,
+      );
+    }
     const codexSettingsBeforeRepeat = await readFile(join(home, ".codex", "hooks.json"), "utf8");
     const repeated = await module.installHooks(
       pathToFileURL(join(installedRuntime, "bin", "viberacing.mjs")),
@@ -4403,6 +4421,16 @@ for await (const line of lines) {
       env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
     }),
   );
+  const relocatedExecutable = join(
+    bin,
+    process.platform === "win32" ? "codex-new.cmd" : "codex-new",
+  );
+  await rename(executablePath, relocatedExecutable);
+  environment.VIBERACING_CODEX_BIN = relocatedExecutable;
+  const relocatedSync = await execFileAsync(process.execPath, [connectorPath, "sync"], {
+    env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
+  });
+  assert.doesNotMatch(relocatedSync.stderr, /partial sync|executable.*unavailable/i);
   const pendingRegistration = await execFileAsync(process.execPath, [connectorPath, "sync"], {
     env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-second" },
   });
@@ -4511,6 +4539,7 @@ for await (const line of lines) {
       .filter((sourceIds) => sourceIds.length > 0),
     [
       [primarySourceId],
+      [primarySourceId], // The explicit sync after moving the executable retains the same account.
       [primarySourceId, secondarySourceId],
       [secondarySourceId],
       [primarySourceId],
@@ -8603,6 +8632,41 @@ test("doctor fails closed until Codex trusts the stable owned hook", async (cont
   assert.equal(trusted.stderr, "");
   assert.equal(await readFile(hookPath, "utf8"), firstSettings);
   await access(join(directory, "bin", "viberacing-hook.mjs"));
+
+  // An application update moves the executable, but must not invalidate hook trust or pairing.
+  const relocated = join(bin, process.platform === "win32" ? "codex-new.cmd" : "codex-new");
+  await rename(executablePath, relocated);
+  const relocatedEnvironment = {
+    ...environment,
+    VIBERACING_CODEX_BIN: relocated,
+    VIBERACING_TEST_CODEX_HOOK_TRUST: "trusted",
+  };
+  const sourcesPath = join(directory, "sources.json");
+  const sourcesBefore = await readFile(sourcesPath, "utf8");
+  const connectionBefore = await readFile(join(directory, "config.json"), "utf8");
+  const readOnly = await runWithInput(["doctor"], relocatedEnvironment, "");
+  assert.match(readOnly.stdout, /codex hook: current/);
+  assert.equal(await readFile(sourcesPath, "utf8"), sourcesBefore);
+  assert.equal(await readFile(join(directory, "config.json"), "utf8"), connectionBefore);
+  const repaired = await runWithInput(["doctor", "--repair"], relocatedEnvironment, "");
+  assert.equal(repaired.code, 0, repaired.stderr);
+  assert.match(repaired.stdout, /codex hook: current/);
+  assert.equal(await readFile(hookPath, "utf8"), firstSettings);
+  assert.deepEqual(
+    JSON.parse(await readFile(sourcesPath, "utf8")).sources,
+    JSON.parse(sourcesBefore).sources.map((source) => ({ ...source, executablePath: relocated })),
+  );
+  const failedInspection = await runWithInput(
+    ["doctor"],
+    {
+      ...relocatedEnvironment,
+      VIBERACING_TEST_CODEX_HOOK_API_ERROR: "1",
+    },
+    "",
+  );
+  assert.match(failedInspection.stdout, /codex hook: inspection-failed/);
+  assert.match(failedInspection.stdout, /hook trust was not determined/);
+  assert.doesNotMatch(failedInspection.stdout, /run `\/hooks`/);
 });
 
 test("doctor reports Claude availability without collecting usage", async (context) => {
@@ -13812,6 +13876,30 @@ test(
     const capture = await readFile(antigravitySource.dataPath, "utf8");
     assert.match(capture, /safe-session/);
     assert.doesNotMatch(capture, /prompt|response|synthetic private/);
+    const relocated = join(bin, "agy-new");
+    await rename(antigravityExecutable, relocated);
+    await execFileAsync(
+      process.execPath,
+      [connectorPath, "run", "antigravity", "--", "-p", "again", "--output-format=stream-json"],
+      {
+        env: {
+          ...environment,
+          VIBERACING_ANTIGRAVITY_BIN: relocated,
+          SYNTHETIC_ARGV_PATH: antigravityArgv,
+        },
+      },
+    );
+    assert.deepEqual(JSON.parse(await readFile(antigravityArgv, "utf8")), [
+      "-p",
+      "again",
+      "--output-format=stream-json",
+    ]);
+    assert.deepEqual(
+      (await readLocalSources(join(home, ".viberacing"))).find(
+        (source) => source.agentId === "antigravity",
+      ),
+      { ...antigravitySource, executablePath: relocated },
+    );
     await execFileAsync(process.execPath, [connectorPath, "disconnect"], { env: environment });
   },
 );

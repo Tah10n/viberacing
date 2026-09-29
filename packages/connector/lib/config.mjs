@@ -2513,8 +2513,10 @@ export async function diagnoseHookForSource(source, options = {}) {
     try {
       const inspect = options.inspectCodexHookTrust ?? inspectCodexHookTrust;
       return await inspect(source, { sourcePath: path, command });
-    } catch {
-      return "trust-unknown";
+    } catch (error) {
+      if (error?.diagnosticCode === "agent_executable_missing") return "executable-missing";
+      if (error?.diagnosticCode === "agent_api_timeout") return "inspection-timeout";
+      return "inspection-failed";
     }
   }
   if (source.agentId === "claude_code")
@@ -2569,6 +2571,9 @@ function mergeHookStatus(previous, next) {
     "outdated",
     "missing",
     "trust-unknown",
+    "executable-missing",
+    "inspection-timeout",
+    "inspection-failed",
     "current",
   ];
   return priority.indexOf(previous) <= priority.indexOf(next) ? previous : next;

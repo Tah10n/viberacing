@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 
@@ -63,10 +63,17 @@ function managerDirectories(home, platform, environment) {
 function appCandidates(definition, home, platform, environment) {
   const { join } = pathApi(platform);
   if (platform === "darwin")
-    return (definition.darwinApps ?? []).flatMap((application) => [
-      join("/Applications", application, "Contents", "Resources", definition.command),
-      join(home, "Applications", application, "Contents", "Resources", definition.command),
-    ]);
+    return (definition.darwinApps ?? []).flatMap((application) =>
+      ["/Applications", join(home, "Applications")].flatMap((root) => {
+        const resources = join(root, application, "Contents", "Resources");
+        return [
+          join(resources, definition.command),
+          ...(definition.command === "codex"
+            ? [join(resources, "codex-cli", "CodexCLI.app", "Contents", "MacOS", "codex")]
+            : []),
+        ];
+      }),
+    );
   if (platform !== "win32") return [];
   const roots = [
     environment.LOCALAPPDATA,
@@ -85,7 +92,7 @@ function appCandidates(definition, home, platform, environment) {
 
 export function executableCandidates(
   agentId,
-  { platform = process.platform, environment = process.env, home = homedir() } = {},
+  { platform = process.platform, environment = process.env, home = homedir(), executablePath } = {},
 ) {
   const definition = definitions[agentId];
   if (!definition) return [];
@@ -97,6 +104,7 @@ export function executableCandidates(
     .filter(Boolean);
   const candidates = [
     override && (paths.isAbsolute(override) ? override : paths.resolve(override)),
+    executablePath,
     ...pathDirectories.flatMap((directory) => names.map((name) => paths.join(directory, name))),
     ...appCandidates(definition, home, platform, environment),
     ...managerDirectories(home, platform, environment).flatMap((directory) =>
@@ -108,6 +116,7 @@ export function executableCandidates(
 
 async function executable(path, platform) {
   try {
+    if (!(await stat(path)).isFile()) return false;
     await access(path, platform === "win32" ? constants.F_OK : constants.X_OK);
     return true;
   } catch {
