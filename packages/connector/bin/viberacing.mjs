@@ -2754,10 +2754,16 @@ function validPendingAccountRegistration(value) {
       JSON.stringify([
         "completeness",
         "entries",
+        ...(Object.hasOwn(value, "observationToken") ? ["observationToken"] : []),
         "profileClientSourceId",
         "rangeEnd",
         "rangeStart",
       ]) &&
+    (!Object.hasOwn(value, "observationToken") ||
+      (typeof value.observationToken === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\.[0-9a-f]{64}$/.test(
+          value.observationToken,
+        ))) &&
     typeof value.profileClientSourceId === "string" &&
     uuidPattern.test(value.profileClientSourceId) &&
     /^\d{4}-\d{2}-\d{2}$/.test(value.rangeStart ?? "") &&
@@ -3004,6 +3010,7 @@ async function syncRange(providedConfig, options = {}) {
               registeredAfterClaim = true;
             } catch (error) {
               state.pendingAccountRegistrations[binding.source.clientSourceId] = {
+                ...(observation ? { observationToken: observation.observationToken } : {}),
                 profileClientSourceId: task.physicalClientSourceId,
                 ...range,
                 completeness: result.completeness,
@@ -3279,6 +3286,7 @@ async function syncRange(providedConfig, options = {}) {
           sourceId: source.sourceId,
           syncSequence: sequence,
           kind: snapshotKind,
+          ...(pending.observationToken ? { observationToken: pending.observationToken } : {}),
           rangeStart: pending.rangeStart,
           rangeEnd: pending.rangeEnd,
           completeness: pending.completeness,

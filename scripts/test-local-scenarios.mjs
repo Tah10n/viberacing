@@ -1172,6 +1172,16 @@ async function verifyUsageObservationOrdering() {
     await dashboardTotal(80);
     await send(b, fresh, 200);
     check((await total()) === "80", "old snapshot replay undid downward correction");
+    const pendingRegistrationObservation = await observe(b);
+    // Delivery after registration recovery must retain the original observation order.
+    await send(b, pendingRegistrationObservation, 150);
+    check((await total()) === "150", "recovered newer observation did not replace older usage");
+    await dashboardTotal(150);
+    const laterCorrection = await observe(a);
+    await send(a, laterCorrection, 60);
+    await send(b, pendingRegistrationObservation, 150);
+    check((await total()) === "60", "recovered old observation undid a later correction");
+    await dashboardTotal(60);
     const partial = await observe(b);
     await send(b, partial, 210, "partial");
     check((await total()) === "210", "newer partial observation did not advance the total");

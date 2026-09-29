@@ -4267,13 +4267,14 @@ test("a Claude hook collects only its dirty source and unchanged data sends no H
   await assert.rejects(access(codexLaunch));
 });
 
-test("Codex account switches register once and route snapshots without sending provider identity", async (context) => {
+async function checkCodexRegistrationBackfill(context, legacyPending) {
   const primaryClientId = "12121212-1212-4212-8212-121212121212";
   const primarySourceId = "13131313-1313-4313-8313-131313131313";
   const secondarySourceId = "14141414-1414-4414-8414-141414141414";
   const secondaryAccountId = "15151515-1515-4515-8515-151515151515";
   const primaryAccountId = "16161616-1616-4616-8616-161616161616";
   const browserRequestId = "18181818-1818-4818-8818-181818181818";
+  const observationTokens = [];
   const registrationBodies = [];
   const usageBodies = [];
   const resultBodies = [];
@@ -4284,10 +4285,12 @@ test("Codex account switches register once and route snapshots without sending p
       const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       response.setHeader("content-type", "application/json");
       if (request.url === "/api/installations/current" && body?.startObservation) {
+        const observationToken = `${new Date(Date.UTC(2026, 0, 1, 0, 0, observationTokens.length)).toISOString()}.${"a".repeat(64)}`;
+        observationTokens.push(observationToken);
         response.end(
           JSON.stringify({
             ...reconciliationResponse(body.sourceIds.map((sourceId) => ({ sourceId }))),
-            observationToken: `${new Date().toISOString()}.${"a".repeat(64)}`,
+            observationToken,
           }),
         );
         return;
@@ -4441,11 +4444,19 @@ for await (const line of lines) {
   assert.deepEqual(Object.keys(Object.values(pendingState.pendingAccountRegistrations)[0]).sort(), [
     "completeness",
     "entries",
+    "observationToken",
     "profileClientSourceId",
     "rangeEnd",
     "rangeStart",
   ]);
   assert.doesNotMatch(JSON.stringify(pendingState.pendingAccountRegistrations), /example|acct1_/i);
+  const savedPending = Object.values(pendingState.pendingAccountRegistrations)[0];
+  const originalToken = observationTokens.at(-1);
+  assert.equal(savedPending.observationToken, originalToken);
+  if (legacyPending) {
+    delete savedPending.observationToken;
+    await writeFile(join(directory, "state.json"), `${JSON.stringify(pendingState)}\n`);
+  }
   terminalOutputs.push(
     await execFileAsync(process.execPath, [connectorPath, "sync"], {
       env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-first" },
@@ -4455,6 +4466,12 @@ for await (const line of lines) {
     JSON.parse(await readFile(join(directory, "state.json"), "utf8")).pendingAccountRegistrations,
     {},
   );
+  const recovered = usageBodies
+    .at(-1)
+    .snapshots.find(({ sourceId }) => sourceId === secondarySourceId);
+  assert.ok(recovered);
+  assert.equal(recovered.observationToken, legacyPending ? undefined : originalToken);
+  assert.notEqual(observationTokens.at(-1), originalToken);
   terminalOutputs.push(
     await execFileAsync(process.execPath, [connectorPath, "sync"], {
       env: { ...environment, VIBERACING_TEST_CODEX_ACCOUNT_ID: "account-second" },
@@ -4568,7 +4585,12 @@ for await (const line of lines) {
     terminalOutputs.map(({ stdout, stderr }) => `${stdout}\n${stderr}`).join("\n"),
     /same@example\.com|account-(?:first|second)|acct1_/i,
   );
-});
+}
+
+for (const legacyPending of [false, true])
+  test(`Codex account switches preserve ${legacyPending ? "legacy unticketed" : "original ticketed"} registration backfills without sending provider identity`, async (context) => {
+    await checkCodexRegistrationBackfill(context, legacyPending);
+  });
 
 test("a current Codex B snapshot durably supersedes a stale registration backfill", async (context) => {
   const profileClientSourceId = "20202020-2020-4020-8020-202020202020";
