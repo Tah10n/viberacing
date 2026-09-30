@@ -2,5 +2,8 @@
 .next
 coverage
 node_modules
+target
+.od-skills
+plugin-source
 pnpm-lock.yaml
 LICENSE

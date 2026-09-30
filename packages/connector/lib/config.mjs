@@ -2199,7 +2199,12 @@ export function hookCommandForPlatform(installedScript, source, platform = proce
     source.agentId,
     marker,
   ];
-  const command = values.map((value) => quoteHookArgument(value, platform)).join(" ");
+  // Codex runs Windows command hooks through PowerShell, rather than cmd.exe.
+  const powershell = platform === "win32" && source.agentId === "codex";
+  const command = values
+    .map((value) => quoteHookArgument(value, platform, powershell ? "powershell" : "cmd"))
+    .join(" ");
+  if (powershell) return `& ${command}`;
   return platform === "win32" ? `"${command}"` : command;
 }
 
@@ -2207,10 +2212,13 @@ function sourceHookCommand(installedScript, source) {
   return hookCommandForPlatform(installedScript, source);
 }
 
-export function quoteHookArgument(value, platform = process.platform) {
+export function quoteHookArgument(value, platform = process.platform, shell = "cmd") {
   if (typeof value !== "string" || /[\0\r\n]/.test(value))
     throw new Error("Hook arguments cannot contain NUL or newlines");
-  if (platform === "win32") return quoteWindowsCommandArgument(value);
+  if (platform === "win32")
+    return shell === "powershell"
+      ? `'${value.replaceAll("'", "''")}'`
+      : quoteWindowsCommandArgument(value);
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
@@ -2400,10 +2408,11 @@ export async function installHookForSource(
   const options = { markers: [legacyHookMarker, marker] };
   if (source.agentId === "codex") {
     const path = join(hookRoot(source, "codex"), "hooks.json");
+    // Windows ACL checks and scheduler startup can exceed three seconds.
     const installedStop = await updateHook(
       path,
       "Stop",
-      { hooks: [{ type: "command", command, timeout: 3 }] },
+      { hooks: [{ type: "command", command, timeout: process.platform === "win32" ? 10 : 3 }] },
       options,
     );
     const removedSessionEnd = await updateHook(path, "SessionEnd", null, {

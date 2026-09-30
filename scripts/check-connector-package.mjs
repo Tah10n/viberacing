@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolvedExecutableInvocation } from "../packages/connector/lib/executables.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = "packages/connector";
@@ -110,9 +111,15 @@ if (!repositoryLicense.equals(packageLicense)) {
 const cache = mkdtempSync(join(tmpdir(), "viberacing-npm-cache-"));
 let output;
 try {
-  output = execFileSync("npm", ["pack", "--dry-run", "--json", `./${packageRoot}`], {
+  const invocation = resolvedExecutableInvocation(
+    process.platform === "win32" ? "npm.cmd" : "npm",
+    ["pack", "--dry-run", "--json", `./${packageRoot}`],
+  );
+  output = execFileSync(invocation.command, invocation.args, {
     cwd: root,
     encoding: "utf8",
+    windowsHide: true,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
     env: { ...process.env, npm_config_cache: cache },
   });
 } finally {

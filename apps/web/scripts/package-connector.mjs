@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnResolvedExecutable } from "../../../packages/connector/lib/executables.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = join(scriptDirectory, "..", "..", "..");
@@ -21,7 +21,10 @@ const temporaryDirectory = await mkdtemp(join(tmpdir(), "viberacing-connector-pa
 
 function run(command, arguments_) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, arguments_, { stdio: "inherit" });
+    const child = spawnResolvedExecutable(command, arguments_, {
+      stdio: "inherit",
+      windowsHide: true,
+    });
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (code === 0) resolve();
@@ -31,7 +34,7 @@ function run(command, arguments_) {
 }
 
 try {
-  await run("corepack", [
+  await run(process.platform === "win32" ? "corepack.cmd" : "corepack", [
     "pnpm",
     "--dir",
     connectorDirectory,

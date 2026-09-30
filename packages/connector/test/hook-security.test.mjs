@@ -64,6 +64,14 @@ test("hook argument encoders reject control bytes and preserve shell metacharact
     const config = await import(`../lib/config.mjs?hook-encoder=${encodeURIComponent(root)}`);
     assert.throws(() => config.quoteHookArgument("bad\narg"), /NUL or newlines/);
     assert.throws(() => config.quoteHookArgument("bad\0arg"), /NUL or newlines/);
+    assert.throws(
+      () => config.quoteHookArgument("bad\narg", "win32", "powershell"),
+      /NUL or newlines/,
+    );
+    assert.equal(
+      config.quoteHookArgument("path ' $() ; & ` % ! ^ (literal)", "win32", "powershell"),
+      "'path '' $() ; & ` % ! ^ (literal)'",
+    );
     const hostile = "path % ! ^ & (literal)";
     const encoded = config.quoteHookArgument(hostile, "win32");
     assert.match(encoded, /^\^".*\^"$/);
@@ -77,8 +85,14 @@ test("hook argument encoders reject control bytes and preserve shell metacharact
       { clientSourceId: "45454545-4545-4454-8454-454545454545", agentId: "codex" },
       "win32",
     );
-    assert.match(command, /^"\^".*\^""$/);
+    assert.match(command, /^& '[^']*' /);
     assert.match(command, /--viberacing-hook-id=viberacing-hook-v3:45454545/);
+    const cmdCommand = config.hookCommandForPlatform(
+      "C:\\state % ! ^ & (literal)\\viberacing.mjs",
+      { clientSourceId: "45454545-4545-4454-8454-454545454545", agentId: "claude_code" },
+      "win32",
+    );
+    assert.match(cmdCommand, /^"\^".*\^""$/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -105,7 +119,7 @@ test(
     );
     const source = {
       clientSourceId: "45454545-4545-4454-8454-454545454545",
-      agentId: "codex",
+      agentId: "claude_code",
     };
     const command = config.hookCommandForPlatform(script, source, "win32");
     const commandShell =
@@ -131,5 +145,63 @@ test(
       `--viberacing-hook-id=viberacing-hook-v3:${source.clientSourceId}`,
     ]);
     await assert.rejects(access(marker), { code: "ENOENT" });
+  },
+);
+
+test(
+  "Windows PowerShell executes Codex hook paths and arguments literally",
+  { skip: process.platform !== "win32" },
+  async (context) => {
+    const root = await mkdtemp(join(tmpdir(), "viberacing-powershell-hook-"));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const marker = join(root, "injected-marker");
+    const state = join(root, "state ' $(New-Item injected-marker) ; & ` % ! ^ (literal)");
+    const script = join(state, "runtime", "literal hook.mjs");
+    const output = join(root, "argv.json");
+    await mkdir(join(state, "runtime"), { recursive: true });
+    await writeFile(
+      script,
+      `import { writeFile } from "node:fs/promises"; await writeFile(process.env.VIBERACING_HOOK_ARGV_OUTPUT, JSON.stringify(process.argv.slice(2)));\n`,
+    );
+    const config = await import(
+      `../lib/config.mjs?powershell-hook-execution=${encodeURIComponent(root)}`
+    );
+    const source = {
+      clientSourceId: "45454545-4545-4454-8454-454545454545",
+      agentId: "codex",
+    };
+    const command = config.hookCommandForPlatform(script, source, "win32");
+    const shells = [
+      win32.join(process.env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+      win32.join(process.env.ProgramFiles, "PowerShell", "7", "pwsh.exe"),
+    ];
+    for (const shell of shells) {
+      if (
+        !(await access(shell).then(
+          () => true,
+          () => false,
+        ))
+      )
+        continue;
+      await execFileAsync(shell, ["-NoProfile", "-NonInteractive", "-Command", command], {
+        cwd: root,
+        env: {
+          ...process.env,
+          VIBERACING_HOOK_ARGV_OUTPUT: output,
+          VIBERACING_HOOK_INJECT: `; New-Item -ItemType File '${marker}' ;`,
+        },
+        windowsHide: true,
+        timeout: 10_000,
+      });
+      assert.deepEqual(JSON.parse(await readFile(output, "utf8")), [
+        "hook",
+        "--source",
+        source.clientSourceId,
+        "--agent",
+        source.agentId,
+        `--viberacing-hook-id=viberacing-hook-v3:${source.clientSourceId}`,
+      ]);
+      await assert.rejects(access(marker), { code: "ENOENT" });
+    }
   },
 );

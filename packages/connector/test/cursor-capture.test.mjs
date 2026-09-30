@@ -20,6 +20,7 @@ import { cursorHookMarker, inspectCursorHooks } from "../lib/cursor-hooks.mjs";
 import { ensurePrivateStateDirectory } from "../lib/windows-security.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "viberacing-cursor-capture-"));
+await ensurePrivateStateDirectory(root);
 const oldState = process.env.VIBERACING_STATE_DIR;
 const oldHome = process.env.HOME;
 const oldUserProfile = process.env.USERPROFILE;
