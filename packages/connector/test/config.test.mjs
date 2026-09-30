@@ -638,7 +638,7 @@ test("installs a runnable connector copy and additive, owned hooks", async () =>
       codex.hooks.Stop.filter((group) => JSON.stringify(group).includes(codexMarker)).length,
       1,
     );
-    assert.equal(codex.hooks.Stop.at(-1).hooks[0].timeout, 3);
+    assert.equal(codex.hooks.Stop.at(-1).hooks[0].timeout, process.platform === "win32" ? 10 : 3);
     assert.match(codex.hooks.Stop.at(-1).hooks[0].command, /bin[/\\]viberacing-hook\.mjs/);
     assert.doesNotMatch(codex.hooks.Stop.at(-1).hooks[0].command, /runtime[/\\][^/\\]+/);
     assert.doesNotMatch(JSON.stringify(codex), /viberacing-hook-v2/);

@@ -6,6 +6,23 @@ The connector follows [Semantic Versioning](https://semver.org/). The web applic
 continuously; its changes are grouped with the connector release when they affect the shared user
 experience or protocol.
 
+## [0.7.7] - 2026-09-30
+
+### Fixed
+
+- Windows Codex hooks use literal PowerShell arguments and allow ten seconds for private-state
+  checks and scheduler startup. After updating, review and trust the changed Vibe Racing `Stop` hook
+  through Codex `/hooks` once. macOS and Linux commands are unchanged.
+- Connector packaging and package checks launch npm and Corepack command shims correctly on Windows.
+
+## [0.7.6] - 2026-09-29
+
+### Fixed
+
+- Codex sync preserves the original observation token when account registration fails and its saved
+  usage is sent after recovery. Recovered observations retain their original order relative to later
+  corrections; legacy pending records without a token remain supported.
+
 ## [0.7.5] - 2026-09-29
 
 ### Fixed
@@ -29,12 +46,6 @@ experience or protocol.
   files resume incremental reads after validation.
 
 ## [Unreleased]
-
-### Fixed
-
-- Connector 0.7.6 preserves the original observation token when Codex account registration fails and
-  its saved usage is sent after recovery. Recovered observations retain their original order
-  relative to later corrections; legacy pending records without a token remain supported.
 
 ### Added
 
