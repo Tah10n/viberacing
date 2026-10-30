@@ -17,6 +17,10 @@ dist/
 *.tsbuildinfo
 *.log
 
+# Local Railway migration snapshots and reviewed plans (never commit live state)
+.railway/.cac-migration.json
+.railway/*.plan.json
+
 # Local agent and editor state
 .codex/
 .codex-log/

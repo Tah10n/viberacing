@@ -59,8 +59,13 @@ For public search metadata, sitemap behavior and Google ownership verification, 
    notation, surrounding whitespace, leading zeroes, and fractional values are rejected so token
    integers stay canonical decimal strings.
 
-4. Deploy. `railway.json` builds the pinned root image, runs the idempotent migration before
-   traffic, and gates rollout on `/ready`.
+4. Configure the root `Dockerfile`, pre-deploy `node scripts/migrate.mjs`, readiness path `/ready`
+   with a 300-second timeout, `ON_FAILURE` with 3 retries, and 40 seconds of draining, then deploy.
+   The existing official service still gets these settings from `railway.json` until its separately
+   approved [Railway IaC migration](../.railway/README.md). Railway stops reading legacy config
+   files on 2026-12-01; new services must set these values in Railway or their own IaC
+   configuration. The checked-in `.railway/railway.ts` targets the existing official production
+   environment only.
 5. Verify `/health`, `/ready`, GitHub sign-in, multi-source pairing, sync/correction, reconnect
    token rotation, source/installation disconnect, public ranking, and deletion.
 
