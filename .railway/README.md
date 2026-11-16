@@ -1,187 +1,108 @@
-# Railway configuration migration
+# Railway configuration
 
-This is a prepared migration for the existing `viberacing` service in `robust-celebration` /
-`production`. It has **not been applied**. Keep `railway.json` unchanged until the separately
-approved cutover is healthy. Merging this preparation does not apply IaC, although the existing
-GitHub `main` autodeploy can deploy the application when this PR is eventually merged.
+`.railway/railway.ts` manages the existing `viberacing` web service in `robust-celebration` /
+`production`. Apply it before deploying the first commit without the root `railway.json`. An
+ordinary application deployment does not evaluate this file. CI checks its types and deployment
+contract offline; it has no Railway credentials or automatic IaC apply action.
 
-Railway
-[deprecates Config as Code](https://docs.railway.com/infrastructure-as-code#iac-vs-config-as-code)
-with a hard cutoff of **2026-12-01**. The replacement is evaluated explicitly by the CLI; Railway
-does not read `.railway/railway.ts` during an ordinary application deployment. No workflow applies
-IaC; the Railway step in `pnpm verify` is an offline type/contract check. No Railway credentials are
-needed in CI.
+The named partial `viberacing` owns only `service.viberacing`. Keep its name and scope: PostgreSQL
+and `postgres-volume` remain outside its ownership. The authoring function rejects another project
+or environment ID. Existing source (`Tah10n/viberacing`, `main`, Wait for CI), placement, one
+replica, resource limits and runtime switches are preserved. The generated Railway domain remains
+managed by the platform. All 11 variable names use `preserve()` so values, secrets and database
+references stay in Railway. Refresh the inventory before later changes; a missing variable can mean
+deletion.
 
-## Scope and preserved settings
+## Deployment contract
 
-The named partial `viberacing` declares only `service.viberacing`. It must not own `Postgres` or
-`postgres-volume`. Do not remove or rename the partial: whole-project ownership could delete omitted
-resources. The authoring function rejects any other project or environment ID.
+The former legacy file is retained only as `.railway/deployment-contract.json`, an offline fixture
+for `pnpm railway:check`. It is not a Railway Config File path. The SDK's evaluated settings must
+match all eight values, and the check rejects root legacy files that would enable discovery again.
 
-| Existing Config as Code setting  | IaC setting                      | Value                          |
-| -------------------------------- | -------------------------------- | ------------------------------ |
-| `build.builder`                  | `build.builder`                  | `DOCKERFILE`                   |
-| `build.dockerfilePath`           | `build.dockerfilePath`           | `Dockerfile`                   |
-| `deploy.preDeployCommand`        | `deploy.preDeployCommand`        | `["node scripts/migrate.mjs"]` |
-| `deploy.healthcheckPath`         | `deploy.healthcheckPath`         | `/ready`                       |
-| `deploy.healthcheckTimeout`      | `deploy.healthcheckTimeout`      | `300`                          |
-| `deploy.restartPolicyType`       | `deploy.restartPolicyType`       | `ON_FAILURE`                   |
-| `deploy.restartPolicyMaxRetries` | `deploy.restartPolicyMaxRetries` | `3`                            |
-| `deploy.drainingSeconds`         | `deploy.drainingSeconds`         | `40`                           |
+| Setting             | Value                      |
+| ------------------- | -------------------------- |
+| Builder             | `DOCKERFILE`               |
+| Dockerfile path     | `Dockerfile`               |
+| Pre-deploy command  | `node scripts/migrate.mjs` |
+| Readiness path      | `/ready`                   |
+| Healthcheck timeout | `300` seconds              |
+| Restart policy      | `ON_FAILURE`               |
+| Restart attempts    | `3`                        |
+| Draining period     | `40` seconds               |
 
-The imported GitHub source remains `Tah10n/viberacing`, branch `main`, with Wait for CI enabled.
-Build environment V3, runtime V2, one replica in `europe-west4-drams3a`, the existing CPU/memory
-limits, and runtime switches are retained. The Dockerfile supplies the start command. The generated
-`viberacing.up.railway.app` domain remains platform-managed, as in Railway's importer.
+The Dockerfile supplies the start command. There are no application, schema or data changes in this
+migration. The SDK is pinned to `railway@3.16.0` as a development dependency, outside the web
+runtime. The checked CLI version is 5.71.0; recheck help and the plan when using another version.
 
-All 11 existing variable names use `preserve()`: Railway retains values, sealed metadata and
-reference expressions, including the database connection. The file does not set or decrypt any
-value. A preserved name is an inventory entry, not an endorsement of its value. Refresh that
-inventory before applying; omitting a newly added variable could delete it. Changes to runtime
-variables, runtime dependencies, databases, volumes, domains, replicas or resource limits are
-outside this migration.
-
-## Read-only checks
-
-Use the locked dependencies and Railway CLI **5.71.0** (the version checked for this migration).
-Recheck command help and the plan if using another CLI version. The SDK is pinned to
-`railway@3.16.0` as a development dependency; the production image does not depend on it.
+## Plan and apply
 
 ```sh
 corepack pnpm install --frozen-lockfile --ignore-scripts
 corepack pnpm railway:check
-railway --version
 railway link --project 9c93a77d-9033-4045-b34c-f8755cf1d6b6 \
   --environment 2edee876-7008-4fe5-922e-917085a6f21e \
   --service 04065ef3-a69b-4e6d-87bb-5b362e9aa28b
 railway config pull --json
 railway config partials list --json
-railway config plan
+railway config plan --out /tmp/viberacing-railway.plan.json
 ```
 
-`link` selects the local CLI target. `pull --json` only reads the graph and preserves variable
-values; do not add `--include-variables`, `--decrypt-variables` or `--show-values`. Keep full
-snapshots and plan artifacts outside the repository. Do not run `pull --force`: it would replace
-this narrow partial with a whole-project import. Do not regenerate over the reviewed file with
-`migrate --force`.
+These commands select the local target and read remote state. Run them from a reviewed committed
+checkout. Keep snapshots and saved plans outside the repository. Do not use variable decryption or
+`--show-values`, and do not overwrite the narrow partial with `pull --force` or regenerated code.
+Reject any create/delete, variable, database, volume, domain, source, replica or resource-limit
+change outside the intended operation. The first apply records ownership even if settings match.
 
-The 2026-10-30 read-only plan with CLI 5.71.0 returned `ok: true`, no diagnostics, and exactly two
-`resource.update` entries, both for `viberacing`:
+For an authorized, reviewed plan:
 
-```text
-Update viberacing build.builder
-  build.builder -> DOCKERFILE
-Update viberacing deploy settings
-  drainingSeconds -> 40
-  healthcheckPath -> /ready
-  healthcheckTimeout -> 300
-  preDeployCommand -> ["node scripts/migrate.mjs"]
-  restartPolicyMaxRetries -> 3
-  restartPolicyType -> ON_FAILURE
+```sh
+railway config apply --plan /tmp/viberacing-railway.plan.json
 ```
 
-The root `Dockerfile` path is present in the evaluated graph and normalizes to Railway's default.
-There were no creates, deletes, variable, source, networking, database or volume changes. The
-evaluated build/deploy objects were also compared against the live imported settings overlaid with
-**all eight** legacy settings. No staged patch, apply result or deployment was created by the plan.
-This preview is evidence, not a reusable approval or an assertion that cutover is complete.
+Do not use `--confirm-destructive`. A stale etag or `.railway/` tree requires a fresh plan and
+review. After applying, inspect service settings, partial ownership and a fresh plan. Expect no
+drift and ownership of only `service.viberacing`. Monitor any deployment caused by apply.
 
-### CLI migration caveats
+## Initial migration order
 
-The official
-[migration guide](https://docs.railway.com/infrastructure-as-code#migrating-from-config-as-code)
-describes a legacy-config conflict check. At inspection time the service's `railwayConfigFile` was
-`null` (automatic discovery), but `resolvedFileConfig.configFile` was `/railway.json` at commit
-`3fc5dbf04397379c460ea623a0d4db4051cf13b6`. Thus the file was still active despite a successful
-plan. CLI 5.71.0's `migrate status` and `cutover` inspect explicit config paths, so their empty
-inventory must not be treated as proof that automatic discovery is disabled. Verify the resolved
-deployment config as well as the service settings.
+Railway
+[stops reading legacy files on 2026-12-01](https://docs.railway.com/infrastructure-as-code#iac-vs-config-as-code).
+The official service was using automatic discovery: `railwayConfigFile` was null while its running
+deployment resolved `/railway.json`. A successful plan or empty `migrate status` inventory does not
+prove that discovery has stopped. Clearing a path alone does not remove a root file from the
+builder. The updated
+[migration guide](https://docs.railway.com/infrastructure-as-code#no-config-file-path-set) requires
+applying the settings before deleting an automatically discovered file.
 
-CLI 5.58.0's migration preview also omitted restart/draining settings and left Dockerfile settings
-in comments. Its `migrate --apply` clears remote config paths. CLI 5.71.0 separates local generation
-from `migrate cutover`, but cutover still changes service settings and triggers a deployment.
-Neither generator is a substitute for the reviewed configuration and parity check here. The
-versioned
-[CLI implementation](https://github.com/railwayapp/cli/blob/v5.71.0/src/commands/config/migrate.rs)
-defines these behaviors.
-
-## One-time cutover — separate approval required
-
-Do not execute this section as part of PR preparation. It changes production settings and can
-trigger deployments. Coordinate a deployment window, including any environments inheriting
-production; prevent concurrent merges/configuration edits until verification finishes.
-
-1. Refresh the read-only snapshots above. Record the active healthy deployment and rollback target,
-   current `railwayConfigFile`, resolved file manifest, source, domains, placement/limits and
-   variable **names**. Confirm only the existing web service is targeted, the partial is unclaimed
-   or already owned by `viberacing`, and all inherited environments are in the approved scope.
-   Reconcile drift before continuing. Keep `railway.json` available for rollback before the cutoff
-   date.
-
-2. Preserve the fallback settings **in the same service-settings update that disables file
-   discovery**. Clearing the path alone can launch a deployment without the migration command or
-   readiness gate because those platform fields were null. Use Railway's service settings API
-   (`serviceInstanceUpdate`) for service `04065ef3-a69b-4e6d-87bb-5b362e9aa28b` and environment
-   `2edee876-7008-4fe5-922e-917085a6f21e` with the following reviewed input. This is a proposed
-   production mutation, not a command run by this PR:
-
-   ```json
-   {
-     "builder": "DOCKERFILE",
-     "dockerfilePath": "Dockerfile",
-     "preDeployCommand": ["node scripts/migrate.mjs"],
-     "healthcheckPath": "/ready",
-     "healthcheckTimeout": 300,
-     "restartPolicyType": "ON_FAILURE",
-     "restartPolicyMaxRetries": 3,
-     "drainingSeconds": 40,
-     "railwayConfigFile": ""
-   }
-   ```
-
-   The empty string is the CLI's explicit disable value; `null` was the automatic-discovery state.
-   This update leaves variables, source, networking, resource limits and the database untouched.
-   Never substitute a path-only `migrate cutover` while the fallback fields are missing.
-
-3. Inspect the resulting service settings and deployment. All eight settings must be persisted; the
-   new resolved config must no longer read `/railway.json`. Verify the migration log, `/health`,
-   `/ready`, the homepage and `/og`, plus Wait for CI, the domain, one web replica and the unchanged
-   database. If discovery is still active, deployment fails, or scope differs, stop and restore the
-   saved config path before any IaC apply. Do not infer success from `migrate status` alone.
-
-4. From the reviewed committed checkout, create a **fresh** plan outside the repo:
-
-   ```sh
-   railway config plan --out /tmp/viberacing-railway.plan.json
-   ```
-
-   Expect no configuration changes after step 2; the first apply still records partial ownership. If
-   a moved setting remains in the plan, explain and review it before continuing. Reject resource
-   creates/deletes, variable changes, unrelated settings or any database/volume/domain change. After
-   separate approval of that exact plan, apply it with:
-
-   ```sh
-   railway config apply --plan /tmp/viberacing-railway.plan.json
-   ```
-
-   Do not use `--confirm-destructive`. A stale environment etag or `.railway/` tree requires a new
-   plan and review. Verify a subsequent plan has no changes and partial ownership contains only
-   `service.viberacing`. Repeat deployment/readiness checks if apply caused another rollout.
-
-5. Remove `railway.json` in a follow-up change only after the switch is verified. At that point
-   replace the temporary legacy parity comparison in `scripts/check-railway-config.mjs` with an
-   explicit deployment contract. Keep the offline check and manual apply workflow. Do not install
-   Railway's automatic apply-on-merge GitHub Action as part of this migration.
+1. Require the current PR's mandatory checks to pass before changing production. Refresh the
+   production snapshot, source, variable names, domains, placement/limits and current healthy
+   deployment's rollback eligibility. Check for concurrent edits and inheriting environments. The
+   2026-11-16 preflight matched the reviewed inventory and showed only two web-service updates: the
+   builder and the six deploy settings above. The root Dockerfile path normalizes to its default.
+2. While production's source still contains the old file, apply the pinned IaC plan. Confirm all
+   eight effective settings now come from persisted service configuration, all existing variables
+   and resources are retained, partial ownership is correct, and a fresh plan has no drift. This
+   makes a deployment without the legacy file safe. Do not merge its removal before this check.
+3. Confirm there is no explicit legacy Config File path. If one was added since the snapshot, stop
+   and review that drift before proceeding: deleting a file still selected by a path breaks builds.
+   The CLI's `migrate cutover` changes only the stored path, not deployment settings; it neither
+   replaces step 2 nor creates a deployment by itself.
+4. Merge the reviewed removal commit after its required checks pass. Wait for main's checks and the
+   ordinary source deployment. Preserve Wait for CI. Verify the active deployment has the intended
+   merge SHA and no resolved legacy config path, file manifest or property mapping. The fixture
+   `.railway/deployment-contract.json` must never be set as a Config File path.
+5. Verify migration logs, `/health`, `/ready`, homepage and `/og`; check source, domain, replica,
+   variable inventory and the unchanged database/volume. A final IaC plan must show no changes.
 
 ## Rollback
 
-Before **2026-12-01**, restore the saved config-file path (or explicitly `/railway.json` for the
-auto-discovered baseline) on this service while retaining the equivalent platform fallback values.
-Verify the resolved file manifest and health of the resulting deployment. The atomic manual handover
-above does not create the CLI's `.cac-migration.json`, so `migrate undo` is not its rollback.
+Retain the current healthy deployment ID and image digest before applying. If a rollout fails,
+restore that deployment using Railway's normal rollback while retaining the eight equivalent
+platform settings. No schema changes are introduced. Application rollback does not undo platform
+settings or partial ownership.
 
-After the cutoff, restoring the legacy file cannot recover settings: repair the explicit platform
-settings or review/apply the last known good IaC configuration. An application rollback does not
-undo platform settings or partial ownership. Keep the eight fallback values intact, do not delete
-resources or variables, and use the recorded healthy Railway deployment if an application rollback
-is separately authorized. This migration contains no schema or data changes.
+Before the cutoff, the previous source commit still contains the legacy file and can restore its old
+behavior. A Config File path may only be restored when the deployed commit contains that file;
+restoring `/railway.json` on the removal commit would break the next build. After 2026-12-01, repair
+the explicit platform/IaC settings instead of relying on legacy discovery. Do not delete variables,
+databases, volumes or the partial to roll back this migration.

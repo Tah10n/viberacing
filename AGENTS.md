@@ -4,7 +4,8 @@ Vibe Racing is deliberately one web service, one PostgreSQL database, and one lo
 
 ## Engineering rules
 
-- Keep the production path in `apps/web`, `packages/connector`, `Dockerfile`, and `railway.json`.
+- Keep the production path in `apps/web`, `packages/connector`, `Dockerfile`, and
+  `.railway/railway.ts`.
 - Prefer a small route and a SQL transaction over a new service or abstraction.
 - Do not add queues, caches, workers, or another database without a measured production need.
 - Preserve integer precision for token totals and use UTC dates and weeks.

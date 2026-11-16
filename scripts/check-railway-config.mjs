@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRailwayContext, project } from "railway/iac";
 import railway, { partial } from "../.railway/railway.ts";
 
@@ -23,14 +23,22 @@ assert.deepEqual(web.source, {
   checkSuites: true,
 });
 
-// Compare the SDK's evaluated settings with the working deployment contract,
-// rather than matching source text. A newly added legacy field must also migrate.
-const legacy = JSON.parse(readFileSync(new URL("../railway.json", import.meta.url), "utf8"));
+// Keep the original eight-setting contract as a fixture, outside Railway discovery.
+const contract = JSON.parse(
+  readFileSync(new URL("../.railway/deployment-contract.json", import.meta.url), "utf8"),
+);
 for (const section of ["build", "deploy"]) {
-  for (const [key, value] of Object.entries(legacy[section])) {
+  for (const [key, value] of Object.entries(contract[section])) {
     const expected = key === "preDeployCommand" && typeof value === "string" ? [value] : value;
     assert.deepEqual(web[section][key], expected, `Missing or changed ${section}.${key}`);
   }
+}
+for (const path of ["railway.json", "railway.toml"]) {
+  assert.equal(
+    existsSync(new URL(`../${path}`, import.meta.url)),
+    false,
+    `Remove ${path}: root Config as Code would override the applied IaC settings.`,
+  );
 }
 assert.equal(Object.keys(web.variables).length, 11, "Review any change to the variable inventory.");
 for (const [name, value] of Object.entries(web.variables)) {
@@ -51,5 +59,5 @@ for (const mismatch of [
 }
 
 console.log(
-  "Railway config: legacy settings, source, preserved variables and target guard passed.",
+  "Railway config: deployment contract, discovery guard, source, variables and target guard passed.",
 );
